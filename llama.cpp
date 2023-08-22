@@ -1859,10 +1859,13 @@ static void llm_load_tensors(
                     for (uint32_t i = 0; i < n_layer; ++i) {
                         auto & layer = model.layers[i];
 
-                        layer.attn_norm     = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "weight", i), {n_embd}, GGML_BACKEND_CPU);
-                        layer.attn_norm_b   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "bias", i),   {n_embd}, GGML_BACKEND_CPU);
-                        layer.attn_norm_2   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, GGML_BACKEND_CPU);
-                        layer.attn_norm_2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, GGML_BACKEND_CPU);
+                        layer.attn_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "weight", i), {n_embd}, GGML_BACKEND_CPU);
+                        layer.attn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "bias", i),   {n_embd}, GGML_BACKEND_CPU);
+
+                        if (gguf_find_tensor(ml.ctx_gguf, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i).c_str()) >= 0) {
+                            layer.attn_norm_2   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, GGML_BACKEND_CPU);
+                            layer.attn_norm_2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, GGML_BACKEND_CPU);
+                        }
 
                         layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, GGML_BACKEND_CPU);
                         layer.wo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},                GGML_BACKEND_CPU);
@@ -2421,19 +2424,19 @@ static struct ggml_cgraph * llm_build_falcon(
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * cur;
-        struct ggml_tensor * layernorm_output;
+        struct ggml_tensor * attn_norm;
 
         // self-attention
         {
-            layernorm_output = ggml_norm(ctx0, inpL);
+            attn_norm = ggml_norm(ctx0, inpL);
 
-            layernorm_output = ggml_add(ctx0,
+            attn_norm = ggml_add(ctx0,
                     ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].attn_norm, layernorm_output),
-                        layernorm_output),
-                    ggml_repeat(ctx0, model.layers[il].attn_norm_b, layernorm_output));
+                        ggml_repeat(ctx0, model.layers[il].attn_norm, attn_norm),
+                        attn_norm),
+                    ggml_repeat(ctx0, model.layers[il].attn_norm_b, attn_norm));
 
-            if ( hparams.n_head_kv == 8 ) { // Falcon-40B
+            if (hparams.n_head_kv == 8) { // Falcon-40B
                 cur = ggml_norm(ctx0, inpL);
 
                 cur = ggml_add(ctx0,
@@ -2441,9 +2444,8 @@ static struct ggml_cgraph * llm_build_falcon(
                             ggml_repeat(ctx0, model.layers[il].attn_norm_2, cur),
                             cur),
                         ggml_repeat(ctx0, model.layers[il].attn_norm_2_b, cur));
-            }
-            else { // Falcon 7B
-                cur = layernorm_output;
+            } else { // Falcon 7B
+                cur = attn_norm;
             }
 
             // compute QKV
@@ -2563,8 +2565,8 @@ static struct ggml_cgraph * llm_build_falcon(
             }
         }
 
-        struct ggml_tensor* inpFF = layernorm_output;
-        struct ggml_tensor* attn_out = ggml_cpy(
+        struct ggml_tensor * inpFF = attn_norm;
+        struct ggml_tensor * attn_out = ggml_cpy(
             ctx0, cur, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
 
         {
@@ -2607,7 +2609,7 @@ static struct ggml_cgraph * llama_build_graph(
            const float * embd,
                    int   n_tokens,
                    int   n_past) {
-    const auto & model   = lctx.model;
+    const auto & model = lctx.model;
 
     struct ggml_cgraph * result = NULL;
 
@@ -2669,8 +2671,8 @@ static bool llama_eval_internal(
 
     GGML_ASSERT(!!kv_self.ctx);
 
-    const int64_t n_embd      = hparams.n_embd;
-    const int64_t n_vocab     = hparams.n_vocab;
+    const int64_t n_embd  = hparams.n_embd;
+    const int64_t n_vocab = hparams.n_vocab;
 
     ggml_allocr_reset(lctx.alloc);
 

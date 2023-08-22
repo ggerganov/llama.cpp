@@ -101,7 +101,10 @@ gguf_writer.add_embedding_length(hparams["hidden_size"])
 gguf_writer.add_feed_forward_length(4 * hparams["hidden_size"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_head_count(hparams["n_head"])
-if "n_head_kv" in hparams: gguf_writer.add_head_count_kv(hparams["n_head_kv"])
+if "n_head_kv" in hparams:
+    gguf_writer.add_head_count_kv(hparams["n_head_kv"])
+else:
+    gguf_writer.add_head_count_kv(1)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 
 # TOKENIZATION
@@ -201,7 +204,7 @@ tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 
 # params for qkv transform
 n_head    = hparams["n_head"]
-n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else n_head
+n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else 1
 
 head_dim = hparams["hidden_size"] // n_head
 
