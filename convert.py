@@ -72,7 +72,7 @@ SAFETENSORS_DATA_TYPES: Dict[str, DataType] = {
 # TODO: match this with `llama_ftype`
 # TODO: rename to LLAMAFileType
 # TODO: move to `gguf.py`
-class GGMLFileType(enum.Enum):
+class GGMLFileType(enum.IntEnum):
     AllF32    = 0
     MostlyF16 = 1  # except 1d tensors
 
