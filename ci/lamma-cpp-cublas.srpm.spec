@@ -18,7 +18,8 @@ Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
-BuildRequires:  coreutils make gcc-c++ git
+BuildRequires:  coreutils make gcc-c++ git cuda-toolkit
+Requires:       cuda-toolkit
 URL:            https://github.com/ggerganov/llama.cpp
 
 %define debug_package %{nil}
