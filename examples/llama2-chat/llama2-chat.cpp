@@ -109,7 +109,7 @@ struct chat {
             }
 
             printf("%s", llama_token_to_str(ctx, id).c_str());
-
+            fflush(stdout);
         } while (true);
     }
 
