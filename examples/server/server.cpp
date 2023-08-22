@@ -1056,33 +1056,42 @@ static json format_tokenizer_response(const std::vector<llama_token> &tokens)
         {"tokens", tokens}};
 }
 
+template <typename T>
+static T json_value(const json &body, const std::string &key, const T &default_value)
+{
+    // Fallback null to default value
+    return body.contains(key) && !body.at(key).is_null()
+        ? body.value(key, default_value)
+        : default_value;
+}
+
 static void parse_options_completion(const json &body, llama_server_context &llama)
 {
     gpt_params default_params;
 
-    llama.stream = body.value("stream", false);
-    llama.params.n_predict = body.value("n_predict", default_params.n_predict);
-    llama.params.top_k = body.value("top_k", default_params.top_k);
-    llama.params.top_p = body.value("top_p", default_params.top_p);
-    llama.params.tfs_z = body.value("tfs_z", default_params.tfs_z);
-    llama.params.typical_p = body.value("typical_p", default_params.typical_p);
-    llama.params.repeat_last_n = body.value("repeat_last_n", default_params.repeat_last_n);
-    llama.params.temp = body.value("temperature", default_params.temp);
-    llama.params.repeat_penalty = body.value("repeat_penalty", default_params.repeat_penalty);
-    llama.params.presence_penalty = body.value("presence_penalty", default_params.presence_penalty);
-    llama.params.frequency_penalty = body.value("frequency_penalty", default_params.frequency_penalty);
-    llama.params.mirostat = body.value("mirostat", default_params.mirostat);
-    llama.params.mirostat_tau = body.value("mirostat_tau", default_params.mirostat_tau);
-    llama.params.mirostat_eta = body.value("mirostat_eta", default_params.mirostat_eta);
-    llama.params.penalize_nl = body.value("penalize_nl", default_params.penalize_nl);
-    llama.params.n_keep = body.value("n_keep", default_params.n_keep);
-    llama.params.seed = body.value("seed", default_params.seed);
-    llama.params.prompt = body.value("prompt", default_params.prompt);
-    llama.params.grammar = body.value("grammar", default_params.grammar);
-    llama.params.n_probs = body.value("n_probs", default_params.n_probs);
+    llama.stream = json_value(body, "stream", false);
+    llama.params.n_predict = json_value(body, "n_predict", default_params.n_predict);
+    llama.params.top_k = json_value(body, "top_k", default_params.top_k);
+    llama.params.top_p = json_value(body, "top_p", default_params.top_p);
+    llama.params.tfs_z = json_value(body, "tfs_z", default_params.tfs_z);
+    llama.params.typical_p = json_value(body, "typical_p", default_params.typical_p);
+    llama.params.repeat_last_n = json_value(body, "repeat_last_n", default_params.repeat_last_n);
+    llama.params.temp = json_value(body, "temperature", default_params.temp);
+    llama.params.repeat_penalty = json_value(body, "repeat_penalty", default_params.repeat_penalty);
+    llama.params.presence_penalty = json_value(body, "presence_penalty", default_params.presence_penalty);
+    llama.params.frequency_penalty = json_value(body, "frequency_penalty", default_params.frequency_penalty);
+    llama.params.mirostat = json_value(body, "mirostat", default_params.mirostat);
+    llama.params.mirostat_tau = json_value(body, "mirostat_tau", default_params.mirostat_tau);
+    llama.params.mirostat_eta = json_value(body, "mirostat_eta", default_params.mirostat_eta);
+    llama.params.penalize_nl = json_value(body, "penalize_nl", default_params.penalize_nl);
+    llama.params.n_keep = json_value(body, "n_keep", default_params.n_keep);
+    llama.params.seed = json_value(body, "seed", default_params.seed);
+    llama.params.prompt = json_value(body, "prompt", default_params.prompt);
+    llama.params.grammar = json_value(body, "grammar", default_params.grammar);
+    llama.params.n_probs = json_value(body, "n_probs", default_params.n_probs);
 
     llama.params.logit_bias.clear();
-    if (body.value("ignore_eos", false))
+    if (json_value(body, "ignore_eos", false))
     {
         llama.params.logit_bias[llama_token_eos(llama.ctx)] = -INFINITY;
     }
@@ -1337,7 +1346,7 @@ int main(int argc, char **argv)
         auto lock = llama.lock();
 
         const json body = json::parse(req.body);
-        const std::string content = body.value("content", "");
+        const std::string content = json_value<std::string>(body, "content", "");
         const std::vector<llama_token> tokens = llama_tokenize(llama.ctx, content, false);
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json"); });
@@ -1350,7 +1359,7 @@ int main(int argc, char **argv)
 
         llama.rewind();
         llama_reset_timings(llama.ctx);
-        llama.params.prompt = body.value("content", "");
+        llama.params.prompt = json_value<std::string>(body, "content", "");
         llama.params.n_predict = 0;
         llama.loadPrompt();
         llama.beginCompletion();
@@ -1379,7 +1388,7 @@ int main(int argc, char **argv)
                           {
         if (res.status == 400) {
             res.set_content("Invalid request", "text/plain");
-        } else {
+        } else if (res.status != 500) {
             res.set_content("File Not Found", "text/plain");
             res.status = 404;
         } });
