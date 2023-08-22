@@ -351,6 +351,8 @@ extern "C" {
     LLAMA_API int llama_n_ctx_from_model  (const struct llama_model * model);
     LLAMA_API int llama_n_embd_from_model (const struct llama_model * model);
 
+    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
+
     // Get the vocabulary as output parameters.
     // Returns number of results.
     LLAMA_API int llama_get_vocab(

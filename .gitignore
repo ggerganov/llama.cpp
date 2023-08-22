@@ -47,7 +47,8 @@ models-mnt
 /Pipfile
 /embd-input-test
 /libllama.so
-
+/llama-bench
+build-info.h
 arm_neon.h
 compile_commands.json
 CMakeSettings.json

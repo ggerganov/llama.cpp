@@ -5,7 +5,6 @@
 #import <Foundation/Foundation.h>
 
 #import <Metal/Metal.h>
-#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #undef MIN
 #undef MAX
@@ -79,6 +78,14 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(mul_mat_q4_K_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q5_K_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q6_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_f16_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q4_0_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q4_1_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q2_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q3_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q4_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q5_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mm_q6_K_f32);
     GGML_METAL_DECL_KERNEL(rope);
     GGML_METAL_DECL_KERNEL(alibi_f32);
     GGML_METAL_DECL_KERNEL(cpy_f32_f16);
@@ -110,13 +117,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     ctx->n_buffers = 0;
     ctx->concur_list_len = 0;
 
-    // determine if we can use MPS
-    if (MPSSupportsMTLDevice(ctx->device)) {
-        fprintf(stderr, "%s: using MPS\n", __func__);
-    } else {
-        fprintf(stderr, "%s: not using MPS\n", __func__);
-        GGML_ASSERT(false && "MPS not supported");
-    }
 
 #if 0
     // compile from source string and show compile log
@@ -163,10 +163,15 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     // load kernels
     {
+        NSError * error = nil;
 #define GGML_METAL_ADD_KERNEL(name) \
         ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
-        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:nil]; \
-        fprintf(stderr, "%s: loaded %-32s %16p\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name);
+        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
+        fprintf(stderr, "%s: loaded %-32s %16p\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name); \
+        if (error) { \
+            fprintf(stderr, "%s: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
+            return NULL; \
+        }
 
         GGML_METAL_ADD_KERNEL(add);
         GGML_METAL_ADD_KERNEL(add_row);
@@ -196,6 +201,14 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(mul_mat_q4_K_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q5_K_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q6_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_f16_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q4_0_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q4_1_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q2_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q3_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q4_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q5_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mm_q6_K_f32);
         GGML_METAL_ADD_KERNEL(rope);
         GGML_METAL_ADD_KERNEL(alibi_f32);
         GGML_METAL_ADD_KERNEL(cpy_f32_f16);
@@ -228,11 +241,12 @@ void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
     ctx->n_cb = n_cb;
 }
 
-bool ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
-    if (ctx->concur_list_len) {
-        return true;
-    }
-    return false;
+int ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
+    return ctx->concur_list_len;
+}
+
+int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
+    return ctx->concur_list;
 }
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -375,7 +389,7 @@ void ggml_metal_get_tensor(
 
 void ggml_metal_graph_find_concurrency(
         struct ggml_metal_context * ctx,
-        struct ggml_cgraph * gf) {
+        struct ggml_cgraph * gf, bool check_mem) {
     int search_depth = gf->n_nodes; //we only find concurrency in this range to avoid wasting too much time
     int nodes_unused[GGML_MAX_CONCUR];
 
@@ -422,7 +436,7 @@ void ggml_metal_graph_find_concurrency(
                         }
                     }
                 }
-                if (exe_flag) {
+                if (exe_flag && check_mem) {
                     // check if nodes[i]'s data will be overwritten by a node before nodes[i].
                     // if node[5] and node[3] write to the same memory region, then we can't issue node[5] before node[3]
                     int64_t data_start = (int64_t) gf->nodes[i]->data;
@@ -506,7 +520,7 @@ void ggml_metal_graph_compute(
 
             id<MTLCommandBuffer> command_buffer = command_buffers[cb_idx];
 
-            id<MTLComputeCommandEncoder> encoder = nil;
+            id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
 
             const int node_start =                                  (cb_idx + 0) * n_nodes_per_cb;
             const int node_end   = (cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb;
@@ -515,10 +529,6 @@ void ggml_metal_graph_compute(
                 const int i = has_concur ? ctx->concur_list[ind] : ind;
 
                 if (i == -1) {
-                    if (encoder == nil) {
-                        encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                        continue;
-                    }
                     [encoder memoryBarrierWithScope:MTLBarrierScopeBuffers];
                     continue;
                 }
@@ -592,10 +602,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_ADD:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             if (ggml_nelements(src1) == ne10) {
                                 // src1 is a row
                                 [encoder setComputePipelineState:ctx->pipeline_add_row];
@@ -613,10 +619,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_MUL:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             if (ggml_nelements(src1) == ne10) {
                                 // src1 is a row
                                 [encoder setComputePipelineState:ctx->pipeline_mul_row];
@@ -634,10 +636,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_SCALE:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const float scale = *(const float *) src1->data;
 
                             [encoder setComputePipelineState:ctx->pipeline_scale];
@@ -653,10 +651,6 @@ void ggml_metal_graph_compute(
                         switch (ggml_get_unary_op(gf->nodes[i])) {
                             case GGML_UNARY_OP_SILU:
                                 {
-                                    if (encoder == nil) {
-                                        encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                                    }
-
                                     [encoder setComputePipelineState:ctx->pipeline_silu];
                                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -667,10 +661,6 @@ void ggml_metal_graph_compute(
                                 } break;
                             case GGML_UNARY_OP_RELU:
                                 {
-                                    if (encoder == nil) {
-                                        encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                                    }
-
                                     [encoder setComputePipelineState:ctx->pipeline_relu];
                                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -681,10 +671,6 @@ void ggml_metal_graph_compute(
                                 } break;
                             case GGML_UNARY_OP_GELU:
                                 {
-                                    if (encoder == nil) {
-                                        encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                                    }
-
                                     [encoder setComputePipelineState:ctx->pipeline_gelu];
                                     [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                     [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
@@ -701,10 +687,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_SOFT_MAX:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const int nth = 32;
 
                             [encoder setComputePipelineState:ctx->pipeline_soft_max];
@@ -719,10 +701,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_DIAG_MASK_INF:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const int n_past = ((int32_t *)(dst->op_params))[0];
 
                             [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
@@ -740,53 +718,43 @@ void ggml_metal_graph_compute(
 
                             GGML_ASSERT(ne00 == ne10);
                             // GGML_ASSERT(ne02 == ne12); // Should be checked on individual data types until broadcast is implemented everywhere
+                            uint gqa = ne12/ne02;
                             GGML_ASSERT(ne03 == ne13);
 
+                            // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
+                            // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
                             if (ggml_is_contiguous(src0) &&
                                 ggml_is_contiguous(src1) &&
-                                (src0t == GGML_TYPE_F32 || src0t == GGML_TYPE_F16) && ne11 > 1) {
-
-                                if (encoder != nil) {
-                                    [encoder endEncoding];
-                                    encoder = nil;
+                                src1t == GGML_TYPE_F32 &&
+                                [ctx->device supportsFamily:MTLGPUFamilyApple7] &&
+                                ne00%32 == 0 &&
+                                ne11 > 1) {
+                                    switch (src0->type) {
+                                        case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_mul_mm_f16_f32]; break;
+                                        case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q4_0_f32]; break;
+                                        case GGML_TYPE_Q4_1: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q4_1_f32]; break;
+                                        case GGML_TYPE_Q2_K: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q2_K_f32]; break;
+                                        case GGML_TYPE_Q3_K: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q3_K_f32]; break;
+                                        case GGML_TYPE_Q4_K: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q4_K_f32]; break;
+                                        case GGML_TYPE_Q5_K: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q5_K_f32]; break;
+                                        case GGML_TYPE_Q6_K: [encoder setComputePipelineState:ctx->pipeline_mul_mm_q6_K_f32]; break;
+                                        default: GGML_ASSERT(false && "MUL MAT-MAT not implemented");
+                                    }
+                                    [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                                    [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                                    [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                                    [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
+                                    [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:4];
+                                    [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:5];
+                                    [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:6];
+                                    [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:7];
+                                    [encoder setBytes:&ne0 length:sizeof(ne0) atIndex:8];
+                                    [encoder setBytes:&ne1 length:sizeof(ne1) atIndex:9];
+                                    [encoder setBytes:&gqa length:sizeof(gqa) atIndex:10];
+                                    [encoder setThreadgroupMemoryLength:8192 atIndex:0];
+                                    [encoder dispatchThreadgroups:MTLSizeMake( (ne11+31)/32, (ne01+63) / 64, ne12) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                                 }
-
-                                MPSDataType src0dt = src0t == GGML_TYPE_F32 ? MPSDataTypeFloat32 : MPSDataTypeFloat16;
-                                MPSDataType src1dt = src1t == GGML_TYPE_F32 ? MPSDataTypeFloat32 : MPSDataTypeFloat16;
-
-                                // for F32 x F32 we use MPS
-                                MPSMatrixDescriptor * desc0 = [MPSMatrixDescriptor
-                                    matrixDescriptorWithRows:ne01 columns:ne00 rowBytes:src0->nb[1] dataType:src0dt];
-
-                                MPSMatrixDescriptor * desc1 = [MPSMatrixDescriptor
-                                    matrixDescriptorWithRows:ne11 columns:ne10 rowBytes:src1->nb[1] dataType:src1dt];
-
-                                MPSMatrixDescriptor * desc  = [MPSMatrixDescriptor
-                                    matrixDescriptorWithRows:ne1 columns:ne0 rowBytes:dst->nb[1] dataType:MPSDataTypeFloat32];
-
-                                MPSMatrixMultiplication * mul = [[MPSMatrixMultiplication alloc]
-                                    initWithDevice:ctx->device transposeLeft:false transposeRight:true
-                                        resultRows:ne11 resultColumns:ne01 interiorColumns:ne00 alpha:1.0 beta:0.0];
-
-                                // we need to do ne12 multiplications
-                                // TODO: is there a way to do this in parallel - currently very slow ..
-                                // TODO: might be possible to offload part of the computation to ANE using Accelerate's CBLAS
-                                for (int64_t i02 = 0; i02 < ne12; ++i02) {
-                                    size_t offs_src0_cur = offs_src0 + i02/(ne12/ne02)*nb02; // gqa not used for now
-                                    size_t offs_src1_cur = offs_src1 + i02*nb12;
-                                    size_t offs_dst_cur  = offs_dst  + i02*nb2;
-
-                                    MPSMatrix * mat_src0 = [[MPSMatrix alloc] initWithBuffer:id_src0 offset:offs_src0_cur descriptor:desc0];
-                                    MPSMatrix * mat_src1 = [[MPSMatrix alloc] initWithBuffer:id_src1 offset:offs_src1_cur descriptor:desc1];
-                                    MPSMatrix * mat_dst  = [[MPSMatrix alloc] initWithBuffer:id_dst  offset:offs_dst_cur  descriptor:desc ];
-
-                                    [mul encodeToCommandBuffer:command_buffer leftMatrix:mat_src1 rightMatrix:mat_src0 resultMatrix:mat_dst];
-                                }
-                            } else {
-                                if (encoder == nil) {
-                                    encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                                }
-
+                            else {
                                 int nth0 = 32;
                                 int nth1 = 1;
 
@@ -885,23 +853,24 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:14];
                                 [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:15];
                                 [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:16];
+                                [encoder setBytes:&gqa length:sizeof(gqa) atIndex:17];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 ||
                                     src0t == GGML_TYPE_Q2_K || src0t == GGML_TYPE_Q4_K) {
-                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7) / 8, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7) / 8, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q3_K) {
 #ifdef GGML_QKK_64
-                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+1)/2, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+1)/2, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
 #else
-                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+3)/4, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+3)/4, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
 #endif
                                 }
                                 else if (src0t == GGML_TYPE_Q5_K) {
-                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3) / 4, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3) / 4, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q6_K) {
-                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+1)/2, ne11, 1) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01+1)/2, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 } else {
                                     [encoder setThreadgroupMemoryLength:nth0*sizeof(float) atIndex:0];
                                     [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
@@ -910,10 +879,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_GET_ROWS:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             switch (src0->type) {
                                 case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_get_rows_f16]; break;
                                 case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_get_rows_q4_0]; break;
@@ -939,10 +904,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_RMS_NORM:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             float eps;
                             memcpy(&eps, dst->op_params, sizeof(float));
 
@@ -962,10 +923,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_NORM:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const float eps = 1e-5f;
 
                             const int nth = 256;
@@ -984,10 +941,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_ALIBI:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             GGML_ASSERT((src0t == GGML_TYPE_F32));
 
                             const int n_past = ((int32_t *) dst->op_params)[0]; UNUSED(n_past);
@@ -1027,10 +980,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_ROPE:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const int n_past = ((int32_t *) dst->op_params)[0];
                             const int n_dims = ((int32_t *) dst->op_params)[1];
                             const int mode   = ((int32_t *) dst->op_params)[2];
@@ -1071,10 +1020,6 @@ void ggml_metal_graph_compute(
                     case GGML_OP_CPY:
                     case GGML_OP_CONT:
                         {
-                            if (encoder == nil) {
-                                encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
-                            }
-
                             const int nth = 32;
 
                             switch (src0t) {
