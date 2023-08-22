@@ -1968,7 +1968,7 @@ static bool llama_model_load(
                 } break;
             case LLM_ARCH_FALCON:
                 {
-                }
+                } break;
             default:
                 throw std::runtime_error("unsupported architecture");
         };

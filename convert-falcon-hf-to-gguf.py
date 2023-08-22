@@ -109,6 +109,8 @@ gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 print("gguf: get tokenizer metadata")
 
 tokens: List[str] = []
+scores: List[float] = []
+toktypes: List[int] = []
 merges: List[str] = []
 
 
@@ -152,8 +154,12 @@ if Path(dir_model + "/tokenizer.json").is_file():
             text = bytearray(pad_token)
 
         tokens.append(text)
+        scores.append(0.0)                      # dymmy
+        toktypes.append(gguf.TokenType.NORMAL)  # dummy
 
     gguf_writer.add_token_list(tokens)
+    gguf_writer.add_token_scores(scores)
+    gguf_writer.add_token_types(toktypes)
 
     if "added_tokens" in tokenizer_json and Path(dir_model + "/tokenizer_config.json").is_file():
         print("gguf: get special token ids")
