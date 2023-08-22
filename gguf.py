@@ -597,7 +597,7 @@ class GGUFWriter:
         self.add_string(KEY_GENERAL_SOURCE_HF_REPO, repo)
 
     def add_file_type(self, ftype: int):
-        self.add_string(KEY_GENERAL_FILE_TYPE, file_type)
+        self.add_uint32(KEY_GENERAL_FILE_TYPE, ftype)
 
     def add_name(self, name: str):
         self.add_string(KEY_GENERAL_NAME, name)
