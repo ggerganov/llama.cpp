@@ -31,7 +31,6 @@ CPU inference for Meta's Lllama2 models using default options.
 %autosetup
 
 %build
-tree
 make -j
 
 %install
