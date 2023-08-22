@@ -19,7 +19,7 @@ struct chat {
     llama_context * ctx;
 
     std::string system;
-    int n_threads = 8;
+    int n_threads = get_num_physical_cores();
 
     chat(const std::string & model_file, const std::string & system) : system(system) {
         lparams = llama_context_default_params();
