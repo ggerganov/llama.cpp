@@ -1,9 +1,11 @@
-import sys, struct, math, argparse
+import sys, struct, math, argparse, warnings
 from pathlib import Path
 
 import numpy as np
 
 import gguf
+
+warnings.filterwarnings('error')
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256
@@ -325,7 +327,11 @@ def main():
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLV3Model()
     print('* Scanning GGML input file')
-    offset = model.load(data, 0)
+    try:
+        offset = model.load(data, 0)
+    except OverflowError:
+        print(f'!!! Caught overflow loading tensors. The most likely issue is running on Windows but not in WSL. Try running in WSL if possible.', file = sys.stderr)
+        raise
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
