@@ -1850,6 +1850,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         //load data and store to threadgroup memory
         half4x4 temp_a;
         dequantize_func(x, il, temp_a);
+        threadgroup_barrier(mem_flags::mem_threadgroup);
         #pragma unroll(16)
         for (int i = 0; i < 16; i++) {
             *(sa + SG_MAT_SIZE * ((tiitg / THREAD_PER_ROW / 8) \
@@ -1895,6 +1896,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         }
     } else {
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
+        threadgroup_barrier(mem_flags::mem_threadgroup);
         threadgroup float *temp_str = ((threadgroup float *)shared_memory) \
                                       + 32 * (sgitg&1) + (16 * (sgitg>>1)) * BLOCK_SIZE_M;
         for (int i = 0; i < 8; i++) {
