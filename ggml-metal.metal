@@ -87,7 +87,12 @@ kernel void kernel_gelu(
     device       float * dst,
     uint tpig[[thread_position_in_grid]]) {
     float x = src0[tpig];
-    dst[tpig] = 0.5f*x*(1.0f + tanh(SQRT_2_OVER_PI*x*(1.0f + GELU_COEF_A*x*x)));
+
+    // BEWARE !!!
+    // Simply using "tanh" instead of "precise::tanh" will sometimes results in NaNs!
+    // This was observed with Falcon 7B and 40B models
+    //
+    dst[tpig] = 0.5f*x*(1.0f + precise::tanh(SQRT_2_OVER_PI*x*(1.0f + GELU_COEF_A*x*x)));
 }
 
 kernel void kernel_soft_max(
@@ -571,7 +576,25 @@ kernel void kernel_rope(
             dst_data[1] = x0*sin_theta + x1*cos_theta;
         }
     } else {
-        // TODO: implement
+        for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
+            for (int64_t ic = 0; ic < n_dims; ic += 2) {
+                const float cos_theta = cos(theta);
+                const float sin_theta = sin(theta);
+
+                theta *= theta_scale;
+
+                const int64_t i0 = ib*n_dims + ic/2;
+
+                device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+                const float x0 = src[0];
+                const float x1 = src[n_dims/2];
+
+                dst_data[0]        = x0*cos_theta - x1*sin_theta;
+                dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
+            }
+        }
     }
 }
 
