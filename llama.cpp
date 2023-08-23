@@ -2333,9 +2333,11 @@ static struct ggml_cgraph * llm_build_llama(
         inpL = cur;
     }
 
+    cur = inpL;
+
     // norm
     {
-        cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
+        cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
         offload_func_nr(cur);
         ggml_set_name(cur, "rms_norm_2");
 
@@ -2436,7 +2438,6 @@ static struct ggml_cgraph * llm_build_falcon(
     ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     for (int il = 0; il < n_layer; ++il) {
-        struct ggml_tensor * cur;
         struct ggml_tensor * attn_norm;
 
         // self-attention
@@ -2561,6 +2562,12 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * inpFF = attn_norm;
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
+
+            // TODO: this is temporary needed to introduce artificial dependency between FF and ATTN
+            //       adding this, because there seems to be a bug in the Metal concurrency optimization
+            //       without this line, the results are non-deterministic and wrong
+            cur->src[2] = attn_out;
+
             cur = ggml_gelu(ctx0, cur);
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
         }
@@ -2572,9 +2579,11 @@ static struct ggml_cgraph * llm_build_falcon(
         inpL = cur;
     }
 
+    cur = inpL;
+
     // norm
     {
-        cur = ggml_norm(ctx0, inpL, norm_eps);
+        cur = ggml_norm(ctx0, cur, norm_eps);
 
         cur = ggml_add(ctx0,
                 ggml_mul(ctx0, cur, model.output_norm),
