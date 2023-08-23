@@ -2445,19 +2445,15 @@ static struct ggml_cgraph * llm_build_falcon(
             attn_norm = ggml_norm(ctx0, inpL, norm_eps);
 
             attn_norm = ggml_add(ctx0,
-                    ggml_mul(ctx0,
-                        ggml_repeat(ctx0, model.layers[il].attn_norm, attn_norm),
-                        attn_norm),
-                    ggml_repeat(ctx0, model.layers[il].attn_norm_b, attn_norm));
+                    ggml_mul(ctx0, attn_norm, model.layers[il].attn_norm),
+                    model.layers[il].attn_norm_b);
 
             if (model.layers[il].attn_norm_2) { // Falcon-40B
                 cur = ggml_norm(ctx0, inpL, norm_eps);
 
                 cur = ggml_add(ctx0,
-                        ggml_mul(ctx0,
-                            ggml_repeat(ctx0, model.layers[il].attn_norm_2, cur),
-                            cur),
-                        ggml_repeat(ctx0, model.layers[il].attn_norm_2_b, cur));
+                        ggml_mul(ctx0, cur, model.layers[il].attn_norm_2),
+                        model.layers[il].attn_norm_2_b);
             } else { // Falcon 7B
                 cur = attn_norm;
             }
@@ -2595,10 +2591,8 @@ static struct ggml_cgraph * llm_build_falcon(
         cur = ggml_norm(ctx0, inpL, norm_eps);
 
         cur = ggml_add(ctx0,
-                ggml_mul(ctx0,
-                    ggml_repeat(ctx0, model.output_norm, cur),
-                    cur),
-                ggml_repeat(ctx0, model.output_norm_b, cur));
+                ggml_mul(ctx0, cur, model.output_norm),
+                model.output_norm_b);
         ggml_set_name(cur, "result_norm");
     }
 
