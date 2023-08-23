@@ -925,10 +925,6 @@ struct llama_kv_cache {
 };
 
 struct llama_vocab {
-    // TODO:
-    // - add a vector of merges
-    //   so that we can pass it to different types of tokenizers with a common interface
-
     using id    = int32_t;
     using token = std::string;
     using ttype = llama_token_type;
