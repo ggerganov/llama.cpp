@@ -514,7 +514,8 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the 7B model to ggml FP16 format
-python3 convert.py models/7B/
+# Use --ctx 4096 for LLaMA v2
+python3 convert.py models/7B/ --ctx 2048
 
   # [Optional] for models using BPE tokenizers
   python convert.py models/7B/ --vocabtype bpe
