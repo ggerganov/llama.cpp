@@ -3,6 +3,7 @@
 *.so
 *.gguf
 *.bin
+*.log
 .DS_Store
 .build/
 .cache/
