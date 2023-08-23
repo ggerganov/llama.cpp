@@ -811,6 +811,7 @@ enum e_model {
     MODEL_7B,
     MODEL_13B,
     MODEL_30B,
+    MODEL_40B,
     MODEL_65B,
     MODEL_70B,
 };
@@ -1489,9 +1490,10 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_7B:  return "7B";
         case MODEL_13B: return "13B";
         case MODEL_30B: return "30B";
+        case MODEL_40B: return "40B";
         case MODEL_65B: return "65B";
         case MODEL_70B: return "70B";
-        default: GGML_ASSERT(false);
+        default:        return "?B";
     }
 }
 
@@ -1555,39 +1557,28 @@ static void llm_load_hparams(
         case LLM_ARCH_LLAMA:
             {
                 GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+
+                switch (hparams.n_layer) {
+                    case 26: model.type = e_model::MODEL_3B; break;
+                    case 32: model.type = e_model::MODEL_7B; break;
+                    case 40: model.type = e_model::MODEL_13B; break;
+                    case 60: model.type = e_model::MODEL_30B; break;
+                    case 80: model.type = hparams.n_head == hparams.n_head_kv ? e_model::MODEL_65B : e_model::MODEL_70B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
             } break;
         case LLM_ARCH_FALCON:
             {
                 GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+
+                switch (hparams.n_layer) {
+                    case 32: model.type = e_model::MODEL_7B; break;
+                    case 60: model.type = e_model::MODEL_40B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
             } break;
         default: (void)0;
     };
-
-    // TODO: generalize to non-LLaMA models
-    switch (hparams.n_layer) {
-        case 26: model.type = e_model::MODEL_3B; break;
-        case 32: model.type = e_model::MODEL_7B; break;
-        case 40: model.type = e_model::MODEL_13B; break;
-        case 60: model.type = e_model::MODEL_30B; break;
-        case 80: model.type = e_model::MODEL_65B; break;
-        default:
-                 {
-                     if (hparams.n_layer < 32) {
-                         model.type = e_model::MODEL_7B;
-                     }
-                 } break;
-    }
-
-    // LLaMAv2
-    // TODO: probably not needed
-    {
-        const auto n_gqa = hparams.n_gqa();
-
-        if (model.type == e_model::MODEL_65B && n_gqa == 8) {
-            LLAMA_LOG_WARN("%s: assuming 70B model based on GQA == %d\n", __func__, n_gqa);
-            model.type = e_model::MODEL_70B;
-        }
-    }
 
     model.ftype = ml.ftype;
 
@@ -5015,7 +5006,10 @@ int llama_model_n_embd(const struct llama_model * model) {
 }
 
 int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
-    return snprintf(buf, buf_size, "LLaMA %s %s", llama_model_type_name(model->type), llama_model_ftype_name(model->ftype).c_str());
+    return snprintf(buf, buf_size, "%s %s %s",
+            model->name.c_str(),
+            llama_model_type_name(model->type),
+            llama_model_ftype_name(model->ftype).c_str());
 }
 
 int llama_model_quantize(

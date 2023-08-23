@@ -733,7 +733,11 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        self.gguf.add_name                ("LLaMA")
+        ver = None
+        if (params.n_ctx == 4096):
+            ver = "v2"
+
+        self.gguf.add_name                ("LLaMA" if ver == None else "LLaMA " + ver)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)

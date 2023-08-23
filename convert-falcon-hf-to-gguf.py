@@ -94,7 +94,7 @@ print("gguf: get model metadata")
 
 block_count = hparams["n_layer"]
 
-gguf_writer.add_name(last_dir)
+gguf_writer.add_name("Falcon")
 gguf_writer.add_context_length(2048) # not in config.json
 gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
 gguf_writer.add_embedding_length(hparams["hidden_size"])
