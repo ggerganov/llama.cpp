@@ -1315,8 +1315,8 @@ static void llama_v3_model_load_internal(
             ggml_cuda_set_scratch_size(vram_scratch);
             if (n_gpu_layers > 0) {
                 LLAMA_V3_LOG_INFO("%s: allocating batch_size x (%zd kB + n_ctx x %zd B) = %zd MB VRAM for the scratch buffer\n",
-                        __func__, vram_scratch_base / kB, vram_scratch_per_context,
-                        (vram_scratch + MB - 1) / MB); // round up
+                        __func__, vram_scratch_base / kB3, vram_scratch_per_context,
+                        (vram_scratch + MB3 - 1) / MB3); // round up
             }
         }
 #endif // GGML_USE_CUBLAS
