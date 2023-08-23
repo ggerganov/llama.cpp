@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ctypes
 from ctypes import cdll, c_char_p, c_void_p, POINTER, c_float, c_int
 import numpy as np

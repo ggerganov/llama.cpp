@@ -148,7 +148,7 @@ struct cmd_params {
 };
 
 static const cmd_params cmd_params_defaults = {
-    /* model         */ {"models/7B/ggml-model-q4_0.bin"},
+    /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
     /* n_batch       */ {512},
@@ -179,12 +179,12 @@ static void print_usage(int /* argc */, char ** argv) {
     fprintf(stdout, "  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     fprintf(stdout, "  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
     fprintf(stdout, "  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
-    fprintf(stdout, "  -ts, --tensor_split <ts>                       \n");
+    fprintf(stdout, "  -ts, --tensor_split <ts0/ts1/..>               \n");
     fprintf(stdout, "  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
-    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : "md");
+    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : cmd_params_defaults.output_format == MARKDOWN ? "md" : "sql");
     fprintf(stdout, "  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     fprintf(stdout, "\n");
-    fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by repeating the parameter.\n");
+    fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 
 }
 
@@ -606,6 +606,8 @@ const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
 struct printer {
+    virtual ~printer() {}
+
     FILE * fout;
     virtual void print_header(const cmd_params & params) { (void) params; };
     virtual void print_test(const test & t) = 0;
@@ -726,7 +728,7 @@ struct markdown_printer : public printer {
         if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
         }
-        if (params.n_batch.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
+        if (params.n_threads.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
             fields.push_back("n_threads");
         }
         if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
@@ -849,7 +851,7 @@ struct sql_printer : public printer {
 };
 
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
-    std::vector<llama_token> tokens(n_batch, llama_token_bos());
+    std::vector<llama_token> tokens(n_batch, llama_token_bos(ctx));
     int n_processed = 0;
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
@@ -859,7 +861,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
-    llama_token token = llama_token_bos();
+    llama_token token = llama_token_bos(ctx);
     for (int i = 0; i < n_gen; i++) {
         llama_eval(ctx, &token, 1, n_past + i, n_threads);
     }

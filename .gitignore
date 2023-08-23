@@ -1,7 +1,10 @@
 *.o
 *.a
 *.so
+*.gguf
 *.bin
+*.exe
+*.dll
 .DS_Store
 .build/
 .cache/
@@ -47,6 +50,8 @@ models-mnt
 /server
 /Pipfile
 /embd-input-test
+/gguf
+/gguf-llama-simple
 /libllama.so
 /llama-bench
 build-info.h
@@ -65,7 +70,6 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
-
 pyproject.toml
 poetry.lock
 poetry.toml
@@ -79,4 +83,3 @@ tests/test-quantize-fns
 tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0
-
