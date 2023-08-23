@@ -1280,6 +1280,7 @@ static void llama_model_load_internal(
     std::string general_name = "n/a";
     std::string general_arch = "n/a";
     std::string general_date = "n/a";
+    std::string general_commit_hash = "n/a";
 
     // read hparams
     {
@@ -1338,6 +1339,7 @@ static void llama_model_load_internal(
         GGUF_GET(general_name, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.name");
         GGUF_GET(general_arch, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.architecture");
         GGUF_GET(general_date, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.date");
+        GGUF_GET(general_commit_hash, gguf_get_val_str, GGUF_TYPE_STRING, false, "general.commit_hash");
 
         // special tokens
         GGUF_GET(vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, "tokenizer.ggml.bos_token_id");
@@ -1448,6 +1450,7 @@ static void llama_model_load_internal(
         // general kv
         LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, general_name.c_str());
         LLAMA_LOG_INFO("%s: general.date = %s\n",    __func__, general_date.c_str());
+        LLAMA_LOG_INFO("%s: general.commit_hash = %s\n", __func__, general_commit_hash.c_str());
 
         // special tokens
         if (vocab.special_bos_id != -1) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].text.c_str() ); }
