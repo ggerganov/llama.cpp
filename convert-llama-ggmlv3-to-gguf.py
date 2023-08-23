@@ -1,11 +1,9 @@
-import sys, struct, math, argparse, warnings
+import sys, struct, math, argparse
 from pathlib import Path
 
 import numpy as np
 
 import gguf
-
-warnings.filterwarnings('error')
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256
@@ -95,7 +93,7 @@ class Tensor:
         pad = ((offset + 31) & ~31) - offset
         offset += pad
         n_elems = np.prod(self.dims)
-        n_bytes = (n_elems * tysize) // blksize
+        n_bytes = np.int64(np.int64(n_elems) * np.int64(tysize)) // np.int64(blksize)
         self.start_offset = offset
         self.len_bytes = n_bytes
         offset += n_bytes
@@ -327,11 +325,7 @@ def main():
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLV3Model()
     print('* Scanning GGML input file')
-    try:
-        offset = model.load(data, 0)
-    except OverflowError:
-        print(f'!!! Caught overflow loading tensors. The most likely issue is running on Windows but not in WSL. Try running in WSL if possible.', file = sys.stderr)
-        raise
+    offset = model.load(data, 0)
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
