@@ -39,6 +39,7 @@ Last revision compatible with the old format: [dadbed9](https://github.com/ggerg
         <li><a href="#memorydisk-requirements">Memory/Disk Requirements</a></li>
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
+        <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
         <li><a href="#instruction-mode-with-alpaca">Instruction mode with Alpaca</a></li>
         <li><a href="#using-openllama">Using OpenLLaMA</a></li>
         <li><a href="#using-gpt4all">Using GPT4All</a></li>
@@ -604,6 +605,16 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
     CHAT_SAVE_DIR=./chat/bob ./examples/chat-persistent.sh
 ```
 
+### Constrained output with grammars
+
+`llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only:
+
+```bash
+./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+```
+
+The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
+
 ### Instruction mode with Alpaca
 
 1. First, download the `ggml` Alpaca model into the `./models` folder
@@ -885,3 +896,4 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /
 - [BLIS](./docs/BLIS.md)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
+- [GBNF grammars](./grammars/README.md)

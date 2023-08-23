@@ -26,6 +26,7 @@ KEY_GENERAL_DESCRIPTION          = "general.description"
 KEY_GENERAL_LICENSE              = "general.license"
 KEY_GENERAL_SOURCE_URL           = "general.source.url"
 KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
+KEY_GENERAL_FILE_TYPE            = "general.file_type"
 
 # LLM
 KEY_LLM_CONTEXT_LENGTH        = "{arch}.context_length"
@@ -594,6 +595,9 @@ class GGUFWriter:
 
     def add_source_hf_repo(self, repo: str):
         self.add_string(KEY_GENERAL_SOURCE_HF_REPO, repo)
+
+    def add_file_type(self, ftype: int):
+        self.add_uint32(KEY_GENERAL_FILE_TYPE, ftype)
 
     def add_name(self, name: str):
         self.add_string(KEY_GENERAL_NAME, name)
