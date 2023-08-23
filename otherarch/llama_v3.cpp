@@ -1357,7 +1357,7 @@ static void llama_v3_model_load_internal(
         LLAMA_V3_LOG_INFO("%s: offloaded %d/%d layers to GPU\n",
                 __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
         LLAMA_V3_LOG_INFO("%s: total VRAM used: %zu MB\n",
-                __func__, (vram_weights + vram_scratch + vram_kv_cache + MB - 1) / MB); // round up
+                __func__, (vram_weights + vram_scratch + vram_kv_cache + MB3 - 1) / MB3); // round up
 #else
         (void) n_gpu_layers;
 #endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
