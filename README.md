@@ -121,7 +121,7 @@ Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
 ```java
 $ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
-I llama.cpp build info: 
+I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
 I UNAME_M:  arm64
@@ -170,7 +170,7 @@ llm_load_tensors: mem required  = 7024.01 MB (+  400.00 MB per state)
 llama_new_context_with_model: kv self size  =  400.00 MB
 llama_new_context_with_model: compute buffer total size =   75.41 MB
 
-system_info: n_threads = 16 / 24 | AVX = 0 | AVX2 = 0 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | FMA = 0 | NEON = 1 | ARM_FMA = 1 | F16C = 0 | FP16_VA = 1 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 0 | VSX = 0 | 
+system_info: n_threads = 16 / 24 | AVX = 0 | AVX2 = 0 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | FMA = 0 | NEON = 1 | ARM_FMA = 1 | F16C = 0 | FP16_VA = 1 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 0 | VSX = 0 |
 sampling: repeat_last_n = 64, repeat_penalty = 1.100000, presence_penalty = 0.000000, frequency_penalty = 0.000000, top_k = 40, tfs_z = 1.000000, top_p = 0.950000, typical_p = 1.000000, temp = 0.800000, mirostat = 0, mirostat_lr = 0.100000, mirostat_ent = 5.000000
 generate: n_ctx = 512, n_batch = 512, n_predict = 400, n_keep = 0
 
