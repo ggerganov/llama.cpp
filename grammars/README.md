@@ -10,13 +10,29 @@ GBNF (GGML BNF) is a format for defining [formal grammars](https://en.wikipedia.
 
 In GBNF, we define *production rules* that specify how a *non-terminal* (rule name) can be replaced with sequences of *terminals* (characters, specifically Unicode [code points](https://en.wikipedia.org/wiki/Code_point)) and other non-terminals. The basic format of a production rule is `nonterminal ::= sequence...`.
 
-## Examples
+## Example
 
-Here are some examples and what they mean:
+Before going deeper, let's look at some of the features demonstrated in `grammars/chess.gbnf`, a small chess notation grammar:
+```
+# `root` specifies the pattern for the overall output
+root ::= (
+    # it must start with the characters "1. " followed by a sequence
+    # of characters that match the `move` rule, followed by a space, followed
+    # by another move, and then a newline
+    "1. " move " " move "\n"
 
-- `root ::= "1. " move " " move "\n"...`: In this rule from a chess game grammar, `root` requires the characters `"1. "`, followed by a sequence of characters that match the `move` rule, followed by a space, and so on
-- `move ::= (pawn | nonpawn | castle) [+#]?...`: Here, `move` is an abstract representation, which can be a pawn, nonpawn, or castle. The `[+#]?` denotes the possibility of checking or mate signs after moves.
-- `ws ::= [ \t\n]*`: In this context, `ws` is an abstract representation of whitespace, which could be any combination of space, tab or newline characters, or nothing (`*` denotes one or more).
+    # it's followed by one or more subsequent moves, numbered with one or two digits
+    ([1-9] [0-9]? ". " move " " move "\n")+
+)
+
+# `move` is an abstract representation, which can be a pawn, nonpawn, or castle.
+# The `[+#]?` denotes the possibility of checking or mate signs after moves
+move ::= (pawn | nonpawn | castle) [+#]?
+
+pawn ::= ...
+nonpawn ::= ...
+castle ::= ...
+```
 
 ## Non-Terminals and Terminals
 
