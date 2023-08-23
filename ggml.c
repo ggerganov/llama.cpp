@@ -19530,6 +19530,103 @@ struct gguf_context * gguf_init_empty(void) {
     return ctx;
 }
 
+
+struct gguf_context * gguf_read_headers(const char * fname)
+{
+    FILE * file = fopen(fname, "rb");
+    if (!file) {
+        return NULL;
+    }
+
+    // offset from start of file
+    size_t offset = 0;
+    uint32_t magic = 0;
+    gguf_fread_el(file, &magic, sizeof(magic), &offset);    bool ok = true;
+    struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
+    // read the header
+    {
+        ctx->header.magic = magic;
+        ctx->kv    = NULL;
+        ctx->infos = NULL;
+        ctx->data  = NULL;
+        ok = ok && gguf_fread_el(file, &ctx->header.version,   sizeof(ctx->header.version),   &offset);
+        ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
+        ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
+
+        if (!ok) {
+            fprintf(stderr, "%s: failed to read header\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+    }
+
+    // read the kv pairs
+    {
+        ctx->kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
+        for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+            struct gguf_kv * kv = &ctx->kv[i];
+            ok = ok && gguf_fread_str(file, &kv->key,                          &offset);
+            ok = ok && gguf_fread_el (file, &kv->type,    sizeof(kv->type),    &offset);
+            switch (kv->type) {
+                case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (file, &kv->value.uint8,   sizeof(kv->value.uint8),   &offset); break;
+                case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (file, &kv->value.int8,    sizeof(kv->value.int8),    &offset); break;
+                case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (file, &kv->value.uint16,  sizeof(kv->value.uint16),  &offset); break;
+                case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (file, &kv->value.int16,   sizeof(kv->value.int16),   &offset); break;
+                case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (file, &kv->value.uint32,  sizeof(kv->value.uint32),  &offset); break;
+                case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (file, &kv->value.int32,   sizeof(kv->value.int32),   &offset); break;
+                case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (file, &kv->value.float32, sizeof(kv->value.float32), &offset); break;
+                case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (file, &kv->value.bool_,   sizeof(kv->value.bool_),   &offset); break;
+                case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(file, &kv->value.str,                                &offset); break;
+                case GGUF_TYPE_ARRAY:
+                    {
+                        ok = ok && gguf_fread_el(file, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
+                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n),    &offset);
+
+                        switch (kv->value.arr.type) {
+                            case GGUF_TYPE_UINT8:
+                            case GGUF_TYPE_INT8:
+                            case GGUF_TYPE_UINT16:
+                            case GGUF_TYPE_INT16:
+                            case GGUF_TYPE_UINT32:
+                            case GGUF_TYPE_INT32:
+                            case GGUF_TYPE_FLOAT32:
+                            case GGUF_TYPE_BOOL:
+                                {
+                                    kv->value.arr.data = malloc(kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type]);
+                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type], &offset);
+                                } break;
+                            case GGUF_TYPE_STRING:
+                                {
+                                    kv->value.arr.data = malloc(kv->value.arr.n * sizeof(struct gguf_str));
+                                    for (uint32_t j = 0; j < kv->value.arr.n; ++j) {
+                                        ok = ok && gguf_fread_str(file, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
+                                    }
+                                } break;
+                            case GGUF_TYPE_ARRAY:
+                            case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
+                        };
+                    } break;
+                case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
+            };
+
+            if (!ok) {
+                break;
+            }
+        }
+
+        if (!ok) {
+            fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+    }
+
+    fclose(file);
+    return ctx;
+}
+
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
     FILE * file = fopen(fname, "rb");
     if (!file) {

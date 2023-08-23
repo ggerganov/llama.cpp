@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "model_adapter.h"
+#include "ggml.h"
 
 #include <chrono>
 
@@ -253,9 +254,28 @@ void print_tok_vec(std::vector<float> &embd)
     }
     else if(magic == 0x46554747)
     {
-         fileformat = FileFormat::GGUF_LLAMA;
+        fin.close();
+        fileformat = FileFormat::GGUF_LLAMA;
+        auto ctx = gguf_read_headers(fname.c_str());
+        auto keyidx = gguf_find_key(ctx, "general.architecture");
+        std::string modelarch = "";
+        if (keyidx != -1) { modelarch = gguf_get_val_str(ctx, keyidx); }
+        gguf_free(ctx);
+        if(modelarch=="llama")
+        {
+            fileformat = FileFormat::GGUF_LLAMA;
+        }
+        else
+        {
+            printf("\nERROR: Detected unimplemented GGUF Arch: %s\n",modelarch.c_str());
+        }
     }
-    fin.close();
+
+    if(fin.is_open())
+    {
+        fin.close();
+    }
+
 
     return fileformat;
  }

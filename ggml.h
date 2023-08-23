@@ -1842,6 +1842,8 @@ extern "C" {
     GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
     //GGML_API struct gguf_context * gguf_init_from_buffer(..);
 
+    GGML_API struct gguf_context * gguf_read_headers(const char * fnam);
+
     GGML_API void gguf_free(struct gguf_context * ctx);
 
     GGML_API const char * gguf_type_name(enum gguf_type type);
