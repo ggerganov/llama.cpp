@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # HF falcon--> gguf conversion
 
 import gguf
