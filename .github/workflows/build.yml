@@ -299,7 +299,7 @@ jobs:
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
             echo "name=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" >> $$ GITHUB_OUTPUT
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -350,9 +350,9 @@ jobs:
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=$BUILD_NUMBER" > $GITHUB_OUTPUT
+            echo "name=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" > $GITHUB_OUTPUT
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -422,9 +422,9 @@ jobs:
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=$BUILD_NUMBER" > $GITHUB_OUTPUT
+            echo "name=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" > $GITHUB_OUTPUT
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" >> $GITHUB_OUTPUT
           fi
 
       - name: Download artifacts
