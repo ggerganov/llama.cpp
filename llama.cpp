@@ -2971,14 +2971,10 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
 }
 
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
-    if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-        char buf[7];
-        int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
-        GGML_ASSERT(0 <= result && result < 7);
-        return vocab.token_to_id.at(buf);
-    }
-    // vocab.type == LLAMA_VOCAB_TYPE_BPE
-    return vocab.token_to_id.at(std::string(1, ch));
+    char buf[7];
+    int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
+    GGML_ASSERT(0 <= result && result < 7);
+    return vocab.token_to_id.at(buf);
 }
 
 static std::string llama_escape_whitespace(const std::string& text) {
