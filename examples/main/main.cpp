@@ -197,6 +197,11 @@ int main(int argc, char ** argv) {
         embd_inp = session_tokens;
     }
 
+    // Should not run without any tokens
+    if (embd_inp.empty()) {
+        embd_inp.push_back(llama_token_bos(ctx));
+    }
+
     // Tokenize negative prompt
     std::vector<llama_token> guidance_inp;
     int guidance_offset = 0;
