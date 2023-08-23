@@ -2545,26 +2545,23 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
             ggml_set_name(KQV_merged, "KQV_merged");
 
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+            cur = ggml_cpy(ctx0, KQV_merged, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
             ggml_set_name(cur, "KQV_merged_contiguous");
-
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
             ggml_set_name(cur, "result_wo");
         }
 
-        struct ggml_tensor * inpFF = attn_norm;
-        struct ggml_tensor * attn_out = ggml_cpy(
-            ctx0, cur, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, N));
+        struct ggml_tensor * attn_out = cur;
 
-        cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
-        cur = ggml_gelu(ctx0, cur);
-        cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
+        // feed forward
+        {
+            struct ggml_tensor * inpFF = attn_norm;
+
+            cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
+            cur = ggml_gelu(ctx0, cur);
+            cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
+        }
 
         cur = ggml_add(ctx0, cur, attn_out);
         cur = ggml_add(ctx0, cur, inpL);
