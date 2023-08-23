@@ -5779,26 +5779,6 @@ int llama_tokenize(
     return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
 }
 
-int llama_tokenize_bpe(
-        struct llama_context * ctx,
-                  const char * text,
-                 llama_token * tokens,
-                         int   n_max_tokens,
-                        bool   add_bos) {
-    auto res = llama_tokenize_internal(ctx->model.vocab, text, add_bos, false);
-
-    if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
-        return -((int) res.size());
-    }
-
-    for (size_t i = 0; i < res.size(); i++) {
-        tokens[i] = res[i];
-    }
-
-    return res.size();
-}
-
 int llama_tokenize_with_model(
     const struct llama_model * model,
                   const char * text,
@@ -5822,18 +5802,6 @@ int llama_tokenize_with_model(
 
 int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
     return llama_token_to_str_with_model(&ctx->model, token, buf, length);
-}
-
-int llama_token_to_str_bpe(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    if (0 <= token && token < llama_model_n_vocab(&ctx->model)) {
-        std::string result = ctx->model.vocab.id_to_token[token].text;
-        if (length < (int) result.length()) {
-            return -result.length();
-        }
-        memcpy(buf, result.c_str(), result.length());
-        return result.length();
-    }
-    return 0;
 }
 
 // does not write null-terminator to str

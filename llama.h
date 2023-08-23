@@ -370,13 +370,6 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    LLAMA_API int llama_tokenize_bpe(
-            struct llama_context * ctx,
-                      const char * text,
-                     llama_token * tokens,
-                             int   n_max_tokens,
-                            bool   add_bos);
-
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
@@ -387,12 +380,6 @@ extern "C" {
     // Token Id -> String. Uses the vocabulary in the provided context
     // Does not write null terminator to the buffer
     LLAMA_API int llama_token_to_str(
-            const struct llama_context * ctx,
-                           llama_token   token,
-                                  char * buf,
-                                  int    length);
-
-    LLAMA_API int llama_token_to_str_bpe(
             const struct llama_context * ctx,
                            llama_token   token,
                                   char * buf,
