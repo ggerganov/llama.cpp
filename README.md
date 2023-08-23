@@ -11,15 +11,17 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
+- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717#issuecomment-1690568032
 
-Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
+- A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
 
-### Current `master` should be considered in Beta - expect some issues for a few days!
+  Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
 
-### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
+  ### Current `master` should be considered in Beta - expect some issues for a few days!
 
-### Issues with non-GGUF models will be considered with low priority!
+  ### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
+
+  ### Issues with non-GGUF models will be considered with low priority!
 
 ----
 
@@ -66,12 +68,11 @@ The main goal of `llama.cpp` is to run the LLaMA model using 4-bit integer quant
 - Apple silicon first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
 - AVX, AVX2 and AVX512 support for x86 architectures
 - Mixed F16 / F32 precision
-- 4-bit, 5-bit and 8-bit integer quantization support
-- Supports OpenBLAS/Apple BLAS/ARM Performance Lib/ATLAS/BLIS/Intel MKL/NVHPC/ACML/SCSL/SGIMATH and [more](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors) in BLAS
-- cuBLAS and CLBlast support
+- 2-bit, 3-bit, 4-bit, 5-bit, 6-bit and 8-bit integer quantization support
+- CUDA, Metal and OpenCL GPU backend support
 
 The original implementation of `llama.cpp` was [hacked in an evening](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022).
-Since then, the project has improved significantly thanks to many contributions. This project is for educational purposes and serves
+Since then, the project has improved significantly thanks to many contributions. This project is mainly for educational purposes and serves
 as the main playground for developing new features for the [ggml](https://github.com/ggerganov/ggml) library.
 
 **Supported platforms:**
@@ -85,6 +86,7 @@ as the main playground for developing new features for the [ggml](https://github
 
 - [X] LLaMA 🦙
 - [x] LLaMA 2 🦙🦙
+- [X] Falcon
 - [X] [Alpaca](https://github.com/ggerganov/llama.cpp#instruction-mode-with-alpaca)
 - [X] [GPT4All](https://github.com/ggerganov/llama.cpp#using-gpt4all)
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
@@ -115,90 +117,84 @@ as the main playground for developing new features for the [ggml](https://github
 
 ---
 
-Here is a typical run using LLaMA-7B:
+Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
 ```java
-make -j && ./main -m ./models/7B/ggml-model-q4_0.bin -p "Building a website can be done in 10 simple steps:" -n 512
-I llama.cpp build info:
+$ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
+I llama.cpp build info: 
 I UNAME_S:  Darwin
 I UNAME_P:  arm
 I UNAME_M:  arm64
-I CFLAGS:   -I.              -O3 -DNDEBUG -std=c11   -fPIC -pthread -DGGML_USE_ACCELERATE
-I CXXFLAGS: -I. -I./examples -O3 -DNDEBUG -std=c++11 -fPIC -pthread
+I CFLAGS:   -I.            -O3 -std=c11   -fPIC -DNDEBUG -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -pthread -DGGML_USE_K_QUANTS -DGGML_USE_ACCELERATE
+I CXXFLAGS: -I. -I./common -O3 -std=c++11 -fPIC -DNDEBUG -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar -pthread -DGGML_USE_K_QUANTS
 I LDFLAGS:   -framework Accelerate
-I CC:       Apple clang version 14.0.0 (clang-1400.0.29.202)
-I CXX:      Apple clang version 14.0.0 (clang-1400.0.29.202)
+I CC:       Apple clang version 14.0.3 (clang-1403.0.22.14.1)
+I CXX:      Apple clang version 14.0.3 (clang-1403.0.22.14.1)
 
 make: Nothing to be done for `default'.
-main: seed = 1678486056
-llama_model_load: loading model from './models/7B/ggml-model-q4_0.bin' - please wait ...
-llama_model_load: n_vocab = 32000
-llama_model_load: n_ctx   = 512
-llama_model_load: n_embd  = 4096
-llama_model_load: n_mult  = 256
-llama_model_load: n_head  = 32
-llama_model_load: n_layer = 32
-llama_model_load: n_rot   = 128
-llama_model_load: f16     = 2
-llama_model_load: n_ff    = 11008
-llama_model_load: ggml ctx size = 4529.34 MB
-llama_model_load: memory_size =   512.00 MB, n_mem = 16384
-llama_model_load: .................................... done
-llama_model_load: model size =  4017.27 MB / num tensors = 291
+main: build = 1041 (cf658ad)
+main: seed  = 1692823051
+llama_model_loader: loaded meta data with 16 key-value pairs and 363 tensors from models/llama-13b-v2/ggml-model-q4_0.gguf (version GGUF V1 (latest))
+llama_model_loader: - type  f32:   81 tensors
+llama_model_loader: - type q4_0:  281 tensors
+llama_model_loader: - type q6_K:    1 tensors
+llm_load_print_meta: format         = GGUF V1 (latest)
+llm_load_print_meta: arch           = llama
+llm_load_print_meta: vocab type     = SPM
+llm_load_print_meta: n_vocab        = 32000
+llm_load_print_meta: n_merges       = 0
+llm_load_print_meta: n_ctx_train    = 4096
+llm_load_print_meta: n_ctx          = 512
+llm_load_print_meta: n_embd         = 5120
+llm_load_print_meta: n_head         = 40
+llm_load_print_meta: n_head_kv      = 40
+llm_load_print_meta: n_layer        = 40
+llm_load_print_meta: n_rot          = 128
+llm_load_print_meta: n_gqa          = 1
+llm_load_print_meta: f_norm_eps     = 1.0e-05
+llm_load_print_meta: f_norm_rms_eps = 1.0e-05
+llm_load_print_meta: n_ff           = 13824
+llm_load_print_meta: freq_base      = 10000.0
+llm_load_print_meta: freq_scale     = 1
+llm_load_print_meta: model type     = 13B
+llm_load_print_meta: model ftype    = mostly Q4_0
+llm_load_print_meta: model size     = 13.02 B
+llm_load_print_meta: general.name   = LLaMA v2
+llm_load_print_meta: BOS token = 1 '<s>'
+llm_load_print_meta: EOS token = 2 '</s>'
+llm_load_print_meta: UNK token = 0 '<unk>'
+llm_load_print_meta: LF token  = 13 '<0x0A>'
+llm_load_tensors: ggml ctx size =    0.11 MB
+llm_load_tensors: mem required  = 7024.01 MB (+  400.00 MB per state)
+...................................................................................................
+llama_new_context_with_model: kv self size  =  400.00 MB
+llama_new_context_with_model: compute buffer total size =   75.41 MB
 
-main: prompt: 'Building a website can be done in 10 simple steps:'
-main: number of tokens in prompt = 15
-     1 -> ''
-  8893 -> 'Build'
-   292 -> 'ing'
-   263 -> ' a'
-  4700 -> ' website'
-   508 -> ' can'
-   367 -> ' be'
-  2309 -> ' done'
-   297 -> ' in'
- 29871 -> ' '
- 29896 -> '1'
- 29900 -> '0'
-  2560 -> ' simple'
-  6576 -> ' steps'
- 29901 -> ':'
-
-sampling parameters: temp = 0.800000, top_k = 40, top_p = 0.950000
+system_info: n_threads = 16 / 24 | AVX = 0 | AVX2 = 0 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | FMA = 0 | NEON = 1 | ARM_FMA = 1 | F16C = 0 | FP16_VA = 1 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 0 | VSX = 0 | 
+sampling: repeat_last_n = 64, repeat_penalty = 1.100000, presence_penalty = 0.000000, frequency_penalty = 0.000000, top_k = 40, tfs_z = 1.000000, top_p = 0.950000, typical_p = 1.000000, temp = 0.800000, mirostat = 0, mirostat_lr = 0.100000, mirostat_ent = 5.000000
+generate: n_ctx = 512, n_batch = 512, n_predict = 400, n_keep = 0
 
 
-Building a website can be done in 10 simple steps:
-1) Select a domain name and web hosting plan
-2) Complete a sitemap
-3) List your products
-4) Write product descriptions
-5) Create a user account
-6) Build the template
-7) Start building the website
-8) Advertise the website
-9) Provide email support
-10) Submit the website to search engines
-A website is a collection of web pages that are formatted with HTML. HTML is the code that defines what the website looks like and how it behaves.
-The HTML code is formatted into a template or a format. Once this is done, it is displayed on the user's browser.
-The web pages are stored in a web server. The web server is also called a host. When the website is accessed, it is retrieved from the server and displayed on the user's computer.
-A website is known as a website when it is hosted. This means that it is displayed on a host. The host is usually a web server.
-A website can be displayed on different browsers. The browsers are basically the software that renders the website on the user's screen.
-A website can also be viewed on different devices such as desktops, tablets and smartphones.
-Hence, to have a website displayed on a browser, the website must be hosted.
-A domain name is an address of a website. It is the name of the website.
-The website is known as a website when it is hosted. This means that it is displayed on a host. The host is usually a web server.
-A website can be displayed on different browsers. The browsers are basically the software that renders the website on the user’s screen.
-A website can also be viewed on different devices such as desktops, tablets and smartphones. Hence, to have a website displayed on a browser, the website must be hosted.
-A domain name is an address of a website. It is the name of the website.
-A website is an address of a website. It is a collection of web pages that are formatted with HTML. HTML is the code that defines what the website looks like and how it behaves.
-The HTML code is formatted into a template or a format. Once this is done, it is displayed on the user’s browser.
-A website is known as a website when it is hosted
-
-main: mem per token = 14434244 bytes
-main:     load time =  1332.48 ms
-main:   sample time =  1081.40 ms
-main:  predict time = 31378.77 ms / 61.41 ms per token
-main:    total time = 34036.74 ms
+ Building a website can be done in 10 simple steps:
+Step 1: Find the right website platform.
+Step 2: Choose your domain name and hosting plan.
+Step 3: Design your website layout.
+Step 4: Write your website content and add images.
+Step 5: Install security features to protect your site from hackers or spammers
+Step 6: Test your website on multiple browsers, mobile devices, operating systems etc…
+Step 7: Test it again with people who are not related to you personally – friends or family members will work just fine!
+Step 8: Start marketing and promoting the website via social media channels or paid ads
+Step 9: Analyze how many visitors have come to your site so far, what type of people visit more often than others (e.g., men vs women) etc…
+Step 10: Continue to improve upon all aspects mentioned above by following trends in web design and staying up-to-date on new technologies that can enhance user experience even further!
+How does a Website Work?
+A website works by having pages, which are made of HTML code. This code tells your computer how to display the content on each page you visit – whether it’s an image or text file (like PDFs). In order for someone else’s browser not only be able but also want those same results when accessing any given URL; some additional steps need taken by way of programming scripts that will add functionality such as making links clickable!
+The most common type is called static HTML pages because they remain unchanged over time unless modified manually (either through editing files directly or using an interface such as WordPress). They are usually served up via HTTP protocols – this means anyone can access them without having any special privileges like being part of a group who is allowed into restricted areas online; however, there may still exist some limitations depending upon where one lives geographically speaking.
+How to
+llama_print_timings:        load time =   576.45 ms
+llama_print_timings:      sample time =   283.10 ms /   400 runs   (    0.71 ms per token,  1412.91 tokens per second)
+llama_print_timings: prompt eval time =   599.83 ms /    19 tokens (   31.57 ms per token,    31.68 tokens per second)
+llama_print_timings:        eval time = 24513.59 ms /   399 runs   (   61.44 ms per token,    16.28 tokens per second)
+llama_print_timings:       total time = 25431.49 ms
 ```
 
 And here is another demo of running both LLaMA-7B and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on a single M1 Pro MacBook:
@@ -542,6 +538,8 @@ As the models are currently fully loaded into memory, you will need adequate dis
 ### Quantization
 
 Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+*(outdated)*
 
 | Model | Measure      | F16    | Q4_0   | Q4_1   | Q5_0   | Q5_1   | Q8_0   |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|
