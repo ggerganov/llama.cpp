@@ -504,7 +504,8 @@ Building the program with BLAS support may lead to some performance improvements
 ```bash
 # obtain the original LLaMA model weights and place them in ./models
 ls ./models
-65B 30B 13B 7B tokenizer_checklist.chk tokenizer.model
+65B 30B 13B 7B tokenizer.model
+
   # [Optional] for models using BPE tokenizers
   ls ./models
   65B 30B 13B 7B vocab.json
