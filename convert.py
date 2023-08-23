@@ -22,6 +22,7 @@ import numpy as np
 
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Literal, Optional, Sequence, Tuple, TypeVar, Union)
 from sentencepiece import SentencePieceProcessor  # type: ignore
@@ -734,6 +735,7 @@ class OutputFile:
 
     def add_meta_arch(self, params: Params) -> None:
         self.gguf.add_name                ("LLaMA")
+        self.gguf.add_date(datetime.today().isoformat())
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
