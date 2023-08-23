@@ -19,11 +19,7 @@ options:
 
 An example command using a model from [karpathy/tinyllamas](https://huggingface.co/karpathy/tinyllamas) is as follows:
 
-`$ ./convert-llama2c-to-ggml --copy-vocab-from-model ../llama2.c/tokenizer.bin --llama2c-model stories42M.bin --llama2c-output-model stories42M.ggmlv3.bin`
-
-For now the generated model is in the legacy GGJTv3 format, so you need to convert it to gguf manually:
-
-`$ python ./convert-llama-ggmlv3-to-gguf.py --eps 1e-5 --input stories42M.ggmlv3.bin --output stories42M.gguf.bin`
+`$ ./convert-llama2c-to-ggml --copy-vocab-from-model ../llama2.c/tokenizer.bin --llama2c-model stories42M.bin --llama2c-output-model stories42M.gguf.bin`
 
 Now you can use the model with a command like:
 

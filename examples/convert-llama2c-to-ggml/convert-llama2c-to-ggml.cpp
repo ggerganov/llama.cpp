@@ -13,6 +13,20 @@
 #include <algorithm>
 #include <string>
 
+// tensor names
+#define TN_TOKEN_EMBD  "token_embd.weight"
+#define TN_OUTPUT_NORM "output_norm.weight"
+#define TN_OUTPUT      "output.weight"
+#define TN_ATTN_NORM   "blk.%d.attn_norm.weight"
+#define TN_ATTN_Q      "blk.%d.attn_q.weight"
+#define TN_ATTN_K      "blk.%d.attn_k.weight"
+#define TN_ATTN_V      "blk.%d.attn_v.weight"
+#define TN_ATTN_OUTPUT "blk.%d.attn_output.weight"
+#define TN_FFN_NORM    "blk.%d.ffn_norm.weight"
+#define TN_FFN_GATE    "blk.%d.ffn_gate.weight"
+#define TN_FFN_DOWN    "blk.%d.ffn_down.weight"
+#define TN_FFN_UP      "blk.%d.ffn_up.weight"
+
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
@@ -183,6 +197,7 @@ struct my_llama_hparams {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;   // this is provided as user input?
     uint32_t n_embd  = 4096;
+    uint32_t n_ff    = 11008;
     uint32_t n_mult  = 4;
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
@@ -287,7 +302,7 @@ void print_params(struct my_llama_hparams * params) {
     printf("%s: n_embd:  %d\n", __func__, params->n_embd);
     printf("%s: n_mult:  %d\n", __func__, params->n_mult);
     printf("%s: n_head:  %d\n", __func__, params->n_head);
-    printf("%s: n_ff:    %d\n", __func__, get_n_ff(params));
+    printf("%s: n_ff:    %d\n", __func__, params->n_ff);
     printf("%s: n_layer: %d\n", __func__, params->n_layer);
     printf("%s: n_rot:   %d\n", __func__, params->n_rot);
 }
@@ -299,7 +314,7 @@ void init_model(struct my_llama_model * model) {
     const uint32_t n_layer = hparams.n_layer;
     const uint32_t n_vocab = hparams.n_vocab;
 
-    const uint32_t n_ff = get_n_ff(&hparams);
+    const uint32_t n_ff = hparams.n_ff;
     struct ggml_context * ctx = model->ctx;
 
     model->train_its = 0;
@@ -503,30 +518,6 @@ struct llama_file {
     }
 };
 
-void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
-    if (tensor == NULL) {
-        file->write_u32(0);
-        file->write_u32(0);
-        file->write_u32(GGML_TYPE_F32);
-        file->seek((0-file->tell()) & 31, SEEK_CUR);
-        return;
-    }
-    const char * name = ggml_get_name(tensor);
-    uint32_t name_len = strlen(name);
-    uint32_t nd = tensor->n_dims;
-    uint32_t ne[4] = { (uint32_t)tensor->ne[0],
-                       (uint32_t)tensor->ne[1],
-                       (uint32_t)tensor->ne[2],
-                       (uint32_t)tensor->ne[3] };
-    file->write_u32(nd);
-    file->write_u32(name_len);
-    file->write_u32(tensor->type);
-    file->write_raw(ne, sizeof(ne[0]) * nd);
-    file->write_raw(name, name_len);
-    file->seek((0-file->tell()) & 31, SEEK_CUR);
-    file->write_raw(tensor->data, ggml_nbytes(tensor));
-}
-
 bool is_ggml_file(const char *filename) {
     llama_file file(filename, "rb");
     if (file.size < 4) {
@@ -537,48 +528,26 @@ bool is_ggml_file(const char *filename) {
 }
 
 void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
-#pragma message("TODO: implement reading vocabulary using gguf")
-//    // heuristic to infer whether vocab is from ggml or from llama2.c vocabulary
-//    if (is_ggml_file(filename)) {
-//
-//        struct llama_context_params llama_params = llama_context_default_params();
-//        llama_params.vocab_only = true;
-//
-//        struct llama_model * lmodel = llama_load_model_from_file(filename, llama_params);
-//        struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
-//
-//        const int n_vocab = llama_n_vocab(lctx);
-//        vocab->id_to_token.resize(n_vocab);
-//        for (int i=0; i<n_vocab; ++i) {
-//            vocab->id_to_token[i].text  = llama_token_get_text(lctx, i);
-//            vocab->id_to_token[i].score = llama_token_get_score(lctx, i);
-//            vocab->id_to_token[i].type  = llama_token_get_type(lctx, i);
-//            vocab->token_to_id.emplace(vocab->id_to_token[i].text, i);
-//        }
-//        llama_free(lctx);
-//        llama_free_model(lmodel);
-//    } else
-    { // assume llama2.c vocabulary
-        printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
-        llama_file file(filename, "rb");
-        const int  n_vocab = config->vocab_size;
-        /* uint32_t max_token_length =  */ file.read_u32(); // unused
-        vocab->id_to_token.resize(n_vocab);
-        for (int i=0; i<n_vocab; ++i) {
-            float_t score = file.read_f32();
-            uint32_t len = file.read_u32();
-            std::string text = file.read_string(len);
-            // Special-case handling of <0xXX> single byte tokens.
-            char byte_val;
-            if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
-                char cstr[2] = { byte_val, 0 };
-                text = cstr;
-            }
-            vocab->id_to_token[i].text = text;
-            vocab->id_to_token[i].score = score;
-            vocab->id_to_token[i].type = LLAMA_TOKEN_TYPE_UNDEFINED;
-            vocab->token_to_id.emplace(text, i);
+    // assume llama2.c vocabulary
+    printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
+    llama_file file(filename, "rb");
+    const int  n_vocab = config->vocab_size;
+    /* uint32_t max_token_length =  */ file.read_u32(); // unused
+    vocab->id_to_token.resize(n_vocab);
+    for (int i=0; i<n_vocab; ++i) {
+        float_t score = file.read_f32();
+        uint32_t len = file.read_u32();
+        std::string text = file.read_string(len);
+        // Special-case handling of <0xXX> single byte tokens.
+        char byte_val;
+        if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
+            char cstr[2] = { byte_val, 0 };
+            text = cstr;
         }
+        vocab->id_to_token[i].text = text;
+        vocab->id_to_token[i].score = score;
+        vocab->id_to_token[i].type = LLAMA_TOKEN_TYPE_UNDEFINED;
+        vocab->token_to_id.emplace(text, i);
     }
 }
 
@@ -619,33 +588,6 @@ void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * kar
 }
 
 void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename) {
-    struct llama_file file(filename, "wb");
-    if (file.fp == NULL) {
-        return;
-    }
-
-#pragma message("TODO: implement file saving using gguf")
-    // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC_GGJT);   // magic
-    file.write_u32(LLAMA_FILE_VERSION_GGJT_V3); // version
-    // write_hparams
-    file.write_u32(model->hparams.n_vocab);
-    file.write_u32(model->hparams.n_embd);
-    file.write_u32(model->hparams.n_mult);
-    file.write_u32(model->hparams.n_head);
-    file.write_u32(model->hparams.n_layer);
-    file.write_u32(model->hparams.n_rot);
-    file.write_u32(LLAMA_FTYPE_ALL_F32);
-
-    // write_vocab - for now we are just writing the existing BPE voc. assuming karpathy's vocabulary is the same. idk.
-    uint32_t n_vocab = model->hparams.n_vocab;
-    for (uint32_t i = 0; i < n_vocab; i++) {
-        const auto & token_data = vocab->id_to_token.at(i);
-        file.write_u32((uint32_t) token_data.text.size());
-        file.write_raw(token_data.text.data(), token_data.text.size());
-        file.write_raw(&token_data.score, sizeof(token_data.score));
-    }
-
     // stuff AK weights into GG weights one by one.
     // w->token_embedding_table -> model->tok_embeddings
     // float*                   -> struct ggml_tensor
@@ -677,23 +619,91 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
         stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
     }
+
+    struct gguf_context * ctx = gguf_init_empty();
+
+    std::vector<const char*> tokens;
+    std::transform(vocab->id_to_token.begin(), vocab->id_to_token.end(), std::back_inserter(tokens),
+        [](const llama_vocab::token_data & token_data) { return token_data.text.c_str(); });
+    gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+    
+    std::vector<float> scores;
+    std::transform(vocab->id_to_token.begin(), vocab->id_to_token.end(), std::back_inserter(scores),
+        [](const llama_vocab::token_data & token_data) { return token_data.score; });
+    gguf_set_arr_data(ctx, "tokenizer.ggml.scores", GGUF_TYPE_FLOAT32, scores.data(), scores.size());
+
+    std::vector<int> token_types;
+    for (size_t i = 0; i < vocab->id_to_token.size(); ++i) {
+        // TODO: Refine this.
+        token_types.push_back(LLAMA_TOKEN_TYPE_UNDEFINED);
+    }
+    gguf_set_arr_data(ctx, "tokenizer.ggml.token_type", GGUF_TYPE_INT32, token_types.data(), token_types.size());
+
+    gguf_set_val_str(ctx, "tokenizer.ggml.model", "llama");
+    
+    gguf_set_val_str(ctx, "general.name", "llama2.c");
+    gguf_set_val_str(ctx, "general.architecture", "llama");
+
+    // special tokens
+    // gguf_set_val_u32(ctx, "tokenizer.ggml.bos_token_id", ...);
+    // gguf_set_val_u32(ctx, "tokenizer.ggml.eos_token_id", ...);
+    // gguf_set_val_u32(ctx, "tokenizer.ggml.unknown_token_id", ...);
+    // gguf_set_val_u32(ctx, "tokenizer.ggml.separator_token_id", ...);
+    // gguf_set_val_u32(ctx, "tokenizer.ggml.padding_token_id", ...);
+
+    gguf_set_val_u32(ctx, "llama.context_length", model->hparams.n_ctx);
+    gguf_set_val_u32(ctx, "llama.embedding_length", model->hparams.n_embd);
+    gguf_set_val_u32(ctx, "llama.feed_forward_length", model->hparams.n_ff);
+    gguf_set_val_u32(ctx, "llama.attention.head_count", model->hparams.n_head);
+    gguf_set_val_u32(ctx, "llama.block_count", model->hparams.n_layer);
+    gguf_set_val_u32(ctx, "llama.rope.dimension_count", model->hparams.n_rot);
+    gguf_set_val_f32(ctx, "llama.attention.layer_norm_rms_epsilon", 1e-5f);
+    // // n_head_kv is optional, default to n_head
+    // gguf_set_val_u32(ctx, "llama.attention.head_count_kv", hparams.n_head_kv);
+
     // write tensors
-    write_tensor(&file, model->tok_embeddings);
-    write_tensor(&file, model->norm);
-    write_tensor(&file, model->output); // ?
+    ggml_set_name(model->tok_embeddings, TN_TOKEN_EMBD);
+    gguf_add_tensor(ctx, model->tok_embeddings);
+
+    ggml_set_name(model->norm, TN_OUTPUT_NORM);
+    gguf_add_tensor(ctx, model->norm);
+
+    ggml_set_name(model->output, TN_OUTPUT);
+    gguf_add_tensor(ctx, model->output); // ?
+
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
-        write_tensor(&file, layer.attention_norm);
-        write_tensor(&file, layer.wq);
-        write_tensor(&file, layer.wk);
-        write_tensor(&file, layer.wv);
-        write_tensor(&file, layer.wo);
-        write_tensor(&file, layer.ffn_norm);
-        write_tensor(&file, layer.w1);
-        write_tensor(&file, layer.w2);
-        write_tensor(&file, layer.w3);
+        ggml_format_name(layer.attention_norm, TN_ATTN_NORM, i);
+        gguf_add_tensor(ctx, layer.attention_norm);
+
+        ggml_format_name(layer.wq, TN_ATTN_Q, i);
+        gguf_add_tensor(ctx, layer.wq);
+
+        ggml_format_name(layer.wk, TN_ATTN_K, i);
+        gguf_add_tensor(ctx, layer.wk);
+
+        ggml_format_name(layer.wv, TN_ATTN_V, i);
+        gguf_add_tensor(ctx, layer.wv);
+
+        ggml_format_name(layer.wo, TN_ATTN_OUTPUT, i);
+        gguf_add_tensor(ctx, layer.wo);
+
+        ggml_format_name(layer.ffn_norm, TN_FFN_NORM, i);
+        gguf_add_tensor(ctx, layer.ffn_norm);
+
+        ggml_format_name(layer.w1, TN_FFN_GATE, i);
+        gguf_add_tensor(ctx, layer.w1);
+
+        ggml_format_name(layer.w2, TN_FFN_DOWN, i);
+        gguf_add_tensor(ctx, layer.w2);
+
+        ggml_format_name(layer.w3, TN_FFN_UP, i);
+        gguf_add_tensor(ctx, layer.w3);
     }
+
+    gguf_write_to_file(ctx, filename, false);
+    gguf_free(ctx);
 }
 
 struct train_params get_default_train_params() {
@@ -840,6 +850,7 @@ int main(int argc, char ** argv) {
     model.hparams.n_vocab = config.vocab_size; //llama_n_vocab(lctx);
     model.hparams.n_ctx   = params.n_ctx;
     model.hparams.n_embd  = config.dim; //params.n_embd;
+    model.hparams.n_ff    = config.hidden_dim;
     model.hparams.n_mult  = 32;//params.n_mult;
     model.hparams.n_head  = config.n_heads; //params.n_head;
     model.hparams.n_layer = config.n_layers; //params.n_layer;
