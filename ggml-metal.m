@@ -539,8 +539,8 @@ void ggml_metal_graph_compute(
 
             id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
 
-            const int node_start =                                  (cb_idx + 0) * n_nodes_per_cb;
-            const int node_end   = (cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb;
+            const int node_start =                                      (cb_idx + 0) * n_nodes_per_cb;
+            const int node_end   = MIN((cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb, n_nodes);
 
             for (int ind = node_start; ind < node_end; ++ind) {
                 const int i = has_concur ? ctx->concur_list[ind] : ind;
