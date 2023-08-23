@@ -5555,10 +5555,6 @@ struct ggml_tensor * ggml_repeat(
         is_node = true;
     }
 
-    if (ggml_are_same_shape(a, b) && !is_node) {
-        return a;
-    }
-
     struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, b->n_dims, b->ne);
 
     result->op   = GGML_OP_REPEAT;
