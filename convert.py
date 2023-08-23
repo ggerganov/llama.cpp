@@ -16,6 +16,7 @@ import pickle
 import re
 import signal
 import struct
+import subprocess
 import sys
 import zipfile
 import numpy as np
@@ -735,7 +736,8 @@ class OutputFile:
 
     def add_meta_arch(self, params: Params) -> None:
         self.gguf.add_name                ("LLaMA")
-        self.gguf.add_date(datetime.today().isoformat())
+        self.gguf.add_date                (datetime.today().isoformat())
+        self.gguf.add_commit_hash         (get_git_revision_short_hash())
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
@@ -1001,6 +1003,9 @@ def do_dump_model(model_plus: ModelPlus) -> None:
     for name, lazy_tensor in model_plus.model.items():
         print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}")
 
+
+def get_git_revision_short_hash() -> str:
+    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
 
 def main(args_in: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
