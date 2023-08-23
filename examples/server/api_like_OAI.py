@@ -27,6 +27,8 @@ def is_present(json, key):
         buf = json[key]
     except KeyError:
         return False
+    if json[key] == None:
+        return False
     return True
 
 
