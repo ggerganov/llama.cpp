@@ -11,7 +11,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717#issuecomment-1690568032
+- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
 
 - A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
 
