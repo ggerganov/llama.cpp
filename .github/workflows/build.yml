@@ -297,9 +297,9 @@ jobs:
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "::set-output name=name::$BUILD_NUMBER"
+            echo "name=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=name::${{ env.BRANCH_NAME }}-$BUILD_NUMBER"
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" >> $$ GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -350,9 +350,9 @@ jobs:
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "::set-output name=name::$BUILD_NUMBER"
+            echo "name=$BUILD_NUMBER" > $GITHUB_OUTPUT
           else
-            echo "::set-output name=name::${{ env.BRANCH_NAME }}-$BUILD_NUMBER"
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" > $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -412,9 +412,9 @@ jobs:
       - windows-latest-cmake-cublas
 
     steps:
-      - name: Download artifacts
-        id: download-artifact
-        uses: actions/download-artifact@v3
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
 
       - name: Determine tag name
         id: tag
@@ -422,10 +422,14 @@ jobs:
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "::set-output name=name::$BUILD_NUMBER"
+            echo "name=$BUILD_NUMBER" > $GITHUB_OUTPUT
           else
-            echo "::set-output name=name::${{ env.BRANCH_NAME }}-$BUILD_NUMBER"
+            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER" > $GITHUB_OUTPUT
           fi
+
+      - name: Download artifacts
+        id: download-artifact
+        uses: actions/download-artifact@v3
 
       - name: Create release
         id: create_release
