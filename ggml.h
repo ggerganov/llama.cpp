@@ -199,6 +199,9 @@
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
 
+#define OLD_LLAMA_FILE_MAGIC_GGJT 0x67676a74u // 'ggjt'
+#define OLD_LLAMA_FILE_MAGIC_GGML 0x67676d6cu // 'ggml'
+
 #define GGML_QNT_VERSION        2    // bump this on quantization format changes
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 

@@ -19546,7 +19546,11 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         gguf_fread_el(file, &magic, sizeof(magic), &offset);
 
         if (magic != GGUF_MAGIC) {
-            fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
+            if(magic == OLD_LLAMA_FILE_MAGIC_GGJT || magic == OLD_LLAMA_FILE_MAGIC_GGML) {
+                fprintf(stderr, "error: opening GGML files isn't supported anymore, you must use a GGUF file\n");
+            } else {
+                fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
+            }
             fclose(file);
             return NULL;
         }
