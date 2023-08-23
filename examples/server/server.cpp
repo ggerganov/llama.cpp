@@ -190,6 +190,7 @@ struct llama_server_context
     size_t n_past = 0;
     size_t n_remain = 0;
 
+    json prompt;
     std::vector<llama_token> embd;
     std::vector<llama_token> last_n_tokens;
 
@@ -267,6 +268,53 @@ struct llama_server_context
         return true;
     }
 
+    std::vector<llama_token> tokenize(json json_prompt, bool add_bos)
+    {
+        // If `add_bos` is true, we only add BOS, when json_prompt is a string,
+        // or the first element of the json_prompt array is a string.
+        std::vector<llama_token> prompt_tokens;
+
+        if (json_prompt.is_array())
+        {
+            bool first = true;
+            for (const auto& p : json_prompt)
+            {
+                if (p.is_string())
+                {
+                    auto s = p.template get<std::string>();
+                    std::vector<llama_token> p;
+                    if (first)
+                    {
+                        s.insert(0, 1, ' '); // add a space if it's the first
+                        p = ::llama_tokenize(ctx, s, add_bos);
+                        first = false;
+                    }
+                    else
+                    {
+                        p = ::llama_tokenize(ctx, s, false);
+                    }
+                    prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
+                }
+                else
+                {
+                    if (first)
+                    {
+                        first = false;
+                    }
+                    prompt_tokens.push_back(p.template get<llama_token>());
+                }
+            }
+        }
+        else
+        {
+            auto s = json_prompt.template get<std::string>();
+            s.insert(0, 1, ' '); // always add a first space
+            prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
+        }
+
+        return prompt_tokens;
+    }
+
     bool loadGrammar()
     {
         if (!params.grammar.empty()) {
@@ -294,8 +342,8 @@ struct llama_server_context
 
     void loadPrompt()
     {
-        params.prompt.insert(0, 1, ' '); // always add a first space
-        std::vector<llama_token> prompt_tokens = ::llama_tokenize(ctx, params.prompt, true);
+        auto prompt_tokens = tokenize(prompt, true);  // always add BOS
+
         num_prompt_tokens = prompt_tokens.size();
 
         if (params.n_keep < 0)
@@ -671,12 +719,11 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "                        number of layers to store in VRAM\n");
     fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
     fprintf(stdout, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
-    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
-    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
-    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
+    fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
+    fprintf(stdout, "                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
+    fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif
     fprintf(stdout, "  -m FNAME, --model FNAME\n");
     fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
@@ -867,12 +914,12 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n", {});
 #endif // GGML_USE_CUBLAS
         }
-        else if (arg == "--mul-mat-q" || arg == "-mmq")
+        else if (arg == "--no-mul-mat-q" || arg == "-nommq")
         {
 #ifdef GGML_USE_CUBLAS
-            params.mul_mat_q = true;
+            params.mul_mat_q = false;
 #else
-            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n", {});
+            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n", {});
 #endif // GGML_USE_CUBLAS
         }
         else if (arg == "--main-gpu" || arg == "-mg")
@@ -1017,7 +1064,7 @@ static json format_final_response(llama_server_context &llama, const std::string
         {"tokens_predicted", llama.num_tokens_predicted},
         {"tokens_evaluated", llama.num_prompt_tokens},
         {"generation_settings", format_generation_settings(llama)},
-        {"prompt", llama.params.prompt},
+        {"prompt", llama.prompt},
         {"truncated", llama.truncated},
         {"stopped_eos", llama.stopped_eos},
         {"stopped_word", llama.stopped_word},
@@ -1086,9 +1133,17 @@ static void parse_options_completion(const json &body, llama_server_context &lla
     llama.params.penalize_nl = json_value(body, "penalize_nl", default_params.penalize_nl);
     llama.params.n_keep = json_value(body, "n_keep", default_params.n_keep);
     llama.params.seed = json_value(body, "seed", default_params.seed);
-    llama.params.prompt = json_value(body, "prompt", default_params.prompt);
     llama.params.grammar = json_value(body, "grammar", default_params.grammar);
     llama.params.n_probs = json_value(body, "n_probs", default_params.n_probs);
+
+    if (body.count("prompt") != 0)
+    {
+        llama.prompt = body["prompt"];
+    }
+    else
+    {
+        llama.prompt = "";
+    }
 
     llama.params.logit_bias.clear();
     if (json_value(body, "ignore_eos", false))
@@ -1346,8 +1401,11 @@ int main(int argc, char **argv)
         auto lock = llama.lock();
 
         const json body = json::parse(req.body);
-        const std::string content = json_value<std::string>(body, "content", "");
-        const std::vector<llama_token> tokens = llama_tokenize(llama.ctx, content, false);
+        std::vector<llama_token> tokens;
+        if (body.count("content") != 0)
+        {
+            tokens = llama.tokenize(body["content"], false);
+        }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json"); });
 
@@ -1359,7 +1417,14 @@ int main(int argc, char **argv)
 
         llama.rewind();
         llama_reset_timings(llama.ctx);
-        llama.params.prompt = json_value<std::string>(body, "content", "");
+        if (body.count("content") != 0)
+        {
+            llama.prompt = body["content"];
+        }
+        else
+        {
+            llama.prompt = "";
+        }
         llama.params.n_predict = 0;
         llama.loadPrompt();
         llama.beginCompletion();
