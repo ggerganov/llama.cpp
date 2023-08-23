@@ -568,6 +568,12 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
             float_t score = file.read_f32();
             uint32_t len = file.read_u32();
             std::string text = file.read_string(len);
+            // Special-case handling of <0xXX> single byte tokens.
+            char byte_val;
+            if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
+                char cstr[2] = { byte_val, 0 };
+                text = cstr;
+            }
             vocab->id_to_token[i].text = text;
             vocab->id_to_token[i].score = score;
             vocab->id_to_token[i].type = LLAMA_TOKEN_TYPE_UNDEFINED;
