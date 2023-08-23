@@ -623,20 +623,16 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     struct gguf_context * ctx = gguf_init_empty();
 
     std::vector<const char*> tokens;
-    std::transform(vocab->id_to_token.begin(), vocab->id_to_token.end(), std::back_inserter(tokens),
-        [](const llama_vocab::token_data & token_data) { return token_data.text.c_str(); });
-    gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
-    
     std::vector<float> scores;
-    std::transform(vocab->id_to_token.begin(), vocab->id_to_token.end(), std::back_inserter(scores),
-        [](const llama_vocab::token_data & token_data) { return token_data.score; });
-    gguf_set_arr_data(ctx, "tokenizer.ggml.scores", GGUF_TYPE_FLOAT32, scores.data(), scores.size());
-
-    std::vector<int> token_types;
-    for (size_t i = 0; i < vocab->id_to_token.size(); ++i) {
-        // TODO: Refine this.
-        token_types.push_back(LLAMA_TOKEN_TYPE_UNDEFINED);
+    std::vector<llama_token_type> token_types;
+    for (const llama_vocab::token_data & token_data : vocab->id_to_token) {
+        tokens.push_back(token_data.text.c_str());
+        scores.push_back(token_data.score);
+        token_types.push_back(token_data.type);
     }
+    // TODO(ochafik): Do we need to output merges too, maybe?
+    gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
+    gguf_set_arr_data(ctx, "tokenizer.ggml.scores", GGUF_TYPE_FLOAT32, scores.data(), scores.size());
     gguf_set_arr_data(ctx, "tokenizer.ggml.token_type", GGUF_TYPE_INT32, token_types.data(), token_types.size());
 
     gguf_set_val_str(ctx, "tokenizer.ggml.model", "llama");
@@ -669,7 +665,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     gguf_add_tensor(ctx, model->norm);
 
     ggml_set_name(model->output, TN_OUTPUT);
-    gguf_add_tensor(ctx, model->output); // ?
+    gguf_add_tensor(ctx, model->output);
 
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
