@@ -198,7 +198,7 @@ int main(int argc, char ** argv) {
     }
 
     // Should not run without any tokens
-    if(embd_inp.size()==0) {
+    if (embd_inp.size()==0) {
         embd_inp.push_back(llama_token_bos(ctx));
     }
 
