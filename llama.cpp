@@ -703,7 +703,7 @@ struct llama_vocab {
     // default LLaMA special tokens
     id special_bos_id = 1;
     id special_eos_id = 2;
-    id special_unk_id = -1;
+    id special_unk_id = 0;
     id special_sep_id = -1;
     id special_pad_id = -1;
 
