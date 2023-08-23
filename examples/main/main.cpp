@@ -61,7 +61,8 @@ void sigint_handler(int signo) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    LOG("Hello World!")
+    LOG("Hello World!\n")
+    LOG("Hello Again!\n")
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;

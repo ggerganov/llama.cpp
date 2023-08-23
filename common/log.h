@@ -92,8 +92,8 @@
 
 // This us a trick to bypass the silly
 // "warning: ISO C++11 requires at least one argument for the "..." in a variadic macro"
-// so we xan gave a single macro which can be called just like printf.
-#define LOG(...) _LOG(__VA_ARGS__, '\n')
+// so we can gave a single macro which can be called just like printf.
+#define LOG(...) _LOG(__VA_ARGS__, '\0')
 
 inline FILE *log_handler(std::string s = "llama.log")
 {
