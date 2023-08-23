@@ -830,6 +830,7 @@ struct llama_hparams {
     uint32_t n_rot       = 64;
     uint32_t n_ff        = 11008;
 
+    float f_norm_eps     = 1e-5;
     float f_norm_rms_eps = 1e-5;
 
     float rope_freq_base  = 10000.0f;
@@ -1557,6 +1558,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_FALCON:
             {
+                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
             } break;
         default: (void)0;
     };
@@ -1672,28 +1674,29 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     const auto & vocab   = model.vocab;
 
     // hparams
-    LLAMA_LOG_INFO("%s: format       = %s\n",     __func__, llama_file_version_name(ml.fver));
-    LLAMA_LOG_INFO("%s: arch         = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch).c_str());
-    LLAMA_LOG_INFO("%s: vocab type   = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
-    LLAMA_LOG_INFO("%s: n_vocab      = %u\n",     __func__, hparams.n_vocab);
-    LLAMA_LOG_INFO("%s: n_ctx_train  = %u\n",     __func__, hparams.n_ctx_train);
-    LLAMA_LOG_INFO("%s: n_ctx        = %u\n",     __func__, hparams.n_ctx);
-    LLAMA_LOG_INFO("%s: n_embd       = %u\n",     __func__, hparams.n_embd);
-    LLAMA_LOG_INFO("%s: n_head       = %u\n",     __func__, hparams.n_head);
-    LLAMA_LOG_INFO("%s: n_head_kv    = %u\n",     __func__, hparams.n_head_kv);
-    LLAMA_LOG_INFO("%s: n_layer      = %u\n",     __func__, hparams.n_layer);
-    LLAMA_LOG_INFO("%s: n_rot        = %u\n",     __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-    LLAMA_LOG_INFO("%s: n_gqa        = %u\n",     __func__, hparams.n_gqa());
-    LLAMA_LOG_INFO("%s: f_norm_eps   = %.1e\n",   __func__, hparams.f_norm_rms_eps);
-    LLAMA_LOG_INFO("%s: n_ff         = %u\n",     __func__, hparams.n_ff);
-    LLAMA_LOG_INFO("%s: freq_base    = %.1f\n",   __func__, hparams.rope_freq_base);
-    LLAMA_LOG_INFO("%s: freq_scale   = %g\n",     __func__, hparams.rope_freq_scale);
-    LLAMA_LOG_INFO("%s: model type   = %s\n",     __func__, llama_model_type_name(model.type));
-    LLAMA_LOG_INFO("%s: model ftype  = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
-    LLAMA_LOG_INFO("%s: model size   = %.2f B\n", __func__, ml.n_elements*1e-9);
+    LLAMA_LOG_INFO("%s: format         = %s\n",     __func__, llama_file_version_name(ml.fver));
+    LLAMA_LOG_INFO("%s: arch           = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch).c_str());
+    LLAMA_LOG_INFO("%s: vocab type     = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
+    LLAMA_LOG_INFO("%s: n_vocab        = %u\n",     __func__, hparams.n_vocab);
+    LLAMA_LOG_INFO("%s: n_ctx_train    = %u\n",     __func__, hparams.n_ctx_train);
+    LLAMA_LOG_INFO("%s: n_ctx          = %u\n",     __func__, hparams.n_ctx);
+    LLAMA_LOG_INFO("%s: n_embd         = %u\n",     __func__, hparams.n_embd);
+    LLAMA_LOG_INFO("%s: n_head         = %u\n",     __func__, hparams.n_head);
+    LLAMA_LOG_INFO("%s: n_head_kv      = %u\n",     __func__, hparams.n_head_kv);
+    LLAMA_LOG_INFO("%s: n_layer        = %u\n",     __func__, hparams.n_layer);
+    LLAMA_LOG_INFO("%s: n_rot          = %u\n",     __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+    LLAMA_LOG_INFO("%s: n_gqa          = %u\n",     __func__, hparams.n_gqa());
+    LLAMA_LOG_INFO("%s: f_norm_eps     = %.1e\n",   __func__, hparams.f_norm_eps);
+    LLAMA_LOG_INFO("%s: f_norm_rms_eps = %.1e\n",   __func__, hparams.f_norm_rms_eps);
+    LLAMA_LOG_INFO("%s: n_ff           = %u\n",     __func__, hparams.n_ff);
+    LLAMA_LOG_INFO("%s: freq_base      = %.1f\n",   __func__, hparams.rope_freq_base);
+    LLAMA_LOG_INFO("%s: freq_scale     = %g\n",     __func__, hparams.rope_freq_scale);
+    LLAMA_LOG_INFO("%s: model type     = %s\n",     __func__, llama_model_type_name(model.type));
+    LLAMA_LOG_INFO("%s: model ftype    = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
+    LLAMA_LOG_INFO("%s: model size     = %.2f B\n", __func__, ml.n_elements*1e-9);
 
     // general kv
-    LLAMA_LOG_INFO("%s: general.name = %s\n",    __func__, model.name.c_str());
+    LLAMA_LOG_INFO("%s: general.name   = %s\n",    __func__, model.name.c_str());
 
     // special tokens
     if (vocab.special_bos_id != -1) { LLAMA_LOG_INFO( "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].text.c_str() ); }
@@ -1899,8 +1902,7 @@ static void llm_load_tensors(
             mmapped_size - vram_weights; // weights in VRAM not in memory
 
         // this is the memory required by one llama_state
-        const size_t mem_required_state =
-            scale*hparams.kv_size();
+        const size_t mem_required_state = scale*hparams.kv_size();
 
         LLAMA_LOG_INFO("%s: mem required  = %7.2f MB (+ %7.2f MB per state)\n", __func__,
                 mem_required / 1024.0 / 1024.0, mem_required_state / 1024.0 / 1024.0);
@@ -2383,6 +2385,10 @@ static struct ggml_cgraph * llm_build_falcon(
 
     GGML_ASSERT(n_embd_head == hparams.n_rot);
 
+    const float freq_base  = hparams.rope_freq_base;
+    const float freq_scale = hparams.rope_freq_scale;
+    const float norm_eps   = hparams.f_norm_eps;
+
     auto & buf_compute = lctx.buf_compute;
 
     struct ggml_init_params params = {
@@ -2436,7 +2442,7 @@ static struct ggml_cgraph * llm_build_falcon(
 
         // self-attention
         {
-            attn_norm = ggml_norm(ctx0, inpL);
+            attn_norm = ggml_norm(ctx0, inpL, norm_eps);
 
             attn_norm = ggml_add(ctx0,
                     ggml_mul(ctx0,
@@ -2445,7 +2451,7 @@ static struct ggml_cgraph * llm_build_falcon(
                     ggml_repeat(ctx0, model.layers[il].attn_norm_b, attn_norm));
 
             if (model.layers[il].attn_norm_2) { // Falcon-40B
-                cur = ggml_norm(ctx0, inpL);
+                cur = ggml_norm(ctx0, inpL, norm_eps);
 
                 cur = ggml_add(ctx0,
                         ggml_mul(ctx0,
@@ -2490,8 +2496,8 @@ static struct ggml_cgraph * llm_build_falcon(
                 wsize * n_embd_head * (n_head +     n_head_kv));
 
             // using mode = 2 for neox mode
-            Qcur = ggml_rope_inplace(ctx0, Qcur, n_past, n_embd_head, 2, 0);
-            Kcur = ggml_rope_inplace(ctx0, Kcur, n_past, n_embd_head, 2, 0);
+            Qcur = ggml_rope_custom_inplace(ctx0, Qcur, n_past, n_embd_head, 2, 0, freq_base, freq_scale);
+            Kcur = ggml_rope_custom_inplace(ctx0, Kcur, n_past, n_embd_head, 2, 0, freq_base, freq_scale);
 
             // store key and value to memory
             {
@@ -2522,8 +2528,6 @@ static struct ggml_cgraph * llm_build_falcon(
 
             // K * Q
 
-//            K = ggml_cont(ctx0, ggml_repeat2(ctx0, K, repeat_dummy));
-
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
 
@@ -2549,7 +2553,6 @@ static struct ggml_cgraph * llm_build_falcon(
                     n_embd_head, n_head_kv, n_past + N),
                 0, 2, 1, 3);
 
-//            V = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_repeat2(ctx0, V, repeat_dummy)));
             V = ggml_cont(ctx0, ggml_transpose(ctx0, V));
 
             // KQV = transpose(V) * KQ_soft_max
@@ -2589,7 +2592,7 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // norm
     {
-        cur = ggml_norm(ctx0, inpL);
+        cur = ggml_norm(ctx0, inpL, norm_eps);
 
         cur = ggml_add(ctx0,
                 ggml_mul(ctx0,
