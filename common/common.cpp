@@ -289,7 +289,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_batch = std::stoi(argv[i]);
-            params.n_batch = std::min(512, params.n_batch);
         } else if (arg == "--keep") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -388,11 +387,11 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
 #endif // GGML_USE_CUBLAS
-        } else if (arg == "--mul-mat-q" || arg == "-mmq") {
+        } else if (arg == "--no-mul-mat-q" || arg == "-nommq") {
 #ifdef GGML_USE_CUBLAS
-            params.mul_mat_q = true;
+            params.mul_mat_q = false;
 #else
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to use mul_mat_q kernels.\n");
+            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n");
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--low-vram" || arg == "-lv") {
 #ifdef GGML_USE_CUBLAS
@@ -600,11 +599,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        number of layers to store in VRAM\n");
     fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n" );
-    fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n" );
-    fprintf(stdout, "  -mmq, --mul-mat-q     use experimental mul_mat_q CUDA kernels instead of cuBLAS. TEMP!!!\n" );
-    fprintf(stdout, "                        Reduces VRAM usage by 700/970/1430 MiB for 7b/13b/33b but prompt processing speed\n" );
-    fprintf(stdout, "                        is still suboptimal, especially q2_K, q3_K, q5_K, and q6_K.\n" );
+    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
+    fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
+    fprintf(stdout, "                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
+    fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif
     fprintf(stdout, "  --mtest               compute maximum memory usage\n");
     fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");
