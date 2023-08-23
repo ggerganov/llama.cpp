@@ -28,6 +28,8 @@ KEY_GENERAL_LICENSE              = "general.license"
 KEY_GENERAL_SOURCE_URL           = "general.source.url"
 KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 KEY_GENERAL_FILE_TYPE            = "general.file_type"
+KEY_GENERAL_DATE                 = "general.date"
+KEY_GENERAL_COMMIT_HASH          = "general.commit_hash"
 
 # LLM
 KEY_LLM_CONTEXT_LENGTH        = "{arch}.context_length"
@@ -599,6 +601,12 @@ class GGUFWriter:
 
     def add_file_type(self, ftype: int):
         self.add_uint32(KEY_GENERAL_FILE_TYPE, ftype)
+
+    def add_date(self, date: str):
+        self.add_string(KEY_GENERAL_DATE, date)
+
+    def add_commit_hash(self, commit_hash: str):
+        self.add_string(KEY_GENERAL_COMMIT_HASH, commit_hash)
 
     def add_name(self, name: str):
         self.add_string(KEY_GENERAL_NAME, name)
