@@ -1596,6 +1596,9 @@ static void llm_load_hparams(
     hparams.rope_freq_scale = rope_freq_scale;
 }
 
+// TODO: This should probably be in llama.h
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos, bool escape);
+
 static void llm_load_vocab(
         llama_model_loader & ml,
         llama_model & model) {
@@ -1655,11 +1658,10 @@ static void llm_load_vocab(
         token_data.score = scores[i];
         token_data.type  = (llama_token_type) toktypes[i];
 
-        // determine the newline token: 0x0A == 10 == '\n'
-        if (token_data.text == "<0x0A>") {
-            vocab.linefeed_id = i;
-        }
     }
+
+    // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
+    vocab.linefeed_id = llama_tokenize_internal(vocab, "\n", false, false)[0];
 
     // special tokens
     GGUF_GET_KEY(ctx, vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_BOS_ID));
