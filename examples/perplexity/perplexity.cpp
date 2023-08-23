@@ -41,6 +41,8 @@ void perplexity_v2(llama_context * ctx, const gpt_params & params) {
     const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
     const bool add_bos = is_spm;
 
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
+
     auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
     const int calc_chunk = params.n_ctx;
@@ -151,6 +153,8 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
 
     const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
     const bool add_bos = is_spm;
+
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
     auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
