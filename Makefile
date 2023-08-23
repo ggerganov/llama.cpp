@@ -351,7 +351,7 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o console.o grammar-parser.o $(OBJS)
+main: examples/main/main.cpp                                  build-info.h ggml.o llama.o common.o common/log.h console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='

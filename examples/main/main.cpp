@@ -3,7 +3,11 @@
 #define _GNU_SOURCE
 #endif
 
+#define LOG_TARGET log_handler("asd")
+//#define LOG_NO_TIMESTAMPS
 #include "common.h"
+
+#include "log.h"
 #include "console.h"
 #include "llama.h"
 #include "build-info.h"
@@ -54,8 +58,23 @@ void sigint_handler(int signo) {
 }
 #endif
 
+inline FILE *log_handler(std::string s)
+{
+    static bool initialized{false};
+
+    if (!initialized)[[unlikely]]
+    {
+        fprintf(stderr,"arg: %s", s.c_str());
+        initialized=true;
+    }
+
+    return stderr;
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
+
+    LOG("Hello World!")
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
