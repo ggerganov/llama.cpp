@@ -3907,6 +3907,29 @@ static __global__ void rope_f32(const float * x, float * dst, const int ncols, c
     dst[i + 1] = x0*sin_theta + x1*cos_theta;
 }
 
+// TODO: this implementation is wrong!
+//static __global__ void rope_neox_f32(const float * x, float * dst, const int ncols, const float p0,
+//                                const float p_delta, const int p_delta_rows, const float theta_scale) {
+//    const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
+//
+//    if (col >= ncols) {
+//        return;
+//    }
+//
+//    const int row = blockDim.x*blockIdx.x + threadIdx.x;
+//    const int i = row*ncols + col/2;
+//
+//    const float theta = (p0 + p_delta * (row/p_delta_rows))*powf(theta_scale, col/2);
+//    const float sin_theta = sinf(theta);
+//    const float cos_theta = cosf(theta);
+//
+//    const float x0 = x[i + 0];
+//    const float x1 = x[i + ncols/2];
+//
+//    dst[i + 0]       = x0*cos_theta - x1*sin_theta;
+//    dst[i + ncols/2] = x0*sin_theta + x1*cos_theta;
+//}
+
 static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const float p, const float block_p, const float theta_scale) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
     const int half_n_dims = ncols/4;
@@ -5515,7 +5538,8 @@ inline void ggml_cuda_op_rope(
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
-    const bool is_glm = mode & 4;
+    const bool is_neox = mode & 2;
+    const bool is_glm  = mode & 4;
 
     // compute
     if (is_glm) {
@@ -5523,6 +5547,9 @@ inline void ggml_cuda_op_rope(
         const float id_p = min(p, n_ctx - 2.f);
         const float block_p = max(p - (n_ctx - 2.f), 0.f);
         rope_glm_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, id_p, block_p, theta_scale, cudaStream_main);
+    } else if (is_neox) {
+        GGML_ASSERT(false && "RoPE NeoX not implemented yet");
+#pragma message("TODO: implement RoPE NeoX for CUDA")
     } else {
         const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
         rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p0, freq_scale, ne01, theta_scale, cudaStream_main);

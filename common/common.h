@@ -120,15 +120,6 @@ std::vector<llama_token> llama_tokenize(
            const std::string & text,
                         bool   add_bos);
 
-std::vector<llama_token> llama_tokenize_bpe(
-        struct llama_context * ctx,
-           const std::string & text,
-                        bool   add_bos);
-
 std::string llama_token_to_str(
         const struct llama_context * ctx,
                        llama_token   token);
-
-std::string llama_token_to_str_bpe(
-    const struct llama_context * ctx,
-                   llama_token   token);

@@ -28,7 +28,6 @@ std::vector<float> softmax(const std::vector<float>& logits) {
 }
 
 void perplexity_v2(llama_context * ctx, const gpt_params & params) {
-
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
@@ -38,7 +37,13 @@ void perplexity_v2(llama_context * ctx, const gpt_params & params) {
         fprintf(stderr, "%s: stride is %d but must be greater than zero!\n",__func__,params.ppl_stride);
         return;
     }
-    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
+
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = is_spm;
+
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
+
+    auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
     const int calc_chunk = params.n_ctx;
 
@@ -86,7 +91,7 @@ void perplexity_v2(llama_context * ctx, const gpt_params & params) {
             const auto token_org = tokens[batch_start];
 
             // add BOS token for the first batch of each chunk
-            if (j == 0) {
+            if (add_bos && j == 0) {
                 tokens[batch_start] = llama_token_bos(ctx);
             }
 
@@ -136,7 +141,6 @@ void perplexity_v2(llama_context * ctx, const gpt_params & params) {
 }
 
 void perplexity(llama_context * ctx, const gpt_params & params) {
-
     if (params.ppl_stride > 0) {
         perplexity_v2(ctx, params);
         return;
@@ -146,7 +150,13 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
-    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
+
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = is_spm;
+
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
+
+    auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
     const int n_chunk_max = tokens.size() / params.n_ctx;
 
@@ -177,7 +187,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             const auto token_org = tokens[batch_start];
 
             // add BOS token for the first batch of each chunk
-            if (j == 0) {
+            if (add_bos && j == 0) {
                 tokens[batch_start] = llama_token_bos(ctx);
             }
 
@@ -295,8 +305,10 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     size_t hs_task_count = prompt_lines.size()/6;
     fprintf(stderr, "%s : loaded %zu tasks from prompt.\n", __func__, hs_task_count);
 
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+
     // This is needed as usual for LLaMA models
-    bool prepend_bos = true;
+    const bool add_bos = is_spm;
 
     // Number of tasks to use when computing the score
     if ( params.hellaswag_tasks < hs_task_count  ) {
@@ -352,14 +364,13 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     std::vector<float> tok_logits(n_vocab);
 
     for (size_t task_idx = 0; task_idx < hs_task_count; task_idx++) {
-
         // Tokenize the context to count tokens
-        std::vector<int> context_embd = ::llama_tokenize(ctx, hs_data[task_idx].context, prepend_bos);
+        std::vector<int> context_embd = ::llama_tokenize(ctx, hs_data[task_idx].context, add_bos);
         size_t context_size = context_embd.size();
 
         // Do the 1st ending
         // In this case we include the context when evaluating
-        auto query_embd = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[0], prepend_bos);
+        auto query_embd = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[0], add_bos);
         auto query_size = query_embd.size();
         //printf("First query: %d\n",(int)query_size);
 

@@ -43,7 +43,7 @@ static bool is_interacting = false;
 void sigint_handler(int signo) {
     if (signo == SIGINT) {
         if (!is_interacting) {
-            is_interacting=true;
+            is_interacting = true;
         } else {
             console::cleanup();
             printf("\n");
@@ -189,10 +189,12 @@ int main(int argc, char ** argv) {
         }
     }
 
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        embd_inp = ::llama_tokenize(ctx, params.prompt, true);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
     } else {
         embd_inp = session_tokens;
     }
@@ -208,9 +210,9 @@ int main(int argc, char ** argv) {
     int original_prompt_len = 0;
     if (ctx_guidance) {
         params.cfg_negative_prompt.insert(0, 1, ' ');
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, true);
+        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, is_spm);
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
     }
@@ -257,8 +259,8 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n", false);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", is_spm);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {

@@ -30,12 +30,12 @@ KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 KEY_GENERAL_FILE_TYPE            = "general.file_type"
 
 # LLM
-KEY_LLM_CONTEXT_LENGTH        = "{arch}.context_length"
-KEY_LLM_EMBEDDING_LENGTH      = "{arch}.embedding_length"
-KEY_LLM_BLOCK_COUNT           = "{arch}.block_count"
-KEY_LLM_FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
-KEY_LLM_USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
-KEY_LLM_TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
+KEY_CONTEXT_LENGTH        = "{arch}.context_length"
+KEY_EMBEDDING_LENGTH      = "{arch}.embedding_length"
+KEY_BLOCK_COUNT           = "{arch}.block_count"
+KEY_FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
+KEY_USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
+KEY_TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
 
 # attention
 KEY_ATTENTION_HEAD_COUNT        = "{arch}.attention.head_count"
@@ -583,7 +583,7 @@ class GGUFWriter:
         self.add_string(KEY_GENERAL_AUTHOR, author)
 
     def add_tensor_data_layout(self, layout: str):
-        self.add_string(KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
+        self.add_string(KEY_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_url(self, url: str):
         self.add_string(KEY_GENERAL_URL, url)
@@ -613,27 +613,27 @@ class GGUFWriter:
 
     def add_context_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_CONTEXT_LENGTH.format(arch=self.arch), length)
+            KEY_CONTEXT_LENGTH.format(arch=self.arch), length)
 
     def add_embedding_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_EMBEDDING_LENGTH.format(arch=self.arch), length)
+            KEY_EMBEDDING_LENGTH.format(arch=self.arch), length)
 
     def add_block_count(self, length: int):
         self.add_uint32(
-            KEY_LLM_BLOCK_COUNT.format(arch=self.arch), length)
+            KEY_BLOCK_COUNT.format(arch=self.arch), length)
 
     def add_feed_forward_length(self, length: int):
         self.add_uint32(
-            KEY_LLM_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
+            KEY_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool):
         self.add_bool(
-            KEY_LLM_USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
+            KEY_USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
 
     def add_tensor_data_layout(self, layout: str):
         self.add_string(
-            KEY_LLM_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
+            KEY_TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_head_count(self, count: int):
         self.add_uint32(
