@@ -21,6 +21,7 @@ enum FileFormat
     GGJT=3, // 3=(llama ggjt)
     GGJT_2=4, //newer llama format unshuffled
     GGJT_3=5, //using 16bit scalar
+    GGUF_LLAMA=6, //GGUF (llama newest ver)
 
     GPTJ_1=100, //the very first super old GPTJ format
     GPTJ_2=101, //pygmalion, uses old ggml lib
@@ -47,7 +48,7 @@ enum FileFormat
     MPT_1=500, //first supported mpt version
 
 
-    GGUF_LLAMA=1000, //GGUF (llama newest ver)
+
 };
 
 enum ModelLoadResult
