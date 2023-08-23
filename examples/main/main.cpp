@@ -61,8 +61,15 @@ void sigint_handler(int signo) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    LOG("Hello World!\n")
-    LOG("Hello Again!\n")
+    LOG("Hello World to default output!\n")
+    log_set_target(stderr);
+    LOG("Hello World to stderr!\n")
+    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG("Hello World to default log file!\n")
+    log_set_target(stdout);
+    LOG("Hello World to stdout!\n")
+    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG("Hello World to default log file again!\n")
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
