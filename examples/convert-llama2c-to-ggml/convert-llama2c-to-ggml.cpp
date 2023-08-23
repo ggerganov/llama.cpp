@@ -557,7 +557,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
 //        }
 //        llama_free(lctx);
 //        llama_free_model(lmodel);
-//    } else 
+//    } else
     { // assume llama2.c vocabulary
         printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
         llama_file file(filename, "rb");
