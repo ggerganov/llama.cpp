@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # HF falcon--> gguf conversion
 
 import gguf
@@ -94,21 +95,27 @@ print("gguf: get model metadata")
 
 block_count = hparams["n_layer"]
 
-gguf_writer.add_name(last_dir)
+gguf_writer.add_name("Falcon")
 gguf_writer.add_context_length(2048) # not in config.json
 gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
 gguf_writer.add_embedding_length(hparams["hidden_size"])
 gguf_writer.add_feed_forward_length(4 * hparams["hidden_size"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_head_count(hparams["n_head"])
-if "n_head_kv" in hparams: gguf_writer.add_head_count_kv(hparams["n_head_kv"])
+if "n_head_kv" in hparams:
+    gguf_writer.add_head_count_kv(hparams["n_head_kv"])
+else:
+    gguf_writer.add_head_count_kv(1)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
+gguf_writer.add_file_type(ftype)
 
 # TOKENIZATION
 
 print("gguf: get tokenizer metadata")
 
 tokens: List[str] = []
+scores: List[float] = []
+toktypes: List[int] = []
 merges: List[str] = []
 
 
@@ -152,41 +159,30 @@ if Path(dir_model + "/tokenizer.json").is_file():
             text = bytearray(pad_token)
 
         tokens.append(text)
+        scores.append(0.0)                      # dymmy
+        toktypes.append(gguf.TokenType.NORMAL)  # dummy
 
     gguf_writer.add_token_list(tokens)
+    gguf_writer.add_token_scores(scores)
+    gguf_writer.add_token_types(toktypes)
 
-    if "added_tokens" in tokenizer_json and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("gguf: get special token ids")
+print("gguf: get special token ids")
+# Look for special tokens in config.json
 
-        with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
-            tokenizer_config = json.load(f)
+if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
+    gguf_writer.add_bos_token_id(hparams["bos_token_id"])
 
-        # find special token ids
+if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
+    gguf_writer.add_eos_token_id(hparams["eos_token_id"])
 
-        if "bos_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["bos_token"]:
-                    gguf_writer.add_bos_token_id(key["id"])
+if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
+    gguf_writer.add_unk_token_id(hparams["unk_token_id"])
 
-        if "eos_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["eos_token"]:
-                    gguf_writer.add_eos_token_id(key["id"])
+if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
+    gguf_writer.add_sep_token_id(hparams["sep_token_id"])
 
-        if "unk_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["unk_token"]:
-                    gguf_writer.add_unk_token_id(key["id"])
-
-        if "sep_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["sep_token"]:
-                    gguf_writer.add_sep_token_id(key["id"])
-
-        if "pad_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["pad_token"]:
-                    gguf_writer.add_pad_token_id(key["id"])
+if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
+    gguf_writer.add_pad_token_id(hparams["pad_token_id"])
 
 
 # TENSORS
@@ -194,8 +190,9 @@ if Path(dir_model + "/tokenizer.json").is_file():
 tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 
 # params for qkv transform
-n_head = hparams["n_head"]
+n_head    = hparams["n_head"]
 n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else 1
+
 head_dim = hparams["hidden_size"] // n_head
 
 # tensor info
