@@ -1121,6 +1121,9 @@ void ggml_metal_graph_compute(
 
     [command_buffers[n_cb - 1] waitUntilCompleted];
 
+    // release resources
+    [queue release];
+
     // check status of command buffers
     // needed to detect if the device ran out-of-memory for example (#1881)
     for (int i = 0; i < n_cb; i++) {
@@ -1129,5 +1132,9 @@ void ggml_metal_graph_compute(
             fprintf(stderr, "%s: command buffer %d failed with status %lu\n", __func__, i, status);
             GGML_ASSERT(false);
         }
+
+        [command_buffers[i] release];
     }
+
+    [command_buffers release];
 }
