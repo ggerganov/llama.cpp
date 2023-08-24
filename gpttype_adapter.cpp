@@ -338,34 +338,32 @@ static std::string FileFormatTokenizeID(int id, FileFormat file_format)
     }
 }
 
-static std::vector<int> TokenizeString(const std::string & str_to_tokenize, FileFormat file_format)
+static void TokenizeString(const std::string & str_to_tokenize, std::vector<int> & output_tokens, FileFormat file_format)
 {
-    std::vector<int> tokvec;
     if (file_format == FileFormat::GGML || file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2  || file_format == FileFormat::GGJT_3 || file_format == FileFormat::GGUF_LLAMA)
     {
         if(file_format == FileFormat::GGHF || file_format == FileFormat::GGJT || file_format == FileFormat::GGJT_2 )
         {
-            tokvec = ::llama_v2_tokenize(llama_ctx_v2, str_to_tokenize, true);
+            output_tokens = ::llama_v2_tokenize(llama_ctx_v2, str_to_tokenize, true);
         }
         else if (file_format == FileFormat::GGML)
         {
-            tokvec = ::legacy_llama_v2_tokenize(llama_ctx_v2, str_to_tokenize, true);
+            output_tokens = ::legacy_llama_v2_tokenize(llama_ctx_v2, str_to_tokenize, true);
         }
         else if (file_format == FileFormat::GGJT_3)
         {
-            tokvec = ::llama_v3_tokenize(llama_ctx_v3, str_to_tokenize, true);
+            output_tokens = ::llama_v3_tokenize(llama_ctx_v3, str_to_tokenize, true);
         }
         else
         {
-            tokvec = ::llama_tokenize(llama_ctx_v4, str_to_tokenize, true);
+            output_tokens = ::llama_tokenize(llama_ctx_v4, str_to_tokenize, true);
         }
     }
     else
     {
         // tokenize the prompt
-        tokvec = ::gpt_tokenize(vocab, str_to_tokenize);
+        output_tokens = ::gpt_tokenize(vocab, str_to_tokenize);
     }
-    return tokvec;
 }
 
 static std::string RemoveBell(const std::string & input) //removes the bell character
@@ -1001,7 +999,8 @@ int gpttype_token_count(const std::string & input)
     {
         printf("\nFileFormat: %d, Tokenizing: %s",file_format ,input.c_str());
     }
-    auto toks = TokenizeString(input, file_format);
+    std::vector<int> toks;
+    TokenizeString(input, toks, file_format);
     int tokcount = toks.size();
     if(debugmode==1)
     {
@@ -1063,7 +1062,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
 
     // tokenize the prompt
-    std::vector<int> embd_inp = TokenizeString(params.prompt, file_format);
+    std::vector<int> embd_inp;
+    TokenizeString(params.prompt, embd_inp, file_format);
 
     //truncate to front of the prompt if its too long
     int32_t nctx = params.n_ctx;
