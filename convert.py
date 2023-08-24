@@ -106,6 +106,9 @@ class Params:
 
     ftype: Optional[GGMLFileType] = None
 
+    # path to the directory containing the model files
+    path_model: Optional['Path'] = None
+
     @staticmethod
     def find_n_mult(n_ff: int, n_embd: int) -> int:
         # hardcoded magic range
@@ -230,6 +233,8 @@ class Params:
             params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
         else:
             params = Params.guessed(model_plus.model)
+
+        params.path_model = model_plus.paths[0].parent
 
         return params
 
@@ -733,11 +738,13 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        ver = None
+        name = "LLaMA"
         if (params.n_ctx == 4096):
-            ver = "v2"
+            name = "LLaMA v2"
+            if params.path_model:
+                name = str(params.path_model.parent).split('/')[-1]
 
-        self.gguf.add_name                ("LLaMA" if ver == None else "LLaMA " + ver)
+        self.gguf.add_name                (name)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
