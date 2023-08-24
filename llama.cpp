@@ -4074,7 +4074,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (text.empty()) {
+        } else if (text.empty() || text[0] == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
             candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
