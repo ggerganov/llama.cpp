@@ -1,6 +1,10 @@
 *.o
 *.a
 *.so
+*.gguf
+*.bin
+*.exe
+*.dll
 .DS_Store
 .build/
 .cache/
@@ -39,13 +43,17 @@ models-mnt
 /perplexity
 /embedding
 /train-text-from-scratch
+/convert-llama2c-to-ggml
 /simple
 /benchmark-matmult
 /vdot
 /server
 /Pipfile
 /embd-input-test
+/gguf
+/gguf-llama-simple
 /libllama.so
+/llama-bench
 build-info.h
 arm_neon.h
 compile_commands.json
@@ -62,12 +70,12 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
-
 pyproject.toml
 poetry.lock
 poetry.toml
 
 # Test binaries
+tests/test-grammar-parser
 tests/test-double-float
 tests/test-grad0
 tests/test-opt
@@ -75,4 +83,3 @@ tests/test-quantize-fns
 tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0
-

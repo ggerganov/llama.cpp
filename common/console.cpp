@@ -10,6 +10,9 @@
 #include <windows.h>
 #include <fcntl.h>
 #include <io.h>
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
 #else
 #include <climits>
 #include <sys/ioctl.h>
@@ -68,9 +71,10 @@ namespace console {
             }
         }
         if (hConsole) {
-            // Enable ANSI colors on Windows 10+
-            if (advanced_display && !(dwMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
-                SetConsoleMode(hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            // Check conditions combined to reduce nesting
+            if (advanced_display && !(dwMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) &&
+                !SetConsoleMode(hConsole, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+                advanced_display = false;
             }
             // Set console output codepage to UTF8
             SetConsoleOutputCP(CP_UTF8);

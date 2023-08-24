@@ -5,6 +5,7 @@
 #include <cmath>
 #include <ctime>
 #include <sstream>
+#include <cstring>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -26,12 +27,136 @@ std::vector<float> softmax(const std::vector<float>& logits) {
     return probs;
 }
 
-void perplexity(llama_context * ctx, const gpt_params & params) {
+void perplexity_v2(llama_context * ctx, const gpt_params & params) {
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
-    auto tokens = ::llama_tokenize(ctx, params.prompt, true);
+
+    if (params.ppl_stride <= 0) {
+        fprintf(stderr, "%s: stride is %d but must be greater than zero!\n",__func__,params.ppl_stride);
+        return;
+    }
+
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = is_spm;
+
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
+
+    auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+
+    const int calc_chunk = params.n_ctx;
+
+    fprintf(stderr, "%s: have %zu tokens. Calculation chunk = %d\n", __func__, tokens.size(), calc_chunk);
+
+    if (int(tokens.size()) <= calc_chunk) {
+        fprintf(stderr, "%s: there are only %zu tokens, this is not enough for a context size of %d and stride %d\n",__func__,
+                tokens.size(), params.n_ctx, params.ppl_stride);
+        return;
+    }
+
+    const int n_chunk_max = (tokens.size() - calc_chunk + params.ppl_stride - 1)  / params.ppl_stride;
+
+    const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
+    const int n_vocab = llama_n_vocab(ctx);
+    const int n_batch = params.n_batch;
+
+    int count = 0;
+    double nll = 0.0;
+
+    fprintf(stderr, "%s: calculating perplexity over %d chunks, batch_size=%d\n", __func__, n_chunk, n_batch);
+
+    for (int i = 0; i < n_chunk; ++i) {
+        const int start =     i * params.ppl_stride;
+        const int end   = start + calc_chunk;
+
+        const int num_batches = (calc_chunk + n_batch - 1) / n_batch;
+        //fprintf(stderr, "%s: evaluating %d...%d using %d batches\n", __func__, start, end, num_batches);
+
+        std::vector<float> logits;
+
+        const auto t_start = std::chrono::high_resolution_clock::now();
+
+        for (int j = 0; j < num_batches; ++j) {
+            const int batch_start = start + j * n_batch;
+            const int batch_size  = std::min(end - batch_start, n_batch);
+
+            //fprintf(stderr, "    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
+            if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
+                //fprintf(stderr, "%s : failed to eval\n", __func__);
+                return;
+            }
+
+            // save original token and restore it after eval
+            const auto token_org = tokens[batch_start];
+
+            // add BOS token for the first batch of each chunk
+            if (add_bos && j == 0) {
+                tokens[batch_start] = llama_token_bos(ctx);
+            }
+
+            const auto batch_logits = llama_get_logits(ctx);
+            logits.insert(logits.end(), batch_logits, batch_logits + batch_size * n_vocab);
+
+            if (j == 0) {
+                tokens[batch_start] = token_org;
+            }
+        }
+
+        const auto t_end = std::chrono::high_resolution_clock::now();
+
+        if (i == 0) {
+            const float t_total = std::chrono::duration<float>(t_end - t_start).count();
+            fprintf(stderr, "%s: %.2f seconds per pass - ETA ", __func__, t_total);
+            int total_seconds = (int)(t_total * n_chunk);
+            if (total_seconds >= 60*60) {
+                fprintf(stderr, "%d hours ", total_seconds / (60*60));
+                total_seconds = total_seconds % (60*60);
+            }
+            fprintf(stderr, "%.2f minutes\n", total_seconds / 60.0);
+        }
+
+        //fprintf(stderr, "%s: using tokens %d...%d\n",__func__,params.n_ctx - params.ppl_stride + start, params.n_ctx + start);
+        for (int j = params.n_ctx - params.ppl_stride - 1; j < params.n_ctx - 1; ++j) {
+
+            // Calculate probability of next token, given the previous ones.
+            const std::vector<float> tok_logits(
+                logits.begin() + (j + 0) * n_vocab,
+                logits.begin() + (j + 1) * n_vocab);
+
+            const float prob = softmax(tok_logits)[tokens[start + j + 1]];
+
+            nll += -std::log(prob);
+            ++count;
+        }
+        // perplexity is e^(average negative log-likelihood)
+        if (params.ppl_output_type == 0) {
+            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        } else {
+            printf("%8d  %.4lf\n", i*params.ppl_stride, std::exp(nll / count));
+        }
+        fflush(stdout);
+    }
+    printf("\n");
+}
+
+void perplexity(llama_context * ctx, const gpt_params & params) {
+    if (params.ppl_stride > 0) {
+        perplexity_v2(ctx, params);
+        return;
+    }
+
+    // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Output: `perplexity: 13.5106 [114/114]`
+    // BOS tokens will be added for each chunk before eval
+
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = is_spm;
+
+    fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
+
+    auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
     const int n_chunk_max = tokens.size() / params.n_ctx;
 
@@ -62,8 +187,8 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             const auto token_org = tokens[batch_start];
 
             // add BOS token for the first batch of each chunk
-            if (j == 0) {
-                tokens[batch_start] = llama_token_bos();
+            if (add_bos && j == 0) {
+                tokens[batch_start] = llama_token_bos(ctx);
             }
 
             if (llama_eval(ctx, tokens.data() + batch_start, batch_size, j * n_batch, params.n_threads)) {
@@ -88,7 +213,7 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
                 fprintf(stderr, "%d hours ", total_seconds / (60*60));
                 total_seconds = total_seconds % (60*60);
             }
-            fprintf(stderr, "%d minutes\n", total_seconds / 60);
+            fprintf(stderr, "%.2f minutes\n", total_seconds / 60.0);
         }
 
         // We get the logits for all the tokens in the context window (params.n_ctx)
@@ -115,10 +240,35 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
             ++count;
         }
         // perplexity is e^(average negative log-likelihood)
-        printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        if (params.ppl_output_type == 0) {
+            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+        } else {
+            printf("%8d  %.4lf\n", i*params.n_ctx, std::exp(nll / count));
+        }
         fflush(stdout);
     }
     printf("\n");
+}
+
+std::vector<float> hellaswag_evaluate_tokens(llama_context * ctx, const std::vector<int>& tokens, int n_past, int n_batch,
+        int n_vocab, int n_thread) {
+    std::vector<float> result;
+    result.reserve(tokens.size() * n_vocab);
+    size_t n_chunk = (tokens.size() + n_batch - 1)/n_batch;
+    for (size_t i_chunk = 0; i_chunk < n_chunk; ++i_chunk) {
+        size_t n_tokens = tokens.size() - i_chunk * n_batch;
+        n_tokens = std::min(n_tokens, size_t(n_batch));
+        if (llama_eval(ctx, tokens.data() + i_chunk * n_batch, n_tokens, n_past, n_thread)) {
+            fprintf(stderr, "%s : failed to eval\n", __func__);
+            return {};
+        }
+
+        const auto logits = llama_get_logits(ctx);
+        result.insert(result.end(), logits, logits + n_tokens * n_vocab);
+
+        n_past += n_tokens;
+    }
+    return result;
 }
 
 void hellaswag_score(llama_context * ctx, const gpt_params & params) {
@@ -155,8 +305,10 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     size_t hs_task_count = prompt_lines.size()/6;
     fprintf(stderr, "%s : loaded %zu tasks from prompt.\n", __func__, hs_task_count);
 
+    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+
     // This is needed as usual for LLaMA models
-    bool prepend_bos = true;
+    const bool add_bos = is_spm;
 
     // Number of tasks to use when computing the score
     if ( params.hellaswag_tasks < hs_task_count  ) {
@@ -209,50 +361,92 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     double acc = 0.0f;
     const int n_vocab = llama_n_vocab(ctx);
 
-    for (size_t task_idx = 0; task_idx < hs_task_count; task_idx++) {
+    std::vector<float> tok_logits(n_vocab);
 
+    for (size_t task_idx = 0; task_idx < hs_task_count; task_idx++) {
         // Tokenize the context to count tokens
-        std::vector<int> context_embd = ::llama_tokenize(ctx, hs_data[task_idx].context, prepend_bos);
+        std::vector<int> context_embd = ::llama_tokenize(ctx, hs_data[task_idx].context, add_bos);
         size_t context_size = context_embd.size();
 
-        for (size_t ending_idx=0;ending_idx<4;ending_idx++) {
+        // Do the 1st ending
+        // In this case we include the context when evaluating
+        auto query_embd = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[0], add_bos);
+        auto query_size = query_embd.size();
+        //printf("First query: %d\n",(int)query_size);
+
+        // Stop if query wont fit the ctx window
+        if (query_size > (size_t)params.n_ctx) {
+            fprintf(stderr, "%s : number of tokens in query %zu > n_ctxl\n", __func__, query_size);
+            return;
+        }
+
+        // Speedup small evaluations by evaluating atleast 32 tokens
+        if (query_size < 32) {
+            query_embd.resize(32);
+        }
+
+        auto logits = hellaswag_evaluate_tokens(ctx, query_embd, 0, params.n_batch, n_vocab, params.n_threads);
+        if (logits.empty()) {
+            fprintf(stderr, "%s : failed to eval\n", __func__);
+            return;
+        }
+
+        std::memcpy(tok_logits.data(), logits.data() + (context_size-1)*n_vocab, n_vocab*sizeof(float));
+        const auto first_probs = softmax(tok_logits);
+
+        hs_data[task_idx].ending_logprob_count[0] = 1;
+        hs_data[task_idx].ending_logprob[0] = std::log(first_probs[query_embd[context_size]]);
+
+        // Calculate the logprobs over the ending
+        for (size_t j = context_size; j < query_size - 1; j++) {
+
+            std::memcpy(tok_logits.data(), logits.data() + j*n_vocab, n_vocab*sizeof(float));
+
+            const float prob = softmax(tok_logits)[query_embd[j + 1]];
+
+            hs_data[task_idx].ending_logprob[0] += std::log(prob);
+            hs_data[task_idx].ending_logprob_count[0]++;
+        }
+
+        // Calculate the mean token logprob for acc_norm
+        hs_data[task_idx].ending_logprob[0] /= hs_data[task_idx].ending_logprob_count[0];
+
+        // Do the remaining endings
+        // For these, we use the bare ending with n_past = context_size
+        //
+        for (size_t ending_idx = 1; ending_idx < 4; ending_idx++) {
 
             // Tokenize the query
-            std::vector<int> query_embd = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[ending_idx], prepend_bos);
-            size_t query_size = query_embd.size();
+            query_embd = ::llama_tokenize(ctx, hs_data[task_idx].ending[ending_idx], false);
+            query_size = query_embd.size();
 
             // Stop if query wont fit the ctx window
-            if (query_size > (size_t)params.n_ctx) {
+            if (context_size + query_size > (size_t)params.n_ctx) {
                 fprintf(stderr, "%s : number of tokens in query %zu > n_ctxl\n", __func__, query_size);
                 return;
             }
 
             // Speedup small evaluations by evaluating atleast 32 tokens
-            if (query_size < 32) {
-                query_embd.resize(32);
-            }
+            // No, resizing to 32 is actually slightly slower (at least on CUDA)
+            //if (query_size < 32) {
+            //    query_embd.resize(32);
+            //}
 
             // Evaluate the query
-            if (llama_eval(ctx, query_embd.data(), query_embd.size(), 0, params.n_threads)) {
+            logits = hellaswag_evaluate_tokens(ctx, query_embd, context_size, params.n_batch, n_vocab, params.n_threads);
+            if (logits.empty()) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
             }
 
-            const auto query_logits = llama_get_logits(ctx);
-            std::vector<float> logits;
-            logits.insert(logits.end(), query_logits, query_logits + query_size * n_vocab);
-
-            hs_data[task_idx].ending_logprob_count[ending_idx] = 0;
-            hs_data[task_idx].ending_logprob[ending_idx] = 0.0f;
+            hs_data[task_idx].ending_logprob_count[ending_idx] = 1;
+            hs_data[task_idx].ending_logprob[ending_idx] = std::log(first_probs[query_embd[0]]);
 
             // Calculate the logprobs over the ending
-            for (size_t j = context_size-1; j < query_size - 1; j++) {
-                // Calculate probability of next token, given the previous ones.
-                const std::vector<float> tok_logits(
-                    logits.begin() + (j + 0) * n_vocab,
-                    logits.begin() + (j + 1) * n_vocab);
+            for (size_t j = 0; j < query_size - 1; j++) {
+                std::memcpy(tok_logits.data(), logits.data() + j*n_vocab, n_vocab*sizeof(float));
 
-                const float prob = softmax(tok_logits)[query_embd[ j + 1]];
+                const float prob = softmax(tok_logits)[query_embd[j + 1]];
 
                 hs_data[task_idx].ending_logprob[ending_idx] += std::log(prob);
                 hs_data[task_idx].ending_logprob_count[ending_idx]++;
@@ -267,9 +461,9 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         }
 
         // Find the ending with maximum logprob
-        size_t ending_logprob_max_idx = -1;
-        double ending_logprob_max_val = -INFINITY;
-        for (size_t j=0; j < 4; j++) {
+        size_t ending_logprob_max_idx = 0;
+        double ending_logprob_max_val = hs_data[task_idx].ending_logprob[0];
+        for (size_t j = 1; j < 4; j++) {
             if (hs_data[task_idx].ending_logprob[j] > ending_logprob_max_val) {
                 ending_logprob_max_idx = j;
                 ending_logprob_max_val =  hs_data[task_idx].ending_logprob[j];
@@ -303,6 +497,12 @@ int main(int argc, char ** argv) {
 
     params.perplexity = true;
     params.n_batch = std::min(params.n_batch, params.n_ctx);
+
+    if (params.ppl_stride > 0) {
+        fprintf(stderr, "Will perform strided perplexity calculation -> adjusting context size from %d to %d\n",
+                params.n_ctx, params.n_ctx + params.ppl_stride/2);
+        params.n_ctx += params.ppl_stride/2;
+    }
 
     if (params.n_ctx > 2048) {
         fprintf(stderr, "%s: warning: model might not support context sizes greater than 2048 tokens (%d specified);"
