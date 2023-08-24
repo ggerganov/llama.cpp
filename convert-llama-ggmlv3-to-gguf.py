@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys, struct, math, argparse
 from pathlib import Path
 
@@ -93,7 +94,7 @@ class Tensor:
         pad = ((offset + 31) & ~31) - offset
         offset += pad
         n_elems = np.prod(self.dims)
-        n_bytes = (n_elems * tysize) // blksize
+        n_bytes = np.int64(np.int64(n_elems) * np.int64(tysize)) // np.int64(blksize)
         self.start_offset = offset
         self.len_bytes = n_bytes
         offset += n_bytes
@@ -215,15 +216,10 @@ class GGMLToGGUF:
         if self.vocab_override is not None:
             vo = self.vocab_override
             print('* Adding vocab item(s)')
-            for (idx, vitem) in enumerate(vo.all_tokens()):
-                if len(vitem) == 3:
-                    tokens.append(vitem[0])
-                    scores.append(vitem[1])
-                    toktypes.append(vitem[2])
-                else:
-                    # Maybe try to guess the token type here?
-                    tokens.append(vitem[0])
-                    scores.append(vitem[1])
+            for (idx, (vbytes, score, ttype)) in enumerate(vo.all_tokens()):
+                tokens.append(vbytes)
+                scores.append(score)
+                toktypes.append(ttype)
             assert len(tokens) == hp.n_vocab, f'Override vocab has a different number of items than hyperparameters - override = {len(tokens)} but n_vocab={hp.n_vocab}'
             gguf_writer.add_token_list(tokens)
             gguf_writer.add_token_scores(scores)
@@ -231,9 +227,21 @@ class GGMLToGGUF:
                 gguf_writer.add_token_types(toktypes)
             return
         print(f'* Adding {hp.n_vocab} vocab item(s)')
+        assert len(self.model.vocab.items) >= 3, 'Cannot handle unexpectedly short model vocab'
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
             tt = 1 # Normal
-            if len(vbytes) == 0:
+            # Special handling for UNK, BOS, EOS tokens.
+            if tokid <= 2:
+                if tokid == 0:
+                    vbytes = b'<unk>'
+                    tt = 2
+                elif tokid == 1:
+                    vbytes = b'<s>'
+                    tt = 3
+                else:
+                    vbytes = b'</s>'
+                    tt = 3
+            elif len(vbytes) == 0:
                 tt = 3 # Control
             elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
                 vbytes = bytes(f'<0x{vbytes[0]:02X}>', encoding = 'UTF-8')
@@ -246,6 +254,9 @@ class GGMLToGGUF:
         gguf_writer.add_token_list(tokens)
         gguf_writer.add_token_scores(scores)
         gguf_writer.add_token_types(toktypes)
+        gguf_writer.add_unk_token_id(0)
+        gguf_writer.add_bos_token_id(1)
+        gguf_writer.add_eos_token_id(2)
 
     def add_tensors(self, gguf_writer):
         nm = self.name_map
@@ -330,4 +341,5 @@ def main():
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
 
-main()
+if __name__ == '__main__':
+    main()

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # 7b pth llama --> gguf conversion
 # Only models with a single datafile are supported, like 7B
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model

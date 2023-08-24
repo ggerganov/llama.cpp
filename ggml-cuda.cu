@@ -388,7 +388,7 @@ static int g_device_count = -1;
 static int g_main_device = 0;
 static int g_compute_capabilities[GGML_CUDA_MAX_DEVICES];
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
-static bool g_mul_mat_q = false;
+static bool g_mul_mat_q = true;
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 1024*1024*1024; // 1 GB by default
@@ -4008,6 +4008,29 @@ static __global__ void rope_f32(const float * x, float * dst, const int ncols, c
     dst[i + 1] = x0*sin_theta + x1*cos_theta;
 }
 
+// TODO: this implementation is wrong!
+//static __global__ void rope_neox_f32(const float * x, float * dst, const int ncols, const float p0,
+//                                const float p_delta, const int p_delta_rows, const float theta_scale) {
+//    const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
+//
+//    if (col >= ncols) {
+//        return;
+//    }
+//
+//    const int row = blockDim.x*blockIdx.x + threadIdx.x;
+//    const int i = row*ncols + col/2;
+//
+//    const float theta = (p0 + p_delta * (row/p_delta_rows))*powf(theta_scale, col/2);
+//    const float sin_theta = sinf(theta);
+//    const float cos_theta = cosf(theta);
+//
+//    const float x0 = x[i + 0];
+//    const float x1 = x[i + ncols/2];
+//
+//    dst[i + 0]       = x0*cos_theta - x1*sin_theta;
+//    dst[i + ncols/2] = x0*sin_theta + x1*cos_theta;
+//}
+
 static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const float p, const float block_p, const float theta_scale) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
     const int half_n_dims = ncols/4;
@@ -4080,24 +4103,29 @@ static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int
 
 // the CUDA soft max implementation differs from the CPU implementation
 // instead of doubles floats are used
-// values are also not normalized to the maximum value by subtracting it in the exponential function
-// theoretically these changes could cause problems with rounding error and arithmetic overflow but for LLaMa it seems to be fine
 static __global__ void soft_max_f32(const float * x, float * dst, const int ncols) {
     const int row = blockDim.x*blockIdx.x + threadIdx.x;
     const int block_size = blockDim.y;
     const int tid = threadIdx.y;
 
-    float tmp = 0.0;
+    float max_val = -INFINITY;
 
-    for (int block_start = 0; block_start < ncols; block_start += block_size) {
-        const int col = block_start + tid;
-
-        if (col >= ncols) {
-            break;
-        }
-
+    for (int col = tid; col < ncols; col += block_size) {
         const int i = row*ncols + col;
-        const float val = expf(x[i]);
+        max_val = max(max_val, x[i]);
+    }
+
+    // find the max value in the block
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        max_val = max(max_val, __shfl_xor_sync(0xffffffff, max_val, mask, 32));
+    }
+
+    float tmp = 0.f;
+
+    for (int col = tid; col < ncols; col += block_size) {
+        const int i = row*ncols + col;
+        const float val = expf(x[i] - max_val);
         tmp += val;
         dst[i] = val;
     }
@@ -4108,15 +4136,11 @@ static __global__ void soft_max_f32(const float * x, float * dst, const int ncol
         tmp += __shfl_xor_sync(0xffffffff, tmp, mask, 32);
     }
 
-    for (int block_start = 0; block_start < ncols; block_start += block_size) {
-        const int col = block_start + tid;
+    const float inv_tmp = 1.f / tmp;
 
-        if (col >= ncols) {
-            break;
-        }
-
+    for (int col = tid; col < ncols; col += block_size) {
         const int i = row*ncols + col;
-        dst[i] /= tmp;
+        dst[i] *= inv_tmp;
     }
 }
 
@@ -5623,7 +5647,8 @@ inline void ggml_cuda_op_rope(
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
-    const bool is_glm = mode & 4;
+    const bool is_neox = mode & 2;
+    const bool is_glm  = mode & 4;
 
     // compute
     if (is_glm) {
@@ -5631,6 +5656,9 @@ inline void ggml_cuda_op_rope(
         const float id_p = min(p, n_ctx - 2.f);
         const float block_p = max(p - (n_ctx - 2.f), 0.f);
         rope_glm_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, id_p, block_p, theta_scale, cudaStream_main);
+    } else if (is_neox) {
+        GGML_ASSERT(false && "RoPE NeoX not implemented yet");
+#pragma message("TODO: implement RoPE NeoX for CUDA")
     } else {
         const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
         rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p0, freq_scale, ne01, theta_scale, cudaStream_main);

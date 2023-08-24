@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # HF llama --> gguf conversion
 
 import gguf

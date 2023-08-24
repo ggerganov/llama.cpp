@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import gguf
 import argparse
@@ -69,7 +69,10 @@ SAFETENSORS_DATA_TYPES: Dict[str, DataType] = {
     'I32': DT_I32,
 }
 
-class GGMLFileType(enum.Enum):
+# TODO: match this with `llama_ftype`
+# TODO: rename to LLAMAFileType
+# TODO: move to `gguf.py`
+class GGMLFileType(enum.IntEnum):
     AllF32    = 0
     MostlyF16 = 1  # except 1d tensors
 
@@ -100,6 +103,8 @@ class Params:
     n_head:     int
     n_head_kv:  int
     f_norm_eps: float
+
+    ftype: Optional[GGMLFileType] = None
 
     @staticmethod
     def find_n_mult(n_ff: int, n_embd: int) -> int:
@@ -728,7 +733,11 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        self.gguf.add_name                ("LLaMA")
+        ver = None
+        if (params.n_ctx == 4096):
+            ver = "v2"
+
+        self.gguf.add_name                ("LLaMA" if ver == None else "LLaMA " + ver)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
@@ -737,6 +746,9 @@ class OutputFile:
         self.gguf.add_head_count          (params.n_head)
         self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
+
+        if params.ftype:
+            self.gguf.add_file_type(params.ftype)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
@@ -956,7 +968,7 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, Sentence
             path = path3
         else:
             raise FileNotFoundError(
-                f"Could not find tokenizer.model in {path} or its parent; "
+                f"Could not find {vocab_file} in {path} or its parent; "
                 "if it's in another directory, pass the directory as --vocab-dir")
 
     print(f"Loading vocab file '{path}', type '{vocabtype}'")
@@ -1020,6 +1032,12 @@ def main(args_in: Optional[List[str]] = None) -> None:
                             " - LLaMA v2: --ctx 4096\n")
         params.n_ctx = args.ctx
 
+    if args.outtype:
+        params.ftype = {
+            "f32": GGMLFileType.AllF32,
+            "f16": GGMLFileType.MostlyF16,
+        }[args.outtype]
+
     print(f"params = {params}")
 
     vocab: Vocab
@@ -1040,11 +1058,14 @@ def main(args_in: Optional[List[str]] = None) -> None:
             vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
             vocab = load_vocab(vocab_dir, args.vocabtype)
 
-        model       = model_plus.model
-        model       = convert_model_names(model, params)
-        output_type = pick_output_type(model, args.outtype)
-        model       = convert_to_output_type(model, output_type)
-        outfile     = args.outfile or default_outfile(model_plus.paths, output_type)
+        model   = model_plus.model
+        model   = convert_model_names(model, params)
+        ftype   = pick_output_type(model, args.outtype)
+        model   = convert_to_output_type(model, ftype)
+        outfile = args.outfile or default_outfile(model_plus.paths, ftype)
+
+        params.ftype = ftype
+        print(f"Writing {outfile}, format {ftype}")
 
         OutputFile.write_all(outfile, params, model, vocab)
         print(f"Wrote {outfile}")

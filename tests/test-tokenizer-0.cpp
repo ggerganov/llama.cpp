@@ -17,6 +17,8 @@ static std::string unescape_whitespace(llama_context* ctx, const std::vector<lla
 static const std::map<std::string, std::vector<llama_token>> & k_tests() {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
         { " ",                      {1,    259, }, },
+        { "  ",                     { 1,    1678, }, },
+        { "   ",                    { 1,     268, }, },
         { "\t",                     { 1,    29871,   12, }, },
         { "\n",                     { 1,    29871,   13, }, },
         { "\t\n",                   { 1,    29871,   12,     13, }, },
@@ -38,6 +40,12 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
                 243,    162,    155,    185,  30722,    243,    162,    143,    174,  30598,
                 313,  20787,    953,   3848,    275,  16125,    630,  29897,  29871,  31681,
                 313,   6194,    953,  29877,   2397,    393,    756,    967,   1914,   5993,  29897, }, },
+        { "Hello",                  { 1,    15043 }, },
+        { " Hello",                 { 1,    29871,  15043 }, },
+        { "  Hello",                { 1,    259,    15043 }, },
+        { "   Hello",               { 1,    1678,   15043 }, },
+        { "    Hello",              { 1,    268,    15043 }, },
+        { "    Hello\n    Hello",   { 1,    268,    15043,  13,     1678,   15043 }, },
     };
 
     return _k_tests;
@@ -106,7 +114,8 @@ int main(int argc, char **argv) {
 
         if (!correct) {
             fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
-            fprintf(stderr, "%s : detokenized to: '%s'\n", __func__, unescape_whitespace(ctx, test_kv.second).c_str());
+            fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
+                unescape_whitespace(ctx, res).c_str(), unescape_whitespace(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
                 fprintf(stderr, "%6d, ", t);

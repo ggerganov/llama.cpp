@@ -11,18 +11,11 @@
 #include <locale>
 
 static std::string escape_whitespace(const std::string& text) {
-    std::string result;
-    bool escaping = false;
-    result += "\xe2\x96\x81";
+    std::string result = "\xe2\x96\x81";
     for (size_t offs = 0; offs < text.length(); ++offs) {
         if (text[offs] == ' ') {
-            if (!escaping) {
-                result += "\xe2\x96\x81";
-                escaping = true;
-            }
-        }
-        else {
-            escaping = false;
+            result += "\xe2\x96\x81";
+        } else {
             result += text[offs];
         }
     }
@@ -74,26 +67,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    GGML_ASSERT(llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_BPE);
+
     const int n_vocab = llama_n_vocab(ctx);
 
     for (int i = 0; i < n_vocab; ++i) {
-        std::string forward = llama_token_to_str_bpe(ctx, i);
-        std::vector<llama_token> tokens = llama_tokenize_bpe(ctx, forward, false);
+        std::string forward = llama_token_to_str(ctx, i);
+        std::vector<llama_token> tokens = llama_tokenize(ctx, forward, false);
         if (tokens.size() == 1) {
             if (i != tokens[0]) {
                 std::string backward = llama_token_to_str(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n",
                     __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
-                return 2;
-            }
-        } else {
-            llama_token_type type = llama_token_get_type(ctx, i);
-            if (type == LLAMA_TOKEN_TYPE_UNKNOWN || type == LLAMA_TOKEN_TYPE_CONTROL || type == LLAMA_TOKEN_TYPE_BYTE) {
-                fprintf(stderr, "%s : info: token %d is string %s and bpe returns tokens %s\n",
-                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
-            } else {
-                fprintf(stderr, "%s : error: token %d is string %s but bpe returns tokens %s\n",
-                    __func__, i, llama_token_to_str(ctx, i).c_str(), unescape_whitespace(ctx, tokens).c_str());
                 return 2;
             }
         }
