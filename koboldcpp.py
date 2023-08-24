@@ -1577,10 +1577,15 @@ def main(launch_args,start_server=True):
     args = launch_args
     embedded_kailite = None
     if args.config:
-        with open(args.config, 'r') as f:
-            config = json.load(f)
-        for key, value in config.items():
-            setattr(args, key, value)
+        if isinstance(args.config, str) and os.path.exists(args.config):
+            with open(args.config, 'r') as f:
+                config = json.load(f)
+            for key, value in config.items():
+                setattr(args, key, value)
+        else:
+            print("Specified kcpp config file invalid or not found.")
+            time.sleep(2)
+            sys.exit(2)
     if not args.model_param:
         args.model_param = args.model
     if not args.model_param:
@@ -1730,7 +1735,7 @@ if __name__ == '__main__':
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     parser.add_argument("--launch", help="Launches a web browser when load is completed.", action='store_true')
     parser.add_argument("--lora", help="LLAMA models only, applies a lora file on top of model. Experimental.", metavar=('[lora_filename]', '[lora_base]'), nargs='+')
-    parser.add_argument("--config", help="Load settings from a .kcpps file. Other arguments will be ignored", nargs="?")
+    parser.add_argument("--config", help="Load settings from a .kcpps file. Other arguments will be ignored", type=str, nargs='?')
     physical_core_limit = 1
     if os.cpu_count()!=None and os.cpu_count()>1:
         physical_core_limit = int(os.cpu_count()/2)
