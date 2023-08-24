@@ -441,8 +441,8 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                         else {
                             AT_PRINTF("reusing parent %s for %s\n", parent->name, node->name);
                             node->data = parent->data;
+                            return;
                         }
-                        return;
                     }
                 }
             }
@@ -528,7 +528,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 }
                 AT_PRINTF("\n");
             }
-            
+
 
             // update parents
             // update immediately if there is no parse_seq
