@@ -443,6 +443,8 @@ struct test {
     static const std::string gpu_info;
     std::string model_filename;
     std::string model_type;
+    uint64_t model_size;
+    uint64_t model_n_params;
     int n_batch;
     int n_threads;
     bool f32_kv;
@@ -459,8 +461,10 @@ struct test {
     test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
         model_filename = inst.model;
         char buf[128];
-        llama_model_type(lmodel, buf, sizeof(buf));
+        llama_model_desc(lmodel, buf, sizeof(buf));
         model_type = buf;
+        model_size = llama_model_size(lmodel);
+        model_n_params = llama_model_n_params(lmodel);
         n_batch = inst.n_batch;
         n_threads = inst.n_threads;
         f32_kv = inst.f32_kv;
@@ -526,7 +530,7 @@ struct test {
             "build_commit", "build_number",
             "cuda", "opencl", "metal", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
-            "model_filename", "model_type",
+            "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "f16_kv",
             "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
             "n_prompt", "n_gen", "test_time",
@@ -540,6 +544,7 @@ struct test {
 
     static field_type get_field_type(const std::string & field) {
         if (field == "build_number" || field == "n_batch" || field == "n_threads" ||
+            field == "model_size" || field == "model_n_params" ||
             field == "n_gpu_layers" || field == "main_gpu" ||
             field == "n_prompt" || field == "n_gen" ||
             field == "avg_ns" || field == "stddev_ns") {
@@ -575,7 +580,7 @@ struct test {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
-            model_filename, model_type,
+            model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
             std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
@@ -723,7 +728,10 @@ struct markdown_printer : public printer {
 
     void print_header(const cmd_params & params) override {
         // select fields to print
-        fields = { "model", "backend" };
+        fields.push_back("model");
+        fields.push_back("model_size");
+        fields.push_back("model_n_params");
+        fields.push_back("backend");
         bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
@@ -771,12 +779,22 @@ struct markdown_printer : public printer {
         fprintf(fout, "|");
         for (const auto & field : fields) {
             std::string value;
+            char buf[128];
             if (field == "model") {
                 value = t.model_type;
+            } else if (field == "model_size") {
+                snprintf(buf, sizeof(buf), "%.2f GiB", t.model_size / 1024.0 / 1024.0 / 1024.0);
+                value = buf;
+            } else if (field == "model_n_params") {
+                if (t.model_n_params < 1000*1000*1000) {
+                    snprintf(buf, sizeof(buf), "%.2f M", t.model_n_params / 1e6);
+                } else {
+                    snprintf(buf, sizeof(buf), "%.2f B", t.model_n_params / 1e9);
+                }
+                value = buf;
             } else if (field == "backend") {
                 value = test::get_backend();
             } else if (field == "test") {
-                char buf[128];
                 if (t.n_prompt > 0 && t.n_gen == 0) {
                     snprintf(buf, sizeof(buf), "pp %d", t.n_prompt);
                 } else if (t.n_gen > 0 && t.n_prompt == 0) {
@@ -787,7 +805,6 @@ struct markdown_printer : public printer {
                 }
                 value = buf;
             } else if (field == "t/s") {
-                char buf[128];
                 snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.avg_ts(), t.stdev_ts());
                 value = buf;
             } else if (vmap.find(field) != vmap.end()) {
