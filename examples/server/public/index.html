@@ -662,7 +662,9 @@
         `
 
         return html`
-          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>${msg.content}</>
+          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
+            ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
+          </>
         `
       });
     }
