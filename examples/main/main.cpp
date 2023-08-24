@@ -61,15 +61,32 @@ void sigint_handler(int signo) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    LOG("Hello World to default output!\n")
+    log_disable();
+    LOG("01 Hello World to nobody, because logs are disabled!\n")
+    log_enable();
+    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
+    LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
     log_set_target(stderr);
-    LOG("Hello World to stderr!\n")
+    LOG("04 Hello World to stderr!\n")
+    LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n")
     log_set_target(LOG_DEFAULT_FILE_NAME);
-    LOG("Hello World to default log file!\n")
+    LOG("06 Hello World to default log file!\n")
     log_set_target(stdout);
-    LOG("Hello World to stdout!\n")
+    LOG("07 Hello World to stdout!\n")
     log_set_target(LOG_DEFAULT_FILE_NAME);
-    LOG("Hello World to default log file again!\n")
+    LOG("08 Hello World to default log file again!\n")
+    log_disable();
+    LOG("09 Hello World _1_ into the void!\n")
+    log_enable();
+    LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n")
+    log_disable();
+    log_set_target("llama.anotherlog.log");
+    LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
+    log_enable();
+    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
+    log_set_target("llama.yetanotherlog.log");
+    LOG("13 Hello World this time in yet new file?\n")
+
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
