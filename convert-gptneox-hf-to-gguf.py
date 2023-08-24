@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # HF gptneox--> gguf conversion
 
 import gguf
