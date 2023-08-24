@@ -18,6 +18,12 @@ typedef struct {
     uint8_t qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
 
+#define QK8_0 32
+typedef struct {
+    half    d;         // delta
+    int8_t  qs[QK8_0]; // quants
+} block_q8_0;
+
 kernel void kernel_add(
         device const float * src0,
         device const float * src1,
@@ -1621,12 +1627,12 @@ template <typename type4x4>
 void dequantize_q4_0(device const block_q4_0 *xb, short il, thread type4x4 & reg) {
     device const uint16_t * qs = ((device const uint16_t *)xb + 1);
     const half d = il ? (xb->d / 16.h) : xb->d;
-    const half m = il ? (-8.h * 16.h) : -8.h;
+    const half m = il ? ( -8.h * 16.h) : -8.h;
     const ushort mask0 = il ? 0x00F0 : 0x000F;
     const ushort mask1 = il ? 0xF000 : 0x0F00;
 
     for (int i=0;i<8;i++) {
-        reg[i/2][2*(i%2)] = (((qs[i] & mask0)) + m) * d;
+        reg[i/2][2*(i%2)]   = (((qs[i] & mask0)     ) + m) * d;
         reg[i/2][2*(i%2)+1] = (((qs[i] & mask1) >> 8) + m) * d;
     }
 }
@@ -1640,8 +1646,18 @@ void dequantize_q4_1(device const block_q4_1 *xb, short il, thread type4x4 & reg
     const ushort mask1 = il ? 0xF000 : 0x0F00;
 
     for (int i=0;i<8;i++) {
-        reg[i/2][2*(i%2)] = (((qs[i] & mask0)) * d) + m;
+        reg[i/2][2*(i%2)]   = (((qs[i] & mask0)     ) * d) + m;
         reg[i/2][2*(i%2)+1] = (((qs[i] & mask1) >> 8) * d) + m;
+    }
+}
+
+template <typename type4x4>
+void dequantize_q8_0(device const block_q8_0 *xb, short il, thread type4x4 & reg) {
+    device const uint8_t * qs = ((device const uint8_t *)xb->qs);
+    const half d = xb->d;
+
+    for (int i=0;i<16;i++) {
+        reg[i/4][i%4] = (qs[i + 16*il] * d);
     }
 }
 
@@ -1947,9 +1963,10 @@ kernel void kernel_mul_mm(device const  uchar * src0,
 typedef void (get_rows_t)(device const void *, device const int *, device float *, constant int64_t &, \
                           constant uint64_t &, constant uint64_t &, uint, uint, uint);
 
-template [[host_name("kernel_get_rows_f16")]] kernel get_rows_t kernel_get_rows<half4x4, 1, dequantize_f16>;
+template [[host_name("kernel_get_rows_f16")]]  kernel get_rows_t kernel_get_rows<half4x4,    1, dequantize_f16>;
 template [[host_name("kernel_get_rows_q4_0")]] kernel get_rows_t kernel_get_rows<block_q4_0, 2, dequantize_q4_0>;
 template [[host_name("kernel_get_rows_q4_1")]] kernel get_rows_t kernel_get_rows<block_q4_1, 2, dequantize_q4_1>;
+template [[host_name("kernel_get_rows_q8_0")]] kernel get_rows_t kernel_get_rows<block_q8_0, 2, dequantize_q8_0>;
 template [[host_name("kernel_get_rows_q2_K")]] kernel get_rows_t kernel_get_rows<block_q2_K, QK_NL, dequantize_q2_K>;
 template [[host_name("kernel_get_rows_q3_K")]] kernel get_rows_t kernel_get_rows<block_q3_K, QK_NL, dequantize_q3_K>;
 template [[host_name("kernel_get_rows_q4_K")]] kernel get_rows_t kernel_get_rows<block_q4_K, QK_NL, dequantize_q4_K>;
@@ -1960,7 +1977,7 @@ typedef void (mat_mm_t)(device const uchar *, device const float *, device float
                              constant int64_t &, constant int64_t &, constant int64_t &, constant int64_t &, \
                              constant int64_t &, constant int64_t &, constant uint &, threadgroup uchar *, uint3, uint, uint);
 
-template [[host_name("kernel_mul_mm_f16_f32")]] kernel mat_mm_t kernel_mul_mm<half4x4, 1, dequantize_f16>;
+template [[host_name("kernel_mul_mm_f16_f32")]]  kernel mat_mm_t kernel_mul_mm<half4x4,    1, dequantize_f16>;
 template [[host_name("kernel_mul_mm_q4_0_f32")]] kernel mat_mm_t kernel_mul_mm<block_q4_0, 2, dequantize_q4_0>;
 template [[host_name("kernel_mul_mm_q4_1_f32")]] kernel mat_mm_t kernel_mul_mm<block_q4_1, 2, dequantize_q4_1>;
 template [[host_name("kernel_mul_mm_q2_K_f32")]] kernel mat_mm_t kernel_mul_mm<block_q2_K, QK_NL, dequantize_q2_K>;
