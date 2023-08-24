@@ -521,13 +521,16 @@ void ggml_metal_graph_compute(
 
     const int n_cb = ctx->n_cb;
 
-    NSMutableArray * command_buffers = [NSMutableArray arrayWithCapacity:n_cb];
+    NSMutableArray * command_buffers  = [NSMutableArray arrayWithCapacity:n_cb];
+    NSMutableArray * command_encoders = [NSMutableArray arrayWithCapacity:n_cb];
 
     for (int i = 0; i < n_cb; ++i) {
         command_buffers[i] = [ctx->queue commandBuffer];
 
         // enqueue the command buffers in order to specify their execution order
         [command_buffers[i] enqueue];
+
+        command_encoders[i] = [command_buffers[i] computeCommandEncoderWithDescriptor: edesc];
     }
 
     // TODO: is this the best way to start threads?
@@ -541,9 +544,8 @@ void ggml_metal_graph_compute(
             size_t offs_src1 = 0;
             size_t offs_dst  = 0;
 
-            id<MTLCommandBuffer> command_buffer = command_buffers[cb_idx];
-
-            id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
+            id<MTLCommandBuffer> command_buffer  = command_buffers[cb_idx];
+            id<MTLComputeCommandEncoder> encoder = command_encoders[cb_idx];
 
             const int node_start =                                      (cb_idx + 0) * n_nodes_per_cb;
             const int node_end   = MIN((cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb, n_nodes);
@@ -1133,8 +1135,10 @@ void ggml_metal_graph_compute(
             GGML_ASSERT(false);
         }
 
+        [command_encoders[i] release];
         [command_buffers[i] release];
     }
 
+    [command_encoders release];
     [command_buffers release];
 }
