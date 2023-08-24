@@ -473,7 +473,7 @@ bool gpt2_eval(
         // norm
         {
             // [ 768, N]
-            cur = ggml_norm(ctx0, inpL);
+            cur = ggml_norm(ctx0, inpL, default_norm_eps);
 
             // cur = ln_1_g*cur + ln_1_b
             // [ 768, N]
@@ -624,7 +624,7 @@ bool gpt2_eval(
         {
             // norm
             {
-                cur = ggml_norm(ctx0, inpFF);
+                cur = ggml_norm(ctx0, inpFF, default_norm_eps);
 
                 // cur = ln_2_g*cur + ln_2_b
                 // [ 768, N]
@@ -683,7 +683,7 @@ bool gpt2_eval(
     // norm
     {
         // [ 768, N]
-        inpL = ggml_norm(ctx0, inpL);
+        inpL = ggml_norm(ctx0, inpL, default_norm_eps);
 
         // inpL = ln_f_g*inpL + ln_f_b
         // [ 768, N]

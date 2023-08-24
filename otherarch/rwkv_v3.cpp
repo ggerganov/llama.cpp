@@ -477,7 +477,7 @@ struct ggml_tensor * rwkv_max(ggml_context * ctx, struct ggml_tensor * x, struct
 struct ggml_tensor * rwkv_layer_norm(ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * weight, struct ggml_tensor * bias) {
     // LayerNorm in RWKV is `x = (x - mean(x)) / sqrt(variance(x) + 1e-5) * weight + bias`
     // Looks like ggml_norm does the first part, we only need to apply weight & bias.
-    return ggml_add_inplace(ctx, ggml_mul_inplace(ctx, ggml_norm(ctx, x), weight), bias);
+    return ggml_add_inplace(ctx, ggml_mul_inplace(ctx, ggml_norm(ctx, x, default_norm_eps), weight), bias);
 }
 
 // --- Implementation ---

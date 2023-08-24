@@ -458,4 +458,4 @@ struct mpt_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
-
+const float default_norm_eps = 1e-5f;

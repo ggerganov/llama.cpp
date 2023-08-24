@@ -367,7 +367,7 @@ ggml_tensor * gpt_neox_ff(
         const gpt_neox_layer &layer,
         ggml_context * ctx0,
         ggml_tensor * inp) {
-    ggml_tensor * cur = ggml_norm(ctx0, inp);
+    ggml_tensor * cur = ggml_norm(ctx0, inp, default_norm_eps);
 
     cur = ggml_add(ctx0,
         ggml_mul(ctx0,
@@ -481,7 +481,7 @@ bool gpt_neox_eval(
         // self-attention
         {
             {
-                cur = ggml_norm(ctx0, inpL);
+                cur = ggml_norm(ctx0, inpL, default_norm_eps);
 
                 cur = ggml_add(ctx0,
                         ggml_mul(ctx0,
@@ -613,7 +613,7 @@ bool gpt_neox_eval(
 
     // norm
     {
-        inpL = ggml_norm(ctx0, inpL);
+        inpL = ggml_norm(ctx0, inpL, default_norm_eps);
 
         // inpL = ln_f_g*inpL + ln_f_b
         inpL = ggml_add(ctx0,
