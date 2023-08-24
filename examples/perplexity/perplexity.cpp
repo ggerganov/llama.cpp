@@ -130,7 +130,7 @@ std::vector<float> hellaswag_evaluate_tokens(llama_context * ctx, const std::vec
     for (size_t i_chunk = 0; i_chunk < n_chunk; ++i_chunk) {
         size_t n_tokens = tokens.size() - i_chunk * n_batch;
         n_tokens = std::min(n_tokens, size_t(n_batch));
-        if (llama_eval(ctx, tokens.data() + i_chunk * n_batch, n_tokens, n_past, n_thread)) {
+        if (llama_eval(ctx, tokens.data() + i_chunk * n_batch, n_tokens, n_past, n_thread, n_thread)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return {};
         }
@@ -304,7 +304,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             //}
 
             // Evaluate the query
-            logits = hellaswag_evaluate_tokens(ctx, query_embd, context_size, params.n_batch, n_vocab, params.n_threads, params.pp_threads);
+            logits = hellaswag_evaluate_tokens(ctx, query_embd, context_size, params.n_batch, n_vocab, params.n_threads);
             if (logits.empty()) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;
