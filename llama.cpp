@@ -195,6 +195,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
+    LLM_KV_ROPE_FREQ_BASE,
     LLM_KV_ROPE_SCALE_LINEAR,
 
     LLM_KV_TOKENIZER_MODEL,
@@ -238,6 +239,7 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count" },
+    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"       },
     { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"    },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
@@ -1561,12 +1563,26 @@ static void llm_load_hparams(
     hparams.n_head_kv = hparams.n_head;
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
-    // TODO: manually setting rope scale should override this
+    // TODO: manually setting rope freq base and scale should override this
+    // FIXME: partial fix when the param specified is not the default value, but
+    //        will not work for overriding the model value to the params default
+
+    llama_context_params defaults = llama_context_default_params();
+
+    // rope_freq_base
+    {
+        float ropebase = 10000.0f;
+        GGUF_GET_KEY(ctx, ropebase, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
+        if (ropebase != 10000.0f && rope_freq_base == defaults.rope_freq_base) {
+            rope_freq_base = ropebase;
+        }
+    }
+
     // rope_freq_scale (inverse of the kv) is optional
     {
         float ropescale = 1.0f;
         GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-        if (ropescale != 1.0f) {
+        if (ropescale != 1.0f && rope_freq_scale == defaults.rope_freq_scale) {
             rope_freq_scale = 1.0f/ropescale;
         }
     }
