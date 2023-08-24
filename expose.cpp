@@ -240,4 +240,10 @@ extern "C"
     bool abort_generate() {
         return gpttype_generate_abort();
     }
+
+    int token_count(const char * input)
+    {
+        std::string inputstr = input;
+        return gpttype_token_count(inputstr);
+    }
 }

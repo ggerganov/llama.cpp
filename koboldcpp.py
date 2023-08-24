@@ -178,6 +178,7 @@ def init_library():
     handle.get_last_token_count.restype = ctypes.c_int
     handle.get_last_stop_reason.restype = ctypes.c_int
     handle.abort_generate.restype = ctypes.c_bool
+    handle.token_count.restype = ctypes.c_int
     handle.get_pending_output.restype = ctypes.c_char_p
 
 def load_model(model_filename):
@@ -528,6 +529,22 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         kai_sse_stream_flag = False
         self.path = self.path.rstrip('/')
 
+        if self.path.endswith(('/api/extra/tokencount')):
+            try:
+                genparams = json.loads(body)
+                countprompt = genparams.get('prompt', "")
+                count = handle.token_count(countprompt.encode("UTF-8"))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"value": count}).encode())
+
+            except ValueError as e:
+                utfprint("Count Tokens - Body Error: " + str(e))
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"value": -1}).encode())
+            return
+
         if self.path.endswith('/api/extra/abort'):
             ag = handle.abort_generate()
             self.send_response(200)
@@ -831,7 +848,7 @@ def show_new_gui():
     debugmode = ctk.IntVar()
 
     lowvram_var = ctk.IntVar()
-    mmq_var = ctk.IntVar()
+    mmq_var = ctk.IntVar(value=1)
 
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
