@@ -764,13 +764,15 @@ def quantize_array_q8_0(arr):
     assert arr.dtype == np.float32, f'Bad array type {arr.dtype}'
     n_blocks = arr.size // QK8_0
     blocks = arr.reshape((n_blocks, QK8_0))
-    return np.fromiter(map(quantize_block_q8_0, blocks), count = n_blocks, dtype = BLOCK_Q8_0)
+    return np.fromiter(quantize_blocks_q8_0(blocks), count = n_blocks, dtype = BLOCK_Q8_0)
 
-def quantize_block_q8_0(blk, zero = np.float32(0), one = np.float32(1), onetwentyseven = np.float32(127), zero_chunk = (np.int8(0),) * QK8_0):
-    d = abs(blk).max() / onetwentyseven
-    if d == zero:
-        return (np.float16(d), zero_chunk)
-    return (np.float16(d), (blk * (one / d)).round())
+# Much faster implementation of block quantization contributed by @Cebtenzzre
+def quantize_blocks_q8_0(blocks):
+    d = abs(blocks).max(axis = 1) / np.float32(127)
+    with np.errstate(divide = 'ignore'):
+        qs = (blocks / d[:, None]).round()
+    qs[d == 0] = 0
+    yield from zip(np.float16(d), qs)
 
 
 class OutputFile:
@@ -892,7 +894,7 @@ class OutputFile:
             elapsed = time.time() - start
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
-            print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:6} | T+{int(elapsed):4}")
+            print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}")
             of.gguf.write_tensor_data(ndarray)
 
         of.close()
