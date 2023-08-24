@@ -1,7 +1,7 @@
 #!/bin/bash
 
 qnt=(f16 q8_0 q6_k q5_k q5_1 q5_0 q4_k q4_1 q4_0 q3_k q2_k)
-args="--no-mmap -ngl 999 -t 8"
+args="-ngl 999 -t 8"
 
 if [ -z "$1" ]; then
     echo "usage: $0 <model> [qnt] [args]"
