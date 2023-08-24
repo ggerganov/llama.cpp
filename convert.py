@@ -200,12 +200,22 @@ class Params:
         n_embd           = config["dim"]
         n_layer          = config["n_layers"]
         n_mult           = config["multiple_of"]
-        n_ctx            = 2048 if config["norm_eps"] == 1e-06 else 4096 # hack to determine LLaMA v1 vs v2
         n_ff             = -1
         n_head           = config["n_heads"]
         n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
         f_norm_eps       = config["norm_eps"]
         f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
+
+        # hack to determine LLaMA v1 vs v2 vs CodeLlama
+        if f_rope_freq_base and f_rope_freq_base == 1000000:
+            # CodeLlama
+            n_ctx = 16384
+        elif config["norm_eps"] == 1e-05:
+            # LLaMA v2
+            n_ctx = 4096
+        else:
+            # LLaMA v1
+            n_ctx = 2048
 
         if n_vocab == -1:
             n_vocab = model["tok_embeddings.weight"].shape[0]
