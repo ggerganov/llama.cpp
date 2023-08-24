@@ -1,13 +1,10 @@
 #pragma once
 
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include <chrono>
 #include <cstring>
 #include <sstream>
 #include <iostream>
+#include <thread>
 
 // --------------------------------
 //
@@ -94,10 +91,37 @@
 #define LOG_TEE_TARGET stderr
 #endif
 
+// Utility to obtain "pid" like unique process id and use it when creating log files.
+inline std::string log_get_pid()
+{
+    static std::string pid;
+    if (pid.empty()) [[unlikely]]
+    {
+        // std::this_thread::get_id() is the most portable way of obtaining a "process id"
+        //  it's not the same as "pid" but is unique enough to solve multiple instances
+        //  trying to write to the same log.
+        std::stringstream ss;
+        ss << std::this_thread::get_id();
+        pid = ss.str();
+    }
+
+    return pid;
+}
+
+// Utility function for generating log file names with unique id based on thread id.
+//  invocation with LOG_FILENAME_GENERATOR( "llama", "log" ) creates a string "llama.<number>.log"
+//  where the number is a runtime id of the current thread.
+
+#define LOG_FILENAME_GENERATOR(log_file_basename, log_file_extension) _log_filename_generator(log_file_basename, log_file_extension)
+
+// INTERNAL, DO NOT USE
+inline std::string _log_filename_generator(std::string log_file_basename, std::string log_file_extension)
+{
+    return std::string().append(log_file_basename).append(".").append(log_get_pid()).append(".").append(log_file_extension);
+}
+
 #ifndef LOG_DEFAULT_FILE_NAME
-// TODO: This should get a wrapper
-//  to let others have custom log names with automatic unique id
-#define LOG_DEFAULT_FILE_NAME std::string().append("llama.").append(log_get_pid()).append(".log")
+#define LOG_DEFAULT_FILE_NAME LOG_FILENAME_GENERATOR("llama", "log")
 #endif
 
 // Utility for turning #define values into string literals
@@ -196,23 +220,6 @@ enum LogTriState
 //  by defining LOG_TEE_TARGET
 //
 #define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, '\0')
-
-// Utility to obtain "pid" like unique process id and use it when creating log files.
-inline std::string log_get_pid()
-{
-    static std::string pid;
-    if (pid.empty()) [[unlikely]]
-    {
-        // std::this_thread::get_id() is the most portable way of obtaining a "process id"
-        //  it's not the same as "pid" but is unique enough to solve multiple instances
-        //  trying to write to the same log.
-        std::stringstream ss;
-        ss << std::this_thread::get_id();
-        pid = ss.str();
-    }
-
-    return pid;
-}
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStateSame, std::string filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
@@ -356,3 +363,96 @@ inline FILE *log_set_target(FILE *target) { return _log_handler2(true, LogTriSta
 
 // INTERNAL, DO NOT USE
 inline FILE *log_handler() { return _log_handler1(); }
+
+inline void log_test()
+{
+    std::cerr << "LOGDBG: LOGTEST" << std::endl;
+
+    log_disable();
+    LOG("01 Hello World to nobody, because logs are disabled!\n")
+    log_enable();
+    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
+    LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
+    log_set_target(stderr);
+    LOG("04 Hello World to stderr!\n")
+    LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n")
+    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG("06 Hello World to default log file!\n")
+    log_set_target(stdout);
+    LOG("07 Hello World to stdout!\n")
+    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG("08 Hello World to default log file again!\n")
+    log_disable();
+    LOG("09 Hello World _1_ into the void!\n")
+    log_enable();
+    LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n")
+    log_disable();
+    log_set_target("llama.anotherlog.log");
+    LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
+    log_enable();
+    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
+    log_set_target("llama.yetanotherlog.log");
+    LOG("13 Hello World this time in yet new file?\n")
+    log_set_target(LOG_FILENAME_GENERATOR("llama_autonamed", "log"));
+    LOG("14 Hello World in log with generated filename!\n")
+
+    //exit(0);
+}
+
+inline bool log_param_single_parse(std::string param)
+{
+    std::cerr << "LOGDBG: single param: " << param << std::endl;
+
+    if (std::string("--log-test").compare(param) == 0)
+    {
+        log_test();
+        return true;
+    }
+    else if (std::string("--log-disable").compare(param) == 0)
+    {
+        log_disable();
+        return true;
+    }
+    else if (std::string("--log-enable").compare(param) == 0)
+    {
+        log_enable();
+        return true;
+    }
+
+    std::cerr << "LOGDBG: single param NO MATCH " << param << std::endl;
+
+    return false;
+}
+
+inline bool log_param_pair_parse(bool check_but_dont_parse, std::string param, std::string next = std::string())
+{
+    std::cerr << "LOGDBG: pair param: " << param << "/" << next << std::endl;
+
+    if (std::string("--log-file").compare(param) == 0)
+    {
+        if( check_but_dont_parse )
+        {
+            return true;
+        }
+        log_set_target(LOG_FILENAME_GENERATOR(next.empty() ? "unnamed" : next, "log"));
+        return true;
+    }
+
+    std::cerr << "LOGDBG: pair param NO MATCH " << param << "/" << next << std::endl;
+
+    return false;
+}
+
+inline void log_print_usage()
+{
+    fprintf(stdout, "log options:\n");
+    /*
+    fprintf(stdout, "  -h, --help            show this help message and exit\n");
+    // spacing
+    fprintf(stdout, "__-param----------------Description\n");*/
+    fprintf(stdout, "  --log-test            Run simple logging test\n");
+    fprintf(stdout, "  --log-disable         Disable trace logs\n");
+    fprintf(stdout, "  --log-enable          Enable trace logs\n");
+    fprintf(stdout, "  --log-file            Specify a log filename (without extension)\n");
+    fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+}

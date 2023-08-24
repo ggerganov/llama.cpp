@@ -4,6 +4,8 @@
 
 #include "llama.h"
 
+#include "log.h"
+
 #include <string>
 #include <vector>
 #include <random>
