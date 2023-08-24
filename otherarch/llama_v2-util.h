@@ -171,7 +171,7 @@ struct llama_v2_mmap {
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) {
-            throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
+            throw std::runtime_error(format_old("mmap failed: %s", strerror(errno)));
         }
 
         if (prefetch) {
