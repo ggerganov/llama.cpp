@@ -104,6 +104,8 @@ class Params:
     n_head_kv:  int
     f_norm_eps: float
 
+    f_rope_freq_base: Optional[float] = None
+
     ftype: Optional[GGMLFileType] = None
 
     # path to the directory containing the model files
@@ -194,15 +196,16 @@ class Params:
     def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
         config = json.load(open(config_path))
 
-        n_vocab    = config["vocab_size"] if "vocab_size" in config else -1
-        n_embd     = config["dim"]
-        n_layer    = config["n_layers"]
-        n_mult     = config["multiple_of"]
-        n_ctx      = 2048 if config["norm_eps"] == 1e-06 else 4096 # hack to determine LLaMA v1 vs v2
-        n_ff       = -1
-        n_head     = config["n_heads"]
-        n_head_kv  = config["n_kv_heads"] if "n_kv_heads" in config else n_head
-        f_norm_eps = config["norm_eps"]
+        n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
+        n_embd           = config["dim"]
+        n_layer          = config["n_layers"]
+        n_mult           = config["multiple_of"]
+        n_ctx            = 2048 if config["norm_eps"] == 1e-06 else 4096 # hack to determine LLaMA v1 vs v2
+        n_ff             = -1
+        n_head           = config["n_heads"]
+        n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
+        f_norm_eps       = config["norm_eps"]
+        f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
         if n_vocab == -1:
             n_vocab = model["tok_embeddings.weight"].shape[0]
@@ -211,15 +214,16 @@ class Params:
             n_ff = model["layers.0.feed_forward.w1.weight"].shape[0]
 
         return Params(
-            n_vocab    = n_vocab,
-            n_embd     = n_embd,
-            n_mult     = n_mult,
-            n_layer    = n_layer,
-            n_ctx      = n_ctx,
-            n_ff       = n_ff,
-            n_head     = n_head,
-            n_head_kv  = n_head_kv,
-            f_norm_eps = f_norm_eps,
+            n_vocab          = n_vocab,
+            n_embd           = n_embd,
+            n_mult           = n_mult,
+            n_layer          = n_layer,
+            n_ctx            = n_ctx,
+            n_ff             = n_ff,
+            n_head           = n_head,
+            n_head_kv        = n_head_kv,
+            f_norm_eps       = f_norm_eps,
+            f_rope_freq_base = f_rope_freq_base,
         )
 
     @staticmethod
@@ -753,6 +757,9 @@ class OutputFile:
         self.gguf.add_head_count          (params.n_head)
         self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
+
+        if params.f_rope_freq_base:
+            self.gguf.add_rope_freq_base(params.f_rope_freq_base)
 
         if params.ftype:
             self.gguf.add_file_type(params.ftype)
