@@ -2337,6 +2337,7 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
 struct opt_callback_data {
     struct train_params *     params;
     struct ggml_opt_context * opt;
+    struct llama_context *    lctx;
     llama_token *             tokens_data;
     size_t                    tokens_size;
     int *                     samples_data;
@@ -2377,6 +2378,7 @@ void opt_callback(void * vdata, float * sched) {
     }
 
     get_example_targets_batch(
+        data->lctx,
         data->samples_data,
         data->samples_size,
         data->tokens_data,
@@ -2560,6 +2562,7 @@ int main(int argc, char ** argv) {
     struct opt_callback_data opt_cb_data;
     opt_cb_data.params = &params;
     opt_cb_data.opt = opt;
+    opt_cb_data.lctx = lctx;
     opt_cb_data.tokens_data = train_tokens.data();
     opt_cb_data.tokens_size = train_tokens.size();
     opt_cb_data.samples_data = train_samples.data();
