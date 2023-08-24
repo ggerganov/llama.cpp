@@ -168,7 +168,7 @@ class Params:
         n_head       = config["num_attention_heads"]
         n_head_kv    = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head
         f_norm_eps   = config["rms_norm_eps"]
-        f_rope_scale = config["rope_scaling"]["factor"] if "rope_scaling" in config and "factor" in config["rope_scaling"] else None
+        f_rope_scale = config.get("rope_scaling", {}).get("factor", None) if config.get("rope_scaling", {}).get("type", "") == "linear" else None
 
         n_mult = Params.find_n_mult(n_ff, n_embd)
 
