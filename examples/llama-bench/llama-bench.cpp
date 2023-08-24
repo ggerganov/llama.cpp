@@ -18,9 +18,7 @@
 #include "llama.h"
 #include "common.h"
 #include "build-info.h"
-#ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#endif
 
 // utils
 static uint64_t get_time_ns() {
