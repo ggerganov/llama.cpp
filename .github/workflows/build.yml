@@ -300,7 +300,7 @@ jobs:
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
             echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
             echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
@@ -355,7 +355,7 @@ jobs:
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
             echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
             echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
@@ -429,7 +429,7 @@ jobs:
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
             echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
             echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
