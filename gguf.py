@@ -47,6 +47,7 @@ KEY_ATTENTION_LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 
 # RoPE
 KEY_ROPE_DIMENSION_COUNT = "{arch}.rope.dimension_count"
+KEY_ROPE_FREQ_BASE       = "{arch}.rope.freq_base"
 KEY_ROPE_SCALE_LINEAR    = "{arch}.rope.scale_linear"
 
 # tokenization
@@ -663,7 +664,10 @@ class GGUFWriter:
         self.add_uint32(
             KEY_ROPE_DIMENSION_COUNT.format(arch=self.arch), count)
 
-    def add_rope_scale_linear(self, value:  float):
+    def add_rope_freq_base(self, value: float):
+        self.add_float32(KEY_ROPE_FREQ_BASE.format(arch=self.arch), value)
+
+    def add_rope_scale_linear(self, value: float):
         self.add_float32(KEY_ROPE_SCALE_LINEAR.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str):
