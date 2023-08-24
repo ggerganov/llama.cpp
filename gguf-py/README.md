@@ -16,7 +16,7 @@ Maintainers who participate in development of this package are advised to instal
 
 
 ```sh
-cd /path/to/llama.cpp/gguf
+cd /path/to/llama.cpp/gguf-py
 
 pip install --editable .
 ```
