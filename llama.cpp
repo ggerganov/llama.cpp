@@ -827,6 +827,7 @@ enum e_model {
     MODEL_7B,
     MODEL_13B,
     MODEL_30B,
+    MODEL_34B,
     MODEL_40B,
     MODEL_65B,
     MODEL_70B,
@@ -1518,6 +1519,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_7B:  return "7B";
         case MODEL_13B: return "13B";
         case MODEL_30B: return "30B";
+        case MODEL_34B: return "34B";
         case MODEL_40B: return "40B";
         case MODEL_65B: return "65B";
         case MODEL_70B: return "70B";
@@ -1590,6 +1592,7 @@ static void llm_load_hparams(
                     case 26: model.type = e_model::MODEL_3B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = e_model::MODEL_13B; break;
+                    case 48: model.type = e_model::MODEL_34B; break;
                     case 60: model.type = e_model::MODEL_30B; break;
                     case 80: model.type = hparams.n_head == hparams.n_head_kv ? e_model::MODEL_65B : e_model::MODEL_70B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;

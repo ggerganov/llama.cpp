@@ -191,7 +191,7 @@ class Params:
     def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
         config = json.load(open(config_path))
 
-        n_vocab    = config["vocab_size"]
+        n_vocab    = config["vocab_size"] if "vocab_size" in config else -1
         n_embd     = config["dim"]
         n_layer    = config["n_layers"]
         n_mult     = config["multiple_of"]
