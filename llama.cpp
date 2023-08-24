@@ -2707,11 +2707,6 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * inpFF = attn_norm;
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
-
-            // TODO: this is temporary needed to introduce artificial dependency between FF and ATTN
-            //       adding this, because there seems to be a bug in the Metal concurrency optimization
-            //       without this line, the results are non-deterministic and wrong
-            cur->src[2] = attn_out;
             offload_func(cur);
 
             cur = ggml_gelu(ctx0, cur);
