@@ -298,9 +298,10 @@ jobs:
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -352,9 +353,10 @@ jobs:
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -425,9 +427,10 @@ jobs:
           BUILD_NUMBER="$(git rev-list --count HEAD)"
           SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ env.BRANCH_NAME }}-$BUILD_NUMBER-$SHORT_HASH" >> $GITHUB_OUTPUT
+            SAFE_NAME=${{ env.BRANCH_NAME//\//- }}  # Replace slashes with dashes
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Download artifacts
