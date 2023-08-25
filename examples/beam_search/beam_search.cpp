@@ -29,10 +29,10 @@
 
 // Used for debugging to print out beam tokens.
 struct ostream_beam_view {
-    llama_context* ctx;
+    llama_context * ctx;
     llama_beam_view beam_view;
 };
-std::ostream& operator<<(std::ostream& os, ostream_beam_view const& obv) {
+std::ostream& operator<<(std::ostream& os, ostream_beam_view const & obv) {
     os << "p(" << obv.beam_view.p << ") eos(" << std::boolalpha << obv.beam_view.eos << ") tokens(";
     for (size_t i=0 ; i<obv.beam_view.n_tokens ; ++i) {
         os << llama_token_to_str(obv.ctx, obv.beam_view.tokens[i]);
@@ -42,11 +42,11 @@ std::ostream& operator<<(std::ostream& os, ostream_beam_view const& obv) {
 
 // Put here anything you want back in beam_search_callback().
 struct beam_search_callback_data {
-    llama_context* ctx;
+    llama_context * ctx;
     std::vector<llama_token> response;
 };
 
-bool is_at_eos(beam_search_callback_data const& callback_data, llama_token const* tokens, size_t const n_tokens) {
+bool is_at_eos(beam_search_callback_data const & callback_data, llama_token const * tokens, size_t const n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(callback_data.ctx);
 }
 
@@ -56,7 +56,7 @@ bool is_at_eos(beam_search_callback_data const& callback_data, llama_token const
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-void beam_search_callback(void* callback_data_ptr, llama_beams_state beams_state) {
+void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_state) {
     auto& callback_data = *static_cast<beam_search_callback_data*>(callback_data_ptr);
     // Mark beams as EOS as needed.
     for (size_t i=0 ; i<beams_state.n_beams ; ++i) {
@@ -69,7 +69,7 @@ void beam_search_callback(void* callback_data_ptr, llama_beams_state beams_state
     if (size_t const n = beams_state.common_prefix_length) {
         callback_data.response.resize(callback_data.response.size() + n);
         assert(0u < beams_state.n_beams);
-        llama_token const* tokens = beams_state.beam_views[0].tokens;
+        llama_token const * tokens = beams_state.beam_views[0].tokens;
         std::copy(tokens, tokens + n, callback_data.response.end() - n);
         printf("%lu", n);
     }

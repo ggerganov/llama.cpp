@@ -4335,7 +4335,7 @@ struct llama_beam {
     float p;  // Cumulative beam probability (renormalized relative to all beams)
     bool eos; // Initialize end-of-sentence to false. Callback sets this to true.
     // Sort beams by probability. In case of ties, prefer beams at eos.
-    bool operator<(llama_beam const& rhs) const {
+    bool operator<(llama_beam const & rhs) const {
         return std::make_tuple(p, eos) < std::make_tuple(rhs.p, rhs.eos);
     }
     // Shift off first n tokens and discard them.
@@ -4350,7 +4350,7 @@ struct llama_beam {
 
 // A struct for calculating logit-related info.
 struct logit_info {
-    float const* const logits;
+    float const * const logits;
     int const n_vocab;
     float const max_l;
     float const normalizer;
@@ -4358,7 +4358,7 @@ struct logit_info {
         float max_l;
         float operator()(float sum, float l) const { return sum + std::exp(l - max_l); }
     };
-    logit_info(llama_context* ctx)
+    logit_info(llama_context * ctx)
       : logits(llama_get_logits(ctx))
       , n_vocab(llama_n_vocab(ctx))
       , max_l(*std::max_element(logits, logits + n_vocab))
@@ -4376,7 +4376,7 @@ struct logit_info {
         for (llama_token token_id=0 ; token_id<k_min ; ++token_id) {
             min_heap.push_back(get_token_data(token_id));
         }
-        auto comp = [](llama_token_data const& a, llama_token_data const& b) { return a.logit > b.logit; };
+        auto comp = [](llama_token_data const & a, llama_token_data const & b) { return a.logit > b.logit; };
         std::make_heap(min_heap.begin(), min_heap.end(), comp);
         for (llama_token token_id=k_min ; token_id<n_vocab ; ++token_id) {
             if (min_heap.front().logit < logits[token_id]) {
@@ -4432,9 +4432,9 @@ struct beam_search {
     //  * Gather elements until the vector is full, then call std::make_heap() on it.
     //  * If the heap is full and a new element is found that should be included, pop the
     //    least element to the back(), replace it with the new, then push it into the heap.
-    void fill_next_beams_by_top_probabilities(llama_beam& beam) {
+    void fill_next_beams_by_top_probabilities(llama_beam & beam) {
         // Min-heaps use a greater-than comparator.
-        auto const comp = [](llama_beam const& a, llama_beam const& b) { return a.p > b.p; };
+        auto const comp = [](llama_beam const & a, llama_beam const & b) { return a.p > b.p; };
         if (beam.eos) {
             // beam is at end-of-sentence, so just copy it to next_beams if its probability is high enough.
             if (next_beams.size() < n_beams) {
@@ -4516,9 +4516,9 @@ struct beam_search {
     //  * any of the beams have not yet reached end-of-sentence, AND
     //  * the highest probability beam(s) (plural in case of ties) are not at end-of-sentence
     //    (since all other beam probabilities can only decrease)
-    void loop(llama_beam_search_callback_fn_t const callback, void* const callback_data) {
+    void loop(llama_beam_search_callback_fn_t const callback, void * const callback_data) {
         beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eos.
-        auto const not_eos = [](llama_beam const& beam) { return !beam.eos; };
+        auto const not_eos = [](llama_beam const & beam) { return !beam.eos; };
         for (int i=0 ; i<n_predict && std::any_of(beams.begin(),beams.end(),not_eos) &&
                        !beams[top_beam_index()].eos ; ++i) {
             callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
@@ -4528,8 +4528,8 @@ struct beam_search {
                 n_past += common_prefix_length;
             }
             // Zero-out next_beam probabilities to place them last in following min-heap.
-            std::for_each(next_beams.begin(), next_beams.end(), [](llama_beam& beam) { beam.p = 0.0f; });
-            for (llama_beam& beam : beams) {
+            std::for_each(next_beams.begin(), next_beams.end(), [](llama_beam & beam) { beam.p = 0.0f; });
+            for (llama_beam & beam : beams) {
                 beam.shift_tokens(common_prefix_length);
                 fill_next_beams_by_top_probabilities(beam);
             }
@@ -4543,10 +4543,10 @@ struct beam_search {
 
     // As beams grow, the cumulative probabilities decrease.
     // Renormalize them to avoid floating point underflow.
-    static void renormalize_beam_probabilities(std::vector<llama_beam>& beams) {
-        auto const sum_p = [](float sum, llama_beam& beam) { return sum + beam.p; };
+    static void renormalize_beam_probabilities(std::vector<llama_beam> & beams) {
+        auto const sum_p = [](float sum, llama_beam & beam) { return sum + beam.p; };
         float const inv_sum = 1.0f / std::accumulate(beams.begin(), beams.end(), 0.0f, sum_p);
-        std::for_each(beams.begin(), beams.end(), [=](llama_beam& beam) { beam.p *= inv_sum; });
+        std::for_each(beams.begin(), beams.end(), [=](llama_beam & beam) { beam.p *= inv_sum; });
     }
 
     // Assumes beams is non-empty.  Uses llama_beam::operator<() for ordering.
@@ -4564,7 +4564,7 @@ struct beam_search {
 };
 
 void llama_beam_search(llama_context * ctx,
-                       llama_beam_search_callback_fn_t callback, void* callback_data,
+                       llama_beam_search_callback_fn_t callback, void * callback_data,
                        size_t n_beams, int n_past, int n_predict, int n_threads) {
     assert(ctx);
     const int64_t t_start_sample_us = ggml_time_us();

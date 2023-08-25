@@ -1209,7 +1209,7 @@ static void log_server_request(const Request &req, const Response &res)
                            });
 }
 
-bool is_at_eos(llama_server_context& server_context, llama_token const* tokens, size_t const n_tokens) {
+bool is_at_eos(llama_server_context & server_context, llama_token const * tokens, size_t const n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1219,11 +1219,11 @@ bool is_at_eos(llama_server_context& server_context, llama_token const* tokens, 
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-void beam_search_callback(void* callback_data, llama_beams_state beams_state) {
-    auto& llama = *static_cast<llama_server_context*>(callback_data);
+void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
+    auto & llama = *static_cast<llama_server_context*>(callback_data);
     // Mark beams as EOS as needed.
     for (size_t i=0 ; i<beams_state.n_beams ; ++i) {
-        llama_beam_view& beam_view = beams_state.beam_views[i];
+        llama_beam_view & beam_view = beams_state.beam_views[i];
         if (!beam_view.eos && is_at_eos(llama, beam_view.tokens, beam_view.n_tokens)) {
             beam_view.eos = true;
         }
@@ -1232,8 +1232,7 @@ void beam_search_callback(void* callback_data, llama_beams_state beams_state) {
     if (size_t const n = beams_state.common_prefix_length) {
         llama.generated_token_probs.resize(llama.generated_token_probs.size() + n);
         assert(0u < beams_state.n_beams);
-        llama_token const* tokens = beams_state.beam_views[0].tokens;
-        //std::copy(tokens, tokens + n, llama->generated_token_probs.end() - n);
+        llama_token const * tokens = beams_state.beam_views[0].tokens;
         auto const map = [](llama_token tok) { return completion_token_output{{},tok}; };
         std::transform(tokens, tokens + n, llama.generated_token_probs.end() - n, map);
         printf("%lu", n);
@@ -1248,20 +1247,20 @@ void beam_search_callback(void* callback_data, llama_beams_state beams_state) {
 }
 
 struct token_translator {
-    llama_context* ctx;
+    llama_context * ctx;
     std::string operator()(llama_token tok) const { return llama_token_to_str(ctx, tok); }
     std::string operator()(completion_token_output cto) const { return (*this)(cto.tok); }
 };
 
-void append_to_generated_text_from_generated_token_probs(llama_server_context& llama) {
-    auto& gtps = llama.generated_token_probs;
+void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
+    auto & gtps = llama.generated_token_probs;
     auto translator = token_translator{llama.ctx};
-    auto add_strlen = [=](size_t sum, completion_token_output const& cto) { return sum + translator(cto).size(); };
+    auto add_strlen = [=](size_t sum, completion_token_output const & cto) { return sum + translator(cto).size(); };
     size_t const len = std::accumulate(gtps.begin(), gtps.end(), size_t(0), add_strlen);
     if (llama.generated_text.capacity() < llama.generated_text.size() + len) {
         llama.generated_text.reserve(llama.generated_text.size() + len);
     }
-    for (completion_token_output const& cto : gtps) {
+    for (completion_token_output const & cto : gtps) {
         llama.generated_text += translator(cto);
     }
 }
