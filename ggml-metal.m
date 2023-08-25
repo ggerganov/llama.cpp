@@ -239,9 +239,65 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
 void ggml_metal_free(struct ggml_metal_context * ctx) {
     fprintf(stderr, "%s: deallocating\n", __func__);
+#define GGML_METAL_DEL_KERNEL(name) \
+    [ctx->function_##name release]; \
+    [ctx->pipeline_##name release];
+
+    GGML_METAL_DEL_KERNEL(add);
+    GGML_METAL_DEL_KERNEL(add_row);
+    GGML_METAL_DEL_KERNEL(mul);
+    GGML_METAL_DEL_KERNEL(mul_row);
+    GGML_METAL_DEL_KERNEL(scale);
+    GGML_METAL_DEL_KERNEL(silu);
+    GGML_METAL_DEL_KERNEL(relu);
+    GGML_METAL_DEL_KERNEL(gelu);
+    GGML_METAL_DEL_KERNEL(soft_max);
+    GGML_METAL_DEL_KERNEL(diag_mask_inf);
+    GGML_METAL_DEL_KERNEL(get_rows_f16);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_0);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_1);
+    GGML_METAL_DEL_KERNEL(get_rows_q8_0);
+    GGML_METAL_DEL_KERNEL(get_rows_q2_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q3_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q5_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q6_K);
+    GGML_METAL_DEL_KERNEL(rms_norm);
+    GGML_METAL_DEL_KERNEL(norm);
+    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_1_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q8_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q2_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q3_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q5_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q6_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q8_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_1_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q2_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q3_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q5_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q6_K_f32);
+    GGML_METAL_DEL_KERNEL(rope);
+    GGML_METAL_DEL_KERNEL(alibi_f32);
+    GGML_METAL_DEL_KERNEL(cpy_f32_f16);
+    GGML_METAL_DEL_KERNEL(cpy_f32_f32);
+    GGML_METAL_DEL_KERNEL(cpy_f16_f16);
+
+#undef GGML_METAL_DEL_KERNEL
+
     for (int i = 0; i < ctx->n_buffers; ++i) {
         [ctx->buffers[i].metal release];
     }
+
+    [ctx->library release];
+    [ctx->queue release];
+    [ctx->device release];
+
     free(ctx);
 }
 
@@ -1124,6 +1180,7 @@ void ggml_metal_graph_compute(
     [command_buffers[n_cb - 1] waitUntilCompleted];
 
     // release resources
+    [edesc release];
     [queue release];
 
     // check status of command buffers
