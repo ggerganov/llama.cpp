@@ -716,10 +716,10 @@ struct markdown_printer : public printer {
             return -30;
         }
         if (field == "t/s") {
-            return 15;
+            return 16;
         }
         if (field == "size" || field == "params") {
-            return 8;
+            return 10;
         }
         if (field == "n_gpu_layers") {
             return 3;
