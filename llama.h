@@ -495,7 +495,6 @@ extern "C" {
     /// @details Deterministically returns entire sentence constructed by a beam search.
     /// @param ctx Pointer to the llama_context.
     /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
-    ///                 The return beam_search_control can be used to control the beam_search execution.
     /// @param callback_data A pointer that is simply passed back to callback.
     /// @param n_beams Number of beams to use.
     /// @param n_past Number of tokens already evaluated.
