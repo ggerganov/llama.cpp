@@ -47,6 +47,7 @@ compile_commands.json
 CMakeSettings.json
 
 __pycache__
+dist
 
 zig-out/
 zig-cache/
@@ -57,7 +58,6 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
-pyproject.toml
 poetry.lock
 poetry.toml
 
