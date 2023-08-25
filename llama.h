@@ -465,6 +465,10 @@ extern "C" {
     /// @details Accepts the sampled token into the grammar
     LLAMA_API void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token);
 
+    //
+    // Beam search
+    //
+
     struct llama_beam_view {
         llama_token const* tokens;
         size_t n_tokens;
@@ -482,6 +486,7 @@ extern "C" {
         size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
         bool last_call;               // True iff this is the last callback invocation.
     };
+
     // Type of pointer to the beam_search_callback function.
     // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
     // passed back to beam_search_callback. This avoids having to use global variables in the callback.

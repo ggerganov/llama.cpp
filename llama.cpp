@@ -4326,6 +4326,10 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
 }
 
+//
+// Beam search
+//
+
 struct llama_beam {
     std::vector<llama_token> tokens;
     float p;  // Cumulative beam probability (renormalized relative to all beams)
