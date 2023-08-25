@@ -1209,7 +1209,7 @@ static void log_server_request(const Request &req, const Response &res)
                            });
 }
 
-bool is_at_eos(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
+bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1223,9 +1223,9 @@ void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
     auto & llama = *static_cast<llama_server_context*>(callback_data);
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
-        llama_beam_view & beam_view = beams_state.beam_views[i];
-        if (!beam_view.eos && is_at_eos(llama, beam_view.tokens, beam_view.n_tokens)) {
-            beam_view.eos = true;
+        llama_beam_view& beam_view = beams_state.beam_views[i];
+        if (!beam_view.eob && is_at_eob(llama, beam_view.tokens, beam_view.n_tokens)) {
+            beam_view.eob = true;
         }
     }
     printf(",");  // Show progress

@@ -473,7 +473,7 @@ extern "C" {
         const llama_token * tokens;
         size_t n_tokens;
         float p;   // Cumulative beam probability (renormalized relative to all beams)
-        bool eos;  // Callback should set this to true when a beam is at end-of-sentence.
+        bool eob;  // Callback should set this to true when a beam is at end-of-beam.
     };
 
     // Passed to beam_search_callback function.

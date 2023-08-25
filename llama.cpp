@@ -4333,10 +4333,10 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
 struct llama_beam {
     std::vector<llama_token> tokens;
     float p;  // Cumulative beam probability (renormalized relative to all beams)
-    bool eos; // Initialize end-of-sentence to false. Callback sets this to true.
-    // Sort beams by probability. In case of ties, prefer beams at eos.
+    bool eob; // Initialize end-of-beam to false. Callback sets this to true.
+    // Sort beams by probability. In case of ties, prefer beams at eob.
     bool operator<(const llama_beam & rhs) const {
-        return std::make_tuple(p, eos) < std::make_tuple(rhs.p, rhs.eos);
+        return std::make_pair(p, eob) < std::make_pair(rhs.p, rhs.eob);
     }
     // Shift off first n tokens and discard them.
     void shift_tokens(const size_t n) {
@@ -4345,7 +4345,7 @@ struct llama_beam {
             tokens.resize(tokens.size() - n);
         }
     }
-    llama_beam_view view() const { return {tokens.data(), tokens.size(), p, eos}; }
+    llama_beam_view view() const { return {tokens.data(), tokens.size(), p, eob}; }
 };
 
 // A struct for calculating logit-related info.
@@ -4435,7 +4435,7 @@ struct llama_beam_search_data {
     void fill_next_beams_by_top_probabilities(llama_beam & beam) {
         // Min-heaps use a greater-than comparator.
         const auto comp = [](const llama_beam & a, const llama_beam & b) { return a.p > b.p; };
-        if (beam.eos) {
+        if (beam.eob) {
             // beam is at end-of-sentence, so just copy it to next_beams if its probability is high enough.
             if (next_beams.size() < n_beams) {
                 next_beams.push_back(std::move(beam));
@@ -4513,16 +4513,16 @@ struct llama_beam_search_data {
 
     // Loop:
     //  * while i < n_predict, AND
-    //  * any of the beams have not yet reached end-of-sentence, AND
+    //  * any of the beams have not yet reached end-of-beam (eob), AND
     //  * the highest probability beam(s) (plural in case of ties) are not at end-of-sentence
     //    (since all other beam probabilities can only decrease)
     void loop(const llama_beam_search_callback_fn_t callback, void * const callback_data) {
-        beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eos.
-        const auto not_eos = [](const llama_beam & beam) { return !beam.eos; };
-        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eos) &&
-                       !beams[top_beam_index()].eos ; ++i) {
+        beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eob.
+        const auto not_eob = [](const llama_beam & beam) { return !beam.eob; };
+        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eob) &&
+                       !beams[top_beam_index()].eob ; ++i) {
             callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
-            update_beams_from_beam_views();   // Update values (p,eos) that callback may have changed.
+            update_beams_from_beam_views();   // Update values (p,eob) that callback may have changed.
             if (common_prefix_length) {
                 llama_eval(ctx, beams[0].tokens.data(), common_prefix_length, n_past, n_threads);
                 n_past += common_prefix_length;
@@ -4554,11 +4554,11 @@ struct llama_beam_search_data {
         return std::max_element(beams.begin(), beams.end()) - beams.begin();
     }
 
-    // Copy (p,eos) for each beam which may have been changed by the callback.
+    // Copy (p,eob) for each beam which may have been changed by the callback.
     void update_beams_from_beam_views() {
         for (size_t i = 0 ; i < beams.size() ; ++i) {
             beams[i].p = beam_views[i].p;
-            beams[i].eos = beam_views[i].eos;
+            beams[i].eob = beam_views[i].eob;
         }
     }
 };

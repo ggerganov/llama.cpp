@@ -33,7 +33,7 @@ struct ostream_beam_view {
     llama_beam_view beam_view;
 };
 std::ostream& operator<<(std::ostream& os, const ostream_beam_view & obv) {
-    os << "p(" << obv.beam_view.p << ") eos(" << std::boolalpha << obv.beam_view.eos << ") tokens(";
+    os << "p(" << obv.beam_view.p << ") eob(" << std::boolalpha << obv.beam_view.eob << ") tokens(";
     for (size_t i = 0 ; i < obv.beam_view.n_tokens ; ++i) {
         os << llama_token_to_str(obv.ctx, obv.beam_view.tokens[i]);
     }
@@ -46,7 +46,9 @@ struct beam_search_callback_data {
     std::vector<llama_token> response;
 };
 
-bool is_at_eos(const beam_search_callback_data & callback_data, const llama_token * tokens, const size_t n_tokens) {
+// In this case, end-of-beam (eob) is equivalent to end-of-sentence (eos) but this need not always be the same.
+// For example, eob can be flagged due to maximum token length, stop words, etc.
+bool is_at_eob(const beam_search_callback_data & callback_data, const llama_token * tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(callback_data.ctx);
 }
 
@@ -61,8 +63,8 @@ void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_stat
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
         llama_beam_view& beam_view = beams_state.beam_views[i];
-        if (!beam_view.eos && is_at_eos(callback_data, beam_view.tokens, beam_view.n_tokens)) {
-            beam_view.eos = true;
+        if (!beam_view.eob && is_at_eob(callback_data, beam_view.tokens, beam_view.n_tokens)) {
+            beam_view.eob = true;
         }
     }
     printf(",");  // Show progress
