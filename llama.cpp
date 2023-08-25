@@ -4373,12 +4373,12 @@ struct logit_info {
         std::vector<llama_token_data> min_heap;  // min-heap by logit
         llama_token const k_min = std::min(static_cast<llama_token>(k), n_vocab);
         min_heap.reserve(k_min);
-        for (llama_token token_id=0 ; token_id<k_min ; ++token_id) {
+        for (llama_token token_id = 0 ; token_id < k_min ; ++token_id) {
             min_heap.push_back(get_token_data(token_id));
         }
         auto comp = [](llama_token_data const & a, llama_token_data const & b) { return a.logit > b.logit; };
         std::make_heap(min_heap.begin(), min_heap.end(), comp);
-        for (llama_token token_id=k_min ; token_id<n_vocab ; ++token_id) {
+        for (llama_token token_id = k_min ; token_id < n_vocab ; ++token_id) {
             if (min_heap.front().logit < logits[token_id]) {
                 std::pop_heap(min_heap.begin(), min_heap.end(), comp);
                 min_heap.back().id = token_id;
@@ -4489,9 +4489,9 @@ struct beam_search {
     // Requires beams is not empty.
     size_t find_common_prefix_length() {
         size_t common_prefix_length = beams[0].tokens.size();
-        for (size_t i=1 ; i<beams.size() ; ++i) {
+        for (size_t i = 1 ; i < beams.size() ; ++i) {
             common_prefix_length = std::min(common_prefix_length, beams[i].tokens.size());
-            for (size_t j=0 ; j<common_prefix_length ; ++j) {
+            for (size_t j = 0 ; j < common_prefix_length ; ++j) {
                 if (beams[0].tokens[j] != beams[i].tokens[j]) {
                     common_prefix_length = j;
                     break;
@@ -4504,7 +4504,7 @@ struct beam_search {
     // Construct beams_state to send back to caller via the callback function.
     // Side effect: set common_prefix_length = find_common_prefix_length();
     llama_beams_state get_beams_state(bool const last_call) {
-        for (size_t i=0 ; i<beams.size() ; ++i) {
+        for (size_t i = 0 ; i < beams.size() ; ++i) {
             beam_views[i] = beams[i].view();
         }
         common_prefix_length = find_common_prefix_length();
@@ -4519,7 +4519,7 @@ struct beam_search {
     void loop(llama_beam_search_callback_fn_t const callback, void * const callback_data) {
         beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eos.
         auto const not_eos = [](llama_beam const & beam) { return !beam.eos; };
-        for (int i=0 ; i<n_predict && std::any_of(beams.begin(),beams.end(),not_eos) &&
+        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eos) &&
                        !beams[top_beam_index()].eos ; ++i) {
             callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
             update_beams_from_beam_views();   // Update values (p,eos) that callback may have changed.
@@ -4556,7 +4556,7 @@ struct beam_search {
 
     // Copy (p,eos) for each beam which may have been changed by the callback.
     void update_beams_from_beam_views() {
-        for (size_t i=0 ; i<beams.size() ; ++i) {
+        for (size_t i = 0 ; i < beams.size() ; ++i) {
             beams[i].p = beam_views[i].p;
             beams[i].eos = beam_views[i].eos;
         }

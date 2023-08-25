@@ -34,7 +34,7 @@ struct ostream_beam_view {
 };
 std::ostream& operator<<(std::ostream& os, ostream_beam_view const & obv) {
     os << "p(" << obv.beam_view.p << ") eos(" << std::boolalpha << obv.beam_view.eos << ") tokens(";
-    for (size_t i=0 ; i<obv.beam_view.n_tokens ; ++i) {
+    for (size_t i = 0 ; i < obv.beam_view.n_tokens ; ++i) {
         os << llama_token_to_str(obv.ctx, obv.beam_view.tokens[i]);
     }
     return os << ')';
@@ -59,7 +59,7 @@ bool is_at_eos(beam_search_callback_data const & callback_data, llama_token cons
 void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_state) {
     auto& callback_data = *static_cast<beam_search_callback_data*>(callback_data_ptr);
     // Mark beams as EOS as needed.
-    for (size_t i=0 ; i<beams_state.n_beams ; ++i) {
+    for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
         llama_beam_view& beam_view = beams_state.beam_views[i];
         if (!beam_view.eos && is_at_eos(callback_data, beam_view.tokens, beam_view.n_tokens)) {
             beam_view.eos = true;
@@ -76,7 +76,7 @@ void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_stat
     fflush(stdout);
 #if 1 // DEBUG: print current beams for this iteration
     std::cout << "\n\nCurrent beams (last_call=" << beams_state.last_call << "):\n";
-    for (size_t i=0 ; i < beams_state.n_beams ; ++i) {
+    for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
         std::cout << "beams["<<i<<"]: " << ostream_beam_view{callback_data.ctx,beams_state.beam_views[i]} << std::endl;
     }
 #endif
