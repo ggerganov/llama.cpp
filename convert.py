@@ -170,7 +170,8 @@ class Params:
         f_norm_eps       = config["rms_norm_eps"]
         f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
-        if "rope_scaling" in config and config["rope_scaling"].get("type") == "linear":
+        rope_scaling = config.get("rope_scaling")
+        if isinstance(rope_scaling, dict) and rope_scaling.get("type") == "linear":
             f_rope_scale = config["rope_scaling"].get("factor")
         else:
             f_rope_scale = None
