@@ -1209,7 +1209,7 @@ static void log_server_request(const Request &req, const Response &res)
                            });
 }
 
-bool is_at_eos(llama_server_context & server_context, llama_token const * tokens, size_t const n_tokens) {
+bool is_at_eos(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1229,11 +1229,11 @@ void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
         }
     }
     printf(",");  // Show progress
-    if (size_t const n = beams_state.common_prefix_length) {
+    if (const size_t n = beams_state.common_prefix_length) {
         llama.generated_token_probs.resize(llama.generated_token_probs.size() + n);
         assert(0u < beams_state.n_beams);
-        llama_token const * tokens = beams_state.beam_views[0].tokens;
-        auto const map = [](llama_token tok) { return completion_token_output{{},tok}; };
+        const llama_token * tokens = beams_state.beam_views[0].tokens;
+        const auto map = [](llama_token tok) { return completion_token_output{{},tok}; };
         std::transform(tokens, tokens + n, llama.generated_token_probs.end() - n, map);
         printf("%lu", n);
     }
@@ -1255,12 +1255,12 @@ struct token_translator {
 void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
     auto & gtps = llama.generated_token_probs;
     auto translator = token_translator{llama.ctx};
-    auto add_strlen = [=](size_t sum, completion_token_output const & cto) { return sum + translator(cto).size(); };
-    size_t const len = std::accumulate(gtps.begin(), gtps.end(), size_t(0), add_strlen);
+    auto add_strlen = [=](size_t sum, const completion_token_output & cto) { return sum + translator(cto).size(); };
+    const size_t len = std::accumulate(gtps.begin(), gtps.end(), size_t(0), add_strlen);
     if (llama.generated_text.capacity() < llama.generated_text.size() + len) {
         llama.generated_text.reserve(llama.generated_text.size() + len);
     }
-    for (completion_token_output const & cto : gtps) {
+    for (const completion_token_output & cto : gtps) {
         llama.generated_text += translator(cto);
     }
 }

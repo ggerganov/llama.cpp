@@ -32,7 +32,7 @@ struct ostream_beam_view {
     llama_context * ctx;
     llama_beam_view beam_view;
 };
-std::ostream& operator<<(std::ostream& os, ostream_beam_view const & obv) {
+std::ostream& operator<<(std::ostream& os, const ostream_beam_view & obv) {
     os << "p(" << obv.beam_view.p << ") eos(" << std::boolalpha << obv.beam_view.eos << ") tokens(";
     for (size_t i = 0 ; i < obv.beam_view.n_tokens ; ++i) {
         os << llama_token_to_str(obv.ctx, obv.beam_view.tokens[i]);
@@ -46,7 +46,7 @@ struct beam_search_callback_data {
     std::vector<llama_token> response;
 };
 
-bool is_at_eos(beam_search_callback_data const & callback_data, llama_token const * tokens, size_t const n_tokens) {
+bool is_at_eos(const beam_search_callback_data & callback_data, const llama_token * tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(callback_data.ctx);
 }
 
@@ -66,10 +66,10 @@ void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_stat
         }
     }
     printf(",");  // Show progress
-    if (size_t const n = beams_state.common_prefix_length) {
+    if (const size_t n = beams_state.common_prefix_length) {
         callback_data.response.resize(callback_data.response.size() + n);
         assert(0u < beams_state.n_beams);
-        llama_token const * tokens = beams_state.beam_views[0].tokens;
+        const llama_token * tokens = beams_state.beam_views[0].tokens;
         std::copy(tokens, tokens + n, callback_data.response.end() - n);
         printf("%lu", n);
     }
