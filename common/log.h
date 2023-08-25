@@ -244,7 +244,7 @@ enum LogTriState
 
 // LOG macro variants with auto endline.
 #define LOGLN(...) _LOG(__VA_ARGS__, "\n")
-#define LOG_TEELN(...) _LOG(__VA_ARGS__, "\n")
+#define LOG_TEELN(...) _LOG_TEE(__VA_ARGS__, "\n")
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStateSame, std::string filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
@@ -496,7 +496,9 @@ inline void log_print_usage()
 // INTERNAL, DO NOT USE
 inline void _log_dump_cmdline(int argc, char **argv)
 {
-    std::string buf;
+    // TODO:
+    //  Windows doesn't seem to like this somehow
+    std::string buf{""};
     for (int i = 0; i < argc; ++i)
     {
         if (std::string(argv[i]).find(' ') != std::string::npos)

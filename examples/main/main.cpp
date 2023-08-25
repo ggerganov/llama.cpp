@@ -238,7 +238,6 @@ int main(int argc, char ** argv) {
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
         LOG("original_prompt_len: %s", LOG_TOSTR(original_prompt_len))
         LOG("guidance_offset: %s", LOG_TOSTR(guidance_offset))
-        
     }
 
     const int n_ctx = llama_n_ctx(ctx);
