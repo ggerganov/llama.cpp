@@ -107,6 +107,7 @@ if "n_head_kv" in hparams:
 else:
     gguf_writer.add_head_count_kv(1)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
+gguf_writer.add_file_type(ftype)
 
 # TOKENIZATION
 
