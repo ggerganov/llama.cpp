@@ -3004,11 +3004,8 @@ static std::string llama_escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string llama_unescape_whitespace(const std::string& word) {
-    if (word.length() >= 3 && word.substr(0, 3) == "\xe2\x96\x81") {
-        return std::string(" ") + word.substr(3);
-    }
-    return word;
+static void llama_unescape_whitespace(std::string & word) {
+    replace_all(word, "\xe2\x96\x81", " ");
 }
 
 struct llm_symbol {
@@ -5822,7 +5819,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].text;
             if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
-                result = llama_unescape_whitespace(result);
+                llama_unescape_whitespace(result);
             }
             if (length < (int) result.length()) {
                 return -result.length();
