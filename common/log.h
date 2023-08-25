@@ -5,6 +5,8 @@
 #include <sstream>
 #include <iostream>
 #include <thread>
+#include <vector>
+#include <algorithm>
 
 // --------------------------------
 //
@@ -14,6 +16,9 @@
 //
 //  The LOG() and LOG_TEE() macros are ready to go by default
 //   they do not require any initialization.
+//
+//  LOGLN() and LOG_TEELN() are variants which automatically
+//   include \n character at the end of the log string.
 //
 //  LOG() behaves exactly like printf, by default writing to a logfile.
 //  LOG_TEE() additionally, prints to the screen too ( mimics Unix tee command ).
@@ -147,6 +152,14 @@ inline std::string _log_filename_generator(std::string log_file_basename, std::s
 #define LOG_TIMESTAMP_VAL
 #endif
 
+#ifdef LOG_TEE_TIMESTAMPS
+#define LOG_TEE_TIMESTAMP_FMT "[%lu]"
+#define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
+#else
+#define LOG_TEE_TIMESTAMP_FMT
+#define LOG_TEE_TIMESTAMP_VAL
+#endif
+
 // Allows disabling file/line/function prefix
 //  in order to disable, define LOG_NO_FILE_LINE_FUNCTION
 //  like so:
@@ -160,6 +173,14 @@ inline std::string _log_filename_generator(std::string log_file_basename, std::s
 #else
 #define LOG_FLF_FMT
 #define LOG_FLF_VAL
+#endif
+
+#ifdef LOG_TEE_FILE_LINE_FUNCTION
+#define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
+#define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+#else
+#define LOG_TEE_FLF_FMT
+#define LOG_TEE_FLF_VAL
 #endif
 
 // Utility for synchronizing log configuration state
@@ -179,7 +200,7 @@ enum LogTriState
         /*fprintf(stderr, "DBG:" str, ##__VA_ARGS__);*/                                                               \
         if (LOG_TARGET != nullptr)                                                                                    \
         {                                                                                                             \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%c" LOG_TIMESTAMP_VAL LOG_FLF_VAL, ##__VA_ARGS__); \
+            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, ##__VA_ARGS__); \
             fflush(LOG_TARGET); /*fprintf(stderr, "DBGEND\n");*/                                                      \
         }                                                                                                             \
     }
@@ -187,19 +208,19 @@ enum LogTriState
 // INTERNAL, DO NOT USE
 //  USE LOG_TEE() INSTEAD
 //
-#define _LOG_TEE(str, ...)                                                                                                \
-    {                                                                                                                     \
-        /*fprintf(stderr, "DBG:" str, ##__VA_ARGS__);*/                                                                   \
-        if (LOG_TARGET != nullptr)                                                                                        \
-        {                                                                                                                 \
-            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%c" LOG_TIMESTAMP_VAL LOG_FLF_VAL, ##__VA_ARGS__);     \
-            fflush(LOG_TARGET); /*fprintf(stderr, "DBGEND\n");*/                                                          \
-        }                                                                                                                 \
-        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr && LOG_TEE_TARGET != nullptr)           \
-        {                                                                                                                 \
-            fprintf(LOG_TEE_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%c" LOG_TIMESTAMP_VAL LOG_FLF_VAL, ##__VA_ARGS__); \
-            fflush(LOG_TEE_TARGET); /*fprintf(stderr, "DBGEND\n");*/                                                      \
-        }                                                                                                                 \
+#define _LOG_TEE(str, ...)                                                                                                                \
+    {                                                                                                                                     \
+        /*fprintf(stderr, "DBG:" str, ##__VA_ARGS__);*/                                                                                   \
+        if (LOG_TARGET != nullptr)                                                                                                        \
+        {                                                                                                                                 \
+            fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, ##__VA_ARGS__);                     \
+            fflush(LOG_TARGET); /*fprintf(stderr, "DBGEND\n");*/                                                                          \
+        }                                                                                                                                 \
+        if (LOG_TARGET != nullptr && LOG_TARGET != stdout && LOG_TARGET != stderr && LOG_TEE_TARGET != nullptr)                           \
+        {                                                                                                                                 \
+            fprintf(LOG_TEE_TARGET, LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL, ##__VA_ARGS__); \
+            fflush(LOG_TEE_TARGET); /*fprintf(stderr, "DBGEND\n");*/                                                                      \
+        }                                                                                                                                 \
     }
 
 // The '\0' as a last argument, is a trick to bypass the silly
@@ -209,7 +230,7 @@ enum LogTriState
 // Main LOG macro.
 //  behaves like printf, and supports arguments the exact same way.
 //
-#define LOG(...) _LOG(__VA_ARGS__, '\0')
+#define LOG(...) _LOG(__VA_ARGS__, "")
 
 // Main TEE macro.
 //  does the same as LOG
@@ -219,7 +240,11 @@ enum LogTriState
 // Secondary target can be changed just like LOG_TARGET
 //  by defining LOG_TEE_TARGET
 //
-#define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, '\0')
+#define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, "")
+
+// LOG macro variants with auto endline.
+#define LOGLN(...) _LOG(__VA_ARGS__, "\n")
+#define LOG_TEELN(...) _LOG(__VA_ARGS__, "\n")
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStateSame, std::string filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
@@ -396,7 +421,7 @@ inline void log_test()
     log_set_target(LOG_FILENAME_GENERATOR("llama_autonamed", "log"));
     LOG("14 Hello World in log with generated filename!\n")
 
-    //exit(0);
+    // exit(0);
 }
 
 inline bool log_param_single_parse(std::string param)
@@ -430,7 +455,7 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, std::string param, s
 
     if (std::string("--log-file").compare(param) == 0)
     {
-        if( check_but_dont_parse )
+        if (check_but_dont_parse)
         {
             return true;
         }
@@ -456,3 +481,86 @@ inline void log_print_usage()
     fprintf(stdout, "  --log-file            Specify a log filename (without extension)\n");
     fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
+
+inline void log_dump_cmdline(int argc, char **argv)
+{
+    std::string buf;
+    for (int i = 0; i < argc; ++i)
+    {
+        if (std::string(argv[i]).find(' ') != std::string::npos)
+        {
+            buf.append(" \"").append(argv[i]).append("\"");
+        }
+        else
+        {
+            buf.append(" ").append(argv[i]);
+        }
+    }
+    LOGLN("Cmd:%s", buf.c_str())
+}
+
+#define LOG_TOSTR(var) _log_var_to_string(var).c_str()
+
+inline std::string _log_var_to_string(bool var)
+{
+    return var ? "true" : "false";
+}
+
+inline std::string _log_var_to_string(std::string var)
+{
+    return var;
+}
+
+inline std::string _log_var_to_string(std::vector<int> var)
+{
+    std::string buf;
+    buf.append("[ ");
+    bool first = true;
+    for (auto e : var)
+    {
+        if (first)
+        {
+            first = false;
+        }
+        else
+        {
+            buf.append(", ");
+        }
+        buf.append(std::to_string(e));
+    }
+    buf.append(" ]");
+
+    return buf;
+}
+
+#define LOG_TOKENS_TOSTR_PRETTY(tokens, ctx)                        \
+    [&tokens, &ctx]()                                               \
+    {                                                               \
+        std::string buf("[ ");                                      \
+        bool first = true;                                          \
+        for (const auto &token : tokens)                            \
+        {                                                           \
+            if (!first)                                             \
+                buf.append(", ");                                   \
+            else                                                    \
+                first = false;                                      \
+                                                                    \
+            auto detokenized = llama_token_to_str(ctx, token);      \
+                                                                    \
+            detokenized.erase(                                      \
+                std::remove_if(                                     \
+                    detokenized.begin(),                            \
+                    detokenized.end(),                              \
+                    [](const char c) { return !std::isprint(c); }), \
+                detokenized.end());                                 \
+                                                                    \
+            buf                                                     \
+                .append("'")                                        \
+                .append(detokenized)                                \
+                .append("'")                                        \
+                .append(":")                                        \
+                .append(std::to_string(token));                     \
+        }                                                           \
+        return buf.append(" ]");                                    \
+    }()                                                             \
+        .c_str()
