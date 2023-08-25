@@ -1836,7 +1836,7 @@ static void llm_load_tensors(
     (void) main_gpu;
     (void) mul_mat_q;
 #if defined(GGML_USE_CUBLAS)
-    LLAMA_LOG_INFO("%s: using CUDA for GPU acceleration\n", __func__);
+    LLAMA_LOG_INFO("%s: using " GGML_CUDA_NAME " for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
     ggml_cuda_set_mul_mat_q(mul_mat_q);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU

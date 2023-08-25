@@ -422,6 +422,35 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_F16          | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs. |
   | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
 
+- #### hipBLAS
+
+  This provide BLAS acceleation on HIP supported GPU like AMD GPU.
+  Make sure to have ROCm installed.
+  You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
+  Windows support is coming soon...
+
+  - Using `make`:
+    ```bash
+    make LLAMA_HIPBLAS=1
+    ```
+  - Using `CMake`:
+    ```bash
+    mkdir build
+    cd build
+    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
+    cmake --build .
+    ```
+
+  The environment variable [`HIP_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/understand/gpu_isolation.html#hip-visible-devices) can be used to specify which GPU(s) will be used.
+  If your GPU is not officialy supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 or 11.0.0 on RDNA3.
+  The following compilation options are also available to tweak performance (yes, they refer to CUDA, not HIP, because it uses the same code as the cuBLAS version above):
+
+  | Option                  | Legal values           | Default | Description |
+  |-------------------------|------------------------|---------|-------------|
+  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_MMV_Y        | Positive integer       |       1 | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
+
 - #### CLBlast
 
   OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.

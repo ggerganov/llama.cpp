@@ -613,9 +613,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
     fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
+#ifdef GGML_USE_CUBLAS
     fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
-    fprintf(stdout, "                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
+    fprintf(stdout, "                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
     fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
+#endif // GGML_USE_CUBLAS
 #endif
     fprintf(stdout, "  --mtest               compute maximum memory usage\n");
     fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");

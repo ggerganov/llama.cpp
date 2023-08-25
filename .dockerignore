@@ -5,14 +5,7 @@
 .vscode/
 .DS_Store
 
-build/
-build-em/
-build-debug/
-build-release/
-build-static/
-build-no-accel/
-build-sanitize-addr/
-build-sanitize-thread/
+build*/
 
 models/*
 
