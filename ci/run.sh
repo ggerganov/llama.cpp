@@ -391,6 +391,7 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
     ln -sfn ${mnt_models} ${SRC}/models-mnt
 
     python3 -m pip install -r ${SRC}/requirements.txt
+    python3 -m pip install --editable gguf-py
 fi
 
 ret=0

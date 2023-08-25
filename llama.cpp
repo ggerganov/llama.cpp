@@ -195,6 +195,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
+    LLM_KV_ROPE_FREQ_BASE,
     LLM_KV_ROPE_SCALE_LINEAR,
 
     LLM_KV_TOKENIZER_MODEL,
@@ -238,6 +239,7 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count" },
+    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"       },
     { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"    },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
@@ -827,6 +829,7 @@ enum e_model {
     MODEL_7B,
     MODEL_13B,
     MODEL_30B,
+    MODEL_34B,
     MODEL_40B,
     MODEL_65B,
     MODEL_70B,
@@ -1518,6 +1521,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_7B:  return "7B";
         case MODEL_13B: return "13B";
         case MODEL_30B: return "30B";
+        case MODEL_34B: return "34B";
         case MODEL_40B: return "40B";
         case MODEL_65B: return "65B";
         case MODEL_70B: return "70B";
@@ -1559,12 +1563,26 @@ static void llm_load_hparams(
     hparams.n_head_kv = hparams.n_head;
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
-    // TODO: manually setting rope scale should override this
+    // TODO: manually setting rope freq base and scale should override this
+    // FIXME: partial fix when the param specified is not the default value, but
+    //        will not work for overriding the model value to the params default
+
+    llama_context_params defaults = llama_context_default_params();
+
+    // rope_freq_base
+    {
+        float ropebase = 10000.0f;
+        GGUF_GET_KEY(ctx, ropebase, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
+        if (ropebase != 10000.0f && rope_freq_base == defaults.rope_freq_base) {
+            rope_freq_base = ropebase;
+        }
+    }
+
     // rope_freq_scale (inverse of the kv) is optional
     {
         float ropescale = 1.0f;
         GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-        if (ropescale != 1.0f) {
+        if (ropescale != 1.0f && rope_freq_scale == defaults.rope_freq_scale) {
             rope_freq_scale = 1.0f/ropescale;
         }
     }
@@ -1590,6 +1608,7 @@ static void llm_load_hparams(
                     case 26: model.type = e_model::MODEL_3B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = e_model::MODEL_13B; break;
+                    case 48: model.type = e_model::MODEL_34B; break;
                     case 60: model.type = e_model::MODEL_30B; break;
                     case 80: model.type = hparams.n_head == hparams.n_head_kv ? e_model::MODEL_65B : e_model::MODEL_70B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
@@ -1817,7 +1836,7 @@ static void llm_load_tensors(
     (void) main_gpu;
     (void) mul_mat_q;
 #if defined(GGML_USE_CUBLAS)
-    LLAMA_LOG_INFO("%s: using CUDA for GPU acceleration\n", __func__);
+    LLAMA_LOG_INFO("%s: using " GGML_CUDA_NAME " for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
     ggml_cuda_set_mul_mat_q(mul_mat_q);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
@@ -1939,6 +1958,14 @@ static void llm_load_tensors(
                         model.output_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
                         model.output_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd},          backend_norm);
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
+
+                        if (backend_norm == GGML_BACKEND_GPU) {
+                            vram_weights += ggml_nbytes(model.output_norm);
+                            vram_weights += ggml_nbytes(model.output_norm_b);
+                        }
+                        if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+                            vram_weights += ggml_nbytes(model.output);
+                        }
                     }
 
                     const uint32_t n_ff = hparams.n_ff;
@@ -1948,7 +1975,7 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
                         const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
@@ -1959,6 +1986,11 @@ static void llm_load_tensors(
                         if (gguf_find_tensor(ml.ctx_gguf, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i).c_str()) >= 0) {
                             layer.attn_norm_2   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, backend);
                             layer.attn_norm_2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, backend);
+
+                            if (backend == GGML_BACKEND_GPU) {
+                                vram_weights += ggml_nbytes(layer.attn_norm_2);
+                                vram_weights += ggml_nbytes(layer.attn_norm_2_b);
+                            }
                         }
 
                         layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, backend_split);
@@ -1966,6 +1998,13 @@ static void llm_load_tensors(
 
                         layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
                         layer.w3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+
+                        if (backend == GGML_BACKEND_GPU) {
+                            vram_weights +=
+                                ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
+                                ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.wo)          +
+                                ggml_nbytes(layer.w2)        + ggml_nbytes(layer.w3);
+                        }
                     }
                 } break;
             default:
@@ -2732,11 +2771,6 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * inpFF = attn_norm;
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
-
-            // TODO: this is temporary needed to introduce artificial dependency between FF and ATTN
-            //       adding this, because there seems to be a bug in the Metal concurrency optimization
-            //       without this line, the results are non-deterministic and wrong
-            cur->src[2] = attn_out;
             offload_func(cur);
 
             cur = ggml_gelu(ctx0, cur);
@@ -3039,11 +3073,8 @@ static std::string llama_escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string llama_unescape_whitespace(const std::string& word) {
-    if (word.length() >= 3 && word.substr(0, 3) == "\xe2\x96\x81") {
-        return std::string(" ") + word.substr(3);
-    }
-    return word;
+static void llama_unescape_whitespace(std::string & word) {
+    replace_all(word, "\xe2\x96\x81", " ");
 }
 
 struct llm_symbol {
@@ -4109,7 +4140,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (text.empty()) {
+        } else if (text.empty() || text[0] == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
             candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
@@ -4328,6 +4359,257 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
     GGML_ASSERT(!grammar->stacks.empty());
 
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+}
+
+//
+// Beam search
+//
+
+struct llama_beam {
+    std::vector<llama_token> tokens;
+    float p;  // Cumulative beam probability (renormalized relative to all beams)
+    bool eob; // Initialize end-of-beam to false. Callback sets this to true.
+    // Sort beams by probability. In case of ties, prefer beams at eob.
+    bool operator<(const llama_beam & rhs) const {
+        return std::make_pair(p, eob) < std::make_pair(rhs.p, rhs.eob);
+    }
+    // Shift off first n tokens and discard them.
+    void shift_tokens(const size_t n) {
+        if (n) {
+            std::copy(tokens.begin() + n, tokens.end(), tokens.begin());
+            tokens.resize(tokens.size() - n);
+        }
+    }
+    llama_beam_view view() const { return {tokens.data(), tokens.size(), p, eob}; }
+};
+
+// A struct for calculating logit-related info.
+struct llama_logit_info {
+    const float * const logits;
+    const int n_vocab;
+    const float max_l;
+    const float normalizer;
+    struct sum_exp {
+        float max_l;
+        float operator()(float sum, float l) const { return sum + std::exp(l - max_l); }
+    };
+    llama_logit_info(llama_context * ctx)
+      : logits(llama_get_logits(ctx))
+      , n_vocab(llama_n_vocab(ctx))
+      , max_l(*std::max_element(logits, logits + n_vocab))
+      , normalizer(1.0f / std::accumulate(logits, logits + n_vocab, 0.0f, sum_exp{max_l}))
+      { }
+    llama_token_data get_token_data(const llama_token token_id) const {
+        constexpr auto p = std::numeric_limits<float>::quiet_NaN();  // never used
+        return {token_id, logits[token_id], p};
+    }
+    // Return top k token_data by logit.
+    std::vector<llama_token_data> top_k(size_t k) {
+        std::vector<llama_token_data> min_heap;  // min-heap by logit
+        const llama_token k_min = std::min(static_cast<llama_token>(k), n_vocab);
+        min_heap.reserve(k_min);
+        for (llama_token token_id = 0 ; token_id < k_min ; ++token_id) {
+            min_heap.push_back(get_token_data(token_id));
+        }
+        auto comp = [](const llama_token_data & a, const llama_token_data & b) { return a.logit > b.logit; };
+        std::make_heap(min_heap.begin(), min_heap.end(), comp);
+        for (llama_token token_id = k_min ; token_id < n_vocab ; ++token_id) {
+            if (min_heap.front().logit < logits[token_id]) {
+                std::pop_heap(min_heap.begin(), min_heap.end(), comp);
+                min_heap.back().id = token_id;
+                min_heap.back().logit = logits[token_id];
+                std::push_heap(min_heap.begin(), min_heap.end(), comp);
+            }
+        }
+        return min_heap;
+    }
+    float probability_from_logit(float logit) {
+        return normalizer * std::exp(logit - max_l);
+    }
+};
+
+struct llama_beam_search_data {
+    llama_context * ctx;
+    size_t n_beams;
+    int n_past;
+    int n_predict;
+    int n_threads;
+    std::vector<llama_beam> beams;
+    std::vector<llama_beam> next_beams;
+
+    // Re-calculated on each loop iteration
+    size_t common_prefix_length;
+
+    // Used to communicate to/from callback on beams state.
+    std::vector<llama_beam_view> beam_views;
+
+    llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict, int n_threads)
+      : ctx(ctx)
+      , n_beams(n_beams)
+      , n_past(n_past)
+      , n_predict(n_predict)
+      , n_threads(n_threads)
+      , beam_views(n_beams) {
+        beams.reserve(n_beams);
+        next_beams.reserve(n_beams);
+    }
+
+    // Collapse beams to a single beam given by index.
+    void collapse_beams(const size_t beam_idx) {
+        if (0u < beam_idx) {
+            std::swap(beams[0], beams[beam_idx]);
+        }
+        beams.resize(1);
+    }
+
+    // Min-heaps are used to efficiently collect the top-k elements (k=n_beams).
+    // The repetative patterns below reflect the 2 stages of heaps:
+    //  * Gather elements until the vector is full, then call std::make_heap() on it.
+    //  * If the heap is full and a new element is found that should be included, pop the
+    //    least element to the back(), replace it with the new, then push it into the heap.
+    void fill_next_beams_by_top_probabilities(llama_beam & beam) {
+        // Min-heaps use a greater-than comparator.
+        const auto comp = [](const llama_beam & a, const llama_beam & b) { return a.p > b.p; };
+        if (beam.eob) {
+            // beam is at end-of-sentence, so just copy it to next_beams if its probability is high enough.
+            if (next_beams.size() < n_beams) {
+                next_beams.push_back(std::move(beam));
+                if (next_beams.size() == n_beams) {
+                    std::make_heap(next_beams.begin(), next_beams.end(), comp);
+                }
+            } else if (next_beams.front().p < beam.p) {
+                std::pop_heap(next_beams.begin(), next_beams.end(), comp);
+                next_beams.back() = std::move(beam);
+                std::push_heap(next_beams.begin(), next_beams.end(), comp);
+            }
+        } else {
+            // beam is not at end-of-sentence, so branch with next top_k tokens.
+            if (!beam.tokens.empty()) {
+                llama_eval(ctx, beam.tokens.data(), beam.tokens.size(), n_past, n_threads);
+            }
+            llama_logit_info logit_info(ctx);
+            std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
+            size_t i=0;
+            if (next_beams.size() < n_beams) {
+                for (; next_beams.size() < n_beams ; ++i) {
+                    llama_beam next_beam = beam;
+                    next_beam.tokens.push_back(next_tokens[i].id);
+                    next_beam.p *= logit_info.probability_from_logit(next_tokens[i].logit);
+                    next_beams.push_back(std::move(next_beam));
+                }
+                std::make_heap(next_beams.begin(), next_beams.end(), comp);
+            } else {
+                for (; next_beams.front().p == 0.0f ; ++i) {
+                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
+                    next_beams.back() = beam;
+                    next_beams.back().tokens.push_back(next_tokens[i].id);
+                    next_beams.back().p *= logit_info.probability_from_logit(next_tokens[i].logit);
+                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
+                }
+            }
+            for (; i < n_beams ; ++i) {
+                const float next_p = beam.p * logit_info.probability_from_logit(next_tokens[i].logit);
+                if (next_beams.front().p < next_p) {
+                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
+                    next_beams.back() = beam;
+                    next_beams.back().tokens.push_back(next_tokens[i].id);
+                    next_beams.back().p = next_p;
+                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
+                }
+            }
+        }
+    }
+
+    // Find common_prefix_length based on beams.
+    // Requires beams is not empty.
+    size_t find_common_prefix_length() {
+        size_t common_prefix_length = beams[0].tokens.size();
+        for (size_t i = 1 ; i < beams.size() ; ++i) {
+            common_prefix_length = std::min(common_prefix_length, beams[i].tokens.size());
+            for (size_t j = 0 ; j < common_prefix_length ; ++j) {
+                if (beams[0].tokens[j] != beams[i].tokens[j]) {
+                    common_prefix_length = j;
+                    break;
+                }
+            }
+        }
+        return common_prefix_length;
+    }
+
+    // Construct beams_state to send back to caller via the callback function.
+    // Side effect: set common_prefix_length = find_common_prefix_length();
+    llama_beams_state get_beams_state(const bool last_call) {
+        for (size_t i = 0 ; i < beams.size() ; ++i) {
+            beam_views[i] = beams[i].view();
+        }
+        common_prefix_length = find_common_prefix_length();
+        return {beam_views.data(), beams.size(), common_prefix_length, last_call};
+    }
+
+    // Loop:
+    //  * while i < n_predict, AND
+    //  * any of the beams have not yet reached end-of-beam (eob), AND
+    //  * the highest probability beam(s) (plural in case of ties) are not at end-of-sentence
+    //    (since all other beam probabilities can only decrease)
+    void loop(const llama_beam_search_callback_fn_t callback, void * const callback_data) {
+        beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eob.
+        const auto not_eob = [](const llama_beam & beam) { return !beam.eob; };
+        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eob) &&
+                       !beams[top_beam_index()].eob ; ++i) {
+            callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
+            update_beams_from_beam_views();   // Update values (p,eob) that callback may have changed.
+            if (common_prefix_length) {
+                llama_eval(ctx, beams[0].tokens.data(), common_prefix_length, n_past, n_threads);
+                n_past += common_prefix_length;
+            }
+            // Zero-out next_beam probabilities to place them last in following min-heap.
+            std::for_each(next_beams.begin(), next_beams.end(), [](llama_beam & beam) { beam.p = 0.0f; });
+            for (llama_beam & beam : beams) {
+                beam.shift_tokens(common_prefix_length);
+                fill_next_beams_by_top_probabilities(beam);
+            }
+            // next_beams become the beams of next/final iteration. Swap them to re-use memory.
+            beams.swap(next_beams);
+            renormalize_beam_probabilities(beams);
+        }
+        collapse_beams(top_beam_index());
+        callback(callback_data, get_beams_state(true));
+    }
+
+    // As beams grow, the cumulative probabilities decrease.
+    // Renormalize them to avoid floating point underflow.
+    static void renormalize_beam_probabilities(std::vector<llama_beam> & beams) {
+        const auto sum_p = [](float sum, llama_beam & beam) { return sum + beam.p; };
+        const float inv_sum = 1.0f / std::accumulate(beams.begin(), beams.end(), 0.0f, sum_p);
+        std::for_each(beams.begin(), beams.end(), [=](llama_beam & beam) { beam.p *= inv_sum; });
+    }
+
+    // Assumes beams is non-empty.  Uses llama_beam::operator<() for ordering.
+    size_t top_beam_index() {
+        return std::max_element(beams.begin(), beams.end()) - beams.begin();
+    }
+
+    // Copy (p,eob) for each beam which may have been changed by the callback.
+    void update_beams_from_beam_views() {
+        for (size_t i = 0 ; i < beams.size() ; ++i) {
+            beams[i].p = beam_views[i].p;
+            beams[i].eob = beam_views[i].eob;
+        }
+    }
+};
+
+void llama_beam_search(llama_context * ctx,
+                       llama_beam_search_callback_fn_t callback, void * callback_data,
+                       size_t n_beams, int n_past, int n_predict, int n_threads) {
+    assert(ctx);
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    llama_beam_search_data beam_search_data(ctx, n_beams, n_past, n_predict, n_threads);
+
+    beam_search_data.loop(callback, callback_data);
+
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    ctx->n_sample++;
 }
 
 //
@@ -5301,11 +5583,27 @@ int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
             model->name.c_str(),
             llama_model_type_name(model->type),
             llama_model_ftype_name(model->ftype).c_str());
+}
+
+uint64_t llama_model_size(const struct llama_model * model) {
+    uint64_t size = 0;
+    for (const auto & it : model->tensors_by_name) {
+        size += ggml_nbytes(it.second);
+    }
+    return size;
+}
+
+uint64_t llama_model_n_params(const struct llama_model * model) {
+    uint64_t nparams = 0;
+    for (const auto & it : model->tensors_by_name) {
+        nparams += ggml_nelements(it.second);
+    }
+    return nparams;
 }
 
 int llama_model_quantize(
@@ -5857,7 +6155,7 @@ int llama_token_to_str_with_model(const struct llama_model * model, llama_token 
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].text;
             if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
-                result = llama_unescape_whitespace(result);
+                llama_unescape_whitespace(result);
             }
             if (length < (int) result.length()) {
                 return -result.length();
