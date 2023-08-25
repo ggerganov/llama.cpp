@@ -5297,11 +5297,27 @@ int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
             model->name.c_str(),
             llama_model_type_name(model->type),
             llama_model_ftype_name(model->ftype).c_str());
+}
+
+uint64_t llama_model_size(const struct llama_model * model) {
+    uint64_t size = 0;
+    for (const auto & it : model->tensors_by_name) {
+        size += ggml_nbytes(it.second);
+    }
+    return size;
+}
+
+uint64_t llama_model_n_params(const struct llama_model * model) {
+    uint64_t nparams = 0;
+    for (const auto & it : model->tensors_by_name) {
+        nparams += ggml_nelements(it.second);
+    }
+    return nparams;
 }
 
 int llama_model_quantize(
