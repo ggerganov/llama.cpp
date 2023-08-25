@@ -36,7 +36,7 @@ pip install build twine
 
 Then, folow these steps to release a new version:
 
-1. Update versions in `pyproject.toml` and `__init__.py`.
+1. Update the version in `pyproject.toml`.
 2. Build the package:
 
 ```sh
@@ -52,3 +52,4 @@ python -m twine upload dist/*
 ## TODO
 - [ ] Add tests
 - [ ] Include conversion scripts as command line entry points in this package.
+- Add CI workflow for releasing the package.
