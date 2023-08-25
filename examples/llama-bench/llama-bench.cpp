@@ -806,7 +806,11 @@ struct markdown_printer : public printer {
             if (field == "model") {
                 value = t.model_type;
             } else if (field == "size") {
-                snprintf(buf, sizeof(buf), "%.2f GB", t.model_size / 1024.0 / 1024.0 / 1024.0);
+                if (t.model_size < 1024*1024*1024) {
+                    snprintf(buf, sizeof(buf), "%.2f MiB", t.model_size / 1024.0 / 1024.0);
+                } else {
+                    snprintf(buf, sizeof(buf), "%.2f GiB", t.model_size / 1024.0 / 1024.0 / 1024.0);
+                }
                 value = buf;
             } else if (field == "params") {
                 if (t.model_n_params < 1000*1000*1000) {
