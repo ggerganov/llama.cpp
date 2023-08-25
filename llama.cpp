@@ -56,12 +56,6 @@
     #include <stdio.h> // for _fseeki64
 #endif
 
-// TODO: Fix unused logit skipping crashes on ROCm
-// (see https://github.com/ggerganov/llama.cpp/pull/2700#issuecomment-1689548127)
-#ifndef LLAMA_USE_HIPBLAS
-#define LLAMA_SKIP_UNUSED_LOGITS
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cassert>

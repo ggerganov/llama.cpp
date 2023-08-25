@@ -302,6 +302,11 @@ k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
+ifndef LLAMA_NO_SKIP_UNUSED_LOGITS
+  CFLAGS   += -DLLAMA_SKIP_UNUSED_LOGITS
+  CXXFLAGS += -DLLAMA_SKIP_UNUSED_LOGITS
+endif
+
 #
 # Print build information
 #

@@ -79,6 +79,7 @@ option(LLAMA_METAL                           "llama: use Metal"                 
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
+option(LLAMA_SKIP_UNUSED_LOGITS              "llama: skip computation of unused logits"         ON)
 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
@@ -350,6 +351,10 @@ if (LLAMA_CLBLAST)
     else()
         message(WARNING "CLBlast not found")
     endif()
+endif()
+
+if (LLAMA_SKIP_UNUSED_LOGITS)
+    add_compile_definitions(LLAMA_SKIP_UNUSED_LOGITS)
 endif()
 
 if (LLAMA_ALL_WARNINGS)
