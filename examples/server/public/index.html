@@ -378,6 +378,13 @@
         const data = chunk.data;
 
         if (data.stop) {
+          while (
+            currentMessages.length > 0 &&
+            currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
+          ) {
+            currentMessages.pop();
+          }
+          transcriptUpdate([...history, ["{{char}}", currentMessages]])
           console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
         } else {
           currentMessages.push(data);
