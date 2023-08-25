@@ -549,10 +549,7 @@ struct llama_server_context
                 llama_grammar_accept_token(ctx, grammar, result.tok);
             }
 
-            size_t prob_size = std::min(candidates_p.size, (size_t)n_probs);
-            // Pick the first prob
-            
-            for (size_t i = 0; i < ; ++i)
+            for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
             {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
