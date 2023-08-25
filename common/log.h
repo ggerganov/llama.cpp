@@ -371,20 +371,29 @@ inline FILE *_log_handler2(bool change = false, LogTriState disable = LogTriStat
 // Disables logs entirely at runtime.
 //  Makes LOG() and LOG_TEE() produce no output,
 //  untill enabled back.
-inline FILE *log_disable()
+#define LOG_DISABLE() _log_disable()
+
+// INTERNAL, DO NOT USE
+inline FILE *_log_disable()
 {
     return _log_handler1(true, LogTriStateTrue);
 }
 
 // Enables logs at runtime.
-inline FILE *log_enable()
+#define LOG_ENABLE() _log_enable()
+
+// INTERNAL, DO NOT USE
+inline FILE *_log_enable()
 {
     return _log_handler1(true, LogTriStateFalse);
 }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
-inline FILE *log_set_target(std::string filename) { return _log_handler1(true, LogTriStateSame, filename); }
-inline FILE *log_set_target(FILE *target) { return _log_handler2(true, LogTriStateSame, target); }
+#define LOG_SET_TARGET(target) _log_set_target(target)
+
+// INTERNAL, DO NOT USE
+inline FILE *_log_set_target(std::string filename) { return _log_handler1(true, LogTriStateSame, filename); }
+inline FILE *_log_set_target(FILE *target) { return _log_handler2(true, LogTriStateSame, target); }
 
 // INTERNAL, DO NOT USE
 inline FILE *log_handler() { return _log_handler1(); }
@@ -393,32 +402,32 @@ inline void log_test()
 {
     std::cerr << "LOGDBG: LOGTEST" << std::endl;
 
-    log_disable();
+    LOG_DISABLE();
     LOG("01 Hello World to nobody, because logs are disabled!\n")
-    log_enable();
+    LOG_ENABLE();
     LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
     LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
-    log_set_target(stderr);
+    LOG_SET_TARGET(stderr);
     LOG("04 Hello World to stderr!\n")
     LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n")
-    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG_SET_TARGET(LOG_DEFAULT_FILE_NAME);
     LOG("06 Hello World to default log file!\n")
-    log_set_target(stdout);
+    LOG_SET_TARGET(stdout);
     LOG("07 Hello World to stdout!\n")
-    log_set_target(LOG_DEFAULT_FILE_NAME);
+    LOG_SET_TARGET(LOG_DEFAULT_FILE_NAME);
     LOG("08 Hello World to default log file again!\n")
-    log_disable();
+    LOG_DISABLE();
     LOG("09 Hello World _1_ into the void!\n")
-    log_enable();
+    LOG_ENABLE();
     LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n")
-    log_disable();
-    log_set_target("llama.anotherlog.log");
+    LOG_DISABLE();
+    LOG_SET_TARGET("llama.anotherlog.log");
     LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
-    log_enable();
+    LOG_ENABLE();
     LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
-    log_set_target("llama.yetanotherlog.log");
+    LOG_SET_TARGET("llama.yetanotherlog.log");
     LOG("13 Hello World this time in yet new file?\n")
-    log_set_target(LOG_FILENAME_GENERATOR("llama_autonamed", "log"));
+    LOG_SET_TARGET(LOG_FILENAME_GENERATOR("llama_autonamed", "log"));
     LOG("14 Hello World in log with generated filename!\n")
 
     // exit(0);
@@ -435,12 +444,12 @@ inline bool log_param_single_parse(std::string param)
     }
     else if (std::string("--log-disable").compare(param) == 0)
     {
-        log_disable();
+        LOG_DISABLE();
         return true;
     }
     else if (std::string("--log-enable").compare(param) == 0)
     {
-        log_enable();
+        LOG_ENABLE();
         return true;
     }
 
@@ -459,7 +468,7 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, std::string param, s
         {
             return true;
         }
-        log_set_target(LOG_FILENAME_GENERATOR(next.empty() ? "unnamed" : next, "log"));
+        LOG_SET_TARGET(LOG_FILENAME_GENERATOR(next.empty() ? "unnamed" : next, "log"));
         return true;
     }
 
@@ -482,7 +491,10 @@ inline void log_print_usage()
     fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
-inline void log_dump_cmdline(int argc, char **argv)
+#define LOG_DUMP_CMDLINE( argc, argv ) _log_dump_cmdline(argc,argv)
+
+// INTERNAL, DO NOT USE
+inline void _log_dump_cmdline(int argc, char **argv)
 {
     std::string buf;
     for (int i = 0; i < argc; ++i)
@@ -564,3 +576,34 @@ inline std::string _log_var_to_string(std::vector<int> var)
         return buf.append(" ]");                                    \
     }()                                                             \
         .c_str()
+
+
+#ifdef LOG_DISABLE_LOGS
+
+#undef LOG
+#define LOG(...) // dummy stub
+#undef LOGLN
+#define LOGLN(...) // dummy stub
+
+#undef LOG_TEE
+#define LOG_TEE(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+
+#undef LOG_TEELN
+#define LOG_TEELN(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+
+#undef LOG_DISABLE
+#define LOG_DISABLE() // dummy stub
+
+#undef LOG_ENABLE
+#define LOG_ENABLE() // dummy stub
+
+#undef LOG_ENABLE
+#define LOG_ENABLE() // dummy stub
+
+#undef LOG_SET_TARGET
+#define LOG_SET_TARGET(...) // dummy stub
+
+#undef LOG_DUMP_CMDLINE
+#define LOG_DUMP_CMDLINE(...) // dummy stub
+
+#endif // LOG_DISABLE_LOGS

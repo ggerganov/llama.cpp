@@ -62,10 +62,11 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    log_set_target(LOG_FILENAME_GENERATOR("main", "log"));
+#ifndef LOG_DISABLE_LOGS
+    LOG_SET_TARGET(LOG_FILENAME_GENERATOR("main", "log"));
     LOG_TEE("Log start\n")
-
-    log_dump_cmdline(argc,argv);
+    LOG_DUMP_CMDLINE(argc,argv);
+#endif // LOG_DISABLE_LOGS
 
     // TODO: Dump params ?
     //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity))
@@ -847,7 +848,9 @@ int main(int argc, char ** argv) {
     }
     llama_backend_free();
 
+#ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n")
+#endif // LOG_DISABLE_LOGS
 
     return 0;
 }

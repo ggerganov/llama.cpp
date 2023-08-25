@@ -302,6 +302,11 @@ k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
+ifdef LLAMA_DISABLE_LOGS
+	CFLAGS += -DLOG_DISABLE_LOGS
+	CXXFLAGS += -DLOG_DISABLE_LOGS
+endif # LLAMA_DISABLE_LOGS
+
 #
 # Print build information
 #

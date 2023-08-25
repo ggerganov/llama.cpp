@@ -462,7 +462,9 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, default_params);
+#ifndef LOG_DISABLE_LOGS
             log_print_usage();
+#endif // LOG_DISABLE_LOGS
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
@@ -502,6 +504,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 std::istreambuf_iterator<char>(),
                 std::back_inserter(params.grammar)
             );
+#ifndef LOG_DISABLE_LOGS
         // Parse args for logging parameters
         } else if ( log_param_single_parse( argv[i] ) ) {
             // Do nothing, log_param_single_parse automatically does it's thing
@@ -519,6 +522,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
         // End of Parse args for logging parameters
+#endif // LOG_DISABLE_LOGS
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);
