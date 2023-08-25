@@ -1836,7 +1836,7 @@ static void llm_load_tensors(
     (void) main_gpu;
     (void) mul_mat_q;
 #if defined(GGML_USE_CUBLAS)
-    LLAMA_LOG_INFO("%s: using CUDA for GPU acceleration\n", __func__);
+    LLAMA_LOG_INFO("%s: using " GGML_CUDA_NAME " for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
     ggml_cuda_set_mul_mat_q(mul_mat_q);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
@@ -1958,6 +1958,14 @@ static void llm_load_tensors(
                         model.output_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
                         model.output_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd},          backend_norm);
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
+
+                        if (backend_norm == GGML_BACKEND_GPU) {
+                            vram_weights += ggml_nbytes(model.output_norm);
+                            vram_weights += ggml_nbytes(model.output_norm_b);
+                        }
+                        if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+                            vram_weights += ggml_nbytes(model.output);
+                        }
                     }
 
                     const uint32_t n_ff = hparams.n_ff;
@@ -1967,7 +1975,7 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
                         const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
@@ -1978,6 +1986,11 @@ static void llm_load_tensors(
                         if (gguf_find_tensor(ml.ctx_gguf, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i).c_str()) >= 0) {
                             layer.attn_norm_2   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, backend);
                             layer.attn_norm_2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, backend);
+
+                            if (backend == GGML_BACKEND_GPU) {
+                                vram_weights += ggml_nbytes(layer.attn_norm_2);
+                                vram_weights += ggml_nbytes(layer.attn_norm_2_b);
+                            }
                         }
 
                         layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, backend_split);
@@ -1985,6 +1998,13 @@ static void llm_load_tensors(
 
                         layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
                         layer.w3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+
+                        if (backend == GGML_BACKEND_GPU) {
+                            vram_weights +=
+                                ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
+                                ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.wo)          +
+                                ggml_nbytes(layer.w2)        + ggml_nbytes(layer.w3);
+                        }
                     }
                 } break;
             default:
@@ -5277,11 +5297,27 @@ int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size) {
+int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
             model->name.c_str(),
             llama_model_type_name(model->type),
             llama_model_ftype_name(model->ftype).c_str());
+}
+
+uint64_t llama_model_size(const struct llama_model * model) {
+    uint64_t size = 0;
+    for (const auto & it : model->tensors_by_name) {
+        size += ggml_nbytes(it.second);
+    }
+    return size;
+}
+
+uint64_t llama_model_n_params(const struct llama_model * model) {
+    uint64_t nparams = 0;
+    for (const auto & it : model->tensors_by_name) {
+        nparams += ggml_nelements(it.second);
+    }
+    return nparams;
 }
 
 int llama_model_quantize(

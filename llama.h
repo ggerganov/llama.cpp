@@ -254,7 +254,11 @@ extern "C" {
     LLAMA_API int llama_model_n_embd (const struct llama_model * model);
 
     // Get a string describing the model type
-    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
+    LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
+    // Returns the total size of all the tensors in the model in bytes
+    LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
+    // Returns the total number of parameters in the model
+    LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
@@ -348,7 +352,7 @@ extern "C" {
 
     LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
 
-    LLAMA_API llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence

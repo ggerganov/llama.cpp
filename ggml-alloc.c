@@ -8,6 +8,7 @@
 
 #define UNUSED(x) (void)(x)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define GGML_MAX_CONCUR (2*GGML_MAX_NODES)
 
 //#define GGML_ALLOCATOR_DEBUG
 
@@ -67,7 +68,7 @@ struct ggml_allocr {
     struct hash_node hash_table[GGML_GRAPH_HASHTABLE_SIZE];
     size_t max_size;
     bool measure;
-    int parse_seq[GGML_MAX_NODES];
+    int parse_seq[GGML_MAX_CONCUR];
     int parse_seq_len;
 
 #ifdef GGML_ALLOCATOR_DEBUG
