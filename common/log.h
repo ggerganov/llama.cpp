@@ -491,14 +491,16 @@ inline void log_print_usage()
     fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
+#ifndef _WIN32
+// TODO:
+//  Windows doesn't seem to like this somehow
+
 #define LOG_DUMP_CMDLINE( argc, argv ) _log_dump_cmdline(argc,argv)
 
 // INTERNAL, DO NOT USE
 inline void _log_dump_cmdline(int argc, char **argv)
 {
-    // TODO:
-    //  Windows doesn't seem to like this somehow
-    std::string buf{""};
+    std::string buf;
     for (int i = 0; i < argc; ++i)
     {
         if (std::string(argv[i]).find(' ') != std::string::npos)
@@ -512,6 +514,10 @@ inline void _log_dump_cmdline(int argc, char **argv)
     }
     LOGLN("Cmd:%s", buf.c_str())
 }
+
+#else
+#define LOG_DUMP_CMDLINE(...) // dummy stub
+#endif
 
 #define LOG_TOSTR(var) _log_var_to_string(var).c_str()
 
