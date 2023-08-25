@@ -235,7 +235,6 @@ struct my_llama_model {
     uint32_t train_tokens = 0;
 };
 
-
 // gguf constants
 const char * LLM_KV_OPTIMIZER_TYPE = "optimizer.type";
 const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
@@ -1280,13 +1279,43 @@ static std::string format(const char * fmt, ...) {
 }
 
 int tokenize_file(struct llama_context * lctx, const char * filename, std::vector<llama_token>& out) {
-    struct llama_file f(filename, "rb");
+    FILE * fp = std::fopen(filename, "rb");
+    if (fp == NULL) {
+        return 0;
+    } 
+
+#ifdef _WIN32
+    GGML_ASSERT(_fseeki64(fp, (__int64) 0, SEEK_END) == 0);
+#else
+    GGML_ASSERT(std::fseek(fp, (long) 0, SEEK_END) == 0);
+#endif
+
+    size_t size = 0;
+#ifdef _WIN32
+    __int64 ret = _ftelli64(fp);
+    size = ret;
+#else
+    long ret = std::ftell(fp);
+    size = ret;
+#endif
+
+#ifdef _WIN32
+    GGML_ASSERT(_fseeki64(fp, (__int64) 0, SEEK_SET) == 0);
+#else
+    GGML_ASSERT(std::fseek(fp, (long) 0, SEEK_SET) == 0);
+#endif
 
     std::vector<char> buf;
-    buf.resize(f.size+1);
+    buf.resize(size+1);
 
-    f.read_raw(buf.data(), f.size);
-    buf[f.size] = '\0';
+    if (std::fread(buf.data(), size, 1, fp) != 1) {
+        throw std::runtime_error(std::string("unexpectedly reached end of file"));
+    }
+    if (ferror(fp)) {
+        throw std::runtime_error(format("read error: %s", strerror(errno)));
+    }
+
+    buf[size] = '\0';
 
     int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
     if (n_tokens < 0) {
@@ -1482,7 +1511,7 @@ void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
     if (dst == NULL) {
         return;
     }
-    struct ggml_tensor * t  = ggml_get_tensor(f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+    struct ggml_tensor * t  = ggml_get_tensor(ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
     GGML_ASSERT(are_same_layout(dst, t));
     memcpy(dst->data, t->data, ggml_nbytes(t));
 }
@@ -1503,7 +1532,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     // don't call ggml_opt_init until optimizer type and optimizer specific parameters are know
 
     std::string opt_type;
-    GGUF_GET_KEY(fctx, opt_type, gguf_get_arr_str, GGUF_TYPE_STRING, true, LLM_KV_OPTIMIZER_TYPE);
+    GGUF_GET_KEY(fctx, opt_type, gguf_get_val_str, GGUF_TYPE_STRING, true, LLM_KV_OPTIMIZER_TYPE);
     if (opt_type == LLM_KV_OPTIMIZER_TYPE_ADAM) {
         opt->params.type = GGML_OPT_ADAM;
 
@@ -1514,9 +1543,9 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         GGML_ASSERT(opt->ctx != NULL);
         ggml_opt_init(opt->ctx, opt, opt->params, opt->nx);
 
-        read_tensor_by_name(opt->adam.m,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS)
-        read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS)
-        read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS)
+        read_tensor_by_name(opt->adam.m,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+        read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+        read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
     } else if (opt_type == LLM_KV_OPTIMIZER_TYPE_LBFGS) {
         opt->params.type = GGML_OPT_LBFGS;
 
@@ -1569,7 +1598,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
                 ggml_set_name(opt->adam.m, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
                 ggml_set_name(opt->adam.v, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
                 if (opt->adam.pf) {
-                    ggml_set_name(pf, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
+                    ggml_set_name(opt->adam.pf, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
                 }
 
                 gguf_add_tensor(fctx, opt->adam.m);
@@ -1595,7 +1624,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
                 ggml_set_name(opt->lbfgs.gp,   LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS);
                 ggml_set_name(opt->lbfgs.d,    LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION);
                 if (opt->lbfgs.pf) {
-                    ggml_set_name(pf, LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES);
+                    ggml_set_name(opt->lbfgs.pf, LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES);
                 }
                 ggml_set_name(opt->lbfgs.lmal, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA);
                 ggml_set_name(opt->lbfgs.lmys, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS);
@@ -1646,20 +1675,20 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     GGML_ASSERT(arch == "llama");
 
     uint32_t ftype_u;
-    GGUF_GET_KEY(fctx, ftype_u, gguf_get_val_u32, GGUF_TYPE_U32, true, LLM_KV_GENERAL_FILE_TYPE);
+    GGUF_GET_KEY(fctx, ftype_u, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_GENERAL_FILE_TYPE);
     GGML_ASSERT((enum llama_ftype) ftype_u == LLAMA_FTYPE_ALL_F32);
 
-    GGUF_GET_KEY(fctx, model->hparams.n_ctx,   gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_CONTEXT_LENGTH));
-    GGUF_GET_KEY(fctx, model->hparams.n_embd,  gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_EMBEDDING_LENGTH));
-    GGUF_GET_KEY(fctx, model->hparams.n_ff,    gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_FEED_FORWARD_LENGTH));
-    GGUF_GET_KEY(fctx, model->hparams.n_head,  gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
-    GGUF_GET_KEY(fctx, model->hparams.n_layer, gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_BLOCK_COUNT));
-    GGUF_GET_KEY(fctx, model->hparams.n_rot,   gguf_get_val_u32, GGUF_TYPE_U32, true, kv(LLM_KV_ROPE_DIMENSION_COUNT));
+    GGUF_GET_KEY(fctx, model->hparams.n_ctx,   gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_CONTEXT_LENGTH));
+    GGUF_GET_KEY(fctx, model->hparams.n_embd,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_EMBEDDING_LENGTH));
+    GGUF_GET_KEY(fctx, model->hparams.n_ff,    gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_FEED_FORWARD_LENGTH));
+    GGUF_GET_KEY(fctx, model->hparams.n_head,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
+    GGUF_GET_KEY(fctx, model->hparams.n_layer, gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_BLOCK_COUNT));
+    GGUF_GET_KEY(fctx, model->hparams.n_rot,   gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_ROPE_DIMENSION_COUNT));
     
     float rope_freq_scale;
-    GGUF_GET_KEY(fctx, model->hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_F32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
-    GGUF_GET_KEY(fctx, model->hparams.rope_freq_base, gguf_get_val_f32, GGUF_TYPE_F32, true, kv(LLM_KV_ROPE_FREQ_BASE));
-    GGUF_GET_KEY(fctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_F32, true, kv(LLM_KV_ROPE_SCALE_LINEAR));
+    GGUF_GET_KEY(fctx, model->hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+    GGUF_GET_KEY(fctx, model->hparams.rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ROPE_FREQ_BASE));
+    GGUF_GET_KEY(fctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ROPE_SCALE_LINEAR));
     model->hparams.rope_freq_scale = 1.0f / rope_freq_scale;
 
     init_model(model);
@@ -1668,7 +1697,7 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     read_tensor_by_name(model->norm,           f_ggml_ctx, tn(LLM_TENSOR_OUTPUT_NORM));
     read_tensor_by_name(model->output,         f_ggml_ctx, tn(LLM_TENSOR_OUTPUT));
 
-    for (uint32_t i = 0; i < n_layer; ++i) {
+    for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
         read_tensor_by_name(layer.attention_norm, f_ggml_ctx, tni(LLM_TENSOR_ATTN_NORM, i));
@@ -2509,7 +2538,7 @@ int main(int argc, char ** argv) {
     opt->params = params.use_adam ? opt_params_adam : opt_params_lbfgs;
 
     printf("%s: init model\n", __func__);
-    bool existed = load_checkpoint(&model, opt, params.fn_checkpoint_in, true);
+    bool existed = load_checkpoint_file(params.fn_checkpoint_in, &model, opt);
     set_param_model(&model);
 
     opt->params = params.use_adam ? opt_params_adam : opt_params_lbfgs;
