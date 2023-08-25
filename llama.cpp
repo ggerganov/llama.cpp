@@ -2756,8 +2756,6 @@ static struct ggml_cgraph * llm_build_falcon(
         cur = ggml_add(ctx0,
                 ggml_mul(ctx0, cur, model.output_norm),
                 model.output_norm_b);
-        offload_func_nr(cur->src[0]);
-        offload_func_nr(cur);
         ggml_set_name(cur, "result_norm");
     }
 
