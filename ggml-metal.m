@@ -1177,15 +1177,11 @@ void ggml_metal_graph_compute(
     // wait for all threads to finish
     dispatch_barrier_sync(queue, ^{});
 
-    [command_buffers[n_cb - 1] waitUntilCompleted];
-
-    // release resources
-    [edesc release];
-    [queue release];
-
     // check status of command buffers
     // needed to detect if the device ran out-of-memory for example (#1881)
     for (int i = 0; i < n_cb; i++) {
+        [command_buffers[i] waitUntilCompleted];
+
         MTLCommandBufferStatus status = (MTLCommandBufferStatus) [command_buffers[i] status];
         if (status != MTLCommandBufferStatusCompleted) {
             fprintf(stderr, "%s: command buffer %d failed with status %lu\n", __func__, i, status);
@@ -1195,6 +1191,10 @@ void ggml_metal_graph_compute(
         [command_encoders[i] release];
         [command_buffers[i] release];
     }
+
+    // release resources
+    [edesc release];
+    [queue release];
 
     [command_encoders release];
     [command_buffers release];
