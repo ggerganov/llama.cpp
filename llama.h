@@ -308,8 +308,7 @@ extern "C" {
                const llama_token * tokens,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads,
-                             int   pp_threads);
+                             int   n_threads);
 
     // Same as llama_eval, but use float matrix input directly.
     LLAMA_API int llama_eval_embd(
@@ -317,8 +316,7 @@ extern "C" {
                      const float * embd,
                              int   n_tokens,
                              int   n_past,
-                             int   n_threads,
-                             int   pp_threads);
+                             int   n_threads);
 
     // Export a static computation graph for context of 511 and batch size of 1
     // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these

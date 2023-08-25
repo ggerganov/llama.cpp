@@ -144,7 +144,7 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
 
             const std::vector<llama_token> tmp(params.n_batch, llama_token_bos());
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads, params.pp_threads);
+            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
         }
 
         llama_print_timings(ctx);
@@ -406,7 +406,7 @@ int main(int argc, char ** argv) {
     // do one empty run to warm up the model
     {
         const std::vector<llama_token> tmp = { llama_token_bos(), };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads, params.pp_threads);
+        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
         llama_reset_timings(ctx);
     }
 
@@ -513,7 +513,8 @@ int main(int argc, char ** argv) {
 
                 for (int i = 0; i < input_size; i += params.n_batch) {
                     int n_eval = std::min(input_size - i, params.n_batch);
-                    if (llama_eval(ctx_guidance, input_buf + i, n_eval, n_past_guidance, params.n_threads, params.pp_threads)) {
+                    int eval_thr = n_eval > 1 ? params.pp_threads : params.n_threads;
+                    if (llama_eval(ctx_guidance, input_buf + i, n_eval, n_past_guidance, eval_thr)) {
                         fprintf(stderr, "%s : failed to eval\n", __func__);
                         return 1;
                     }
@@ -527,7 +528,8 @@ int main(int argc, char ** argv) {
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
                 }
-                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads, params.pp_threads)) {
+                int eval_thr = n_eval > 1 ? params.pp_threads : params.n_threads;
+                if (llama_eval(ctx, &embd[i], n_eval, n_past, eval_thr)) {
                     fprintf(stderr, "%s : failed to eval\n", __func__);
                     return 1;
                 }
