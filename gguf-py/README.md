@@ -6,14 +6,13 @@ This is a Python package for writing binary files in the [GGUF](https://github.c
 See [convert-llama-hf-to-gguf.py](https://github.com/ggerganov/llama.cpp/blob/master/convert-llama-hf-to-gguf.py)
 as an example for its usage.
 
-## Install
+## Installation
 ```sh
 pip install gguf
 ```
 
 ## Development
 Maintainers who participate in development of this package are advised to install it in editable mode:
-
 
 ```sh
 cd /path/to/llama.cpp/gguf-py
@@ -28,7 +27,28 @@ In this case, upgrade Pip to the latest:
 pip install --upgrade pip
 ```
 
-## TODO
+## Publishing
+To publish the package, you need to have `twine` and `build` installed:
 
+```sh
+pip install build twine
+```
+
+Then, folow these steps to release a new version:
+
+1. Update versions in `pyproject.toml` and `__init__.py`.
+2. Build the package:
+
+```sh
+python -m build
+```
+
+3. Upload the generated distribution archives:
+
+```sh
+python -m twine upload dist/*
+```
+
+## TODO
 - [ ] Add tests
 - [ ] Include conversion scripts as command line entry points in this package.
