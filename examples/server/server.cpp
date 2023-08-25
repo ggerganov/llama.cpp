@@ -549,7 +549,10 @@ struct llama_server_context
                 llama_grammar_accept_token(ctx, grammar, result.tok);
             }
 
-            for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
+            size_t prob_size = std::min(candidates_p.size, (size_t)n_probs);
+            // Pick the first prob
+            
+            for (size_t i = 0; i < ; ++i)
             {
                 result.probs.push_back({candidates_p.data[i].id, candidates_p.data[i].p});
             }
@@ -1322,10 +1325,10 @@ int main(int argc, char **argv)
 
                 while (llama.has_next_token) {
                     const completion_token_output token_with_probs = llama.doCompletion();
-                    const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
-                    if (llama.multibyte_pending > 0) {
+                    if (token_with_probs.tok == -1 || llama.multibyte_pending > 0) {
                         continue;
                     }
+                    const std::string token_text = llama_token_to_str(llama.ctx, token_with_probs.tok);
 
                     size_t pos = std::min(sent_count, llama.generated_text.size());
 
