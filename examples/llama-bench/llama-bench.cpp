@@ -718,6 +718,13 @@ struct markdown_printer : public printer {
         if (field == "t/s") {
             return 15;
         }
+        if (field == "size" || field == "params") {
+            return 8;
+        }
+        if (field == "n_gpu_layers") {
+            return 3;
+        }
+
         int width = std::max((int)field.length(), 10);
 
         if (test::get_field_type(field) == test::STRING) {
@@ -726,11 +733,27 @@ struct markdown_printer : public printer {
         return width;
     }
 
+    static std::string get_field_display_name(const std::string & field) {
+        if (field == "n_gpu_layers") {
+            return "ngl";
+        }
+        if (field == "n_threads") {
+            return "threads";
+        }
+        if (field == "mul_mat_q") {
+            return "mmq";
+        }
+        if (field == "tensor_split") {
+            return "ts";
+        }
+        return field;
+    }
+
     void print_header(const cmd_params & params) override {
         // select fields to print
         fields.push_back("model");
-        fields.push_back("model_size");
-        fields.push_back("model_n_params");
+        fields.push_back("size");
+        fields.push_back("params");
         fields.push_back("backend");
         bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
@@ -762,7 +785,7 @@ struct markdown_printer : public printer {
 
         fprintf(fout, "|");
         for (const auto & field : fields) {
-            fprintf(fout, " %*s |", get_field_width(field), field.c_str());
+            fprintf(fout, " %*s |", get_field_width(field), get_field_display_name(field).c_str());
         }
         fprintf(fout, "\n");
         fprintf(fout, "|");
@@ -782,10 +805,10 @@ struct markdown_printer : public printer {
             char buf[128];
             if (field == "model") {
                 value = t.model_type;
-            } else if (field == "model_size") {
-                snprintf(buf, sizeof(buf), "%.2f GiB", t.model_size / 1024.0 / 1024.0 / 1024.0);
+            } else if (field == "size") {
+                snprintf(buf, sizeof(buf), "%.2f GB", t.model_size / 1024.0 / 1024.0 / 1024.0);
                 value = buf;
-            } else if (field == "model_n_params") {
+            } else if (field == "params") {
                 if (t.model_n_params < 1000*1000*1000) {
                     snprintf(buf, sizeof(buf), "%.2f M", t.model_n_params / 1e6);
                 } else {
