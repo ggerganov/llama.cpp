@@ -105,6 +105,7 @@ class Params:
     f_norm_eps: float
 
     f_rope_freq_base: Optional[float] = None
+    f_rope_scale: Optional[float] = None
 
     ftype: Optional[GGMLFileType] = None
 
@@ -169,6 +170,11 @@ class Params:
         f_norm_eps       = config["rms_norm_eps"]
         f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
+        if "rope_scaling" in config and config["rope_scaling"].get("type") == "linear":
+            f_rope_scale = config["rope_scaling"].get("factor")
+        else:
+            f_rope_scale = None
+
         n_mult = Params.find_n_mult(n_ff, n_embd)
 
         if "max_sequence_length" in config:
@@ -190,6 +196,7 @@ class Params:
             n_head_kv        = n_head_kv,
             f_norm_eps       = f_norm_eps,
             f_rope_freq_base = f_rope_freq_base,
+            f_rope_scale     = f_rope_scale,
         )
 
     # LLaMA v2 70B params.json
@@ -772,6 +779,9 @@ class OutputFile:
 
         if params.f_rope_freq_base:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
+
+        if params.f_rope_scale:
+            self.gguf.add_rope_scale_linear(params.f_rope_scale)
 
         if params.ftype:
             self.gguf.add_file_type(params.ftype)
