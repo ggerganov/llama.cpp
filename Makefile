@@ -64,8 +64,13 @@ endif
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-			-Wmissing-prototypes
+			-Wmissing-prototypes -Wno-unused-function
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
+
+ifeq '' '$(findstring clang++,$(CXX))'
+	# g++ only
+	CXXFLAGS += -Wno-format-truncation
+endif
 
 # OS specific
 # TODO: support Windows

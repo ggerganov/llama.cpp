@@ -1548,7 +1548,7 @@ int main(int argc, char **argv)
 
     svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep)
                               {
-        const auto * fmt = "500 Internal Server Error\n%s";
+        const char fmt[] = "500 Internal Server Error\n%s";
         char buf[BUFSIZ];
         try {
             std::rethrow_exception(std::move(ep));
