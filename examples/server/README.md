@@ -77,34 +77,31 @@ You need to have [Node.js](https://nodejs.org/en) installed.
 ```bash
 mkdir llama-client
 cd llama-client
-npm init
-npm install axios
 ```
 
 Create a index.js file and put inside this:
 
 ```javascript
-const axios = require("axios");
-
 const prompt = `Building a website can be done in 10 simple steps:`;
 
 async function Test() {
-    let result = await axios.post("http://127.0.0.1:8080/completion", {
-        prompt,
-        n_predict: 512,
-    });
-
-    // the response is received until completion finish
-    console.log(result.data.content);
+    let response = await fetch("http://127.0.0.1:8080/completion", {
+        method: 'POST',
+        body: JSON.stringify({
+            prompt,
+            n_predict: 512,
+        })
+    })
+    console.log((await response.json()).content)
 }
 
-Test();
+Test()
 ```
 
 And run it:
 
 ```bash
-node .
+node index.js
 ```
 
 ## API Endpoints
