@@ -270,19 +270,17 @@ int main(int argc, char ** argv) {
         }
     }
 
+    LOGLN(
+            "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
+            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size())
+
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token token to recalculate the cached logits
     if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
             session_tokens.size() > embd_inp.size()) {
-#ifndef _WIN32
-        LOG(
-            "recalculate the cached logits: embd_inp.empty() %s, n_matching_session_tokens %lu, embd_inp.size() %lu, session_tokens.size() %lu, embd_inp.size() %lu, session_tokens.resize( %lu )",
-            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size(), embd_inp.size() - 1)
-#else
-        LOG(
-            "recalculate the cached logits: embd_inp.empty() %s, n_matching_session_tokens %llu, embd_inp.size() %llu, session_tokens.size() %llu, embd_inp.size() %llu, session_tokens.resize( %llu )",
-            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size(), embd_inp.size() - 1)
-#endif
+
+        LOGLN("recalculate the cached logits (do): session_tokens.resize( %zu )", embd_inp.size() - 1)
+        
         session_tokens.resize(embd_inp.size() - 1);
     }
 
