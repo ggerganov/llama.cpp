@@ -23,7 +23,6 @@
 #define KV_TOKENIZER_LIST                "tokenizer.ggml.tokens"
 #define KV_TOKENIZER_TOKEN_TYPE          "tokenizer.ggml.token_type"
 #define KV_TOKENIZER_SCORES              "tokenizer.ggml.scores"
-#define KV_TOKENIZER_MERGES              "tokenizer.ggml.merges"
 #define KV_TOKENIZER_BOS_ID              "tokenizer.ggml.bos_token_id"
 #define KV_TOKENIZER_EOS_ID              "tokenizer.ggml.eos_token_id"
 #define KV_TOKENIZER_UNK_ID              "tokenizer.ggml.unknown_token_id"
@@ -35,15 +34,10 @@
 #define KV_EMBEDDING_LENGTH              "llama.embedding_length"
 #define KV_BLOCK_COUNT                   "llama.block_count"
 #define KV_FEED_FORWARD_LENGTH           "llama.feed_forward_length"
-#define KV_USE_PARALLEL_RESIDUAL         "llama.use_parallel_residual"
-#define KV_TENSOR_DATA_LAYOUT            "llama.tensor_data_layout"
-
 #define KV_ATTENTION_HEAD_COUNT          "llama.attention.head_count"
 #define KV_ATTENTION_HEAD_COUNT_KV       "llama.attention.head_count_kv"
 #define KV_ATTENTION_LAYERNORM_RMS_EPS   "llama.attention.layer_norm_rms_epsilon"
-
 #define KV_ROPE_DIMENSION_COUNT          "llama.rope.dimension_count"
-#define KV_ROPE_SCALE_LINEAR             "llama.rope.scale_linear"
 
 #define TN_TOKEN_EMBD  "token_embd.weight"
 #define TN_OUTPUT_NORM "output_norm.weight"
@@ -329,11 +323,6 @@ struct train_params {
     int mem_compute1_gb;
 };
 
-uint32_t get_n_ff(const struct my_llama_hparams* hparams) {
-    const uint32_t n_ff = ((2*(4*hparams->n_embd)/3 + hparams->n_mult - 1)/hparams->n_mult)*hparams->n_mult;
-    return n_ff;
-}
-
 void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %d\n", __func__, params->n_vocab);
     printf("%s: n_ctx:   %d\n", __func__, params->n_ctx);
@@ -534,21 +523,6 @@ struct llama_file {
         return std::string(chars.data(), len);
     }
 
-    void write_raw(const void * ptr, size_t size) {
-        if (size == 0) {
-            return;
-        }
-        errno = 0;
-        size_t ret = std::fwrite(ptr, size, 1, fp);
-        if (ret != 1) {
-            throw std::runtime_error(format("write error: %s", strerror(errno)));
-        }
-    }
-
-    void write_u32(std::uint32_t val) {
-        write_raw(&val, sizeof(val));
-    }
-
     ~llama_file() {
         if (fp) {
             std::fclose(fp);
@@ -708,8 +682,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     // for rms-att-weight
     int row_length = model->hparams.n_embd;
     const auto & hparams = model->hparams;
-    //int n_ff = model->hparams.n_embd;
-    int n_ff = get_n_ff(&hparams);
+    int n_ff = model->hparams.n_ff;
 
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
