@@ -392,7 +392,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         hs_data[i].context = prompt_lines[idx*6];
         hs_data[i].gold_ending_idx = std::stoi( prompt_lines[idx*6+1] );
         for (size_t j=0; j < 4; j++) {
-            hs_data[i].ending[j] = " " + prompt_lines[idx*6+2+j];
+            hs_data[i].ending[j] = prompt_lines[idx*6+2+j];
         }
 
         // Delete the selected random example from the prompt
@@ -417,7 +417,7 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         size_t context_size = context_embd.size();
 
         for (int i = 0; i < 4; ++i) {
-            ending_tokens[i] = ::llama_tokenize(ctx, hs_data[task_idx].context + hs_data[task_idx].ending[i], add_bos);
+            ending_tokens[i] = ::llama_tokenize(ctx, hs_data[task_idx].context + " " + hs_data[task_idx].ending[i], add_bos);
             for (int k = 0; k < int(context_size); ++k) {
                 if (ending_tokens[i][k] != context_embd[k]) {
                     fprintf(stderr, "Oops: ending %d of task %d differs from context at position %d\n",i,int(task_idx),k);
