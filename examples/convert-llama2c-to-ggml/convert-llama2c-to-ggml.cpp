@@ -34,6 +34,10 @@
 #define LLAMA_FILE_MAGIC_GGJT        0x67676a74u // 'ggjt'
 #define LLAMA_FILE_VERSION_GGJT_V3   3
 
+#define UNKNOWN_TOKEN_ID 0
+#define BOS_TOKEN_ID 1
+#define EOS_TOKEN_ID 2
+
 //////////////////////////////////////// llama2.c model structs and functions to load models, alloc memory etc.
 typedef struct {
     int dim; // transformer dimension
@@ -527,6 +531,16 @@ bool is_ggml_file(const char *filename) {
     return magic == GGUF_MAGIC;
 }
 
+llama_vocab::ttype get_token_type(llama_vocab::id id, const llama_vocab::token &text) {
+    if (id == UNKNOWN_TOKEN_ID) return LLAMA_TOKEN_TYPE_UNKNOWN;
+    if (id == BOS_TOKEN_ID || id == EOS_TOKEN_ID) return LLAMA_TOKEN_TYPE_CONTROL;
+    unsigned char byte_val;
+    if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
+        return LLAMA_TOKEN_TYPE_BYTE;
+    }
+    return LLAMA_TOKEN_TYPE_NORMAL;
+}
+
 void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
     // assume llama2.c vocabulary
     printf("Assuming llama2.c vocabulary since %s is not a ggml file\n", filename);
@@ -538,15 +552,9 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
         float_t score = file.read_f32();
         uint32_t len = file.read_u32();
         std::string text = file.read_string(len);
-        // Special-case handling of <0xXX> single byte tokens.
-        char byte_val;
-        if (sscanf(text.c_str(), "<0x%02hhX>", &byte_val) == 1) {
-            char cstr[2] = { byte_val, 0 };
-            text = cstr;
-        }
         vocab->id_to_token[i].text = text;
         vocab->id_to_token[i].score = score;
-        vocab->id_to_token[i].type = LLAMA_TOKEN_TYPE_UNDEFINED;
+        vocab->id_to_token[i].type = get_token_type(i, text);
         vocab->token_to_id.emplace(text, i);
     }
 }
@@ -630,7 +638,6 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         scores.push_back(token_data.score);
         token_types.push_back(token_data.type);
     }
-    // TODO(ochafik): Do we need to output merges too, maybe?
     gguf_set_arr_str(ctx, "tokenizer.ggml.tokens", tokens.data(), tokens.size());
     gguf_set_arr_data(ctx, "tokenizer.ggml.scores", GGUF_TYPE_FLOAT32, scores.data(), scores.size());
     gguf_set_arr_data(ctx, "tokenizer.ggml.token_type", GGUF_TYPE_INT32, token_types.data(), token_types.size());
@@ -641,11 +648,9 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     gguf_set_val_str(ctx, "general.architecture", "llama");
 
     // special tokens
-    // gguf_set_val_u32(ctx, "tokenizer.ggml.bos_token_id", ...);
-    // gguf_set_val_u32(ctx, "tokenizer.ggml.eos_token_id", ...);
-    // gguf_set_val_u32(ctx, "tokenizer.ggml.unknown_token_id", ...);
-    // gguf_set_val_u32(ctx, "tokenizer.ggml.separator_token_id", ...);
-    // gguf_set_val_u32(ctx, "tokenizer.ggml.padding_token_id", ...);
+    gguf_set_val_u32(ctx, "tokenizer.ggml.unknown_token_id", UNKNOWN_TOKEN_ID);
+    gguf_set_val_u32(ctx, "tokenizer.ggml.bos_token_id", BOS_TOKEN_ID);
+    gguf_set_val_u32(ctx, "tokenizer.ggml.eos_token_id", EOS_TOKEN_ID);
 
     gguf_set_val_u32(ctx, "llama.context_length", model->hparams.n_ctx);
     gguf_set_val_u32(ctx, "llama.embedding_length", model->hparams.n_embd);
@@ -655,7 +660,6 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     gguf_set_val_u32(ctx, "llama.rope.dimension_count", model->hparams.n_rot);
     gguf_set_val_f32(ctx, "llama.attention.layer_norm_rms_epsilon", 1e-5f);
     // // n_head_kv is optional, default to n_head
-    // gguf_set_val_u32(ctx, "llama.attention.head_count_kv", hparams.n_head_kv);
 
     // write tensors
     ggml_set_name(model->tok_embeddings, TN_TOKEN_EMBD);
@@ -670,9 +674,6 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
-        ggml_format_name(layer.attention_norm, TN_ATTN_NORM, i);
-        gguf_add_tensor(ctx, layer.attention_norm);
-
         ggml_format_name(layer.wq, TN_ATTN_Q, i);
         gguf_add_tensor(ctx, layer.wq);
 
@@ -685,8 +686,8 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
         ggml_format_name(layer.wo, TN_ATTN_OUTPUT, i);
         gguf_add_tensor(ctx, layer.wo);
 
-        ggml_format_name(layer.ffn_norm, TN_FFN_NORM, i);
-        gguf_add_tensor(ctx, layer.ffn_norm);
+        ggml_format_name(layer.attention_norm, TN_ATTN_NORM, i);
+        gguf_add_tensor(ctx, layer.attention_norm);
 
         ggml_format_name(layer.w1, TN_FFN_GATE, i);
         gguf_add_tensor(ctx, layer.w1);
@@ -696,6 +697,9 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
         ggml_format_name(layer.w3, TN_FFN_UP, i);
         gguf_add_tensor(ctx, layer.w3);
+        
+        ggml_format_name(layer.ffn_norm, TN_FFN_NORM, i);
+        gguf_add_tensor(ctx, layer.ffn_norm);
     }
 
     gguf_write_to_file(ctx, filename, false);
