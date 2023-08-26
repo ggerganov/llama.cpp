@@ -365,6 +365,9 @@ class GGUFValueType(IntEnum):
     BOOL    = 7
     STRING  = 8
     ARRAY   = 9
+    UINT64  = 10
+    INT64   = 11
+    FLOAT64 = 12
 
     @staticmethod
     def get_type(val):
@@ -378,6 +381,7 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.BOOL
         elif isinstance(val, int):
             return GGUFValueType.INT32
+        # TODO: need help with 64-bit types in Python
         else:
             print("Unknown type: "+str(type(val)))
             sys.exit()
@@ -444,6 +448,18 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.FLOAT32)
 
+    def add_uint64(self, key: str, val: int):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.UINT64)
+
+    def add_int64(self, key: str, val: int):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.INT64)
+
+    def add_float64(self, key: str, val: float):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.FLOAT64)
+
     def add_bool(self, key: str, val: bool):
         self.add_key(key)
         self.add_val(val, GGUFValueType.BOOL)
@@ -483,6 +499,12 @@ class GGUFWriter:
             self.kv_data += struct.pack("<i", val)
         elif vtype == GGUFValueType.FLOAT32:
             self.kv_data += struct.pack("<f", val)
+        elif vtype == GGUFValueType.UINT64:
+            self.kv_data += struct.pack("<Q", val)
+        elif vtype == GGUFValueType.INT64:
+            self.kv_data += struct.pack("<q", val)
+        elif vtype == GGUFValueType.FLOAT64:
+            self.kv_data += struct.pack("<d", val)
         elif vtype == GGUFValueType.BOOL:
             self.kv_data += struct.pack("?", val)
         elif vtype == GGUFValueType.STRING:
@@ -512,7 +534,7 @@ class GGUFWriter:
         n_dims = len(tensor_shape)
         self.ti_data += struct.pack("<I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
+            self.ti_data += struct.pack("<Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         else:

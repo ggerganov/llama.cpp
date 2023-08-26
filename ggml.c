@@ -19408,9 +19408,12 @@ static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
     [GGUF_TYPE_FLOAT32] = sizeof(float),
     [GGUF_TYPE_BOOL]    = sizeof(bool),
     [GGUF_TYPE_STRING]  = sizeof(struct gguf_str),
+    [GGUF_TYPE_UINT64]  = sizeof(uint64_t),
+    [GGUF_TYPE_INT64]   = sizeof(int64_t),
+    [GGUF_TYPE_FLOAT64] = sizeof(double),
     [GGUF_TYPE_ARRAY]   = 0, // undefined
 };
-static_assert(GGUF_TYPE_COUNT == 10, "GGUF_TYPE_COUNT != 10");
+static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
 static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
     [GGUF_TYPE_UINT8]   = "u8",
@@ -19423,8 +19426,11 @@ static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
     [GGUF_TYPE_BOOL]    = "bool",
     [GGUF_TYPE_STRING]  = "str",
     [GGUF_TYPE_ARRAY]   = "arr",
+    [GGUF_TYPE_UINT64]  = "u64",
+    [GGUF_TYPE_INT64]   = "i64",
+    [GGUF_TYPE_FLOAT64] = "f64",
 };
-static_assert(GGUF_TYPE_COUNT == 10, "GGUF_TYPE_COUNT != 10");
+static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
 union gguf_value {
     uint8_t  uint8;
@@ -19434,6 +19440,9 @@ union gguf_value {
     uint32_t uint32;
     int32_t  int32;
     float    float32;
+    uint64_t uint64;
+    int64_t  int64;
+    double   float64;
     bool     bool_;
 
     struct gguf_str str;
@@ -19466,7 +19475,7 @@ struct gguf_tensor_info {
     struct gguf_str name;
 
     uint32_t n_dims;
-    uint32_t ne[GGML_MAX_DIMS];
+    uint64_t ne[GGML_MAX_DIMS];
 
     enum ggml_type type;
 
@@ -19599,6 +19608,9 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (file, &kv->value.uint32,  sizeof(kv->value.uint32),  &offset); break;
                 case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (file, &kv->value.int32,   sizeof(kv->value.int32),   &offset); break;
                 case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (file, &kv->value.float32, sizeof(kv->value.float32), &offset); break;
+                case GGUF_TYPE_UINT64:  ok = ok && gguf_fread_el (file, &kv->value.uint64,  sizeof(kv->value.uint64),  &offset); break;
+                case GGUF_TYPE_INT64:   ok = ok && gguf_fread_el (file, &kv->value.int64,   sizeof(kv->value.int64),   &offset); break;
+                case GGUF_TYPE_FLOAT64: ok = ok && gguf_fread_el (file, &kv->value.float64, sizeof(kv->value.float64), &offset); break;
                 case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (file, &kv->value.bool_,   sizeof(kv->value.bool_),   &offset); break;
                 case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(file, &kv->value.str,                                &offset); break;
                 case GGUF_TYPE_ARRAY:
@@ -19614,6 +19626,9 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_UINT32:
                             case GGUF_TYPE_INT32:
                             case GGUF_TYPE_FLOAT32:
+                            case GGUF_TYPE_UINT64:
+                            case GGUF_TYPE_INT64:
+                            case GGUF_TYPE_FLOAT64:
                             case GGUF_TYPE_BOOL:
                                 {
                                     kv->value.arr.data = malloc(kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type]);
@@ -19954,6 +19969,18 @@ float gguf_get_val_f32(struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.float32;
 }
 
+uint64_t gguf_get_val_u64(struct gguf_context * ctx, int i) {
+    return ctx->kv[i].value.uint64;
+}
+
+int64_t gguf_get_val_i64(struct gguf_context * ctx, int i) {
+    return ctx->kv[i].value.int64;
+}
+
+double gguf_get_val_f64(struct gguf_context * ctx, int i) {
+    return ctx->kv[i].value.float64;
+}
+
 bool gguf_get_val_bool(struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.bool_;
 }
@@ -20056,6 +20083,27 @@ void gguf_set_val_f32(struct gguf_context * ctx, const char * key, float val) {
     ctx->kv[idx].value.float32 = val;
 }
 
+void gguf_set_val_u64(struct gguf_context * ctx, const char * key, uint64_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type         = GGUF_TYPE_UINT64;
+    ctx->kv[idx].value.uint64 = val;
+}
+
+void gguf_set_val_i64(struct gguf_context * ctx, const char * key, int64_t val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type        = GGUF_TYPE_INT64;
+    ctx->kv[idx].value.int64 = val;
+}
+
+void gguf_set_val_f64(struct gguf_context * ctx, const char * key, double val) {
+    const int idx = gguf_get_or_add_key(ctx, key);
+
+    ctx->kv[idx].type          = GGUF_TYPE_FLOAT64;
+    ctx->kv[idx].value.float64 = val;
+}
+
 void gguf_set_val_bool(struct gguf_context * ctx, const char * key, bool val) {
     const int idx = gguf_get_or_add_key(ctx, key);
 
@@ -20106,6 +20154,9 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
             case GGUF_TYPE_UINT32:  gguf_set_val_u32 (ctx, src->kv[i].key.data, src->kv[i].value.uint32);   break;
             case GGUF_TYPE_INT32:   gguf_set_val_i32 (ctx, src->kv[i].key.data, src->kv[i].value.int32);    break;
             case GGUF_TYPE_FLOAT32: gguf_set_val_f32 (ctx, src->kv[i].key.data, src->kv[i].value.float32);  break;
+            case GGUF_TYPE_UINT64:  gguf_set_val_u64 (ctx, src->kv[i].key.data, src->kv[i].value.uint64);   break;
+            case GGUF_TYPE_INT64:   gguf_set_val_i64 (ctx, src->kv[i].key.data, src->kv[i].value.int64);    break;
+            case GGUF_TYPE_FLOAT64: gguf_set_val_f64 (ctx, src->kv[i].key.data, src->kv[i].value.float64);  break;
             case GGUF_TYPE_BOOL:    gguf_set_val_bool(ctx, src->kv[i].key.data, src->kv[i].value.bool_);    break;
             case GGUF_TYPE_STRING:  gguf_set_val_str (ctx, src->kv[i].key.data, src->kv[i].value.str.data); break;
             case GGUF_TYPE_ARRAY:
@@ -20267,6 +20318,9 @@ static void gguf_write_to_buf(struct gguf_context * ctx, struct gguf_buf * buf, 
             case GGUF_TYPE_UINT32:  gguf_bwrite_el (buf, &kv->value.uint32,  sizeof(kv->value.uint32) ); break;
             case GGUF_TYPE_INT32:   gguf_bwrite_el (buf, &kv->value.int32,   sizeof(kv->value.int32)  ); break;
             case GGUF_TYPE_FLOAT32: gguf_bwrite_el (buf, &kv->value.float32, sizeof(kv->value.float32)); break;
+            case GGUF_TYPE_UINT64:  gguf_bwrite_el (buf, &kv->value.uint64,  sizeof(kv->value.uint64) ); break;
+            case GGUF_TYPE_INT64:   gguf_bwrite_el (buf, &kv->value.int64,   sizeof(kv->value.int64)  ); break;
+            case GGUF_TYPE_FLOAT64: gguf_bwrite_el (buf, &kv->value.float64, sizeof(kv->value.float64)); break;
             case GGUF_TYPE_BOOL:    gguf_bwrite_el (buf, &kv->value.bool_,   sizeof(kv->value.bool_)  ); break;
             case GGUF_TYPE_STRING:  gguf_bwrite_str(buf, &kv->value.str                               ); break;
             case GGUF_TYPE_ARRAY:
@@ -20282,6 +20336,9 @@ static void gguf_write_to_buf(struct gguf_context * ctx, struct gguf_buf * buf, 
                         case GGUF_TYPE_UINT32:
                         case GGUF_TYPE_INT32:
                         case GGUF_TYPE_FLOAT32:
+                        case GGUF_TYPE_UINT64:
+                        case GGUF_TYPE_INT64:
+                        case GGUF_TYPE_FLOAT64:
                         case GGUF_TYPE_BOOL:
                             {
                                 gguf_bwrite_el(buf, kv->value.arr.data, kv->value.arr.n * GGUF_TYPE_SIZE[kv->value.arr.type]);
