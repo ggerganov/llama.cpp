@@ -286,7 +286,6 @@ struct llama_server_context
                     std::vector<llama_token> p;
                     if (first)
                     {
-                        s.insert(0, 1, ' '); // add a space if it's the first
                         p = ::llama_tokenize(ctx, s, add_bos);
                         first = false;
                     }
@@ -309,7 +308,6 @@ struct llama_server_context
         else
         {
             auto s = json_prompt.template get<std::string>();
-            s.insert(0, 1, ' '); // always add a first space
             prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
         }
 

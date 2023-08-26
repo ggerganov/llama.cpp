@@ -211,7 +211,6 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        params.cfg_negative_prompt.insert(0, 1, ' ');
         guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
 
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
