@@ -955,10 +955,10 @@ struct llama_vocab {
     id linefeed_id = 13;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
-        replace_all(token_left,  " ",  "Ġ");
-        replace_all(token_left,  "\n", "Ċ");
-        replace_all(token_right, " ",  "Ġ");
-        replace_all(token_right, "\n", "Ċ");
+        replace_all(token_left,  " ",  "\u0120");
+        replace_all(token_left,  "\n", "\u010A");
+        replace_all(token_right, " ",  "\u0120");
+        replace_all(token_right, "\n", "\u010A");
 
         auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
         if (it == bpe_ranks.end()) {
