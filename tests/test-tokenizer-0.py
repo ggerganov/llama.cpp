@@ -56,3 +56,15 @@ print("'" + tokenizer.decode([15043]) + "'")        # 'Hello'
 print("'" + tokenizer.decode([15043, 15043]) + "'") # 'Hello Hello'
 print("'" + tokenizer.decode([29871, 15043]) + "'")               # ' Hello'
 print("'" + tokenizer.decode([29871, 15043, 29871, 15043]) + "'") # ' Hello  Hello'
+
+print("\n\ntests for C++:\n")
+for text in tests:
+    res = tokenizer.encode(text, add_bos=False)
+
+    k = text.replace('\n', '\\n')
+    k = k.replace('\t', '\\t')
+    k = '"' + k + '"'
+    print("{ %-24s, { " % k, end='')
+    for x in res:
+        print("%7d," % x, end='')
+    print(" }, },")
