@@ -19394,7 +19394,7 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
 ////////////////////////////////////////////////////////////////////////////////
 
 struct gguf_str {
-    uint32_t n;
+    uint64_t n;  // GGUVv2
     char * data;
 };
 
@@ -19450,15 +19450,13 @@ union gguf_value {
     struct {
         enum gguf_type type;
 
-        uint32_t n;
+        uint64_t n;  // GGUFv2
         void * data;
     } arr;
 };
 
 struct gguf_kv {
     struct gguf_str key;
-
-    uint32_t n_bytes; // TODO: is this actually needed?
 
     enum  gguf_type  type;
     union gguf_value value;
@@ -19467,8 +19465,8 @@ struct gguf_kv {
 struct gguf_header {
     uint32_t magic;
     uint32_t version;
-    uint32_t n_tensors;
-    uint32_t n_kv;
+    uint64_t n_tensors; // GGUFv2
+    uint64_t n_kv;      // GGUFv2
 };
 
 struct gguf_tensor_info {
@@ -19506,14 +19504,27 @@ static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset)
     return n == size;
 }
 
-static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
+// NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
+static bool gguf_fread_str_cur(FILE * file, struct gguf_str * p, size_t * offset) {
     p->n    = 0;
     p->data = NULL;
 
     bool ok = true;
 
-    // TODO: how to avoid mallocs for strings?
     ok = ok && gguf_fread_el(file, &p->n,    sizeof(p->n), offset); p->data = calloc(p->n + 1, 1);
+    ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
+
+    return ok;
+}
+
+static bool gguf_fread_str_v1(FILE * file, struct gguf_str * p, size_t * offset) {
+    p->n    = 0;
+    p->data = NULL;
+
+    bool ok = true;
+
+    uint32_t n = 0;
+    ok = ok && gguf_fread_el(file, &n,       sizeof(n),   offset); p->data = calloc(n + 1, 1); p->n = n;
     ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
 
     return ok;
@@ -19574,8 +19585,21 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ctx->data  = NULL;
 
         ok = ok && gguf_fread_el(file, &ctx->header.version,   sizeof(ctx->header.version),   &offset);
-        ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
-        ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
+
+        if (ctx->header.version == 1) {
+            // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
+            uint32_t n_tensors = 0;
+            uint32_t n_kv      = 0;
+
+            ok = ok && gguf_fread_el(file, &n_tensors, sizeof(n_tensors), &offset);
+            ok = ok && gguf_fread_el(file, &n_kv,      sizeof(n_kv),      &offset);
+
+            ctx->header.n_tensors = n_tensors;
+            ctx->header.n_kv      = n_kv;
+        } else {
+            ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
+            ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
+        }
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
@@ -19583,6 +19607,12 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             gguf_free(ctx);
             return NULL;
         }
+    }
+
+    // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
+    bool (* gguf_fread_str)(FILE *, struct gguf_str *, size_t *) = gguf_fread_str_cur;
+    if (ctx->header.version == 1) {
+        gguf_fread_str = gguf_fread_str_v1;
     }
 
     // read the kv pairs
@@ -19594,9 +19624,8 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
 
-            ok = ok && gguf_fread_str(file, &kv->key,                          &offset);
-          //ok = ok && gguf_fread_el (file, &kv->n_bytes, sizeof(kv->n_bytes), &offset);
-            ok = ok && gguf_fread_el (file, &kv->type,    sizeof(kv->type),    &offset);
+            ok = ok && gguf_fread_str(file, &kv->key,                    &offset);
+            ok = ok && gguf_fread_el (file, &kv->type, sizeof(kv->type), &offset);
 
             //fprintf(stderr, "%s: reading kv with key %s\n", __func__, kv->key.data);
 
@@ -19616,7 +19645,15 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 case GGUF_TYPE_ARRAY:
                     {
                         ok = ok && gguf_fread_el(file, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
-                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n),    &offset);
+
+                        if (ctx->header.version == 1) {
+                            // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
+                            uint32_t n = 0;
+                            ok = ok && gguf_fread_el(file, &n, sizeof(n), &offset);
+                            kv->value.arr.n = n;
+                        } else {
+                            ok = ok && gguf_fread_el(file, &kv->value.arr.n, sizeof(kv->value.arr.n), &offset);
+                        }
 
                         switch (kv->value.arr.type) {
                             case GGUF_TYPE_UINT8:
@@ -19676,8 +19713,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
             for (uint32_t j = 0; j < info->n_dims; ++j) {
                 if (ctx->header.version == 1) {
-                    // NOTE: temporary handling of GGUF v1
-                    //       remove after Oct 2023
+                    // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
                     uint32_t t = 0;
                     ok = ok && gguf_fread_el(file, &t, sizeof(t), &offset);
                     info->ne[j] = t;
