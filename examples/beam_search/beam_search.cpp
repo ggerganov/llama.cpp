@@ -35,7 +35,7 @@ struct ostream_beam_view {
 std::ostream& operator<<(std::ostream& os, const ostream_beam_view & obv) {
     os << "p(" << obv.beam_view.p << ") eob(" << std::boolalpha << obv.beam_view.eob << ") tokens(";
     for (size_t i = 0 ; i < obv.beam_view.n_tokens ; ++i) {
-        os << llama_token_to_str(obv.ctx, obv.beam_view.tokens[i]);
+        os << llama_token_to_piece(obv.ctx, obv.beam_view.tokens[i]);
     }
     return os << ')';
 }
@@ -156,7 +156,7 @@ int main(int argc, char ** argv)
 
     for( auto id : tokens_list )
     {
-        std::cout << llama_token_to_str(ctx, id);
+        std::cout << llama_token_to_piece(ctx, id);
     }
     std::cout << std::flush;
 
@@ -175,7 +175,7 @@ int main(int argc, char ** argv)
 
     std::cout << "\n\n";
     for (llama_token const token_id : callback_data.response) {
-        std::cout << llama_token_to_str(ctx,token_id);
+        std::cout << llama_token_to_piece(ctx,token_id);
     }
     std::cout << std::endl;
 

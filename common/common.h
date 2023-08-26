@@ -121,6 +121,11 @@ std::vector<llama_token> llama_tokenize(
            const std::string & text,
                         bool   add_bos);
 
-std::string llama_token_to_str(
+std::string llama_token_to_piece(
         const struct llama_context * ctx,
                        llama_token   token);
+
+// removes the leading space from the first non-BOS token
+std::string llama_detokenize(
+                         llama_context * ctx,
+        const std::vector<llama_token> & tokens);

@@ -1964,7 +1964,7 @@ void print_matrix(struct ggml_tensor * probs) {
 
 
 void print_token(struct llama_context * ctx, llama_token token) {
-    printf("%s", llama_token_to_str(ctx, token).c_str());
+    printf("%s", llama_token_to_piece(ctx, token).c_str());
 }
 
 void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
@@ -2202,7 +2202,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
         const char * in  = buf.data();
         const char * end = buf.data() + buf.size();
         for (int i = 0; i < (int) out.size(); ++i) {
-            std::string s = llama_token_to_str(lctx, out[i]);
+            std::string s = llama_token_to_piece(lctx, out[i]);
             int len = s.length();
             if (in >= end) {
                 printf("%s: unexpected end of original text.\n", __func__);

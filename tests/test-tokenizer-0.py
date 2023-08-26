@@ -13,7 +13,7 @@ dir_tokenizer = args.dir_tokenizer
 tokenizer = SentencePieceProcessor(dir_tokenizer + '/tokenizer.model')
 
 tests = [
-        ""
+        "",
         " ",
         "  ",
         "   ",
@@ -49,3 +49,10 @@ for text in tests:
     print('\nwithout bos:')
     print(tokenizer.encode(text, add_bos=False))
     print(tokenizer.decode(tokenizer.encode(text, add_bos=False)))
+
+print("'" + tokenizer.id_to_piece(15043) + "'") # '_Hello'
+print("'" + tokenizer.id_to_piece(29871) + "'") # '_'
+print("'" + tokenizer.decode([15043]) + "'")        # 'Hello'
+print("'" + tokenizer.decode([15043, 15043]) + "'") # 'Hello Hello'
+print("'" + tokenizer.decode([29871, 15043]) + "'")               # ' Hello'
+print("'" + tokenizer.decode([29871, 15043, 29871, 15043]) + "'") # ' Hello  Hello'

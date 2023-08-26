@@ -6,14 +6,6 @@
 #include <map>
 #include <vector>
 
-static std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens) {
-    std::string result;
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        result += llama_token_to_str(ctx, tokens[i]);
-    }
-    return result;
-}
-
 static const std::map<std::string, std::vector<llama_token>> & k_tests() {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
         { "" ,                      { }, },

@@ -796,12 +796,12 @@ static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
-static std::string llama_token_to_text(const struct llama_context * ctx, llama_token token) {
+static std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(ctx, token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        int check = llama_token_to_piece(ctx, token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -3374,6 +3374,11 @@ private:
 static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos) {
     std::vector<llama_vocab::id> output;
 
+    // OG tokenizer behavior:
+    //
+    // tokenizer.encode('', add_bos=True)  returns [1]
+    // tokenizer.encode('', add_bos=False) returns []
+
     if (bos && vocab.special_bos_id != -1) {
         output.push_back(vocab.special_bos_id);
     }
@@ -3382,11 +3387,12 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
         return output;
     }
 
-    raw_text = " " + raw_text;
-
     switch (vocab.type) {
         case LLAMA_VOCAB_TYPE_SPM:
             {
+                // without adding this leading whitespace, we do not get the same results as the original tokenizer
+                raw_text = " " + raw_text;
+
                 llm_tokenizer_spm tokenizer(vocab);
                 llama_escape_whitespace(raw_text);
                 tokenizer.tokenize(raw_text, output);
@@ -4079,16 +4085,16 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
     std::vector<llama_grammar_candidate>                              candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id   = candidates->data[i].id;
-        const std::string text = llama_token_to_text(ctx, id);
+        const llama_token id    = candidates->data[i].id;
+        const std::string piece = llama_token_to_str(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (text.empty() || text[0] == 0) {
+        } else if (piece.empty() || piece[0] == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
+            candidates_decoded.push_back(decode_utf8(piece.c_str(), grammar->partial_utf8));
             candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
         }
     }
@@ -4292,10 +4298,10 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string text = llama_token_to_text(ctx, token);
+    const std::string piece = llama_token_to_str(ctx, token);
 
     // Note terminating 0 in decoded string
-    const auto   decoded     = decode_utf8(text.c_str(), grammar->partial_utf8);
+    const auto   decoded     = decode_utf8(piece.c_str(), grammar->partial_utf8);
     const auto & code_points = decoded.first;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
@@ -6089,12 +6095,12 @@ int llama_tokenize_with_model(
     return res.size();
 }
 
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
+int llama_token_to_piece(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_piece_with_model(&ctx->model, token, buf, length);
 }
 
-// does not write null-terminator to str
-int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
+// does not write null-terminator to buf
+int llama_token_to_piece_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_model_n_vocab(model)) {
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].text;
