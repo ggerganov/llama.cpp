@@ -189,12 +189,19 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    // Add BOS if SPM tokenizer
+    const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
 
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
+
+    if (llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM) {
+        // Add a space in front of the first character to match OG llama tokenizer behavior
+        params.prompt.insert(0, 1, ' ');
+    }
+
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        embd_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
         embd_inp = session_tokens;
     }
@@ -210,9 +217,9 @@ int main(int argc, char ** argv) {
     int original_prompt_len = 0;
     if (ctx_guidance) {
         params.cfg_negative_prompt.insert(0, 1, ' ');
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, is_spm);
+        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
     }
@@ -259,7 +266,7 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", is_spm);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
     const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
