@@ -509,7 +509,7 @@ class GGUFWriter:
             self.kv_data += struct.pack("?", val)
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
-            self.kv_data += struct.pack("<Q", len(encoded_val))
+            self.kv_data += struct.pack("<I", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY:
             ltype = set([GGUFValueType.get_type(item) for item in val])
@@ -529,7 +529,7 @@ class GGUFWriter:
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
-        self.ti_data += struct.pack("<Q", len(encoded_name))
+        self.ti_data += struct.pack("<I", len(encoded_name))
         self.ti_data += encoded_name
         n_dims = len(tensor_shape)
         self.ti_data += struct.pack("<Q", n_dims)
