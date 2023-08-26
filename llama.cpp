@@ -3887,7 +3887,7 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
 
     // Calculate absolute value of second derivatives
     for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        second_derivatives[i] = abs(second_derivatives[i]);
+        second_derivatives[i] = std::abs(second_derivatives[i]);
     }
 
     // Normalize the second derivatives
