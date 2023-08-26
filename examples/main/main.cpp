@@ -274,9 +274,15 @@ int main(int argc, char ** argv) {
     // reevaluation of the last token token to recalculate the cached logits
     if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
             session_tokens.size() > embd_inp.size()) {
+#ifndef _WIN32
         LOG(
             "recalculate the cached logits: embd_inp.empty() %s, n_matching_session_tokens %lu, embd_inp.size() %lu, session_tokens.size() %lu, embd_inp.size() %lu, session_tokens.resize( %lu )",
             LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size(), embd_inp.size() - 1)
+#else
+        LOG(
+            "recalculate the cached logits: embd_inp.empty() %s, n_matching_session_tokens %llu, embd_inp.size() %llu, session_tokens.size() %llu, embd_inp.size() %llu, session_tokens.resize( %llu )",
+            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size(), embd_inp.size() - 1)
+#endif
         session_tokens.resize(embd_inp.size() - 1);
     }
 
