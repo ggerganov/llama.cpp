@@ -1,10 +1,10 @@
-# tests with SPM tokenizer
+# tests with BPE tokenizer
 
 import os
 import sys
 import argparse
 
-from sentencepiece import SentencePieceProcessor
+from transformers import AutoTokenizer
 
 parser = argparse.ArgumentParser()
 parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 dir_tokenizer = args.dir_tokenizer
 
-tokenizer = SentencePieceProcessor(dir_tokenizer + '/tokenizer.model')
+tokenizer = AutoTokenizer.from_pretrained(dir_tokenizer)
 
 tests = [
         "",
@@ -43,26 +43,14 @@ tests = [
         "    Hello\n    Hello",
     ]
 
-
 for text in tests:
     print('text: ', text)
-    print('\nwith bos:')
-    print(tokenizer.encode(text, add_bos=True))
-    print(tokenizer.decode(tokenizer.encode(text, add_bos=True)))
-    print('\nwithout bos:')
-    print(tokenizer.encode(text, add_bos=False))
-    print(tokenizer.decode(tokenizer.encode(text, add_bos=False)))
-
-print("'" + tokenizer.id_to_piece(15043) + "'") # '_Hello'
-print("'" + tokenizer.id_to_piece(29871) + "'") # '_'
-print("'" + tokenizer.decode([15043]) + "'")        # 'Hello'
-print("'" + tokenizer.decode([15043, 15043]) + "'") # 'Hello Hello'
-print("'" + tokenizer.decode([29871, 15043]) + "'")               # ' Hello'
-print("'" + tokenizer.decode([29871, 15043, 29871, 15043]) + "'") # ' Hello  Hello'
+    print(tokenizer.encode(text))
+    print(tokenizer.decode(tokenizer.encode(text)))
 
 print("\n\ntests for C++:\n")
 for text in tests:
-    res = tokenizer.encode(text, add_bos=False)
+    res = tokenizer.encode(text)
 
     k = text.replace('\n', '\\n')
     k = k.replace('\t', '\\t')
@@ -84,7 +72,7 @@ if fname_tok:
     with open(fname_tok, 'r') as f:
         lines = f.readlines()
         s = ''.join(lines)
-        res = tokenizer.encode(s, add_bos=True)
+        res = tokenizer.encode(s)
         # write to file
         with open(fname_out, 'w') as f:
             for x in res:
