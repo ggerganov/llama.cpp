@@ -239,6 +239,7 @@ struct my_llama_model {
 const char * LLM_KV_OPTIMIZER_TYPE = "optimizer.type";
 const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
 const char * LLM_KV_OPTIMIZER_TYPE_LBFGS = "lbfgs";
+const char * LLM_KV_OPTIMIZER_FILE_VERSION               = "optimizer.file_version";
 const char * LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT     = "optimizer.convergence_past_count";
 const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT_LOW        = "optimizer.parameter_count.low";
 const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT_HIGH       = "optimizer.parameter_count.high";
@@ -269,6 +270,7 @@ const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.lbfgs.m
 const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
 const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
 
+const char * LLM_KV_TRAINING_FILE_VERSION    = "training.file_version";
 const char * LLM_KV_TRAINING_ITERATION_COUNT = "training.iteration_count";
 const char * LLM_KV_TRAINING_SAMPLE_COUNT    = "training.sample_count";
 const char * LLM_KV_TRAINING_TOKEN_COUNT     = "training.token_count";
@@ -1519,6 +1521,10 @@ void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
 void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
 
+    uint32_t file_version;
+    GGUF_GET_KEY(fctx, file_version, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_FILE_VERSION);
+    GGML_ASSERT(file_version == 0);
+
     GGUF_GET_KEY(fctx, opt->params.past, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT);
     GGUF_GET_KEY(fctx, opt->iter, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_ITERATION_COUNT);
 
@@ -1576,6 +1582,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
 }
 
 void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt) {
+    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_FILE_VERSION, 0);
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT, opt->params.past);
 
     // gguf v1 only supports values with up to 32-bit precision,
@@ -1868,6 +1875,10 @@ void save_llama_model_file(const char * filename, const char * fn_vocab_model, s
 void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct ggml_opt_context * opt) {
     load_llama_model_gguf(fctx, f_ggml_ctx, model);
 
+    uint32_t file_version;
+    GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
+    GGML_ASSERT(file_version == 0);
+
     GGUF_GET_KEY(fctx, model->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
     GGUF_GET_KEY(fctx, model->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
     GGUF_GET_KEY(fctx, model->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
@@ -1878,6 +1889,7 @@ void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
 void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_vocab_model, struct my_llama_model * model, struct ggml_opt_context * opt) {
     save_llama_model_gguf(fctx, fn_vocab_model, model);
 
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    0);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_ITERATION_COUNT, model->train_its);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    model->train_samples);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     model->train_tokens);
