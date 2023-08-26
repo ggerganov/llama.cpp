@@ -195,11 +195,6 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
 
-    if (llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM) {
-        // Add a space in front of the first character to match OG llama tokenizer behavior
-        params.prompt.insert(0, 1, ' ');
-    }
-
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {

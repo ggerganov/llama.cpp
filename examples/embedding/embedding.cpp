@@ -56,9 +56,6 @@ int main(int argc, char ** argv) {
 
     int n_past = 0;
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
-
     // tokenize the prompt
     auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
 

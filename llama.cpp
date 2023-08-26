@@ -1635,7 +1635,7 @@ static void llm_load_hparams(
 }
 
 // TODO: This should probably be in llama.h
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos);
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos);
 
 static void llm_load_vocab(
         llama_model_loader & ml,
@@ -3026,10 +3026,8 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
     return vocab.token_to_id.at(buf);
 }
 
-static std::string llama_escape_whitespace(const std::string& text) {
-    std::string result = text;
-    replace_all(result, " ", "\xe2\x96\x81");
-    return result;
+static void llama_escape_whitespace(std::string & text) {
+    replace_all(text, " ", "\xe2\x96\x81");
 }
 
 static void llama_unescape_whitespace(std::string & word) {
@@ -3373,22 +3371,25 @@ private:
     llm_bigram_bpe::queue work_queue;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos) {
     std::vector<llama_vocab::id> output;
-
-    if (raw_text.empty()) {
-        return output;
-    }
 
     if (bos && vocab.special_bos_id != -1) {
         output.push_back(vocab.special_bos_id);
     }
 
+    if (raw_text.empty()) {
+        return output;
+    }
+
+    raw_text = " " + raw_text;
+
     switch (vocab.type) {
         case LLAMA_VOCAB_TYPE_SPM:
             {
                 llm_tokenizer_spm tokenizer(vocab);
-                tokenizer.tokenize(llama_escape_whitespace(raw_text), output);
+                llama_escape_whitespace(raw_text);
+                tokenizer.tokenize(raw_text, output);
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
