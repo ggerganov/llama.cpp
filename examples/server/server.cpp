@@ -1104,6 +1104,12 @@ static json format_tokenizer_response(const std::vector<llama_token> &tokens)
         {"tokens", tokens}};
 }
 
+static json format_detokenized_response(std::string content)
+{
+    return json{
+        {"content", content}};
+}
+
 template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value)
 {
@@ -1499,6 +1505,21 @@ int main(int argc, char **argv)
             tokens = llama.tokenize(body["content"], false);
         }
         const json data = format_tokenizer_response(tokens);
+        return res.set_content(data.dump(), "application/json"); });
+
+    svr.Post("/detokenize", [&llama](const Request &req, Response &res)
+             {
+        auto lock = llama.lock();
+
+        const json body = json::parse(req.body);
+        std::string content;
+        if (body.count("tokens") != 0)
+        {
+            const std::vector<llama_token> tokens = body["tokens"];
+            content = tokens_to_str(llama.ctx, tokens.cbegin(), tokens.cend());
+        }
+
+        const json data = format_detokenized_response(content);
         return res.set_content(data.dump(), "application/json"); });
 
     svr.Post("/embedding", [&llama](const Request &req, Response &res)
