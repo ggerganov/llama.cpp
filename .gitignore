@@ -17,20 +17,7 @@
 .vs/
 .vscode/
 
-build/
-build-em/
-build-debug/
-build-release/
-build-ci-debug/
-build-ci-release/
-build-static/
-build-cublas/
-build-opencl/
-build-metal/
-build-mpi/
-build-no-accel/
-build-sanitize-addr/
-build-sanitize-thread/
+build*/
 out/
 tmp/
 
@@ -61,6 +48,7 @@ compile_commands.json
 CMakeSettings.json
 
 __pycache__
+dist
 
 zig-out/
 zig-cache/
@@ -71,7 +59,6 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
-pyproject.toml
 poetry.lock
 poetry.toml
 

@@ -21,6 +21,12 @@
               CoreGraphics
               CoreVideo
             ]
+          else if isDarwin then
+            with pkgs.darwin.apple_sdk.frameworks; [
+              Accelerate
+              CoreGraphics
+              CoreVideo
+            ]
           else
             with pkgs; [ openblas ]
         );
@@ -80,8 +86,13 @@
           type = "app";
           program = "${self.packages.${system}.default}/bin/llama";
         };
+        apps.quantize = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/quantize";
+        };
         apps.default = self.apps.${system}.llama;
         devShells.default = pkgs.mkShell {
+          buildInputs = [ llama-python ];
           packages = nativeBuildInputs ++ osSpecific;
         };
       });
