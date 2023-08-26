@@ -1506,7 +1506,7 @@ int main(int argc, char **argv)
         }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json"); });
-    
+
     svr.Post("/detokenize", [&llama](const Request &req, Response &res)
              {
         auto lock = llama.lock();
