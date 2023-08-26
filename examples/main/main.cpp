@@ -289,7 +289,7 @@ int main(int argc, char ** argv) {
             session_tokens.size() > embd_inp.size()) {
 
         LOGLN("recalculate the cached logits (do): session_tokens.resize( %zu )", embd_inp.size() - 1)
-        
+
         session_tokens.resize(embd_inp.size() - 1);
     }
 
