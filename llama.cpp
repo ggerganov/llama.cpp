@@ -1,9 +1,6 @@
 // Defines fileno on msys:
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #endif
 
 #include "llama.h"
@@ -62,6 +59,9 @@
 #include <cinttypes>
 #include <climits>
 #include <cstdarg>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <fstream>
