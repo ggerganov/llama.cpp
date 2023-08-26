@@ -100,7 +100,8 @@ int main(int argc, char **argv) {
     bool success = true;
 
     for (const auto & test_kv : k_tests()) {
-        std::vector<llama_token> res = llama_tokenize(ctx, test_kv.first, true);
+        // Add a space in front of the first character to match OG llama tokenizer behavior
+        std::vector<llama_token> res = llama_tokenize(ctx, " " + test_kv.first, true);
         fprintf(stderr, "%s : '%s' tokenized to '%s'\n",
             __func__, test_kv.first.c_str(), unescape_whitespace(ctx, res).c_str());
 
