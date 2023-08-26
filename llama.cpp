@@ -4762,8 +4762,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
                 int nx = tensor->ne[0];
-                int ny = tensor->ne[1];
-                if (nx % QK_K == 0 && ny % QK_K == 0) {
+                if (nx % QK_K == 0) {
                     new_type = GGML_TYPE_Q6_K;
                 }
             } else if (name.find("attn_v.weight") != std::string::npos) {
@@ -4812,8 +4811,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 new_type == GGML_TYPE_Q5_K || new_type == GGML_TYPE_Q6_K) {
                 int nx = tensor->ne[0];
                 int ny = tensor->ne[1];
-                if (nx % QK_K != 0 || ny % QK_K != 0) {
-                    LLAMA_LOG_INFO("\n\nTensor sizes %d x %d are not divisible by %d, required for k-quants.\n",nx,ny,QK_K);
+                if (nx % QK_K != 0) {
+                    LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for k-quants\n", __func__, nx, ny, QK_K);
                     convert_incompatible_tensor = true;
                 }
             }
