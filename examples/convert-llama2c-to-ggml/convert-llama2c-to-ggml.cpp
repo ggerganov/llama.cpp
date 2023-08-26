@@ -550,11 +550,11 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
 
         const int token_idx = gguf_find_key(ctx, "tokenizer.ggml.tokens");
         GGML_ASSERT(token_idx >= 0);
-        
+
         const int score_idx = gguf_find_key(ctx, "tokenizer.ggml.scores");
         GGML_ASSERT(score_idx >= 0);
         const float * scores = (const float * ) gguf_get_arr_data(ctx, score_idx);
-        
+
         const int toktype_idx = gguf_find_key(ctx, "tokenizer.ggml.token_type");
         GGML_ASSERT(toktype_idx >= 0);
         const int * toktypes = (const int * ) gguf_get_arr_data(ctx, toktype_idx);
@@ -586,7 +586,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
             float_t score = file.read_f32();
             uint32_t len = file.read_u32();
             std::string text = file.read_string(len);
-            
+
             unsigned char byte_val;
             llama_vocab::ttype type = LLAMA_TOKEN_TYPE_NORMAL;
             if (id == UNKNOWN_TOKEN_ID) {
@@ -699,7 +699,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     gguf_set_arr_data(ctx, "tokenizer.ggml.token_type", GGUF_TYPE_INT32, token_types.data(), token_types.size());
 
     gguf_set_val_str(ctx, "tokenizer.ggml.model", "llama");
-    
+
     gguf_set_val_str(ctx, "general.name", "llama2.c");
     gguf_set_val_str(ctx, "general.architecture", "llama");
 
@@ -755,7 +755,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
         ggml_format_name(layer.w3, TN_FFN_UP, i);
         gguf_add_tensor(ctx, layer.w3);
-        
+
         ggml_format_name(layer.ffn_norm, TN_FFN_NORM, i);
         gguf_add_tensor(ctx, layer.ffn_norm);
     }
@@ -766,7 +766,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
 struct train_params get_default_train_params() {
     struct train_params params;
-    params.fn_vocab_model    = "tokenizer.bin";
+    params.fn_vocab_model    = "models/7B/ggml-model-f16.gguf";
     params.fn_llama2c_output_model = "ak_llama_model.bin";
     params.fn_train_data     = "shakespeare.txt";
     params.fn_checkpoint_in  = "checkpoint.bin";
@@ -819,7 +819,7 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "  -h, --help                       show this help message and exit\n");
-    fprintf(stderr, "  --copy-vocab-from-model FNAME    llama2.c vocabulary or ggmlv3 model path from which to copy vocab (default '%s')\n", params->fn_vocab_model);
+    fprintf(stderr, "  --copy-vocab-from-model FNAME    path of gguf llama model or llama2.c vocabulary from which to copy vocab (default '%s')\n", params->fn_vocab_model);
     fprintf(stderr, "  --llama2c-model FNAME            [REQUIRED] model path from which to load Karpathy's llama2.c model\n");
     fprintf(stderr, "  --llama2c-output-model FNAME     model path to save the converted llama2.c model (default %s')\n", params->fn_llama2c_output_model);
     fprintf(stderr, "\n");
