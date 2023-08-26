@@ -11,6 +11,7 @@ let package = Package(
         .target(
             name: "llama",
             path: ".",
+            exclude: ["ggml-metal.metal"],
             sources: ["ggml.c", "llama.cpp"],
             publicHeadersPath: "spm-headers",
             cSettings: [.unsafeFlags(["-Wno-shorten-64-to-32"]), .define("GGML_USE_ACCELERATE")],

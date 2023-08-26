@@ -1,7 +1,7 @@
 name: clang-tidy review post comments
 
 on:
-  workflow_run:
+  workflow_dispatch:
     workflows: ["clang-tidy-review"]
     types:
       - completed
