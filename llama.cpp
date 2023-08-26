@@ -4653,6 +4653,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname_inp, /*use_mmap*/ false));
 
+    llama_model model;
+    llm_load_arch(*ml, model);
+    llm_load_hparams(*ml, model, 0, 0, 0);
+
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
 
@@ -4677,6 +4681,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         else if (name.find("ffn_down.weight") != std::string::npos) {
             ++n_feed_forward_w2;
         }
+    }
+    if (n_attention_wv != n_feed_forward_w2 || (uint32_t)n_attention_wv != model.hparams.n_layer) {
+        LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_feed_forward_w2 = %d, hparams.n_layer = %d\n",
+                __func__, n_attention_wv, n_feed_forward_w2, model.hparams.n_layer);
     }
 
     int i_attention_wv = 0;
@@ -4769,6 +4777,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
                 else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
                         (i_attention_wv < n_attention_wv/8 || i_attention_wv >= 7*n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
+                if (model.type == MODEL_70B) {
+                    // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
+                    // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
+                    // nearly negligible increase in model size by quantizing this tensor with more bits:
+                    if (new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K) new_type = GGML_TYPE_Q5_K;
+                }
                 ++i_attention_wv;
             } else if (name.find("ffn_down.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
