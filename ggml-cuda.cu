@@ -4224,19 +4224,19 @@ static __global__ void dequantize_block_q4_0(const void * __restrict__ vx, float
     const int iqs = i%(QK4_0/4);
 
     const block_q4_0 * x = (const block_q4_0 *) vx;
-    const uchar2 qs = *(uchar2 *)(x[ib].qs + iqs*2);
+    const uchar2 qs = *(const uchar2 *)(x[ib].qs + iqs*2);
     const dfloat d = x[ib].d;
 
     dfloat2 dv0;
     dv0.x = (int)(qs.x & 0xf) - 8;
     dv0.y = (int)(qs.y & 0xf) - 8;
-    float2 v0 = dfloat22float2(dfmul2(dv0, {d, d}));
+    const float2 v0 = dfloat22float2(dfmul2(dv0, {d, d}));
     *(float2 *)(y + ib*QK4_0 + iqs*2) = v0;
 
     dfloat2 dv1;
     dv1.x = (int)(qs.x >> 4) - 8;
     dv1.y = (int)(qs.y >> 4) - 8;
-    float2 v1 = dfloat22float2(dfmul2(dv1, {d, d}));
+    const float2 v1 = dfloat22float2(dfmul2(dv1, {d, d}));
     *(float2 *)(y + ib*QK4_0 + QK4_0/2 + iqs*2) = v1;
 }
 
