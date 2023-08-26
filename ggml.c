@@ -19394,7 +19394,7 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
 ////////////////////////////////////////////////////////////////////////////////
 
 struct gguf_str {
-    uint64_t n;  // GGUVv2
+    uint64_t n;  // GGUFv2
     char * data;
 };
 
