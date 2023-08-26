@@ -19675,7 +19675,15 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_str(file, &info->name,                          &offset);
             ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
             for (uint32_t j = 0; j < info->n_dims; ++j) {
-                ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
+                if (ctx->header.version == 1) {
+                    // NOTE: temporary handling of GGUF v1
+                    //       remove after Oct 2023
+                    uint32_t t = 0;
+                    ok = ok && gguf_fread_el(file, &t, sizeof(t), &offset);
+                    info->ne[j] = t;
+                } else {
+                    ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
+                }
             }
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);
