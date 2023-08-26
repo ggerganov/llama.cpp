@@ -13,7 +13,7 @@ from typing import Any, IO, List, Optional
 #
 
 GGUF_MAGIC             = 0x46554747
-GGUF_VERSION           = 1
+GGUF_VERSION           = 2
 GGUF_DEFAULT_ALIGNMENT = 32
 
 # general
