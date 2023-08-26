@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <fstream>
 
 // generate using test-tokenizer-0.py
 static const std::map<std::string, std::vector<llama_token>> & k_tests() {
@@ -41,11 +42,16 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <vocab-file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s vocab-file [text-file]\n", argv[0]);
         return 1;
     }
 
     const std::string fname = argv[1];
+
+    std::string fname_text;
+    if (argc > 2) {
+        fname_text = argv[2];
+    }
 
     fprintf(stderr, "%s : reading vocab from: '%s'\n", __func__, fname.c_str());
 
@@ -128,6 +134,42 @@ int main(int argc, char **argv) {
             fprintf(stderr, "\n");
 
             success = false;
+        }
+    }
+
+    if (!fname_text.empty()) {
+        fprintf(stderr, "%s : tokenizing: '%s'\n", __func__, fname_text.c_str());
+
+        std::string text;
+        {
+            std::ifstream ifs(fname_text);
+            if (!ifs) {
+                fprintf(stderr, "%s : error: could not open file '%s'\n", __func__, fname_text.c_str());
+                return 1;
+            }
+            text = std::string(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+        }
+
+        fprintf(stderr, "%s : text size: %zu\n", __func__, text.size());
+
+        const std::vector<llama_token> res = llama_tokenize(ctx, text, true);
+
+        fprintf(stderr, "%s : tokens: %zu\n", __func__, res.size());
+
+        {
+            const std::string fname_out = fname_text + ".tokcpp";
+
+            std::ofstream ofs(fname_out);
+            if (!ofs) {
+                fprintf(stderr, "%s : error: could not open file '%s'\n", __func__, fname_out.c_str());
+                return 1;
+            }
+
+            for (const auto & tok : res) {
+                ofs << tok << " ";
+            }
+
+            ofs << "\n";
         }
     }
 

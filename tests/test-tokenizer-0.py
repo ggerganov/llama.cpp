@@ -6,6 +6,7 @@ from sentencepiece import SentencePieceProcessor
 
 parser = argparse.ArgumentParser()
 parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
+parser.add_argument("--fname-tok",   help="path to a text file to tokenize")
 args = parser.parse_args()
 
 dir_tokenizer = args.dir_tokenizer
@@ -68,3 +69,20 @@ for text in tests:
     for x in res:
         print("%7d," % x, end='')
     print(" }, },")
+
+fname_tok = args.fname_tok
+if fname_tok:
+    print('tokenizing file: ', fname_tok)
+    fname_out = fname_tok + '.tok'
+    with open(fname_tok, 'r') as f:
+        lines = f.readlines()
+        s = ''.join(lines)
+        res = tokenizer.encode(s, add_bos=True)
+        # write to file
+        with open(fname_out, 'w') as f:
+            for x in res:
+                f.write(str(x) + ' ')
+            f.write('\n')
+        print('len(res): ', len(res))
+        print('len(lines): ', len(lines))
+    print('results written to: ', fname_out)
