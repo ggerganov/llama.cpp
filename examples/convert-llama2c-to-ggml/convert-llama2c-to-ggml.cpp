@@ -10,6 +10,7 @@
 #include <ctime>
 #include <random>
 #include <stdexcept>
+#include <sstream>
 #include <algorithm>
 #include <string>
 
@@ -564,6 +565,15 @@ bool is_ggml_file(const char *filename) {
     return magic == GGUF_MAGIC;
 }
 
+static std::string llama_escape_whitespaces(const std::string& text) {
+    std::ostringstream out;
+    for (char c : text) {
+        if (c == ' ') out << "\xe2\x96\x81";
+        else out << c;
+    }
+    return out.str();
+}
+
 void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
     if (is_ggml_file(filename)) {
         struct ggml_context * ctx_data = NULL;
@@ -639,6 +649,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
             } else {
                 type = LLAMA_TOKEN_TYPE_NORMAL;
             }
+            text = llama_escape_whitespaces(text);
 
             vocab->id_to_token[id].text = text;
             vocab->id_to_token[id].score = score;
