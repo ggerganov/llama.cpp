@@ -4683,8 +4683,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         }
     }
     if (n_attention_wv != n_feed_forward_w2 || (uint32_t)n_attention_wv != model.hparams.n_layer) {
-        fprintf(stderr, "============ Strange model: n_attention_wv = %d, n_feed_forward_w2 = %d, hparams.n_layer = %d\n",
-                n_attention_wv, n_feed_forward_w2, model.hparams.n_layer);
+        LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_feed_forward_w2 = %d, hparams.n_layer = %d\n",
+                __func__, n_attention_wv, n_feed_forward_w2, model.hparams.n_layer);
     }
 
     int i_attention_wv = 0;
