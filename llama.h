@@ -384,7 +384,7 @@ extern "C" {
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.
     // Does not write null terminator to the buffer.
-    // Use code is responsible to remove the leading whitespace of the first non-BOS token.
+    // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
     LLAMA_API int llama_token_to_piece(
             const struct llama_context * ctx,
                            llama_token   token,

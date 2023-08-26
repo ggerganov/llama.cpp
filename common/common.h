@@ -116,15 +116,21 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 // Vocab utils
 //
 
+// tokenizes a string into a vector of tokens
+// should work similar to Python's `tokenizer.encode`
 std::vector<llama_token> llama_tokenize(
         struct llama_context * ctx,
            const std::string & text,
                         bool   add_bos);
 
+// tokenizes a token into a piece
+// should work similar to Python's `tokenizer.id_to_piece`
 std::string llama_token_to_piece(
         const struct llama_context * ctx,
                        llama_token   token);
 
+// detokenizes a vector of tokens into a string
+// should work similar to Python's `tokenizer.decode`
 // removes the leading space from the first non-BOS token
 std::string llama_detokenize(
                          llama_context * ctx,
