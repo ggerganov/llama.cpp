@@ -792,7 +792,7 @@ Finally, copy the `llama` binary and the model files to your device storage. Her
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
 #### Building the Project in Termux (F-Droid)
-[Termux](https://termux.dev/) is an alternative method to run `llama.cpp` on Android devices.
+[Termux](https://termux.dev/) is a way to run `llama.cpp` on Android devices.
 
 Ensure Termux is up to date and clone the repo:
 ```
