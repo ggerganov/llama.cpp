@@ -82,10 +82,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    const int n_vocab = llama_n_vocab(ctx);
-
-    if (n_vocab != 65024) {
-        fprintf(stderr, "%s : expected 65024 tokens, got %d\n", __func__, n_vocab);
+    if (llama_vocab_type(ctx) != LLAMA_VOCAB_TYPE_BPE) {
+        fprintf(stderr, "%s : error: vocab type is not SPM\n", __func__);
         llama_free_model(model);
         llama_free(ctx);
         return 2;
@@ -98,7 +96,7 @@ int main(int argc, char **argv) {
 
         printf("\n");
         printf("src: '%s'\n", test_kv.first.c_str());
-        printf("res: '%s'\n", llama_detokenize(ctx, res).c_str());
+        printf("res: '%s'\n", llama_detokenize_bpe(ctx, res).c_str());
         printf("tok: ");
         for (const auto & tok : res) {
             printf("%d ", tok);
@@ -116,8 +114,8 @@ int main(int argc, char **argv) {
         if (!correct) {
             fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
             fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
-                llama_detokenize(ctx, res).c_str(),
-                llama_detokenize(ctx, test_kv.second).c_str());
+                llama_detokenize_bpe(ctx, res).c_str(),
+                llama_detokenize_bpe(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
                 fprintf(stderr, "%6d, ", t);

@@ -747,7 +747,7 @@ std::string llama_token_to_piece(const struct llama_context * ctx, llama_token t
     return std::string(result.data(), result.size());
 }
 
-std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens) {
+std::string llama_detokenize_spm(llama_context * ctx, const std::vector<llama_token> & tokens) {
     const llama_token bos_id = llama_token_bos(ctx);
 
     std::string piece;
@@ -767,3 +767,15 @@ std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token>
     return result;
 }
 
+std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_token> & tokens) {
+    std::string piece;
+    std::string result;
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        piece = llama_token_to_piece(ctx, tokens[i]);
+
+        result += piece;
+    }
+
+    return result;
+}
