@@ -1319,6 +1319,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
 
     std::vector<char> buf;
     buf.resize(size+1);
+    out.resize(size+1);
 
     if (std::fread(buf.data(), size, 1, fp) != 1) {
         throw std::runtime_error(std::string("unexpectedly reached end of file"));
@@ -1332,8 +1333,10 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
     if (n_tokens < 0) {
         out.resize(-n_tokens);
-        llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
+        n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
     }
+    GGML_ASSERT(n_tokens >= 0);
+    out.resize(n_tokens);
 
     bool verify = false;
     if (verify) {
