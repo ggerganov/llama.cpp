@@ -299,8 +299,10 @@ class Params:
             params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
         elif orig_config_path.exists():
             params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
-        else:
+        elif model_plus.format != 'none':
             params = Params.guessed(model_plus.model)
+        else:
+            raise ValueError('Cannot guess params when model format is none')
 
         params.path_model = model_plus.paths[0].parent
 
@@ -597,7 +599,7 @@ LazyModel = Dict[str, LazyTensor]
 class ModelPlus:
     model: LazyModel
     paths: List[Path]  # Where this was read from.
-    format: Literal['ggml', 'torch', 'safetensors']
+    format: Literal['ggml', 'torch', 'safetensors', 'none']
     vocab: Optional[Vocab]  # For GGML models (which have vocab built in), the vocab.
 
 
@@ -930,7 +932,7 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab) -> None:
+    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: SpecialVocab) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
@@ -938,6 +940,8 @@ class OutputFile:
         # meta data
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
+        of.add_meta_special_vocab(svocab)
+
         of.write_meta()
 
         of.close()
@@ -1187,8 +1191,13 @@ def main(args_in: Optional[List[str]] = None) -> None:
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
+        return
 
-    model_plus = load_some_model(args.model)
+    if not args.vocab_only:
+        model_plus = load_some_model(args.model)
+    else:
+        # You can no longer use guessed parameters for your vocab only model. Does anyone actually care?
+        model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
 
     if args.dump:
         do_dump_model(model_plus)
@@ -1214,11 +1223,12 @@ def main(args_in: Optional[List[str]] = None) -> None:
 
     vocab: Vocab
     if args.vocab_only:
-        # FIXME: Handle special vocab here also.
-        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
+        # FIXME: Try to respect vocab_dir somehow?
+        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
+        special_vocab = SpecialVocab(model_plus.paths[0].parent)
         outfile = args.outfile
-        OutputFile.write_vocab_only(outfile, params, vocab)
+        OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
         return
 
