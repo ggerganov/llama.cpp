@@ -791,17 +791,42 @@ Finally, copy the `llama` binary and the model files to your device storage. Her
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
-#### Building the Project using Termux (F-Droid)
-Termux from F-Droid offers an alternative route to execute the project on an Android device. This method empowers you to construct the project right from within the terminal, negating the requirement for a rooted device or SD Card.
+#### Building the Project in Termux (F-Droid)
+[Termux](https://termux.dev/) is an alternative method to run `llama.cpp` on Android devices.
 
-Outlined below are the directives for installing the project using OpenBLAS and CLBlast. This combination is specifically designed to deliver peak performance on recent devices that feature a GPU.
-
-If you opt to utilize OpenBLAS, you'll need to install the corresponding package.
+Ensure Termux is up to date and clone the repo:
 ```
-apt install libopenblas
+apt update && apt upgrade
+$HOME
+git clone https://github.com/ggerganov/llama.cpp
 ```
 
-Subsequently, if you decide to incorporate CLBlast, you'll first need to install the requisite OpenCL packages:
+Build `llama.cpp`:
+```
+$HOME
+cd llama.cpp
+make
+```
+
+It's possible to include OpenBlas while building:
+```
+$HOME
+pkg install libopenblas
+cd llama.cpp
+cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+cd build
+cmake --build . --config Release
+```
+
+Move your model to the $HOME directory in Termux, for example:
+```
+cd storage/downloads
+mv 7b-model.gguf ~/
+```
+
+Usage example:`./llama.cpp/main -m ~/7b-model.gguf --color -c 2048 --keep -1 -n -2 -b 10 -i -ins`
+
+Alternatively, to enable CLBlast then install the requisite OpenCL packages:
 ```
 apt install ocl-icd opencl-headers opencl-clhpp clinfo
 ```
@@ -830,9 +855,7 @@ export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 
 (Note: some Android devices, like the Zenfone 8, need the following command instead - "export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH". Source: https://www.reddit.com/r/termux/comments/kc3ynp/opencl_working_in_termux_more_in_comments/ )
 
-For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
-
-Place your desired model into the `~/llama.cpp/models/` directory and execute the `./main (...)` script.
+For easy and swift re-execution, consider documenting this final part in a .sh script file. This will allow you to run `./main (...)` with minimal hassle.
 
 ### Docker
 
