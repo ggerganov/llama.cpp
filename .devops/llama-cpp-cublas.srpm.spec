@@ -13,7 +13,7 @@
 #    It is up to the user to install the correct vendor-specific support.
 
 Name:           llama.cpp-cublas
-Version:        master
+Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
 License:        MIT
@@ -40,6 +40,28 @@ cp -p main %{buildroot}%{_bindir}/llamacppcublas
 cp -p server %{buildroot}%{_bindir}/llamacppcublasserver
 cp -p simple %{buildroot}%{_bindir}/llamacppcublassimple
 
+mkdir -p %{buildroot}/usr/lib/systemd/system
+%{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamacublas.service
+[Unit]
+Description=Llama.cpp server, CPU only (no GPU support in this build).
+After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sysconfig/llama
+ExecStart=/usr/bin/llamacppcublasserver $LLAMA_ARGS
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=never
+
+[Install]
+WantedBy=default.target
+EOF
+
+mkdir -p %{buildroot}/etc/sysconfig
+%{__cat} <<EOF  > %{buildroot}/etc/sysconfig/llama
+LLAMA_ARGS="-m /opt/llama2/ggml-model-f32.bin"
+EOF
+
 %clean
 rm -rf %{buildroot}
 rm -rf %{_builddir}/*
@@ -48,6 +70,8 @@ rm -rf %{_builddir}/*
 %{_bindir}/llamacppcublas
 %{_bindir}/llamacppcublasserver
 %{_bindir}/llamacppcublassimple
+/usr/lib/systemd/system/llamacublas.service
+%config /etc/sysconfig/llama
 
 %pre
 
