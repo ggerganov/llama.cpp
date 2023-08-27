@@ -11,9 +11,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- ## IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
 
-- ## GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
+- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
 
 - Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
 
