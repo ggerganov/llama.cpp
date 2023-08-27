@@ -114,12 +114,17 @@ static size_t utf8_len(char src) {
 }
 
 void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    for (size_t pos = 0; ; pos += replace.length()) {
-        pos = s.find(search, pos);
-        if (pos == std::string::npos) break;
-        s.erase(pos, search.length());
-        s.insert(pos, replace);
+    std::string result;
+    for (size_t pos = 0; ; pos += search.length()) {
+        auto new_pos = s.find(search, pos);
+        if (new_pos == std::string::npos) {
+            result += s.substr(pos, s.size() - pos);
+            break;
+        }
+        result += s.substr(pos, new_pos - pos) + replace;
+        pos = new_pos;
     }
+    s = std::move(result);
 }
 
 static void zeros(std::ofstream & file, size_t n) {
