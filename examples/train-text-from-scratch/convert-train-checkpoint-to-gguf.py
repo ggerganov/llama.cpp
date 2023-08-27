@@ -253,8 +253,7 @@ class OptimizationContext:
     def save_gguf(self, gguf_writer):
         gguf_writer.add_uint32(LLM_KV_OPTIMIZER_FILE_VERSION, 0)
         gguf_writer.add_uint32(LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT, self.past)
-        gguf_writer.add_uint32(LLM_KV_OPTIMIZER_PARAMETER_COUNT_LOW, self.nx & 0xffffffff)
-        gguf_writer.add_uint32(LLM_KV_OPTIMIZER_PARAMETER_COUNT_HIGH, (self.nx >> 32) & 0xffffffff)
+        gguf_writer.add_uint64(LLM_KV_OPTIMIZER_PARAMETER_COUNT, self.nx)
         gguf_writer.add_uint32(LLM_KV_OPTIMIZER_ITERATION_COUNT, self.iter)
         gguf_writer.add_uint32(LLM_KV_OPTIMIZER_JUST_INITIALIZED, self.just_initialized)
 

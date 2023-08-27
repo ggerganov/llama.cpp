@@ -241,8 +241,7 @@ const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
 const char * LLM_KV_OPTIMIZER_TYPE_LBFGS = "lbfgs";
 const char * LLM_KV_OPTIMIZER_FILE_VERSION               = "optimizer.file_version";
 const char * LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT     = "optimizer.convergence_past_count";
-const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT_LOW        = "optimizer.parameter_count.low";
-const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT_HIGH       = "optimizer.parameter_count.high";
+const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT            = "optimizer.parameter_count";
 const char * LLM_KV_OPTIMIZER_ITERATION_COUNT            = "optimizer.iteration_count";
 const char * LLM_KV_OPTIMIZER_JUST_INITIALIZED           = "optimizer.just_initialized";
 const char * LLM_KV_OPTIMIZER_ADAM_BEST_LOSS             = "optimizer.adam.best_loss";
@@ -1530,12 +1529,9 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     GGUF_GET_KEY(fctx, opt->iter, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_ITERATION_COUNT);
     GGUF_GET_KEY(fctx, opt->just_initialized, gguf_get_val_bool, GGUF_TYPE_BOOL, true, LLM_KV_OPTIMIZER_JUST_INITIALIZED);
 
-    // gguf v1 only supports values with up to 32-bit precision
-    uint32_t nx[2] = { 0, 0 };
-    GGUF_GET_KEY(fctx, nx[0], gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_PARAMETER_COUNT_LOW);
-    GGUF_GET_KEY(fctx, nx[1], gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_PARAMETER_COUNT_HIGH);
-    memcpy(&opt->nx, &nx[0], sizeof(opt->nx));
-    // TODO read as 64-bit uint
+    uint64_t nx;
+    GGUF_GET_KEY(fctx, nx, gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_OPTIMIZER_PARAMETER_COUNT);
+    opt->nx = (size_t) nx;
 
     // don't call ggml_opt_init until optimizer type and optimizer specific parameters are know
 
@@ -1586,15 +1582,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
 void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt) {
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_FILE_VERSION, 0);
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT, opt->params.past);
-
-    // gguf v1 only supports values with up to 32-bit precision,
-    uint32_t nx[2] = { 0, 0 };
-    nx[0] = opt->nx & 0xFFFFFFFF;
-    nx[1] = (opt->nx >> 32) & 0xFFFFFFFF;
-    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_PARAMETER_COUNT_LOW,  nx[0]);
-    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_PARAMETER_COUNT_HIGH, nx[1]);
-    // TODO set as 64-bit uint
-
+    gguf_set_val_u64(fctx, LLM_KV_OPTIMIZER_PARAMETER_COUNT, (uint64_t) opt->nx);
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_ITERATION_COUNT, opt->iter);
     gguf_set_val_bool(fctx, LLM_KV_OPTIMIZER_JUST_INITIALIZED, opt->just_initialized);
 
