@@ -114,7 +114,7 @@ int main(int argc, char ** argv) {
     std::string ftype_str;
     if (try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
         std::string fpath;
-        const size_t pos = fname_inp.find_last_of('/');
+        const size_t pos = fname_inp.find_last_of("/\\");
         if (pos != std::string::npos) {
             fpath = fname_inp.substr(0, pos + 1);
         }
