@@ -18,7 +18,8 @@ Release:        1%{?dist}
 Summary:        OpenCL Inference of LLaMA model in C/C++
 License:        MIT
 Source0:        https://github.com/ggerganov/llama.cpp/archive/refs/heads/master.tar.gz
-BuildRequires:  coreutils make gcc-c++ git mesa-libOpenCL-devel
+BuildRequires:  coreutils make gcc-c++ git mesa-libOpenCL-devel clblast-devel
+Requires:       clblast
 URL:            https://github.com/ggerganov/llama.cpp
 
 %define debug_package %{nil}
