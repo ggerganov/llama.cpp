@@ -2845,7 +2845,6 @@ static bool llama_eval_internal(
 
     GGML_ASSERT(n_tokens > 0);
     GGML_ASSERT(n_past >= 0);
-    GGML_ASSERT(n_threads > 0);
     // TODO: keep the values of n_batch and n_ctx
     // GGML_ASSERT(n_tokens <= n_batch);
     // GGML_ASSERT(n_past + n_tokens <= n_ctx);
@@ -2855,6 +2854,8 @@ static bool llama_eval_internal(
 #ifdef GGML_USE_MPI
     ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
 #endif
+
+    GGML_ASSERT(n_threads > 0);
 
     const int N = n_tokens;
 
