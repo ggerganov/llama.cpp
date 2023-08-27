@@ -20516,6 +20516,14 @@ int ggml_cpu_has_sse3(void) {
 #endif
 }
 
+int ggml_cpu_has_ssse3(void) {
+#if defined(__SSSE3__)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_vsx(void) {
 #if defined(__POWER9_VECTOR__)
     return 1;
