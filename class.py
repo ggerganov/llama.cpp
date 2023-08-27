@@ -63,7 +63,7 @@ class model_backend(InferenceModel):
             blasbatchsize=512, ropeconfig=[0.0, 10000.0], stream=False, smartcontext=False,
             unbantokens=False, bantokens=None, usemirostat=None, forceversion=0, nommap=False,
             usemlock=False, noavx2=False, debugmode=0, skiplauncher=False, hordeconfig=None, noblas=False,
-            useclblast=None, usecublas=None, gpulayers=0, tensor_split=None)
+            useclblast=None, usecublas=None, gpulayers=0, tensor_split=None, config=None)
 
             koboldcpp.main(kcppargs,False) #initialize library without enabling Lite http server
             kcpp_backend_loaded = True
