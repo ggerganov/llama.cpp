@@ -7,34 +7,34 @@
 #include <vector>
 #include <fstream>
 
-// generate using test-tokenizer-0.py
+// generate using test-tokenizer-0-falcon.py
 static const std::map<std::string, std::vector<llama_token>> & k_tests() {
     static std::map<std::string, std::vector<llama_token>> _k_tests = {
         { ""                      , {  }, },
-        { " "                     , {     259, }, },
-        { "  "                    , {    1678, }, },
-        { "   "                   , {     268, }, },
-        { "\t"                    , {   29871,     12, }, },
-        { "\n"                    , {   29871,     13, }, },
-        { "\t\n"                  , {   29871,     12,     13, }, },
-        { "Hello world"           , {   15043,   3186, }, },
-        { " Hello world"          , {   29871,  15043,   3186, }, },
-        { "Hello World"           , {   15043,   2787, }, },
-        { " Hello World"          , {   29871,  15043,   2787, }, },
-        { " Hello World!"         , {   29871,  15043,   2787,  29991, }, },
-        { "Hello, world!"         , {   15043,  29892,   3186,  29991, }, },
-        { " Hello, world!"        , {   29871,  15043,  29892,   3186,  29991, }, },
-        { " this is 🦙.cpp"        , {   29871,    445,    338,  29871,    243,    162,    169,    156,  29889,   8223, }, },
-        { "w048 7tuijk dsdfhu"    , {     281,  29900,  29946,  29947,  29871,  29955,   9161,  13535,  18031,   2176,   6905, }, },
-        { "нещо на Български"     , {    1538,   4851,    665,   1386,  29713,   1305, }, },
-        { "កាន់តែពិសេសអាចខលចេញ"   , {   29871,  31849,  31324,  31934,    228,    162,    142,    228,    161,    146,    228,    162,    133,    228,    161,    153,    228,    161,    186,  31708,    228,    162,    132,  31708,    228,    161,    165,  31324,    228,    161,    136,    228,    161,    132,    228,    161,    158,    228,    161,    136,    228,    162,    132,    228,    161,    140, }, },
-        { "🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ (only emoji that has its own token)", {   29871,    243,    162,    157,    131,    313,   8945,  29897,  29871,    243,    162,    155,    185,  30722,    243,    162,    143,    174,  30598,    313,  20787,    953,   3848,    275,  16125,    630,  29897,  29871,  31681,    313,   6194,    953,  29877,   2397,    393,    756,    967,   1914,   5993,  29897, }, },
-        { "Hello"                 , {   15043, }, },
-        { " Hello"                , {   29871,  15043, }, },
-        { "  Hello"               , {     259,  15043, }, },
-        { "   Hello"              , {    1678,  15043, }, },
-        { "    Hello"             , {     268,  15043, }, },
-        { "    Hello\n    Hello"  , {     268,  15043,     13,   1678,  15043, }, },
+        { " "                     , {     204, }, },
+        { "  "                    , {     258, }, },
+        { "   "                   , {     466, }, },
+        { "\t"                    , {     192, }, },
+        { "\n"                    , {     193, }, },
+        { "\t\n"                  , {   19125, }, },
+        { "Hello world"           , {    9856,   1079, }, },
+        { " Hello world"          , {   23090,   1079, }, },
+        { "Hello World"           , {    9856,   2889, }, },
+        { " Hello World"          , {   23090,   2889, }, },
+        { " Hello World!"         , {   23090,   2889,     12, }, },
+        { "Hello, world!"         , {    9856,     23,   1079,     12, }, },
+        { " Hello, world!"        , {   23090,     23,   1079,     12, }, },
+        { " this is 🦙.cpp"        , {     414,    304,   3346,    111,    231,     25,  29247, }, },
+        { "w048 7tuijk dsdfhu"    , {      98,  55866,    204,     34,  16682,   7149,  36190,   6869,  11481, }, },
+        { "нещо на Български"     , {     150,    133,   6207,    151,    215,    150,    134,   5052,    133,   6279,   5052,    223,    151,    216,  49679,    123,  53110,  47043,   7795, }, },
+        { "កាន់តែពិសេសអាចខលចេញ"   , {   38154,    206,  38154,    126,  38154,    225,    167,    237,    217,  38154,    221,    167,    237,    208,  38154,    228,  38154,    127,  38154,    237,    167,    237,    207,  38154,    237,  38154,    107,  38154,    126,  38154,    211,  38154,    207,  38154,    233,  38154,    211,    167,    237,    207,  38154,    215, }, },
+        { "🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ (only emoji that has its own token)", {    2571,    232,    206,    204,     19,  11003,     20,   8196,    126,    283,    219,  48778,    116,  13392,    204,     19,  51831,    732,  63209,   1741,   7955,    522,     20,  22438,    211,    204,     19,   7927,  53360,    325,    504,    701,    946,  10930,     20, }, },
+        { "Hello"                 , {    9856, }, },
+        { " Hello"                , {   23090, }, },
+        { "  Hello"               , {     204,  23090, }, },
+        { "   Hello"              , {     258,  23090, }, },
+        { "    Hello"             , {     466,  23090, }, },
+        { "    Hello\n    Hello"  , {     466,  23090,    742,  23090, }, },
     };
 
     return _k_tests;
@@ -84,8 +84,8 @@ int main(int argc, char **argv) {
 
     const int n_vocab = llama_n_vocab(ctx);
 
-    if (n_vocab != 32000) {
-        fprintf(stderr, "%s : expected 32000 tokens, got %d\n", __func__, n_vocab);
+    if (n_vocab != 65024) {
+        fprintf(stderr, "%s : expected 65024 tokens, got %d\n", __func__, n_vocab);
         llama_free_model(model);
         llama_free(ctx);
         return 2;
@@ -94,25 +94,21 @@ int main(int argc, char **argv) {
     bool success = true;
 
     for (const auto & test_kv : k_tests()) {
-        const std::vector<llama_token> res_bos   = llama_tokenize(ctx, test_kv.first, true);
-        const std::vector<llama_token> res_nobos = llama_tokenize(ctx, test_kv.first, false);
+        const std::vector<llama_token> res = llama_tokenize(ctx, test_kv.first, false);
 
         printf("\n");
         printf("src: '%s'\n", test_kv.first.c_str());
-        printf("res: '%s'\n", llama_detokenize(ctx, res_bos).c_str());
+        printf("res: '%s'\n", llama_detokenize(ctx, res).c_str());
         printf("tok: ");
-        for (const auto & tok : res_bos) {
+        for (const auto & tok : res) {
             printf("%d ", tok);
         }
         printf("\n");
 
-        bool correct = res_nobos.size() == test_kv.second.size() && res_bos.size() == res_nobos.size() + 1 && res_bos[0] == 1;
+        bool correct = res.size() == test_kv.second.size();
 
-        for (int i = 0; i < (int) res_nobos.size() && correct; ++i) {
-            if (test_kv.second[i] != res_bos[i + 1]) {
-                correct = false;
-            }
-            if (test_kv.second[i] != res_nobos[i]) {
+        for (int i = 0; i < (int) res.size() && correct; ++i) {
+            if (test_kv.second[i] != res[i]) {
                 correct = false;
             }
         }
@@ -120,7 +116,7 @@ int main(int argc, char **argv) {
         if (!correct) {
             fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
             fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
-                llama_detokenize(ctx, res_nobos).c_str(),
+                llama_detokenize(ctx, res).c_str(),
                 llama_detokenize(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
@@ -128,7 +124,7 @@ int main(int argc, char **argv) {
             }
             fprintf(stderr, "\n");
             fprintf(stderr, "%s : got tokens:      ", __func__);
-            for (const auto & t : res_nobos) {
+            for (const auto & t : res) {
                 fprintf(stderr, "%6d, ", t);
             }
             fprintf(stderr, "\n");
@@ -171,6 +167,8 @@ int main(int argc, char **argv) {
 
             ofs << "\n";
         }
+
+        fprintf(stderr, "%s : tokens written to '%s'\n", __func__, (fname_text + ".tokcpp").c_str());
     }
 
     llama_free_model(model);
