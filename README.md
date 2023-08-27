@@ -824,7 +824,7 @@ cd storage/downloads
 mv 7b-model.gguf ~/
 ```
 
-Usage example:`./llama.cpp/main -m ~/7b-model.gguf --color -c 2048 --keep -1 -n -2 -b 10 -i -ins`
+Usage example:`./main -m ~/7b-model.gguf --color -c 2048 --keep -1 -n -2 -b 10 -i -ins`
 
 Alternatively, to enable CLBlast then install the requisite OpenCL packages:
 ```
