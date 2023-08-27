@@ -216,7 +216,7 @@
 #define GGML_EXIT_ABORTED 1
 
 #define GGUF_MAGIC   0x46554747 // "GGUF"
-#define GGUF_VERSION 1
+#define GGUF_VERSION 2
 
 #define GGUF_DEFAULT_ALIGNMENT 32
 
@@ -1827,6 +1827,9 @@ extern "C" {
         GGUF_TYPE_BOOL    = 7,
         GGUF_TYPE_STRING  = 8,
         GGUF_TYPE_ARRAY   = 9,
+        GGUF_TYPE_UINT64  = 10,
+        GGUF_TYPE_INT64   = 11,
+        GGUF_TYPE_FLOAT64 = 12,
         GGUF_TYPE_COUNT,       // marks the end of the enum
     };
 
@@ -1867,6 +1870,9 @@ extern "C" {
     GGML_API uint32_t     gguf_get_val_u32 (struct gguf_context * ctx, int i);
     GGML_API int32_t      gguf_get_val_i32 (struct gguf_context * ctx, int i);
     GGML_API float        gguf_get_val_f32 (struct gguf_context * ctx, int i);
+    GGML_API uint64_t     gguf_get_val_u64 (struct gguf_context * ctx, int i);
+    GGML_API int64_t      gguf_get_val_i64 (struct gguf_context * ctx, int i);
+    GGML_API double       gguf_get_val_f64 (struct gguf_context * ctx, int i);
     GGML_API bool         gguf_get_val_bool(struct gguf_context * ctx, int i);
     GGML_API const char * gguf_get_val_str (struct gguf_context * ctx, int i);
     GGML_API int          gguf_get_arr_n   (struct gguf_context * ctx, int i);
@@ -1886,6 +1892,9 @@ extern "C" {
     GGML_API void gguf_set_val_u32 (struct gguf_context * ctx, const char * key, uint32_t val);
     GGML_API void gguf_set_val_i32 (struct gguf_context * ctx, const char * key, int32_t  val);
     GGML_API void gguf_set_val_f32 (struct gguf_context * ctx, const char * key, float    val);
+    GGML_API void gguf_set_val_u64 (struct gguf_context * ctx, const char * key, uint64_t val);
+    GGML_API void gguf_set_val_i64 (struct gguf_context * ctx, const char * key, int64_t  val);
+    GGML_API void gguf_set_val_f64 (struct gguf_context * ctx, const char * key, double   val);
     GGML_API void gguf_set_val_bool(struct gguf_context * ctx, const char * key, bool     val);
     GGML_API void gguf_set_val_str (struct gguf_context * ctx, const char * key, const char * val);
     GGML_API void gguf_set_arr_data(struct gguf_context * ctx, const char * key, enum gguf_type type, const void * data, int n);

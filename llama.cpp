@@ -1144,11 +1144,13 @@ static bool llama_kv_cache_init(
 
 enum llama_fver {
     GGUF_FILE_VERSION_V1 = 1,
+    GGUF_FILE_VERSION_V2 = 2,
 };
 
 static const char * llama_file_version_name(llama_fver version) {
     switch (version) {
-        case GGUF_FILE_VERSION_V1: return "GGUF V1 (latest)";
+        case GGUF_FILE_VERSION_V1: return "GGUF V1 (support until nov 2023)";
+        case GGUF_FILE_VERSION_V2: return "GGUF V2 (latest)";
     }
 
     return "unknown";
