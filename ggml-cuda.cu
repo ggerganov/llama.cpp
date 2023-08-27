@@ -4198,7 +4198,7 @@ static void quantize_row_q8_1_cuda(const float * x, void * vy, const int kx, con
 }
 
 #ifdef GGML_CUDA_F16
-#define make_dfloat2(x, y) make_half2((x), (y))
+#define make_dfloat2(x, y) __halves2half2((x), (y))
 #else
 #define make_dfloat2(x, y) make_float2((x), (y))
 #endif
