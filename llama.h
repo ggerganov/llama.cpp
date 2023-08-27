@@ -381,15 +381,17 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    // Token Id -> String. Uses the vocabulary in the provided context
-    // Does not write null terminator to the buffer
-    LLAMA_API int llama_token_to_str(
+    // Token Id -> Piece.
+    // Uses the vocabulary in the provided context.
+    // Does not write null terminator to the buffer.
+    // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    LLAMA_API int llama_token_to_piece(
             const struct llama_context * ctx,
                            llama_token   token,
                                   char * buf,
                                   int    length);
 
-    LLAMA_API int llama_token_to_str_with_model(
+    LLAMA_API int llama_token_to_piece_with_model(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,

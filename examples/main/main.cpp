@@ -195,11 +195,6 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
 
-    if (llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM) {
-        // Add a space in front of the first character to match OG llama tokenizer behavior
-        params.prompt.insert(0, 1, ' ');
-    }
-
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
@@ -216,7 +211,6 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        params.cfg_negative_prompt.insert(0, 1, ' ');
         guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
 
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
@@ -285,7 +279,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]).c_str());
+            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (ctx_guidance) {
@@ -293,14 +287,14 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
             fprintf(stderr, "%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
-                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_str(ctx, guidance_inp[i]).c_str());
+                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
         }
 
         if (params.n_keep > 0) {
         fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                fprintf(stderr, "%s", llama_token_to_str(ctx, embd_inp[i]).c_str());
+                fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             fprintf(stderr, "'\n");
         }
@@ -456,7 +450,7 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
                 //printf("resetting: '");
                 //for (int i = 0; i < (int) embd.size(); i++) {
-                //    printf("%s", llama_token_to_str(ctx, embd[i]));
+                //    printf("%s", llama_token_to_piece(ctx, embd[i]));
                 //}
                 //printf("'\n");
                 //printf("\n---\n");
@@ -509,7 +503,7 @@ int main(int argc, char ** argv) {
                     input_size = embd_guidance.size();
                     //fprintf(stderr, "\n---------------------\n");
                     //for (int i = 0; i < (int) embd_guidance.size(); i++) {
-                        //fprintf(stderr, "%s", llama_token_to_str(ctx, embd_guidance[i]));
+                        //fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_guidance[i]));
                     //}
                     //fprintf(stderr, "\n---------------------\n");
                 } else {
@@ -673,7 +667,7 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                printf("%s", llama_token_to_str(ctx, id).c_str());
+                printf("%s", llama_token_to_piece(ctx, id).c_str());
             }
             fflush(stdout);
         }
@@ -689,7 +683,7 @@ int main(int argc, char ** argv) {
             if (params.antiprompt.size()) {
                 std::string last_output;
                 for (auto id : last_n_tokens) {
-                    last_output += llama_token_to_str(ctx, id);
+                    last_output += llama_token_to_piece(ctx, id);
                 }
 
                 is_antiprompt = false;
