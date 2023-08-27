@@ -797,7 +797,7 @@ https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b0
 Ensure Termux is up to date and clone the repo:
 ```
 apt update && apt upgrade
-$HOME
+cd
 git clone https://github.com/ggerganov/llama.cpp
 ```
 
@@ -809,7 +809,6 @@ make
 
 It's possible to include OpenBlas while building:
 ```
-$HOME
 pkg install libopenblas
 cd llama.cpp
 cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
@@ -819,7 +818,7 @@ cmake --build . --config Release
 
 Move your model to the $HOME directory in Termux, for example:
 ```
-$HOME
+cd
 cd storage/downloads
 mv 7b-model.gguf ~/
 ```
