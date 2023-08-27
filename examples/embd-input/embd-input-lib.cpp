@@ -214,7 +214,7 @@ const char * sampling(struct MyModel * mymodel) {
     if (id == llama_token_eos(ctx)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_str(ctx, id);
+        ret = llama_token_to_piece(ctx, id);
     }
     eval_id(mymodel, id);
     return ret.c_str();
