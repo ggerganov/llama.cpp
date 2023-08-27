@@ -803,7 +803,6 @@ git clone https://github.com/ggerganov/llama.cpp
 
 Build `llama.cpp`:
 ```
-$HOME
 cd llama.cpp
 make
 ```
@@ -820,6 +819,7 @@ cmake --build . --config Release
 
 Move your model to the $HOME directory in Termux, for example:
 ```
+$HOME
 cd storage/downloads
 mv 7b-model.gguf ~/
 ```
