@@ -2594,6 +2594,9 @@ int main(int argc, char ** argv) {
 
     printf("%s: init model\n", __func__);
     bool existed = load_checkpoint_file(params.fn_checkpoint_in, &model, opt);
+    if (!existed) {
+        init_model(&model);
+    }
     set_param_model(&model);
 
     opt->params = params.use_adam ? opt_params_adam : opt_params_lbfgs;
