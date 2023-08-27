@@ -2642,18 +2642,20 @@ static struct ggml_cgraph * llm_build_falcon(
 
             const size_t wsize = ggml_type_size(cur->type);
 
-            struct ggml_tensor * tmpq = ggml_view_3d(
+            // TODO: these 2 ggml_conts are technically not needed, but we add them until CUDA support for
+            //       non-contiguous views is added for the rope operator
+            struct ggml_tensor * tmpq = ggml_cont(ctx0, ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head, N,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
-                0);
+                0));
             offload_func_kq(tmpq);
 
-            struct ggml_tensor * tmpk = ggml_view_3d(
+            struct ggml_tensor * tmpk = ggml_cont(ctx0, ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, N,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
-                wsize * n_embd_head *  n_head);
+                wsize * n_embd_head *  n_head));
             offload_func_kq(tmpk);
 
             struct ggml_tensor * tmpv = ggml_view_3d(
