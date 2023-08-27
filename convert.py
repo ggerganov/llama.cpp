@@ -439,7 +439,7 @@ class Tensor(metaclass=ABCMeta):
     @abstractmethod
     def permute(self, n_head: int, n_head_kv: int) -> 'Tensor': ...
     @abstractmethod
-    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor': ...
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> 'UnquantizedTensor': ...
     @abstractmethod
     def part(self, n_part: int) -> 'UnquantizedTensor': ...
     @abstractmethod
@@ -467,9 +467,9 @@ class UnquantizedTensor(Tensor):
     def to_ggml(self) -> 'UnquantizedTensor':
         return self
 
-    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor':
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> 'UnquantizedTensor':
         r = self.ndarray.shape[0] // 3
-        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head))
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head_kv))
 
     def part(self, n_part: int) -> 'UnquantizedTensor':
         r = self.ndarray.shape[0] // 3
@@ -597,12 +597,12 @@ def permute_lazy(lazy_tensor: LazyTensor, n_head: int, n_head_kv: int) -> LazyTe
         return lazy_tensor.load().permute(n_head, n_head_kv)
     return LazyTensor(load, lazy_tensor.shape, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
-def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int) -> LazyTensor:
+def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int, n_head_kv: int) -> LazyTensor:
     def load() -> Tensor:
-        return lazy_tensor.load().permute_part(n_part, n_head)
+        return lazy_tensor.load().permute_part(n_part, n_head, n_head_kv)
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
-    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}) ' + lazy_tensor.description)
+    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
 def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
     def load() -> Tensor:
@@ -952,8 +952,8 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
            #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
             print(f"Unpacking and permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head)
-            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head)
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
             del tmp[f"model.layers.{i}.self_attn.W_pack.weight"]
         else:
