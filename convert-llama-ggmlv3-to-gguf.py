@@ -259,20 +259,13 @@ class GGMLToGGUF:
         gguf_writer.add_eos_token_id(2)
 
     def add_tensors(self, gguf_writer):
-        nm = self.name_map
+        tensor_map = self.name_map
         data = self.data
         print(f'* Adding {len(self.model.tensors)} tensor(s)')
         for tensor in self.model.tensors:
             name = str(tensor.name, 'UTF-8')
-            if name.endswith('.weight'):
-                name = name[:-7]
-                suffix = '.weight'
-            elif name.endswith('.bias'):
-                name = name[:-5]
-                suffix = '.bias'
-            mapped_name = nm.get(name)
+            mapped_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
             assert mapped_name is not None, f'Bad name {name}'
-            mapped_name += suffix
             tempdims = list(tensor.dims[:])
             if len(tempdims) > 1:
                 temp = tempdims[1]

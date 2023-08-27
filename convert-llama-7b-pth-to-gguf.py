@@ -11,7 +11,7 @@ import json
 import numpy as np
 import torch
 
-from typing import Any, List
+from typing import Any, List, TypeAlias
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
@@ -266,11 +266,8 @@ for part_name in part_names:
         data = data.squeeze().numpy()
 
         # map tensor names
-        if name.endswith(".weight") and name[:-7] in tensor_map:
-            name = tensor_map[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tensor_map:
-            name = tensor_map[name[:-5]] + ".bias"
-        else:
+        new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+        if new_name is None:
             print("Can not map tensor '" + name + "'")
             sys.exit()
 
@@ -289,9 +286,9 @@ for part_name in part_names:
         if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
-        gguf_writer.add_tensor(name, data)
+        gguf_writer.add_tensor(new_name, data)
 
 
 print("gguf: write header")

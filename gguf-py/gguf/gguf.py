@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 
 from enum import IntEnum, auto
-from typing import Any, BinaryIO, IO, Dict, List, Optional, Tuple
+from typing import Any, BinaryIO, IO, Dict, List, Optional, Sequence, Tuple
 
 #
 # constants
@@ -162,167 +162,192 @@ MODEL_TENSOR_SKIP: Dict[MODEL_ARCH, List[MODEL_TENSOR]] = {
 }
 
 
-# TODO: the following helper functions should be removed
-#       instead, get_tensor_name_map should return tuples of (name, MODEL_TENSOR)
-#       however, my Python is very bad, and I couldn't figure out how to do this, hence these functions
-# REMOVE
-def should_skip_tensor_TMP(arch: MODEL_ARCH, n_blocks: int, name: str) -> bool:
-    for skip in MODEL_TENSOR_SKIP.get(arch, []):
-        for i in range(n_blocks):
-            if name == MODEL_TENSOR_NAMES[arch][skip].format(bid=i):
-                return True
+class TensorNameMap:
+    mappings_cfg: Dict[MODEL_TENSOR, Tuple[str, ...]] = {
+        # Token embeddings
+        MODEL_TENSOR.TOKEN_EMBD: (
+            "gpt_neox.embed_in",           # gptneox
+            "transformer.wte",             # gpt2 mpt
+            "transformer.word_embeddings", # falcon
+            "model.embed_tokens",          # llama-hf
+            "tok_embeddings",              # llama-pth
+        ),
 
-    return False
+        # Position embeddings
+        MODEL_TENSOR.POS_EMBD: (
+            "transformer.wpe", # gpt2
+        ),
 
+        # Output
+        MODEL_TENSOR.OUTPUT: (
+            "embed_out", # gptneox
+            "lm_head",   # gpt2 mpt falcon llama-hf
+            "output",    # llama-pth
+        ),
 
-def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
-    tensor_map = {}
+        # Output norm
+        MODEL_TENSOR.OUTPUT_NORM: (
+            "gpt_neox.final_layer_norm", # gptneox
+            "transformer.ln_f",          # gpt2 falcon
+            "model.norm",                # llama-hf
+            "norm",                      # llama-pth
+        ),
 
-    # Token embeddings
-    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.TOKEN_EMBD, None)
+        # Rope frequencies
+        MODEL_TENSOR.ROPE_FREQS: (
+            "rope.freqs", # llama-pth
+        ),
+    }
 
-    tensor_map["gpt_neox.embed_in"]           = mapped_to  # gptneox
-    tensor_map["transformer.wte"]             = mapped_to  # gpt2 mpt
-    tensor_map["transformer.word_embeddings"] = mapped_to  # falcon
-    tensor_map["model.embed_tokens"]          = mapped_to  # llama-hf
-    tensor_map["tok_embeddings"]              = mapped_to  # llama-pth
-
-    # Position embeddings
-    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.POS_EMBD, None)
-
-    tensor_map["transformer.wpe"] = mapped_to  # gpt2
-
-    # Output
-    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.OUTPUT, None)
-
-    tensor_map["embed_out"] = mapped_to  # gptneox
-    tensor_map["lm_head"]   = mapped_to  # gpt2 mpt falcon llama-hf
-    tensor_map["output"]    = mapped_to  # llama-pth
-
-    # Output norm
-    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.OUTPUT_NORM, None)
-
-    tensor_map["gpt_neox.final_layer_norm"] = mapped_to  # gptneox
-    tensor_map["transformer.ln_f"]          = mapped_to  # gpt2 falcon
-    tensor_map["transformer.norm_f"]        = mapped_to  # mpt
-    tensor_map["model.norm"]                = mapped_to  # llama-hf
-    tensor_map["norm"]                      = mapped_to  # llama-pth
-
-    # Rope frequencies
-    mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ROPE_FREQS, None)
-
-    tensor_map["rope.freqs"] = mapped_to  # llama-pth
-
-    # Attention and feed-forward blocks
-    for i in range(0, n_blocks):
+    block_mappings_cfg: Dict[MODEL_TENSOR, Tuple[str, ...]] = {
         # Attention norm
-        # TODO: is there are simpler way to write these 2 lines in Python?
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_NORM, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to else None
-
-        tensor_map["gpt_neox.layers."+str(i)+".input_layernorm"] = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".ln_1"]              = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".norm_1"]       = mapped_to  # mpt
-        tensor_map["transformer.h."+str(i)+".input_layernorm"]   = mapped_to  # falcon7b
-        tensor_map["transformer.h."+str(i)+".ln_mlp"]            = mapped_to  # falcon40b
-        tensor_map["model.layers."+str(i)+".input_layernorm"]    = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention_norm"]           = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_NORM: (
+            "gpt_neox.layers.{bid}.input_layernorm", # gptneox
+            "transformer.h.{bid}.ln_1",              # gpt2
+            "transformer.blocks.{bid}.norm_1",       # mpt
+            "transformer.h.{bid}.input_layernorm",   # falcon7b
+            "transformer.h.{bid}.ln_mlp",            # falcon40b
+            "model.layers.{bid}.input_layernorm",    # llama-hf
+            "layers.{bid}.attention_norm",           # llama-pth
+        ),
 
         # Attention norm 2
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_NORM_2, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["transformer.h."+str(i)+".ln_attn"] = mapped_to  # falcon40b
+        MODEL_TENSOR.ATTN_NORM_2: (
+            "transformer.h.{bid}.ln_attn", # falcon40b
+        ),
 
         # Attention query-key-value
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_QKV, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["gpt_neox.layers."+str(i)+".attention.query_key_value"]    = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".attn.c_attn"]                    = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".attn.Wqkv"]                 = mapped_to  # mpt
-        tensor_map["transformer.h."+str(i)+".self_attention.query_key_value"] = mapped_to  # falcon
+        MODEL_TENSOR.ATTN_QKV: (
+            "gpt_neox.layers.{bid}.attention.query_key_value",    # gptneox
+            "transformer.h.{bid}.attn.c_attn",                    # gpt2
+            "transformer.blocks.{bid}.attn.Wqkv",                 # mpt
+            "transformer.h.{bid}.self_attention.query_key_value", # falcon
+        ),
 
         # Attention query
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_Q, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["model.layers."+str(i)+".self_attn.q_proj"] = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention.wq"]           = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_Q: (
+            "model.layers.{bid}.self_attn.q_proj", # llama-hf
+            "layers.{bid}.attention.wq",           # llama-pth
+        ),
 
         # Attention key
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_K, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["model.layers."+str(i)+".self_attn.k_proj"] = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention.wk"]           = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_K: (
+            "model.layers.{bid}.self_attn.k_proj", # llama-hf
+            "layers.{bid}.attention.wk",           # llama-pth
+        ),
 
         # Attention value
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_V, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["model.layers."+str(i)+".self_attn.v_proj"] = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention.wv"]           = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_V: (
+            "model.layers.{bid}.self_attn.v_proj", # llama-hf
+            "layers.{bid}.attention.wv",           # llama-pth
+        ),
 
         # Attention output
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_OUT, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["gpt_neox.layers."+str(i)+".attention.dense"]    = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".attn.c_proj"]          = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".attn.out_proj"]   = mapped_to  # mpt
-        tensor_map["transformer.h."+str(i)+".self_attention.dense"] = mapped_to  # falcon
-        tensor_map["model.layers."+str(i)+".self_attn.o_proj"]      = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention.wo"]                = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_OUT: (
+            "gpt_neox.layers.{bid}.attention.dense",    # gptneox
+            "transformer.h.{bid}.attn.c_proj",          # gpt2
+            "transformer.blocks.{bid}.attn.out_proj",   # mpt
+            "transformer.h.{bid}.self_attention.dense", # falcon
+            "model.layers.{bid}.self_attn.o_proj",      # llama-hf
+            "layers.{bid}.attention.wo",                # llama-pth
+        ),
 
         # Rotary embeddings
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.ATTN_ROT_EMBD, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["model.layers."+str(i)+".self_attn.rotary_emb.inv_freq"]  = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".attention.inner_attention.rope.freqs"] = mapped_to  # llama-pth
+        MODEL_TENSOR.ATTN_ROT_EMBD: (
+            "model.layers.{bid}.self_attn.rotary_emb.inv_freq",  # llama-hf
+            "layers.{bid}.attention.inner_attention.rope.freqs", # llama-pth
+        ),
 
         # Feed-forward norm
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_NORM, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["gpt_neox.layers."+str(i)+".post_attention_layernorm"] = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".ln_2"]                       = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".norm_2"]                = mapped_to  # mpt
-        tensor_map["model.layers."+str(i)+".post_attention_layernorm"]    = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".ffn_norm"]                          = mapped_to  # llama-pth
+        MODEL_TENSOR.FFN_NORM: (
+            "gpt_neox.layers.{bid}.post_attention_layernorm", # gptneox
+            "transformer.h.{bid}.ln_2",                       # gpt2
+            "transformer.blocks.{bid}.norm_2",                # mpt
+            "model.layers.{bid}.post_attention_layernorm",    # llama-hf
+            "layers.{bid}.ffn_norm",                          # llama-pth
+        ),
 
         # Feed-forward up
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_UP, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["gpt_neox.layers."+str(i)+".mlp.dense_h_to_4h"] = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".mlp.c_fc"]            = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".ffn.up_proj"]    = mapped_to  # mpt
-        tensor_map["transformer.h."+str(i)+".mlp.dense_h_to_4h"]   = mapped_to  # falcon
-        tensor_map["model.layers."+str(i)+".mlp.up_proj"]          = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".feed_forward.w3"]            = mapped_to  # llama-pth
+        MODEL_TENSOR.FFN_UP: (
+            "gpt_neox.layers.{bid}.mlp.dense_h_to_4h", # gptneox
+            "transformer.h.{bid}.mlp.c_fc",            # gpt2
+            "transformer.blocks.{bid}.ffn.up_proj",    # mpt
+            "transformer.h.{bid}.mlp.dense_h_to_4h",   # falcon
+            "model.layers.{bid}.mlp.up_proj",          # llama-hf
+            "layers.{bid}.feed_forward.w3",            # llama-pth
+        ),
 
         # Feed-forward gate
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_GATE, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
-
-        tensor_map["model.layers."+str(i)+".mlp.gate_proj"] = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".feed_forward.w1"]     = mapped_to  # llama-pth
+        MODEL_TENSOR.FFN_GATE: (
+            "model.layers.{bid}.mlp.gate_proj", # llama-hf
+            "layers.{bid}.feed_forward.w1",     # llama-pth
+        ),
 
         # Feed-forward down
-        mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_DOWN, None)
-        mapped_to = mapped_to.format(bid=i) if mapped_to is not None else None
+        MODEL_TENSOR.FFN_DOWN: (
+            "gpt_neox.layers.{bid}.mlp.dense_4h_to_h", # gptneox
+            "transformer.h.{bid}.mlp.c_proj",          # gpt2
+            "transformer.blocks.{bid}.ffn.down_proj",  # mpt
+            "transformer.h.{bid}.mlp.dense_4h_to_h",   # falcon
+            "model.layers.{bid}.mlp.down_proj",        # llama-hf
+            "layers.{bid}.feed_forward.w2",            # llama-pth
+        ),
+    }
 
-        tensor_map["gpt_neox.layers."+str(i)+".mlp.dense_4h_to_h"] = mapped_to  # gptneox
-        tensor_map["transformer.h."+str(i)+".mlp.c_proj"]          = mapped_to  # gpt2
-        tensor_map["transformer.blocks."+str(i)+".ffn.down_proj"]  = mapped_to  # mpt
-        tensor_map["transformer.h."+str(i)+".mlp.dense_4h_to_h"]   = mapped_to  # falcon
-        tensor_map["model.layers."+str(i)+".mlp.down_proj"]        = mapped_to  # llama-hf
-        tensor_map["layers."+str(i)+".feed_forward.w2"]            = mapped_to  # llama-pth
+    mapping: Dict[str, Tuple[MODEL_TENSOR, str]]
 
-    return tensor_map
+    tensor_names: Dict[MODEL_TENSOR, str]
 
+    def __init__(self, arch: MODEL_ARCH, n_blocks: int):
+        mapping = self.mapping = {}
+        tensor_names = self.tensor_names = MODEL_TENSOR_NAMES[arch]
+        for tensor, keys in self.mappings_cfg.items():
+            tensor_name = tensor_names.get(tensor)
+            if tensor_name is None:
+                continue
+            for key in keys:
+                mapping[key] = (tensor, tensor_name)
+        for bid in range(n_blocks):
+            for tensor, keys in self.block_mappings_cfg.items():
+                tensor_name = tensor_names.get(tensor)
+                if tensor_name is None:
+                    continue
+                tensor_name = tensor_name.format(bid = bid)
+                for key in keys:
+                    key = key.format(bid = bid)
+                    mapping[key] = (tensor, tensor_name)
+
+    def get_both(self, key: str, try_suffixes: Sequence[str]) -> Optional[Tuple[MODEL_TENSOR, str]]:
+        result = self.mapping.get(key)
+        if result is not None:
+            return result
+        for suffix in try_suffixes:
+            if key.endswith(suffix):
+                result = self.mapping.get(key[:-len(suffix)])
+                if result is not None:
+                    return (result[0], result[1] + suffix)
+        return None
+
+    def get_name(self, key: str, try_suffixes: Sequence[str]) -> Optional[str]:
+        result = self.get_both(key, try_suffixes = try_suffixes)
+        if result is None:
+            return None
+        return result[1]
+
+    def __getitem__(self, key: str) -> str:
+        try:
+            return self.mapping[key][1]
+        except KeyError:
+            raise KeyError(key)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.mapping
+
+    def __repr__(self) -> str:
+        return repr(self.mapping)
+
+def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> TensorNameMap:
+    return TensorNameMap(arch, n_blocks)
 
 class TokenType(IntEnum):
     NORMAL       = 1

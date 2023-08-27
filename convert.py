@@ -1013,7 +1013,8 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
             for (name, tensor) in model.items()}
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
-    tmap = gguf.get_tensor_name_map(ARCH, params.n_layer)
+    tmap = gguf.TensorNameMap(ARCH, params.n_layer)
+    should_skip: Set[gguf.MODEL_TENSOR] = gguf.MODEL_TENSOR_SKIP.get(ARCH, set())
 
     tmp = model
 
@@ -1035,23 +1036,16 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
 
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
-        name_new = name
-
-        if name in tmap:
-            name_new = tmap[name]
-        elif name.endswith(".weight") and name[:-7] in tmap:
-            name_new = tmap[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tmap:
-            name_new = tmap[name[:-5]] + ".bias"
-        else:
+        tensor_type, name_new = tmap.get_both(name, try_suffixes = (".weight", ".bias")) or (None, None)
+        if name_new is None:
             raise Exception(f"Unexpected tensor name: {name}")
 
-        if gguf.should_skip_tensor_TMP(ARCH, params.n_layer, name_new):
+        if tensor_type in should_skip:
             print(f"skipping tensor {name_new}")
             continue
-        else:
-            print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
-            out[name_new] = lazy_tensor
+
+        print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
+        out[name_new] = lazy_tensor
 
     return out
 
