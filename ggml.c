@@ -20229,7 +20229,7 @@ void gguf_add_tensor(
     const int idx = ctx->header.n_tensors;
     ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
-    ctx->infos[idx].name.n    = strlen(tensor->name) + 1;
+    ctx->infos[idx].name.n    = strlen(tensor->name);
     ctx->infos[idx].name.data = strdup(tensor->name);
 
     for (int i = 0; i < GGML_MAX_DIMS; ++i) {
