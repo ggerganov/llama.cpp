@@ -113,7 +113,7 @@ gguf_writer.add_file_type(ftype)
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[str] = []
+tokens: List[bytearray] = []
 scores: List[float] = []
 toktypes: List[int] = []
 merges: List[str] = []
@@ -199,7 +199,7 @@ head_dim = hparams["hidden_size"] // n_head
 print("gguf: get tensor metadata")
 
 if num_parts == 0:
-    part_names = ("pytorch_model.bin",)
+    part_names = iter(("pytorch_model.bin",))
 else:
     part_names = (
         f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
