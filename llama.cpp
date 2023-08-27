@@ -117,7 +117,10 @@ void replace_all(std::string & s, const std::string & search, const std::string 
     std::string result;
     for (size_t pos = 0; ; pos += search.length()) {
         auto new_pos = s.find(search, pos);
-        if (new_pos == std::string::npos) break;
+        if (new_pos == std::string::npos) {
+            result += s.substr(pos, s.size() - pos);
+            break;
+        }
         result += s.substr(pos, new_pos - pos) + replace;
         pos = new_pos;
     }
