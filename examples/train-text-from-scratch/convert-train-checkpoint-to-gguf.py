@@ -453,6 +453,7 @@ class Checkpoint:
     def save_gguf(self, gguf_writer):
         gguf_writer.add_architecture()
         gguf_writer.add_file_type(gguf.GGMLQuantizationType.F32)
+        gguf_writer.add_layer_norm_rms_eps(1e-5)
         gguf_writer.add_uint32(LLM_KV_TRAINING_FILE_VERSION,    0)
         gguf_writer.add_uint32(LLM_KV_TRAINING_ITERATION_COUNT, self.train_its)
         gguf_writer.add_uint32(LLM_KV_TRAINING_SAMPLE_COUNT,    self.train_samples)
