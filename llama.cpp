@@ -2233,7 +2233,6 @@ static struct ggml_cgraph * llm_build_llama(
     offload_func_t offload_func_nr   = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq   = llama_nop;
     offload_func_t offload_func_v    = llama_nop;
-    offload_func_t offload_func_skip = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
     if (n_gpu_layers > n_layer) {
@@ -2244,9 +2243,6 @@ static struct ggml_cgraph * llm_build_llama(
     }
     if (n_gpu_layers > n_layer + 2) {
         offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
-    }
-    if (n_gpu_layers > 0) {
-        offload_func_skip = ggml_cuda_assign_buffers_no_alloc;
     }
 #endif // GGML_USE_CUBLAS
 
@@ -2331,11 +2327,11 @@ static struct ggml_cgraph * llm_build_llama(
                 // otherwise for Metal we'd have to rebuild the concurrency list.
 
                 cur   = ggml_view_2d(ctx0, cur,   n_embd, 1,   cur->nb[1], (N - 1)*ggml_element_size(cur)*n_embd);
-                offload_func_skip(cur);
+                offload_func_kq(cur);
                 ggml_set_name(cur, "cur-lastpos");
 
                 inpSA = ggml_view_2d(ctx0, inpSA, n_embd, 1, inpSA->nb[1], (N - 1)*ggml_element_size(inpSA)*n_embd);
-                offload_func_skip(inpSA);
+                offload_func(inpSA);
                 ggml_set_name(inpSA, "inpSA-lastpos");
 
                 n_past += N - 1;
