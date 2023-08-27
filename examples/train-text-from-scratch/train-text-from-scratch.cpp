@@ -1492,11 +1492,11 @@ void set_logits_masked(struct ggml_tensor * logits, std::vector<bool>& mask, flo
     if (kid >= 0) { \
         enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
         if (ktype != (type)) { \
-            throw std::runtime_error("key has wrong type"); \
+            throw std::runtime_error(format("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype))); \
         } \
         (dst) = func(ctx, kid); \
     } else if (req) { \
-        throw std::runtime_error("key not found in model"); \
+        throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
     } \
 }
 
