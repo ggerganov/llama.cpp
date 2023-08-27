@@ -190,9 +190,13 @@ void perplexity(llama_context * ctx, const gpt_params & params) {
     const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
     const bool add_bos = is_spm;
 
+    auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
     auto tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+
+    auto tim2 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
 
     const int n_chunk_max = tokens.size() / params.n_ctx;
 
