@@ -100,7 +100,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    if (argc - arg_idx < 3) {
+    if (argc - arg_idx < 2) {
         usage(argv[0]);
     }
 
