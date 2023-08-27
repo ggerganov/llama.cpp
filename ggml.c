@@ -19524,8 +19524,8 @@ static bool gguf_fread_str_v1(FILE * file, struct gguf_str * p, size_t * offset)
     bool ok = true;
 
     uint32_t n = 0;
-    ok = ok && gguf_fread_el(file, &n,       sizeof(n),   offset); p->data = calloc(n + 1, 1); p->n = n;
-    ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
+    ok = ok && gguf_fread_el(file, &n,       sizeof(n), offset); p->data = calloc(n + 1, 1); p->n = n;
+    ok = ok && gguf_fread_el(file,  p->data, p->n,      offset);
 
     return ok;
 }
@@ -20071,7 +20071,7 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
     const int n_kv = gguf_get_n_kv(ctx);
 
     ctx->kv = realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
-    ctx->kv[n_kv].key.n    = strlen(key) + 1;
+    ctx->kv[n_kv].key.n    = strlen(key);
     ctx->kv[n_kv].key.data = strdup(key);
     ctx->header.n_kv++;
 
@@ -20159,7 +20159,7 @@ void gguf_set_val_str(struct gguf_context * ctx, const char * key, const char * 
     const int idx = gguf_get_or_add_key(ctx, key);
 
     ctx->kv[idx].type           = GGUF_TYPE_STRING;
-    ctx->kv[idx].value.str.n    = strlen(val) + 1;
+    ctx->kv[idx].value.str.n    = strlen(val);
     ctx->kv[idx].value.str.data = strdup(val);
 }
 
@@ -20182,7 +20182,7 @@ void gguf_set_arr_str(struct gguf_context * ctx, const char * key, const char **
     ctx->kv[idx].value.arr.data = malloc(n*sizeof(struct gguf_str));
     for (int i = 0; i < n; i++) {
         struct gguf_str * str = &((struct gguf_str *)ctx->kv[idx].value.arr.data)[i];
-        str->n    = strlen(data[i]) + 1;
+        str->n    = strlen(data[i]);
         str->data = strdup(data[i]);
     }
 }
@@ -20229,7 +20229,7 @@ void gguf_add_tensor(
     const int idx = ctx->header.n_tensors;
     ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
-    ctx->infos[idx].name.n    = strlen(tensor->name) + 1;
+    ctx->infos[idx].name.n    = strlen(tensor->name);
     ctx->infos[idx].name.data = strdup(tensor->name);
 
     for (int i = 0; i < GGML_MAX_DIMS; ++i) {
