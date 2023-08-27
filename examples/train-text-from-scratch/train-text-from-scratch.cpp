@@ -1665,18 +1665,18 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     
     std::vector<char> keybuf;
     keybuf.resize(512);
-    auto kv = [arch, &keybuf](const char * key) -> const char * {
+    auto kv = [&arch, &keybuf](const char * key) -> const char * {
         snprintf(keybuf.data(), keybuf.size(), key, arch.c_str());
         return keybuf.data();
     };
 
     std::vector<char> tn_buf;
     tn_buf.resize(GGML_MAX_NAME);
-    auto tn = [arch, &tn_buf](const char * key) -> const char * {
+    auto tn = [&arch, &tn_buf](const char * key) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", key);
         return tn_buf.data();
     };
-    auto tni = [arch, &tn_buf](const char * key, int bid) -> const char * {
+    auto tni = [&arch, &tn_buf](const char * key, int bid) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), key, bid);
         std::string s = tn_buf.data();
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", s.c_str());
