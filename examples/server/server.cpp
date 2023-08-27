@@ -94,7 +94,7 @@ static std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
     std::string ret;
     for (; begin != end; ++begin)
     {
-        ret += llama_token_to_str(ctx, *begin);
+        ret += llama_token_to_piece(ctx, *begin);
     }
     return ret;
 }
@@ -123,7 +123,7 @@ static void server_log(const char *level, const char *function, int line,
 // format incomplete utf-8 multibyte character for output
 static std::string tokens_to_output_formatted_string(const llama_context *ctx, const llama_token token)
 {
-    std::string out = token == -1 ? "" : llama_token_to_str(ctx, token);
+    std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
     // if the size is 1 and first bit is 1, meaning it's a partial character
     //   (size > 1 meaning it's already a known token)
     if (out.size() == 1 && (out[0] & 0x80) == 0x80)
@@ -286,7 +286,6 @@ struct llama_server_context
                     std::vector<llama_token> p;
                     if (first)
                     {
-                        s.insert(0, 1, ' '); // add a space if it's the first
                         p = ::llama_tokenize(ctx, s, add_bos);
                         first = false;
                     }
@@ -309,7 +308,6 @@ struct llama_server_context
         else
         {
             auto s = json_prompt.template get<std::string>();
-            s.insert(0, 1, ' '); // always add a first space
             prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
         }
 
@@ -566,7 +564,7 @@ struct llama_server_context
 
         if (!embd.empty() && embd.back() == llama_token_eos(ctx))
         {
-            // stopping_word = llama_token_to_str(ctx, embd.back());
+            // stopping_word = llama_token_to_piece(ctx, embd.back());
             has_next_token = false;
             stopped_eos = true;
             LOG_VERBOSE("eos token found", {});
@@ -613,7 +611,7 @@ struct llama_server_context
     {
         const completion_token_output token_with_probs = nextToken();
 
-        const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(ctx, token_with_probs.tok);
+        const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_piece(ctx, token_with_probs.tok);
         generated_text += token_text;
 
         if (params.n_probs > 0)
@@ -1104,6 +1102,12 @@ static json format_tokenizer_response(const std::vector<llama_token> &tokens)
         {"tokens", tokens}};
 }
 
+static json format_detokenized_response(std::string content)
+{
+    return json{
+        {"content", content}};
+}
+
 template <typename T>
 static T json_value(const json &body, const std::string &key, const T &default_value)
 {
@@ -1209,6 +1213,62 @@ static void log_server_request(const Request &req, const Response &res)
                            });
 }
 
+bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
+    return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
+}
+
+// Function matching type llama_beam_search_callback_fn_t.
+// Custom callback example is called each time the beams lengths increase:
+//  * Show progress by printing ',' following by number of convergent beam tokens if any.
+//  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
+//    This is also called when the stop condition is met.
+//    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
+void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
+    auto & llama = *static_cast<llama_server_context*>(callback_data);
+    // Mark beams as EOS as needed.
+    for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
+        llama_beam_view& beam_view = beams_state.beam_views[i];
+        if (!beam_view.eob && is_at_eob(llama, beam_view.tokens, beam_view.n_tokens)) {
+            beam_view.eob = true;
+        }
+    }
+    printf(",");  // Show progress
+    if (const size_t n = beams_state.common_prefix_length) {
+        llama.generated_token_probs.resize(llama.generated_token_probs.size() + n);
+        assert(0u < beams_state.n_beams);
+        const llama_token * tokens = beams_state.beam_views[0].tokens;
+        const auto map = [](llama_token tok) { return completion_token_output{{},tok}; };
+        std::transform(tokens, tokens + n, llama.generated_token_probs.end() - n, map);
+        printf("%lu", n);
+    }
+    fflush(stdout);
+#if 0 // DEBUG: print current beams for this iteration
+    std::cout << "\n\nCurrent beams:\n";
+    for (size_t i=0 ; i < beams_state.n_beams ; ++i) {
+        std::cout << "beams["<<i<<"]: " << ostream_beam_view{state.ctx,beams_state.beam_views[i]} << std::endl;
+    }
+#endif
+}
+
+struct token_translator {
+    llama_context * ctx;
+    std::string operator()(llama_token tok) const { return llama_token_to_piece(ctx, tok); }
+    std::string operator()(completion_token_output cto) const { return (*this)(cto.tok); }
+};
+
+void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
+    auto & gtps = llama.generated_token_probs;
+    auto translator = token_translator{llama.ctx};
+    auto add_strlen = [=](size_t sum, const completion_token_output & cto) { return sum + translator(cto).size(); };
+    const size_t len = std::accumulate(gtps.begin(), gtps.end(), size_t(0), add_strlen);
+    if (llama.generated_text.capacity() < llama.generated_text.size() + len) {
+        llama.generated_text.reserve(llama.generated_text.size() + len);
+    }
+    for (const completion_token_output & cto : gtps) {
+        llama.generated_text += translator(cto);
+    }
+}
+
 int main(int argc, char **argv)
 {
     // own arguments required by this example
@@ -1291,22 +1351,30 @@ int main(int argc, char **argv)
         llama.beginCompletion();
 
         if (!llama.stream) {
-            size_t stop_pos = std::string::npos;
+            if (llama.params.n_beams) {
+                // Fill llama.generated_token_probs vector with final beam.
+                llama_beam_search(llama.ctx, beam_search_callback, &llama, llama.params.n_beams,
+                                  llama.n_past, llama.n_remain, llama.params.n_threads);
+                // Translate llama.generated_token_probs to llama.generated_text.
+                append_to_generated_text_from_generated_token_probs(llama);
+            } else {
+                size_t stop_pos = std::string::npos;
 
-            while (llama.has_next_token) {
-                const completion_token_output token_with_probs = llama.doCompletion();
-                const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_str(llama.ctx, token_with_probs.tok);
+                while (llama.has_next_token) {
+                    const completion_token_output token_with_probs = llama.doCompletion();
+                    const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_piece(llama.ctx, token_with_probs.tok);
 
-                stop_pos = llama.findStoppingStrings(llama.generated_text,
-                    token_text.size(), STOP_FULL);
-            }
+                    stop_pos = llama.findStoppingStrings(llama.generated_text,
+                        token_text.size(), STOP_FULL);
+                }
 
-            if (stop_pos == std::string::npos) {
-                stop_pos = llama.findStoppingStrings(llama.generated_text, 0, STOP_PARTIAL);
-            }
-            if (stop_pos != std::string::npos) {
-                llama.generated_text.erase(llama.generated_text.begin() + stop_pos,
-                    llama.generated_text.end());
+                if (stop_pos == std::string::npos) {
+                    stop_pos = llama.findStoppingStrings(llama.generated_text, 0, STOP_PARTIAL);
+                }
+                if (stop_pos != std::string::npos) {
+                    llama.generated_text.erase(llama.generated_text.begin() + stop_pos,
+                        llama.generated_text.end());
+                }
             }
 
             const json data = format_final_response(llama, llama.generated_text, llama.generated_token_probs);
@@ -1325,7 +1393,7 @@ int main(int argc, char **argv)
                     if (token_with_probs.tok == -1 || llama.multibyte_pending > 0) {
                         continue;
                     }
-                    const std::string token_text = llama_token_to_str(llama.ctx, token_with_probs.tok);
+                    const std::string token_text = llama_token_to_piece(llama.ctx, token_with_probs.tok);
 
                     size_t pos = std::min(sent_count, llama.generated_text.size());
 
@@ -1435,6 +1503,21 @@ int main(int argc, char **argv)
             tokens = llama.tokenize(body["content"], false);
         }
         const json data = format_tokenizer_response(tokens);
+        return res.set_content(data.dump(), "application/json"); });
+
+    svr.Post("/detokenize", [&llama](const Request &req, Response &res)
+             {
+        auto lock = llama.lock();
+
+        const json body = json::parse(req.body);
+        std::string content;
+        if (body.count("tokens") != 0)
+        {
+            const std::vector<llama_token> tokens = body["tokens"];
+            content = tokens_to_str(llama.ctx, tokens.cbegin(), tokens.cend());
+        }
+
+        const json data = format_detokenized_response(content);
         return res.set_content(data.dump(), "application/json"); });
 
     svr.Post("/embedding", [&llama](const Request &req, Response &res)
