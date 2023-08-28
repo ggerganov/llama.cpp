@@ -18,6 +18,53 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+uint32_t compute_data_checksum(struct ggml_tensor * tensor) {
+    const int n3 = (tensor->n_dims >= 3) ? tensor->ne[3] : 1;
+    const int n2 = (tensor->n_dims >= 2) ? tensor->ne[2] : 1;
+    const int n1 = (tensor->n_dims >= 1) ? tensor->ne[1] : 1;
+    const int n0 = (tensor->n_dims >= 0) ? tensor->ne[0] : 1;
+    const size_t nb0 = tensor->nb[0];
+    const size_t nb1 = tensor->nb[1];
+    const size_t nb2 = tensor->nb[2];
+    const size_t nb3 = tensor->nb[3];
+    const size_t nb  = ggml_element_size(tensor);
+    uint32_t result = 0;
+    for (int i3 = 0; i3 < n3; ++i3) {
+        for (int i2 = 0; i2 < n2; ++i2) {
+            for (int i1 = 0; i1 < n1; ++i1) {
+                for (int i0 = 0; i0 < n0; ++i0) {
+                    char * ptr = ((char *) tensor->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3);
+                    uint32_t val;
+                    memcpy(&val, ptr, nb);
+                    result = result ^ val;
+                    result = (((result << 1u) | ((result >> 31u) & 0x1u)) + 1u) & 0xffffffffu;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+void print_data_checksum(struct ggml_tensor * tensor) {
+    uint32_t chk = compute_data_checksum(tensor);
+    printf("%s: chk=[%08x] data=[%p] name=%s\n", __func__, chk, tensor->data, ggml_get_name(tensor));
+}
+
+void print_data_checksums(struct ggml_cgraph * g) {
+    for (int i = 0; i < g->n_nodes; ++i) {
+        struct ggml_tensor * node = g->nodes[i];
+        for (int j = 0; j<GGML_MAX_SRC; ++j) {
+            if (node->src[j]) {
+                struct ggml_tensor * src = node->src[j];
+                uint32_t chk = compute_data_checksum(src);
+                printf("%s: node[%3d]->src[%d] chk=[%08x] data=[%p] op=%s name=%s\n", __func__, i, j, chk, src->data, ggml_op_name(src->op), ggml_get_name(src));
+            }
+        }
+        uint32_t chk = compute_data_checksum(node);
+        printf("%s: node[%3d]         chk=[%08x] data=[%p] op=%s name=%s\n", __func__, i, chk, node->data, ggml_op_name(node->op), ggml_get_name(node));
+    }
+}
+
 struct random_normal_distribution {
     std::mt19937 gen;
     std::normal_distribution<float> rd;
@@ -1567,6 +1614,12 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         read_tensor_by_name(opt->adam.m,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
         read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
         read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
+
+        print_data_checksum(opt->adam.m);
+        print_data_checksum(opt->adam.v);
+        if (opt->adam.pf) {
+            print_data_checksum(opt->adam.pf);
+        }
     } else if (opt_type == LLM_KV_OPTIMIZER_TYPE_LBFGS) {
         opt->params.type = GGML_OPT_LBFGS;
 
@@ -1615,6 +1668,12 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
                 ggml_set_name(opt->adam.v, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
                 if (opt->adam.pf) {
                     ggml_set_name(opt->adam.pf, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
+                }
+
+                print_data_checksum(opt->adam.m);
+                print_data_checksum(opt->adam.v);
+                if (opt->adam.pf) {
+                    print_data_checksum(opt->adam.pf);
                 }
 
                 gguf_add_tensor(fctx, opt->adam.m);
@@ -1719,6 +1778,10 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     read_tensor_by_name(model->norm,           f_ggml_ctx, tn(LLM_TENSOR_OUTPUT_NORM));
     read_tensor_by_name(model->output,         f_ggml_ctx, tn(LLM_TENSOR_OUTPUT));
 
+    print_data_checksum(model->tok_embeddings);
+    print_data_checksum(model->norm);
+    print_data_checksum(model->output);
+
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
@@ -1731,6 +1794,16 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         read_tensor_by_name(layer.w1,             f_ggml_ctx, tni(LLM_TENSOR_FFN_GATE, i));
         read_tensor_by_name(layer.w2,             f_ggml_ctx, tni(LLM_TENSOR_FFN_DOWN, i));
         read_tensor_by_name(layer.w3,             f_ggml_ctx, tni(LLM_TENSOR_FFN_UP, i));
+
+        print_data_checksum(layer.attention_norm);
+        print_data_checksum(layer.wq);
+        print_data_checksum(layer.wk);
+        print_data_checksum(layer.wv);
+        print_data_checksum(layer.wo);
+        print_data_checksum(layer.ffn_norm);
+        print_data_checksum(layer.w1);
+        print_data_checksum(layer.w2);
+        print_data_checksum(layer.w3);
     }
 }
 
@@ -1857,12 +1930,26 @@ void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vocab_mod
         gguf_free(vctx);
     }
 
+    print_data_checksum(model->tok_embeddings);
+    print_data_checksum(model->norm);
+    print_data_checksum(model->output);
+
     // add tensors
     gguf_add_tensor(fctx, model->tok_embeddings);
     gguf_add_tensor(fctx, model->norm);
     gguf_add_tensor(fctx, model->output);
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
+
+        print_data_checksum(layer.attention_norm);
+        print_data_checksum(layer.wq);
+        print_data_checksum(layer.wk);
+        print_data_checksum(layer.wv);
+        print_data_checksum(layer.wo);
+        print_data_checksum(layer.ffn_norm);
+        print_data_checksum(layer.w1);
+        print_data_checksum(layer.w2);
+        print_data_checksum(layer.w3);
 
         gguf_add_tensor(fctx, layer.attention_norm);
         gguf_add_tensor(fctx, layer.wq);
