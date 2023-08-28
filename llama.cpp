@@ -6257,10 +6257,6 @@ void llama_log_set(llama_log_callback log_callback, void * user_data) {
     g_state.log_callback_user_data = user_data;
 }
 
-#if defined(_MSC_VER) && !defined(vsnprintf)
-#define vsnprintf _vsnprintf
-#endif
-
 static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
