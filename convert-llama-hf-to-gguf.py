@@ -13,6 +13,8 @@ from typing import Any, List, Optional, TypeAlias
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
+from convert import SpecialVocab
+
 #NDArray = np.ndarray[Any, Any]
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
@@ -189,62 +191,8 @@ if Path(dir_model + "/tokenizer.model").is_file():
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)
 
-
-print("gguf: get special token ids")
-
-if Path(dir_model + "/tokenizer.json").is_file():
-    # Look for special tokens in tokenizer.json if it exists
-
-    with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
-        tokenizer = json.load(f)
-
-    if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
-
-        with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
-            tokenizer_config = json.load(f)
-
-        if "bos_token" in tokenizer_config and tokenizer_config["bos_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["bos_token"]["content"]:
-                    gguf_writer.add_bos_token_id(key["id"])
-
-        if "eos_token" in tokenizer_config and tokenizer_config["eos_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["eos_token"]["content"]:
-                    gguf_writer.add_eos_token_id(key["id"])
-
-        if "unk_token" in tokenizer_config and tokenizer_config["unk_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["unk_token"]["content"]:
-                    gguf_writer.add_unk_token_id(key["id"])
-
-        if "sep_token" in tokenizer_config and tokenizer_config["sep_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["sep_token"]["content"]:
-                    gguf_writer.add_sep_token_id(key["id"])
-
-        if "pad_token" in tokenizer_config and tokenizer_config["pad_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["pad_token"]["content"]:
-                    gguf_writer.add_pad_token_id(key["id"])
-else:
-    # If no tokenizer.json: Look for special tokens in config.json
-
-    if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
-        gguf_writer.add_bos_token_id(hparams["bos_token_id"])
-
-    if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
-        gguf_writer.add_eos_token_id(hparams["eos_token_id"])
-
-    if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
-        gguf_writer.add_unk_token_id(hparams["unk_token_id"])
-
-    if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
-        gguf_writer.add_sep_token_id(hparams["sep_token_id"])
-
-    if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
-        gguf_writer.add_pad_token_id(hparams["pad_token_id"])
-
+special_vocab = SpecialVocab(Path(dir_model))
+special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
 

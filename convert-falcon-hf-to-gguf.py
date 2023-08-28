@@ -13,6 +13,8 @@ from typing import Any, List
 from pathlib import Path
 from transformers import AutoTokenizer
 
+from convert import SpecialVocab
+
 def bytes_to_unicode():
     # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
     """
@@ -116,20 +118,13 @@ print("gguf: get tokenizer metadata")
 tokens: List[bytearray] = []
 scores: List[float] = []
 toktypes: List[int] = []
-merges: List[str] = []
-
 
 if Path(dir_model + "/tokenizer.json").is_file():
     # gpt2 tokenizer
     gguf_writer.add_tokenizer_model("gpt2")
 
-    print("gguf: get gpt2 tokenizer merges")
-
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer_json = json.load(f)
-    merges = tokenizer_json["model"]["merges"]
-
-    gguf_writer.add_token_merges(merges)
 
     print("gguf: get gpt2 tokenizer vocab")
 
@@ -166,24 +161,8 @@ if Path(dir_model + "/tokenizer.json").is_file():
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)
 
-print("gguf: get special token ids")
-# Look for special tokens in config.json
-
-if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
-    gguf_writer.add_bos_token_id(hparams["bos_token_id"])
-
-if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
-    gguf_writer.add_eos_token_id(hparams["eos_token_id"])
-
-if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
-    gguf_writer.add_unk_token_id(hparams["unk_token_id"])
-
-if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
-    gguf_writer.add_sep_token_id(hparams["sep_token_id"])
-
-if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
-    gguf_writer.add_pad_token_id(hparams["pad_token_id"])
-
+special_vocab = SpecialVocab(Path(dir_model))
+special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
 

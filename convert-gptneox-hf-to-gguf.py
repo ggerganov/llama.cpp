@@ -13,6 +13,8 @@ from typing import Any, List
 from pathlib import Path
 from transformers import AutoTokenizer
 
+from convert import SpecialVocab
+
 # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
 
 
@@ -112,20 +114,13 @@ gguf_writer.add_layer_norm_eps(hparams["layer_norm_eps"])
 print("gguf: get tokenizer metadata")
 
 tokens: List[bytearray] = []
-merges: List[str] = []
-
 
 if Path(dir_model + "/tokenizer.json").is_file():
     # gpt2 tokenizer
     gguf_writer.add_tokenizer_model("gpt2")
 
-    print("gguf: get gpt2 tokenizer merges")
-
     with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
         tokenizer_json = json.load(f)
-    merges = tokenizer_json["model"]["merges"]
-
-    gguf_writer.add_token_merges(merges)
 
     print("gguf: get gpt2 tokenizer vocab")
 
@@ -158,39 +153,8 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     gguf_writer.add_token_list(tokens)
 
-    if "added_tokens" in tokenizer_json and Path(dir_model + "/tokenizer_config.json").is_file():
-        print("gguf: get special token ids")
-
-        with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
-            tokenizer_config = json.load(f)
-
-        # find special token ids
-
-        if "bos_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["bos_token"]:
-                    gguf_writer.add_bos_token_id(key["id"])
-
-        if "eos_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["eos_token"]:
-                    gguf_writer.add_eos_token_id(key["id"])
-
-        if "unk_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["unk_token"]:
-                    gguf_writer.add_unk_token_id(key["id"])
-
-        if "sep_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["sep_token"]:
-                    gguf_writer.add_sep_token_id(key["id"])
-
-        if "pad_token" in tokenizer_config:
-            for key in tokenizer_json["added_tokens"]:
-                if key["content"] == tokenizer_config["pad_token"]:
-                    gguf_writer.add_pad_token_id(key["id"])
-
+special_vocab = SpecialVocab(Path(dir_model))
+special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
 
