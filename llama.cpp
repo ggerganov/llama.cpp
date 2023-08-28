@@ -5572,8 +5572,8 @@ int llama_n_embd(const struct llama_context * ctx) {
     return ctx->model.hparams.n_embd;
 }
 
-int llama_n_mult(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_mult;
+int llama_n_ff(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_ff;
 }
 
 int llama_n_head(const struct llama_context * ctx) {
@@ -5604,8 +5604,8 @@ int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int llama_model_n_mult(const struct llama_model * model) {
-    return model->hparams.n_mult;
+int llama_model_n_ff(const struct llama_model * model) {
+    return model->hparams.n_ff;
 }
 
 int llama_model_n_head(const struct llama_model * model) {
