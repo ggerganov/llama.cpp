@@ -1561,8 +1561,8 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         ggml_opt_init(opt->ctx, opt, opt->params, opt->nx);
 
         read_tensor_by_name(opt->adam.m,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
-        read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
-        read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+        read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
+        read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
     } else if (opt_type == LLM_KV_OPTIMIZER_TYPE_LBFGS) {
         opt->params.type = GGML_OPT_LBFGS;
 
