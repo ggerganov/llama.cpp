@@ -154,19 +154,6 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
     return tensor;
 }
 
-struct llama_vocab {
-    using id    = int32_t;
-    using token = std::string;
-
-    struct token_score {
-        token tok;
-        float score;
-    };
-
-    std::unordered_map<token, id> token_to_id;
-    std::vector<token_score> id_to_token;
-};
-
 struct my_llama_hparams {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;   // this is provided as user input?
@@ -2303,25 +2290,6 @@ int main(int argc, char ** argv) {
     printf("%s: model base = '%s'\n", __func__, params.fn_model_base);
     struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_params);
     struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
-
-    //struct llama_vocab vocab;
-    //{
-    //    std::vector<const char *> strings;
-    //    std::vector<float> scores;
-    //    int n_vocab = llama_n_vocab(lctx);
-    //    strings.resize(n_vocab, NULL);
-    //    scores.resize(n_vocab, 0);
-    //    n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-    //    GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
-    //    vocab.id_to_token.resize(n_vocab);
-    //    for (int i=0; i<n_vocab; ++i) {
-    //        std::string tok   = std::string(strings[i]);
-    //        float       score = scores[i];
-    //        vocab.id_to_token[i].tok   = tok;
-    //        vocab.id_to_token[i].score = score;
-    //        vocab.token_to_id.emplace(tok, i);
-    //    }
-    //}
 
     printf("%s: tokenize training data\n", __func__);
     std::vector<llama_token> train_tokens;
