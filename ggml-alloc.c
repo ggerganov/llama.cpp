@@ -268,7 +268,7 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
@@ -297,7 +297,7 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
@@ -556,7 +556,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                                 struct ggml_tensor * view_src = get_view_source(parent);
                                 struct hash_node * view_src_hn = hash_get(ht, view_src);
                                 view_src_hn->n_views -= 1;
-                                AT_PRINTF("view_src %s\n", view_src->name);
+                                AT_PRINTF("view_src %s: %d children, %d views\n", view_src->name, view_src_hn->n_children, view_src_hn->n_views);
                                 if (view_src_hn->n_views == 0 && view_src_hn->n_children == 0 && view_src->data != node->data) {
                                     ggml_allocator_free_tensor(alloc, view_src);
                                 }

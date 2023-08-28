@@ -719,7 +719,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    fprintf(stdout, "  -lv, --low-vram don't allocate VRAM scratch buffer\n");
+    fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
     fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
     fprintf(stdout, "                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
     fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
