@@ -816,7 +816,7 @@ cd build
 cmake --build . --config Release
 ```
 
-Move your model to the $HOME directory in Termux, for example:
+Move your model inside `/data/data/com.termux/files/home`, for example:
 ```
 cd
 cd storage/downloads
