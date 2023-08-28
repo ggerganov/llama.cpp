@@ -369,7 +369,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch convert-llama2c-to-ggml embd-input-test gguf llama-bench build-info.h $(TEST_TARGETS)
+	rm -vf *.o tests/*.o *.so *.dll main quantize quantize-stats perplexity embedding benchmark-matmult save-load-state server simple vdot train-text-from-scratch convert-llama2c-to-ggml embd-input-test gguf llama-bench build-info.h $(TEST_TARGETS)
 
 #
 # Examples
@@ -470,4 +470,4 @@ tests/test-tokenizer-0: tests/test-tokenizer-0.cpp build-info.h ggml.o llama.o c
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
 tests/test-c.o: tests/test-c.c llama.h
-	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
+	$(CC) $(CFLAGS) -Werror=implicit-int -c $(filter-out %.h,$^) -o $@
