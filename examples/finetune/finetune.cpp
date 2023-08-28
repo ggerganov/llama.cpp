@@ -568,7 +568,6 @@ static size_t hash_find(void * hash_table[], void * p) {
 }
 
 static bool hash_insert(void * hash_table[], void * p) {
-    size_t h = hash(p);
     size_t i = hash_find(hash_table, p);
 
     GGML_ASSERT(i < GGML_GRAPH_HASHTABLE_SIZE); // assert that not full
@@ -592,7 +591,6 @@ struct hash_map {
     void * keys[GGML_GRAPH_HASHTABLE_SIZE];
     void * vals[GGML_GRAPH_HASHTABLE_SIZE];
 };
-static const size_t HASH_MAP_SIZE = sizeof(struct hash_map);
 
 struct hash_map * new_hash_map() {
     struct hash_map * result = new struct hash_map;
