@@ -189,12 +189,14 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    // Add BOS if SPM tokenizer
+    const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
 
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
+
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        embd_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
         embd_inp = session_tokens;
     }
@@ -209,10 +211,9 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        params.cfg_negative_prompt.insert(0, 1, ' ');
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, is_spm);
+        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
     }
@@ -259,7 +260,7 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", is_spm);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
     const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
@@ -278,7 +279,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]).c_str());
+            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (ctx_guidance) {
@@ -286,14 +287,14 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
             fprintf(stderr, "%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
-                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_str(ctx, guidance_inp[i]).c_str());
+                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
         }
 
         if (params.n_keep > 0) {
         fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                fprintf(stderr, "%s", llama_token_to_str(ctx, embd_inp[i]).c_str());
+                fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             fprintf(stderr, "'\n");
         }
@@ -449,7 +450,7 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
                 //printf("resetting: '");
                 //for (int i = 0; i < (int) embd.size(); i++) {
-                //    printf("%s", llama_token_to_str(ctx, embd[i]));
+                //    printf("%s", llama_token_to_piece(ctx, embd[i]));
                 //}
                 //printf("'\n");
                 //printf("\n---\n");
@@ -502,7 +503,7 @@ int main(int argc, char ** argv) {
                     input_size = embd_guidance.size();
                     //fprintf(stderr, "\n---------------------\n");
                     //for (int i = 0; i < (int) embd_guidance.size(); i++) {
-                        //fprintf(stderr, "%s", llama_token_to_str(ctx, embd_guidance[i]));
+                        //fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_guidance[i]));
                     //}
                     //fprintf(stderr, "\n---------------------\n");
                 } else {
@@ -597,7 +598,12 @@ int main(int argc, char ** argv) {
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
                 if (!penalize_nl) {
-                    logits[llama_token_nl(ctx)] = nl_logit;
+                    for (size_t idx = 0; idx < candidates_p.size; idx++) {
+                        if (candidates_p.data[idx].id == llama_token_nl(ctx)) {
+                            candidates_p.data[idx].logit = nl_logit;
+                            break;
+                        }
+                    }
                 }
 
                 if (grammar != NULL) {
@@ -661,7 +667,7 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                printf("%s", llama_token_to_str(ctx, id).c_str());
+                printf("%s", llama_token_to_piece(ctx, id).c_str());
             }
             fflush(stdout);
         }
@@ -677,7 +683,7 @@ int main(int argc, char ** argv) {
             if (params.antiprompt.size()) {
                 std::string last_output;
                 for (auto id : last_n_tokens) {
-                    last_output += llama_token_to_str(ctx, id);
+                    last_output += llama_token_to_piece(ctx, id);
                 }
 
                 is_antiprompt = false;
@@ -798,7 +804,8 @@ int main(int argc, char ** argv) {
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
-        if (params.interactive && n_remain <= 0 && params.n_predict != -1) {
+        // We skip this logic when n_predict == -1 (infinite) or -2 (stop at context size).
+        if (params.interactive && n_remain <= 0 && params.n_predict >= 0) {
             n_remain = params.n_predict;
             is_interacting = true;
         }

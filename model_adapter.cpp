@@ -256,7 +256,13 @@ void print_tok_vec(std::vector<float> &embd)
     {
         fin.close();
         fileformat = FileFormat::GGUF_LLAMA;
-        auto ctx = gguf_read_headers(fname.c_str());
+
+        struct gguf_init_params ggufparams;
+        ggufparams.no_alloc = true;
+        ggufparams.ctx = NULL;
+
+        auto ctx  = gguf_init_from_file(fname.c_str(), ggufparams);
+
         auto keyidx = gguf_find_key(ctx, "general.architecture");
         std::string modelarch = "";
         if (keyidx != -1) { modelarch = gguf_get_val_str(ctx, keyidx); }

@@ -613,9 +613,11 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
     fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
+#ifdef GGML_USE_CUBLAS
     fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
-    fprintf(stdout, "                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
+    fprintf(stdout, "                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
     fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
+#endif // GGML_USE_CUBLAS
 #endif
     fprintf(stdout, "  --mtest               compute maximum memory usage\n");
     fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");
@@ -731,16 +733,49 @@ std::vector<llama_token> llama_tokenize(
     return result;
 }
 
-std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(ctx, token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        int check = llama_token_to_piece(ctx, token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
     }
 
     return std::string(result.data(), result.size());
+}
+
+std::string llama_detokenize_spm(llama_context * ctx, const std::vector<llama_token> & tokens) {
+    const llama_token bos_id = llama_token_bos(ctx);
+
+    std::string piece;
+    std::string result;
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        piece = llama_token_to_piece(ctx, tokens[i]);
+
+        // remove the leading space of the first non-BOS token
+        if (((tokens[0] == bos_id && i == 1) || (tokens[0] != bos_id && i == 0)) && piece[0] == ' ') {
+            piece = piece.substr(1);
+        }
+
+        result += piece;
+    }
+
+    return result;
+}
+
+std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_token> & tokens) {
+    std::string piece;
+    std::string result;
+
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        piece = llama_token_to_piece(ctx, tokens[i]);
+
+        result += piece;
+    }
+
+    return result;
 }
