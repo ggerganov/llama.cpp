@@ -816,7 +816,7 @@ cd build
 cmake --build . --config Release
 ```
 
-Move your model to the home directory (~/), for example:
+Move your model to the home directory (`~/`), for example:
 ```
 cd
 cd storage/downloads
