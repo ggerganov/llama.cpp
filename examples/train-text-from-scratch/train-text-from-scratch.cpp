@@ -1294,7 +1294,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     FILE * fp = std::fopen(filename, "rb");
     if (fp == NULL) {
         return 0;
-    } 
+    }
 
 #ifdef _WIN32
     GGML_ASSERT(_fseeki64(fp, (__int64) 0, SEEK_END) == 0);
@@ -1666,7 +1666,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
 void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
     std::string arch;
-    
+
     std::vector<char> keybuf;
     keybuf.resize(512);
     auto kv = [&arch, &keybuf](const char * key) -> const char * {
@@ -1701,10 +1701,10 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     GGUF_GET_KEY(fctx, model->hparams.n_ff,    gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_FEED_FORWARD_LENGTH));
     GGUF_GET_KEY(fctx, model->hparams.n_head,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
     GGUF_GET_KEY(fctx, model->hparams.n_layer, gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_BLOCK_COUNT));
-    
+
     model->hparams.n_rot = model->hparams.n_embd / model->hparams.n_head;
     GGUF_GET_KEY(fctx, model->hparams.n_rot,   gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ROPE_DIMENSION_COUNT));
-    
+
     float rope_freq_scale = 1.0f;
     GGUF_GET_KEY(fctx, model->hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
     GGUF_GET_KEY(fctx, model->hparams.rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
