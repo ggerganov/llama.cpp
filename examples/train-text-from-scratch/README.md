@@ -14,8 +14,8 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
         --checkpoint-out chk-shakespeare-256x16.gguf \
         --model-out ggml-shakespeare-256x16-f32.gguf \
         --train-data "shakespeare.txt" \
-        -t 6 -b 16 -n 32 --seed 1 --adam-iter 16 \
-        --print-details-interval 0 --predict 16 --use-flash
+        -t 6 -b 16 --seed 1 --adam-iter 256 \
+        --no-checkpointing
 
 # predict
 ./bin/main -m ggml-shakespeare-256x16-f32.gguf
