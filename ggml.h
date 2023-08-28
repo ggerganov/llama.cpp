@@ -952,11 +952,11 @@ extern "C" {
 
     // a - x
     // b - dy
-    // TODO: update with configurable eps
     GGML_API struct ggml_tensor * ggml_rms_norm_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            float                 eps);
 
     // A: n columns, m rows
     // B: n columns, p rows  (i.e. we transpose it internally)
@@ -1612,7 +1612,8 @@ extern "C" {
             struct ggml_tensor  * tensor);
 
 
-    GGML_API void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
+    GGML_API void ggml_build_forward_expand (struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
+    GGML_API void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * gf, struct ggml_cgraph * gb, bool keep);
 
     GGML_API struct ggml_cgraph ggml_build_forward (struct ggml_tensor * tensor);
     GGML_API struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cgraph * gf, bool keep);
@@ -1677,6 +1678,8 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
+    typedef void (*ggml_opt_callback)(void * data, float * sched);
+
     // optimization parameters
     //
     //   see ggml.c (ggml_opt_default_params) for default values
@@ -1712,12 +1715,14 @@ extern "C" {
 
             float sched; // schedule multiplier (fixed, decay or warmup)
             float decay; // weight decay for AdamW, use 0.0f to disable
+            int   decay_min_ndim; // minimum number of tensor dimension to apply weight decay
             float alpha; // learning rate
             float beta1;
             float beta2;
             float eps;   // epsilon for numerical stability
             float eps_f; // epsilon for convergence test
             float eps_g; // epsilon for convergence test
+            float gclip; // gradient clipping
         } adam;
 
         // LBFGS parameters
@@ -1745,14 +1750,12 @@ extern "C" {
 
         bool just_initialized;
 
+        float loss_before;
+        float loss_after;
+
         struct {
-            struct ggml_tensor * x;  // view of the parameters
-            struct ggml_tensor * g1; // gradient
-            struct ggml_tensor * g2; // gradient squared
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
-            struct ggml_tensor * mh; // first moment hat
-            struct ggml_tensor * vh; // second moment hat
             struct ggml_tensor * pf; // past function values
             float fx_best;
             float fx_prev;
@@ -1789,10 +1792,10 @@ extern "C" {
 
     // initialize optimizer context
     GGML_API void ggml_opt_init(
-            struct ggml_context * ctx,
+            struct ggml_context     * ctx,
             struct ggml_opt_context * opt,
-            struct ggml_opt_params params,
-            int64_t nx);
+            struct ggml_opt_params    params,
+            int64_t                   nx);
 
     // continue optimizing the function defined by the tensor f
     GGML_API enum ggml_opt_result ggml_opt_resume(
@@ -1806,7 +1809,9 @@ extern "C" {
             struct ggml_opt_context * opt,
             struct ggml_tensor * f,
             struct ggml_cgraph * gf,
-            struct ggml_cgraph * gb);
+            struct ggml_cgraph * gb,
+            ggml_opt_callback callback,
+            void * callback_data);
 
     //
     // quantization

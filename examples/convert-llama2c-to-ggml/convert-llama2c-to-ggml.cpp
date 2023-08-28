@@ -681,7 +681,6 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
 
     // for rms-att-weight
     int row_length = model->hparams.n_embd;
-    const auto & hparams = model->hparams;
     int n_ff = model->hparams.n_ff;
 
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){

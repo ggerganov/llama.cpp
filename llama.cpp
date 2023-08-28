@@ -6248,7 +6248,6 @@ const char * llama_print_system_info(void) {
 }
 
 void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
-
     fprintf(stream, "\n");
     fprintf(stream, "###########\n");
     fprintf(stream, "# Timings #\n");
@@ -6264,10 +6263,10 @@ void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
     fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
     fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
     fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->n_sample);
-    fprintf(stream, "t_eval_us: %ld  # total microseconds spent generating tokens\n", ctx->t_eval_us);
-    fprintf(stream, "t_load_us: %ld  # total microseconds spent loading the model\n", ctx->t_load_us);
-    fprintf(stream, "t_p_eval_us: %ld  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
-    fprintf(stream, "t_sample_us: %ld  # total microseconds spent sampling\n", ctx->t_sample_us);
+    fprintf(stream, "t_eval_us: %" PRId64 "  # total microseconds spent generating tokens\n", ctx->t_eval_us);
+    fprintf(stream, "t_load_us: %" PRId64 "  # total microseconds spent loading the model\n", ctx->t_load_us);
+    fprintf(stream, "t_p_eval_us: %" PRId64 "  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
+    fprintf(stream, "t_sample_us: %" PRId64 "  # total microseconds spent sampling\n", ctx->t_sample_us);
     fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
             1.0e6 * ctx->n_eval / ctx->t_eval_us);
     fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
