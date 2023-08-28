@@ -2,7 +2,7 @@
 BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple server embd-input-test gguf llama-bench
 
 # Binaries only useful for tests
-TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0
+TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
 
 default: $(BUILD_TARGETS)
 
@@ -280,6 +280,30 @@ ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif # LLAMA_CLBLAST
 
+ifdef LLAMA_HIPBLAS
+	ROCM_PATH	?= /opt/rocm
+	HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
+	GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+	LLAMA_CUDA_DMMV_X       ?= 32
+	LLAMA_CUDA_MMV_Y        ?= 1
+	LLAMA_CUDA_KQUANTS_ITER ?= 2
+	CFLAGS      += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	CXXFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
+	LDFLAGS		+= -lhipblas -lamdhip64 -lrocblas
+	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
+	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+	HIPFLAGS    += -DCC_TURING=1000000000
+ifdef LLAMA_CUDA_FORCE_DMMV
+	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
+endif # LLAMA_CUDA_FORCE_DMMV
+	OBJS        += ggml-cuda.o
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+endif # LLAMA_HIPBLAS
+
 ifdef LLAMA_METAL
 	CFLAGS   += -DGGML_USE_METAL -DGGML_METAL_NDEBUG
 	CXXFLAGS += -DGGML_USE_METAL
@@ -418,10 +442,10 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
-tests/test-llama-grammar: tests/test-llama-grammar.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-llama-grammar: tests/test-llama-grammar.cpp build-info.h ggml.o common.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
-tests/test-grammar-parser: tests/test-grammar-parser.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-grammar-parser: tests/test-grammar-parser.cpp build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
 tests/test-double-float: tests/test-double-float.cpp build-info.h ggml.o llama.o common.o $(OBJS)
@@ -442,5 +466,11 @@ tests/test-quantize-perf: tests/test-quantize-perf.cpp build-info.h ggml.o llama
 tests/test-sampling: tests/test-sampling.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
 
-tests/test-tokenizer-0: tests/test-tokenizer-0.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-tokenizer-0-falcon: tests/test-tokenizer-0-falcon.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-tokenizer-0-llama: tests/test-tokenizer-0-llama.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-tokenizer-1: tests/test-tokenizer-1.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)

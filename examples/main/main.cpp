@@ -17,6 +17,7 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -36,8 +37,56 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static llama_context ** g_ctx;
+static llama_context           ** g_ctx;
+static llama_model             ** g_model;
+static gpt_params               * g_params;
+static std::vector<llama_token> * g_input_tokens;
+static std::ostringstream       * g_output_ss;
+static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
+
+void write_logfile(
+    const llama_context * ctx, const gpt_params & params, const llama_model * model,
+    const std::vector<llama_token> input_tokens, const std::string output, const std::vector<llama_token> output_tokens) {
+
+    if (params.logdir.empty()) {
+        return;
+    }
+
+    const std::string timestamp = get_sortable_timestamp();
+
+    const bool success = create_directory_with_parents(params.logdir);
+    if (!success) {
+        fprintf(stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
+                __func__, params.logdir.c_str());
+        return;
+    }
+
+    const std::string logfile_path = params.logdir + timestamp + ".yml";
+    FILE * logfile = fopen(logfile_path.c_str(), "w");
+
+    if (logfile == NULL) {
+        fprintf(stderr, "%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
+        return;
+    }
+
+    fprintf(logfile, "binary: main\n");
+    char model_desc[128];
+    llama_model_desc(model, model_desc, sizeof(model_desc));
+    dump_non_result_info_yaml(logfile, params, ctx, timestamp, input_tokens, model_desc);
+
+    fprintf(logfile, "\n");
+    fprintf(logfile, "######################\n");
+    fprintf(logfile, "# Generation Results #\n");
+    fprintf(logfile, "######################\n");
+    fprintf(logfile, "\n");
+
+    dump_string_yaml_multiline(logfile, "output", output.c_str());
+    dump_vector_int_yaml(logfile, "output_tokens", output_tokens);
+
+    llama_dump_timing_info_yaml(logfile, ctx);
+    fclose(logfile);
+}
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 void sigint_handler(int signo) {
@@ -48,6 +97,7 @@ void sigint_handler(int signo) {
             console::cleanup();
             printf("\n");
             llama_print_timings(*g_ctx);
+            write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
     }
@@ -56,6 +106,7 @@ void sigint_handler(int signo) {
 
 int main(int argc, char ** argv) {
     gpt_params params;
+    g_params = &params;
 
     if (gpt_params_parse(argc, argv, params) == false) {
         return 1;
@@ -116,6 +167,7 @@ int main(int argc, char ** argv) {
     llama_model * model;
     llama_context * ctx;
     llama_context * ctx_guidance = NULL;
+    g_model = &model;
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
@@ -189,12 +241,14 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    // Add BOS if SPM tokenizer
+    const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
 
     // tokenize the prompt
     std::vector<llama_token> embd_inp;
+
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
-        embd_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
         embd_inp = session_tokens;
     }
@@ -209,10 +263,9 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        params.cfg_negative_prompt.insert(0, 1, ' ');
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, is_spm);
+        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, is_spm);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
     }
@@ -259,7 +312,7 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", is_spm);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
     const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
@@ -278,7 +331,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]).c_str());
+            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (ctx_guidance) {
@@ -286,14 +339,14 @@ int main(int argc, char ** argv) {
             fprintf(stderr, "%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
             fprintf(stderr, "%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
-                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_str(ctx, guidance_inp[i]).c_str());
+                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
         }
 
         if (params.n_keep > 0) {
         fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                fprintf(stderr, "%s", llama_token_to_str(ctx, embd_inp[i]).c_str());
+                fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
             fprintf(stderr, "'\n");
         }
@@ -396,6 +449,10 @@ int main(int argc, char ** argv) {
     int n_session_consumed = 0;
     int n_past_guidance    = 0;
 
+    std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
+    std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
+    std::ostringstream output_ss;     g_output_ss     = &output_ss;
+
     // the first thing we will do is to output the prompt, so set color accordingly
     console::set_display(console::prompt);
 
@@ -449,7 +506,7 @@ int main(int argc, char ** argv) {
                 //printf("\n---\n");
                 //printf("resetting: '");
                 //for (int i = 0; i < (int) embd.size(); i++) {
-                //    printf("%s", llama_token_to_str(ctx, embd[i]));
+                //    printf("%s", llama_token_to_piece(ctx, embd[i]));
                 //}
                 //printf("'\n");
                 //printf("\n---\n");
@@ -502,7 +559,7 @@ int main(int argc, char ** argv) {
                     input_size = embd_guidance.size();
                     //fprintf(stderr, "\n---------------------\n");
                     //for (int i = 0; i < (int) embd_guidance.size(); i++) {
-                        //fprintf(stderr, "%s", llama_token_to_str(ctx, embd_guidance[i]));
+                        //fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_guidance[i]));
                     //}
                     //fprintf(stderr, "\n---------------------\n");
                 } else {
@@ -597,7 +654,12 @@ int main(int argc, char ** argv) {
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
                 if (!penalize_nl) {
-                    logits[llama_token_nl(ctx)] = nl_logit;
+                    for (size_t idx = 0; idx < candidates_p.size; idx++) {
+                        if (candidates_p.data[idx].id == llama_token_nl(ctx)) {
+                            candidates_p.data[idx].logit = nl_logit;
+                            break;
+                        }
+                    }
                 }
 
                 if (grammar != NULL) {
@@ -661,7 +723,15 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo) {
             for (auto id : embd) {
-                printf("%s", llama_token_to_str(ctx, id).c_str());
+                const std::string token_str = llama_token_to_piece(ctx, id);
+                printf("%s", token_str.c_str());
+
+                if (embd.size() > 1) {
+                    input_tokens.push_back(id);
+                } else {
+                    output_tokens.push_back(id);
+                    output_ss << token_str;
+                }
             }
             fflush(stdout);
         }
@@ -677,7 +747,7 @@ int main(int argc, char ** argv) {
             if (params.antiprompt.size()) {
                 std::string last_output;
                 for (auto id : last_n_tokens) {
-                    last_output += llama_token_to_str(ctx, id);
+                    last_output += llama_token_to_piece(ctx, id);
                 }
 
                 is_antiprompt = false;
@@ -755,6 +825,8 @@ int main(int argc, char ** argv) {
                         printf("%s", params.input_suffix.c_str());
                     }
 
+                    const size_t original_size = embd_inp.size();
+
                     // instruct mode: insert instruction prefix
                     if (params.instruct && !is_antiprompt) {
                         n_consumed = embd_inp.size();
@@ -767,6 +839,12 @@ int main(int argc, char ** argv) {
                     // instruct mode: insert response suffix
                     if (params.instruct) {
                         embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                    }
+
+                    for (size_t i = original_size; i < embd_inp.size(); ++i) {
+                        const llama_token token = embd_inp[i];
+                        output_tokens.push_back(token);
+                        output_ss << llama_token_to_piece(ctx, token);
                     }
 
                     n_remain -= line_inp.size();
@@ -811,6 +889,8 @@ int main(int argc, char ** argv) {
     }
 
     llama_print_timings(ctx);
+    write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
+
     if (ctx_guidance) { llama_free(ctx_guidance); }
     llama_free(ctx);
     llama_free_model(model);

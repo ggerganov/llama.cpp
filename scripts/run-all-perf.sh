@@ -20,6 +20,8 @@ fi
 model="$1"
 out="../tmp/results-${model}"
 
+set -e
+
 mkdir -p ${out}
 
 mstr=""

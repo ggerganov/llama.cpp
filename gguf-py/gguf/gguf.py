@@ -13,7 +13,7 @@ from typing import Any, IO, List, Optional
 #
 
 GGUF_MAGIC             = 0x46554747
-GGUF_VERSION           = 1
+GGUF_VERSION           = 2
 GGUF_DEFAULT_ALIGNMENT = 32
 
 # general
@@ -365,6 +365,9 @@ class GGUFValueType(IntEnum):
     BOOL    = 7
     STRING  = 8
     ARRAY   = 9
+    UINT64  = 10
+    INT64   = 11
+    FLOAT64 = 12
 
     @staticmethod
     def get_type(val):
@@ -378,6 +381,7 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.BOOL
         elif isinstance(val, int):
             return GGUFValueType.INT32
+        # TODO: need help with 64-bit types in Python
         else:
             print("Unknown type: "+str(type(val)))
             sys.exit()
@@ -400,8 +404,8 @@ class GGUFWriter:
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
         self.fout.write(struct.pack("<I", GGUF_VERSION))
-        self.fout.write(struct.pack("<I", self.ti_data_count))
-        self.fout.write(struct.pack("<I", self.kv_data_count))
+        self.fout.write(struct.pack("<Q", self.ti_data_count))
+        self.fout.write(struct.pack("<Q", self.kv_data_count))
         self.flush()
 #        print("tensors " + str(self.ti_data_count) + " kv " + str(self.kv_data_count))
 
@@ -444,6 +448,18 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.FLOAT32)
 
+    def add_uint64(self, key: str, val: int):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.UINT64)
+
+    def add_int64(self, key: str, val: int):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.INT64)
+
+    def add_float64(self, key: str, val: float):
+        self.add_key(key)
+        self.add_val(val, GGUFValueType.FLOAT64)
+
     def add_bool(self, key: str, val: bool):
         self.add_key(key)
         self.add_val(val, GGUFValueType.BOOL)
@@ -483,17 +499,23 @@ class GGUFWriter:
             self.kv_data += struct.pack("<i", val)
         elif vtype == GGUFValueType.FLOAT32:
             self.kv_data += struct.pack("<f", val)
+        elif vtype == GGUFValueType.UINT64:
+            self.kv_data += struct.pack("<Q", val)
+        elif vtype == GGUFValueType.INT64:
+            self.kv_data += struct.pack("<q", val)
+        elif vtype == GGUFValueType.FLOAT64:
+            self.kv_data += struct.pack("<d", val)
         elif vtype == GGUFValueType.BOOL:
             self.kv_data += struct.pack("?", val)
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
-            self.kv_data += struct.pack("<I", len(encoded_val))
+            self.kv_data += struct.pack("<Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY:
             ltype = set([GGUFValueType.get_type(item) for item in val])
             assert len(ltype) == 1, "All items in a GGUF array should be of the same type"
             self.kv_data += struct.pack("<I", list(ltype)[0])
-            self.kv_data += struct.pack("<I", len(val))
+            self.kv_data += struct.pack("<Q", len(val))
             for item in val:
                 self.add_val(item, add_vtype=False)
         else:
@@ -507,12 +529,12 @@ class GGUFWriter:
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
-        self.ti_data += struct.pack("<I", len(encoded_name))
+        self.ti_data += struct.pack("<Q", len(encoded_name))
         self.ti_data += encoded_name
         n_dims = len(tensor_shape)
         self.ti_data += struct.pack("<I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack("<I", tensor_shape[n_dims - 1 - i])
+            self.ti_data += struct.pack("<Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         else:

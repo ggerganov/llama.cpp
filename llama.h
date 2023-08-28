@@ -10,6 +10,7 @@
 #endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 
 #ifdef LLAMA_SHARED
@@ -254,7 +255,11 @@ extern "C" {
     LLAMA_API int llama_model_n_embd (const struct llama_model * model);
 
     // Get a string describing the model type
-    LLAMA_API int llama_model_type(const struct llama_model * model, char * buf, size_t buf_size);
+    LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
+    // Returns the total size of all the tensors in the model in bytes
+    LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
+    // Returns the total number of parameters in the model
+    LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
@@ -348,7 +353,7 @@ extern "C" {
 
     LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
 
-    LLAMA_API llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
@@ -377,15 +382,17 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    // Token Id -> String. Uses the vocabulary in the provided context
-    // Does not write null terminator to the buffer
-    LLAMA_API int llama_token_to_str(
+    // Token Id -> Piece.
+    // Uses the vocabulary in the provided context.
+    // Does not write null terminator to the buffer.
+    // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    LLAMA_API int llama_token_to_piece(
             const struct llama_context * ctx,
                            llama_token   token,
                                   char * buf,
                                   int    length);
 
-    LLAMA_API int llama_token_to_str_with_model(
+    LLAMA_API int llama_token_to_piece_with_model(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
@@ -465,6 +472,43 @@ extern "C" {
     /// @details Accepts the sampled token into the grammar
     LLAMA_API void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token);
 
+    //
+    // Beam search
+    //
+
+    struct llama_beam_view {
+        const llama_token * tokens;
+        size_t n_tokens;
+        float p;   // Cumulative beam probability (renormalized relative to all beams)
+        bool eob;  // Callback should set this to true when a beam is at end-of-beam.
+    };
+
+    // Passed to beam_search_callback function.
+    // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
+    // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
+    // These pointers are valid only during the synchronous callback, so should not be saved.
+    struct llama_beams_state {
+        struct llama_beam_view * beam_views;
+        size_t n_beams;               // Number of elements in beam_views[].
+        size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
+        bool last_call;               // True iff this is the last callback invocation.
+    };
+
+    // Type of pointer to the beam_search_callback function.
+    // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
+    // passed back to beam_search_callback. This avoids having to use global variables in the callback.
+    typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
+
+    /// @details Deterministically returns entire sentence constructed by a beam search.
+    /// @param ctx Pointer to the llama_context.
+    /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
+    /// @param callback_data A pointer that is simply passed back to callback.
+    /// @param n_beams Number of beams to use.
+    /// @param n_past Number of tokens already evaluated.
+    /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
+    /// @param n_threads Number of threads as passed to llama_eval().
+    LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict, int n_threads);
+
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
     LLAMA_API void llama_print_timings(struct llama_context * ctx);
@@ -476,6 +520,8 @@ extern "C" {
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
     LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+
+    LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx);
 
 #ifdef __cplusplus
 }

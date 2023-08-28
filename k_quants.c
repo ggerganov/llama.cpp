@@ -2694,13 +2694,13 @@ void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restri
             const __m256i q8l = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
             __m256i p16l = _mm256_maddubs_epi16(q4l, q8l);
             p16l = _mm256_madd_epi16(scale_l, p16l);
-            sumi = _mm256_add_epi32(sumi, p16l);
 
             const __m256i q8h = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
             __m256i p16h = _mm256_maddubs_epi16(q4h, q8h);
             p16h = _mm256_madd_epi16(scale_h, p16h);
-            sumi = _mm256_add_epi32(sumi, p16h);
+            const __m256i sumj = _mm256_add_epi32(p16l, p16h);
 
+            sumi = _mm256_add_epi32(sumi, sumj);
         }
 
         __m256 vd = _mm256_set1_ps(d);
