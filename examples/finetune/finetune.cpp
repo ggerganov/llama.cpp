@@ -17,8 +17,6 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
-
 struct random_normal_distribution {
     std::mt19937 gen;
     std::normal_distribution<float> rd;
@@ -195,10 +193,12 @@ struct my_llama_hparams {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;   // this is provided as user input?
     uint32_t n_embd  = 4096;
-    uint32_t n_mult  = 4;
+    uint32_t n_ff    = 11008;
     uint32_t n_head  = 32;
     uint32_t n_layer = 32;
     uint32_t n_rot   = 64;
+
+    float f_rms_norm_eps = 1e-5f;
 
     bool operator!=(const my_llama_hparams& other) const {
         return memcmp(this, &other, sizeof(other));
@@ -304,18 +304,12 @@ struct my_llama_lora {
     uint32_t train_tokens = 0;
 };
 
-uint32_t get_n_ff(const struct my_llama_hparams* hparams) {
-    const uint32_t n_ff = ((2*(4*hparams->n_embd)/3 + hparams->n_mult - 1)/hparams->n_mult)*hparams->n_mult;
-    return n_ff;
-}
-
 void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
     printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
     printf("%s: n_embd:  %u\n", __func__, params->n_embd);
-    printf("%s: n_mult:  %u\n", __func__, params->n_mult);
+    printf("%s: n_ff:    %u\n", __func__, params->n_ff);
     printf("%s: n_head:  %u\n", __func__, params->n_head);
-    printf("%s: n_ff:    %u\n", __func__, get_n_ff(params));
     printf("%s: n_layer: %u\n", __func__, params->n_layer);
     printf("%s: n_rot:   %u\n", __func__, params->n_rot);
 }
@@ -338,19 +332,18 @@ void print_lora_params(struct my_llama_lora_hparams * params) {
 void init_model(struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
     auto & hparams = model->hparams;
 
-    hparams.n_vocab = llama_n_vocab_from_model(input);
+    hparams.n_vocab = llama_model_n_vocab(input);
     hparams.n_ctx   = n_ctx;
-    hparams.n_embd  = llama_n_embd_from_model(input);
-    hparams.n_mult  = llama_n_mult_from_model(input);
-    hparams.n_head  = llama_n_head_from_model(input);
-    hparams.n_layer = llama_n_layer_from_model(input);
-    hparams.n_rot   = llama_n_rot_from_model(input);
+    hparams.n_embd  = llama_model_n_embd(input);
+    hparams.n_ff    = llama_model_n_ff(input);
+    hparams.n_head  = llama_model_n_head(input);
+    hparams.n_layer = llama_model_n_layer(input);
+    hparams.n_rot   = llama_model_n_rot(input);
 
     const uint32_t n_embd  = hparams.n_embd;
     const uint32_t n_layer = hparams.n_layer;
     const uint32_t n_vocab = hparams.n_vocab;
-
-    const uint32_t n_ff = get_n_ff(&hparams);
+    const uint32_t n_ff    = hparams.n_ff;
 
     model->tok_embeddings = llama_get_model_tensor(input, "tok_embeddings.weight");
     model->norm           = llama_get_model_tensor(input, "norm.weight");
@@ -398,7 +391,7 @@ void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora)
     const uint32_t n_embd  = model->hparams.n_embd;
     const uint32_t n_layer = model->hparams.n_layer;
     const uint32_t n_vocab = model->hparams.n_vocab;
-    const uint32_t n_ff = get_n_ff(&model->hparams);
+    const uint32_t n_ff    = model->hparams.n_ff;
 
     struct ggml_context * ctx = lora->ctx;
 
@@ -602,6 +595,8 @@ struct ggml_tensor * forward(
     const int n_layer = hparams.n_layer;
     const int n_head  = hparams.n_head;
     const int n_rot   = hparams.n_rot;
+
+    const float rms_norm_eps = hparams.f_rms_norm_eps;
 
     GGML_ASSERT(n_layer == lora->layers.size());
 
@@ -1082,7 +1077,8 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     const int n_layer    = hparams.n_layer;
     const int n_head     = hparams.n_head;
     const int n_rot      = hparams.n_rot;
-    const int n_ff       = get_n_ff(&hparams);
+    const int n_ff       = hparams.n_ff;
+    const float rms_norm_eps = hparams.f_rms_norm_eps;
     const int rope_mode  = 0;
 
     GGML_ASSERT(n_layer == lora->layers.size());
@@ -1317,7 +1313,7 @@ void print_matrix(struct ggml_tensor * probs) {
 
 
 void print_token(struct llama_context * ctx, llama_token token) {
-    printf("%s", llama_token_to_str(ctx, token));
+    printf("%s", llama_token_get_text(ctx, token));
 }
 
 void print_tokens(struct llama_context* ctx, struct ggml_tensor * tokens) {
@@ -1351,7 +1347,7 @@ void print_tokens_batch(struct llama_context* ctx, struct ggml_tensor * tokens) 
     }
 }
 
-void get_example_targets(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab  = target_logits->ne[0];
 
@@ -1360,7 +1356,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
 
     ggml_set_f32(target_logits, -1.0f/n_vocab);
     ggml_set_f32(target_probs, 0.0f);
-    ggml_set_i32_1d(tokens_input, 0, llama_token_bos());
+    ggml_set_i32_1d(tokens_input, 0, llama_token_bos(lctx));
     for (int i=1; i<n_tokens+1; ++i) {
         int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
         set_f32_2d(target_logits, token, i-1, +1.0f);
@@ -1371,7 +1367,7 @@ void get_example_targets(const int * train_samples, size_t n_train_samples, cons
     }
 }
 
-void get_example_targets_batch(const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
+void get_example_targets_batch(struct llama_context* lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_logits->n_dims == 3);
     GGML_ASSERT(target_probs->n_dims  == 3);
@@ -1394,7 +1390,7 @@ void get_example_targets_batch(const int * train_samples, size_t n_train_samples
         // printf("%s: sample_idx=%zu sample=%zu\n", __func__, sample_idx, sample);
         GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
-        set_i32_2d(tokens_input, 0, k, llama_token_bos());
+        set_i32_2d(tokens_input, 0, k, llama_token_bos(lctx));
         for (int i=1; i<n_tokens+1; ++i) {
             int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
             set_f32_3d(target_logits, token, i-1, k, +1.0f);
@@ -1544,7 +1540,7 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
         const char * in  = buf.data();
         const char * end = buf.data() + buf.size();
         for (int i = 0; i < (int) out.size(); ++i) {
-            const char * s = llama_token_to_str(lctx, out[i]);
+            const char * s = llama_token_get_text(lctx, out[i]);
             int len = strlen(s);
             if (in >= end) {
                 printf("%s: unexpected end of original text.\n", __func__);
@@ -1617,7 +1613,7 @@ void init_sampler(struct my_llama_sampler * sampler, struct llama_context * ctx)
     sampler->mirostat_mu = 2.0f * sampler->params.mirostat_tau;
 }
 
-llama_token sample(struct my_llama_sampler * sampler, float * logits, const llama_token * last_tokens, int n_last_tokens) {
+llama_token sample(struct llama_context * lctx, struct my_llama_sampler * sampler, float * logits, const llama_token * last_tokens, int n_last_tokens) {
     GGML_ASSERT(sampler->ctx != NULL);
 
     struct llama_context * ctx = sampler->ctx;
@@ -1638,7 +1634,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
     const auto params = sampler->params;
 
     // Apply penalties
-    const float nl_logit = logits[llama_token_nl()];
+    const float nl_logit = logits[llama_token_nl(lctx)];
 
     const int n_last = std::min(std::min(n_last_tokens, params.repeat_last_n), sampler->n_ctx);
 
@@ -1657,7 +1653,7 @@ llama_token sample(struct my_llama_sampler * sampler, float * logits, const llam
         params.presence_penalty);
 
     if (!params.penalize_nl) {
-        logits[llama_token_nl()] = nl_logit;
+        logits[llama_token_nl(lctx)] = nl_logit;
     }
 
     llama_token token = 0;
@@ -1884,7 +1880,7 @@ void save_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora,
     file.write_u32(lora->train_tokens);
     file.write_u32(model->hparams.n_vocab);
     file.write_u32(model->hparams.n_embd);
-    file.write_u32(model->hparams.n_mult);
+    //file.write_u32(model->hparams.n_mult); 
     file.write_u32(model->hparams.n_head);
     file.write_u32(model->hparams.n_layer);
     file.write_u32(model->hparams.n_rot);
@@ -1961,7 +1957,7 @@ bool load_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora,
         uint32_t n_rot         = file.read_u32();
         GGML_ASSERT(n_vocab == model->hparams.n_vocab);
         GGML_ASSERT(n_embd  == model->hparams.n_embd);
-        GGML_ASSERT(n_mult  == model->hparams.n_mult);
+        //GGML_ASSERT(n_mult  == model->hparams.n_mult);
         GGML_ASSERT(n_head  == model->hparams.n_head);
         GGML_ASSERT(n_layer == model->hparams.n_layer);
         GGML_ASSERT(n_rot   == model->hparams.n_rot);
@@ -2042,8 +2038,9 @@ void save_as_llama_lora(struct my_llama_lora * lora, const char * filename, cons
         return;
     }
 
+    uint32_t LLAMA_FILE_MAGIC_LORA = 0x67676C61; // 'ggla'
     // write_magic
-    file.write_u32(LLAMA_FILE_MAGIC_GGLA);   // magic
+    file.write_u32(LLAMA_FILE_MAGIC_LORA);   // magic
     file.write_u32(1); // version
     // write_hparams
     file.write_u32(lora->hparams.lora_r);
@@ -2667,6 +2664,7 @@ struct opt_callback_data {
     struct ggml_opt_context * opt;
     struct my_llama_model *   model;
     struct my_llama_lora  *   lora;
+    struct llama_context *    lctx;
     int                       last_save_iter;
     llama_token *             tokens_data;
     size_t                    tokens_size;
@@ -2728,6 +2726,7 @@ void opt_callback(void * vdata, float * sched) {
     }
 
     get_example_targets_batch(
+        data->lctx,
         data->samples_data,
         data->samples_size,
         data->tokens_data,
@@ -2760,24 +2759,24 @@ int main(int argc, char ** argv) {
     struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_params);
     struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
 
-    struct llama_vocab vocab;
-    {
-        std::vector<const char *> strings;
-        std::vector<float> scores;
-        int n_vocab = llama_n_vocab(lctx);
-        strings.resize(n_vocab, NULL);
-        scores.resize(n_vocab, 0);
-        n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
-        GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
-        vocab.id_to_token.resize(n_vocab);
-        for (int i=0; i<n_vocab; ++i) {
-            std::string tok   = std::string(strings[i]);
-            float       score = scores[i];
-            vocab.id_to_token[i].tok   = tok;
-            vocab.id_to_token[i].score = score;
-            vocab.token_to_id.emplace(tok, i);
-        }
-    }
+    //struct llama_vocab vocab;
+    //{
+    //    std::vector<const char *> strings;
+    //    std::vector<float> scores;
+    //    int n_vocab = llama_n_vocab(lctx);
+    //    strings.resize(n_vocab, NULL);
+    //    scores.resize(n_vocab, 0);
+    //    n_vocab = llama_get_vocab(lctx, strings.data(), scores.data(), n_vocab);
+    //    GGML_ASSERT(n_vocab == llama_n_vocab(lctx));
+    //    vocab.id_to_token.resize(n_vocab);
+    //    for (int i=0; i<n_vocab; ++i) {
+    //        std::string tok   = std::string(strings[i]);
+    //        float       score = scores[i];
+    //        vocab.id_to_token[i].tok   = tok;
+    //        vocab.id_to_token[i].score = score;
+    //        vocab.token_to_id.emplace(tok, i);
+    //    }
+    //}
 
     printf("%s: tokenize training data\n", __func__);
     std::vector<llama_token> train_tokens;
@@ -2911,7 +2910,7 @@ int main(int argc, char ** argv) {
     std::vector<int> train_samples;
     train_samples.push_back(0);
     for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
-        if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl())) {
+        if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl(lctx))) {
             train_samples.push_back(i);
         }
     }
@@ -2929,6 +2928,7 @@ int main(int argc, char ** argv) {
     opt_cb_data.opt = opt;
     opt_cb_data.model = &model;
     opt_cb_data.lora = &lora;
+    opt_cb_data.lctx = lctx;
     opt_cb_data.last_save_iter = opt->iter;
     opt_cb_data.tokens_data = train_tokens.data();
     opt_cb_data.tokens_size = train_tokens.size();
@@ -3031,7 +3031,7 @@ int main(int argc, char ** argv) {
             for (int i=0; i<n_batch; ++i) {
                 init_sampler(&sampler, lctx);
                 for (int k=0; k<n_tokens; ++k) {
-                    int32_t token = sample(&sampler,
+                    int32_t token = sample(lctx, &sampler,
                         (float *)       ((char *) logits->data + i*logits->nb[2] + k*logits->nb[1]),
                         (llama_token *) ((char *) tokens_input->data + i*tokens_input->nb[1]),
                         k);
@@ -3101,7 +3101,7 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * target_logits = ggml_new_tensor_2d(lora.ctx, GGML_TYPE_F32, n_vocab,  n_tokens);
         struct ggml_tensor * target_probs  = ggml_new_tensor_2d(lora.ctx, GGML_TYPE_F32, n_vocab,  n_tokens);
 
-        get_example_targets(train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), rand()%train_samples.size(), tokens_input, target_logits, target_probs);
+        get_example_targets(lctx, train_samples.data(), train_samples.size(), train_tokens.data(), train_tokens.size(), rand()%train_samples.size(), tokens_input, target_logits, target_probs);
         for (int i=sample_ctx; i<n_tokens; ++i) {
             ggml_set_i32_1d(tokens_input, i, n_vocab/2);
         }
@@ -3131,7 +3131,7 @@ int main(int argc, char ** argv) {
             //struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);
 
             // set_logits_masked(logits, token_notavail, -1e9);
-            int token = sample(&sampler,
+            int token = sample(lctx, &sampler,
                 (float *) ((char *) logits->data + (sample_ctx-1)*logits->nb[1]),
                 (llama_token *) tokens_input->data,
                 sample_ctx-1);
