@@ -164,8 +164,8 @@ struct my_llama_hparams {
     uint32_t n_rot   = 64;
     uint32_t n_ff    = 11008;
 
-    // float f_norm_eps     = 1e-5; // falcon
-    float f_norm_rms_eps = 1e-5; // llama
+    // float f_norm_eps     = 1e-5f; // falcon
+    float f_norm_rms_eps = 1e-5f; // llama
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
@@ -1572,7 +1572,7 @@ struct train_params get_default_train_params() {
     params.n_batch    =    8;
     params.n_examples =    1;
 
-    params.f_norm_rms_eps  = 1e-5;
+    params.f_norm_rms_eps  = 1e-5f;
     params.rope_freq_base  = 10000.0f;
     params.rope_freq_scale = 1.0f;
 
