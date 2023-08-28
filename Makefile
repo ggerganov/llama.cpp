@@ -468,3 +468,6 @@ tests/test-sampling: tests/test-sampling.cpp build-info.h ggml.o llama.o common.
 
 tests/test-tokenizer-0: tests/test-tokenizer-0.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+tests/test-c.o: tests/test-c.c llama.h
+	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
