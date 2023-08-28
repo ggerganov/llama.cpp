@@ -102,8 +102,8 @@ class Tensor:
 
     def save_gguf(self, gguf_writer, name):
         gguf_writer.add_tensor(
-            name=name, 
-            tensor=self.data, 
+            name=name,
+            tensor=self.data,
             raw_shape=np.array(list(reversed(self.ne))),
             raw_dtype=gguf.GGMLQuantizationType.F32)
 
@@ -239,17 +239,17 @@ class OptimizationContext:
 
             # forgot to save type in version 1:
             # guess self.type from number of remaining bytes
-            size_type_0 = 12 + sum([t.max_storage_size() for t in 
-                                    [self.adam_m, self.adam_v] 
+            size_type_0 = 12 + sum([t.max_storage_size() for t in
+                                    [self.adam_m, self.adam_v]
                                     +([self.adam_pf] if (self.past > 0) else [])])
-            size_type_1 = 24 + sum([t.max_storage_size() for t in 
+            size_type_1 = 24 + sum([t.max_storage_size() for t in
                                     [self.lbfgs_x, self.lbfgs_xp, self.lbfgs_g,
                                      self.lbfgs_gp, self.lbfgs_d, self.lbfgs_pf,
                                      self.lbfgs_lmal, self.lbfgs_lmys,
                                      self.lbfgs_lms, self.lbfgs_lmy]
                                      +([self.lbfgs_pf] if (self.past > 0) else [])])
             # due to alignment padding the size might not by exact
-            # but the difference in size for both types is significant, 
+            # but the difference in size for both types is significant,
             # so we can just use whichever is closest
             remaining = len(data) - offset
             if abs(remaining - size_type_0) < abs(remaining - size_type_1):
@@ -348,7 +348,7 @@ class ModelParams:
     def get_n_ff(self):
         # struct my_llama_model::get_n_ff in train-text-from-scratch.cpp commit 3b5515bbe0e2224425986ba24f1f5d84aa38dce9
         return ((2*(4*self.n_embd)//3 + self.n_mult - 1)//self.n_mult)*self.n_mult
-    
+
     def save_gguf(self, gguf_writer):
         # self.n_vocab not saved
         gguf_writer.add_embedding_length(self.n_embd)
