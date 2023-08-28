@@ -423,7 +423,7 @@ class SpecialVocab:
     special_token_types: Tuple[str, ...] = tuple(('bos', 'eos', 'unk', 'sep', 'pad'))
     special_token_ids: Dict[str, int] = {}
 
-    def __init__(self, path: Path, special_token_types: Optional[Tuple[str]] = None):
+    def __init__(self, path: Path, special_token_types: Optional[Tuple[str, ...]] = None):
         self.special_token_ids = {}
         if special_token_types is not None:
             self.special_token_types = special_token_types
