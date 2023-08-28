@@ -2325,10 +2325,12 @@ static struct ggml_cgraph * llm_build_llama(
                 // Note that we do this even when N==1 so that we don't change the # nodes in the graph,
                 // otherwise for Metal we'd have to rebuild the concurrency list.
 
+                offload_func(cur);
                 cur   = ggml_view_2d(ctx0, cur,   n_embd, 1,   cur->nb[1], (N - 1)*ggml_element_size(cur)*n_embd);
-                offload_func_kq(cur);
+                offload_func(cur);
                 ggml_set_name(cur, "cur-lastpos");
 
+                offload_func(inpSA);
                 inpSA = ggml_view_2d(ctx0, inpSA, n_embd, 1, inpSA->nb[1], (N - 1)*ggml_element_size(inpSA)*n_embd);
                 offload_func(inpSA);
                 ggml_set_name(inpSA, "inpSA-lastpos");
