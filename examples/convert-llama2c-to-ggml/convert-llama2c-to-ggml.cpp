@@ -534,7 +534,7 @@ struct llama_file {
         }
     }
 
-    void write_u32(std::uint32_t val) {
+    void write_u32(std::uint32_t val) const {
         write_raw(&val, sizeof(val));
     }
 
