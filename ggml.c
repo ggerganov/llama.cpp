@@ -223,7 +223,7 @@ inline static void * ggml_aligned_realloc(void * ptr, size_t old_size, size_t si
     return result;
 }
 #define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
-#define GGML_ALIGNED_REALLOC(ptr, old_size, size) ggml_aligned_realloc(size)
+#define GGML_ALIGNED_REALLOC(ptr, old_size, size) ggml_aligned_realloc(ptr, old_size, size)
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
 #endif
 
