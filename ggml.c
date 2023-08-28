@@ -2436,7 +2436,6 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     const int nb = n / qk;
 
     assert(n % qk == 0);
-    assert(nb % 2 == 0);
 
     const block_q4_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
@@ -2445,6 +2444,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     float32x4_t sumv0 = vdupq_n_f32(0.0f);
     float32x4_t sumv1 = vdupq_n_f32(0.0f);
 
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 0; i < nb; i += 2) {
         const block_q4_0 * restrict x0 = &x[i + 0];
         const block_q4_0 * restrict x1 = &x[i + 1];
@@ -2623,6 +2623,7 @@ static void ggml_vec_dot_q4_0_q8_0(const int n, float * restrict s, const void *
     }
 
     // Main loop
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 2; i < nb; i+=2) {
         _mm_prefetch(&x[i] + sizeof(block_q4_0), _MM_HINT_T0);
         _mm_prefetch(&y[i] + sizeof(block_q8_0), _MM_HINT_T0);
@@ -2706,7 +2707,6 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
     const int nb = n / qk;
 
     assert(n % qk == 0);
-    assert(nb % 2 == 0);
 
     const block_q4_1 * restrict x = vx;
     const block_q8_1 * restrict y = vy;
@@ -2718,6 +2718,7 @@ static void ggml_vec_dot_q4_1_q8_1(const int n, float * restrict s, const void *
 
     float summs = 0;
 
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 0; i < nb; i += 2) {
         const block_q4_1 * restrict x0 = &x[i + 0];
         const block_q4_1 * restrict x1 = &x[i + 1];
@@ -2832,7 +2833,6 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
     const int nb = n / qk;
 
     assert(n % qk == 0);
-    assert(nb % 2 == 0);
     assert(qk == QK5_0);
 
     const block_q5_0 * restrict x = vx;
@@ -2848,6 +2848,7 @@ static void ggml_vec_dot_q5_0_q8_0(const int n, float * restrict s, const void *
     uint64_t tmp0[4];
     uint64_t tmp1[4];
 
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 0; i < nb; i += 2) {
         const block_q5_0 * restrict x0 = &x[i];
         const block_q5_0 * restrict x1 = &x[i + 1];
@@ -3072,7 +3073,6 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
     const int nb = n / qk;
 
     assert(n % qk == 0);
-    assert(nb % 2 == 0);
     assert(qk == QK5_1);
 
     const block_q5_1 * restrict x = vx;
@@ -3091,6 +3091,7 @@ static void ggml_vec_dot_q5_1_q8_1(const int n, float * restrict s, const void *
     uint64_t tmp0[4];
     uint64_t tmp1[4];
 
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 0; i < nb; i += 2) {
         const block_q5_1 * restrict x0 = &x[i];
         const block_q5_1 * restrict x1 = &x[i + 1];
@@ -3328,7 +3329,6 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
     const int nb = n / qk;
 
     assert(n % qk == 0);
-    assert(nb % 2 == 0);
 
     const block_q8_0 * restrict x = vx;
     const block_q8_0 * restrict y = vy;
@@ -3337,6 +3337,7 @@ static void ggml_vec_dot_q8_0_q8_0(const int n, float * restrict s, const void *
     float32x4_t sumv0 = vdupq_n_f32(0.0f);
     float32x4_t sumv1 = vdupq_n_f32(0.0f);
 
+    GGML_ASSERT(nb % 2 == 0); // TODO: handle odd nb
     for (int i = 0; i < nb; i += 2) {
         const block_q8_0 * restrict x0 = &x[i + 0];
         const block_q8_0 * restrict x1 = &x[i + 1];
