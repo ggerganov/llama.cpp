@@ -793,15 +793,7 @@ struct ggml_tensor * llama_build_train_graphs(
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
         GGML_ASSERT(t36->grad->data == NULL && !ggml_is_view(t36->grad));
         ggml_allocr_alloc(alloc, t36->grad);
-        // gradient tensors (will be set to zero by ggml_graph_reset)
-        // pinning these produces large unnecessary memory overhead, which will be resolved by PR 2632
-        for (int i = 0; i < gf->n_nodes; ++i) {
-            if (!gf->grads[i]) continue;
-            if (gf->grads[i]->data == NULL && !ggml_is_view(gf->grads[i])) {
-                ggml_allocr_alloc(alloc, gf->grads[i]);
-            }
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, gf->grads[i], one));
-        }
+
         // allocating checkpoints in one block to reduce memory fragmentation
         // note: they will be freed in reverse order
         for (int i = 0; i < (int) checkpoints.size(); ++i) {
