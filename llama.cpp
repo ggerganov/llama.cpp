@@ -2230,9 +2230,9 @@ static struct ggml_cgraph * llm_build_llama(
     //
     // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
     // in that case ggml_cuda_assign_buffers has no effect
-    offload_func_t offload_func_nr   = llama_nop; // nr = non-repeating
-    offload_func_t offload_func_kq   = llama_nop;
-    offload_func_t offload_func_v    = llama_nop;
+    offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
+    offload_func_t offload_func_kq = llama_nop;
+    offload_func_t offload_func_v  = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
     if (n_gpu_layers > n_layer) {
