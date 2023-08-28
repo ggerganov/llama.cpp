@@ -2055,7 +2055,11 @@ static void llm_load_tensors(
 
 #ifdef GGML_USE_CUBLAS
         const int max_backend_supported_layers = hparams.n_layer + 3;
+#if defined(GGML_USE_HIPBLAS)
+        const int max_offloadable_layers = low_vram ? hparams.n_layer + 3 : hparams.n_layer + 3;
+#else
         const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+#endif
         if (n_gpu_layers > (int) hparams.n_layer + 1) {
             if (low_vram) {
                 LLAMA_LOG_INFO("%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);

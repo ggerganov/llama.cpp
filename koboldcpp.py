@@ -215,19 +215,28 @@ def load_model(model_filename):
     if args.useclblast:
         clblastids = 100 + int(args.useclblast[0])*10 + int(args.useclblast[1])
     inputs.clblast_info = clblastids
-    inputs.cublas_info = 0
-    if (args.usecublas and "0" in args.usecublas):
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    elif (args.usecublas and "1" in args.usecublas):
-        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    elif (args.usecublas and "2" in args.usecublas):
-        os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     for n in range(tensor_split_max):
         if args.tensor_split and n < len(args.tensor_split):
             inputs.tensor_split[n] = float(args.tensor_split[n])
         else:
             inputs.tensor_split[n] = 0
+
+    # we must force an explicit tensor split
+    # otherwise the default will divide equally and multigpu crap will slow it down badly
+    inputs.cublas_info = 0
+    if (args.usecublas and "0" in args.usecublas):
+        inputs.cublas_info = 0
+        if not args.tensor_split:
+            inputs.tensor_split[inputs.cublas_info] = 100
+    elif (args.usecublas and "1" in args.usecublas):
+        inputs.cublas_info = 1
+        if not args.tensor_split:
+            inputs.tensor_split[inputs.cublas_info] = 100
+    elif (args.usecublas and "2" in args.usecublas):
+        inputs.cublas_info = 2
+        if not args.tensor_split:
+            inputs.tensor_split[inputs.cublas_info] = 100
 
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
@@ -730,7 +739,7 @@ def show_new_gui():
     lib_option_pairs = [
         (lib_openblas, "Use OpenBLAS"),
         (lib_clblast, "Use CLBlast"),
-        (lib_cublas, "Use CuBLAS"),
+        (lib_cublas, "Use CuBLAS/hipBLAS"),
         (lib_default, "Use No BLAS"),
         (lib_noavx2, "NoAVX2 Mode (Old CPU)"),
         (lib_failsafe, "Failsafe Mode (Old CPU)")]
@@ -895,7 +904,7 @@ def show_new_gui():
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
-        if index == "Use CLBlast" or index == "Use CuBLAS":
+        if index == "Use CLBlast" or index == "Use CuBLAS/hipBLAS":
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             if index == "Use CLBlast":
@@ -903,7 +912,7 @@ def show_new_gui():
                 quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 if gpu_choice_var.get()=="All":
                     gpu_choice_var.set("1")
-            elif index == "Use CuBLAS":
+            elif index == "Use CuBLAS/hipBLAS":
                 CUDA_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 CUDA_quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
         else:
@@ -914,7 +923,7 @@ def show_new_gui():
             quick_gpu_selector_box.grid_forget()
             CUDA_quick_gpu_selector_box.grid_forget()
 
-        if index == "Use CuBLAS":
+        if index == "Use CuBLAS/hipBLAS":
             lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             quick_lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
@@ -925,7 +934,7 @@ def show_new_gui():
             mmq_box.grid_forget()
             quick_mmq_box.grid_forget()
 
-        if index == "Use CLBlast" or index == "Use CuBLAS":
+        if index == "Use CLBlast" or index == "Use CuBLAS/hipBLAS":
             gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
@@ -1111,7 +1120,7 @@ def show_new_gui():
             gpuchoiceidx = int(gpu_choice_var.get())-1
         if runopts_var.get() == "Use CLBlast":
             args.useclblast = [[0,0], [1,0], [0,1]][gpuchoiceidx]
-        if runopts_var.get() == "Use CuBLAS":
+        if runopts_var.get() == "Use CuBLAS/hipBLAS":
             if gpu_choice_var.get()=="All":
                 args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
             else:
@@ -1337,7 +1346,7 @@ def show_old_gui():
         blaschoice = tk.StringVar()
         blaschoice.set("BLAS = 512")
 
-        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS GPU","Use No BLAS","NoAVX2 Mode (Old CPU)","Failsafe Mode (Old CPU)"]
+        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS/hipBLAS GPU","Use No BLAS","NoAVX2 Mode (Old CPU)","Failsafe Mode (Old CPU)"]
         runchoice = tk.StringVar()
         runchoice.set("Use OpenBLAS")
 
@@ -1779,7 +1788,7 @@ if __name__ == '__main__':
     compatgroup = parser.add_mutually_exclusive_group()
     compatgroup.add_argument("--noblas", help="Do not use OpenBLAS for accelerated prompt ingestion", action='store_true')
     compatgroup.add_argument("--useclblast", help="Use CLBlast for GPU Acceleration. Must specify exactly 2 arguments, platform ID and device ID (e.g. --useclblast 1 0).", type=int, choices=range(0,9), nargs=2)
-    compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID] [mmq]'), choices=['normal', 'lowvram', '0', '1', '2', 'mmq'])
+    compatgroup.add_argument("--usecublas", help="Use CuBLAS/hipBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID] [mmq]'), choices=['normal', 'lowvram', '0', '1', '2', 'mmq'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
 

@@ -440,7 +440,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     //this is used for the mem_per_token eval, openblas needs more RAM
     bool use_scratch = ggml_cpu_has_gpublas();
 
-    int cu_parseinfo_maindevice = inputs.cublas_info<0?0:inputs.cublas_info;
+    int cu_parseinfo_maindevice = inputs.cublas_info<=0?0:inputs.cublas_info;
 
     printf("System Info: %s\n", llama_print_system_info());
     #if defined(GGML_USE_CUBLAS)
@@ -530,7 +530,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         if(!ts_all_zero)
         {
             llama_ctx_params.tensor_split = inputs.tensor_split;
-            printf("CUBLAS: Applying Custom Tensor Split!\n");
         }
         #endif
 
@@ -600,7 +599,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         if(!ts_all_zero)
         {
             llama_ctx_params.tensor_split = inputs.tensor_split;
-            printf("CUBLAS: Applying Custom Tensor Split!\n");
         }
         #endif
 
