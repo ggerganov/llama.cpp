@@ -2317,8 +2317,7 @@ static struct ggml_cgraph * llm_build_llama(
             }
 
 #ifdef LLAMA_SKIP_UNUSED_LOGITS
-            if (il == n_layer - 1 && !lctx.logits_all)
-            {
+            if (il == n_layer - 1 && !lctx.logits_all) {
                 // From here on, we only care about the last token and its logits.
                 // We do as if N = 1 (from the end), which means we only keep
                 // the last column of cur and inpSA ((n_embd, N) -> (n_embd, 1)).
