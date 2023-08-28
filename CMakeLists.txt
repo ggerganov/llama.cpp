@@ -69,12 +69,12 @@ option(LLAMA_BLAS                            "llama: use BLAS"                  
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUBLAS                          "llama: use CUDA"                                  OFF)
 #option(LLAMA_CUDA_CUBLAS                     "llama: use cuBLAS for prompt processing"          OFF)
-set(LLAMA_CUDA_MMQ_Y       "64" CACHE STRING "llama: y tile size for mmq CUDA kernels")
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
 option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some calculations"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
+option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
@@ -256,7 +256,6 @@ if (LLAMA_CUBLAS)
 #        if (LLAMA_CUDA_CUBLAS)
 #            add_compile_definitions(GGML_CUDA_CUBLAS)
 #        endif()
-        add_compile_definitions(GGML_CUDA_MMQ_Y=${LLAMA_CUDA_MMQ_Y})
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -298,7 +297,6 @@ if (LLAMA_METAL)
     find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
     find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-    find_library(METALPERFORMANCE_FRAMEWORK MetalPerformanceShaders REQUIRED)
 
     set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
 
@@ -315,7 +313,6 @@ if (LLAMA_METAL)
         ${FOUNDATION_LIBRARY}
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
-        ${METALPERFORMANCE_FRAMEWORK}
         )
 endif()
 
@@ -353,6 +350,43 @@ if (LLAMA_CLBLAST)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
     else()
         message(WARNING "CLBlast not found")
+    endif()
+endif()
+
+if (LLAMA_HIPBLAS)
+    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+
+    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
+    endif()
+    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
+    endif()
+
+    find_package(hip)
+    find_package(hipblas)
+    find_package(rocblas)
+
+    if (${hipblas_FOUND} AND ${hip_FOUND})
+        message(STATUS "HIP and hipBLAS found")
+        add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+        add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
+        if (LLAMA_CUDA_FORCE_DMMV)
+            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
+        endif()
+        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+        target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+        target_compile_definitions(ggml-rocm PRIVATE CC_TURING=1000000000)
+        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+
+        if (LLAMA_STATIC)
+            message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
+        endif()
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-rocm)
+    else()
+        message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
     endif()
 endif()
 
@@ -501,8 +535,10 @@ else()
 endif()
 
 #
-# Build libraries
+# libraries
 #
+
+# ggml
 
 add_library(ggml OBJECT
             ggml.c
@@ -528,10 +564,11 @@ if (BUILD_SHARED_LIBS)
     install(TARGETS ggml_shared LIBRARY)
 endif()
 
+# llama
+
 add_library(llama
             llama.cpp
             llama.h
-            llama-util.h
             )
 
 target_include_directories(llama PUBLIC .)
@@ -549,6 +586,10 @@ if (BUILD_SHARED_LIBS)
     endif()
     install(TARGETS llama LIBRARY)
 endif()
+
+#
+# install
+#
 
 include(GNUInstallDirs)
 install(
@@ -573,10 +614,22 @@ install(
         WORLD_READ
         WORLD_EXECUTE
     DESTINATION ${CMAKE_INSTALL_BINDIR})
+if (LLAMA_METAL)
+    install(
+        FILES ggml-metal.metal
+        PERMISSIONS
+            OWNER_READ
+            OWNER_WRITE
+            GROUP_READ
+            WORLD_READ
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 #
 # programs, examples and tests
 #
+
+add_subdirectory(common)
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
