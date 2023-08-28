@@ -4,9 +4,13 @@ import sys
 import struct
 import tempfile
 import numpy as np
+import json
+import os
+from pathlib import Path
 
+import collections.abc as collections_abc
 from enum import IntEnum, auto
-from typing import Any, BinaryIO, IO, Dict, List, Optional, Sequence, Tuple
+from typing import Any, BinaryIO, Callable, IO, Dict, List, Optional, Sequence, Tuple, Union
 
 #
 # constants
@@ -317,7 +321,7 @@ class TensorNameMap:
                     key = key.format(bid = bid)
                     mapping[key] = (tensor, tensor_name)
 
-    def get_both(self, key: str, try_suffixes: Sequence[str]) -> Optional[Tuple[MODEL_TENSOR, str]]:
+    def get_type_and_name(self, key: str, try_suffixes: Sequence[str]) -> Optional[Tuple[MODEL_TENSOR, str]]:
         result = self.mapping.get(key)
         if result is not None:
             return result
@@ -329,10 +333,16 @@ class TensorNameMap:
         return None
 
     def get_name(self, key: str, try_suffixes: Sequence[str]) -> Optional[str]:
-        result = self.get_both(key, try_suffixes = try_suffixes)
+        result = self.get_type_and_name(key, try_suffixes = try_suffixes)
         if result is None:
             return None
         return result[1]
+
+    def get_type(self, key: str, try_suffixes: Sequence[str]) -> Optional[MODEL_TENSOR]:
+        result = self.get_type_and_name(key, try_suffixes = try_suffixes)
+        if result is None:
+            return None
+        return result[0]
 
     def __getitem__(self, key: str) -> str:
         try:
@@ -423,9 +433,9 @@ class GGUFWriter:
     ti_data_count = 0
     use_temp_file: bool
     temp_file: Optional[tempfile.SpooledTemporaryFile[bytes]] = None
-    tensors: List[Tuple[np.ndarray, int]]
+    tensors: List[Tuple[np.ndarray[Any, Any], int]]
 
-    def __init__(self, path: str, arch: str, use_temp_file = True):
+    def __init__(self, path: Union[os.PathLike[str], str], arch: str, use_temp_file = True):
         self.fout = open(path, "wb")
         self.arch = arch
         self.add_architecture()
@@ -501,13 +511,26 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.STRING)
 
-    def add_array(self, key: str, val: list):
-        if not isinstance(val, list):
-            raise ValueError("Value must be a list for array type")
+    def add_array(self, key: str, val: Sequence[Any]):
+        if not isinstance(val, collections_abc.Sequence):
+            raise ValueError("Value must be a sequence for array type")
 
         self.add_key(key)
         self.add_val(val, GGUFValueType.ARRAY)
 
+    _simple_value_packing = {
+        GGUFValueType.UINT8:   "<B",
+        GGUFValueType.INT8:    "<b",
+        GGUFValueType.UINT16:  "<H",
+        GGUFValueType.INT16:   "<h",
+        GGUFValueType.UINT32:  "<I",
+        GGUFValueType.INT32:   "<i",
+        GGUFValueType.FLOAT32: "<f",
+        GGUFValueType.UINT64:  "<Q",
+        GGUFValueType.INT64:   "<q",
+        GGUFValueType.FLOAT64: "<d",
+        GGUFValueType.BOOL:    "?" ,
+    }
     def add_val(self, val: Any, vtype: Optional[GGUFValueType] = None, add_vtype: bool = True):
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
@@ -516,28 +539,9 @@ class GGUFWriter:
             self.kv_data += struct.pack("<I", vtype)
             self.kv_data_count += 1
 
-        if vtype == GGUFValueType.UINT8:
-            self.kv_data += struct.pack("<B", val)
-        elif vtype == GGUFValueType.INT8:
-            self.kv_data += struct.pack("<b", val)
-        elif vtype == GGUFValueType.UINT16:
-            self.kv_data += struct.pack("<H", val)
-        elif vtype == GGUFValueType.INT16:
-            self.kv_data += struct.pack("<h", val)
-        elif vtype == GGUFValueType.UINT32:
-            self.kv_data += struct.pack("<I", val)
-        elif vtype == GGUFValueType.INT32:
-            self.kv_data += struct.pack("<i", val)
-        elif vtype == GGUFValueType.FLOAT32:
-            self.kv_data += struct.pack("<f", val)
-        elif vtype == GGUFValueType.UINT64:
-            self.kv_data += struct.pack("<Q", val)
-        elif vtype == GGUFValueType.INT64:
-            self.kv_data += struct.pack("<q", val)
-        elif vtype == GGUFValueType.FLOAT64:
-            self.kv_data += struct.pack("<d", val)
-        elif vtype == GGUFValueType.BOOL:
-            self.kv_data += struct.pack("?", val)
+        pack_fmt = self._simple_value_packing.get(vtype)
+        if pack_fmt is not None:
+            self.kv_data += struct.pack(pack_fmt, val)
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
             self.kv_data += struct.pack("<Q", len(encoded_val))
@@ -556,7 +560,7 @@ class GGUFWriter:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def add_tensor_info(self, name: str, tensor_shape: np.ndarray, tensor_dtype: np.dtype, tensor_nbytes: int, raw_dtype: Optional[GGMLQuantizationType] = None):
+    def add_tensor_info(self, name: str, tensor_shape: Sequence[int], tensor_dtype: Union[np.dtype[np.float16], np.dtype[np.float32]], tensor_nbytes: int, raw_dtype: Optional[GGMLQuantizationType] = None):
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
@@ -575,13 +579,14 @@ class GGUFWriter:
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
-    def add_tensor(self, name: str, tensor: np.ndarray, raw_shape: Optional[np.ndarray] = None, raw_dtype: Optional[GGMLQuantizationType] = None):
+    def add_tensor(self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Optional[Sequence[int]] = None, raw_dtype: Optional[GGMLQuantizationType] = None):
         if self.use_temp_file and self.temp_file is None:
             fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256*1024*1024)
             fp.seek(0)
             self.temp_file = fp
 
-        self.add_tensor_info(name, raw_shape if raw_shape is not None else tensor.shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
+        shape: Sequence[int] = raw_shape if raw_shape is not None else tensor.shape
+        self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
 
         pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
 
@@ -599,7 +604,7 @@ class GGUFWriter:
         if pad != 0:
             fp.write(bytes([0] * pad))
 
-    def write_tensor_data(self, tensor: np.ndarray):
+    def write_tensor_data(self, tensor: np.ndarray[Any, Any]):
         self.write_padding(self.fout, self.fout.tell())
         tensor.tofile(self.fout)
         self.write_padding(self.fout, tensor.nbytes)
@@ -720,16 +725,16 @@ class GGUFWriter:
     def add_tokenizer_model(self, model: str):
         self.add_string(KEY_TOKENIZER_MODEL, model)
 
-    def add_token_list(self, tokens: List):
+    def add_token_list(self, tokens: Union[Sequence[str], Sequence[bytes], Sequence[bytearray]]):
         self.add_array(KEY_TOKENIZER_LIST, tokens)
 
-    def add_token_merges(self, merges: List):
+    def add_token_merges(self, merges: Union[Sequence[str], Sequence[bytes], Sequence[bytearray]]):
         self.add_array(KEY_TOKENIZER_MERGES, merges)
 
-    def add_token_types(self, types: List[int]):
+    def add_token_types(self, types: Union[Sequence[TokenType], Sequence[int]]):
         self.add_array(KEY_TOKENIZER_TOKEN_TYPE, types)
 
-    def add_token_scores(self, scores: List[float]):
+    def add_token_scores(self, scores: Sequence[float]):
         self.add_array(KEY_TOKENIZER_SCORES, scores)
 
     def add_bos_token_id(self, id: int):
@@ -746,6 +751,75 @@ class GGUFWriter:
 
     def add_pad_token_id(self, id: int):
         self.add_uint32(KEY_TOKENIZER_PAD_ID, id)
+
+
+class SpecialVocab:
+    merges: List[str] = []
+    special_token_types: Tuple[str, ...] = tuple(('bos', 'eos', 'unk', 'sep', 'pad'))
+    special_token_ids: Dict[str, int] = {}
+
+    def __init__(self, path: Path, special_token_types: Optional[Tuple[str, ...]] = None):
+        self.special_token_ids = {}
+        if special_token_types is not None:
+            self.special_token_types = special_token_types
+        self.load(path)
+
+    def load(self, path: Path):
+        if not self.try_load_from_tokenizer_json(path):
+            self.try_load_from_config_json(path)
+
+    def try_load_from_tokenizer_json(self, path: Path) -> bool:
+        tokenizer_file = path / 'tokenizer.json'
+        if not tokenizer_file.is_file():
+            return False
+        with open(tokenizer_file, 'r', encoding = 'utf-8') as f:
+            tokenizer = json.load(f)
+        merges = tokenizer.get('model', {}).get('merges')
+        if isinstance(merges, list) and len(merges) > 0 and isinstance(merges[0], str):
+            self.merges = merges
+        tokenizer_config_file = path / 'tokenizer_config.json'
+        added_tokens = tokenizer.get('added_tokens')
+        if added_tokens is None or not tokenizer_config_file.is_file():
+            return True
+        with open(tokenizer_config_file, 'r', encoding = 'utf-8') as f:
+            tokenizer_config = json.load(f)
+        for typ in self.special_token_types:
+            tc_content = (tokenizer_config.get(f'{typ}_token') or {}).get('content')
+            if not isinstance(tc_content, str):
+                continue
+            for maybe_token_id in (atok.get('id') for atok in added_tokens if atok.get('content') == tc_content):
+                if isinstance(maybe_token_id, int):
+                    self.special_token_ids[typ] = maybe_token_id
+                break
+        return True
+
+    def try_load_from_config_json(self, path: Path) -> bool:
+        config_file = path / 'config.json'
+        if not config_file.is_file():
+            return False
+        with open(config_file, 'r', encoding = 'utf-8') as f:
+            config = json.load(f)
+        for typ in self.special_token_types:
+            maybe_token_id = config.get(f'{typ}_token_id')
+            if isinstance(maybe_token_id, int):
+                self.special_token_ids[typ] = maybe_token_id
+        return True
+
+    def add_to_gguf(self, gw: GGUFWriter):
+        # FIXME: Don't always include merges (possibly also don't even load them).
+        if len(self.merges) > 0:
+            print(f'SpecialVocab: Adding {len(self.merges)} merge(s).')
+            gw.add_token_merges(self.merges)
+        for typ, tokid in self.special_token_ids.items():
+            handler: Optional[Callable[[int], None]] = getattr(gw, f'add_{typ}_token_id', None)
+            if handler is None:
+                print(f'SpecialVocab: WARNING: No handler for special token type {typ} with id {tokid} - skipping')
+                continue
+            print(f'SpecialVocab: Setting special token type {typ} to {tokid}')
+            handler(tokid)
+
+    def __repr__(self):
+        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids if self.special_token_ids else "unset"}>'
 
 
 # Example usage:

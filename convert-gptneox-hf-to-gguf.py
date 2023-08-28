@@ -13,8 +13,6 @@ from typing import Any, List
 from pathlib import Path
 from transformers import AutoTokenizer
 
-from convert import SpecialVocab
-
 # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
 
 
@@ -153,7 +151,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     gguf_writer.add_token_list(tokens)
 
-special_vocab = SpecialVocab(Path(dir_model))
+special_vocab = gguf.SpecialVocab(Path(dir_model))
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS

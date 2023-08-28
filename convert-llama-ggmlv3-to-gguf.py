@@ -299,7 +299,7 @@ def handle_metadata(cfg, hp):
         raise ValueError('Unable to load metadata')
     vocab = convert.load_vocab(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir, cfg.vocabtype)
     # FIXME: Respect cfg.vocab_dir?
-    svocab = convert.SpecialVocab(cfg.model_metadata_dir)
+    svocab = gguf.SpecialVocab(cfg.model_metadata_dir)
     convert.check_vocab_size(params, vocab)
     return (params, vocab, svocab)
 

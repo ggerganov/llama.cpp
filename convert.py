@@ -418,73 +418,6 @@ class SentencePieceVocab:
 
 Vocab = Union[BpeVocab, SentencePieceVocab]
 
-class SpecialVocab:
-    merges: List[str] = []
-    special_token_types: Tuple[str, ...] = tuple(('bos', 'eos', 'unk', 'sep', 'pad'))
-    special_token_ids: Dict[str, int] = {}
-
-    def __init__(self, path: Path, special_token_types: Optional[Tuple[str, ...]] = None):
-        self.special_token_ids = {}
-        if special_token_types is not None:
-            self.special_token_types = special_token_types
-        self.load(path)
-
-    def load(self, path: Path):
-        if not self.try_load_from_tokenizer_json(path):
-            self.try_load_from_config_json(path)
-
-    def try_load_from_tokenizer_json(self, path: Path) -> bool:
-        tokenizer_file = path / 'tokenizer.json'
-        if not tokenizer_file.is_file():
-            return False
-        with open(tokenizer_file, 'r', encoding = 'utf-8') as f:
-            tokenizer = json.load(f)
-        merges = tokenizer.get('model', {}).get('merges')
-        if isinstance(merges, list) and len(merges) > 0 and isinstance(merges[0], str):
-            self.merges = merges
-        tokenizer_config_file = path / 'tokenizer_config.json'
-        added_tokens = tokenizer.get('added_tokens')
-        if added_tokens is None or not tokenizer_config_file.is_file():
-            return True
-        with open(tokenizer_config_file, 'r', encoding = 'utf-8') as f:
-            tokenizer_config = json.load(f)
-        for typ in self.special_token_types:
-            tc_content = (tokenizer_config.get(f'{typ}_token') or {}).get('content')
-            if not isinstance(tc_content, str):
-                continue
-            for maybe_token_id in (atok.get('id') for atok in added_tokens if atok.get('content') == tc_content):
-                if isinstance(maybe_token_id, int):
-                    self.special_token_ids[typ] = maybe_token_id
-                break
-        return True
-
-    def try_load_from_config_json(self, path: Path) -> bool:
-        config_file = path / 'config.json'
-        if not config_file.is_file():
-            return False
-        with open(config_file, 'r', encoding = 'utf-8') as f:
-            config = json.load(f)
-        for typ in self.special_token_types:
-            maybe_token_id = config.get(f'{typ}_token_id')
-            if isinstance(maybe_token_id, int):
-                self.special_token_ids[typ] = maybe_token_id
-        return True
-
-    def add_to_gguf(self, gw: gguf.GGUFWriter):
-        if len(self.merges) > 0:
-            print(f'SpecialVocab: Adding {len(self.merges)} merge(s).')
-            gw.add_token_merges(self.merges)
-        for typ, tokid in self.special_token_ids.items():
-            handler: Optional[Callable[[int], None]] = getattr(gw, f'add_{typ}_token_id', None)
-            if handler is None:
-                print(f'SpecialVocab: WARNING: No handler for special token type {typ} with id {tokid} - skipping')
-                continue
-            print(f'SpecialVocab: Setting special token type {typ} to {tokid}')
-            handler(tokid)
-
-    def __repr__(self):
-        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids if self.special_token_ids else "unset"}>'
-
 #
 # data loading
 # TODO: reuse (probably move to gguf.py?)
@@ -514,7 +447,7 @@ class Tensor(metaclass=ABCMeta):
     def to_ggml(self) -> 'GGMLCompatibleTensor': ...
 
 
-def bf16_to_fp32(bf16_arr: np.ndarray) -> np.ndarray:
+def bf16_to_fp32(bf16_arr: np.ndarray) -> NDArray:
     assert bf16_arr.dtype == np.uint16, f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
     fp32_arr = bf16_arr.astype(np.uint32) << 16
     return fp32_arr.view(np.float32)
@@ -911,7 +844,7 @@ class OutputFile:
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
 
-    def add_meta_special_vocab(self, svocab: SpecialVocab) -> None:
+    def add_meta_special_vocab(self, svocab: gguf.SpecialVocab) -> None:
         svocab.add_to_gguf(self.gguf)
 
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
@@ -932,7 +865,7 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: SpecialVocab) -> None:
+    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
@@ -960,7 +893,7 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY) -> None:
+    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
@@ -1014,7 +947,7 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     tmap = gguf.TensorNameMap(ARCH, params.n_layer)
-    should_skip: Set[gguf.MODEL_TENSOR] = gguf.MODEL_TENSOR_SKIP.get(ARCH, set())
+    should_skip: Set[gguf.MODEL_TENSOR] = set(gguf.MODEL_TENSOR_SKIP.get(ARCH, []))
 
     tmp = model
 
@@ -1036,7 +969,7 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
 
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
-        tensor_type, name_new = tmap.get_both(name, try_suffixes = (".weight", ".bias")) or (None, None)
+        tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
             raise Exception(f"Unexpected tensor name: {name}")
 
@@ -1190,7 +1123,6 @@ def main(args_in: Optional[List[str]] = None) -> None:
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
     else:
-        # You can no longer use guessed parameters for your vocab only model. Does anyone actually care?
         model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
 
     if args.dump:
@@ -1220,7 +1152,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
         assert args.outfile, "need --outfile if using --vocab-only"
         # FIXME: Try to respect vocab_dir somehow?
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
-        special_vocab = SpecialVocab(model_plus.paths[0].parent)
+        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent)
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
@@ -1232,7 +1164,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
         vocab = load_vocab(vocab_dir, args.vocabtype)
     # FIXME: Try to respect vocab_dir somehow?
-    special_vocab = SpecialVocab(model_plus.paths[0].parent)
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent)
 
     model   = model_plus.model
     model   = convert_model_names(model, params)

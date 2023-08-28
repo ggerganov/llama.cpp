@@ -13,8 +13,6 @@ from typing import Any, List, Optional, TypeAlias
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
-from convert import SpecialVocab
-
 #NDArray = np.ndarray[Any, Any]
 # compatible with python < 3.9
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
@@ -191,7 +189,7 @@ if Path(dir_model + "/tokenizer.model").is_file():
     gguf_writer.add_token_scores(scores)
     gguf_writer.add_token_types(toktypes)
 
-special_vocab = SpecialVocab(Path(dir_model))
+special_vocab = gguf.SpecialVocab(Path(dir_model))
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
