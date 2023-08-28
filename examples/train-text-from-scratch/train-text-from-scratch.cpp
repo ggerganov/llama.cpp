@@ -1529,6 +1529,10 @@ void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
     struct ggml_tensor * t  = ggml_get_tensor(ctx, name);
     GGML_ASSERT(are_same_layout(dst, t));
     memcpy(dst->data, t->data, ggml_nbytes(t));
+
+    if (strlen(ggml_get_name(dst)) == 0) {
+        ggml_set_name(dst, name);
+    }
 }
 
 void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt) {
