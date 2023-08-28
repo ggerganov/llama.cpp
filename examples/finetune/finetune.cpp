@@ -932,6 +932,8 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
             ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, one));
         }
 
+        // allocating checkpoints in one block to reduce memory fragmentation
+        // note: they will be freed in reverse order
         for (int i = 0; i < checkpoints.size(); ++i) {
             if (checkpoints[i]->data == NULL && !ggml_is_view(checkpoints[i])) {
                 ggml_allocr_alloc(alloc, checkpoints[i]);
