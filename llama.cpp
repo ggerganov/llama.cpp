@@ -6247,6 +6247,35 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
+void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
+
+    fprintf(stream, "\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "# Timings #\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "\n");
+
+    fprintf(stream, "mst_eval: %.2f  # ms / token during generation\n",
+            1.0e-3 * ctx->t_eval_us / ctx->n_eval);
+    fprintf(stream, "mst_p_eval: %.2f  # ms / token during prompt processing\n",
+            1.0e-3 * ctx->t_p_eval_us / ctx->n_p_eval);
+    fprintf(stream, "mst_sample: %.2f  # ms / token during sampling\n",
+            1.0e-3 * ctx->t_sample_us / ctx->n_sample);
+    fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
+    fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
+    fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->n_sample);
+    fprintf(stream, "t_eval_us: %ld  # total microseconds spent generating tokens\n", ctx->t_eval_us);
+    fprintf(stream, "t_load_us: %ld  # total microseconds spent loading the model\n", ctx->t_load_us);
+    fprintf(stream, "t_p_eval_us: %ld  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
+    fprintf(stream, "t_sample_us: %ld  # total microseconds spent sampling\n", ctx->t_sample_us);
+    fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
+            1.0e6 * ctx->n_eval / ctx->t_eval_us);
+    fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
+            1.0e6 * ctx->n_p_eval / ctx->t_p_eval_us);
+    fprintf(stream, "ts_sample: %.2f  # tokens / second during sampling\n",
+            1.0e6 * ctx->n_sample / ctx->t_sample_us);
+}
+
 // For internal test use
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
     return ctx->model.tensors_by_name;
