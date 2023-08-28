@@ -246,10 +246,13 @@ const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.lbfgs.m
 const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
 const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
 
-const char * LLM_KV_TRAINING_FILE_VERSION    = "training.file_version";
-const char * LLM_KV_TRAINING_ITERATION_COUNT = "training.iteration_count";
-const char * LLM_KV_TRAINING_SAMPLE_COUNT    = "training.sample_count";
-const char * LLM_KV_TRAINING_TOKEN_COUNT     = "training.token_count";
+const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL   = "train_model";
+const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA = "finetune_lora";
+const char * LLM_KV_TRAINING_TYPE               = "training.type";
+const char * LLM_KV_TRAINING_FILE_VERSION       = "training.file_version";
+const char * LLM_KV_TRAINING_ITERATION_COUNT    = "training.iteration_count";
+const char * LLM_KV_TRAINING_SAMPLE_COUNT       = "training.sample_count";
+const char * LLM_KV_TRAINING_TOKEN_COUNT        = "training.token_count";
 
 // gguf constants (sync with gguf.py)
 
@@ -1431,6 +1434,10 @@ void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
     GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
     GGML_ASSERT(file_version == 0);
 
+    std::string train_type = LLM_KV_TRAINING_TYPE_TRAIN_MODEL;
+    GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
+    GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
+
     GGUF_GET_KEY(fctx, model->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
     GGUF_GET_KEY(fctx, model->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
     GGUF_GET_KEY(fctx, model->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
@@ -1442,6 +1449,7 @@ void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_vocab_mode
     save_llama_model_gguf(fctx, fn_vocab_model, model);
 
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    0);
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_ITERATION_COUNT, model->train_its);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    model->train_samples);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     model->train_tokens);
