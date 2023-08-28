@@ -1526,7 +1526,7 @@ void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
     if (dst == NULL) {
         return;
     }
-    struct ggml_tensor * t  = ggml_get_tensor(ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+    struct ggml_tensor * t  = ggml_get_tensor(ctx, name);
     GGML_ASSERT(are_same_layout(dst, t));
     memcpy(dst->data, t->data, ggml_nbytes(t));
 }
