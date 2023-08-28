@@ -314,15 +314,13 @@ void init_model(struct my_llama_model * model) {
     model->train_samples = 0;
     model->train_tokens = 0;
 
-    const char * arch = "llama";
-
     std::vector<char> tn_buf;
     tn_buf.resize(GGML_MAX_NAME);
-    auto tn = [arch, &tn_buf](const char * key) -> const char * {
+    auto tn = [&tn_buf](const char * key) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", key);
         return tn_buf.data();
     };
-    auto tni = [arch, &tn_buf](const char * key, int bid) -> const char * {
+    auto tni = [&tn_buf](const char * key, int bid) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), key, bid);
         std::string s = tn_buf.data();
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", s.c_str());
@@ -470,7 +468,7 @@ static size_t hash_find(void * hash_table[], void * p) {
 }
 
 static bool hash_insert(void * hash_table[], void * p) {
-    size_t h = hash(p);
+    //size_t h = hash(p);
     size_t i = hash_find(hash_table, p);
 
     GGML_ASSERT(i < GGML_GRAPH_HASHTABLE_SIZE); // assert that not full
@@ -494,7 +492,7 @@ struct hash_map {
     void * keys[GGML_GRAPH_HASHTABLE_SIZE];
     void * vals[GGML_GRAPH_HASHTABLE_SIZE];
 };
-static const size_t HASH_MAP_SIZE = sizeof(struct hash_map);
+//static const size_t HASH_MAP_SIZE = sizeof(struct hash_map);
 
 struct hash_map * new_hash_map() {
     struct hash_map * result = new struct hash_map;
@@ -677,7 +675,6 @@ struct ggml_tensor * llama_build_train_graphs(
     const float f_norm_rms_eps  = hparams.f_norm_rms_eps;
     const float rope_freq_base  = hparams.rope_freq_base;
     const float rope_freq_scale = hparams.rope_freq_scale;
-    const int rope_mode  = 0;
 
     auto set_name = [](struct ggml_tensor * t, const char * n) {
         ggml_set_name(t, n);
@@ -687,8 +684,12 @@ struct ggml_tensor * llama_build_train_graphs(
     };
 
     // rope has so much parameters that we make a custom function for it
-    auto rope = [ctx, n_past, n_rot, rope_mode, n_ctx, rope_freq_base, rope_freq_scale]
+    auto rope = [ctx, n_rot, n_ctx, rope_freq_base, rope_freq_scale]
                 (struct ggml_tensor * t) -> struct ggml_tensor * {
+        // not capturing these, to silcence warnings
+        const int n_past    = 0;
+        const int rope_mode = 0;
+
         return ggml_rope_custom(ctx,
             t, n_past, n_rot, rope_mode, n_ctx,
             rope_freq_base, rope_freq_scale);
@@ -803,14 +804,14 @@ struct ggml_tensor * llama_build_train_graphs(
         }
         // allocating checkpoints in one block to reduce memory fragmentation
         // note: they will be freed in reverse order
-        for (int i = 0; i < checkpoints.size(); ++i) {
+        for (int i = 0; i < (int) checkpoints.size(); ++i) {
             if (checkpoints[i]->data == NULL && !ggml_is_view(checkpoints[i])) {
                 ggml_allocr_alloc(alloc, checkpoints[i]);
             }
         }
 
-        int n_leafs_after = gb->n_leafs;
-        int n_nodes_after = gb->n_nodes;
+        //int n_leafs_after = gb->n_leafs;
+        //int n_nodes_after = gb->n_nodes;
 
         ggml_allocr_alloc_graph(alloc, gb);
 
@@ -1061,6 +1062,8 @@ bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {
     GGML_ASSERT(a->type == b->type);
     GGML_ASSERT(ggml_are_same_shape(a, b));
     GGML_ASSERT(ggml_is_contiguous(a) && ggml_is_contiguous(b));
+
+    return true;
 }
 
 void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, const char * name) {
@@ -1217,11 +1220,11 @@ void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_g
 
     std::vector<char> tn_buf;
     tn_buf.resize(GGML_MAX_NAME);
-    auto tn = [&arch, &tn_buf](const char * key) -> const char * {
+    auto tn = [&tn_buf](const char * key) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", key);
         return tn_buf.data();
     };
-    auto tni = [&arch, &tn_buf](const char * key, int bid) -> const char * {
+    auto tni = [&tn_buf](const char * key, int bid) -> const char * {
         snprintf(tn_buf.data(), tn_buf.size(), key, bid);
         std::string s = tn_buf.data();
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", s.c_str());
@@ -2194,7 +2197,7 @@ int main(int argc, char ** argv) {
         ggml_set_no_alloc(ctx0, false);
 
         // don't use alloc for input tensors, so we can safely fill them with data
-        struct ggml_tensor * after_opt_best_samples = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
+        //struct ggml_tensor * after_opt_best_samples = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
         //struct ggml_tensor * after_opt_probs        = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
         struct ggml_tensor * tokens_input           = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
         struct ggml_tensor * target_logits          = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);

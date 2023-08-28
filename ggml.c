@@ -9448,6 +9448,8 @@ static void ggml_compute_forward_div_f32(
 
 
 #ifdef GGML_USE_ACCELERATE
+            UNUSED(ggml_vec_div_f32);
+
             vDSP_vdiv(
                     (float *) ((char *) src1->data + i3*nb13 + i2*nb12 + i1*nb11), 1,
                     (float *) ((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01), 1,
@@ -13936,7 +13938,7 @@ static void ggml_compute_forward_flash_attn_f32(
                 vvexpf(S, S, &Mup);
                 ggml_vec_sum_f32(Mup, &sum, S);
 #else
-                uint16_t   scvt[GGML_SOFT_MAX_UNROLL];
+                uint16_t   scvt[GGML_SOFT_MAX_UNROLL]; UNUSED(scvt);
                 ggml_float sump[GGML_SOFT_MAX_UNROLL] = { 0.0 };
 
                 for (int i = 0; i < Mup; i += GGML_SOFT_MAX_UNROLL) {
@@ -14530,7 +14532,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
                     vvexpf(SM, SM, &Mup);
                     ggml_vec_sum_f32(Mup, &sum, SM);
 #else
-                    uint16_t   scvt[GGML_SOFT_MAX_UNROLL];
+                    uint16_t   scvt[GGML_SOFT_MAX_UNROLL]; UNUSED(scvt);
                     ggml_float sump[GGML_SOFT_MAX_UNROLL] = { 0.0 };
 
                     for (int i = 0; i < Mup; i += GGML_SOFT_MAX_UNROLL) {
@@ -15330,7 +15332,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
             float max = -INFINITY;
             ggml_vec_max_f32(nc, &max, s0);
 
-            uint16_t scvt;
+            uint16_t scvt; UNUSED(scvt);
             for (int i = 0; i < nc; i++) {
                 if (s0[i] == -INFINITY) {
                     st[i] = 0.0f;
@@ -15410,7 +15412,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         return;
     }
 
-    const double eps = 1e-9f;
+    const double eps = 1e-9;
 
     // TODO: handle transposed/permuted matrices
     const int64_t nc = src0->ne[0];
@@ -15444,7 +15446,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
             float max = -INFINITY;
             ggml_vec_max_f32(nc, &max, s0);
 
-            uint16_t scvt;
+            uint16_t scvt; UNUSED(scvt);
             for (int i = 0; i < nc; i++) {
                 if (s0[i] == -INFINITY) {
                     ds0[i] = 0.0f;
@@ -18495,7 +18497,7 @@ static enum ggml_opt_result ggml_opt_adam(
                     const int64_t ne = ggml_nelements(ps[p]);
                     for (int64_t j = 0; j < ne; ++j) {
                         float g = ggml_get_f32_1d(ps[p]->grad, j);
-                        sum += g*g;
+                        sum += (ggml_float)(g*g);
                     }
                 }
                 ggml_float norm = sqrt(sum);
@@ -18508,7 +18510,7 @@ static enum ggml_opt_result ggml_opt_adam(
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
                 const int64_t ne = ggml_nelements(ps[p]);
-                const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0) * sched;
+                const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
                 for (int64_t j = 0; j < ne; ++j) {
                     float x = ggml_get_f32_1d(ps[p], j);
                     float g = ggml_get_f32_1d(ps[p]->grad, j)*gnorm;

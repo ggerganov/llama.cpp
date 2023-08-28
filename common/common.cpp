@@ -15,6 +15,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <cinttypes>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -938,8 +939,8 @@ std::string get_sortable_timestamp() {
 
     const int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         current_time.time_since_epoch() % 1000000000).count();
-    char timestamp_ns[10];
-    snprintf(timestamp_ns, 11, "%09ld", ns);
+    char timestamp_ns[11];
+    snprintf(timestamp_ns, 11, "%09" PRId64, ns);
 
     return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
 }
