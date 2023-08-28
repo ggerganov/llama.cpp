@@ -483,7 +483,7 @@ struct llama_file {
         return (size_t) ret;
     }
 
-    void seek(size_t offset, int whence) {
+    void seek(size_t offset, int whence) const {
 #ifdef _WIN32
         int ret = _fseeki64(fp, (__int64) offset, whence);
 #else
@@ -492,7 +492,7 @@ struct llama_file {
         GGML_ASSERT(ret == 0); // same
     }
 
-    void read_raw(void * ptr, size_t size) {
+    void read_raw(void * ptr, size_t size) const {
         if (size == 0) {
             return;
         }
@@ -506,21 +506,36 @@ struct llama_file {
         }
     }
 
-    std::uint32_t read_u32() {
+    std::uint32_t read_u32() const {
         std::uint32_t ret;
         read_raw(&ret, sizeof(ret));
         return ret;
     }
-    std::float_t read_f32() {
+    std::float_t read_f32() const {
         std::float_t ret;
         read_raw(&ret, sizeof(ret));
         return ret;
     }
 
-    std::string read_string(std::uint32_t len) {
+    std::string read_string(std::uint32_t len) const {
         std::vector<char> chars(len);
         read_raw(chars.data(), len);
         return std::string(chars.data(), len);
+    }
+
+    void write_raw(const void * ptr, size_t size) const {
+        if (size == 0) {
+            return;
+        }
+        errno = 0;
+        size_t ret = std::fwrite(ptr, size, 1, fp);
+        if (ret != 1) {
+            throw std::runtime_error(format("write error: %s", strerror(errno)));
+        }
+    }
+
+    void write_u32(std::uint32_t val) {
+        write_raw(&val, sizeof(val));
     }
 
     ~llama_file() {
@@ -633,7 +648,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
     }
 }
 
-void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * karpathy_weights){
+void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights){
     int ct;
     switch (gg_weights->n_dims){
         case 1:
