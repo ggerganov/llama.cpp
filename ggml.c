@@ -11418,7 +11418,7 @@ static void ggml_compute_forward_out_prod_q_f32(
     GGML_ASSERT(ne3  == ne13);
 
     // we don't support permuted src0 dim0
-    GGML_ASSERT(nb00 == GGML_TYPE_SIZE[type]);
+    GGML_ASSERT(nb00 == ggml_type_size(type));
 
     // dst dim0 cannot be transposed or permuted
     GGML_ASSERT(nb0 == sizeof(float));
@@ -17507,7 +17507,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     size_t cur = 0;
 
                     if (ggml_is_quantized(node->src[0]->type)) {
-                        cur = GGML_TYPE_SIZE[GGML_TYPE_F32] * node->src[0]->ne[0] * n_tasks;
+                        cur = ggml_type_size(GGML_TYPE_F32) * node->src[0]->ne[0] * n_tasks;
                     }
 
                     work_size = MAX(work_size, cur);
