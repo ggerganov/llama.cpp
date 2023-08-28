@@ -273,6 +273,77 @@ struct my_llama_lora {
     uint32_t train_tokens = 0;
 };
 
+// gguf constants
+const char * LLM_KV_OPTIMIZER_TYPE = "optimizer.type";
+const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
+const char * LLM_KV_OPTIMIZER_TYPE_LBFGS = "lbfgs";
+const char * LLM_KV_OPTIMIZER_FILE_VERSION               = "optimizer.file_version";
+const char * LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT     = "optimizer.convergence_past_count";
+const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT            = "optimizer.parameter_count";
+const char * LLM_KV_OPTIMIZER_ITERATION_COUNT            = "optimizer.iteration_count";
+const char * LLM_KV_OPTIMIZER_JUST_INITIALIZED           = "optimizer.just_initialized";
+const char * LLM_KV_OPTIMIZER_ADAM_BEST_LOSS             = "optimizer.adam.best_loss";
+const char * LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS         = "optimizer.adam.previous_loss";
+const char * LLM_KV_OPTIMIZER_ADAM_NO_IMPROVEMENT_COUNT  = "optimizer.adam.no_improvement_count";
+const char * LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT = "optimizer.lbfgs.approx_hessian_count";
+const char * LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS            = "optimizer.lbfgs.best_loss";
+const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_STEP     = "optimizer.lbfgs.line_search_step";
+const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_J        = "optimizer.lbfgs.line_search_j";
+const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_K        = "optimizer.lbfgs.line_search_k";
+const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_END      = "optimizer.lbfgs.line_search_end";
+const char * LLM_KV_OPTIMIZER_LBFGS_NO_IMPROVEMENT_COUNT = "optimizer.lbfgs.no_improvement_count";
+
+const char * LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS    = "optimizer.adam.first_moments";
+const char * LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS   = "optimizer.adam.second_moments";
+const char * LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES = "optimizer.adam.past_loss_values";
+
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_PARAMETERS  = "optimizer.lbfgs.current_parameters";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_PARAMETERS = "optimizer.lbfgs.previous_parameters";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_GRADIENTS   = "optimizer.lbfgs.current_gradients";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS  = "optimizer.lbfgs.previous_gradients";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION    = "optimizer.lbfgs.search_direction";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES    = "optimizer.lbfgs.past_loss_values";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA        = "optimizer.lbfgs.memory_alpha";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.lbfgs.memory_ys";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
+const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
+
+const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL   = "train_model";
+const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA = "finetune_lora";
+const char * LLM_KV_TRAINING_TYPE               = "training.type";
+const char * LLM_KV_TRAINING_FILE_VERSION       = "training.file_version";
+const char * LLM_KV_TRAINING_ITERATION_COUNT    = "training.iteration_count";
+const char * LLM_KV_TRAINING_SAMPLE_COUNT       = "training.sample_count";
+const char * LLM_KV_TRAINING_TOKEN_COUNT        = "training.token_count";
+
+// gguf constants (sync with gguf.py)
+
+const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
+const char * LLM_KV_GENERAL_FILE_TYPE           = "general.file_type";
+
+const char * LLM_KV_CONTEXT_LENGTH              = "%s.context_length";
+const char * LLM_KV_EMBEDDING_LENGTH            = "%s.embedding_length";
+const char * LLM_KV_BLOCK_COUNT                 = "%s.block_count";
+const char * LLM_KV_FEED_FORWARD_LENGTH         = "%s.feed_forward_length";
+const char * LLM_KV_ATTENTION_HEAD_COUNT        = "%s.attention.head_count";
+const char * LLM_KV_ATTENTION_LAYERNORM_RMS_EPS = "%s.attention.layer_norm_rms_epsilon";
+const char * LLM_KV_ROPE_DIMENSION_COUNT        = "%s.rope.dimension_count";
+const char * LLM_KV_ROPE_FREQ_BASE              = "%s.rope.freq_base"; // TODO load in llama.cpp
+const char * LLM_KV_ROPE_SCALE_LINEAR           = "%s.rope.scale_linear";
+
+const char * LLM_TENSOR_TOKEN_EMBD    = "token_embd";
+const char * LLM_TENSOR_OUTPUT_NORM   = "output_norm";
+const char * LLM_TENSOR_OUTPUT        = "output";
+const char * LLM_TENSOR_ATTN_NORM     = "blk.%d.attn_norm";
+const char * LLM_TENSOR_ATTN_Q        = "blk.%d.attn_q";
+const char * LLM_TENSOR_ATTN_K        = "blk.%d.attn_k";
+const char * LLM_TENSOR_ATTN_V        = "blk.%d.attn_v";
+const char * LLM_TENSOR_ATTN_OUT      = "blk.%d.attn_output";
+const char * LLM_TENSOR_FFN_NORM      = "blk.%d.ffn_norm";
+const char * LLM_TENSOR_FFN_GATE      = "blk.%d.ffn_gate";
+const char * LLM_TENSOR_FFN_DOWN      = "blk.%d.ffn_down";
+const char * LLM_TENSOR_FFN_UP        = "blk.%d.ffn_up";
+
 void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
     printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
@@ -1203,6 +1274,248 @@ void shuffle_ints(int * begin, int * end) {
     });
 }
 
+std::string replace_str(const char * s, const char * needle, const char * replacement) {
+    std::string str = s;
+    size_t pos = str.find(needle);
+    if (pos != std::string::npos) {
+        str.replace(pos, strlen(needle), replacement);
+    }
+    return str;
+}
+
+#define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
+{ \
+    const std::string skey(key); \
+    const int kid = gguf_find_key(ctx, skey.c_str()); \
+    if (kid >= 0) { \
+        enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
+        if (ktype != (type)) { \
+            throw std::runtime_error(format("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype))); \
+        } \
+        (dst) = func(ctx, kid); \
+    } else if (req) { \
+        throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
+    } \
+}
+
+bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {
+    GGML_ASSERT(a != NULL);
+    GGML_ASSERT(b != NULL);
+    GGML_ASSERT(a->type == b->type);
+    GGML_ASSERT(ggml_are_same_shape(a, b));
+    GGML_ASSERT(ggml_is_contiguous(a) && ggml_is_contiguous(b));
+
+    return true;
+}
+
+void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, const char * name) {
+    if (dst == NULL) {
+        return;
+    }
+    struct ggml_tensor * t  = ggml_get_tensor(ctx, name);
+    GGML_ASSERT(are_same_layout(dst, t));
+    memcpy(dst->data, t->data, ggml_nbytes(t));
+
+    if (strlen(ggml_get_name(dst)) == 0) {
+        ggml_set_name(dst, name);
+    }
+}
+
+void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt) {
+    // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
+
+    uint32_t file_version;
+    GGUF_GET_KEY(fctx, file_version, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_FILE_VERSION);
+    GGML_ASSERT(file_version == 0);
+
+    GGUF_GET_KEY(fctx, opt->params.past, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT);
+    GGUF_GET_KEY(fctx, opt->iter, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_OPTIMIZER_ITERATION_COUNT);
+    GGUF_GET_KEY(fctx, opt->just_initialized, gguf_get_val_bool, GGUF_TYPE_BOOL, true, LLM_KV_OPTIMIZER_JUST_INITIALIZED);
+
+    uint64_t nx;
+    GGUF_GET_KEY(fctx, nx, gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_OPTIMIZER_PARAMETER_COUNT);
+    opt->nx = (size_t) nx;
+
+    // don't call ggml_opt_init until optimizer type and optimizer specific parameters are know
+
+    std::string opt_type;
+    GGUF_GET_KEY(fctx, opt_type, gguf_get_val_str, GGUF_TYPE_STRING, true, LLM_KV_OPTIMIZER_TYPE);
+    if (opt_type == LLM_KV_OPTIMIZER_TYPE_ADAM) {
+        opt->params.type = GGML_OPT_ADAM;
+
+        GGUF_GET_KEY(fctx, opt->adam.fx_best,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_ADAM_BEST_LOSS);
+        GGUF_GET_KEY(fctx, opt->adam.fx_prev,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS);
+        GGUF_GET_KEY(fctx, opt->adam.n_no_improvement, gguf_get_val_u32, GGUF_TYPE_UINT32,  true, LLM_KV_OPTIMIZER_ADAM_NO_IMPROVEMENT_COUNT);
+
+        GGML_ASSERT(opt->ctx != NULL);
+        ggml_opt_init(opt->ctx, opt, opt->params, opt->nx);
+
+        read_tensor_by_name(opt->adam.m,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+        read_tensor_by_name(opt->adam.v,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
+        read_tensor_by_name(opt->adam.pf, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
+    } else if (opt_type == LLM_KV_OPTIMIZER_TYPE_LBFGS) {
+        opt->params.type = GGML_OPT_LBFGS;
+
+        GGUF_GET_KEY(fctx, opt->params.lbfgs.m,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT);
+        GGUF_GET_KEY(fctx, opt->lbfgs.fx_best,          gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS);
+        GGUF_GET_KEY(fctx, opt->lbfgs.step,             gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_STEP);
+        GGUF_GET_KEY(fctx, opt->lbfgs.j,                gguf_get_val_i32, GGUF_TYPE_INT32,   true, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_J);
+        GGUF_GET_KEY(fctx, opt->lbfgs.k,                gguf_get_val_i32, GGUF_TYPE_INT32,   true, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_K);
+        GGUF_GET_KEY(fctx, opt->lbfgs.end,              gguf_get_val_i32, GGUF_TYPE_INT32,   true, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_END);
+        GGUF_GET_KEY(fctx, opt->lbfgs.n_no_improvement, gguf_get_val_u32, GGUF_TYPE_UINT32,  true, LLM_KV_OPTIMIZER_LBFGS_NO_IMPROVEMENT_COUNT);
+
+        GGML_ASSERT(opt->ctx != NULL);
+        ggml_opt_init(opt->ctx, opt, opt->params, opt->nx);
+
+        read_tensor_by_name(opt->lbfgs.x,    f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_PARAMETERS);
+        read_tensor_by_name(opt->lbfgs.xp,   f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_PARAMETERS);
+        read_tensor_by_name(opt->lbfgs.g,    f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_GRADIENTS);
+        read_tensor_by_name(opt->lbfgs.gp,   f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS);
+        read_tensor_by_name(opt->lbfgs.d,    f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION);
+        read_tensor_by_name(opt->lbfgs.pf,   f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES);
+        read_tensor_by_name(opt->lbfgs.lmal, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA);
+        read_tensor_by_name(opt->lbfgs.lmys, f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS);
+        read_tensor_by_name(opt->lbfgs.lms,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S);
+        read_tensor_by_name(opt->lbfgs.lmy,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y);
+    } else {
+        throw std::runtime_error("unknown optimizer type\n");
+    }
+}
+
+void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt) {
+    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_FILE_VERSION, 0);
+    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT, opt->params.past);
+    gguf_set_val_u64(fctx, LLM_KV_OPTIMIZER_PARAMETER_COUNT, (uint64_t) opt->nx);
+    gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_ITERATION_COUNT, opt->iter);
+    gguf_set_val_bool(fctx, LLM_KV_OPTIMIZER_JUST_INITIALIZED, opt->just_initialized);
+
+    switch (opt->params.type) {
+        case GGML_OPT_ADAM:
+            {
+                gguf_set_val_str(fctx, LLM_KV_OPTIMIZER_TYPE, LLM_KV_OPTIMIZER_TYPE_ADAM);
+                gguf_set_val_f32(fctx, LLM_KV_OPTIMIZER_ADAM_BEST_LOSS,            opt->adam.fx_best);
+                gguf_set_val_f32(fctx, LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS,        opt->adam.fx_prev);
+                gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_ADAM_NO_IMPROVEMENT_COUNT, opt->adam.n_no_improvement);
+
+                ggml_set_name(opt->adam.m, LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS);
+                ggml_set_name(opt->adam.v, LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS);
+                if (opt->adam.pf) {
+                    ggml_set_name(opt->adam.pf, LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES);
+                }
+
+                gguf_add_tensor(fctx, opt->adam.m);
+                gguf_add_tensor(fctx, opt->adam.v);
+                if (opt->adam.pf) {
+                    gguf_add_tensor(fctx, opt->adam.pf);
+                }
+            } break;
+        case GGML_OPT_LBFGS:
+            {
+                gguf_set_val_str(fctx, LLM_KV_OPTIMIZER_TYPE, LLM_KV_OPTIMIZER_TYPE_LBFGS);
+                gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT, opt->params.lbfgs.m);
+                gguf_set_val_f32(fctx, LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS,            opt->lbfgs.fx_best);
+                gguf_set_val_f32(fctx, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_STEP,     opt->lbfgs.step);
+                gguf_set_val_i32(fctx, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_J,        opt->lbfgs.j);
+                gguf_set_val_i32(fctx, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_K,        opt->lbfgs.k);
+                gguf_set_val_i32(fctx, LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_END,      opt->lbfgs.end);
+                gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_LBFGS_NO_IMPROVEMENT_COUNT, opt->lbfgs.n_no_improvement);
+
+                ggml_set_name(opt->lbfgs.x,    LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_PARAMETERS);
+                ggml_set_name(opt->lbfgs.xp,   LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_PARAMETERS);
+                ggml_set_name(opt->lbfgs.g,    LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_GRADIENTS);
+                ggml_set_name(opt->lbfgs.gp,   LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS);
+                ggml_set_name(opt->lbfgs.d,    LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION);
+                if (opt->lbfgs.pf) {
+                    ggml_set_name(opt->lbfgs.pf, LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES);
+                }
+                ggml_set_name(opt->lbfgs.lmal, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA);
+                ggml_set_name(opt->lbfgs.lmys, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS);
+                ggml_set_name(opt->lbfgs.lms,  LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S);
+                ggml_set_name(opt->lbfgs.lmy,  LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y);
+
+                gguf_add_tensor(fctx, opt->lbfgs.x);
+                gguf_add_tensor(fctx, opt->lbfgs.xp);
+                gguf_add_tensor(fctx, opt->lbfgs.g);
+                gguf_add_tensor(fctx, opt->lbfgs.gp);
+                gguf_add_tensor(fctx, opt->lbfgs.d);
+                if (opt->lbfgs.pf) {
+                    gguf_add_tensor(fctx, opt->lbfgs.pf);
+                }
+                gguf_add_tensor(fctx, opt->lbfgs.lmal);
+                gguf_add_tensor(fctx, opt->lbfgs.lmys);
+                gguf_add_tensor(fctx, opt->lbfgs.lms);
+                gguf_add_tensor(fctx, opt->lbfgs.lmy);
+            } break;
+    }
+}
+
+void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora) {
+    // TODO
+}
+
+void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora) {
+    // TODO
+}
+
+void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+    load_llama_lora_gguf(fctx, f_ggml_ctx, model, lora);
+
+    uint32_t file_version;
+    GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
+    GGML_ASSERT(file_version == 0);
+
+    std::string train_type = LLM_KV_TRAINING_TYPE_FINETUNE_LORA;
+    GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
+    GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
+
+    GGUF_GET_KEY(fctx, lora->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
+    GGUF_GET_KEY(fctx, lora->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
+    GGUF_GET_KEY(fctx, lora->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
+
+    load_opt_context_gguf(fctx, f_ggml_ctx, opt);
+}
+
+void save_checkpoint_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+    save_llama_lora_gguf(fctx, model, lora);
+
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    0);
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_ITERATION_COUNT, lora->train_its);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    lora->train_samples);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     lora->train_tokens);
+
+    save_opt_context_gguf(fctx, opt);
+}
+
+bool load_checkpoint_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+    struct ggml_context * f_ggml_ctx;
+    struct gguf_init_params params;
+    params.no_alloc = false;
+    params.ctx = &f_ggml_ctx;
+    struct gguf_context * fctx = gguf_init_from_file(filename, params);
+    if (fctx == NULL) {
+        return false;
+    }
+
+    load_checkpoint_gguf(fctx, f_ggml_ctx, model, lora, opt);
+
+    return true;
+}
+
+void save_checkpoint_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * pattern_it, int iteration, const char * latest) {
+    std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
+    std::string fn = replace_str(filename, pattern_it, sit.c_str());
+    printf("%s: saving to %s\n", __func__, fn.c_str());
+    struct gguf_context * fctx = gguf_init_empty();
+
+    save_checkpoint_gguf(fctx, model, lora, opt);
+
+    // write file
+    const bool only_meta = false;
+    gguf_write_to_file(fctx, fn.c_str(), only_meta);
+    gguf_free(fctx);
+}
+
 void write_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
     if (tensor == NULL) {
         file->write_u32(0);
@@ -1371,15 +1684,6 @@ void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struc
                 fprintf(stderr, "%s: unknown version %u\n", __func__, version);
             }
     }
-}
-
-std::string replace_str(const char * s, const char * needle, const char * replacement) {
-    std::string str = s;
-    size_t pos = str.find(needle);
-    if (pos != std::string::npos) {
-        str.replace(pos, strlen(needle), replacement);
-    }
-    return str;
 }
 
 void save_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * filename, const char * pattern_it, int iteration, const char * latest) {
