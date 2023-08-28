@@ -268,7 +268,7 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
