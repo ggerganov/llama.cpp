@@ -63,7 +63,7 @@ poetry.toml
 
 # Test binaries
 tests/test-grammar-parser
-tests/test-llama-grammar 
+tests/test-llama-grammar
 tests/test-double-float
 tests/test-grad0
 tests/test-opt
