@@ -3,6 +3,9 @@
 #include <cassert>
 #include <chrono>
 #include <cinttypes>
+#include <clocale>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <iterator>
@@ -10,7 +13,6 @@
 #include <numeric>
 #include <regex>
 #include <sstream>
-#include <stdio.h>
 #include <string>
 #include <vector>
 
@@ -916,6 +918,9 @@ static void llama_null_log_callback(enum llama_log_level level, const char * tex
 }
 
 int main(int argc, char ** argv) {
+    // try to set locale for unicode characters in markdown
+    setlocale(LC_CTYPE, ".UTF-8");
+
 #if !defined(NDEBUG)
     fprintf(stderr, "warning: asserts enabled, performance may be affected\n");
 #endif
