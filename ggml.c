@@ -189,7 +189,6 @@ typedef void * thread_ret_t;
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define GGML_ALIGNED_MALLOC(size) _aligned_malloc(size, GGML_MEM_ALIGN)
-#define GGML_ALIGNED_REALLOC(ptr, old_size, size) _aligned_realloc(ptr, size, GGML_MEM_ALIGN)
 #define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
@@ -215,15 +214,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
     }
     return aligned_memory;
 }
-inline static void * ggml_aligned_realloc(void * ptr, size_t old_size, size_t size) {
-    // There is no posix_memalign_realloc function
-    void * result = ggml_aligned_malloc(size);
-    memcpy(result, ptr, old_size);
-    free(ptr);
-    return result;
-}
 #define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
-#define GGML_ALIGNED_REALLOC(ptr, old_size, size) ggml_aligned_realloc(ptr, old_size, size)
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
 #endif
 
@@ -19624,7 +19615,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the kv pairs
     {
-        ctx->kv = GGML_ALIGNED_MALLOC(ctx->header.n_kv * sizeof(struct gguf_kv));
+        ctx->kv = malloc(ctx->header.n_kv * sizeof(struct gguf_kv));
 
         for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
@@ -19707,7 +19698,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the tensor infos
     {
-        ctx->infos = GGML_ALIGNED_MALLOC(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+        ctx->infos = malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
 
         for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
@@ -19908,7 +19899,7 @@ void gguf_free(struct gguf_context * ctx) {
             }
         }
 
-        GGML_ALIGNED_FREE(ctx->kv);
+        free(ctx->kv);
     }
 
     if (ctx->infos) {
@@ -19920,7 +19911,7 @@ void gguf_free(struct gguf_context * ctx) {
             }
         }
 
-        GGML_ALIGNED_FREE(ctx->infos);
+        free(ctx->infos);
     }
 
     GGML_ALIGNED_FREE(ctx);
@@ -20077,7 +20068,7 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
 
     const int n_kv = gguf_get_n_kv(ctx);
 
-    ctx->kv = GGML_ALIGNED_REALLOC(ctx->kv, n_kv * sizeof(struct gguf_kv), (n_kv + 1) * sizeof(struct gguf_kv));
+    ctx->kv = realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
     ctx->kv[n_kv].key.n    = strlen(key);
     ctx->kv[n_kv].key.data = strdup(key);
     ctx->header.n_kv++;
@@ -20234,7 +20225,7 @@ void gguf_add_tensor(
              struct gguf_context * ctx,
         const struct ggml_tensor * tensor) {
     const int idx = ctx->header.n_tensors;
-    ctx->infos = GGML_ALIGNED_REALLOC(ctx->infos, idx*sizeof(struct gguf_tensor_info), (idx + 1)*sizeof(struct gguf_tensor_info));
+    ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
     ctx->infos[idx].name.n    = strlen(tensor->name);
     ctx->infos[idx].name.data = strdup(tensor->name);
