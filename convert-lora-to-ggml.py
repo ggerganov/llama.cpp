@@ -60,7 +60,7 @@ def write_file_header(fout: BinaryIO, params: Dict[str, Any]) -> None:
 
 
 def write_tensor_header(
-    self, name: str, shape: Sequence[int], data_type: np.dtype
+    self, name: str, shape: Sequence[int], data_type: np.dtype[Any]
 ) -> None:
     sname = name.encode("utf-8")
     fout.write(

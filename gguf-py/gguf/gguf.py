@@ -8,7 +8,6 @@ import json
 import os
 from pathlib import Path
 
-import collections.abc as collections_abc
 from enum import IntEnum, auto
 from typing import Any, BinaryIO, Callable, IO, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -512,7 +511,7 @@ class GGUFWriter:
         self.add_val(val, GGUFValueType.STRING)
 
     def add_array(self, key: str, val: Sequence[Any]):
-        if not isinstance(val, collections_abc.Sequence):
+        if not isinstance(val, Sequence):
             raise ValueError("Value must be a sequence for array type")
 
         self.add_key(key)
@@ -546,15 +545,16 @@ class GGUFWriter:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
             self.kv_data += struct.pack("<Q", len(encoded_val))
             self.kv_data += encoded_val
-        elif vtype == GGUFValueType.ARRAY:
-            ltype = set([GGUFValueType.get_type(item) for item in val])
-            assert len(ltype) == 1, "All items in a GGUF array should be of the same type"
-            self.kv_data += struct.pack("<I", list(ltype)[0])
+        elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and len(val) > 0:
+            ltype = GGUFValueType.get_type(val[0])
+            if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
+                raise ValueError("All items in a GGUF array should be of the same type")
+            self.kv_data += struct.pack("<I", ltype)
             self.kv_data += struct.pack("<Q", len(val))
             for item in val:
                 self.add_val(item, add_vtype=False)
         else:
-            raise ValueError("Invalid GGUF metadata value type")
+            raise ValueError("Invalid GGUF metadata value type or value")
 
     @staticmethod
     def ggml_pad(x: int, n: int) -> int:
@@ -614,7 +614,7 @@ class GGUFWriter:
 
         self.write_padding(self.fout, self.fout.tell())
 
-        if not self.use_temp_file:
+        if self.temp_file is None:
             for (currtensor, currpad) in self.tensors:
                 currtensor.tofile(self.fout)
                 if currpad != 0:
@@ -808,14 +808,14 @@ class SpecialVocab:
     def add_to_gguf(self, gw: GGUFWriter):
         # FIXME: Don't always include merges (possibly also don't even load them).
         if len(self.merges) > 0:
-            print(f'SpecialVocab: Adding {len(self.merges)} merge(s).')
+            print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
         for typ, tokid in self.special_token_ids.items():
             handler: Optional[Callable[[int], None]] = getattr(gw, f'add_{typ}_token_id', None)
             if handler is None:
-                print(f'SpecialVocab: WARNING: No handler for special token type {typ} with id {tokid} - skipping')
+                print(f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping')
                 continue
-            print(f'SpecialVocab: Setting special token type {typ} to {tokid}')
+            print(f'gguf: Setting special token type {typ} to {tokid}')
             handler(tokid)
 
     def __repr__(self):

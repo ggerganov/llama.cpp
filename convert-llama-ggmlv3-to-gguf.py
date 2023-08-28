@@ -75,7 +75,7 @@ class Tensor:
         self.dims = ()
         self.dtype = None
         self.start_offset = 0
-        self.len_bytes = 0
+        self.len_bytes = np.int64(0)
 
     def load(self, data, offset):
         orig_offset = offset

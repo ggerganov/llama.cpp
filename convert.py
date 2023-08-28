@@ -25,7 +25,7 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Literal, Optional, Sequence, Set, Tuple, TypeVar, Union)
+from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Literal, Optional, Sequence, Set, Tuple, Type, TypeVar, Union)
 from sentencepiece import SentencePieceProcessor  # type: ignore
 
 if TYPE_CHECKING:
@@ -447,7 +447,7 @@ class Tensor(metaclass=ABCMeta):
     def to_ggml(self) -> 'GGMLCompatibleTensor': ...
 
 
-def bf16_to_fp32(bf16_arr: np.ndarray) -> NDArray:
+def bf16_to_fp32(bf16_arr: np.ndarray[Any, np.dtype[np.uint16]]) -> NDArray:
     assert bf16_arr.dtype == np.uint16, f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
     fp32_arr = bf16_arr.astype(np.uint32) << 16
     return fp32_arr.view(np.float32)
@@ -658,7 +658,7 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
-    # @staticmethod
+    @staticmethod
     def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
                                # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
@@ -670,13 +670,15 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'pickled storage_offset={storage_offset} in {storage.description}'
         return LazyTensor(load, list(size), storage.kind.data_type, description)
 
-    # @staticmethod
+    @staticmethod
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
-    CLASSES: Dict[Any, Any] = {
-        ('torch._tensor', '_rebuild_from_type_v2'): rebuild_from_type_v2,
-        ('torch._utils', '_rebuild_tensor_v2'): lazy_rebuild_tensor_v2,
+    CLASSES: Dict[Tuple[str, str], Any] = {
+        # getattr used here as a workaround for mypy not being smart enough to detrmine
+        # the staticmethods have a __func__ attribute.
+        ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
+        ('torch._utils', '_rebuild_tensor_v2'): getattr(lazy_rebuild_tensor_v2, '__func__'),
         ('torch', 'BFloat16Storage'): LazyStorageKind(DT_BF16),
         ('torch', 'HalfStorage'): LazyStorageKind(DT_F16),
         ('torch', 'FloatStorage'): LazyStorageKind(DT_F32),
@@ -752,7 +754,7 @@ def lazy_load_file(path: Path) -> ModelPlus:
 In = TypeVar('In')
 Out = TypeVar('Out')
 
-def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int, max_workers: Optional[int] = None, factory: Callable = ThreadPoolExecutor) -> Iterable[Out]:
+def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int, max_workers: Optional[int] = None, use_processpool_executor: bool = False) -> Iterable[Out]:
     '''Parallel map, but with backpressure.  If the caller doesn't call `next`
     fast enough, this will stop calling `func` at some point rather than
     letting results pile up in memory.  Specifically, there is a max of one
@@ -761,7 +763,12 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
         yield from map(func, iterable)
         # Not reached.
     iterable = iter(iterable)
-    with factory(max_workers = max_workers) as executor:
+    executor_class: Union[Type[ThreadPoolExecutor], Type[ProcessPoolExecutor]]
+    if use_processpool_executor:
+        executor_class = ProcessPoolExecutor
+    else:
+        executor_class = ThreadPoolExecutor
+    with executor_class(max_workers = max_workers) as executor:
         futures: List[concurrent.futures.Future[Out]] = []
         done = False
         for _ in range(concurrency):
@@ -913,7 +920,7 @@ class OutputFile:
         # tensor data
         ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency = concurrency)
         if ftype == GGMLFileType.MostlyQ8_0:
-            ndarrays = bounded_parallel_map(OutputFile.maybe_do_quantize, ndarrays_inner, concurrency = concurrency, max_workers = concurrency, factory = ProcessPoolExecutor)
+            ndarrays = bounded_parallel_map(OutputFile.maybe_do_quantize, ndarrays_inner, concurrency = concurrency, max_workers = concurrency, use_processpool_executor = True)
         else:
             ndarrays = map(OutputFile.maybe_do_quantize, ndarrays_inner)
 
