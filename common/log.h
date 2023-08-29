@@ -352,46 +352,46 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
         // with fallback in case something went wrong
         return logfile ? logfile : stderr;
     }
+
+    // do the (re)initialization
+    if (target != nullptr)
+    {
+        if (logfile != nullptr && logfile != stdout && logfile != stderr)
+        {
+            fclose(logfile);
+        }
+
+        log_current_filename = LOG_DEFAULT_FILE_NAME;
+        log_current_target = target;
+
+        logfile = target;
+    }
     else
     {
-        if (target != nullptr)
+        if (log_current_filename != filename)
         {
             if (logfile != nullptr && logfile != stdout && logfile != stderr)
             {
                 fclose(logfile);
             }
-
-            log_current_filename = LOG_DEFAULT_FILE_NAME;
-            log_current_target = target;
-
-            logfile = target;
-        }
-        else
-        {
-            if (log_current_filename != filename)
-            {
-                if (logfile != nullptr && logfile != stdout && logfile != stderr)
-                {
-                    fclose(logfile);
-                }
-            }
-
-            logfile = fopen(filename.c_str(), "w");
         }
 
-        if (!logfile)
-        {
-            //  Verify whether the file was opened, otherwise fallback to stderr
-            logfile = stderr;
-
-            fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", filename.c_str(), std::strerror(errno));
-            fflush(stderr);
-        }
-
-        // At this point we set init flag to true, and let the target fallback to stderr
-        //  otherwise we would repeatedly fopen() which was already unsuccessful
-        _initialized = true;
+        logfile = fopen(filename.c_str(), "w");
     }
+
+    if (!logfile)
+    {
+        //  Verify whether the file was opened, otherwise fallback to stderr
+        logfile = stderr;
+
+        fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", filename.c_str(), std::strerror(errno));
+        fflush(stderr);
+
+        // At this point we let the init flag be to true below, and let the target fallback to stderr
+        //  otherwise we would repeatedly fopen() which was already unsuccessful
+    }
+
+    _initialized = true;
 
     return logfile ? logfile : stderr;
 }
@@ -504,7 +504,7 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
         {
             log_set_target(log_filename_generator(next.empty() ? "unnamed" : next, "log"));
         }
-        
+
         return true;
     }
 
