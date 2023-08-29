@@ -165,6 +165,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
     if (best_fit_block == -1) {
         // the last block is our last resort
         struct free_block * block = &alloc->free_blocks[alloc->n_free_blocks - 1];
+        max_avail = MAX(max_avail, block->size);
         if (block->size >= size) {
             best_fit_block = alloc->n_free_blocks - 1;
         } else {
