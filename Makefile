@@ -64,7 +64,7 @@ endif
 
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-			-Wmissing-prototypes
+			-Wmissing-prototypes -Werror=implicit-int
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
 # OS specific
@@ -491,4 +491,4 @@ tests/test-tokenizer-1: tests/test-tokenizer-1.cpp build-info.h ggml.o llama.o c
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 tests/test-c.o: tests/test-c.c llama.h
-	$(CC) $(CFLAGS) -Werror=implicit-int -c $(filter-out %.h,$^) -o $@
+	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
