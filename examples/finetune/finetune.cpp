@@ -2457,12 +2457,14 @@ int main(int argc, char ** argv) {
     struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_params);
     struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
 
-    printf("%s: tokenize training data\n", __func__);
     std::vector<llama_token> train_tokens;
-    if (tokenize_file(lctx, params.fn_train_data, train_tokens) < 0) {
-        fprintf(stderr, "%s: failed to tokenize file '%s'\n", __func__, params.fn_train_data);
+    if (params.n_examples > 0) {
+        printf("%s: tokenize training data\n", __func__);
+        if (tokenize_file(lctx, params.fn_train_data, train_tokens) < 0) {
+            fprintf(stderr, "%s: failed to tokenize file '%s'\n", __func__, params.fn_train_data);
+        }
+        printf("%s: number of training tokens: %d\n", __func__, (int) train_tokens.size());
     }
-    printf("%s: number of training tokens: %d\n", __func__, (int) train_tokens.size());
 
     struct my_llama_model model;
     init_model(lmodel, &model, params.n_ctx);
@@ -2579,17 +2581,19 @@ int main(int argc, char ** argv) {
         alloc = ggml_allocr_new(compute_buf_0, size_buf_0, tensor_alignment);
     }
 
-    GGML_ASSERT(n_tokens < (int) train_tokens.size());
     std::vector<int> train_samples;
-    train_samples.push_back(0);
-    for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
-        if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl(lctx))) {
-            train_samples.push_back(i);
+    if (params.n_examples > 0) {
+        GGML_ASSERT(n_tokens < (int) train_tokens.size());
+        train_samples.push_back(0);
+        for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
+            if (!params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl(lctx))) {
+                train_samples.push_back(i);
+            }
         }
-    }
-    shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
-    for (int i = 0; i < (int) train_samples.size(); ++i) {
-        GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
+        shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
+        for (int i = 0; i < (int) train_samples.size(); ++i) {
+            GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
+        }
     }
 
     printf("%s: begin training\n", __func__);
