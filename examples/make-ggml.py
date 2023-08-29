@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 This script converts Hugging Face llama models to GGML and quantizes them.
 

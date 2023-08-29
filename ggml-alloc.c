@@ -8,6 +8,7 @@
 
 #define UNUSED(x) (void)(x)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define GGML_MAX_CONCUR (2*GGML_MAX_NODES)
 
 //#define GGML_ALLOCATOR_DEBUG
 
@@ -67,6 +68,8 @@ struct ggml_allocr {
     struct hash_node hash_table[GGML_GRAPH_HASHTABLE_SIZE];
     size_t max_size;
     bool measure;
+    int parse_seq[GGML_MAX_CONCUR];
+    int parse_seq_len;
 
 #ifdef GGML_ALLOCATOR_DEBUG
     struct ggml_tensor * allocated_tensors[1024];
@@ -74,7 +77,7 @@ struct ggml_allocr {
 };
 
 #ifdef GGML_ALLOCATOR_DEBUG
-static void add_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static void add_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     for (int i = 0; i < 1024; i++) {
         if (alloc->allocated_tensors[i] == NULL) {
             alloc->allocated_tensors[i] = tensor;
@@ -83,7 +86,7 @@ static void add_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tens
     }
     GGML_ASSERT(!"out of allocated_tensors");
 }
-static void remove_allocated_tensor(struct ggml_allocator * alloc, struct ggml_tensor * tensor) {
+static void remove_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     for (int i = 0; i < 1024; i++) {
         if (alloc->allocated_tensors[i] == tensor ||
             (alloc->allocated_tensors[i] != NULL && alloc->allocated_tensors[i]->data == tensor->data)) {
@@ -104,6 +107,10 @@ static size_t ggml_allocator_get_alloc_size(struct ggml_allocr * alloc, struct g
 }
 
 void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
+#ifdef GGML_ALLOCATOR_DEBUG
+    GGML_ASSERT(ggml_is_view(tensor) == false); // views generally get data pointer from one of their sources
+    GGML_ASSERT(tensor->data == NULL); // avoid allocating tensor which already has memory allocated
+#endif
     size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
 
@@ -111,10 +118,10 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 
     size_t max_avail = 0;
 
-    // find the best fitting free block
+    // find the best fitting free block besides the last block
     int best_fit_block = -1;
     size_t best_fit_size = SIZE_MAX;
-    for (int i = 0; i < alloc->n_free_blocks; i++) {
+    for (int i = 0; i < alloc->n_free_blocks - 1; i++) {
         struct free_block * block = &alloc->free_blocks[i];
         max_avail = MAX(max_avail, block->size);
         if (block->size >= size && block->size <= best_fit_size) {
@@ -126,10 +133,17 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
     AT_PRINTF("block %d\n", best_fit_block);
 
     if (best_fit_block == -1) {
-        fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
-                __func__, size, max_avail);
-        GGML_ASSERT(!"not enough space in the buffer");
+        // the last block is our last resort
+        struct free_block * block = &alloc->free_blocks[alloc->n_free_blocks - 1];
+        if (block->size >= size) {
+            best_fit_block = alloc->n_free_blocks - 1;
+            max_avail = MAX(max_avail, block->size);
+        } else {
+            fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
+                    __func__, size, max_avail);
+            GGML_ASSERT(!"not enough space in the buffer");
         return;
+        }
     }
     struct free_block * block = &alloc->free_blocks[best_fit_block];
     void * addr = block->addr;
@@ -229,6 +243,13 @@ static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_t
     alloc->n_free_blocks++;
 }
 
+void ggml_allocr_set_parse_seq(struct ggml_allocr * alloc, const int * list, int n) {
+    for (int i = 0; i < n; i++) {
+        alloc->parse_seq[i] = list[i];
+    }
+    alloc->parse_seq_len = n;
+}
+
 void ggml_allocr_reset(struct ggml_allocr * alloc) {
     alloc->n_free_blocks = 1;
     size_t align_offset = aligned_offset(alloc->data, 0, alloc->alignment);
@@ -248,8 +269,10 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
         /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
         /*.measure       = */ false,
+        /*.parse_seq     = */ {0},
+        /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
@@ -275,8 +298,10 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
         /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
         /*.measure       = */ true,
+        /*.parse_seq     = */ {0},
+        /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ = {0},
+        /*.allocated_tensors = */ {0},
 #endif
     };
 
@@ -394,6 +419,14 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                     if (parent == NULL) {
                         break;
                     }
+
+                    // if the node's data is external, then we cannot re-use it
+                    if ((char *) parent->data < (char *) alloc->data ||
+                        (char *) parent->data >= ((char *) alloc->data + alloc->size)) {
+                        AT_PRINTF("not reusing parent %s for %s as %p is external\n", parent->name, node->name, parent->data);
+                        continue;
+                    }
+
                     struct hash_node * p_hn = hash_get(ht, parent);
                     if (parent->data != NULL && p_hn->n_children == 1 && p_hn->n_views == 0 && ggml_are_same_layout(node, parent)) {
                         if (ggml_is_view(parent)) {
@@ -413,8 +446,8 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                         else {
                             AT_PRINTF("reusing parent %s for %s\n", parent->name, node->name);
                             node->data = parent->data;
+                            return;
                         }
-                        return;
                     }
                 }
             }
@@ -465,63 +498,86 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 allocate_node(alloc, input);
             }
         }
-        for (int i = 0; i < gf->n_nodes; i++) {
-            struct ggml_tensor * node = gf->nodes[i];
+        // if we have parse_seq then we allocate nodes following the list, and we only free nodes at barriers
+        int last_barrier_pos = 0;
+        int n_nodes = alloc->parse_seq_len ? alloc->parse_seq_len : gf->n_nodes;
 
-            // allocate parents (leafs)
-            for (int j = 0; j < GGML_MAX_SRC; j++) {
-                struct ggml_tensor * parent = node->src[j];
-                if (parent == NULL) {
-                    break;
+        for (int ind = 0; ind < n_nodes; ind++) {
+            // allocate a node if there is no parse_seq or this is not a barrier
+            if ((alloc->parse_seq_len==0) || alloc->parse_seq[ind] != -1) {
+                int i = alloc->parse_seq_len ? alloc->parse_seq[ind] : ind;
+                struct ggml_tensor * node = gf->nodes[i];
+
+                // allocate parents (leafs)
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * parent = node->src[j];
+                    if (parent == NULL) {
+                        break;
+                    }
+                    allocate_node(alloc, parent);
                 }
-                allocate_node(alloc, parent);
+
+                // allocate node
+                allocate_node(alloc, node);
+
+                AT_PRINTF("exec: %s (%s) <= ", ggml_op_name(node->op), node->name);
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * parent = node->src[j];
+                    if (parent == NULL) {
+                        break;
+                    }
+                    AT_PRINTF("%s", parent->name);
+                    if (j < GGML_MAX_SRC - 1 && node->src[j + 1] != NULL) {
+                        AT_PRINTF(", ");
+                    }
+                }
+                AT_PRINTF("\n");
             }
 
-            // allocate node
-            allocate_node(alloc, node);
-
-            AT_PRINTF("exec: %s (%s) <= ", ggml_op_name(node->op), node->name);
-            for (int j = 0; j < GGML_MAX_SRC; j++) {
-                struct ggml_tensor * parent = node->src[j];
-                if (parent == NULL) {
-                    break;
-                }
-                AT_PRINTF("%s", parent->name);
-                if (j < GGML_MAX_SRC - 1 && node->src[j + 1] != NULL) {
-                    AT_PRINTF(", ");
-                }
-            }
-            AT_PRINTF("\n");
 
             // update parents
-            for (int j = 0; j < GGML_MAX_SRC; j++) {
-                struct ggml_tensor * parent = node->src[j];
-                if (parent == NULL) {
-                    break;
+            // update immediately if there is no parse_seq
+            // update only at barriers if there is parse_seq
+            if ((alloc->parse_seq_len==0) || alloc->parse_seq[ind] == -1) {
+                int update_start = alloc->parse_seq_len ? last_barrier_pos : ind;
+                int update_end   = alloc->parse_seq_len ? ind              : ind + 1;
+                for (int i = update_start; i < update_end; i++) {
+                    int node_i = alloc->parse_seq_len ? alloc->parse_seq[i] : i;
+                    struct ggml_tensor * node = gf->nodes[node_i];
+
+                    for (int j = 0; j < GGML_MAX_SRC; j++) {
+                        struct ggml_tensor * parent = node->src[j];
+                        if (parent == NULL) {
+                            break;
+                        }
+                        struct hash_node * p_hn = hash_get(ht, parent);
+                        p_hn->n_children -= 1;
+
+                        //AT_PRINTF("parent %s: %d children, %d views\n", parent->name, parent->n_children, parent->n_views);
+
+                        if (p_hn->n_children == 0 && p_hn->n_views == 0) {
+                            if (ggml_is_view(parent)) {
+                                struct ggml_tensor * view_src = get_view_source(parent);
+                                struct hash_node * view_src_hn = hash_get(ht, view_src);
+                                view_src_hn->n_views -= 1;
+                                AT_PRINTF("view_src %s: %d children, %d views\n", view_src->name, view_src_hn->n_children, view_src_hn->n_views);
+                                if (view_src_hn->n_views == 0 && view_src_hn->n_children == 0 && view_src->data != node->data) {
+                                    ggml_allocator_free_tensor(alloc, view_src);
+                                }
+                            }
+                            else {
+                                if (parent->data != node->data) {
+                                    ggml_allocator_free_tensor(alloc, parent);
+                                }
+                            }
+                        }
+                    }
                 }
-                struct hash_node * p_hn = hash_get(ht, parent);
-                p_hn->n_children -= 1;
-
-                //AT_PRINTF("parent %s: %d children, %d views\n", parent->name, parent->n_children, parent->n_views);
-
-                if (p_hn->n_children == 0 && p_hn->n_views == 0) {
-                    if (ggml_is_view(parent)) {
-                        struct ggml_tensor * view_src = get_view_source(parent);
-                        struct hash_node * view_src_hn = hash_get(ht, view_src);
-                        view_src_hn->n_views -= 1;
-                        AT_PRINTF("view_src %s: %d children, %d views\n", view_src->name, view_src->n_children, view_src->n_views);
-                        if (view_src_hn->n_views == 0 && view_src_hn->n_children == 0 && view_src->data != node->data) {
-                            ggml_allocator_free_tensor(alloc, view_src);
-                        }
-                    }
-                    else {
-                        if (parent->data != node->data) {
-                            ggml_allocator_free_tensor(alloc, parent);
-                        }
-                    }
+                AT_PRINTF("\n");
+                if (alloc->parse_seq_len) {
+                    last_barrier_pos = ind + 1;
                 }
             }
-            AT_PRINTF("\n");
         }
         // free graph outputs here that wouldn't be freed otherwise because they have no children
         if (outputs != NULL && outputs[g] != NULL) {

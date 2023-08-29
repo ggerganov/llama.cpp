@@ -56,9 +56,6 @@ int main(int argc, char ** argv) {
 
     int n_past = 0;
 
-    // Add a space in front of the first character to match OG llama tokenizer behavior
-    params.prompt.insert(0, 1, ' ');
-
     // tokenize the prompt
     auto embd_inp = ::llama_tokenize(ctx, params.prompt, true);
 
@@ -67,27 +64,34 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
         fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_str(ctx, embd_inp[i]));
+            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
         }
         fprintf(stderr, "\n");
     }
 
-    if (params.embedding){
-        if (embd_inp.size() > 0) {
-            if (llama_eval(ctx, embd_inp.data(), embd_inp.size(), n_past, params.n_threads)) {
-                fprintf(stderr, "%s : failed to eval\n", __func__);
-                return 1;
-            }
-        }
-
-        const int n_embd = llama_n_embd(ctx);
-        const auto embeddings = llama_get_embeddings(ctx);
-
-        for (int i = 0; i < n_embd; i++) {
-            printf("%f ", embeddings[i]);
-        }
-        printf("\n");
+    if (embd_inp.size() > (size_t)params.n_ctx) {
+        fprintf(stderr, "%s: error: prompt is longer than the context window (%zu tokens, n_ctx = %d)\n",
+                __func__, embd_inp.size(), params.n_ctx);
+        return 1;
     }
+
+    while (!embd_inp.empty()) {
+        int n_tokens = std::min(params.n_batch, (int) embd_inp.size());
+        if (llama_eval(ctx, embd_inp.data(), n_tokens, n_past, params.n_threads)) {
+            fprintf(stderr, "%s : failed to eval\n", __func__);
+            return 1;
+        }
+        n_past += n_tokens;
+        embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_tokens);
+    }
+
+    const int n_embd = llama_n_embd(ctx);
+    const auto embeddings = llama_get_embeddings(ctx);
+
+    for (int i = 0; i < n_embd; i++) {
+        printf("%f ", embeddings[i]);
+    }
+    printf("\n");
 
     llama_print_timings(ctx);
     llama_free(ctx);
