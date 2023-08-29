@@ -135,7 +135,7 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 }
 
 #ifndef LOG_DEFAULT_FILE_NAME
-/**/#define LOG_DEFAULT_FILE_NAME log_filename_generator("llama", "log")
+    #define LOG_DEFAULT_FILE_NAME log_filename_generator("llama", "log")
 #endif
 
 // Utility for turning #define values into string literals
@@ -154,29 +154,29 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 //  #include "log.h"
 //
 #ifndef LOG_NO_TIMESTAMPS
-/**/#ifndef _WIN32
-/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
-/*    */#define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-/**/#else
-/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
-/*    */#define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-/**/#endif
+    #ifndef _WIN32
+        #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
+        #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
+    #else
+        #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
+        #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
+    #endif
 #else
-/**/#define LOG_TIMESTAMP_FMT
-/**/#define LOG_TIMESTAMP_VAL
+    #define LOG_TIMESTAMP_FMT "%s"
+    #define LOG_TIMESTAMP_VAL ,""
 #endif
 
 #ifdef LOG_TEE_TIMESTAMPS
-/**/#ifndef _WIN32
-/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
-/*    */#define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-/**/#else
-/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
-/*    */#define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
-/**/#endif
+    #ifndef _WIN32
+        #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
+        #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
+    #else
+        #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
+        #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
+    #endif
 #else
-/**/#define LOG_TEE_TIMESTAMP_FMT
-/**/#define LOG_TEE_TIMESTAMP_VAL
+    #define LOG_TEE_TIMESTAMP_FMT "%s"
+    #define LOG_TEE_TIMESTAMP_VAL ,""
 #endif
 
 // Allows disabling file/line/function prefix
@@ -187,29 +187,29 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 //  #include "log.h"
 //
 #ifndef LOG_NO_FILE_LINE_FUNCTION
-/**/#ifndef _WIN32
-/*    */#define LOG_FLF_FMT "[%24s:%5d][%24s] "
-/*    */#define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-/**/#else
-/*    */#define LOG_FLF_FMT "[%24s:%5ld][%24s] "
-/*    */#define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-/**/#endif
+    #ifndef _WIN32
+        #define LOG_FLF_FMT "[%24s:%5d][%24s] "
+        #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+    #else
+        #define LOG_FLF_FMT "[%24s:%5ld][%24s] "
+        #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+    #endif
 #else
-/**/#define LOG_FLF_FMT
-/**/#define LOG_FLF_VAL
+    #define LOG_FLF_FMT "%s"
+    #define LOG_FLF_VAL ,""
 #endif
 
 #ifdef LOG_TEE_FILE_LINE_FUNCTION
-/**/#ifndef _WIN32
-/*    */#define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
-/*    */#define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-/**/#else
-/*    */#define LOG_TEE_FLF_FMT "[%24s:%5ld][%24s] "
-/*    */#define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
-/**/#endif
+    #ifndef _WIN32
+        #define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
+        #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+    #else
+        #define LOG_TEE_FLF_FMT "[%24s:%5ld][%24s] "
+        #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
+    #endif
 #else
-/**/#define LOG_TEE_FLF_FMT
-/**/#define LOG_TEE_FLF_VAL
+    #define LOG_TEE_FLF_FMT "%s"
+    #define LOG_TEE_FLF_VAL ,""
 #endif
 
 // Utility for synchronizing log configuration state
@@ -225,7 +225,7 @@ enum LogTriState
 //  USE LOG() INSTEAD
 //
 #ifndef _WIN32
-/**/#define _LOG(str, ...)                                                                                          \
+    #define _LOG(str, ...)                                                                                          \
     {                                                                                                               \
         if (LOG_TARGET != nullptr)                                                                                  \
         {                                                                                                           \
@@ -234,7 +234,7 @@ enum LogTriState
         }                                                                                                           \
     }
 #else
-/**/#define _LOG(str, ...)                                                                                               \
+    #define _LOG(str, ...)                                                                                               \
     {                                                                                                                    \
         if (LOG_TARGET != nullptr)                                                                                       \
         {                                                                                                                \
@@ -248,7 +248,7 @@ enum LogTriState
 //  USE LOG_TEE() INSTEAD
 //
 #ifndef _WIN32
-/**/#define _LOG_TEE(str, ...)                                                                                                          \
+    #define _LOG_TEE(str, ...)                                                                                                          \
     {                                                                                                                                   \
         if (LOG_TARGET != nullptr)                                                                                                      \
         {                                                                                                                               \
@@ -262,7 +262,7 @@ enum LogTriState
         }                                                                                                                               \
     }
 #else
-/**/#define _LOG_TEE(str, ...)                                                                                                               \
+    #define _LOG_TEE(str, ...)                                                                                                               \
     {                                                                                                                                        \
         if (LOG_TARGET != nullptr)                                                                                                           \
         {                                                                                                                                    \
@@ -285,9 +285,9 @@ enum LogTriState
 //  behaves like printf, and supports arguments the exact same way.
 //
 #ifndef _WIN32
-/**/#define LOG(...) _LOG(__VA_ARGS__, "")
+    #define LOG(...) _LOG(__VA_ARGS__, "")
 #else
-/**/#define LOG(str, ...) _LOG("%s" str, "", __VA_ARGS__, "")
+    #define LOG(str, ...) _LOG("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // Main TEE macro.
@@ -299,18 +299,18 @@ enum LogTriState
 //  by defining LOG_TEE_TARGET
 //
 #ifndef _WIN32
-/**/#define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, "")
+    #define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, "")
 #else
-/**/#define LOG_TEE(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "")
+    #define LOG_TEE(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // LOG macro variants with auto endline.
 #ifndef _WIN32
-/**/#define LOGLN(...) _LOG(__VA_ARGS__, "\n")
-/**/#define LOG_TEELN(...) _LOG_TEE(__VA_ARGS__, "\n")
+    #define LOGLN(...) _LOG(__VA_ARGS__, "\n")
+    #define LOG_TEELN(...) _LOG_TEE(__VA_ARGS__, "\n")
 #else
-/**/#define LOGLN(str, ...) _LOG("%s" str, "", __VA_ARGS__, "\n")
-/**/#define LOG_TEELN(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "\n")
+    #define LOGLN(str, ...) _LOG("%s" str, "", __VA_ARGS__, "\n")
+    #define LOG_TEELN(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "\n")
 #endif
 
 // INTERNAL, DO NOT USE
@@ -380,7 +380,7 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
                     fclose(logfile);
                 }
             }
-            
+
             logfile = fopen(filename.c_str(), "w");
         }
 
@@ -582,37 +582,37 @@ inline std::string _log_var_to_string(const std::vector<int> & var)
     return buf.str();
 }
 
-#define LOG_TOKENS_TOSTR_PRETTY(ctx, tokens)                        \
-    [&tokens, &ctx]()                                               \
-    {                                                               \
-        std::stringstream buf;                                      \
-        buf << "[ ";                                                \
-                                                                    \
-        bool first = true;                                          \
-        for (const auto &token : tokens)                            \
-        {                                                           \
-            if (!first)                                             \
-                buf << ", ";                                        \
-            else                                                    \
-                first = false;                                      \
-                                                                    \
-            auto detokenized = llama_token_to_piece(ctx, token);    \
-                                                                    \
-            detokenized.erase(                                      \
-                std::remove_if(                                     \
-                    detokenized.begin(),                            \
-                    detokenized.end(),                              \
-                    [](const char c) { return !std::isprint(c); }), \
-                detokenized.end());                                 \
-                                                                    \
-            buf                                                     \
-                << "'" << detokenized << "'"                        \
-                << ":" << std::to_string(token);                    \
-        }                                                           \
-        buf << " ]";                                                \
-                                                                    \
-        return buf.str();                                           \
-    }()                                                             \
+#define LOG_TOKENS_TOSTR_PRETTY(ctx, tokens)                                 \
+    [&tokens, &ctx]()                                                        \
+    {                                                                        \
+        std::stringstream buf;                                               \
+        buf << "[ ";                                                         \
+                                                                             \
+        bool first = true;                                                   \
+        for (const auto &token : tokens)                                     \
+        {                                                                    \
+            if (!first)                                                      \
+                buf << ", ";                                                 \
+            else                                                             \
+                first = false;                                               \
+                                                                             \
+            auto detokenized = llama_token_to_piece(ctx, token);             \
+                                                                             \
+            detokenized.erase(                                               \
+                std::remove_if(                                              \
+                    detokenized.begin(),                                     \
+                    detokenized.end(),                                       \
+                    [](const unsigned char c) { return !std::isprint(c); }), \
+                detokenized.end());                                          \
+                                                                             \
+            buf                                                              \
+                << "'" << detokenized << "'"                                 \
+                << ":" << std::to_string(token);                             \
+        }                                                                    \
+        buf << " ]";                                                         \
+                                                                             \
+        return buf.str();                                                    \
+    }()                                                                      \
         .c_str()
 
 #ifdef LOG_DISABLE_LOGS
