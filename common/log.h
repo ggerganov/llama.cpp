@@ -118,10 +118,10 @@ inline std::string log_get_pid()
 //  invocation with log_filename_generator( "llama", "log" ) creates a string "llama.<number>.log"
 //  where the number is a runtime id of the current thread.
 
-#define log_filename_generator(log_file_basename, log_file_extension) _log_filename_generator(log_file_basename, log_file_extension)
+#define log_filename_generator(log_file_basename, log_file_extension) log_filename_generator_impl(log_file_basename, log_file_extension)
 
 // INTERNAL, DO NOT USE
-inline std::string _log_filename_generator(const std::string & log_file_basename, const std::string & log_file_extension)
+inline std::string log_filename_generator_impl(const std::string & log_file_basename, const std::string & log_file_extension)
 {
     std::stringstream buf;
 
@@ -141,8 +141,8 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 // Utility for turning #define values into string literals
 //  so we can have a define for stderr and
 //  we can print "stderr" instead of literal stderr, etc.
-#define _LOG_STRINGIZE(s) #s
-#define LOG_STRINGIZE(s) _LOG_STRINGIZE(s)
+#define LOG_STRINGIZE1(s) #s
+#define LOG_STRINGIZE(s) LOG_STRINGIZE1(s)
 
 #define LOG_TEE_TARGET_STRING LOG_STRINGIZE(LOG_TEE_TARGET)
 
@@ -225,7 +225,7 @@ enum LogTriState
 //  USE LOG() INSTEAD
 //
 #ifndef _WIN32
-    #define _LOG(str, ...)                                                                                          \
+    #define LOG_IMPL(str, ...)                                                                                          \
     {                                                                                                               \
         if (LOG_TARGET != nullptr)                                                                                  \
         {                                                                                                           \
@@ -234,7 +234,7 @@ enum LogTriState
         }                                                                                                           \
     }
 #else
-    #define _LOG(str, ...)                                                                                               \
+    #define LOG_IMPL(str, ...)                                                                                               \
     {                                                                                                                    \
         if (LOG_TARGET != nullptr)                                                                                       \
         {                                                                                                                \
@@ -248,7 +248,7 @@ enum LogTriState
 //  USE LOG_TEE() INSTEAD
 //
 #ifndef _WIN32
-    #define _LOG_TEE(str, ...)                                                                                                          \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                          \
     {                                                                                                                                   \
         if (LOG_TARGET != nullptr)                                                                                                      \
         {                                                                                                                               \
@@ -262,7 +262,7 @@ enum LogTriState
         }                                                                                                                               \
     }
 #else
-    #define _LOG_TEE(str, ...)                                                                                                               \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                               \
     {                                                                                                                                        \
         if (LOG_TARGET != nullptr)                                                                                                           \
         {                                                                                                                                    \
@@ -285,9 +285,9 @@ enum LogTriState
 //  behaves like printf, and supports arguments the exact same way.
 //
 #ifndef _WIN32
-    #define LOG(...) _LOG(__VA_ARGS__, "")
+    #define LOG(...) LOG_IMPL(__VA_ARGS__, "")
 #else
-    #define LOG(str, ...) _LOG("%s" str, "", __VA_ARGS__, "")
+    #define LOG(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // Main TEE macro.
@@ -299,22 +299,22 @@ enum LogTriState
 //  by defining LOG_TEE_TARGET
 //
 #ifndef _WIN32
-    #define LOG_TEE(...) _LOG_TEE(__VA_ARGS__, "")
+    #define LOG_TEE(...) LOG_TEE_IMPL(__VA_ARGS__, "")
 #else
-    #define LOG_TEE(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "")
+    #define LOG_TEE(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // LOG macro variants with auto endline.
 #ifndef _WIN32
-    #define LOGLN(...) _LOG(__VA_ARGS__, "\n")
-    #define LOG_TEELN(...) _LOG_TEE(__VA_ARGS__, "\n")
+    #define LOGLN(...) LOG_IMPL(__VA_ARGS__, "\n")
+    #define LOG_TEELN(...) LOG_TEE_IMPL(__VA_ARGS__, "\n")
 #else
-    #define LOGLN(str, ...) _LOG("%s" str, "", __VA_ARGS__, "\n")
-    #define LOG_TEELN(str, ...) _LOG_TEE("%s" str, "", __VA_ARGS__, "\n")
+    #define LOGLN(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "\n")
+    #define LOG_TEELN(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "\n")
 #endif
 
 // INTERNAL, DO NOT USE
-inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
+inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
 {
     static bool _initialized{false};
     static bool _disabled{(filename.empty() && target == nullptr)};
@@ -397,40 +397,40 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
 }
 
 // INTERNAL, DO NOT USE
-inline FILE *_log_handler2(bool change = false, LogTriState disable = LogTriStateSame, FILE *target = nullptr, const std::string & filename = LOG_DEFAULT_FILE_NAME)
+inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTriStateSame, FILE *target = nullptr, const std::string & filename = LOG_DEFAULT_FILE_NAME)
 {
-    return _log_handler1(change, disable, filename, target);
+    return log_handler1_impl(change, disable, filename, target);
 }
 
 // Disables logs entirely at runtime.
 //  Makes LOG() and LOG_TEE() produce no output,
 //  untill enabled back.
-#define log_disable() _log_disable()
+#define log_disable() log_disable_impl()
 
 // INTERNAL, DO NOT USE
-inline FILE *_log_disable()
+inline FILE *log_disable_impl()
 {
-    return _log_handler1(true, LogTriStateTrue);
+    return log_handler1_impl(true, LogTriStateTrue);
 }
 
 // Enables logs at runtime.
-#define log_enable() _log_enable()
+#define log_enable() log_enable_impl()
 
 // INTERNAL, DO NOT USE
-inline FILE *_log_enable()
+inline FILE *log_enable_impl()
 {
-    return _log_handler1(true, LogTriStateFalse);
+    return log_handler1_impl(true, LogTriStateFalse);
 }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
-#define log_set_target(target) _log_set_target(target)
+#define log_set_target(target) log_set_target_impl(target)
 
 // INTERNAL, DO NOT USE
-inline FILE *_log_set_target(const std::string & filename) { return _log_handler1(true, LogTriStateSame, filename); }
-inline FILE *_log_set_target(FILE *target) { return _log_handler2(true, LogTriStateSame, target); }
+inline FILE *log_set_target_impl(const std::string & filename) { return log_handler1_impl(true, LogTriStateSame, filename); }
+inline FILE *log_set_target_impl(FILE *target) { return log_handler2_impl(true, LogTriStateSame, target); }
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler() { return _log_handler1(); }
+inline FILE *log_handler() { return log_handler1_impl(); }
 
 inline void log_test()
 {
@@ -525,10 +525,10 @@ inline void log_print_usage()
     fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
-#define log_dump_cmdline(argc, argv) _log_dump_cmdline(argc, argv)
+#define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)
 
 // INTERNAL, DO NOT USE
-inline void _log_dump_cmdline(int argc, char **argv)
+inline void log_dump_cmdline_impl(int argc, char **argv)
 {
     std::stringstream buf;
     for (int i = 0; i < argc; ++i)
@@ -545,19 +545,19 @@ inline void _log_dump_cmdline(int argc, char **argv)
     LOGLN("Cmd:%s", buf.str().c_str())
 }
 
-#define log_tostr(var) _log_var_to_string(var).c_str()
+#define log_tostr(var) log_var_to_string_impl(var).c_str()
 
-inline std::string _log_var_to_string(bool var)
+inline std::string log_var_to_string_impl(bool var)
 {
     return var ? "true" : "false";
 }
 
-inline std::string _log_var_to_string(std::string var)
+inline std::string log_var_to_string_impl(std::string var)
 {
     return var;
 }
 
-inline std::string _log_var_to_string(const std::vector<int> & var)
+inline std::string log_var_to_string_impl(const std::vector<int> & var)
 {
     std::stringstream buf;
     buf << "[ ";
