@@ -94,22 +94,22 @@ gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 print("gguf: get model metadata")
 
 if "n_layer" in hparams:
-  block_count = hparams["n_layer"]
+    block_count = hparams["n_layer"]
 elif "num_hidden_layers" in hparams:
-  block_count = hparams["num_hidden_layers"]
+    block_count = hparams["num_hidden_layers"]
 else:
-  print("No block count found")
+    print("No block count found")
 
-  sys.exit()
+    sys.exit()
 
 if "n_head" in hparams:
-  n_head = hparams["n_head"]
+    n_head = hparams["n_head"]
 elif "num_attention_heads" in hparams:
-  n_head = hparams["num_attention_heads"]
+    n_head = hparams["num_attention_heads"]
 else:
-  print("No head count found")
+    print("No head count found")
 
-  sys.exit()
+    sys.exit()
 
 n_head_kv = hparams["n_head_kv"] if "n_head_kv" in hparams else 1
 
