@@ -8,19 +8,18 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
 
 # finetune LORA adapter
 ./bin/finetune \
-        --model-base open-llama-3b-v2-q8_0.bin \
-        --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin \
-        --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
+        --model-base open-llama-3b-v2-q8_0.gguf \
+        --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf \
+        --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.gguf \
         --model-out lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
         --train-data "shakespeare.txt" \
         --save-every 10 \
         --threads 6 --adam-iter 30 --batch 4 --ctx 64 \
-        --print-details-interval 0 --predict 0 \
         --use-checkpointing --use-alloc \
         --mem-lora 2 --mem-compute 1 --mem-compute0 20
 
 # predict
-./bin/main -m open-llama-3b-v2-q8_0.bin --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
 ```
 
 Finetune output files will be saved every N iterations (config with `--save-every N`).
@@ -30,10 +29,6 @@ Gradient checkpointing reduces the memory requirements by ~50% but increases the
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.
 
 To change the amount of memory for finetuning with memory allocator (`--use-alloc`, used by default), you can use `--mem-compute0 N` to specify the number of gigabytes.
-
-After training, text is generated using the trained LORA. 
-But this text prediction is not optimized as well as it is in `main`. 
-It may result in out-of-memory crash, to disable the text prediction after training use `--predict 0`.
 
 The LORA rank is configured for each model tensor type separately with these command line options:
 
