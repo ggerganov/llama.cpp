@@ -761,6 +761,7 @@ class SpecialVocab:
 
     def __init__(self, path: Path, load_merges: bool = False, special_token_types: Optional[Tuple[str, ...]] = None):
         self.special_token_ids = {}
+        self.load_merges = load_merges
         if special_token_types is not None:
             self.special_token_types = special_token_types
         self.load(path)
