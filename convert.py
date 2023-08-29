@@ -962,7 +962,7 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
         name_new = name
-        
+
         if name in tmap:
             name_new = tmap[name]
         elif name.endswith(".weight") and name[:-7] in tmap:
@@ -1113,7 +1113,7 @@ def main(args_in: Optional[List[str]] = None) -> None:
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
     args = parser.parse_args(args_in)
-    
+
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
