@@ -10,12 +10,12 @@ test:
 	@echo "Running tests..."
 	@for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
-			./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
-			# ./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			# ./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 			continue; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
-			# ./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			# ./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 			continue; \
 		else \
 			./$$test_target; \
