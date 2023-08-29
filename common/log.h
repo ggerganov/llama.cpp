@@ -337,12 +337,7 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
         // Otherwise, process the arguments
         else
         {
-            if (log_current_filename != filename)
-            {
-                _initialized = false;
-            }
-
-            if (log_current_target != target)
+            if (log_current_filename != filename || log_current_target != target)
             {
                 _initialized = false;
             }
@@ -384,14 +379,9 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
                 {
                     fclose(logfile);
                 }
-
-                logfile = nullptr;
-                logfile = fopen(filename.c_str(), "w");
             }
-            else
-            {
-                logfile = fopen(filename.c_str(), "w");
-            }
+            
+            logfile = fopen(filename.c_str(), "w");
         }
 
         if (!logfile)
@@ -490,17 +480,17 @@ inline void log_test()
 
 inline bool log_param_single_parse(const std::string & param)
 {
-    if (std::string("--log-test") == param)
+    if ( param == "--log-test")
     {
         log_test();
         return true;
     }
-    else if (std::string("--log-disable") == param) // NOLINT
+    else if ( param == "--log-disable") // NOLINT
     {
         log_disable();
         return true;
     }
-    else if (std::string("--log-enable") == param)
+    else if ( param == "--log-enable")
     {
         log_enable();
         return true;
@@ -511,7 +501,7 @@ inline bool log_param_single_parse(const std::string & param)
 
 inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & param, const std::string & next = std::string())
 {
-    if (std::string("--log-file") == param)
+    if ( param == "--log-file")
     {
         if (check_but_dont_parse)
         {
