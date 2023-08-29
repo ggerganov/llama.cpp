@@ -193,17 +193,20 @@ endif
 
 ifneq ($(filter armv6%,$(UNAME_M)),)
 	# Raspberry Pi 1, Zero
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+	CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+	CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
 endif
 
 ifneq ($(filter armv7%,$(UNAME_M)),)
 	# Raspberry Pi 2
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+	CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+	CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
 endif
 
 ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 3, 4, Zero 2 (32-bit)
-	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
+	CFLAGS   += -mfp16-format=ieee -mno-unaligned-access
+	CXXFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
 ifneq ($(filter ppc64%,$(UNAME_M)),)
