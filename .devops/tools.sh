@@ -8,11 +8,11 @@ arg1="$1"
 shift
 
 if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
-    exec python3 ./convert.py "$@"
+    python3 ./convert.py "$@"
 elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
-    exec ./quantize "$@"
+    ./quantize "$@"
 elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
-    exec ./main "$@"
+    ./main "$@"
 elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
@@ -24,7 +24,7 @@ elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
         fi
     done
 elif [[ "$arg1" == '--server' || "$arg1" == '-s' ]]; then
-    exec ./server "$@"
+    ./server "$@"
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "
