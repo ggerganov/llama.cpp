@@ -11908,7 +11908,7 @@ static void ggml_compute_forward_diag_mask_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-    const int  n_past  =       ((int32_t *) dst->op_params)[0];
+    const int  n_past  = ((int32_t *) dst->op_params)[0];
     const bool inplace = src0->data == dst->data;
 
     GGML_ASSERT(n_past >= 0);
