@@ -10,6 +10,7 @@ import struct
 import json
 import numpy as np
 import torch
+import argparse
 
 from typing import Any, List, TypeAlias
 from pathlib import Path
@@ -20,7 +21,7 @@ from sentencepiece import SentencePieceProcessor
 NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
 
 
-def count_model_parts(dir_model: str) -> int:
+def count_model_parts(dir_model: Path) -> int:
     num_parts = 0
     for filename in os.listdir(dir_model):
         if filename.startswith("consolidated."):
@@ -31,18 +32,21 @@ def count_model_parts(dir_model: str) -> int:
     return num_parts
 
 
-if len(sys.argv) < 3:
-    print(f"Usage: python {sys.argv[0]} dir-model ftype\n")
-    print("  ftype == 0 -> float32")
-    print("  ftype == 1 -> float16")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Convert a PyTorch 7B LLaMA model to a GGML compatible file")
+    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
+    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
+    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.bin)")
+    parser.add_argument("ftype",     type=int, choices=[0, 1],   help="output format - use 0 for float32, 1 for float16", default = 1)
+    return parser.parse_args()
 
+args = parse_args()
+
+dir_model = args.model
+ftype = args.ftype
+if not dir_model.is_dir():
+    print(f'Error: {args.model} is not a directory', file = sys.stderr)
     sys.exit(1)
-
-
-# output in the same directory as the model
-dir_model = sys.argv[1]
-last_dir = os.path.basename(os.path.normpath(dir_model))
-
 
 # possible tensor data types
 #   ftype == 0 -> float32
@@ -51,19 +55,15 @@ last_dir = os.path.basename(os.path.normpath(dir_model))
 # map from ftype to string
 ftype_str = ["f32", "f16"]
 
-ftype = 1
-if len(sys.argv) > 2:
-    ftype = int(sys.argv[2])
-    if ftype < 0 or ftype > 1:
-        print("Invalid ftype: " + str(ftype))
+if args.outfile is not None:
+    fname_out = args.outfile
+else:
+    # output in the same directory as the model by default
+    fname_out = dir_model / f'ggml-model-{ftype_str[ftype]}.gguf'
 
-        sys.exit(1)
+print("gguf: loading model "+dir_model.name)
 
-fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
-
-print("gguf: loading model "+last_dir)
-
-with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
+with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
 if hparams["architectures"][0] != "LlamaForCausalLM":
@@ -107,7 +107,7 @@ else:
     sys.exit()
 
 
-gguf_writer.add_name(last_dir)
+gguf_writer.add_name(dir_model.name)
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_tensor_data_layout("Meta AI original pth")
 gguf_writer.add_context_length(ctx_length)
@@ -133,54 +133,59 @@ tokens: List[bytes] = []
 scores: List[float] = []
 toktypes: List[int] = []
 
-if Path(dir_model + "/tokenizer.model").is_file():
-    # vocab type sentencepiece
-    print("gguf: get sentencepiece tokenizer vocab and scores")
+tokenizer_model_file = dir_model / 'tokenizer.model'
+if not tokenizer_model_file.is_file():
+    print(f'Error: Missing {tokenizer_model_file}', file = sys.stderr)
+    sys.exit(1)
 
-    tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
+# vocab type sentencepiece
+print("gguf: get sentencepiece tokenizer vocab and scores")
 
-    for i in range(tokenizer.vocab_size()):
-        text: bytes
-        score: float
+tokenizer = SentencePieceProcessor(str(tokenizer_model_file))
 
-        piece = tokenizer.id_to_piece(i)
-        text = piece.encode("utf-8")
-        score = tokenizer.get_score(i)
+for i in range(tokenizer.vocab_size()):
+    text: bytes
+    score: float
 
-        toktype = 1  # defualt to normal token type
-        if tokenizer.is_unknown(i):
-            toktype = 2
-        if tokenizer.is_control(i):
-            toktype = 3
+    piece = tokenizer.id_to_piece(i)
+    text = piece.encode("utf-8")
+    score = tokenizer.get_score(i)
 
-        # toktype = 4 is user-defined = tokens from added_tokens.json
+    toktype = 1  # defualt to normal token type
+    if tokenizer.is_unknown(i):
+        toktype = 2
+    if tokenizer.is_control(i):
+        toktype = 3
 
-        if tokenizer.is_unused(i):
-            toktype = 5
-        if tokenizer.is_byte(i):
-            toktype = 6
+    # toktype = 4 is user-defined = tokens from added_tokens.json
 
-        tokens.append(text)
-        scores.append(score)
-        toktypes.append(toktype)
+    if tokenizer.is_unused(i):
+        toktype = 5
+    if tokenizer.is_byte(i):
+        toktype = 6
 
-    if Path(dir_model + "/added_tokens.json").is_file():
-        with open(dir_model + "/added_tokens.json", "r", encoding="utf-8") as f:
-            addtokens_json = json.load(f)
+    tokens.append(text)
+    scores.append(score)
+    toktypes.append(toktype)
 
-            print("gguf: get added tokens")
+added_tokens_file = dir_model / 'added_tokens.json'
+if added_tokens_file.is_file():
+    with open(added_tokens_file, "r", encoding="utf-8") as f:
+        addtokens_json = json.load(f)
 
-            for key in addtokens_json:
-                tokens.append( key.encode("utf-8") )
-                scores.append(-1000.0)
-                toktypes.append(4) # user-defined token type
+        print("gguf: get added tokens")
 
-    gguf_writer.add_tokenizer_model("llama")
-    gguf_writer.add_token_list(tokens)
-    gguf_writer.add_token_scores(scores)
-    gguf_writer.add_token_types(toktypes)
+        for key in addtokens_json:
+            tokens.append( key.encode("utf-8") )
+            scores.append(-1000.0)
+            toktypes.append(4) # user-defined token type
 
-special_vocab = gguf.SpecialVocab(Path(dir_model))
+gguf_writer.add_tokenizer_model("llama")
+gguf_writer.add_token_list(tokens)
+gguf_writer.add_token_scores(scores)
+gguf_writer.add_token_types(toktypes)
+
+special_vocab = gguf.SpecialVocab(dir_model)
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
@@ -193,6 +198,8 @@ print("gguf: get tensor metadata")
 part_names = (f"consolidated.{n:02}.pth" for n in range(0, num_parts))
 
 for part_name in part_names:
+    if args.vocab_only:
+        break
     print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
@@ -241,11 +248,11 @@ print("gguf: write header")
 gguf_writer.write_header_to_file()
 print("gguf: write metadata")
 gguf_writer.write_kv_data_to_file()
-print("gguf: write tensors")
-gguf_writer.write_tensors_to_file()
+if not args.vocab_only:
+    print("gguf: write tensors")
+    gguf_writer.write_tensors_to_file()
 
 gguf_writer.close()
 
-
-print("gguf: model successfully exported to '" + fname_out + "'")
+print(f"gguf: model successfully exported to '{fname_out}'")
 print("")

@@ -33,11 +33,10 @@ def bytes_to_unicode():
             bs.append(b)
             cs.append(2**8+n)
             n += 1
-    cs = [chr(n) for n in cs]
-    return dict(zip(bs, cs))
+    return dict(zip(bs, (chr(n) for n in cs)))
 
 
-def count_model_parts(dir_model: str) -> int:
+def count_model_parts(dir_model: Path) -> int:
     num_parts = 0
     for filename in os.listdir(dir_model):
         if filename.startswith("pytorch_model-"):
