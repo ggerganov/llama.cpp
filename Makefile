@@ -6,6 +6,26 @@ TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-dou
 
 default: $(BUILD_TARGETS)
 
+test:
+	@echo "Running tests..."
+	@for test_target in $(TEST_TARGETS); do \
+		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
+			# ./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			continue; \
+		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
+			# ./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			continue; \
+		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
+			# ./$$test_target $(CURDIR)/../models/ggml-vocab-llama.gguf; \
+			continue; \
+		else \
+			./$$test_target; \
+		fi; \
+	done
+	@echo "All tests have been run."
+
+all: $(BUILD_TARGETS) $(TEST_TARGETS)
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
