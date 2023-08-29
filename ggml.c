@@ -17147,6 +17147,12 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 GGML_ASSERT(false);
             } break;
     }
+
+    for (int i = 0; i < GGML_MAX_SRC; ++i) {
+        if (tensor->src[i] && tensor->src[i]->grad) {
+            GGML_ASSERT(ggml_are_same_shape(tensor->src[i], tensor->src[i]->grad));
+        }
+    }
 }
 
 static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor * node) {
