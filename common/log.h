@@ -335,12 +335,9 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
             _disabled = false;
         }
         // Otherwise, process the arguments
-        else
+        else if (log_current_filename != filename || log_current_target != target)
         {
-            if (log_current_filename != filename || log_current_target != target)
-            {
-                _initialized = false;
-            }
+            _initialized = false;
         }
     }
 
@@ -351,11 +348,9 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
             // Log is disabled
             return nullptr;
         }
-        else // NOLINT
-        {
-            // with fallback in case something went wrong
-            return logfile ? logfile : stderr;
-        }
+
+        // with fallback in case something went wrong
+        return logfile ? logfile : stderr;
     }
     else
     {
@@ -485,12 +480,14 @@ inline bool log_param_single_parse(const std::string & param)
         log_test();
         return true;
     }
-    else if ( param == "--log-disable") // NOLINT
+
+    if ( param == "--log-disable")
     {
         log_disable();
         return true;
     }
-    else if ( param == "--log-enable")
+
+    if ( param == "--log-enable")
     {
         log_enable();
         return true;
@@ -503,11 +500,11 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
 {
     if ( param == "--log-file")
     {
-        if (check_but_dont_parse)
+        if (!check_but_dont_parse)
         {
-            return true;
+            log_set_target(log_filename_generator(next.empty() ? "unnamed" : next, "log"));
         }
-        log_set_target(log_filename_generator(next.empty() ? "unnamed" : next, "log"));
+        
         return true;
     }
 
