@@ -1468,7 +1468,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
 
 void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
-    
+
     std::string arch;
 
     std::vector<char> keybuf;
@@ -1525,7 +1525,7 @@ void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
     read_tensor_by_name(lora->norm_b,           f_ggml_ctx, ggml_get_name(lora->norm_b));
     read_tensor_by_name(lora->output_a,         f_ggml_ctx, ggml_get_name(lora->output_a));
     read_tensor_by_name(lora->output_b,         f_ggml_ctx, ggml_get_name(lora->output_b));
-    
+
     for (uint32_t i = 0; i < lora->layers.size(); ++i) {
         auto & layer = lora->layers[i];
         read_tensor_by_name(layer.attention_norm_a, f_ggml_ctx, ggml_get_name(layer.attention_norm_a));
@@ -1565,7 +1565,7 @@ void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_model * mo
 
     gguf_set_val_u32(fctx, kv(LLM_KV_CONTEXT_LENGTH),              model->hparams.n_ctx);
     gguf_set_val_u32(fctx, kv(LLM_KV_EMBEDDING_LENGTH),            model->hparams.n_embd);
-    gguf_set_val_u32(fctx, kv(LLM_KV_FEED_FORWARD_LENGTH),         model->hparams.n_ff); 
+    gguf_set_val_u32(fctx, kv(LLM_KV_FEED_FORWARD_LENGTH),         model->hparams.n_ff);
     gguf_set_val_u32(fctx, kv(LLM_KV_ATTENTION_HEAD_COUNT),        model->hparams.n_head);
     gguf_set_val_u32(fctx, kv(LLM_KV_BLOCK_COUNT),                 model->hparams.n_layer);
     gguf_set_val_u32(fctx, kv(LLM_KV_ROPE_DIMENSION_COUNT),        model->hparams.n_rot);

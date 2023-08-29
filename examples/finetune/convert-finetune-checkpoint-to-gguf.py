@@ -131,7 +131,7 @@ class OptimizationContext:
     def load(self, data, offset):
         self.version = struct.unpack('<I', bytes(data[offset:offset + 4]))[0]
         offset += 4
-        
+
         if self.version != 1:
             raise ValueError('Invalid version of optimization context in checkpoint file')
 

@@ -16497,7 +16497,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 if (src0->grad) {
                     src0->grad =
                         ggml_add_or_set(ctx, src0->grad,
-                            // last ggml_get_rows_back argument src0->grad is only 
+                            // last ggml_get_rows_back argument src0->grad is only
                             // necessary to setup correct output shape
                             ggml_get_rows_back(ctx, tensor->grad, src1, src0->grad),
                         zero_table);
