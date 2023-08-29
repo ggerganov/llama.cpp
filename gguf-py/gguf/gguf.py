@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from enum import IntEnum, auto
+from io import BufferedWriter
 from typing import Any, BinaryIO, Callable, IO, Dict, List, Optional, Sequence, Tuple, Union
 
 #
@@ -422,7 +423,7 @@ class GGUFValueType(IntEnum):
 
 
 class GGUFWriter:
-    fout: BinaryIO
+    fout: BufferedWriter
     arch: str
     offset_tensor = 0
     data_alignment = GGUF_DEFAULT_ALIGNMENT
