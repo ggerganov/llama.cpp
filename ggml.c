@@ -16255,7 +16255,8 @@ static struct ggml_tensor * ggml_add_or_set(struct ggml_context * ctx, struct gg
 
 static struct ggml_tensor * ggml_acc_or_set(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b, size_t nb1, size_t nb2, size_t nb3, size_t offset, void * zero_table[]) {
     if (hash_contains(zero_table, a)) {
-        return b;
+        struct ggml_tensor * a_zero = ggml_scale(ctx, a, ggml_new_f32(ctx, 0));
+        return ggml_acc_impl(ctx, a_zero, b, nb1, nb2, nb3, offset, false);
     } else {
         return ggml_acc_impl(ctx, a, b, nb1, nb2, nb3, offset, false);
     }
