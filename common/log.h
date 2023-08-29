@@ -90,11 +90,11 @@
 //  }
 //
 #ifndef LOG_TARGET
-#define LOG_TARGET log_handler()
+    #define LOG_TARGET log_handler()
 #endif
 
 #ifndef LOG_TEE_TARGET
-#define LOG_TEE_TARGET stderr
+    #define LOG_TEE_TARGET stderr
 #endif
 
 // Utility to obtain "pid" like unique process id and use it when creating log files.
@@ -147,10 +147,10 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 //
 #ifndef LOG_NO_TIMESTAMPS
 /**/#ifndef _WIN32
-/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "]"
+/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
 /*    */#define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
 /**/#else
-/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "]"
+/*    */#define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
 /*    */#define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
 /**/#endif
 #else
@@ -160,10 +160,10 @@ inline std::string _log_filename_generator(const std::string & log_file_basename
 
 #ifdef LOG_TEE_TIMESTAMPS
 /**/#ifndef _WIN32
-/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "]"
+/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
 /*    */#define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
 /**/#else
-/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "]"
+/*    */#define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
 /*    */#define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
 /**/#endif
 #else
@@ -378,11 +378,11 @@ inline FILE *_log_handler1(bool change = false, LogTriState disable = LogTriStat
                 }
 
                 logfile = nullptr;
-                logfile = fopen(filename.c_str(), "a");
+                logfile = fopen(filename.c_str(), "w");
             }
             else
             {
-                logfile = fopen(filename.c_str(), "a");
+                logfile = fopen(filename.c_str(), "w");
             }
         }
 
