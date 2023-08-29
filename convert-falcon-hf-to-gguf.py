@@ -48,7 +48,7 @@ def count_model_parts(dir_model: str) -> int:
 
 
 if len(sys.argv) < 3:
-    print("Usage: convert-h5-to-ggml.py dir-model ftype\n")
+    print(f"Usage: python {sys.argv[0]} dir-model ftype\n")
     print("  ftype == 0 -> float32")
     print("  ftype == 1 -> float16")
     sys.exit(1)

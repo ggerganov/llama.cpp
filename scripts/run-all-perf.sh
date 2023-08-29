@@ -20,6 +20,7 @@ fi
 model="$1"
 out="../tmp/results-${model}"
 
+set -o pipefail
 set -e
 
 mkdir -p ${out}
