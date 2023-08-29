@@ -17,40 +17,6 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-
-uint32_t compute_data_checksum(struct ggml_tensor * tensor) {
-    const int n3 = (tensor->n_dims >= 3) ? tensor->ne[3] : 1;
-    const int n2 = (tensor->n_dims >= 2) ? tensor->ne[2] : 1;
-    const int n1 = (tensor->n_dims >= 1) ? tensor->ne[1] : 1;
-    const int n0 = (tensor->n_dims >= 0) ? tensor->ne[0] : 1;
-    const size_t nb0 = tensor->nb[0];
-    const size_t nb1 = tensor->nb[1];
-    const size_t nb2 = tensor->nb[2];
-    const size_t nb3 = tensor->nb[3];
-    const size_t nb  = ggml_element_size(tensor);
-    uint32_t result = 0;
-    for (int i3 = 0; i3 < n3; ++i3) {
-        for (int i2 = 0; i2 < n2; ++i2) {
-            for (int i1 = 0; i1 < n1; ++i1) {
-                for (int i0 = 0; i0 < n0; ++i0) {
-                    char * ptr = ((char *) tensor->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3);
-                    uint32_t val;
-                    memcpy(&val, ptr, nb);
-                    result = result ^ val;
-                    result = (((result << 1u) | ((result >> 31u) & 0x1u)) + 1u) & 0xffffffffu;
-                }
-            }
-        }
-    }
-    return result;
-}
-
-void print_data_checksum(struct ggml_tensor * tensor) {
-    uint32_t chk = compute_data_checksum(tensor);
-    printf("%s: chk=[%08x] data=[%p] name=%s\n", __func__, chk, tensor->data, ggml_get_name(tensor));
-}
-
-
 struct random_normal_distribution {
     std::mt19937 gen;
     std::normal_distribution<float> rd;
@@ -1560,13 +1526,6 @@ void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
     read_tensor_by_name(lora->output_a,         f_ggml_ctx, ggml_get_name(lora->output_a));
     read_tensor_by_name(lora->output_b,         f_ggml_ctx, ggml_get_name(lora->output_b));
     
-    print_data_checksum(lora->tok_embeddings_a);
-    print_data_checksum(lora->tok_embeddings_b);
-    print_data_checksum(lora->norm_a);
-    print_data_checksum(lora->norm_b);
-    print_data_checksum(lora->output_a);
-    print_data_checksum(lora->output_b);
-
     for (uint32_t i = 0; i < lora->layers.size(); ++i) {
         auto & layer = lora->layers[i];
         read_tensor_by_name(layer.attention_norm_a, f_ggml_ctx, ggml_get_name(layer.attention_norm_a));
@@ -1587,25 +1546,6 @@ void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
         read_tensor_by_name(layer.w2_b,             f_ggml_ctx, ggml_get_name(layer.w2_b));
         read_tensor_by_name(layer.w3_a,             f_ggml_ctx, ggml_get_name(layer.w3_a));
         read_tensor_by_name(layer.w3_b,             f_ggml_ctx, ggml_get_name(layer.w3_b));
-
-        print_data_checksum(layer.attention_norm_a);
-        print_data_checksum(layer.attention_norm_b);
-        print_data_checksum(layer.wq_a);
-        print_data_checksum(layer.wq_b);
-        print_data_checksum(layer.wk_a);
-        print_data_checksum(layer.wk_b);
-        print_data_checksum(layer.wv_a);
-        print_data_checksum(layer.wv_b);
-        print_data_checksum(layer.wo_a);
-        print_data_checksum(layer.wo_b);
-        print_data_checksum(layer.ffn_norm_a);
-        print_data_checksum(layer.ffn_norm_b);
-        print_data_checksum(layer.w1_a);
-        print_data_checksum(layer.w1_b);
-        print_data_checksum(layer.w2_a);
-        print_data_checksum(layer.w2_b);
-        print_data_checksum(layer.w3_a);
-        print_data_checksum(layer.w3_b);
     }
 }
 
