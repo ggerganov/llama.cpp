@@ -115,19 +115,27 @@ inline std::string log_get_pid()
 }
 
 // Utility function for generating log file names with unique id based on thread id.
-//  invocation with LOG_FILENAME_GENERATOR( "llama", "log" ) creates a string "llama.<number>.log"
+//  invocation with log_filename_generator( "llama", "log" ) creates a string "llama.<number>.log"
 //  where the number is a runtime id of the current thread.
 
-#define LOG_FILENAME_GENERATOR(log_file_basename, log_file_extension) _log_filename_generator(log_file_basename, log_file_extension)
+#define log_filename_generator(log_file_basename, log_file_extension) _log_filename_generator(log_file_basename, log_file_extension)
 
 // INTERNAL, DO NOT USE
 inline std::string _log_filename_generator(const std::string & log_file_basename, const std::string & log_file_extension)
 {
-    return std::string().append(log_file_basename).append(".").append(log_get_pid()).append(".").append(log_file_extension);
+    std::stringstream buf;
+
+    buf << log_file_basename;
+    buf << ".";
+    buf << log_get_pid();
+    buf << ".";
+    buf << log_file_extension;
+
+    return buf.str();
 }
 
 #ifndef LOG_DEFAULT_FILE_NAME
-/**/#define LOG_DEFAULT_FILE_NAME LOG_FILENAME_GENERATOR("llama", "log")
+/**/#define LOG_DEFAULT_FILE_NAME log_filename_generator("llama", "log")
 #endif
 
 // Utility for turning #define values into string literals
@@ -412,7 +420,7 @@ inline FILE *_log_handler2(bool change = false, LogTriState disable = LogTriStat
 // Disables logs entirely at runtime.
 //  Makes LOG() and LOG_TEE() produce no output,
 //  untill enabled back.
-#define LOG_DISABLE() _log_disable()
+#define log_disable() _log_disable()
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_disable()
@@ -421,7 +429,7 @@ inline FILE *_log_disable()
 }
 
 // Enables logs at runtime.
-#define LOG_ENABLE() _log_enable()
+#define log_enable() _log_enable()
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_enable()
@@ -430,7 +438,7 @@ inline FILE *_log_enable()
 }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
-#define LOG_SET_TARGET(target) _log_set_target(target)
+#define log_set_target(target) _log_set_target(target)
 
 // INTERNAL, DO NOT USE
 inline FILE *_log_set_target(const std::string & filename) { return _log_handler1(true, LogTriStateSame, filename); }
@@ -441,32 +449,32 @@ inline FILE *log_handler() { return _log_handler1(); }
 
 inline void log_test()
 {
-    LOG_DISABLE();
+    log_disable();
     LOG("01 Hello World to nobody, because logs are disabled!\n")
-    LOG_ENABLE();
+    log_enable();
     LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
     LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
-    LOG_SET_TARGET(stderr);
+    log_set_target(stderr);
     LOG("04 Hello World to stderr!\n")
     LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n")
-    LOG_SET_TARGET(LOG_DEFAULT_FILE_NAME);
+    log_set_target(LOG_DEFAULT_FILE_NAME);
     LOG("06 Hello World to default log file!\n")
-    LOG_SET_TARGET(stdout);
+    log_set_target(stdout);
     LOG("07 Hello World to stdout!\n")
-    LOG_SET_TARGET(LOG_DEFAULT_FILE_NAME);
+    log_set_target(LOG_DEFAULT_FILE_NAME);
     LOG("08 Hello World to default log file again!\n")
-    LOG_DISABLE();
+    log_disable();
     LOG("09 Hello World _1_ into the void!\n")
-    LOG_ENABLE();
+    log_enable();
     LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n")
-    LOG_DISABLE();
-    LOG_SET_TARGET("llama.anotherlog.log");
+    log_disable();
+    log_set_target("llama.anotherlog.log");
     LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
-    LOG_ENABLE();
+    log_enable();
     LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
-    LOG_SET_TARGET("llama.yetanotherlog.log");
+    log_set_target("llama.yetanotherlog.log");
     LOG("13 Hello World this time in yet new file?\n")
-    LOG_SET_TARGET(LOG_FILENAME_GENERATOR("llama_autonamed", "log"));
+    log_set_target(log_filename_generator("llama_autonamed", "log"));
     LOG("14 Hello World in log with generated filename!\n")
 #ifdef _WIN32
     LOG_TEE("15 Hello msvc TEE without arguments\n")
@@ -489,12 +497,12 @@ inline bool log_param_single_parse(const std::string & param)
     }
     else if (std::string("--log-disable") == param) // NOLINT
     {
-        LOG_DISABLE();
+        log_disable();
         return true;
     }
     else if (std::string("--log-enable") == param)
     {
-        LOG_ENABLE();
+        log_enable();
         return true;
     }
 
@@ -509,7 +517,7 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
         {
             return true;
         }
-        LOG_SET_TARGET(LOG_FILENAME_GENERATOR(next.empty() ? "unnamed" : next, "log"));
+        log_set_target(log_filename_generator(next.empty() ? "unnamed" : next, "log"));
         return true;
     }
 
@@ -530,27 +538,27 @@ inline void log_print_usage()
     fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
-#define LOG_DUMP_CMDLINE(argc, argv) _log_dump_cmdline(argc, argv)
+#define log_dump_cmdline(argc, argv) _log_dump_cmdline(argc, argv)
 
 // INTERNAL, DO NOT USE
 inline void _log_dump_cmdline(int argc, char **argv)
 {
-    std::string buf;
+    std::stringstream buf;
     for (int i = 0; i < argc; ++i)
     {
         if (std::string(argv[i]).find(' ') != std::string::npos)
         {
-            buf.append(" \"").append(argv[i]).append("\"");
+            buf << " \"" << argv[i] <<"\"";
         }
         else
         {
-            buf.append(" ").append(argv[i]);
+            buf << " " << argv[i];
         }
     }
-    LOGLN("Cmd:%s", buf.c_str())
+    LOGLN("Cmd:%s", buf.str().c_str())
 }
 
-#define LOG_TOSTR(var) _log_var_to_string(var).c_str()
+#define log_tostr(var) _log_var_to_string(var).c_str()
 
 inline std::string _log_var_to_string(bool var)
 {
@@ -564,8 +572,8 @@ inline std::string _log_var_to_string(std::string var)
 
 inline std::string _log_var_to_string(const std::vector<int> & var)
 {
-    std::string buf;
-    buf.append("[ ");
+    std::stringstream buf;
+    buf << "[ ";
     bool first = true;
     for (auto e : var)
     {
@@ -575,24 +583,26 @@ inline std::string _log_var_to_string(const std::vector<int> & var)
         }
         else
         {
-            buf.append(", ");
+            buf << ", ";
         }
-        buf.append(std::to_string(e));
+        buf << std::to_string(e);
     }
-    buf.append(" ]");
+    buf << " ]";
 
-    return buf;
+    return buf.str();
 }
 
 #define LOG_TOKENS_TOSTR_PRETTY(ctx, tokens)                        \
     [&tokens, &ctx]()                                               \
     {                                                               \
-        std::string buf("[ ");                                      \
+        std::stringstream buf;                                      \
+        buf << "[ ";                                                \
+                                                                    \
         bool first = true;                                          \
         for (const auto &token : tokens)                            \
         {                                                           \
             if (!first)                                             \
-                buf.append(", ");                                   \
+                buf << ", ";                                        \
             else                                                    \
                 first = false;                                      \
                                                                     \
@@ -606,13 +616,12 @@ inline std::string _log_var_to_string(const std::vector<int> & var)
                 detokenized.end());                                 \
                                                                     \
             buf                                                     \
-                .append("'")                                        \
-                .append(detokenized)                                \
-                .append("'")                                        \
-                .append(":")                                        \
-                .append(std::to_string(token));                     \
+                << "'" << detokenized << "'"                        \
+                << ":" << std::to_string(token);                    \
         }                                                           \
-        return buf.append(" ]");                                    \
+        buf << " ]";                                                \
+                                                                    \
+        return buf.str();                                           \
     }()                                                             \
         .c_str()
 

@@ -114,9 +114,9 @@ int main(int argc, char ** argv) {
     }
 
 #ifndef LOG_DISABLE_LOGS
-    LOG_SET_TARGET(LOG_FILENAME_GENERATOR("main", "log"));
+    log_set_target(log_filename_generator("main", "log"));
     LOG_TEE("Log start\n");
-    LOG_DUMP_CMDLINE(argc,argv);
+    log_dump_cmdline(argc,argv);
 #endif // LOG_DISABLE_LOGS
 
     // TODO: Dump params ?
@@ -266,7 +266,7 @@ int main(int argc, char ** argv) {
         embd_inp = session_tokens;
     }
 
-    LOG("prompt: \"%s\"\n", LOG_TOSTR(params.prompt));
+    LOG("prompt: \"%s\"\n", log_tostr(params.prompt));
     LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp));
 
     // Should not run without any tokens
@@ -280,7 +280,7 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        LOG("cfg_negative_prompt: \"%s\"\n", LOG_TOSTR(params.cfg_negative_prompt));
+        LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(params.cfg_negative_prompt));
 
         guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
@@ -290,8 +290,8 @@ int main(int argc, char ** argv) {
 
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
-        LOG("original_prompt_len: %s", LOG_TOSTR(original_prompt_len));
-        LOG("guidance_offset:     %s", LOG_TOSTR(guidance_offset));
+        LOG("original_prompt_len: %s", log_tostr(original_prompt_len));
+        LOG("guidance_offset:     %s", log_tostr(guidance_offset));
     }
 
     const int n_ctx = llama_n_ctx(ctx);
@@ -326,7 +326,7 @@ int main(int argc, char ** argv) {
 
     LOGLN(
             "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
-            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size());
+            log_tostr(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size());
 
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token token to recalculate the cached logits
