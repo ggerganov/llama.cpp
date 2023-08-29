@@ -11,7 +11,7 @@ test:
 	@for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
-		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; \
+		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
 			continue; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
 			continue; \
