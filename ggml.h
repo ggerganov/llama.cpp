@@ -671,11 +671,20 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
     GGML_API struct ggml_tensor * ggml_set_f32 (struct ggml_tensor * tensor, float value);
 
+    // Converts a flat index into coordinates
+    GGML_API void    ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3);
+
     GGML_API int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i);
     GGML_API void    ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value);
 
+    GGML_API int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i1, int i2, int i3);
+    GGML_API void    ggml_set_i32_nd(const struct ggml_tensor * tensor, int i1, int i2, int i3, int32_t value);
+
     GGML_API float   ggml_get_f32_1d(const struct ggml_tensor * tensor, int i);
     GGML_API void    ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value);
+
+    GGML_API float   ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
+    GGML_API void    ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value);
 
     GGML_API void *  ggml_get_data    (const struct ggml_tensor * tensor);
     GGML_API float * ggml_get_data_f32(const struct ggml_tensor * tensor);

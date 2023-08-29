@@ -4838,7 +4838,37 @@ struct ggml_tensor * ggml_set_f32(struct ggml_tensor * tensor, float value) {
     return tensor;
 }
 
+void ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3) {
+    const int64_t ne3 = tensor->ne[3];
+    const int64_t ne2 = tensor->ne[2];
+    const int64_t ne1 = tensor->ne[1];
+    const int64_t ne0 = tensor->ne[0];
+
+    const int64_t i3_ = (i/(ne2*ne1*ne0));
+    const int64_t i2_ = (i - i3_*ne2*ne1*ne0)/(ne1*ne0);
+    const int64_t i1_ = (i - i3_*ne2*ne1*ne0 - i2_*ne1*ne0)/ne0;
+    const int64_t i0_ = (i - i3_*ne2*ne1*ne0 - i2_*ne1*ne0 - i1_*ne0);
+
+    if (i0) {
+        * i0 = i0_;
+    }
+    if (i1) {
+        * i1 = i1_;
+    }
+    if (i2) {
+        * i2 = i2_;
+    }
+    if (i3) {
+        * i3 = i3_;
+    }
+}
+
 int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i) {
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = { 0, 0, 0, 0 };
+        ggml_unravel_index(tensor, i, &id[0], &id[1], &id[2], &id[3]);
+        return ggml_get_i32_nd(tensor, id[0], id[1], id[2], id[3]);
+    }
     switch (tensor->type) {
         case GGML_TYPE_I8:
             {
@@ -4875,6 +4905,12 @@ int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i) {
 }
 
 void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = { 0, 0, 0, 0 };
+        ggml_unravel_index(tensor, i, &id[0], &id[1], &id[2], &id[3]);
+        ggml_set_i32_nd(tensor, id[0], id[1], id[2], id[3], value);
+        return;
+    }
     switch (tensor->type) {
         case GGML_TYPE_I8:
             {
@@ -4908,7 +4944,74 @@ void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
     }
 }
 
+int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3) {
+    void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            {
+                return ((int8_t *) data)[0];
+            } break;
+        case GGML_TYPE_I16:
+            {
+                return ((int16_t *) data)[0];
+            } break;
+        case GGML_TYPE_I32:
+            {
+                return ((int32_t *) data)[0];
+            } break;
+        case GGML_TYPE_F16:
+            {
+                return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
+            } break;
+        case GGML_TYPE_F32:
+            {
+                return ((float *) data)[0];
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+
+    return 0.0f;
+}
+
+void ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, int32_t value) {
+    void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            {
+                ((int8_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_I16:
+            {
+                ((int16_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_I32:
+            {
+                ((int32_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_F16:
+            {
+                ((ggml_fp16_t *)(data))[0] = GGML_FP32_TO_FP16(value);
+            } break;
+        case GGML_TYPE_F32:
+            {
+                ((float *)(data))[0] = value;
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
 float ggml_get_f32_1d(const struct ggml_tensor * tensor, int i) {
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = { 0, 0, 0, 0 };
+        ggml_unravel_index(tensor, i, &id[0], &id[1], &id[2], &id[3]);
+        return ggml_get_f32_nd(tensor, id[0], id[1], id[2], id[3]);
+    }
     switch (tensor->type) {
         case GGML_TYPE_I8:
             {
@@ -4945,6 +5048,12 @@ float ggml_get_f32_1d(const struct ggml_tensor * tensor, int i) {
 }
 
 void ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value) {
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = { 0, 0, 0, 0 };
+        ggml_unravel_index(tensor, i, &id[0], &id[1], &id[2], &id[3]);
+        ggml_set_f32_nd(tensor, id[0], id[1], id[2], id[3], value);
+        return;
+    }
     switch (tensor->type) {
         case GGML_TYPE_I8:
             {
@@ -4970,6 +5079,68 @@ void ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value) {
             {
                 GGML_ASSERT(tensor->nb[0] == sizeof(float));
                 ((float *)(tensor->data))[i] = value;
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+}
+
+float ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3) {
+    void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            {
+                return ((int8_t *) data)[0];
+            } break;
+        case GGML_TYPE_I16:
+            {
+                return ((int16_t *) data)[0];
+            } break;
+        case GGML_TYPE_I32:
+            {
+                return ((int32_t *) data)[0];
+            } break;
+        case GGML_TYPE_F16:
+            {
+                return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
+            } break;
+        case GGML_TYPE_F32:
+            {
+                return ((float *) data)[0];
+            } break;
+        default:
+            {
+                GGML_ASSERT(false);
+            } break;
+    }
+
+    return 0.0f;
+}
+
+void ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value) {
+    void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            {
+                ((int8_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_I16:
+            {
+                ((int16_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_I32:
+            {
+                ((int32_t *)(data))[0] = value;
+            } break;
+        case GGML_TYPE_F16:
+            {
+                ((ggml_fp16_t *)(data))[0] = GGML_FP32_TO_FP16(value);
+            } break;
+        case GGML_TYPE_F32:
+            {
+                ((float *)(data))[0] = value;
             } break;
         default:
             {
