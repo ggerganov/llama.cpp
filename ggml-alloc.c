@@ -346,7 +346,6 @@ static bool ggml_op_can_inplace(enum ggml_op op) {
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_ADD:
         case GGML_OP_ADD1:
-        case GGML_OP_ACC:
         case GGML_OP_SUB:
         case GGML_OP_MUL:
         case GGML_OP_DIV:
@@ -356,7 +355,6 @@ static bool ggml_op_can_inplace(enum ggml_op op) {
         case GGML_OP_UNARY:
         case GGML_OP_ROPE:
         case GGML_OP_RMS_NORM:
-        case GGML_OP_SET:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_CONT:
             return true;
