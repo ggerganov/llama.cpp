@@ -150,7 +150,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     gguf_writer.add_token_list(tokens)
 
-special_vocab = gguf.SpecialVocab(Path(dir_model))
+special_vocab = gguf.SpecialVocab(Path(dir_model), load_merges = True)
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
