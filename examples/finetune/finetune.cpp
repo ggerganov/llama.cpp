@@ -1761,335 +1761,6 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, const c
     file->write_raw(tensor->data, ggml_nbytes(tensor));
 }
 
-// void read_tensor(struct llama_file * file, struct ggml_tensor * tensor) {
-//     int32_t nd = file->read_u32();
-//     GGML_ASSERT(nd == tensor->n_dims);
-
-//     uint32_t name_len       = file->read_u32();
-//     enum     ggml_type type = (enum ggml_type) file->read_u32();
-//     GGML_ASSERT(type == tensor->type);
-
-//     uint32_t ne[4];
-//     file->read_raw(ne, sizeof(ne[0]) * nd);
-//     for (int i=0; i<nd; ++i) {
-//         GGML_ASSERT(ne[i] == tensor->ne[i]);
-//     }
-
-//     std::string name = file->read_string(name_len);
-//     GGML_ASSERT(strncmp(ggml_get_name(tensor), name.c_str(), sizeof(tensor->name)-1) == 0);
-
-//     file->seek((0-file->tell()) & 31, SEEK_CUR);
-//     file->read_raw(tensor->data, ggml_nbytes(tensor));
-// }
-
-void write_opt_context(struct llama_file * file, struct ggml_opt_context * opt) {
-    const uint32_t version = 1;
-    GGML_ASSERT(opt->nx   >= 0);
-    GGML_ASSERT(opt->iter >= 0);
-    file->write_u32(version);
-    file->write_u32(opt->params.past);
-    file->write_u32(opt->params.lbfgs.m);
-    file->write_raw(&opt->nx,     sizeof(opt->nx));
-    file->write_raw(&opt->iter,   sizeof(opt->iter));
-    file->write_u32((uint32_t)  opt->just_initialized);
-    switch (opt->params.type) {
-        case GGML_OPT_ADAM:
-            {
-                GGML_ASSERT(opt->adam.m  != NULL);
-                GGML_ASSERT(opt->adam.v  != NULL);
-                write_tensor(file, opt->adam.m, NULL);
-                write_tensor(file, opt->adam.v, NULL);
-                write_tensor(file, opt->adam.pf, NULL);
-                file->write_raw(&opt->adam.fx_best,          sizeof(opt->adam.fx_best));
-                file->write_raw(&opt->adam.fx_prev,          sizeof(opt->adam.fx_prev));
-                file->write_raw(&opt->adam.n_no_improvement, sizeof(opt->adam.n_no_improvement));
-            } break;
-        case GGML_OPT_LBFGS:
-            {
-                GGML_ASSERT(opt->lbfgs.x != NULL);
-                write_tensor(file, opt->lbfgs.x, NULL);
-                write_tensor(file, opt->lbfgs.xp, NULL);
-                write_tensor(file, opt->lbfgs.g, NULL);
-                write_tensor(file, opt->lbfgs.gp, NULL);
-                write_tensor(file, opt->lbfgs.d, NULL);
-                write_tensor(file, opt->lbfgs.pf, NULL);
-                write_tensor(file, opt->lbfgs.lmal, NULL);
-                write_tensor(file, opt->lbfgs.lmys, NULL);
-                write_tensor(file, opt->lbfgs.lms, NULL);
-                write_tensor(file, opt->lbfgs.lmy, NULL);
-                file->write_raw(&opt->lbfgs.fx_best,          sizeof(opt->lbfgs.fx_best));
-                file->write_raw(&opt->lbfgs.step,             sizeof(opt->lbfgs.step));
-                file->write_raw(&opt->lbfgs.j,                sizeof(opt->lbfgs.j));
-                file->write_raw(&opt->lbfgs.k,                sizeof(opt->lbfgs.k));
-                file->write_raw(&opt->lbfgs.end,              sizeof(opt->lbfgs.end));
-                file->write_raw(&opt->lbfgs.n_no_improvement, sizeof(opt->lbfgs.n_no_improvement));
-            } break;
-    }
-}
-
-// void read_opt_context_v1(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
-//     opt->params.past    = (int) file->read_u32();
-//     opt->params.lbfgs.m = (int) file->read_u32();
-//     file->read_raw(&opt->nx,     sizeof(opt->nx));
-//     ggml_opt_init(ctx, opt, opt->params, opt->nx);
-
-//     file->read_raw(&opt->iter,   sizeof(opt->iter));
-//     opt->just_initialized = (bool) file->read_u32();
-
-//     switch (opt->params.type) {
-//         case GGML_OPT_ADAM:
-//             {
-//                 read_tensor(file, opt->adam.m);
-//                 read_tensor(file, opt->adam.v);
-//                 if (opt->adam.pf) { read_tensor(file, opt->adam.pf); }
-//                 file->read_raw(&opt->adam.fx_best,          sizeof(opt->adam.fx_best));
-//                 file->read_raw(&opt->adam.fx_prev,          sizeof(opt->adam.fx_prev));
-//                 file->read_raw(&opt->adam.n_no_improvement, sizeof(opt->adam.n_no_improvement));
-//             } break;
-//         case GGML_OPT_LBFGS:
-//             {
-//                 GGML_ASSERT(opt->lbfgs.x != NULL);
-//                 read_tensor(file, opt->lbfgs.x);
-//                 read_tensor(file, opt->lbfgs.xp);
-//                 read_tensor(file, opt->lbfgs.g);
-//                 read_tensor(file, opt->lbfgs.gp);
-//                 read_tensor(file, opt->lbfgs.d);
-//                 if (opt->lbfgs.pf) { read_tensor(file, opt->lbfgs.pf); }
-//                 read_tensor(file, opt->lbfgs.lmal);
-//                 read_tensor(file, opt->lbfgs.lmys);
-//                 read_tensor(file, opt->lbfgs.lms);
-//                 read_tensor(file, opt->lbfgs.lmy);
-//                 file->read_raw(&opt->lbfgs.fx_best,          sizeof(opt->lbfgs.fx_best));
-//                 file->read_raw(&opt->lbfgs.step,             sizeof(opt->lbfgs.step));
-//                 file->read_raw(&opt->lbfgs.j,                sizeof(opt->lbfgs.j));
-//                 file->read_raw(&opt->lbfgs.k,                sizeof(opt->lbfgs.k));
-//                 file->read_raw(&opt->lbfgs.end,              sizeof(opt->lbfgs.end));
-//                 file->read_raw(&opt->lbfgs.n_no_improvement, sizeof(opt->lbfgs.n_no_improvement));
-//             } break;
-//     }
-// }
-
-// void read_opt_context(struct llama_file * file, struct ggml_context * ctx, struct ggml_opt_context * opt) {
-//     uint32_t version = file->read_u32();
-//     printf("%s: opt context version %u\n", __func__, version);
-//     switch (version) {
-//         case 0:
-//             {
-//                 GGML_ASSERT(false); // not supported in finetune
-//             } break;
-//         case 1:
-//             {
-//                 read_opt_context_v1(file, ctx, opt);
-//             } break;
-//         default:
-//             {
-//                 fprintf(stderr, "%s: unknown version %u\n", __func__, version);
-//             }
-//     }
-// }
-
-void save_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * filename, const char * pattern_it, int iteration, const char * latest) {
-    std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
-    std::string fn = replace_str(filename, pattern_it, sit.c_str());
-    printf("%s: saving to %s\n", __func__, fn.c_str());
-    struct llama_file file(fn.c_str(), "wb");
-    if (file.fp == NULL) {
-        return;
-    }
-
-    std::vector<char> tn_buf;
-    tn_buf.resize(GGML_MAX_NAME);
-
-    auto tni = [&tn_buf](const char * key, int bid) -> const char * {
-        snprintf(tn_buf.data(), tn_buf.size(), key, bid);
-        return tn_buf.data();
-    };
-
-    const uint32_t magic   = 'ggcl';
-    const uint32_t version = 0;
-
-    file.write_u32(magic);
-    file.write_u32(version);
-    file.write_u32(lora->train_its);
-    file.write_u32(lora->train_samples);
-    file.write_u32(lora->train_tokens);
-    file.write_u32(model->hparams.n_vocab);
-    file.write_u32(model->hparams.n_embd);
-    file.write_u32(4 /*model->hparams.n_mult*/); 
-    file.write_u32(model->hparams.n_head);
-    file.write_u32(model->hparams.n_layer);
-    file.write_u32(model->hparams.n_rot);
-    file.write_u32(lora->hparams.n_rank_attention_norm);
-    file.write_u32(lora->hparams.n_rank_wq);
-    file.write_u32(lora->hparams.n_rank_wk);
-    file.write_u32(lora->hparams.n_rank_wv);
-    file.write_u32(lora->hparams.n_rank_wo);
-    file.write_u32(lora->hparams.n_rank_ffn_norm);
-    file.write_u32(lora->hparams.n_rank_w1);
-    file.write_u32(lora->hparams.n_rank_w2);
-    file.write_u32(lora->hparams.n_rank_w3);
-    file.write_u32(lora->hparams.n_rank_tok_embeddings);
-    file.write_u32(lora->hparams.n_rank_norm);
-    file.write_u32(lora->hparams.n_rank_output);
-
-    write_tensor(&file, lora->tok_embeddings_a, "tok_embeddings.weight.loraA");
-    write_tensor(&file, lora->tok_embeddings_b, "tok_embeddings.weight.loraB");
-    write_tensor(&file, lora->norm_a,           "norm.weight.loraA");
-    write_tensor(&file, lora->norm_b,           "norm.weight.loraB");
-    write_tensor(&file, lora->output_a,         "output.weight.loraA");
-    write_tensor(&file, lora->output_b,         "output.weight.loraB");
-
-    print_data_checksum(lora->tok_embeddings_a);
-    print_data_checksum(lora->tok_embeddings_b);
-    print_data_checksum(lora->norm_a);
-    print_data_checksum(lora->norm_b);
-    print_data_checksum(lora->output_a);
-    print_data_checksum(lora->output_b);
-
-    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-        auto & layer = lora->layers[i];
-
-        write_tensor(&file, layer.attention_norm_a, tni("%d.attention_norm.weight.loraA", i));
-        write_tensor(&file, layer.attention_norm_b, tni("%d.attention_norm.weight.loraB", i));
-        write_tensor(&file, layer.wq_a,             tni("%d.attention.wq.weight.loraA", i));
-        write_tensor(&file, layer.wq_b,             tni("%d.attention.wq.weight.loraB", i));
-        write_tensor(&file, layer.wk_a,             tni("%d.attention.wk.weight.loraA", i));
-        write_tensor(&file, layer.wk_b,             tni("%d.attention.wk.weight.loraB", i));
-        write_tensor(&file, layer.wv_a,             tni("%d.attention.wv.weight.loraA", i));
-        write_tensor(&file, layer.wv_b,             tni("%d.attention.wv.weight.loraB", i));
-        write_tensor(&file, layer.wo_a,             tni("%d.attention.wo.weight.loraA", i));
-        write_tensor(&file, layer.wo_b,             tni("%d.attention.wo.weight.loraB", i));
-        write_tensor(&file, layer.ffn_norm_a,       tni("%d.ffn_norm.weight.loraA", i));
-        write_tensor(&file, layer.ffn_norm_b,       tni("%d.ffn_norm.weight.loraB", i));
-        write_tensor(&file, layer.w1_a,             tni("%d.feed_forward.w1.weight.loraA", i));
-        write_tensor(&file, layer.w1_b,             tni("%d.feed_forward.w1.weight.loraB", i));
-        write_tensor(&file, layer.w2_a,             tni("%d.feed_forward.w2.weight.loraA", i));
-        write_tensor(&file, layer.w2_b,             tni("%d.feed_forward.w2.weight.loraB", i));
-        write_tensor(&file, layer.w3_a,             tni("%d.feed_forward.w3.weight.loraA", i));
-        write_tensor(&file, layer.w3_b,             tni("%d.feed_forward.w3.weight.loraB", i));
-
-        print_data_checksum(layer.attention_norm_a);
-        print_data_checksum(layer.attention_norm_b);
-        print_data_checksum(layer.wq_a);
-        print_data_checksum(layer.wq_b);
-        print_data_checksum(layer.wk_a);
-        print_data_checksum(layer.wk_b);
-        print_data_checksum(layer.wv_a);
-        print_data_checksum(layer.wv_b);
-        print_data_checksum(layer.wo_a);
-        print_data_checksum(layer.wo_b);
-        print_data_checksum(layer.ffn_norm_a);
-        print_data_checksum(layer.ffn_norm_b);
-        print_data_checksum(layer.w1_a);
-        print_data_checksum(layer.w1_b);
-        print_data_checksum(layer.w2_a);
-        print_data_checksum(layer.w2_b);
-        print_data_checksum(layer.w3_a);
-        print_data_checksum(layer.w3_b);
-    }
-
-    write_opt_context(&file, opt);
-}
-
-// bool load_checkpoint(struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * filename, bool init) {
-//     struct llama_file file(filename, "rb");
-
-//     uint32_t magic;
-//     uint32_t version;
-
-//     uint32_t train_its = 0;
-//     uint32_t train_samples = 0;
-//     uint32_t train_tokens = 0;
-
-//     if (file.fp) {
-//         printf("%s: Loading model from '%s'.\n", __func__, filename);
-//         magic                  = file.read_u32();
-//         GGML_ASSERT(magic     == 'ggcl');
-//         version                = file.read_u32();
-//         GGML_ASSERT(version   == 0);
-//         train_its              = file.read_u32();
-//         train_samples          = file.read_u32();
-//         train_tokens           = file.read_u32();
-//         uint32_t n_vocab       = file.read_u32();
-//         uint32_t n_embd        = file.read_u32();
-//         uint32_t n_mult        = file.read_u32();
-//         uint32_t n_head        = file.read_u32();
-//         uint32_t n_layer       = file.read_u32();
-//         uint32_t n_rot         = file.read_u32();
-//         GGML_ASSERT(n_vocab == model->hparams.n_vocab);
-//         GGML_ASSERT(n_embd  == model->hparams.n_embd);
-//         //GGML_ASSERT(n_mult  == model->hparams.n_mult);
-//         GGML_ASSERT(n_head  == model->hparams.n_head);
-//         GGML_ASSERT(n_layer == model->hparams.n_layer);
-//         GGML_ASSERT(n_rot   == model->hparams.n_rot);
-//         lora->hparams.n_rank_attention_norm = file.read_u32();
-//         lora->hparams.n_rank_wq             = file.read_u32();
-//         lora->hparams.n_rank_wk             = file.read_u32();
-//         lora->hparams.n_rank_wv             = file.read_u32();
-//         lora->hparams.n_rank_wo             = file.read_u32();
-//         lora->hparams.n_rank_ffn_norm       = file.read_u32();
-//         lora->hparams.n_rank_w1             = file.read_u32();
-//         lora->hparams.n_rank_w2             = file.read_u32();
-//         lora->hparams.n_rank_w3             = file.read_u32();
-//         lora->hparams.n_rank_tok_embeddings = file.read_u32();
-//         lora->hparams.n_rank_norm           = file.read_u32();
-//         lora->hparams.n_rank_output         = file.read_u32();
-
-//         print_params(&model->hparams);
-//         print_lora_params(&lora->hparams);
-//     }
-
-//     if (init) {
-//         init_lora(model, lora);
-//     }
-
-//     if (file.fp) {
-//         lora->train_its = train_its;
-//         lora->train_samples = train_samples;
-//         lora->train_tokens = train_tokens;
-//     }
-
-//     printf("%s: Training iterations: %u.\n", __func__, lora->train_its);
-//     printf("%s: Training samples:    %u.\n", __func__, lora->train_samples);
-//     printf("%s: Training tokens:     %u.\n", __func__, lora->train_tokens);
-
-//     if (file.fp) {
-//         read_tensor(&file, lora->tok_embeddings_a);
-//         read_tensor(&file, lora->tok_embeddings_b);
-//         read_tensor(&file, lora->norm_a);
-//         read_tensor(&file, lora->norm_b);
-//         read_tensor(&file, lora->output_a);
-//         read_tensor(&file, lora->output_b);
-
-//         for (uint32_t i = 0; i < lora->layers.size(); ++i) {
-//             auto & layer = lora->layers[i];
-
-//             read_tensor(&file, layer.attention_norm_a);
-//             read_tensor(&file, layer.attention_norm_b);
-//             read_tensor(&file, layer.wq_a);
-//             read_tensor(&file, layer.wq_b);
-//             read_tensor(&file, layer.wk_a);
-//             read_tensor(&file, layer.wk_b);
-//             read_tensor(&file, layer.wv_a);
-//             read_tensor(&file, layer.wv_b);
-//             read_tensor(&file, layer.wo_a);
-//             read_tensor(&file, layer.wo_b);
-//             read_tensor(&file, layer.ffn_norm_a);
-//             read_tensor(&file, layer.ffn_norm_b);
-//             read_tensor(&file, layer.w1_a);
-//             read_tensor(&file, layer.w1_b);
-//             read_tensor(&file, layer.w2_a);
-//             read_tensor(&file, layer.w2_b);
-//             read_tensor(&file, layer.w3_a);
-//             read_tensor(&file, layer.w3_b);
-//         }
-
-//         read_opt_context(&file, lora->ctx, opt);
-//     }
-
-//     return (file.fp != NULL);
-// }
-
 void save_as_llama_lora(struct my_llama_lora * lora, const char * filename, const char * pattern_it, int iteration, const char * latest) {
     std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
     std::string fn = replace_str(filename, pattern_it, sit.c_str());
@@ -2247,9 +1918,9 @@ struct train_params get_default_train_params() {
     struct train_params params;
     params.fn_model_base     = "";
     params.fn_train_data     = "shakespeare.txt";
-    params.fn_checkpoint_in  = "checkpoint.bin";
-    params.fn_checkpoint_out = "checkpoint-ITERATION.bin";
-    params.fn_lora_out       = "ggml-lora-ITERATION-f32.bin";
+    params.fn_checkpoint_in  = "checkpoint.gguf";
+    params.fn_checkpoint_out = "checkpoint-ITERATION.gguf";
+    params.fn_lora_out       = "ggml-lora-ITERATION-f32.gguf";
     params.pattern_fn_it     = "ITERATION";
     params.fn_latest         = "LATEST";
 
@@ -2780,13 +2451,6 @@ void opt_callback(void * vdata, float * sched) {
         if (strlen(params->fn_checkpoint_out) > 0) {
             save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
             save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, -1, params->fn_latest);
-            std::string fn_chk_old = params->fn_checkpoint_out;
-            fn_chk_old = fn_chk_old + std::string(".old.bin");
-            save_checkpoint(data->model, data->lora, opt, fn_chk_old.c_str(), params->pattern_fn_it, opt->iter, params->fn_latest);
-            save_checkpoint(data->model, data->lora, opt, fn_chk_old.c_str(), params->pattern_fn_it, -1, params->fn_latest);
-
-            // save_checkpoint(data->model, data->lora, opt, params->fn_checkpoint_out, params->pattern_fn_it, opt->iter, params->fn_latest);
-            // save_checkpoint(data->model, data->lora, opt, params->fn_checkpoint_out, params->pattern_fn_it, -1, params->fn_latest);
         }
         if (strlen(params->fn_lora_out) > 0) {
             save_as_llama_lora(data->lora, params->fn_lora_out, params->pattern_fn_it, opt->iter, params->fn_latest);
@@ -2948,6 +2612,7 @@ int main(int argc, char ** argv) {
     bool existed = load_checkpoint_lora_file(params.fn_checkpoint_in, &model, &lora, opt);
     if (!existed) {
         init_lora(&model, &lora);
+        randomize_lora(&lora, params.seed, 0.0f, 1.0f, -1.0f, +1.0f);
     }
     set_param_lora(&lora);
     print_params(&model.hparams);
@@ -2957,11 +2622,6 @@ int main(int argc, char ** argv) {
 
     opt->iter = lora.train_its;
     printf("%s: opt iter %d\n", __func__, opt->iter);
-
-    bool from_scratch = !existed;
-    if (from_scratch) {
-        randomize_lora(&lora, params.seed, 0.0f, 1.0f, -1.0f, +1.0f);
-    }
 
     printf("used_mem model: %zu bytes\n", ggml_used_mem(lora.ctx));
     // ggml_print_tensor_objects(lora.ctx);
@@ -3111,10 +2771,6 @@ int main(int argc, char ** argv) {
     if (params.n_examples > 0) {
         save_checkpoint_lora_file(params.fn_checkpoint_out, &model, &lora, opt, params.pattern_fn_it, opt->iter, params.fn_latest);
         save_checkpoint_lora_file(params.fn_checkpoint_out, &model, &lora, opt, params.pattern_fn_it, -1, params.fn_latest);
-        std::string fn_chk_old = params.fn_checkpoint_out;
-        fn_chk_old = fn_chk_old + std::string(".old.bin");
-        save_checkpoint(&model, &lora, opt, fn_chk_old.c_str(), params.pattern_fn_it, opt->iter, params.fn_latest);
-        save_checkpoint(&model, &lora, opt, fn_chk_old.c_str(), params.pattern_fn_it, -1, params.fn_latest);
     }
 
     if (strlen(params.fn_lora_out) > 0) {
