@@ -374,7 +374,7 @@ static bool check_mat_mul(
 
 int main(int argc, const char ** argv) {
     struct ggml_init_params params = {
-        /* .mem_size   = */ 128*1024*1024,
+        /* .mem_size   = */ 256*1024*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ false,
     };
