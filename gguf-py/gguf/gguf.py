@@ -144,6 +144,7 @@ MODEL_TENSOR_NAMES = {
         MODEL_TENSOR.ATTN_NORM_2: "blk.{bid}.attn_norm_2",
         MODEL_TENSOR.ATTN_QKV:    "blk.{bid}.attn_qkv",
         MODEL_TENSOR.ATTN_OUT:    "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_NORM:    "blk.{bid}.ffn_norm",
         MODEL_TENSOR.FFN_DOWN:    "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:      "blk.{bid}.ffn_up",
     },
@@ -291,6 +292,7 @@ def get_tensor_name_map(arch: MODEL_ARCH, n_blocks: int) -> dict:
         tensor_map["transformer.blocks."+str(i)+".norm_2"]                = mapped_to  # mpt
         tensor_map["model.layers."+str(i)+".post_attention_layernorm"]    = mapped_to  # llama-hf
         tensor_map["layers."+str(i)+".ffn_norm"]                          = mapped_to  # llama-pth
+        tensor_map["transformer.h."+str(i)+".post_attention_layernorm"]   = mapped_to  # falcon-rw
 
         # Feed-forward up
         mapped_to = MODEL_TENSOR_NAMES[arch].get(MODEL_TENSOR.FFN_UP, None)
