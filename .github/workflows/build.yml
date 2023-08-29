@@ -166,7 +166,7 @@ jobs:
       - name: Test
         id: make_test
         run: |
-          CC=gcc-8 make tests
+          make tests
           make test
 
   macOS-latest-cmake:
