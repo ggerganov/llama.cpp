@@ -3359,7 +3359,6 @@ private:
     }
 
     // probably not 100% correct
-    // TODO: this is quite slow - how to make it more efficient?
     static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> words;
 
