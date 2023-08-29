@@ -1,9 +1,6 @@
 // Defines fileno on msys:
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #endif
 
 #include "llama.h"
@@ -62,6 +59,9 @@
 #include <cinttypes>
 #include <climits>
 #include <cstdarg>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -114,12 +114,17 @@ static size_t utf8_len(char src) {
 }
 
 void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    for (size_t pos = 0; ; pos += replace.length()) {
-        pos = s.find(search, pos);
-        if (pos == std::string::npos) break;
-        s.erase(pos, search.length());
-        s.insert(pos, replace);
+    std::string result;
+    for (size_t pos = 0; ; pos += search.length()) {
+        auto new_pos = s.find(search, pos);
+        if (new_pos == std::string::npos) {
+            result += s.substr(pos, s.size() - pos);
+            break;
+        }
+        result += s.substr(pos, new_pos - pos) + replace;
+        pos = new_pos;
     }
+    s = std::move(result);
 }
 
 static void zeros(std::ofstream & file, size_t n) {
@@ -796,12 +801,12 @@ static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
-static std::string llama_token_to_text(const struct llama_context * ctx, llama_token token) {
+static std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_str(ctx, token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(ctx, token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_str(ctx, token, result.data(), result.size());
+        int check = llama_token_to_piece(ctx, token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -955,10 +960,10 @@ struct llama_vocab {
     id linefeed_id = 13;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
-        replace_all(token_left,  " ",  "Ġ");
-        replace_all(token_left,  "\n", "Ċ");
-        replace_all(token_right, " ",  "Ġ");
-        replace_all(token_right, "\n", "Ċ");
+        replace_all(token_left,  " ",  "\u0120");
+        replace_all(token_left,  "\n", "\u010A");
+        replace_all(token_right, " ",  "\u0120");
+        replace_all(token_right, "\n", "\u010A");
 
         auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
         if (it == bpe_ranks.end()) {
@@ -1144,11 +1149,13 @@ static bool llama_kv_cache_init(
 
 enum llama_fver {
     GGUF_FILE_VERSION_V1 = 1,
+    GGUF_FILE_VERSION_V2 = 2,
 };
 
 static const char * llama_file_version_name(llama_fver version) {
     switch (version) {
-        case GGUF_FILE_VERSION_V1: return "GGUF V1 (latest)";
+        case GGUF_FILE_VERSION_V1: return "GGUF V1 (support until nov 2023)";
+        case GGUF_FILE_VERSION_V2: return "GGUF V2 (latest)";
     }
 
     return "unknown";
@@ -1635,7 +1642,8 @@ static void llm_load_hparams(
 }
 
 // TODO: This should probably be in llama.h
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos);
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos);
+static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
 
 static void llm_load_vocab(
         llama_model_loader & ml,
@@ -1737,7 +1745,11 @@ static void llm_load_vocab(
     }
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
-    vocab.linefeed_id = llama_tokenize_internal(vocab, "\n", false)[0];
+    if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
+        vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
+    } else {
+        vocab.linefeed_id = llama_tokenize_internal(vocab, "\n", false)[0];
+    }
 
     // special tokens
     GGUF_GET_KEY(ctx, vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_BOS_ID));
@@ -2635,18 +2647,20 @@ static struct ggml_cgraph * llm_build_falcon(
 
             const size_t wsize = ggml_type_size(cur->type);
 
-            struct ggml_tensor * tmpq = ggml_view_3d(
+            // TODO: these 2 ggml_conts are technically not needed, but we add them until CUDA support for
+            //       non-contiguous views is added for the rope operator
+            struct ggml_tensor * tmpq = ggml_cont(ctx0, ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head, N,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
-                0);
+                0));
             offload_func_kq(tmpq);
 
-            struct ggml_tensor * tmpk = ggml_view_3d(
+            struct ggml_tensor * tmpk = ggml_cont(ctx0, ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, N,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
-                wsize * n_embd_head *  n_head);
+                wsize * n_embd_head *  n_head));
             offload_func_kq(tmpk);
 
             struct ggml_tensor * tmpv = ggml_view_3d(
@@ -2831,7 +2845,6 @@ static bool llama_eval_internal(
 
     GGML_ASSERT(n_tokens > 0);
     GGML_ASSERT(n_past >= 0);
-    GGML_ASSERT(n_threads > 0);
     // TODO: keep the values of n_batch and n_ctx
     // GGML_ASSERT(n_tokens <= n_batch);
     // GGML_ASSERT(n_past + n_tokens <= n_ctx);
@@ -2841,6 +2854,8 @@ static bool llama_eval_internal(
 #ifdef GGML_USE_MPI
     ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
 #endif
+
+    GGML_ASSERT(n_threads > 0);
 
     const int N = n_tokens;
 
@@ -3026,10 +3041,8 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
     return vocab.token_to_id.at(buf);
 }
 
-static std::string llama_escape_whitespace(const std::string& text) {
-    std::string result = text;
-    replace_all(result, " ", "\xe2\x96\x81");
-    return result;
+static void llama_escape_whitespace(std::string & text) {
+    replace_all(text, " ", "\xe2\x96\x81");
 }
 
 static void llama_unescape_whitespace(std::string & word) {
@@ -3373,22 +3386,31 @@ private:
     llm_bigram_bpe::queue work_queue;
 };
 
-static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, const std::string & raw_text, bool bos) {
+static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos) {
     std::vector<llama_vocab::id> output;
 
-    if (raw_text.empty()) {
-        return output;
-    }
+    // OG tokenizer behavior:
+    //
+    // tokenizer.encode('', add_bos=True)  returns [1]
+    // tokenizer.encode('', add_bos=False) returns []
 
     if (bos && vocab.special_bos_id != -1) {
         output.push_back(vocab.special_bos_id);
     }
 
+    if (raw_text.empty()) {
+        return output;
+    }
+
     switch (vocab.type) {
         case LLAMA_VOCAB_TYPE_SPM:
             {
+                // without adding this leading whitespace, we do not get the same results as the original tokenizer
+                raw_text = " " + raw_text;
+
                 llm_tokenizer_spm tokenizer(vocab);
-                tokenizer.tokenize(llama_escape_whitespace(raw_text), output);
+                llama_escape_whitespace(raw_text);
+                tokenizer.tokenize(raw_text, output);
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
@@ -3887,7 +3909,7 @@ void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array *
 
     // Calculate absolute value of second derivatives
     for (size_t i = 0; i < second_derivatives.size(); ++i) {
-        second_derivatives[i] = abs(second_derivatives[i]);
+        second_derivatives[i] = std::abs(second_derivatives[i]);
     }
 
     // Normalize the second derivatives
@@ -4078,16 +4100,16 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
     std::vector<llama_grammar_candidate>                              candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id   = candidates->data[i].id;
-        const std::string text = llama_token_to_text(ctx, id);
+        const llama_token id    = candidates->data[i].id;
+        const std::string piece = llama_token_to_str(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
             }
-        } else if (text.empty() || text[0] == 0) {
+        } else if (piece.empty() || piece[0] == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            candidates_decoded.push_back(decode_utf8(text.c_str(), grammar->partial_utf8));
+            candidates_decoded.push_back(decode_utf8(piece.c_str(), grammar->partial_utf8));
             candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
         }
     }
@@ -4291,10 +4313,10 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string text = llama_token_to_text(ctx, token);
+    const std::string piece = llama_token_to_str(ctx, token);
 
     // Note terminating 0 in decoded string
-    const auto   decoded     = decode_utf8(text.c_str(), grammar->partial_utf8);
+    const auto   decoded     = decode_utf8(piece.c_str(), grammar->partial_utf8);
     const auto & code_points = decoded.first;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
         grammar->stacks = llama_grammar_accept(grammar->rules, grammar->stacks, *it);
@@ -4762,7 +4784,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
                 int nx = tensor->ne[0];
-                if (nx % QK_K == 0) {
+                if (model.arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
+                    new_type = GGML_TYPE_Q8_0;
+                }
+                else if (new_type != GGML_TYPE_Q8_0) {
                     new_type = GGML_TYPE_Q6_K;
                 }
             } else if (name.find("attn_v.weight") != std::string::npos) {
@@ -4786,17 +4811,39 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (name.find("ffn_down.weight") != std::string::npos) {
                 if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
                 else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
-                    new_type = i_feed_forward_w2 < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
+                    new_type = i_feed_forward_w2 < 2 ? GGML_TYPE_Q5_K
+                             : model.arch != LLM_ARCH_FALCON || use_more_bits(i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q4_K
+                             : GGML_TYPE_Q3_K;
                 }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
-                else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
-                         use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_feed_forward_w2 < 4) new_type = GGML_TYPE_Q5_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) {
+                    new_type = model.arch == LLM_ARCH_FALCON ? GGML_TYPE_Q4_K : GGML_TYPE_Q5_K;
+                }
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) {
+                    if (model.arch == LLM_ARCH_FALCON) {
+                        new_type = i_feed_forward_w2 < 2 ? GGML_TYPE_Q6_K :
+                                   use_more_bits(i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
+                    } else {
+                        if (use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
+                    }
+                }
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M && use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && model.arch != LLM_ARCH_FALCON && i_feed_forward_w2 < 4) {
+                    new_type = GGML_TYPE_Q5_K;
+                }
                 ++i_feed_forward_w2;
             } else if (name.find("attn_output.weight") != std::string::npos) {
-                if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K  ) new_type = GGML_TYPE_Q3_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+                if (model.arch != LLM_ARCH_FALCON) {
+                    if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K  ) new_type = GGML_TYPE_Q3_K;
+                    else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
+                    else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+                } else {
+                    if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+                }
+            }
+            else if (name.find("attn_qkv.weight") != std::string::npos) {
+                if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
             }
             else if (name.find("ffn_gate.weight") != std::string::npos || name.find("ffn_up.weight") != std::string::npos) {
                 if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
@@ -6101,12 +6148,12 @@ int llama_tokenize_with_model(
     return res.size();
 }
 
-int llama_token_to_str(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    return llama_token_to_str_with_model(&ctx->model, token, buf, length);
+int llama_token_to_piece(const struct llama_context * ctx, llama_token token, char * buf, int length) {
+    return llama_token_to_piece_with_model(&ctx->model, token, buf, length);
 }
 
-// does not write null-terminator to str
-int llama_token_to_str_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
+// does not write null-terminator to buf
+int llama_token_to_piece_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_model_n_vocab(model)) {
         if (llama_is_normal_token(model->vocab, token)) {
             std::string result = model->vocab.id_to_token[token].text;
@@ -6194,9 +6241,38 @@ const char * llama_print_system_info(void) {
     s += "WASM_SIMD = "   + std::to_string(ggml_cpu_has_wasm_simd())   + " | ";
     s += "BLAS = "        + std::to_string(ggml_cpu_has_blas())        + " | ";
     s += "SSE3 = "        + std::to_string(ggml_cpu_has_sse3())        + " | ";
+    s += "SSSE3 = "       + std::to_string(ggml_cpu_has_ssse3())       + " | ";
     s += "VSX = "         + std::to_string(ggml_cpu_has_vsx())         + " | ";
 
     return s.c_str();
+}
+
+void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
+    fprintf(stream, "\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "# Timings #\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "\n");
+
+    fprintf(stream, "mst_eval: %.2f  # ms / token during generation\n",
+            1.0e-3 * ctx->t_eval_us / ctx->n_eval);
+    fprintf(stream, "mst_p_eval: %.2f  # ms / token during prompt processing\n",
+            1.0e-3 * ctx->t_p_eval_us / ctx->n_p_eval);
+    fprintf(stream, "mst_sample: %.2f  # ms / token during sampling\n",
+            1.0e-3 * ctx->t_sample_us / ctx->n_sample);
+    fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
+    fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
+    fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->n_sample);
+    fprintf(stream, "t_eval_us: %" PRId64 "  # total microseconds spent generating tokens\n", ctx->t_eval_us);
+    fprintf(stream, "t_load_us: %" PRId64 "  # total microseconds spent loading the model\n", ctx->t_load_us);
+    fprintf(stream, "t_p_eval_us: %" PRId64 "  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
+    fprintf(stream, "t_sample_us: %" PRId64 "  # total microseconds spent sampling\n", ctx->t_sample_us);
+    fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
+            1.0e6 * ctx->n_eval / ctx->t_eval_us);
+    fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
+            1.0e6 * ctx->n_p_eval / ctx->t_p_eval_us);
+    fprintf(stream, "ts_sample: %.2f  # tokens / second during sampling\n",
+            1.0e6 * ctx->n_sample / ctx->t_sample_us);
 }
 
 // For internal test use
@@ -6208,10 +6284,6 @@ void llama_log_set(llama_log_callback log_callback, void * user_data) {
     g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
     g_state.log_callback_user_data = user_data;
 }
-
-#if defined(_MSC_VER) && !defined(vsnprintf)
-#define vsnprintf _vsnprintf
-#endif
 
 static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
     va_list args_copy;

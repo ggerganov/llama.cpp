@@ -30,6 +30,9 @@ bool gguf_ex_write(const std::string & fname) {
     gguf_set_val_u32 (ctx, "some.parameter.uint32",   0x12345678);
     gguf_set_val_i32 (ctx, "some.parameter.int32",   -0x12345679);
     gguf_set_val_f32 (ctx, "some.parameter.float32",  0.123456789f);
+    gguf_set_val_u64 (ctx, "some.parameter.uint64",   0x123456789abcdef0ull);
+    gguf_set_val_i64 (ctx, "some.parameter.int64",   -0x123456789abcdef1ll);
+    gguf_set_val_f64 (ctx, "some.parameter.float64",  0.1234567890123456789);
     gguf_set_val_bool(ctx, "some.parameter.bool",     true);
     gguf_set_val_str (ctx, "some.parameter.string",   "hello world");
 

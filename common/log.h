@@ -607,7 +607,7 @@ inline std::string _log_var_to_string(std::vector<int> var)
             else                                                    \
                 first = false;                                      \
                                                                     \
-            auto detokenized = llama_token_to_str(ctx, token);      \
+            auto detokenized = llama_token_to_piece(ctx, token);    \
                                                                     \
             detokenized.erase(                                      \
                 std::remove_if(                                     \

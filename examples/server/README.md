@@ -164,6 +164,12 @@ node index.js
 
     Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
 
+-   **POST** `/detokenize`: Convert tokens to text.
+
+    *Options:*
+
+    `tokens`: Set the tokens to detokenize.
+
 -   **POST** `/embedding`: Generate embedding of a given text just as [the embedding example](../embedding) does.
 
     *Options:*

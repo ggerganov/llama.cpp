@@ -10,6 +10,7 @@
 #endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdbool.h>
 
 #ifdef LLAMA_SHARED
@@ -381,15 +382,17 @@ extern "C" {
                              int   n_max_tokens,
                             bool   add_bos);
 
-    // Token Id -> String. Uses the vocabulary in the provided context
-    // Does not write null terminator to the buffer
-    LLAMA_API int llama_token_to_str(
+    // Token Id -> Piece.
+    // Uses the vocabulary in the provided context.
+    // Does not write null terminator to the buffer.
+    // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    LLAMA_API int llama_token_to_piece(
             const struct llama_context * ctx,
                            llama_token   token,
                                   char * buf,
                                   int    length);
 
-    LLAMA_API int llama_token_to_str_with_model(
+    LLAMA_API int llama_token_to_piece_with_model(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
@@ -494,7 +497,7 @@ extern "C" {
     // Type of pointer to the beam_search_callback function.
     // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
     // passed back to beam_search_callback. This avoids having to use global variables in the callback.
-    typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, llama_beams_state);
+    typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
 
     /// @details Deterministically returns entire sentence constructed by a beam search.
     /// @param ctx Pointer to the llama_context.
@@ -517,6 +520,8 @@ extern "C" {
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
     LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+
+    LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 
 #ifdef __cplusplus
 }
