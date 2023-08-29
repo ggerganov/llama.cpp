@@ -115,12 +115,12 @@ int main(int argc, char ** argv) {
 
 #ifndef LOG_DISABLE_LOGS
     LOG_SET_TARGET(LOG_FILENAME_GENERATOR("main", "log"));
-    LOG_TEE("Log start\n")
+    LOG_TEE("Log start\n");
     LOG_DUMP_CMDLINE(argc,argv);
 #endif // LOG_DISABLE_LOGS
 
     // TODO: Dump params ?
-    //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity))
+    //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity));
 
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
@@ -172,7 +172,7 @@ int main(int argc, char ** argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    LOG("llama backend init\n")
+    LOG("%s: llama backend init\n", __func__);
     llama_backend_init(params.numa);
 
     llama_model * model;
@@ -182,7 +182,7 @@ int main(int argc, char ** argv) {
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
-    LOG("load the model and apply lora adapter, if any\n")
+    LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
     if (params.cfg_scale > 1.f) {
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
@@ -253,27 +253,26 @@ int main(int argc, char ** argv) {
         }
     }
 
-    // Add BOS if SPM tokenizer
     const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    LOG("add_bos: %d\n", add_bos);
 
-    // tokenize the prompt
-    LOG("Tokenize the prompt\n")
     std::vector<llama_token> embd_inp;
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
+        LOG("tokenize the prompt\n");
         embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
+        LOG("use session tokens\n");
         embd_inp = session_tokens;
     }
 
-    LOG("prompt: \"%s\"\n", LOG_TOSTR(params.prompt))
-    //LOG("Prompt tokenized: %s\n", LOG_TOSTR(embd_inp))
-    LOG("embd_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(embd_inp,ctx))
+    LOG("prompt: \"%s\"\n", LOG_TOSTR(params.prompt));
+    LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp));
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
         embd_inp.push_back(llama_token_bos(ctx));
-        LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(embd_inp,ctx))
+        LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp));
     }
 
     // Tokenize negative prompt
@@ -281,22 +280,22 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        LOG("cfg_negative_prompt: \"%s\"\n", LOG_TOSTR(params.cfg_negative_prompt))
+        LOG("cfg_negative_prompt: \"%s\"\n", LOG_TOSTR(params.cfg_negative_prompt));
 
         guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
-        LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(guidance_inp,ctx_guidance))
+        LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
 
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
-        LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(original_inp,ctx))
+        LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp));
 
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
-        LOG("original_prompt_len: %s", LOG_TOSTR(original_prompt_len))
-        LOG("guidance_offset: %s", LOG_TOSTR(guidance_offset))
+        LOG("original_prompt_len: %s", LOG_TOSTR(original_prompt_len));
+        LOG("guidance_offset:     %s", LOG_TOSTR(guidance_offset));
     }
 
     const int n_ctx = llama_n_ctx(ctx);
-    LOG("n_ctx: %d\n", n_ctx)
+    LOG("n_ctx: %d\n", n_ctx);
 
     if ((int) embd_inp.size() > n_ctx - 4) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
@@ -305,7 +304,7 @@ int main(int argc, char ** argv) {
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
-    if (session_tokens.size()) {
+    if (session_tokens.size() > 0) {
         for (llama_token id : session_tokens) {
             if (n_matching_session_tokens >= embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
                 break;
@@ -327,14 +326,12 @@ int main(int argc, char ** argv) {
 
     LOGLN(
             "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
-            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size())
+            LOG_TOSTR(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size());
 
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token token to recalculate the cached logits
-    if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
-            session_tokens.size() > embd_inp.size()) {
-
-        LOGLN("recalculate the cached logits (do): session_tokens.resize( %zu )", embd_inp.size() - 1)
+    if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() && session_tokens.size() > embd_inp.size()) {
+        LOGLN("recalculate the cached logits (do): session_tokens.resize( %zu )", embd_inp.size() - 1);
 
         session_tokens.resize(embd_inp.size() - 1);
     }
@@ -347,6 +344,9 @@ int main(int argc, char ** argv) {
     // prefix & suffix for instruct mode
     const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
     const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
+
+    LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx));
+    LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx));
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
@@ -403,7 +403,7 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: interactive mode on.\n", __func__);
 
         if (params.antiprompt.size()) {
-            for (auto antiprompt : params.antiprompt) {
+            for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
             }
         }
@@ -463,11 +463,11 @@ int main(int argc, char ** argv) {
                               " - To return control without starting a new line, end your input with '/'.\n"
                               " - If you want to submit another line, end your input with '\\'.\n";
         }
-        fprintf(stderr, "== Running in interactive mode. ==\n"
+        LOG_TEE("== Running in interactive mode. ==\n");
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-               " - Press Ctrl+C to interject at any time.\n"
+        LOG_TEE(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-               "%s\n", control_message);
+        LOG_TEE(       "%s\n", control_message);
 
         is_interacting = params.interactive_first;
     }
@@ -492,8 +492,9 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
-    // do one empty run to warm up the model
     {
+        LOG("warming up the model with an empty run\n");
+
         const std::vector<llama_token> tmp = { llama_token_bos(ctx), };
         llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
         llama_reset_timings(ctx);
