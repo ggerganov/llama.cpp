@@ -16278,7 +16278,7 @@ static struct ggml_tensor * ggml_sub_or_set(struct ggml_context * ctx, struct gg
     }
 }
 
-static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor * tensor, bool inplace, void * zero_table[]) {
+static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor * tensor, void * zero_table[]) {
     struct ggml_tensor * src0 = tensor->src[0];
     struct ggml_tensor * src1 = tensor->src[1];
 
@@ -17268,9 +17268,10 @@ void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * 
     for (int i = gf->n_nodes - 1; i >= 0; i--) {
         struct ggml_tensor * node = gf->nodes[i];
 
-        // because we detached the grad nodes from the original graph, we can afford inplace operations
+        // inplace operations to add gradients are not created by ggml_compute_backward
+        // use allocator to automatically make inplace operations
         if (node->grad) {
-            ggml_compute_backward(ctx, node, keep, zero_table);
+            ggml_compute_backward(ctx, node, zero_table);
         }
     }
 
