@@ -469,7 +469,7 @@ class UnquantizedTensor(Tensor):
 
     def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor':
         r = self.ndarray.shape[0] // 3
-        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head))
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head))
 
     def part(self, n_part: int) -> 'UnquantizedTensor':
         r = self.ndarray.shape[0] // 3
@@ -952,9 +952,10 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
            #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
             print(f"Unpacking and permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
-            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
+            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head)
+            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
+            del tmp[f"model.layers.{i}.self_attn.W_pack.weight"]
         else:
             break
 
