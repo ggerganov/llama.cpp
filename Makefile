@@ -213,10 +213,6 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 		CFLAGS   += -mcpu=power9
 		CXXFLAGS += -mcpu=power9
 	endif
-	# Require c++23's std::byteswap for big-endian support.
-	ifeq ($(UNAME_M),ppc64)
-		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
-	endif
 endif
 
 else
