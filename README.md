@@ -113,6 +113,7 @@ as the main playground for developing new features for the [ggml](https://github
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
 - Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
+- React Native: [mybigday/llama.rn](https://github.com/mybigday/llama.rn)
 
 **UI:**
 
