@@ -67,8 +67,9 @@ OPT = -Ofast
 else
 OPT = -O3
 endif
-CFLAGS   = -I.            $(OPT) -std=c11   -fPIC
-CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC
+CPPFLAGS = -I. -Icommon
+CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
+CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -76,12 +77,11 @@ ifdef LLAMA_DEBUG
 	CXXFLAGS += -O0 -g
 	LDFLAGS  += -g
 else
-	CFLAGS   += -DNDEBUG
-	CXXFLAGS += -DNDEBUG
+	CPPFLAGS += -DNDEBUG
 endif
 
 ifdef LLAMA_SERVER_VERBOSE
-	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+	CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
 ifdef LLAMA_DISABLE_LOGS
@@ -153,8 +153,7 @@ ifdef LLAMA_GPROF
 	CXXFLAGS += -pg
 endif
 ifdef LLAMA_PERF
-	CFLAGS   += -DGGML_PERF
-	CXXFLAGS += -DGGML_PERF
+	CPPFLAGS += -DGGML_PERF
 endif
 
 # Architecture specific
@@ -221,12 +220,10 @@ else
 endif
 
 ifndef LLAMA_NO_K_QUANTS
-	CFLAGS   += -DGGML_USE_K_QUANTS
-	CXXFLAGS += -DGGML_USE_K_QUANTS
+	CPPFLAGS += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
 ifdef LLAMA_QKK_64
-	CFLAGS   += -DGGML_QKK_64
-	CXXFLAGS += -DGGML_QKK_64
+	CPPFLAGS += -DGGML_QKK_64
 endif
 endif
 
@@ -234,30 +231,31 @@ ifndef LLAMA_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
-		CFLAGS  += -DGGML_USE_ACCELERATE
-		LDFLAGS += -framework Accelerate
+		CPPFLAGS += -DGGML_USE_ACCELERATE
+		LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_MPI
-	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
-	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
+	CPPFLAGS += -DGGML_USE_MPI
+	CFLAGS   += -Wno-cast-qual
+	CXXFLAGS += -Wno-cast-qual
 	OBJS     += ggml-mpi.o
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags openblas)
-	LDFLAGS += $(shell pkg-config --libs openblas)
+	CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
+	CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
+	LDFLAGS  += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	LDFLAGS += -lblis -L/usr/local/lib
+	CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	LDFLAGS  += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
@@ -309,8 +307,9 @@ endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
 
-	CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
-	CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+	CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
+	CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
+	CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
 
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
@@ -331,8 +330,7 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
-	CFLAGS      += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
-	CXXFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	CPPFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
 	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	LDFLAGS		+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
@@ -349,8 +347,7 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
-	CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
-	CXXFLAGS += -DGGML_USE_METAL
+	CPPFLAGS += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
 	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS     += ggml-metal.o
 endif # LLAMA_METAL
