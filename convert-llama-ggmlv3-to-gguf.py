@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import math
 import struct
@@ -74,7 +76,7 @@ class Vocab:
 class Tensor:
     def __init__(self):
         self.name = None
-        self.dims = ()
+        self.dims: tuple[int, ...] = ()
         self.dtype = None
         self.start_offset = 0
         self.len_bytes = np.int64(0)
@@ -121,7 +123,7 @@ class GGMLV3Model:
         offset += hp.load(data, offset)
         vocab = Vocab()
         offset += vocab.load(data, offset, hp.n_vocab)
-        tensors = []
+        tensors: list[Tensor] = []
         tensor_map = {}
         while offset < len(data):
             tensor = Tensor()
