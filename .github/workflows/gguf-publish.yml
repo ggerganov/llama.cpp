@@ -34,7 +34,7 @@ jobs:
         cd gguf-py
         python -m pip install poetry
         poetry install
-        
+
     - name: Build package
       run: poetry build
     - name: Publish package
