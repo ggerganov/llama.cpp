@@ -9,7 +9,7 @@ import os
 import struct
 import sys
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import gguf
 import numpy as np
@@ -114,7 +114,7 @@ gguf_writer.add_layer_norm_eps(hparams["layer_norm_eps"])
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytearray] = []
+tokens: list[bytearray] = []
 
 tokenizer_json_file = dir_model / 'tokenizer.json'
 if not tokenizer_json_file.is_file():

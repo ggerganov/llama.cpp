@@ -9,7 +9,7 @@ import os
 import struct
 import sys
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import gguf
 import numpy as np
@@ -117,9 +117,9 @@ gguf_writer.add_file_type(ftype)
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytearray] = []
-scores: List[float] = []
-toktypes: List[int] = []
+tokens: list[bytearray] = []
+scores: list[float] = []
+toktypes: list[int] = []
 
 tokenizer_json_file = dir_model / 'tokenizer.json'
 if not tokenizer_json_file.is_file():
