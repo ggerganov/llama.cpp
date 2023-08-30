@@ -321,6 +321,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_NORM_2,     "blk.%d.attn_norm_2" },
             { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
@@ -900,15 +901,20 @@ struct llama_layer {
     struct ggml_tensor * wk;
     struct ggml_tensor * wv;
     struct ggml_tensor * wo;
+    struct ggml_tensor * wo_b;
     struct ggml_tensor * wqkv;
+    struct ggml_tensor * wqkv_b;
 
     // normalization
     struct ggml_tensor * ffn_norm;
+    struct ggml_tensor * ffn_norm_b;
 
     // ff
-    struct ggml_tensor * w1; // ffn_gate
-    struct ggml_tensor * w2; // ffn_down
-    struct ggml_tensor * w3; // ffn_up
+    struct ggml_tensor * w1;   // ffn_gate
+    struct ggml_tensor * w2;   // ffn_down
+    struct ggml_tensor * w2_b; // ff_down bias
+    struct ggml_tensor * w3;   // ffn_up
+    struct ggml_tensor * w3_b; // ff_up bias
 };
 
 struct llama_kv_cache {
@@ -2012,14 +2018,37 @@ static void llm_load_tensors(
                         // I think this is because we skip the QKV reshaping in the conversion script (maybe because parallel attention is disabled?)
                         if (model.type == MODEL_1B) {
                           layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd * 3}, backend_split);
+                          // TODO - The config.json has a `bias: true` -- can we plumb that through here to figure out if we need to include it?
+                          layer.wqkv_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "bias", i), {n_embd * 3}, backend);
                         } else {
                           layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, backend_split);
                         }
 
                         layer.wo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd}, backend_split);
+                        // TODO - The config.json has a `bias: true` -- can we plumb that through here to figure out if we need to include it?
+                        if (model.type == MODEL_1B) {
+                          layer.wo_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd}, backend_split);
+                        }
 
-                        layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+                        // TODO: Can we figure out if we need this dynamically?
+                        if (model.type == MODEL_1B) {
+                            layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
+                            layer.ffn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "bias", i), {n_embd}, backend);
+                        }
+
+                        layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, backend_split);
+
+                        // TODO - The config.json has a `bias: true` -- can we plumb that through here to figure out if we need to include it?
+                        if (model.type == MODEL_1B) {
+                            layer.w2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, backend_split);
+                        }
+
                         layer.w3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+                        // TODO - The config.json has a `bias: true` -- can we plumb that through here to figure out if we need to include it?
+                        if (model.type == MODEL_1B) {
+                            // TODO - where does 4 come from?
+                            layer.w3_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP, "bias", i), {n_embd * 4}, backend_split);
+                        }
 
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
