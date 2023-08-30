@@ -34,7 +34,7 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " \
+./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
 'User: Hi
 AI: Hello. I am an AI chatbot. Would you like to talk?
 User: Sure!
