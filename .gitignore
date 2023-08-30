@@ -45,6 +45,7 @@ models-mnt
 /baby-llama
 /beam-search
 /save-load-state
+/fill-in-middle
 build-info.h
 arm_neon.h
 compile_commands.json
