@@ -87,7 +87,7 @@ int main(int argc, char ** argv) {
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
         auto next_token = llama_sample_token(ctx, &candidates_p);
-        auto next_token_str = llama_token_to_str(ctx, next_token);
+        auto next_token_str = llama_token_to_piece(ctx, next_token);
         last_n_tokens_data.push_back(next_token);
 
         printf("%s", next_token_str.c_str());
@@ -147,7 +147,7 @@ int main(int argc, char ** argv) {
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
         auto next_token = llama_sample_token(ctx2, &candidates_p);
-        auto next_token_str = llama_token_to_str(ctx2, next_token);
+        auto next_token_str = llama_token_to_piece(ctx2, next_token);
         last_n_tokens_data.push_back(next_token);
 
         printf("%s", next_token_str.c_str());

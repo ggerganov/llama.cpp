@@ -4,7 +4,7 @@ import os
 import re
 import struct
 import sys
-from typing import Any, Dict, Sequence, TextIO
+from typing import Any, Dict, Sequence, BinaryIO
 
 import numpy as np
 import torch
@@ -46,7 +46,7 @@ def translate_tensor_name(t: str) -> str:
         sys.exit(1)
 
 
-def write_file_header(fout: TextIO, params: Dict[str, Any]) -> None:
+def write_file_header(fout: BinaryIO, params: Dict[str, Any]) -> None:
     fout.write(b"ggla"[::-1])  # magic (ggml lora)
     fout.write(struct.pack("i", 1))  # file version
     fout.write(struct.pack("i", params["r"]))
@@ -60,7 +60,7 @@ def write_file_header(fout: TextIO, params: Dict[str, Any]) -> None:
 
 
 def write_tensor_header(
-    self, name: str, shape: Sequence[int], data_type: np.dtype
+    self, name: str, shape: Sequence[int], data_type: np.dtype[Any]
 ) -> None:
     sname = name.encode("utf-8")
     fout.write(

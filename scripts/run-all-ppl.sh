@@ -17,6 +17,9 @@ if [ ! -z "$3" ]; then
     args="$3"
 fi
 
+set -o pipefail
+set -e
+
 model="$1"
 out="../tmp/results-${model}"
 
