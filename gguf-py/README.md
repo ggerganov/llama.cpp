@@ -27,8 +27,25 @@ In this case, upgrade Pip to the latest:
 pip install --upgrade pip
 ```
 
-## Publishing
-To publish the package, you need to have `twine` and `build` installed:
+## Automatic publishing with CI
+
+There's a GitHub workflow to make a release automatically upon creation of tags in a specified format.
+
+1. Bump the version in `pyproject.toml`.
+2. Create a tag named `gguf-vx.x.x` where `x.x.x` is the semantic version number.
+
+```sh
+git tag -a gguf-v1.0.0 -m "Version 1.0 release"
+```
+
+3. Push the tags.
+
+```sh
+git push origin --tags
+```
+
+## Manual publishing
+If you want to publish the package manually for any reason, you need to have `twine` and `build` installed:
 
 ```sh
 pip install build twine
@@ -36,7 +53,7 @@ pip install build twine
 
 Then, folow these steps to release a new version:
 
-1. Update the version in `pyproject.toml`.
+1. Bump the version in `pyproject.toml`.
 2. Build the package:
 
 ```sh
