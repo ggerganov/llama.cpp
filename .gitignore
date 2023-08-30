@@ -24,6 +24,7 @@ tmp/
 models/*
 models-mnt
 
+# Binaries and examples
 /main
 /quantize
 /quantize-stats
@@ -46,6 +47,9 @@ build-info.h
 arm_neon.h
 compile_commands.json
 CMakeSettings.json
+baby-llama
+beam_search
+save-load-state
 
 __pycache__
 dist
