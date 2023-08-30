@@ -49,10 +49,6 @@
 #include <immintrin.h>
 #include <kompute/Kompute.hpp>
 
-#ifndef __STDC_IEC_559__
-#warning Your C implementation does not seem to be IEC 559 compliant, which is required for proper Vulkan interop.
-#endif
-
 #define QK4_0 32
 #define QR4_0 2
 #define QK4_1 32
