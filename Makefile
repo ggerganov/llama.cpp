@@ -23,6 +23,18 @@ test:
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
+coverage: ## Run code coverage
+	gcov tests/*.cpp
+
+lcov-report: coverage ## Generate lcov report
+	mkdir -p lcov-report
+	lcov --capture --directory . --output-file lcov-report/coverage.info
+	genhtml lcov-report/coverage.info --output-directory lcov-report
+
+gcovr-report: coverage ## Generate gcovr report
+	mkdir -p gcovr-report
+	gcovr --root . --html --html-details --output gcovr-report/coverage.html
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -77,6 +89,10 @@ endif
 
 ifdef LLAMA_SERVER_VERBOSE
 	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+endif
+
+ifdef LLAMA_CODE_COVERAGE
+	CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
 endif
 
 # warnings
@@ -391,7 +407,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report *.dot $(BUILD_TARGETS) $(TEST_TARGETS)
 
 #
 # Examples
