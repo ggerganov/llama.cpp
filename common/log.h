@@ -9,23 +9,6 @@
 #include <algorithm>
 #include <cinttypes>
 
-#define LOG_COMPAT_GNU 1
-#define LOG_COMPAT_WIN 2
-
-#ifndef LOG_COMPAT
-    //default
-    #define LOG_COMPAT LOG_COMPAT_GNU
-    //overrides
-    #ifdef _WIN32
-        #ifdef _MSC_VER
-            #define LOG_COMPAT LOG_COMPAT_WIN
-        #endif
-        #ifdef __MINGW32__ 
-            #define LOG_COMPAT LOG_COMPAT_GNU
-        #endif
-    #endif
-#endif
-
 // --------------------------------
 //
 // Basic usage:
@@ -171,7 +154,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_TIMESTAMPS
-    #if LOG_COMPAT == LOG_COMPAT_GNU
+    #ifndef _MSC_VER
         #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
         #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
     #else
@@ -184,7 +167,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 #endif
 
 #ifdef LOG_TEE_TIMESTAMPS
-    #if LOG_COMPAT == LOG_COMPAT_GNU
+    #ifndef _MSC_VER
         #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
         #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
     #else
@@ -204,7 +187,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_FILE_LINE_FUNCTION
-    #if LOG_COMPAT == LOG_COMPAT_GNU
+    #ifndef _MSC_VER
         #define LOG_FLF_FMT "[%24s:%5d][%24s] "
         #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
     #else
@@ -217,7 +200,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 #endif
 
 #ifdef LOG_TEE_FILE_LINE_FUNCTION
-    #if LOG_COMPAT == LOG_COMPAT_GNU
+    #ifndef _MSC_VER
         #define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
         #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
     #else
@@ -241,7 +224,7 @@ enum LogTriState
 // INTERNAL, DO NOT USE
 //  USE LOG() INSTEAD
 //
-#if LOG_COMPAT == LOG_COMPAT_GNU
+#ifndef _MSC_VER
     #define LOG_IMPL(str, ...)                                                                                          \
     {                                                                                                               \
         if (LOG_TARGET != nullptr)                                                                                  \
@@ -264,7 +247,7 @@ enum LogTriState
 // INTERNAL, DO NOT USE
 //  USE LOG_TEE() INSTEAD
 //
-#if LOG_COMPAT == LOG_COMPAT_GNU
+#ifndef _MSC_VER
     #define LOG_TEE_IMPL(str, ...)                                                                                                          \
     {                                                                                                                                   \
         if (LOG_TARGET != nullptr)                                                                                                      \
@@ -301,7 +284,7 @@ enum LogTriState
 // Main LOG macro.
 //  behaves like printf, and supports arguments the exact same way.
 //
-#if LOG_COMPAT == LOG_COMPAT_GNU
+#ifndef _MSC_VER
     #define LOG(...) LOG_IMPL(__VA_ARGS__, "")
 #else
     #define LOG(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "")
@@ -315,14 +298,14 @@ enum LogTriState
 // Secondary target can be changed just like LOG_TARGET
 //  by defining LOG_TEE_TARGET
 //
-#if LOG_COMPAT == LOG_COMPAT_GNU
+#ifndef _MSC_VER
     #define LOG_TEE(...) LOG_TEE_IMPL(__VA_ARGS__, "")
 #else
     #define LOG_TEE(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // LOG macro variants with auto endline.
-#if LOG_COMPAT == LOG_COMPAT_GNU
+#ifndef _MSC_VER
     #define LOGLN(...) LOG_IMPL(__VA_ARGS__, "\n")
     #define LOG_TEELN(...) LOG_TEE_IMPL(__VA_ARGS__, "\n")
 #else
@@ -478,7 +461,7 @@ inline void log_test()
     LOG("13 Hello World this time in yet new file?\n")
     log_set_target(log_filename_generator("llama_autonamed", "log"));
     LOG("14 Hello World in log with generated filename!\n")
-#if LOG_COMPAT == LOG_COMPAT_WIN
+#ifdef _MSC_VER
     LOG_TEE("15 Hello msvc TEE without arguments\n")
     LOG_TEE("16 Hello msvc TEE with (%d)(%s) arguments\n", 1, "test")
     LOG_TEELN("17 Hello msvc TEELN without arguments\n")
