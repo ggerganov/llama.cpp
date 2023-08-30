@@ -6385,7 +6385,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 				//version 1.2.4 and later supports unban tokens
 				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
 				{
-					submit_payload.use_default_badwordids = (localsettings.unban_tokens?false:true);
+					submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
 				}
 
 				let pseudostreaming = should_use_pseudostreaming();
@@ -6622,6 +6622,9 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 			if (clientagenttouse != null) {
 				subpostheaders['Client-Agent'] = clientagenttouse;
 			}
+
+			//horde supports unban tokens
+			submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
 
 			fetch(selectedhorde.submit_endpoint, {
 				method: 'POST', // or 'PUT'
