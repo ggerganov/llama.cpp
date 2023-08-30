@@ -759,7 +759,7 @@ class GGUFWriter:
 class SpecialVocab:
     load_merges: bool = False
     merges: list[str] = []
-    special_token_types: tuple[str, ...] = tuple(('bos', 'eos', 'unk', 'sep', 'pad'))
+    special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
     special_token_ids: dict[str, int] = {}
 
     def __init__(self, path: Path, load_merges: bool = False, special_token_types: tuple[str, ...] | None = None):
