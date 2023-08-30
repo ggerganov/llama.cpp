@@ -47,7 +47,7 @@ enum FileFormat
 
     MPT_1=500, //first supported mpt version
 
-
+    GGUF_FALCON=600, //GGUF (falcon)
 
 };
 

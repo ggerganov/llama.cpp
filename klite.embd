@@ -1,6 +1,6 @@
 <!--
 An embedded version of Kobold Lite for use in koboldcpp
-Current version: 57
+Current version: 58
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
 - Concedo
@@ -1704,8 +1704,22 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 	/*--------- end chat window---------------*/
 	</style>
 
+	<style>
+	/*--------- begin instruct-UI ------------*/
+	.ui-settings-inline { font-size: 12px; display:flex; flex-direction: row; }
+	.instruct-settings-input { margin: 0px 2px; font-size:10px; }
+	.instruct-settings-input input { width:40px; height:20px; }
+	#code-block-background-colorselector, #code-block-foreground-colorselector { text-align: center; margin: 0px 5px; }
+	#you-text-colorselector, #you-speech-colorselector, #you-action-colorselector, #AI-text-colorselector, #AI-speech-colorselector, #AI-action-colorselector, #sys-text-colorselector, #sys-speech-colorselector, #sys-action-colorselector { text-align: center; margin: 0px 5px; }
+	#you-bubble-colorselector, #AI-bubble-colorselector, #sys-bubble-colorselector, #you-portrait, #AI-portrait { text-align: center; margin: 0px 10px; border-radius: 1rem; padding: 1px 6px; }
+	@media screen and (max-width: 880px) {
+		#aesthetic_text_preview_panel { display: none; }
+	}
+	/*--------- end instruct-UI -----------*/
+	</style>
+
 	<script>
-		const niko_square = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAACTwAAAk8B95E4kAAAACFQTFRFAAAASmalSmalS2SjUUpfODE+SkNZgVpbm3F21oSHzLGpx53jDQAAAAt0Uk5TABC+//////////9ydjxtAAABEklEQVR4nGXS0W2DMBAGYLpBpW6QTtBC1L6DStJXYmeBUqI+B+wwAD48QPF1gVJP2bMdCmlOQkKfTv7NHdHNKl7U6ja6iy/qIbq/hMcAyY6eNIB3/p4meenFw1oIACGKGQaJqOQMLz9IZY8TJNqSfFmbBlhze4Z652HbMe6gY/vPlCA5MMZ6OqMsmfLQcNmcEA2Hel84kFofqGOo2rFxHfFGw4cD0bpggqd2BHcPgO+Q8tyMlRFCgu5CRw5MVBIazk4BNogCejSqx86nUGRvAAAJJ0BBRUnGx27ppQ4weMhyNKHjmJ0/f4Lib0DKgXybR6iUHkW7GLKlVLAzJJoG8ToGCIui47N0sbnlKq+W/f93+AVlMq2m+jctLgAAAABJRU5ErkJggg==";
+		const niko_square = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAADxQTFRFS2Si+X5+pmBfHyApLjZSS2SjP057Vzw5EA4Sf1ZT+9Sv1WpqnYx/7qaYw7vUAAAAS2Sj9PPzgnrLS2SjAzrF9gAAABR0Uk5T///////w////////////AKj//yMlHqVpAAAD3klEQVR4nKWXi7KjIAyGFSgxEjhV3/9d90+8onZPd810prWSDwi50fyoTNP7/X79g2D4NJlqo+rvV/Mf8npPM2B6/4+6ihKaB/pGaH4e6IPw00y3+48xhBC3J32Id+NeUzN9UPfer4RoD/eIqbnuwLS7zncLAfqdPvvDmvY9XAE6vuuImEAw8fNT1/kr4Qqw+YhdIocfJl0glxyTvyG8m7MNY1B9diAkmgGUODnH7Km7AF53AGEjUJtWYdUPzn0LyC6AQO0qCUCi1PKXAM5tCwXeAC0ROf36AqA2VACmbQ8yP9DVimeA6lPKkLaW3EPylXAARBXV701OhOVPI6hcAXH1mTyP7e8AMyEc4mQDzP7XrfOfl5D7ndAdfXID6NwMyXACEpEbgPTCLJn1hEGoAep/OKheQiCEEhj1HgBQX1ZxQMPLlyVsABwejkp8EGEQAkxRA4RgIRYhTxme1fkKoBZwAHjLA+b/cgLQ8gZ4gZ+tVtgAnboaa+Lg0IwRhBqAmX0cI0WFqHN3FUAXAOPpzIWhPzZYQgUAu4ljiaKTaKwtZtwAIdv8XkocR9+UYM5/BMTRxzJKsWEu+RPAAsBxKSWWgTHS18cofiwhlCJD4cApUb0CNWKA/5dhwAqKD2UIXAEoFgUMkIJTCCcjzkGE890BQhXA685WQNqD6ujKWDRhhI7EdKUCtKSGxd8ASEr+6sqNApKPeD/iFEpT6nAUcAMgMmBzqwVPgJCd80X3AIlDDcjSzH8PJbD7AGiT020WjfcCN0jI5WwJGk5axP4eikeyvQd4HE5i7I4xEpWANKg0m2p0OUIcQKJnd7uCaABMRebOSOoB1WUVYACzaGSs012NaI5gAC0GcPWD9iLI6/qVdGeXY7R6xu1M0FAhG7s865ctw97Zoz85kuXi5T2EbaZatLileQA+VifrYGrT7ruL+lbZ0orYcXQJpry/tl+26l1s8sOy+BxMqKjr23nf7mhFnktbOgJOGQmnVG0ZVve06VvDUFmEztGIhHAy2YHA+qsCuFNS1T0Edf41AOZ1b7uwH1tYYFA4p3U1owiOOu+AsyxrQ3AIXwrLXtryL4BPpW0rrvMaPgHSx+K6l3cj3Oin1lH6S3nfd+KDa51lAjJhE6ddz7XRu29xUH51O95SgNOahDTB3PPvLc7cZPWYEVlVlp5AkGtJK/63XZoq0jBsvUrPeNDvr/tE1SnD3qxIEVuNfAsY0J9w4Ux2ZKizHPLHFdw127r7HIS2ZpvFTHHbbN+3+2Qm29p9NvXv2v3twkHHCwd9vnA8vvI8vnQ9vvY9v3g+vvo+v3w/u/7/AZoAPJwrbZ1IAAAAAElFTkSuQmCC";
 		const human_square = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAACTwAAAk8B95E4kAAAAB5QTFRFFIqj/v//V6u9ksnUFIqjx+PpcbjHFIqjFIqjAAAAcfUgXwAAAAp0Uk5T/////9z//5IQAKod7AcAAACKSURBVHicY5hRwoAE3DsZWhhQgAdDAaoAO4MDqgALA/lAOQmVzyooaIAiYCgoKIYiICgoKIouIIhfBYYZGLYwKBuh8oHcVAUkfqKgaKCgMILPJggGCFMUIQIIewIhAnCXMAlCgQKqEQhDmGECAegCBmiGws1gYFICA2SnIgEHVC4LZlRiRDZ6cgAAfnASgWRzByEAAAAASUVORK5CYII=";
 		const favicon_busy = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAB5QTFRFAAAA459F8vrrV2hQWm5T2M2oeo9zWWtS6P3k1evQZQ2NdgAAAAp0Uk5TAP//7xr/5HYRi6G3mX8AAAEASURBVHicjZGxagMxDIY9GNr1hryAwaGd1frWQEQ8x+HuAXJEpbOPmG4ZkwcopG9byXYuCaHQf5I+0K9ftlKi0zl9/RzUVcdX+ny5Bc/fRGd1C05Ex0uDaaHUE31IOXKpPaDGPdGI2rfIIMLoEwC0CbkU4FIEIhog7QsgAuqM7QegYRSnFbhgWHNwyKZKr6S3TTA9oKzV8d0IaIIVCx6BXQEzs3mTEQ+hgCb0bQZuAhYELMUig9kDMH8BaZr/gWLqnVkXUNdysAsowRC2tlqU6HLcuk7k4/SSszOZzq/ncrYhW+Rnzg9AZUL2RLfrOoK0qIC/RtTi9JPaR4B07e/0C6jPUVuNXWqeAAAAAElFTkSuQmCC";
 		const favivon_normal = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAEtQTFRFAAAA+XJ0l09PsVdXcTw842hqw2hmTi4vMCQlb2eUgWtl+tGpBAMDEw4NPCkoFw8PJBgXt5WBVkxW4Nvf7Lia3Z+MpJnAZ05HnJOTYIS/NAAAABl0Uk5TAv////v//vT9//3/Nna08qf+///////a/hkcROQAAAGUSURBVHiclZLRcoQgDEULBAKoIKjI/39pL4i7nbUPbcYZwJyES5Kvr3/YvIx1nn9zL4G4EwuTXX7xs4QFGEklOT6SBENERguhsWHFD2AVRhL8IEgawY8b5L4fYtg+TSl8+NMEu4G2P34Q67r6I+37dLyBfU/4PY/sInG2MR8vIHG01h9mHfq1hUUQtwYcLEcp+ltmwqutdy5HMwAfc8ExKtVSLEZZW13Jxb4Azq7UHFnFrtGItLliS1UDYOfctm3JhEtlEH5zzpZNDsC63AB1VysY3gqC3C2ytsNW6Q3IjCt91Qr9QK8MiFL4nUEpEyNLYmodxYo3RquVHWUmbbRu0QCbKWwNfil5zYeENrRRqtZrGEQYqdtW8FWHLl4bgZDLFLZdbS/UzP2AEGTufkt3xWSvwzJeh4GxHWD5qlgXOZ/n2ULuC/od4Pk8x9xhCekD0Bqd/DmXgbpEumRgrMPn1K6ecs4pJc/V0nE+x35KtfTJTJufpvPTD2DyNZ3e4wP3zDCHevg+yYvf09PfkHuK7/Vv9g2CjBTdqv3bFgAAAABJRU5ErkJggg==";
@@ -2825,6 +2839,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
+		unban_tokens: false, //allow the EOS token when using locally
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
@@ -2908,6 +2923,26 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 	//attempt to load settings
 	function init() {
 
+		//polyfill for forEach
+		if (window.NodeList && !NodeList.prototype.forEach) {
+			NodeList.prototype.forEach = function (callback, thisArg) {
+				thisArg = thisArg || window;
+				for (var i = 0; i < this.length; i++) {
+					callback.call(thisArg, this[i], i, this);
+				}
+			};
+		}
+
+		//polyfill for object.entries
+		if (!Object.entries)
+		{
+			Object.entries = function( obj ){
+				var ownProps = Object.keys( obj ),i = ownProps.length,resArray = new Array(i); // preallocate the Array
+				while (i--){resArray[i] = [ownProps[i], obj[ownProps[i]]];}
+				return resArray;
+			};
+		}
+
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
 		{
@@ -2916,7 +2951,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		}
 
 		//disable debug log if not local
-		const dbgmode = urlParams.get('dbg');
+		let dbgmode = urlParams.get('dbg');
 
 		if (localflag)
 		{
@@ -3022,6 +3057,9 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 		//setup drag and drop zone for files
 		setupDragDrop();
+
+		//setup customization UI functionality
+		initializeInstructUIFunctionality();
 
 		//fix for iphone zooming
 		if(navigator.userAgent.indexOf('iPhone') > -1 )
@@ -3868,8 +3906,6 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 				"selective": itm.selective,
 				"constant": itm.constant
 			};
-			nwi.content = replaceAll(nwi.content,"{{char}}",chatopponent,true);
-			nwi.content = replaceAll(nwi.content,"{{user}}",myname,true);
 			current_wi.push(nwi);
 		}
 	}
@@ -3889,14 +3925,6 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		let greeting = obj.first_mes?obj.first_mes:"";
 
 		//post process
-		memory = replaceAll(memory,"{{char}}",chatopponent,true);
-		scenario = replaceAll(scenario,"{{char}}",chatopponent,true);
-		greeting = replaceAll(greeting,"{{char}}",chatopponent,true);
-		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent,true);
-		memory = replaceAll(memory,"{{user}}",myname,true);
-		scenario = replaceAll(scenario,"{{user}}",myname,true);
-		greeting = replaceAll(greeting,"{{user}}",myname,true);
-		examplemsg = replaceAll(examplemsg,"{{user}}",myname,true);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
@@ -3936,14 +3964,6 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		let examplemsg = obj.example_dialogue?obj.example_dialogue:"";
 		let greeting = obj.char_greeting?obj.char_greeting:"";
 		//post process
-		memory = replaceAll(memory,"{{char}}",chatopponent);
-		scenario = replaceAll(scenario,"{{char}}",chatopponent);
-		greeting = replaceAll(greeting,"{{char}}",chatopponent);
-		examplemsg = replaceAll(examplemsg,"{{char}}",chatopponent);
-		memory = replaceAll(memory,"{{user}}",myname);
-		scenario = replaceAll(scenario,"{{user}}",myname);
-		greeting = replaceAll(greeting,"{{user}}",myname);
-		examplemsg = replaceAll(examplemsg,"{{user}}",myname);
 		if(scenario!="")
 		{
 			scenario = "\n[Scenario: "+scenario+"]";
@@ -4104,7 +4124,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		}
 		if(temp_scenario.opmode == 4)
 		{
-			if (temp_scenario.enhanced_instruct_ui) { localsettings.enhanced_instruct_ui = temp_scenario.enhanced_chat_ui; }
+			if (temp_scenario.enhanced_instruct_ui) { localsettings.enhanced_instruct_ui = temp_scenario.enhanced_instruct_ui; }
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
@@ -5273,6 +5293,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
+		document.getElementById("unban_tokens").checked = localsettings.unban_tokens;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
@@ -5442,6 +5463,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
+		localsettings.unban_tokens = (document.getElementById("unban_tokens").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
 		localsettings.enhanced_instruct_ui = (document.getElementById("enhanced_instruct_ui").checked ? true : false);
@@ -5496,6 +5518,10 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 				toggle_editable();
 			}
 		}
+
+		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
+		if (localsettings.opmode == 4 && localsettings.enhanced_instruct_ui) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
+		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
 
 		//validate samplers, if fail, reset to default
 		validate_samplers(true);
@@ -5594,7 +5620,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
-
+			truncated_context = replace_placeholders(truncated_context);
 		let submit_payload = {
 			"prompt": truncated_context,
 			"params": {
@@ -5722,10 +5748,8 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 	function btn_editmode()
 	{
-		if (gametext_arr.length > 0) {
-			document.getElementById("allowediting").checked = true;
-			toggle_editable();
-		}
+		document.getElementById("allowediting").checked = true;
+		toggle_editable();
 	}
 
 	function toggle_editable() {
@@ -5748,6 +5772,19 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 			}
 		}
 		render_gametext();
+	}
+
+	function replace_placeholders(inputtxt)
+	{
+		//only do this for chat and instruct modes
+		if(localsettings.opmode==3||localsettings.opmode==4)
+		{
+			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You");
+			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent);
+			inputtxt = replaceAll(inputtxt,"{{[INPUT]}}",get_instruct_starttag(false));
+			inputtxt = replaceAll(inputtxt,"{{[OUTPUT]}}",get_instruct_endtag(false));
+		}
+		return inputtxt;
 	}
 
 	function end_trim_to_sentence(input,include_newline=false) {
@@ -5793,14 +5830,17 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		var event = event || window.event;
 		var charCode = event.keyCode || event.which;
 
-		if (!event.shiftKey && charCode == 13) {
+		if (!event.shiftKey && (charCode == 13||(charCode == 10 && event.ctrlKey))) {
 			let willsubmit = (document.getElementById("entersubmit").checked ? true : false);
 			let newgennotempty = (document.getElementById("input_text").value != "");
 			if (willsubmit) {
 				event.preventDefault();
 				//enter pressed, trigger auto submit
-				if (newgennotempty && !document.getElementById("btnsend").disabled) {
-					submit_generation();
+				if (!document.getElementById("btnsend").disabled) {
+					if(newgennotempty || event.ctrlKey)
+					{
+						submit_generation();
+					}
 				}
 			}
 		}
@@ -5870,6 +5910,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 	function manual_gen_image() {
 		let truncated_context = concat_gametext(true, "");
+		truncated_context = replace_placeholders(truncated_context);
 		var tclen = truncated_context.length;
 		if (tclen > 0) {
 			var sentence = truncated_context.substring(tclen - 300, tclen);
@@ -6228,6 +6269,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
 				truncated_context = truncated_memory + truncated_context;
 			}
+			truncated_context = replace_placeholders(truncated_context);
 
 			last_token_budget = truncated_context.length  + "/" + max_allowed_characters;
 
@@ -6338,6 +6380,12 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 							}
 						}
 					}
+				}
+
+				//version 1.2.4 and later supports unban tokens
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
+				{
+					submit_payload.use_default_badwordids = (localsettings.unban_tokens?true:false);
 				}
 
 				let pseudostreaming = should_use_pseudostreaming();
@@ -6940,9 +6988,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 										img.queue = 0;
 										let origImg = "data:image/jpeg;base64," + finalimg.generations[0].img;
 										//console.log("Original image: " + origImg);
-										compressImage(origImg, (newDataUri) => {
-											img.result = newDataUri;
-										});
+										compressImage(origImg, (newDataUri) => { img.result = newDataUri; }, true);
 									}
 								})
 								.catch((error) => {
@@ -6991,7 +7037,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		}
 
 	}
-	function compressImage(inputDataUri, onDone) {
+	function compressImage(inputDataUri, onDone, isJpeg=true) {
 		let img = document.createElement('img');
 		let wantedWidth = 256;
 		let wantedHeight = 256;
@@ -7009,7 +7055,16 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 			// We resize the image with the canvas method
 			ctx.drawImage(this, 0, 0, wantedWidth, wantedHeight);
 
-			var dataURI = canvas.toDataURL('image/jpeg', 0.33);
+			var dataURI = "";
+			if(isJpeg)
+			{
+				dataURI = canvas.toDataURL(`image/jpeg`, 0.33);
+			}
+			else
+			{
+				//png does not support compression by default, not recommended!
+				dataURI = canvas.toDataURL(`image/png`);
+			}
 			onDone(dataURI);
 		};
 
@@ -7493,6 +7548,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
+				fulltxt = replace_placeholders(fulltxt);
 			}
 
 
@@ -7520,8 +7576,8 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 					fulltxt = simpleMarkdown(fulltxt);
 				}
 
-				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
+				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
@@ -7706,11 +7762,13 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
 		let isStyleApplicable = (localsettings.opmode == 3 && localsettings.enhanced_chat_ui) || (localsettings.opmode == 4 && localsettings.enhanced_instruct_ui);
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
-		if (localsettings.enhanced_chat_ui && !inEditMode && isStyleApplicable)
+		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
+			textToRender = replace_placeholders(textToRender);
+
 			if (localsettings.opmode == 3) { render_enhanced_chat(textToRender); }
-			else if (localsettings.opmode == 4) { render_enhanced_chat_instruct(textToRender); }
+			else if (localsettings.opmode == 4) { document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender); }
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
 			if (pending_response_id=="") { document.getElementById("chatistyping").classList.add("hidden"); }
@@ -7867,28 +7925,6 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		}
 
 		chatbody.innerHTML = newbodystr;
-	}
-
-	function render_enhanced_chat_instruct(input)
-	{
-		var chatbody = document.getElementById("chat_msg_body");
-		if (!chatbody) { return; }
-
-		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
-		let sysStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 40, 40, 0.8)'><p style='opacity:.8'>`;
-		let youStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:#29343a'><p>`;
-		let botStyle = `</p></div></div></div><div class="incoming_msg"><div class="chat_received_msg" style='width:100%'><div class="chat_received_withd_msg" style='width:100%;background-color:rgba(20, 20, 40, 1)'><p>`;
-
-		// We'll transform the input to a well-formatted HTML string. First, trim any newline characters after seq_start and seq_end.
-		let newbodystr = sysStyle + input.replaceAll(you + '\n', you).replaceAll(bot + '\n', bot).replaceAll(you + ' ', you).replaceAll(bot + ' ', bot);
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }  	// Remove the last endtag if it exists.
-		if (localsettings.instruct_has_markdown) {											// Style *Expressions*, "Speech", and code blocks if markdown is toggled.
-			newbodystr = newbodystr.replaceAll(/\*(\S[^*]+\S)\*/g,`<em style='opacity:0.7'>$1</em>`);
-			newbodystr = newbodystr.replaceAll(/&quot;(.*?)&quot;/g, `<em style='color:rgba(150, 150, 200, 1)'>"$1"</em>`);
-			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g); for (var i = 0; i < blocks.length; i++) { if (blocks[i].startsWith("```")) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='margin:0px 100px 0px 20px;background-color:black;color:rgba(180, 35, 40, 1)'>$1</pre><p>`); } else { blocks[i] = blocks[i].replaceAll("```","`").replaceAll("``","`").replaceAll(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);} } newbodystr = blocks.join('');
-		}
-		newbodystr = newbodystr.replaceAll(you, youStyle).replaceAll(bot, botStyle);	  	// Style incoming messages and outcoming messages appropriately.
-		chatbody.innerHTML = newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>');	// Replace the HTML and handle newlines as needed.
 	}
 
 	function chat_handle_typing(event)
@@ -8175,9 +8211,349 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		let v = isNaN(val) ? 0 : val;
 		return clamp(v, min, max);
 	};
-
 	</script>
 
+	<!-- Aesthetic UI scripts -->
+	<script>
+	const aestheticTextStyleTypes = ['text', 'speech', 'action'];	 // One style per speech type. Could add more later I guess.
+	const aestheticTextStyleRoles = ['uniform', 'you', 'AI', 'sys']; // Uniform for when you want all roles use the same styles.
+
+	class AestheticTextStyle {
+		constructor(options) {
+			options = options || {};
+			this.color = options.color || 'rgba(255,255,255, 1)';
+			this.fontWeight = options.bold ? 'bold' : 'normal';
+			this.fontStyle = options.italic ? 'italic' : 'normal';
+			this.opacity = options.opacity || 1;
+		}
+	}
+
+	class AestheticInstructUISettings {
+		constructor() {
+			this.bubbleColor_sys = 'rgba(20, 40, 40, 0.8)';
+			this.bubbleColor_you = '#29343a';
+			this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
+
+			// this.background_anchor_style_you = 'left';
+			// this.background_anchor_style_AI = 'left';
+			this.background_margin = [10, 10, 5, 0];
+			this.background_padding = [40, 40, 10, 0];
+			this.background_minHeight = 100;
+
+			this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
+			this.border_style = 'Rect';
+			this.portrait_width = 100;
+			this.portrait_height = 100;
+
+			this.you_portrait = null;
+			this.AI_portrait = niko_square;
+
+			this.font_size = 12;
+			this.use_markdown = true;
+			this.use_uniform_colors = true; // Hides 'you, AI, sys' if set to true via settings UI.
+
+			for (let role of aestheticTextStyleRoles) {
+				this[`text_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255,1)'} );
+				this[`speech_color_${role}`] = new AestheticTextStyle({ color: 'rgba(150, 150, 200, 1)', italic: true });
+				this[`action_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255, 0.7)', italic: true });
+			}
+
+			this.code_block_background = 'black';
+			this.code_block_foreground = 'rgba(180, 35, 40, 1)';
+		}
+
+		padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
+		margin() { return `${this.background_margin[2]}px ${this.background_margin[1]}px ${this.background_margin[3]}px ${this.background_margin[0]}px`; }
+		portraitSize() { return { width: this.portrait_width, height: this.border_style == 'Circle' ? this.portrait_width : this.portrait_height }; }
+		portraitRadius() { return this.border_style == 'Circle' ? '1000rem' : (this.border_style == 'Rounded' ? '2rem' : '0.1rem'); }
+	}
+
+	const sideMapping = { 'left': 0, 'right': 1, 'top': 2, 'bottom': 3 };
+
+	let aestheticInstructUISettings = new AestheticInstructUISettings();
+	let tempAestheticInstructUISettings = null; // These exist to act as backup when customizing, to revert when pressing the 'Cancel' button.
+
+	function initializeInstructUIFunctionality() {
+		// Load the default settings (by default), or the latest chosen ones.
+		if (localsettings.persist_session === true) {
+			const jsonString = localStorage.getItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions');
+			if (jsonString) {
+				var obj = JSON.parse(jsonString);
+				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
+			}
+		}else{
+			//reset to defaults
+			localStorage.setItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
+		}
+		// Initialize text colorPicker and background color pickers. Text colorPicker should change the foreground, and background colorPicker should change the background.
+		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
+			element.addEventListener('click', (e) => {
+				let clrPicker = e.target.classList.contains('enhancedTextColorPicker') ? colorPicker : colorPicker_background;
+				clrPicker.clickedElement = e.target;
+				clrPicker.click();
+			});
+			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
+		});
+		document.getElementById('colorPicker').addEventListener('change', 			 function() { this.clickedElement.style.color           = this.value; this.clickedElement = null; refreshPreview(); });
+		document.getElementById('colorPicker_background').addEventListener('change', function() { this.clickedElement.style.backgroundColor = this.value; this.clickedElement = null; refreshPreview(); });
+
+		// Initialize functionality for the margin & padding input fields.
+		document.querySelectorAll('.instruct-settings-input').forEach(element => {
+			const input = element.querySelector('input');
+			const type = element.getAttribute('data-type');
+			const side = element.getAttribute('data-side');
+
+			input.addEventListener('input', function() {
+				let clippedvalue = parseInt(this.value, 10);
+				clippedvalue = cleannum(clippedvalue, 0, 300);
+				if (type === 'margin') { aestheticInstructUISettings.background_margin[sideMapping[side]] = parseInt(clippedvalue, 10); }
+				else if (type === 'padding') { aestheticInstructUISettings.background_padding[sideMapping[side]] = parseInt(clippedvalue, 10); }
+			});
+		});
+
+		// Initialize functionality for the portrait pickers.
+		document.querySelectorAll('#you-portrait, #AI-portrait').forEach(element => {
+		element.addEventListener('click', (e) => {
+			let finput = document.getElementById('portraitFileInput');
+			finput.click();
+			finput.onchange = (event) => {
+				if (event.target.files.length > 0 && event.target.files[0]) {
+					const file = event.target.files[0];
+					const reader = new FileReader();
+					reader.onload = function(img) {
+						compressImage(img.target.result, loadCompressedImage, true);
+						function loadCompressedImage(compressedImageURI) {
+							let isSelfPortrait = (element.id=="you-portrait");
+							if(isSelfPortrait)
+							{
+								aestheticInstructUISettings.you_portrait = compressedImageURI;
+							}
+							else
+							{
+								aestheticInstructUISettings.AI_portrait = compressedImageURI;
+							}
+							updateDataFromUI(); updateTextPreview();
+						}
+					}
+					reader.readAsDataURL(file);
+				}
+				finput.value = "";
+			};
+		});
+		element.addEventListener('mouseover', () => element.style.cursor = "pointer");
+		});
+
+		document.getElementById("reset-portrait").addEventListener('click', (e) => {
+			aestheticInstructUISettings.you_portrait = null;
+			aestheticInstructUISettings.AI_portrait = niko_square;
+			updateDataFromUI(); updateTextPreview();
+		});
+
+		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
+
+			let ns = new AestheticInstructUISettings();
+			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
+			updateUIFromData();
+			updateTextPreview();
+		});
+
+		refreshPreview(false);
+	}
+
+	function openAestheticUISettingsMenu() {
+		tempAestheticInstructUISettings = deepCopyAestheticSettings(aestheticInstructUISettings);
+		document.getElementById("aestheticsettingscontainer").classList.remove("hidden");
+		updateTextPreview();
+
+	}
+	function hideAestheticUISettingsMenu(confirm) {
+		if (!confirm) { aestheticInstructUISettings = deepCopyAestheticSettings(tempAestheticInstructUISettings); updateUIFromData(); }
+		tempAestheticInstructUISettings = null;
+
+		document.getElementById("aestheticsettingscontainer").classList.add("hidden");
+		render_gametext();
+	}
+
+	function deepCopyAestheticSettings(original) {
+		let copy = new AestheticInstructUISettings();
+		for (let [key, value] of Object.entries(original)) {
+			if (value instanceof AestheticTextStyle) { copy[key] = new AestheticTextStyle({ color: value.color, bold: value.fontWeight === 'bold', italic: value.fontStyle === 'italic', opacity: value.opacity }); }
+			else { copy[key] = value; }
+		}
+		return copy;
+	}
+
+	function refreshPreview(updateFromUI = true) {
+		if (updateFromUI) { updateDataFromUI(); }
+		updateUIFromData();
+		updateTextPreview();
+	}
+
+	function updateDataFromUI() {
+		for (let role of aestheticTextStyleRoles) {
+			for (let type of aestheticTextStyleTypes) {
+				aestheticInstructUISettings[`${type}_color_${role}`] = getTextStyleFromElement(`${role}-${type}-colorselector`);
+			}
+			if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
+		}
+
+		aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
+		aestheticInstructUISettings.use_uniform_colors = !document.getElementById('instructModeCustomized').checked;
+		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
+		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
+		aestheticInstructUISettings.font_size = document.getElementById('instruct-font-size').value;
+		aestheticInstructUISettings.border_style = document.getElementById('instructBorderStyle').value;
+		aestheticInstructUISettings.portrait_width = document.getElementById('portrait_width').value;
+		aestheticInstructUISettings.portrait_height = document.getElementById('portrait_height').value;
+		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
+		// aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
+		// aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
+
+		//basic sanitization
+		aestheticInstructUISettings.font_size = cleannum(aestheticInstructUISettings.font_size, 5, 50);
+		aestheticInstructUISettings.portrait_width = cleannum(aestheticInstructUISettings.portrait_width, 10, 250);
+		aestheticInstructUISettings.portrait_height = cleannum(aestheticInstructUISettings.portrait_height, 10, 250);
+		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
+
+		// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
+		localStorage.setItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
+
+		function getTextStyleFromElement(id) {
+			let element = document.getElementById(id);
+			let computedStyle = window.getComputedStyle(element);
+			return new AestheticTextStyle({color: computedStyle.color, bold: computedStyle.fontWeight > 400, italic: computedStyle.fontStyle == 'italic', opacity: computedStyle.opacity});
+		}
+	}
+	function updateUIFromData() {
+		// Parse color settings and apply to the related parts in the UI.
+		for (let role of aestheticTextStyleRoles) {
+			for (let type of aestheticTextStyleTypes) {
+				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
+			}
+			if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
+		}
+
+		// Apply the settings from the json file to the UI.
+		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
+		document.getElementById('instructModeCustomized').checked = !aestheticInstructUISettings.use_uniform_colors;
+		document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
+		document.getElementById('code-block-foreground-colorselector').style.color = aestheticInstructUISettings.code_block_foreground;
+		document.getElementById('instruct-font-size').value = aestheticInstructUISettings.font_size;
+		document.getElementById('instructBorderStyle').value = aestheticInstructUISettings.border_style;
+		document.getElementById('portrait_width').value = aestheticInstructUISettings.portrait_width;
+		document.getElementById('portrait_height').value = aestheticInstructUISettings.portrait_height;
+		document.getElementById('instruct-min-backgroundHeight').value = aestheticInstructUISettings.background_minHeight;
+		// document.getElementById('background-anchor-style-AI').value = aestheticInstructUISettings.background_anchor_style_AI;
+		// document.getElementById('background-anchor-style-you').value = aestheticInstructUISettings.background_anchor_style_you;
+
+		// Show or hide custumization UI elements based on whether they should be visible in the UI or not.
+		showOrHide('.uniform-mode-font', document.getElementById('instructModeCustomized').checked == false);
+		showOrHide('.custom-mode-font', document.getElementById('instructModeCustomized').checked == true);
+		showOrHide('.instruct-markdown-user', document.getElementById('instructModeMarkdown').checked == true);
+		showOrHide('.rectPortraitMode', document.getElementById('instructBorderStyle').value != 'Circle');
+
+		document.querySelectorAll('.instruct-settings-input').forEach(element => {
+			const input = element.querySelector('input');
+			const type = element.getAttribute('data-type');
+			const side = element.getAttribute('data-side');
+
+			if (type === 'margin') { input.value = aestheticInstructUISettings.background_margin[sideMapping[side]]; }
+			else if (type === 'padding') { input.value = aestheticInstructUISettings.background_padding[sideMapping[side]]; }
+		});
+
+
+		function setElementColor(id, textStyle) {
+			let element = document.getElementById(id);
+			if (!element) { console.warn(`Element with ID: ${id} not found.`); return; }
+
+			element.style.color      = textStyle.color;
+			element.style.opacity    = textStyle.opacity;
+			element.style.fontWeight = textStyle.fontWeight;
+			element.style.fontStyle  = textStyle.fontStyle;
+		}
+		function showOrHide(classID, value) {
+			if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
+			else { document.querySelectorAll(classID).forEach((x) => x.classList.add('hidden')); }
+		}
+	}
+
+	function render_enhanced_chat_instruct(input)
+	{
+		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
+		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
+		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
+
+		//update portraits globally as css classes, that way multiple lines can reuse them
+		let portraitsStyling = `
+		<style>
+		.you-portrait-image {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+		.AI-portrait-image {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+		</style>
+		`;
+
+		// We'll transform the input to a well-formatted HTML string.
+		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
+		newbodystr = replaceAll(newbodystr,you + '\n', you);
+		newbodystr = replaceAll(newbodystr, bot + '\n', bot);
+		newbodystr = replaceAll(newbodystr, you + ' ', you);
+		newbodystr = replaceAll(newbodystr,bot + ' ', bot);
+		newbodystr = replaceAll(newbodystr,'"', '&quot;');
+		newbodystr = replaceAll(newbodystr,you + '\n', you);
+		newbodystr = replaceAll(newbodystr,you, style('you'));
+		newbodystr = replaceAll(newbodystr,bot, style('AI'));
+		newbodystr += contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
+		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
+			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
+			for (let role of aestheticTextStyleRoles) {																// ..starting by the "speech" and *actions* for each role.
+				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
+				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
+					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
+					replacedText = replacedText.replace(/\*(\S[^*]+\S)\*/g, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
+					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
+					return replacedText;
+				});
+			}
+			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
+			newbodystr = applyStylizedCodeBlocks(); // Apply the code-block styling, if markdown is used.
+		}
+		let ret = newbodystr;
+		ret = replaceAll(ret,'\r\n','<br>');
+		ret = replaceAll(ret,'\n','<br>');
+		return portraitsStyling + ret + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+
+		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
+		function image(role) {
+			const portraitSrc = as[`${role}_portrait`];
+			if (!portraitSrc || as.border_style == 'None' || role == 'sys') { return ''; }
+			return `<div class='${role}-portrait-image' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
+		}
+		function applyStylizedCodeBlocks() {
+			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
+			for (var i = 0; i < blocks.length; i++) {
+				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 40px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
+				else {
+					let bi = blocks[i];
+					bi = replaceAll(bi,'```','`');
+					bi = replaceAll(bi,'``','`');
+					bi = bi.replace(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);
+					blocks[i] = bi;
+				}
+			}
+			return blocks.join('');
+		}
+	}
+
+	function updateTextPreview() {
+		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
+		preview = replaceAll(preview,'qqq', '```');
+		preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
+		preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview);
+	}
+	</script>
 
 </head>
 
@@ -8240,8 +8616,6 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 									<a class="nav-link" href="#" id="btn_share"
 										onclick="export_share_story()">Share</a>
 								</li>
-
-
 							</ul>
 						</div>
 					</nav>
@@ -8320,6 +8694,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
 					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2"  onclick="manual_gen_image()">Add Img</button>
+					<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()">Customize UI</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
 				</div>
@@ -8856,6 +9231,10 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban Tokens (KAI) </div>
+						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Session </div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
 						</div>
@@ -9087,8 +9466,193 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		</div>
 	</div>
 
+	<div class="popupcontainer flex hidden" id="aestheticsettingscontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup highest" style="margin-left: 20px; margin-right: 20px;">
+			<div class="popuptitlebar" id="aesthetic_customization_panel">
+				<div class="popuptitletext">Aesthetic Instruct UI customization panel</div>
+			</div>
+			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:70vh;">
+				<!-- Settings panel -->
+				<div style="background-color: #122b40;" onchange="refreshPreview()">
+					<div style="padding: 10px; width:350px; height:100%">
+						<!-- PRESET LOADING //TODO: Make exporting/importing work -->
+						<!-- <div class="hidden">
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<div class="justifyleft settingsmall" style="font-size: 14px; margin-bottom: 2px;">RAWRRR Presets</div>
+								<div class="ui-settings-inline">
+									<select class="form-control" id="presets" style="width:300px;height:24px;padding:0;" onchange="toggle_UI_preset()">
+										<option value="1" title="Known Working Settings">[Default]</option>
+										<option value="1000" title="Known Working Settings">[Custom]</option>
+									</select>
+									<button class="btn btn-primary" style="height:25px; font-size: 12px;text-align: center; margin-left: 10px;">Save</button>
+								</div>
+							</div>
+						</div> -->
 
+						<!-- BACKGROUND STYLE SETTINGS -->
+						<div>
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<!-- Background style header -->
+								<div class="justifyleft settingsmall" style="font-size: 14px; margin-bottom: 2px;">Background Style</div>
+
+								<!-- Background style main settings -->
+								<div style="margin-left: 12px;">
+									<div class="ui-settings-inline">
+										<div style="margin-right: 5px">Bubble Color: </div>
+										<div class="enhancedStandardColorPicker" id="sys-bubble-colorselector">System 🖌️</div>
+										<div class="enhancedStandardColorPicker" id="you-bubble-colorselector">You 🖌️</div>
+										<div class="enhancedStandardColorPicker" id="AI-bubble-colorselector">AI 🖌️</div>
+									</div>
+									<!-- ANCHOR NOT IMPLEMENTED -->
+									<!-- <div class="ui-settings-inline hidden">
+										<div style="margin-right: 38px">Anchor: </div>
+										<div style="text-align: center; margin: 0px 10px">You:</div>
+										<select class="form-control" id="background-anchor-style-you" style="width:50px;height:16px;padding:0; font-size: 10px;">
+											<option value="0">Left</option>
+											<option value="1">Right</option>
+										</select>
+										<div style="text-align: center; margin: 0px 10px">AI:</div>
+										<select class="form-control" id="background-anchor-style-AI" style="width:50px;height:16px;padding:0; font-size: 10px;">
+											<option value="0">Left</option>
+											<option value="1">Right</option>
+										</select>
+									</div> -->
+									<!-- ^^ TODO: IMPLEMENT ANCHOR ABOVE ^^-->
+									<div class="ui-settings-inline">
+										<div style="margin-right:20px;">Min Height: </div>
+										<div class="instruct-settings-input"><input id ="instruct-min-backgroundHeight" type="number"/> px</div>
+									</div>
+									<div class="ui-settings-inline">
+										<div style="margin-right:20px;">Margin (px): </div>
+										<div class="instruct-settings-input" data-type="margin" data-side="left"  >L: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="margin" data-side="right" >R: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="margin" data-side="top"   >T: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="margin" data-side="bottom">B: <input type="number"/></div>
+									</div>
+									<div class="ui-settings-inline">
+										<div style="margin-right:13px">Padding (px): </div>
+										<div class="instruct-settings-input" data-type="padding" data-side="left"  >L: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="padding" data-side="right" >R: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="padding" data-side="top"   >T: <input type="number"/></div>
+										<div class="instruct-settings-input" data-type="padding" data-side="bottom">B: <input type="number"/></div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- PORTRAIT STYLE SETTINGS -->
+						<div>
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<!-- Portrait style header -->
+								<div class="justifyleft settingsmall" style="font-size: 15px; margin-bottom: 5px;">Portrait Style</div>
+
+								<!-- Portrait style main settings -->
+								<div style="margin-left: 12px;">
+									<div class="ui-settings-inline">
+										<div style="margin-right: 27px">Portraits: </div>
+										<div id="you-portrait">🖼️ Your Portrait</div>
+										<div id="AI-portrait">🖼️ AI's Portrait</div>
+									</div>
+								</div>
+								<div style="margin-left: 12px;">
+									<div class="ui-settings-inline">
+										<div style="margin-right:17px;">Portrait Style: </div>
+										<select class="form-control" id="instructBorderStyle" style="width:60px;height:16px;padding:0; font-size: 10px;">
+											<option value="None">None</option>
+											<option value="Circle">Circle</option>
+											<option value="Rounded">Rounded</option>
+											<option value="Rect">Rect</option>
+										</select>
+										<div id="reset-portrait" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset Image)</a></div>
+									</div>
+									<div class="ui-settings-inline">
+										<div style="margin-right:18px;">Portrait Size: </div>
+										<div>						 <span class="rectPortraitMode">W: </span><input id="portrait_width"  type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;'/></div>
+										<div style="margin-left:5px"><span class="rectPortraitMode">H: </span><input id="portrait_height" type="number" placeholder="100" value="100" style='width:40px;height:20px;font-size:10px;' class="rectPortraitMode"/></div>
+										<div style="align-self: center;">px</div>
+									</div>
+
+								</div>
+							</div>
+						</div>
+
+						<!-- FONT STYLE SETTINGS -->
+						<div>
+							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
+								<!-- Font style header -->
+								<div class="justifyleft settingsmall" style="font-size: 15px; margin-bottom:5px;">Font Style</div>
+
+								<!-- Font style main settings -->
+								<div style="margin-left: 12px;">
+									<div class="ui-settings-inline">
+										<div style="margin-right:20px;text-align: center;">Font Size: </div>
+										<div style="margin: 0px 10px"><input id="instruct-font-size" type="number" min="8" max="40" style='width:40px;height:20px;font-size:10px;'/> px</div>
+									</div>
+									<div class="ui-settings-inline">
+										<div style="font-size: 12px; margin-right:27px; text-align: center;">Customize: </div>
+										<div class="ui-settings-inline" style="font-size: 10px">
+											<div style="padding-top: 2px;">Per-entity: </div>
+											<input id="instructModeCustomized" type="checkbox" style="height: 10px;">
+										</div>
+										<div class="ui-settings-inline" style="font-size: 10px; margin-left: 10px">
+											<div style="padding-top: 2px;">Markdown: </div>
+											<input id="instructModeMarkdown"  type="checkbox" style="height: 10px">
+										</div>
+									</div>
+									<div class="ui-settings-inline uniform-mode-font">
+										<div style="margin-right:48px; text-align: center;">Colors: </div>
+										<div class="enhancedTextColorPicker" id="uniform-text-colorselector">text🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="uniform-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="uniform-action-colorselector">*action*🖌️</div>
+									</div>
+									<div class="ui-settings-inline custom-mode-font">
+										<div style="margin-right:58px; text-align: center;">You: </div>
+										<div class="enhancedTextColorPicker" id="you-text-colorselector">text🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="you-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="you-action-colorselector">*action*🖌️</div>
+									</div>
+									<div class="ui-settings-inline custom-mode-font">
+										<div style="margin-right:67px; text-align: center;">AI: </div>
+										<div class="enhancedTextColorPicker" id="AI-text-colorselector">text🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="AI-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="AI-action-colorselector">*action*🖌️</div>
+									</div>
+									<div class="ui-settings-inline custom-mode-font">
+										<div style="margin-right:38px; text-align: center;">System: </div>
+										<div class="enhancedTextColorPicker" id="sys-text-colorselector">text🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="sys-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedTextColorPicker instruct-markdown-user" id="sys-action-colorselector">*action*🖌️</div>
+									</div>
+									<div class="ui-settings-inline instruct-markdown-user">
+										<div style="margin-right:11px; text-align: center;">Code blocks: </div>
+										<div class="enhancedTextColorPicker" id="code-block-background-colorselector">background🖌️</div>
+										<div class="enhancedTextColorPicker" id="code-block-foreground-colorselector">foreground🖌️</div>
+									</div>
+								</div>
+								<br>
+									<div id="reset-all-aesthetic-instruct" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset All Styles)</a></div>
+							</div>
+						</div>
+
+					</div>
+					<div class="popupfooter" id="aesthetic_instruct_footer" style="margin-top: -55px;height:55px;">
+						<button type="button" class="btn btn-primary" id="btn_settingsaccept" onclick="hideAestheticUISettingsMenu(true)">OK</button>
+						<button type="button" class="btn btn-primary" id="btn_settingsclose" onclick="hideAestheticUISettingsMenu(false)">Cancel</button>
+					</div>
+				</div>
+				<div id="aesthetic_text_preview_panel" style="background-color: black; padding: 10px; height:100%; overflow-y: auto; ">
+					<p>Style Preview</p>
+					<div id="aesthetic_text_preview" style="background-color: black; margin: 2px; text-align: left; word-wrap: break-word;"></div>
+				</div>
+				<input type="color" id="colorPicker" style="display: none;">
+				<input type="color" id="colorPicker_background" style="display: none;">
+				<input type="file" id="portraitFileInput" style="display:none" accept="image/*">
+			</div>
+		</div>
+	</div>
 </body>
+
 <script>
 init();
 
