@@ -3211,7 +3211,7 @@ private:
 
 struct llm_bigram_bpe {
     struct comparator {
-        bool operator()(llm_bigram_bpe & l, llm_bigram_bpe & r) {
+        bool operator()(const llm_bigram_bpe & l, const llm_bigram_bpe & r) const {
             return l.rank > r.rank || (l.rank == r.rank && l.left > r.left);
         }
     };
@@ -3359,23 +3359,22 @@ private:
     }
 
     // probably not 100% correct
-    // TODO: this is quite slow - how to make it more efficient?
-    static std::vector<std::string> bpe_gpt2_preprocess(std::string text) {
+    static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> words;
 
         // ref: https://github.com/openai/gpt-2/blob/a74da5d99abaaba920de8131d64da2862a8f213b/src/encoder.py#L53
         const std::string pattern = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
         const std::regex re(pattern);
-        std::smatch m;
 
-        while (std::regex_search(text, m, re)) {
-            for (auto x : m) {
-                words.push_back(x);
-            }
-            text = m.suffix();
+        auto words_begin = std::sregex_iterator(text.begin(), text.end(), re);
+        auto words_end = std::sregex_iterator();
+        auto n_words = std::distance(words_begin, words_end);
+        words.reserve(n_words);
+        for (auto it = words_begin; it != words_end; ++it) {
+            words.push_back(it->str());
         }
-
         return words;
+
     }
 
     const llama_vocab & vocab;
