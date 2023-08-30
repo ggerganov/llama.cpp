@@ -174,18 +174,18 @@ int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f, bool shar
 }
 
 void free_weights(TransformerWeights* w) {
-    delete w->token_embedding_table;
-    delete w->rms_att_weight;
-    delete w->rms_ffn_weight;
-    delete w->wq;
-    delete w->wk;
-    delete w->wv;
-    delete w->wo;
-    delete w->w1;
-    delete w->w2;
-    delete w->w3;
-    delete w->rms_final_weight;
-    if (w->wcls) delete w->wcls;
+    delete[] w->token_embedding_table;
+    delete[] w->rms_att_weight;
+    delete[] w->rms_ffn_weight;
+    delete[] w->wq;
+    delete[] w->wk;
+    delete[] w->wv;
+    delete[] w->wo;
+    delete[] w->w1;
+    delete[] w->w2;
+    delete[] w->w3;
+    delete[] w->rms_final_weight;
+    delete[] w->wcls;
 }
 
 void print_sample_weights(TransformerWeights *w){
