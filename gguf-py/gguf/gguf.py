@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import shutil
-import sys
-import struct
-import tempfile
-import numpy as np
 import json
 import os
-from pathlib import Path
-
+import shutil
+import struct
+import sys
+import tempfile
 from enum import IntEnum, auto
 from io import BufferedWriter
-from typing import Any, BinaryIO, Callable, IO, Dict, List, Optional, Sequence, Tuple, Union
+from pathlib import Path
+from typing import IO, Any, BinaryIO, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
+import numpy as np
 
 #
 # constants

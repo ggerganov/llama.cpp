@@ -6,7 +6,7 @@ import os
 import re
 import struct
 import sys
-from typing import Any, Dict, Sequence, BinaryIO
+from typing import Any, BinaryIO, Dict, Sequence
 
 import numpy as np
 import torch

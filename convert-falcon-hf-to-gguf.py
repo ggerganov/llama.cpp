@@ -3,18 +3,19 @@
 
 from __future__ import annotations
 
-import gguf
-import os
-import sys
-import struct
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import Any, List
+
+import gguf
 import numpy as np
 import torch
-import argparse
-
-from typing import Any, List
-from pathlib import Path
 from transformers import AutoTokenizer
+
 
 def bytes_to_unicode():
     # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py

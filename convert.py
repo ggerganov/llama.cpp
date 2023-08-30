@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import gguf
 import argparse
 import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import copy
 import enum
 import faulthandler
@@ -21,12 +19,15 @@ import struct
 import sys
 import time
 import zipfile
-import numpy as np
-
 from abc import ABCMeta, abstractmethod
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Literal, Optional, Sequence, Set, Tuple, Type, TypeVar, Union)
+from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable, List, Literal, Optional, Sequence, Set,
+                    Tuple, Type, TypeVar, Union)
+
+import gguf
+import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore
 
 if TYPE_CHECKING:

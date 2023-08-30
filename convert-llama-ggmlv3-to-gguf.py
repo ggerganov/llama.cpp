@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-import sys, struct, math, argparse
+import argparse
+import math
+import struct
+import sys
 from pathlib import Path
 
-import numpy as np
-
 import gguf
+import numpy as np
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256

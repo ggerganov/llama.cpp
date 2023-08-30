@@ -3,17 +3,17 @@
 
 from __future__ import annotations
 
-import gguf
-import os
-import sys
-import struct
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, List, Optional
+
+import gguf
 import numpy as np
 import torch
-import argparse
-
-from typing import TYPE_CHECKING, Any, List, Optional
-from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
 if TYPE_CHECKING:
