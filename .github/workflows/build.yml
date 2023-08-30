@@ -41,6 +41,12 @@ jobs:
         run: |
           CC=gcc-8 make
 
+      - name: Test
+        id: make_test
+        run: |
+          CC=gcc-8 make tests
+          make test
+
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
 
@@ -156,6 +162,12 @@ jobs:
         id: make_build
         run: |
           make
+
+      - name: Test
+        id: make_test
+        run: |
+          make tests
+          make test
 
   macOS-latest-cmake:
     runs-on: macos-latest
