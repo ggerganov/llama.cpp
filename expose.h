@@ -69,6 +69,7 @@ struct generation_inputs
     const float mirostat_tau;
     const samplers sampler_order[KCPP_SAMPLER_MAX];
     const int sampler_len;
+    const bool unban_tokens_rt;
     const char * stop_sequence[stop_token_max];
     const bool stream_sse;
 };
