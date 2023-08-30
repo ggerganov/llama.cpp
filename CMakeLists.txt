@@ -234,7 +234,8 @@ if (LLAMA_BLAS)
 endif()
 
 if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    set(GGML_HEADERS_EXTRA k_quants.h)
+    set(GGML_SOURCES_EXTRA k_quants.c)
     add_compile_definitions(GGML_USE_K_QUANTS)
     if (LLAMA_QKK_64)
         add_compile_definitions(GGML_QKK_64)
@@ -249,8 +250,9 @@ if (LLAMA_CUBLAS)
         message(STATUS "cuBLAS found")
 
         enable_language(CUDA)
-
-        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
+        
+        set(GGML_HEADERS_CUDA ggml-cuda.h)
+        set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
         add_compile_definitions(GGML_USE_CUBLAS)
 #        if (LLAMA_CUDA_CUBLAS)
@@ -298,7 +300,8 @@ if (LLAMA_METAL)
     find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
 
-    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
+    set(GGML_HEADERS_METAL ggml-metal.h)
+    set(GGML_SOURCES_METAL ggml-metal.m)
 
     add_compile_definitions(GGML_USE_METAL)
     #add_compile_definitions(GGML_METAL_NDEBUG)
@@ -321,6 +324,7 @@ if (LLAMA_MPI)
     find_package(MPI)
     if (MPI_C_FOUND)
         message(STATUS "MPI found")
+        set(GGML_HEADERS_MPI ggml-mpi.h)
         set(GGML_SOURCES_MPI ggml-mpi.c ggml-mpi.h)
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
@@ -343,7 +347,8 @@ if (LLAMA_CLBLAST)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
+        set(GGML_HEADERS_OPENCL ggml-opencl.h)
+        set(GGML_SOURCES_OPENCL ggml-opencl.cpp)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
@@ -539,6 +544,8 @@ endif()
 # libraries
 #
 
+include(GNUInstallDirs)
+
 # ggml
 
 add_library(ggml OBJECT
@@ -546,11 +553,11 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
-            ${GGML_SOURCES_CUDA}
-            ${GGML_SOURCES_OPENCL}
-            ${GGML_SOURCES_METAL}
-            ${GGML_SOURCES_MPI}
-            ${GGML_SOURCES_EXTRA}
+            ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
@@ -564,6 +571,13 @@ if (BUILD_SHARED_LIBS)
     target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
     install(TARGETS ggml_shared LIBRARY)
 endif()
+
+set(GGML_PUBLIC_HEADERS "ggml.h"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+
+set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+install(TARGETS ggml PUBLIC_HEADER)
 
 # llama
 
@@ -585,14 +599,15 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-    install(TARGETS llama LIBRARY)
 endif()
+
+set_target_properties(llama PROPERTIES PUBLIC_HEADER llama.h)
+install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 #
 # install
 #
 
-include(GNUInstallDirs)
 install(
     FILES convert.py
     PERMISSIONS
