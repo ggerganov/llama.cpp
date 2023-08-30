@@ -623,6 +623,7 @@ struct llama_mmap {
             }
         }
         #else
+        (void)prefetch;
         #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
         #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
     }
