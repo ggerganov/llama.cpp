@@ -687,10 +687,10 @@ typedef struct {
 static inline void fix_y_v1(thread float & sumy, thread float4x4 & yl) {
     sumy = 0.f;
     for (int i = 0; i < 8; i += 2) {
-        sumy += yl[i/4][i%4];   sumy += yl[i/4][i%4+1];
+        sumy += yl[  i/4][i%4]; sumy += yl[  i/4][i%4+1];
         sumy += yl[2+i/4][i%4]; sumy += yl[2+i/4][i%4+1];
-        yl[i/4  ][i%4  ] = yl[i/4][i%4];
-        yl[i/4  ][i%4+1] = 1/256.f  * yl[i/4][i%4+1];
+        yl[i/4  ][i%4  ] =            yl[  i/4][i%4];
+        yl[i/4  ][i%4+1] = 1/256.f  * yl[  i/4][i%4+1];
         yl[i/4+2][i%4  ] = 1/16.f   * yl[2+i/4][i%4];
         yl[i/4+2][i%4+1] = 1/4096.f * yl[2+i/4][i%4+1];
     }
@@ -699,7 +699,8 @@ static inline void fix_y_v1(thread float & sumy, thread float4x4 & yl) {
 static inline void fix_y_v2(thread float & coef1, thread float & coef2, thread float & sumy, thread float4x4 & yl) {
     sumy = 0.f;
     for (int i = 0; i < 16; i += 2) {
-        sumy += yl[i/4][i%4]; sumy += yl[i/4][i%4+1];
+        sumy += yl[i/4][i%4];
+        sumy += yl[i/4][i%4+1];
         yl[i/4][i%4]   = coef1 * yl[i/4][i%4];
         yl[i/4][i%4+1] = coef2 * yl[i/4][i%4+1];
     }
@@ -725,8 +726,8 @@ class q4_0_driver {
             const half d = xb->d;
             addr_uint16_p q = (addr_uint16_p)xb->qs + q_offset;
             for (int i = 0; i < 8; i += 2) {
-                sum += yl[i/4][i%4]     * (q[i/2] & 0x000F);
-                sum += yl[i/4][i%4+1]   * (q[i/2] & 0x0F00);
+                sum += yl[i/4  ][i%4]   * (q[i/2] & 0x000F);
+                sum += yl[i/4  ][i%4+1] * (q[i/2] & 0x0F00);
                 sum += yl[i/4+2][i%4]   * (q[i/2] & 0x00F0);
                 sum += yl[i/4+2][i%4+1] * (q[i/2] & 0xF000);
             }
@@ -764,8 +765,8 @@ class q4_1_driver {
             const half m = xb->m;
             addr_uint16_p q = (addr_uint16_p)xb->qs + q_offset;
             for (int i = 0; i < 8; i += 2) {
-                sum += yl[i/4][i%4]     * (q[i/2] & 0x000F);
-                sum += yl[i/4][i%4+1]   * (q[i/2] & 0x0F00);
+                sum += yl[i/4  ][i%4]   * (q[i/2] & 0x000F);
+                sum += yl[i/4  ][i%4+1] * (q[i/2] & 0x0F00);
                 sum += yl[i/4+2][i%4]   * (q[i/2] & 0x00F0);
                 sum += yl[i/4+2][i%4+1] * (q[i/2] & 0xF000);
             }
