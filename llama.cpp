@@ -830,6 +830,7 @@ static llama_state g_state;
 // available llama models
 enum e_model {
     MODEL_UNKNOWN,
+    MODEL_1B,
     MODEL_3B,
     MODEL_7B,
     MODEL_13B,
@@ -1524,6 +1525,7 @@ std::string llama_model_ftype_name(enum llama_ftype ftype) {
 
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
+        case MODEL_1B:  return "1B";
         case MODEL_3B:  return "3B";
         case MODEL_7B:  return "7B";
         case MODEL_13B: return "13B";
@@ -1626,6 +1628,7 @@ static void llm_load_hparams(
                 GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
 
                 switch (hparams.n_layer) {
+                    case 24: model.type = e_model::MODEL_1B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 60: model.type = e_model::MODEL_40B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
