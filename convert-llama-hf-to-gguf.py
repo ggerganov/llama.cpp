@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import gguf
 import numpy as np
 import torch
-from sentencepiece import SentencePieceProcessor
+from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
 if TYPE_CHECKING:
     from typing import TypeAlias

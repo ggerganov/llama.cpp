@@ -14,7 +14,7 @@ from typing import Any
 import gguf
 import numpy as np
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer  # type: ignore[import]
 
 
 def bytes_to_unicode():

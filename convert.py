@@ -27,7 +27,7 @@ from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Litera
 
 import gguf
 import numpy as np
-from sentencepiece import SentencePieceProcessor  # type: ignore
+from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
 if TYPE_CHECKING:
     from typing import TypeAlias
@@ -338,7 +338,7 @@ class BpeVocab:
 
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
-        from transformers.models.gpt2 import tokenization_gpt2
+        from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
         byte_encoder = tokenization_gpt2.bytes_to_unicode()
         byte_decoder = {v: k for k, v in byte_encoder.items()}
         for i, item in enumerate(tokenizer):
