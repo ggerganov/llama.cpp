@@ -9329,11 +9329,12 @@ static void ggml_compute_forward_mul_f32(
         struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_can_repeat_rows(src1, src0) && ggml_are_same_shape(src0, dst));
 
+    const int ith = params->ith;
+    const int nth = params->nth;
+
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
-    const int ith = params->ith;
-    const int nth = params->nth;
 
 #ifdef GGML_USE_CLBLAST
     if (src1->backend == GGML_BACKEND_GPU) {
@@ -17229,7 +17230,13 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     }
                 } break;
             case GGML_OP_SILU_BACK:
+                {
+                    n_tasks = n_threads;
+                } break;
             case GGML_OP_MUL:
+                {
+                    n_tasks = MIN(n_threads, ggml_nrows(node->src[0]));
+                } break;
             case GGML_OP_NORM:
             case GGML_OP_RMS_NORM:
             case GGML_OP_RMS_NORM_BACK:
