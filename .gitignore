@@ -1,3 +1,6 @@
+*
+!*.*
+
 *.o
 *.a
 *.so
@@ -5,7 +8,6 @@
 *.bin
 *.exe
 *.dll
-*.log
 .DS_Store
 .build/
 .cache/
@@ -23,25 +25,7 @@ tmp/
 
 models/*
 models-mnt
-
-/main
-/quantize
-/quantize-stats
-/result
-/perplexity
-/embedding
-/train-text-from-scratch
-/convert-llama2c-to-ggml
-/simple
-/benchmark-matmult
-/vdot
-/server
-/Pipfile
-/embd-input-test
-/gguf
-/gguf-llama-simple
 /libllama.so
-/llama-bench
 build-info.h
 arm_neon.h
 compile_commands.json
@@ -61,16 +45,3 @@ examples/jeopardy/results.txt
 
 poetry.lock
 poetry.toml
-
-# Test binaries
-tests/test-grammar-parser
-tests/test-llama-grammar
-tests/test-double-float
-tests/test-grad0
-tests/test-opt
-tests/test-quantize-fns
-tests/test-quantize-perf
-tests/test-sampling
-tests/test-tokenizer-0-llama
-tests/test-tokenizer-0-falcon
-tests/test-tokenizer-1
