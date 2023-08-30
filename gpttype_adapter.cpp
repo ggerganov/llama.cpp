@@ -606,11 +606,13 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.use_mmap = inputs.use_mmap;
         llama_ctx_params.use_mlock = inputs.use_mlock;
         llama_ctx_params.n_gpu_layers = inputs.gpulayers;
+        #if defined(GGML_USE_CLBLAST)
         if(file_format==FileFormat::GGUF_FALCON && llama_ctx_params.n_gpu_layers>0)
         {
-            printf("\nGPU layer offload for GGUF FALCON is known to have issues, it has been set to 0.\n");
+            printf("\nGPU layer offload for GGUF FALCON on OpenCL is known to have issues, it has been set to 0.\n");
             llama_ctx_params.n_gpu_layers = 0;
         }
+        #endif
         llama_ctx_params.main_gpu = cu_parseinfo_maindevice;
         llama_ctx_params.rope_freq_base = rope_freq_base;
         llama_ctx_params.rope_freq_scale = rope_freq_scale;
