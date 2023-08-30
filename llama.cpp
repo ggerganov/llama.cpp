@@ -3216,7 +3216,7 @@ private:
 
 struct llm_bigram_bpe {
     struct comparator {
-        bool operator()(llm_bigram_bpe & l, llm_bigram_bpe & r) {
+        bool operator()(const llm_bigram_bpe & l, const llm_bigram_bpe & r) const {
             return l.rank > r.rank || (l.rank == r.rank && l.left > r.left);
         }
     };
@@ -3364,23 +3364,22 @@ private:
     }
 
     // probably not 100% correct
-    // TODO: this is quite slow - how to make it more efficient?
-    static std::vector<std::string> bpe_gpt2_preprocess(std::string text) {
+    static std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> words;
 
         // ref: https://github.com/openai/gpt-2/blob/a74da5d99abaaba920de8131d64da2862a8f213b/src/encoder.py#L53
         const std::string pattern = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
         const std::regex re(pattern);
-        std::smatch m;
 
-        while (std::regex_search(text, m, re)) {
-            for (auto x : m) {
-                words.push_back(x);
-            }
-            text = m.suffix();
+        auto words_begin = std::sregex_iterator(text.begin(), text.end(), re);
+        auto words_end = std::sregex_iterator();
+        auto n_words = std::distance(words_begin, words_end);
+        words.reserve(n_words);
+        for (auto it = words_begin; it != words_end; ++it) {
+            words.push_back(it->str());
         }
-
         return words;
+
     }
 
     const llama_vocab & vocab;
@@ -6252,6 +6251,34 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
+void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
+    fprintf(stream, "\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "# Timings #\n");
+    fprintf(stream, "###########\n");
+    fprintf(stream, "\n");
+
+    fprintf(stream, "mst_eval: %.2f  # ms / token during generation\n",
+            1.0e-3 * ctx->t_eval_us / ctx->n_eval);
+    fprintf(stream, "mst_p_eval: %.2f  # ms / token during prompt processing\n",
+            1.0e-3 * ctx->t_p_eval_us / ctx->n_p_eval);
+    fprintf(stream, "mst_sample: %.2f  # ms / token during sampling\n",
+            1.0e-3 * ctx->t_sample_us / ctx->n_sample);
+    fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
+    fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
+    fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->n_sample);
+    fprintf(stream, "t_eval_us: %" PRId64 "  # total microseconds spent generating tokens\n", ctx->t_eval_us);
+    fprintf(stream, "t_load_us: %" PRId64 "  # total microseconds spent loading the model\n", ctx->t_load_us);
+    fprintf(stream, "t_p_eval_us: %" PRId64 "  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
+    fprintf(stream, "t_sample_us: %" PRId64 "  # total microseconds spent sampling\n", ctx->t_sample_us);
+    fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
+            1.0e6 * ctx->n_eval / ctx->t_eval_us);
+    fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
+            1.0e6 * ctx->n_p_eval / ctx->t_p_eval_us);
+    fprintf(stream, "ts_sample: %.2f  # tokens / second during sampling\n",
+            1.0e6 * ctx->n_sample / ctx->t_sample_us);
+}
+
 // For internal test use
 const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
     return ctx->model.tensors_by_name;
@@ -6261,10 +6288,6 @@ void llama_log_set(llama_log_callback log_callback, void * user_data) {
     g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
     g_state.log_callback_user_data = user_data;
 }
-
-#if defined(_MSC_VER) && !defined(vsnprintf)
-#define vsnprintf _vsnprintf
-#endif
 
 static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
     va_list args_copy;
