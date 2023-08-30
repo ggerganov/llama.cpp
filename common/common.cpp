@@ -480,6 +480,9 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             }
         } else if (arg == "-h" || arg == "--help") {
             gpt_print_usage(argc, argv, default_params);
+#ifndef LOG_DISABLE_LOGS
+            log_print_usage();
+#endif // LOG_DISABLE_LOGS
             exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
@@ -519,6 +522,25 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 std::istreambuf_iterator<char>(),
                 std::back_inserter(params.grammar)
             );
+#ifndef LOG_DISABLE_LOGS
+        // Parse args for logging parameters
+        } else if ( log_param_single_parse( argv[i] ) ) {
+            // Do nothing, log_param_single_parse automatically does it's thing
+            //  and returns if a match was found and parsed.
+        } else if ( log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i] ) ) {
+            // We have a matching known parameter requiring an argument,
+            //  now we need to check if there is anything after this argv
+            //  and flag invalid_param or parse it.
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            if( !log_param_pair_parse( /*check_but_dont_parse*/ false, argv[i-1], argv[i]) ) {
+                invalid_param = true;
+                break;
+            }
+        // End of Parse args for logging parameters
+#endif // LOG_DISABLE_LOGS
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             gpt_print_usage(argc, argv, default_params);

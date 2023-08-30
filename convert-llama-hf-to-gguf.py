@@ -8,8 +8,9 @@ import struct
 import json
 import numpy as np
 import torch
+import argparse
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TypeAlias
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
@@ -43,40 +44,38 @@ def count_model_parts(dir_model: str) -> int:
     return num_parts
 
 
-if len(sys.argv) < 3:
-    print(f"Usage: python {sys.argv[0]} dir-model ftype\n")
-    print("  ftype == 0 -> float32")
-    print("  ftype == 1 -> float16")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Convert a HuggingFace LLaMA model to a GGML compatible file")
+    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
+    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
+    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.bin)")
+    parser.add_argument("ftype",     type=int, choices=[0, 1],   help="output format - use 0 for float32, 1 for float16", default = 1)
+    return parser.parse_args()
 
+args = parse_args()
+
+dir_model = args.model
+ftype = args.ftype
+if not dir_model.is_dir():
+    print(f'Error: {args.model} is not a directory', file = sys.stderr)
     sys.exit(1)
-
-
-# output in the same directory as the model
-dir_model = sys.argv[1]
-last_dir = os.path.basename(os.path.normpath(dir_model))
-
 
 # possible tensor data types
 #   ftype == 0 -> float32
 #   ftype == 1 -> float16
 
-
 # map from ftype to string
 ftype_str = ["f32", "f16"]
 
-ftype = 1
-if len(sys.argv) > 2:
-    ftype = int(sys.argv[2])
-    if ftype < 0 or ftype > 1:
-        print("Invalid ftype: " + str(ftype))
+if args.outfile is not None:
+    fname_out = args.outfile
+else:
+    # output in the same directory as the model by default
+    fname_out = dir_model / f'ggml-model-{ftype_str[ftype]}.gguf'
 
-        sys.exit(1)
+print("gguf: loading model "+dir_model.name)
 
-fname_out = sys.argv[1] + "/ggml-model-" + ftype_str[ftype] + ".gguf"
-
-print("gguf: loading model "+last_dir)
-
-with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
+with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
 if hparams["architectures"][0] != "LlamaForCausalLM":
@@ -115,7 +114,7 @@ else:
     sys.exit()
 
 
-gguf_writer.add_name(last_dir)
+gguf_writer.add_name(dir_model.name)
 gguf_writer.add_source_hf_repo(hf_repo)
 gguf_writer.add_tensor_data_layout("Meta AI original pth")
 gguf_writer.add_context_length(ctx_length)
@@ -141,110 +140,61 @@ tokens: List[bytes] = []
 scores: List[float] = []
 toktypes: List[int] = []
 
-if Path(dir_model + "/tokenizer.model").is_file():
-    # vocab type sentencepiece
-    print("gguf: get sentencepiece tokenizer vocab, scores and token types")
+tokenizer_model_file = dir_model / 'tokenizer.model'
+if not tokenizer_model_file.is_file():
+    print(f'Error: Missing {tokenizer_model_file}', file = sys.stderr)
+    sys.exit(1)
 
-    tokenizer = SentencePieceProcessor(dir_model + "/tokenizer.model")
+# vocab type sentencepiece
+print("gguf: get sentencepiece tokenizer vocab, scores and token types")
 
-    for i in range(tokenizer.vocab_size()):
-        text: bytes
-        score: float
+tokenizer = SentencePieceProcessor(str(tokenizer_model_file))
 
-        piece = tokenizer.id_to_piece(i)
-        text = piece.encode("utf-8")
-        score = tokenizer.get_score(i)
+for i in range(tokenizer.vocab_size()):
+    text: bytes
+    score: float
 
-        toktype = 1  # defualt to normal token type
-        if tokenizer.is_unknown(i):
-            toktype = 2
-        if tokenizer.is_control(i):
-            toktype = 3
+    piece = tokenizer.id_to_piece(i)
+    text = piece.encode("utf-8")
+    score = tokenizer.get_score(i)
 
-        # toktype = 4 is user-defined = tokens from added_tokens.json
+    toktype = 1  # defualt to normal token type
+    if tokenizer.is_unknown(i):
+        toktype = 2
+    if tokenizer.is_control(i):
+        toktype = 3
 
-        if tokenizer.is_unused(i):
-            toktype = 5
-        if tokenizer.is_byte(i):
-            toktype = 6
+    # toktype = 4 is user-defined = tokens from added_tokens.json
 
-        tokens.append(text)
-        scores.append(score)
-        toktypes.append(toktype)
+    if tokenizer.is_unused(i):
+        toktype = 5
+    if tokenizer.is_byte(i):
+        toktype = 6
 
-    if Path(dir_model + "/added_tokens.json").is_file():
-        with open(dir_model + "/added_tokens.json", "r", encoding="utf-8") as f:
-            addtokens_json = json.load(f)
+    tokens.append(text)
+    scores.append(score)
+    toktypes.append(toktype)
 
-            print("gguf: get added tokens")
+added_tokens_file = dir_model / 'added_tokens.json'
+if added_tokens_file.is_file():
+    with open(added_tokens_file, "r", encoding="utf-8") as f:
+        addtokens_json = json.load(f)
 
-            for key in addtokens_json:
-                tokens.append( key.encode("utf-8") )
-                scores.append(-1000.0)
-                toktypes.append(4) # user-defined token type
+        print("gguf: get added tokens")
 
-
-    gguf_writer.add_tokenizer_model("llama")
-    gguf_writer.add_token_list(tokens)
-    gguf_writer.add_token_scores(scores)
-    gguf_writer.add_token_types(toktypes)
+        for key in addtokens_json:
+            tokens.append( key.encode("utf-8") )
+            scores.append(-1000.0)
+            toktypes.append(4) # user-defined token type
 
 
-print("gguf: get special token ids")
+gguf_writer.add_tokenizer_model("llama")
+gguf_writer.add_token_list(tokens)
+gguf_writer.add_token_scores(scores)
+gguf_writer.add_token_types(toktypes)
 
-if Path(dir_model + "/tokenizer.json").is_file():
-    # Look for special tokens in tokenizer.json if it exists
-
-    with open(dir_model + "/tokenizer.json", "r", encoding="utf-8") as f:
-        tokenizer = json.load(f)
-
-    if "added_tokens" in tokenizer and Path(dir_model + "/tokenizer_config.json").is_file():
-
-        with open(dir_model + "/tokenizer_config.json", "r", encoding="utf-8") as f:
-            tokenizer_config = json.load(f)
-
-        if "bos_token" in tokenizer_config and tokenizer_config["bos_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["bos_token"]["content"]:
-                    gguf_writer.add_bos_token_id(key["id"])
-
-        if "eos_token" in tokenizer_config and tokenizer_config["eos_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["eos_token"]["content"]:
-                    gguf_writer.add_eos_token_id(key["id"])
-
-        if "unk_token" in tokenizer_config and tokenizer_config["unk_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["unk_token"]["content"]:
-                    gguf_writer.add_unk_token_id(key["id"])
-
-        if "sep_token" in tokenizer_config and tokenizer_config["sep_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["sep_token"]["content"]:
-                    gguf_writer.add_sep_token_id(key["id"])
-
-        if "pad_token" in tokenizer_config and tokenizer_config["pad_token"] != None:
-            for key in tokenizer["added_tokens"]:
-                if key["content"] == tokenizer_config["pad_token"]["content"]:
-                    gguf_writer.add_pad_token_id(key["id"])
-else:
-    # If no tokenizer.json: Look for special tokens in config.json
-
-    if "bos_token_id" in hparams and hparams["bos_token_id"] != None:
-        gguf_writer.add_bos_token_id(hparams["bos_token_id"])
-
-    if "eos_token_id" in hparams and hparams["eos_token_id"] != None:
-        gguf_writer.add_eos_token_id(hparams["eos_token_id"])
-
-    if "unk_token_id" in hparams and hparams["unk_token_id"] != None:
-        gguf_writer.add_unk_token_id(hparams["unk_token_id"])
-
-    if "sep_token_id" in hparams and hparams["sep_token_id"] != None:
-        gguf_writer.add_sep_token_id(hparams["sep_token_id"])
-
-    if "pad_token_id" in hparams and hparams["pad_token_id"] != None:
-        gguf_writer.add_pad_token_id(hparams["pad_token_id"])
-
+special_vocab = gguf.SpecialVocab(dir_model)
+special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS
 
@@ -254,13 +204,15 @@ tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
 print("gguf: get tensor metadata")
 
 if num_parts == 0:
-    part_names = ("pytorch_model.bin",)
+    part_names = iter(("pytorch_model.bin",))
 else:
     part_names = (
         f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
     )
 
 for part_name in part_names:
+    if args.vocab_only:
+        break
     print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
@@ -286,11 +238,8 @@ for part_name in part_names:
             data = reverse_hf_permute(data, head_count, head_count_kv)
 
         # map tensor names
-        if name.endswith(".weight") and name[:-7] in tensor_map:
-            name = tensor_map[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tensor_map:
-            name = tensor_map[name[:-5]] + ".bias"
-        else:
+        new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+        if new_name is None:
             print("Can not map tensor '" + name + "'")
             sys.exit()
 
@@ -309,20 +258,20 @@ for part_name in part_names:
         if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print(name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
-        gguf_writer.add_tensor(name, data)
+        gguf_writer.add_tensor(new_name, data)
 
 
 print("gguf: write header")
 gguf_writer.write_header_to_file()
 print("gguf: write metadata")
 gguf_writer.write_kv_data_to_file()
-print("gguf: write tensors")
-gguf_writer.write_tensors_to_file()
+if not args.vocab_only:
+    print("gguf: write tensors")
+    gguf_writer.write_tensors_to_file()
 
 gguf_writer.close()
 
-
-print("gguf: model successfully exported to '" + fname_out + "'")
+print(f"gguf: model successfully exported to '{fname_out}'")
 print("")

@@ -171,6 +171,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wstrict-prototypes
             -Wpointer-arith
             -Wmissing-prototypes
+            -Werror=implicit-int
         )
         set(cxx_flags
             -Wall
