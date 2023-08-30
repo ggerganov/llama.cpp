@@ -148,7 +148,7 @@ if Path(dir_model + "/tokenizer.json").is_file():
 
     print("gguf: get gpt2 tokenizer vocab")
 
-    vocab_size = len(tokenizer_json["model"]["vocab"])
+    vocab_size = hparams["vocab_size"]
 
     # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
     tokenizer = AutoTokenizer.from_pretrained(dir_model)
