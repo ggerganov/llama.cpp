@@ -142,6 +142,14 @@ results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & params)
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+
+    if (int(tokens.size()) < 2*params.n_ctx) {
+        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*params.n_ctx,
+                params.n_ctx);
+        fprintf(stderr, "%s: the data file you provided tokenizes to only %zu tokens\n",__func__,tokens.size());
+        return {std::move(tokens), 0., {}, {}};
+    }
+
     std::vector<float>       logit_history;
     std::vector<float>       prob_history;
 
@@ -273,6 +281,13 @@ results_perplexity perplexity(llama_context * ctx, const gpt_params & params) {
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
+
+    if (int(tokens.size()) < 2*params.n_ctx) {
+        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*params.n_ctx,
+                params.n_ctx);
+        fprintf(stderr, "%s: the data file you provided tokenizes to only %zu tokens\n",__func__,tokens.size());
+        return {std::move(tokens), 0., {}, {}};
+    }
 
     std::vector<float> logit_history;
     logit_history.resize(tokens.size());
