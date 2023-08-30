@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+import os
+import requests
+# Save original proxy settings
+original_http_proxy = os.environ.get('http_proxy')
+original_https_proxy = os.environ.get('https_proxy')
+# Unset the proxies
+os.environ['http_proxy'] = ''
+os.environ['https_proxy'] = ''
+# Reset the proxies to original values after your code
+if original_http_proxy is not None:
+    os.environ['http_proxy'] = original_http_proxy
+if original_https_proxy is not None:
+    os.environ['https_proxy'] = original_https_proxy
+
 import argparse
 from flask import Flask, jsonify, request, Response
 import urllib.parse
