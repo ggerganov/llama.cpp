@@ -42,6 +42,9 @@ models-mnt
 /gguf-llama-simple
 /libllama.so
 /llama-bench
+/baby-llama
+/beam-search
+/save-load-state
 build-info.h
 arm_neon.h
 compile_commands.json
