@@ -345,7 +345,7 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
-ifdef LLAMA_NO_K_QUANTS
+ifndef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
