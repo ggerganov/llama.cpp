@@ -16191,9 +16191,9 @@ static size_t hash_find(void * hash_table[], void * p) {
 
 static bool hash_insert(void * hash_table[], void * p) {
     size_t i = hash_find(hash_table, p);
-    
+
     GGML_ASSERT(i < GGML_GRAPH_HASHTABLE_SIZE); // assert that not full
-    
+
     if (hash_table[i] == p) {
         return true;
     }
