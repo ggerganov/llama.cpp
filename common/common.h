@@ -4,6 +4,9 @@
 
 #include "llama.h"
 
+#define LOG_NO_FILE_LINE_FUNCTION
+#include "log.h"
+
 #include <string>
 #include <vector>
 #include <random>
@@ -11,10 +14,11 @@
 #include <unordered_map>
 #include <tuple>
 
-#if !defined (_WIN32)
-#include <stdio.h>
-#include <termios.h>
-#endif
+#ifdef _WIN32
+#define DIRECTORY_SEPARATOR '\\'
+#else
+#define DIRECTORY_SEPARATOR '/'
+#endif // _WIN32
 
 //
 // CLI argument parsing
@@ -27,19 +31,17 @@ struct gpt_params {
     int32_t n_predict                       = -1;   // new tokens to predict
     int32_t n_ctx                           = 512;  // context size
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_gqa                           = 1;    // grouped-query attention factor (TODO: move to hparams)
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
     int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
-    float   rms_norm_eps                    = LLAMA_DEFAULT_RMS_EPS; // rms norm epsilon
+    int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 10000.0f; // RoPE base frequency
     float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
 
     // sampling parameters
-    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   tfs_z             = 1.00f; // 1.0 = disabled
@@ -53,12 +55,14 @@ struct gpt_params {
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
 
+    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
     // Classifier-Free Guidance
     // https://arxiv.org/abs/2306.17806
     std::string cfg_negative_prompt;       // string to help guidance
     float       cfg_scale         = 1.f;   // How strong is guidance
 
-    std::string model             = "models/7B/ggml-model.bin"; // model path
+    std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
@@ -66,11 +70,20 @@ struct gpt_params {
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
+    std::string logdir            = "";  // directory in which to save YAML log files
 
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base    = "";  // base model path for the lora adapter
 
-    bool low_vram          = false;   // if true, reduce VRAM usage at the cost of performance
+    int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
+    int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
+                                    //                                       (which is more convenient to use for plotting)
+                                    //
+    bool hellaswag         = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
+    size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
+
+    bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
+    bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
@@ -79,14 +92,16 @@ struct gpt_params {
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
     bool embedding         = false; // get only sentence embedding
+    bool escape            = false; // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
+    bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
+    bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool perplexity        = false; // compute perplexity over the prompt
-    bool perplexity_lines  = false; // compute perplexity over each line of the prompt
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool mem_test          = false; // compute maximum memory usage
@@ -102,53 +117,51 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 std::string gpt_random_prompt(std::mt19937 & rng);
 
 //
-// Vocab utils
-//
-
-std::vector<llama_token> llama_tokenize(struct llama_context * ctx, const std::string & text, bool add_bos);
-
-//
 // Model utils
 //
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(const gpt_params & params);
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 //
-// Console utils
+// Vocab utils
 //
 
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_BOLD          "\x1b[1m"
+// tokenizes a string into a vector of tokens
+// should work similar to Python's `tokenizer.encode`
+std::vector<llama_token> llama_tokenize(
+        struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
 
-enum console_color_t {
-    CONSOLE_COLOR_DEFAULT=0,
-    CONSOLE_COLOR_PROMPT,
-    CONSOLE_COLOR_USER_INPUT,
-    CONSOLE_COLOR_ERROR
-};
+// tokenizes a token into a piece
+// should work similar to Python's `tokenizer.id_to_piece`
+std::string llama_token_to_piece(
+        const struct llama_context * ctx,
+                       llama_token   token);
 
-struct console_state {
-    bool multiline_input = false;
-    bool use_color = false;
-    console_color_t color = CONSOLE_COLOR_DEFAULT;
+// TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
+//       that takes into account the tokenizer type and decides how to handle the leading space
+//
+// detokenizes a vector of tokens into a string
+// should work similar to Python's `tokenizer.decode`
+// removes the leading space from the first non-BOS token
+std::string llama_detokenize_spm(
+                         llama_context * ctx,
+        const std::vector<llama_token> & tokens);
 
-    FILE* out = stdout;
-#if defined (_WIN32)
-    void* hConsole;
-#else
-    FILE* tty = nullptr;
-    termios prev_state;
-#endif
-};
+// detokenizes a vector of tokens into a string
+// should work similar to Python's `tokenizer.decode`
+std::string llama_detokenize_bpe(
+                         llama_context * ctx,
+        const std::vector<llama_token> & tokens);
 
-void console_init(console_state & con_st);
-void console_cleanup(console_state & con_st);
-void console_set_color(console_state & con_st, console_color_t color);
-bool console_readline(console_state & con_st, std::string & line);
+bool create_directory_with_parents(const std::string & path);
+void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data);
+void dump_vector_int_yaml(FILE * stream, const char * prop_name, const std::vector<int> & data);
+void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const char * data);
+std::string get_sortable_timestamp();
+
+void dump_non_result_info_yaml(
+    FILE * stream, const gpt_params & params, const llama_context * lctx,
+    const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
