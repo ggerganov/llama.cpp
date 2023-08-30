@@ -25,6 +25,7 @@ struct chat {
         lparams = llama_context_default_params();
         lparams.n_ctx = 4096;
         lparams.n_gpu_layers = 99;
+        lparams.mul_mat_q = true;
 
         model = llama_load_model_from_file(model_file.c_str(), lparams);
         if (model == NULL) {
