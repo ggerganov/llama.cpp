@@ -494,10 +494,11 @@ Building the program with BLAS support may lead to some performance improvements
       ```cmd
       set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
       git clone https://github.com/CNugteren/CLBlast.git
-      mkdir CLBlast/build
-      cd CLBlast/build
+      mkdir CLBlast\build
+      cd CLBlast\build
       cmake .. -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
-      cmake --build . --config Release cmake --install . --prefix C:/CLBlast
+      cmake --build . --config Release
+      cmake --install . --prefix C:/CLBlast
       ```
 
   - <details>
