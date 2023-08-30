@@ -2675,6 +2675,11 @@ static struct ggml_cgraph * llm_build_falcon(
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
             offload_func_kq(cur);
 
+            if (model.layers[il].wqkv_b) { // Falcon-RW-1B
+                cur = ggml_add(ctx0, cur, model.layers[il].wqkv_b);
+                offload_func(cur);
+            }
+
             // Note that the strides for Kcur, Vcur are set up so that the
             // resulting views are misaligned with the tensor's storage
             // (by applying the K/V offset we shift the tensor's original
@@ -2786,6 +2791,12 @@ static struct ggml_cgraph * llm_build_falcon(
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
             offload_func(cur);
+
+            if (model.layers[il].wo_b) { // Falcon-RW-1B
+                cur = ggml_add(ctx0, cur, model.layers[il].wo_b);
+                offload_func(cur);
+            }
+
             ggml_set_name(cur, "result_wo");
         }
 
@@ -2798,10 +2809,20 @@ static struct ggml_cgraph * llm_build_falcon(
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
             offload_func(cur);
 
+            if (model.layers[il].w3_b) { // Falcon-RW-1B
+                cur = ggml_add(ctx0, cur, model.layers[il].w3_b);
+                offload_func(cur);
+            }
+
             cur = ggml_gelu(ctx0, cur);
             offload_func(cur);
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
             offload_func(cur);
+
+            if (model.layers[il].w2_b) { // Falcon-RW-1B
+                cur = ggml_add(ctx0, cur, model.layers[il].w2_b);
+                offload_func(cur);
+            }
         }
 
         cur = ggml_add(ctx0, cur, attn_out);
