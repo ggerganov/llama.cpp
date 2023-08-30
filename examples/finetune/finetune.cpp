@@ -699,7 +699,7 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     checkpoints.push_back(t00);
     checkpoints.push_back(t01);
 
-    struct ggml_tensor * kv_scale;
+    struct ggml_tensor * kv_scale = NULL;
     if (!enable_flash_attn) {
         kv_scale = ggml_new_f32(ctx, 1.0f/sqrtf(float(n_embd)/n_head));
     }
