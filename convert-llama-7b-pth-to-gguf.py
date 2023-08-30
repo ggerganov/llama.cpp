@@ -3,6 +3,8 @@
 # Only models with a single datafile are supported, like 7B
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
+from __future__ import annotations
+
 import gguf
 import os
 import sys
@@ -12,13 +14,14 @@ import numpy as np
 import torch
 import argparse
 
-from typing import Any, List, TypeAlias
+from typing import TYPE_CHECKING, Any, List
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
-#NDArray = np.ndarray[Any, Any]
-# compatible with python < 3.9
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 
 def count_model_parts(dir_model: Path) -> int:

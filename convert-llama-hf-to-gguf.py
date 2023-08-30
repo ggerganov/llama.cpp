@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # HF llama --> gguf conversion
 
+from __future__ import annotations
+
 import gguf
 import os
 import sys
@@ -10,13 +12,14 @@ import numpy as np
 import torch
 import argparse
 
-from typing import Any, List, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any, List, Optional
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
 
-#NDArray = np.ndarray[Any, Any]
-# compatible with python < 3.9
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+if TYPE_CHECKING:
+    from typing import TypeAlias
+
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 # reverse HF permute back to original pth layout
 # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py

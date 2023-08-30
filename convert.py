@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import gguf
 import argparse
@@ -29,12 +30,12 @@ from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Generator, Iterable,
 from sentencepiece import SentencePieceProcessor  # type: ignore
 
 if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
 
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
 
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 ARCH=gguf.MODEL_ARCH.LLAMA
 NAMES=gguf.MODEL_TENSOR_NAMES[ARCH]
@@ -47,7 +48,7 @@ DEFAULT_CONCURRENCY = 8
 @dataclass(frozen=True)
 class DataType:
     name: str
-    dtype: 'np.dtype[Any]'
+    dtype: np.dtype[Any]
     valid_conversions: List[str]
 
     def elements_to_bytes(self, n_elements: int) -> int:
@@ -65,7 +66,7 @@ DT_BF16 = UnquantizedDataType('BF16', dtype = np.dtype(np.uint16), valid_convers
 @dataclass(frozen=True)
 class QuantizedDataType(DataType):
     block_size: int
-    quantized_dtype: 'np.dtype[Any]'
+    quantized_dtype: np.dtype[Any]
     ggml_type: gguf.GGMLQuantizationType
 
     def quantize(self, arr: NDArray) -> NDArray:
@@ -98,7 +99,7 @@ DT_Q8_0 = Q8_0QuantizedDataType('Q8_0',
     quantized_dtype = np.dtype([('d', '<f2'), ('qs', 'i1', (32,))]))
 
 # Quantized types skipped here because they may also map to np.float32
-NUMPY_TYPE_TO_DATA_TYPE: Dict['np.dtype[Any]', DataType] = {}
+NUMPY_TYPE_TO_DATA_TYPE: Dict[np.dtype[Any], DataType] = {}
 for dt in (DT_BF16, DT_F16, DT_F32, DT_I32):
     if dt.dtype in NUMPY_TYPE_TO_DATA_TYPE:
         raise ValueError(f'Invalid duplicate data type {dt}')
@@ -119,7 +120,7 @@ class GGMLFileType(enum.IntEnum):
     MostlyF16  = 1  # except 1d tensors
     MostlyQ8_0 = 7  # except 1d tensors
 
-    def type_for_tensor(self, name: str, tensor: 'LazyTensor') -> DataType:
+    def type_for_tensor(self, name: str, tensor: LazyTensor) -> DataType:
         dt = GGML_FILE_TYPE_TO_DATA_TYPE.get(self)
         if dt is None:
             raise ValueError(self)
@@ -154,7 +155,7 @@ class Params:
     ftype: Optional[GGMLFileType] = None
 
     # path to the directory containing the model files
-    path_model: Optional['Path'] = None
+    path_model: Optional[Path] = None
 
     @staticmethod
     def find_n_mult(n_ff: int, n_embd: int) -> int:
@@ -166,7 +167,7 @@ class Params:
         raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
 
     @staticmethod
-    def guessed(model: 'LazyModel') -> 'Params':
+    def guessed(model: LazyModel) -> Params:
         # try transformer naming first
         n_vocab, n_embd = model["model.embed_tokens.weight"].shape if "model.embed_tokens.weight" in model else model["tok_embeddings.weight"].shape
 
@@ -202,7 +203,7 @@ class Params:
         )
 
     @staticmethod
-    def loadHFTransformerJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+    def loadHFTransformerJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
         n_vocab          = config["vocab_size"]
@@ -247,7 +248,7 @@ class Params:
     # LLaMA v2 70B params.json
     # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
     @staticmethod
-    def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+    def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
         n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
@@ -291,7 +292,7 @@ class Params:
         )
 
     @staticmethod
-    def load(model_plus: 'ModelPlus') -> 'Params':
+    def load(model_plus: ModelPlus) -> Params:
         hf_config_path   = model_plus.paths[0].parent / "config.json"
         orig_config_path = model_plus.paths[0].parent / "params.json"
 
@@ -436,15 +437,15 @@ class Tensor(metaclass=ABCMeta):
     data_type: DataType
 
     @abstractmethod
-    def astype(self, data_type: DataType) -> 'Tensor': ...
+    def astype(self, data_type: DataType) -> Tensor: ...
     @abstractmethod
-    def permute(self, n_head: int, n_head_kv: int) -> 'Tensor': ...
+    def permute(self, n_head: int, n_head_kv: int) -> Tensor: ...
     @abstractmethod
-    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> 'UnquantizedTensor': ...
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def part(self, n_part: int) -> 'UnquantizedTensor': ...
+    def part(self, n_part: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def to_ggml(self) -> 'GGMLCompatibleTensor': ...
+    def to_ggml(self) -> GGMLCompatibleTensor: ...
 
 
 def bf16_to_fp32(bf16_arr: np.ndarray[Any, np.dtype[np.uint16]]) -> NDArray:
@@ -465,22 +466,22 @@ class UnquantizedTensor(Tensor):
             self.ndarray = bf16_to_fp32(self.ndarray)
         return UnquantizedTensor(self.ndarray.astype(dtype))
 
-    def to_ggml(self) -> 'UnquantizedTensor':
+    def to_ggml(self) -> UnquantizedTensor:
         return self
 
-    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> 'UnquantizedTensor':
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
         return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head_kv))
 
-    def part(self, n_part: int) -> 'UnquantizedTensor':
+    def part(self, n_part: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
         return UnquantizedTensor(self.ndarray[r * n_part : r * n_part + r, ...])
 
-    def permute(self, n_head: int, n_head_kv: int) -> 'UnquantizedTensor':
+    def permute(self, n_head: int, n_head_kv: int) -> UnquantizedTensor:
         return UnquantizedTensor(permute(self.ndarray, n_head, n_head_kv))
 
 
-def load_unquantized(lazy_tensor: 'LazyTensor', expected_dtype: Any = None, convert: bool = False) -> NDArray:
+def load_unquantized(lazy_tensor: LazyTensor, expected_dtype: Any = None, convert: bool = False) -> NDArray:
     tensor = lazy_tensor.load()
     assert isinstance(tensor, UnquantizedTensor)
 
@@ -513,7 +514,7 @@ class LazyTensor:
                 (self.data_type, ret.data_type, self.description)
         return ret
 
-    def astype(self, data_type: DataType) -> 'LazyTensor':
+    def astype(self, data_type: DataType) -> LazyTensor:
         self.validate_conversion_to(data_type)
 
         def load() -> Tensor:

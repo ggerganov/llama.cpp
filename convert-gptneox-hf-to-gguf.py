@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # HF gptneox--> gguf conversion
 
+from __future__ import annotations
+
 import gguf
 import os
 import sys
