@@ -107,7 +107,7 @@ as the main playground for developing new features for the [ggml](https://github
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
-- Node.js: [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
+- Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp), [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
 - Rust: [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
