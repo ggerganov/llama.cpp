@@ -307,8 +307,8 @@ def handle_metadata(cfg, hp):
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
-    parser.add_argument('--input', '-i', type = Path, help = 'Input GGMLv3 filename')
-    parser.add_argument('--output', '-o', type = Path, help ='Output GGUF filename')
+    parser.add_argument('--input', '-i', type = Path, required = True, help = 'Input GGMLv3 filename')
+    parser.add_argument('--output', '-o', type = Path, required = True, help ='Output GGUF filename')
     parser.add_argument('--name', help = 'Set model name')
     parser.add_argument('--desc', help = 'Set model description')
     parser.add_argument('--gqa', type = int, default = 1, help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
