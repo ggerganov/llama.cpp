@@ -197,7 +197,7 @@ ifdef LLAMA_HIPBLAS
 	ROCM_PATH	?= /opt/rocm
 	CC         := $(ROCM_PATH)/llvm/bin/clang
 	CXX        := $(ROCM_PATH)/llvm/bin/clang++
-	GPU_TARGETS ?= gfx803 gfx900 gfx906 gfx908 gfx90a gfx1030 gfx1100
+	GPU_TARGETS ?= gfx803 gfx900 gfx906 gfx908 gfx90a gfx1030 gfx1100 $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
 	LLAMA_CUDA_DMMV_X ?= 128
 	LLAMA_CUDA_MMV_Y ?= 2
 	LLAMA_CUDA_KQUANTS_ITER ?= 1
