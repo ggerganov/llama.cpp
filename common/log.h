@@ -13,14 +13,16 @@
 #define LOG_COMPAT_WIN 2
 
 #ifndef LOG_COMPAT
+    //default
     #define LOG_COMPAT LOG_COMPAT_GNU
-#endif
-
-#ifdef _WIN32
-    #ifdef __MINGW32__
-        #define LOG_COMPAT LOG_COMPAT_GNU
-    #else
-        #define LOG_COMPAT LOG_COMPAT_WIN
+    //overrides
+    #ifdef _WIN32
+        #ifdef _MSC_VER
+            #define LOG_COMPAT LOG_COMPAT_WIN
+        #endif
+        #ifdef __MINGW32__ 
+            #define LOG_COMPAT LOG_COMPAT_GNU
+        #endif
     #endif
 #endif
 
