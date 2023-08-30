@@ -22,14 +22,6 @@ static std::string escape_whitespace(const std::string& text) {
     return result;
 }
 
-static std::string unescape_whitespace(llama_context * ctx, const std::vector<llama_token> & tokens) {
-    std::string result;
-    for (size_t i = 0; i < tokens.size(); ++i) {
-        result += llama_token_to_str(ctx, tokens[i]);
-    }
-    return result;
-}
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <vocab-file>\n", argv[0]);
@@ -72,13 +64,13 @@ int main(int argc, char **argv) {
     const int n_vocab = llama_n_vocab(ctx);
 
     for (int i = 0; i < n_vocab; ++i) {
-        std::string forward = llama_token_to_str(ctx, i);
+        std::string forward = llama_token_to_piece(ctx, i);
         std::vector<llama_token> tokens = llama_tokenize(ctx, forward, false);
         if (tokens.size() == 1) {
             if (i != tokens[0]) {
-                std::string backward = llama_token_to_str(ctx, tokens[0]);
+                std::string backward = llama_token_to_piece(ctx, tokens[0]);
                 fprintf(stderr, "%s : error: token %d is string %s but bpe returns token %d %s\n",
-                    __func__, i, llama_token_to_str(ctx, i).c_str(), tokens[0], backward.c_str());
+                    __func__, i, llama_token_to_piece(ctx, i).c_str(), tokens[0], backward.c_str());
                 return 2;
             }
         }

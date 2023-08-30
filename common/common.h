@@ -11,6 +11,12 @@
 #include <unordered_map>
 #include <tuple>
 
+#ifdef _WIN32
+#define DIRECTORY_SEPARATOR '\\'
+#else
+#define DIRECTORY_SEPARATOR '/'
+#endif // _WIN32
+
 //
 // CLI argument parsing
 //
@@ -61,6 +67,7 @@ struct gpt_params {
     std::string input_suffix      = "";  // string to suffix user inputs with
     std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
+    std::string logdir            = "";  // directory in which to save YAML log files
 
     std::string lora_adapter = "";  // lora adapter path
     std::string lora_base    = "";  // base model path for the lora adapter
@@ -82,6 +89,7 @@ struct gpt_params {
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
     bool embedding         = false; // get only sentence embedding
+    bool escape            = false; // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
@@ -116,11 +124,41 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 // Vocab utils
 //
 
+// tokenizes a string into a vector of tokens
+// should work similar to Python's `tokenizer.encode`
 std::vector<llama_token> llama_tokenize(
         struct llama_context * ctx,
            const std::string & text,
                         bool   add_bos);
 
-std::string llama_token_to_str(
+// tokenizes a token into a piece
+// should work similar to Python's `tokenizer.id_to_piece`
+std::string llama_token_to_piece(
         const struct llama_context * ctx,
                        llama_token   token);
+
+// TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
+//       that takes into account the tokenizer type and decides how to handle the leading space
+//
+// detokenizes a vector of tokens into a string
+// should work similar to Python's `tokenizer.decode`
+// removes the leading space from the first non-BOS token
+std::string llama_detokenize_spm(
+                         llama_context * ctx,
+        const std::vector<llama_token> & tokens);
+
+// detokenizes a vector of tokens into a string
+// should work similar to Python's `tokenizer.decode`
+std::string llama_detokenize_bpe(
+                         llama_context * ctx,
+        const std::vector<llama_token> & tokens);
+
+bool create_directory_with_parents(const std::string & path);
+void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data);
+void dump_vector_int_yaml(FILE * stream, const char * prop_name, const std::vector<int> & data);
+void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const char * data);
+std::string get_sortable_timestamp();
+
+void dump_non_result_info_yaml(
+    FILE * stream, const gpt_params & params, const llama_context * lctx,
+    const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);

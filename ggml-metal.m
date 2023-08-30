@@ -11,6 +11,7 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+// TODO: temporary - reuse llama.cpp logging
 #ifdef GGML_METAL_NDEBUG
 #define metal_printf(...)
 #else
@@ -33,11 +34,14 @@ struct ggml_metal_buffer {
 struct ggml_metal_context {
     int n_cb;
 
-    float * logits;
-
     id<MTLDevice>       device;
     id<MTLCommandQueue> queue;
     id<MTLLibrary>      library;
+
+    id<MTLCommandBuffer>         command_buffers [GGML_METAL_MAX_COMMAND_BUFFERS];
+    id<MTLComputeCommandEncoder> command_encoders[GGML_METAL_MAX_COMMAND_BUFFERS];
+
+    dispatch_queue_t d_queue;
 
     int n_buffers;
     struct ggml_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
@@ -110,16 +114,17 @@ static NSString * const msl_library_source = @"see metal.metal";
 @end
 
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
-    fprintf(stderr, "%s: allocating\n", __func__);
+    metal_printf("%s: allocating\n", __func__);
 
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
 
-    ctx->n_cb   = n_cb;
+    ctx->n_cb   = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
     ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
     ctx->concur_list_len = 0;
 
+    ctx->d_queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
 #if 0
     // compile from source string and show compile log
@@ -128,7 +133,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
         ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
         if (error) {
-            fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
+            metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
     }
@@ -142,11 +147,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
         NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
         NSString * path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
-        fprintf(stderr, "%s: loading '%s'\n", __func__, [path UTF8String]);
+        metal_printf("%s: loading '%s'\n", __func__, [path UTF8String]);
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
-            fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
+            metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
 
@@ -158,7 +163,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         ctx->library = [ctx->device newLibraryWithSource:src options:nil error:&error];
 #endif
         if (error) {
-            fprintf(stderr, "%s: error: %s\n", __func__, [[error description] UTF8String]);
+            metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
     }
@@ -170,11 +175,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #define GGML_METAL_ADD_KERNEL(name) \
         ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
         ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
-        fprintf(stderr, "%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name, \
+        metal_printf("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name, \
                 (int) ctx->pipeline_##name.maxTotalThreadsPerThreadgroup, \
                 (int) ctx->pipeline_##name.threadExecutionWidth); \
         if (error) { \
-            fprintf(stderr, "%s: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
+            metal_printf("%s: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
             return NULL; \
         }
 
@@ -226,22 +231,80 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
-    fprintf(stderr, "%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
-    fprintf(stderr, "%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
+    metal_printf("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+    metal_printf("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
     if (ctx->device.maxTransferRate != 0) {
-        fprintf(stderr, "%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
+        metal_printf("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
     } else {
-        fprintf(stderr, "%s: maxTransferRate               = built-in GPU\n", __func__);
+        metal_printf("%s: maxTransferRate               = built-in GPU\n", __func__);
     }
 
     return ctx;
 }
 
 void ggml_metal_free(struct ggml_metal_context * ctx) {
-    fprintf(stderr, "%s: deallocating\n", __func__);
+    metal_printf("%s: deallocating\n", __func__);
+#define GGML_METAL_DEL_KERNEL(name) \
+    [ctx->function_##name release]; \
+    [ctx->pipeline_##name release];
+
+    GGML_METAL_DEL_KERNEL(add);
+    GGML_METAL_DEL_KERNEL(add_row);
+    GGML_METAL_DEL_KERNEL(mul);
+    GGML_METAL_DEL_KERNEL(mul_row);
+    GGML_METAL_DEL_KERNEL(scale);
+    GGML_METAL_DEL_KERNEL(silu);
+    GGML_METAL_DEL_KERNEL(relu);
+    GGML_METAL_DEL_KERNEL(gelu);
+    GGML_METAL_DEL_KERNEL(soft_max);
+    GGML_METAL_DEL_KERNEL(diag_mask_inf);
+    GGML_METAL_DEL_KERNEL(get_rows_f16);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_0);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_1);
+    GGML_METAL_DEL_KERNEL(get_rows_q8_0);
+    GGML_METAL_DEL_KERNEL(get_rows_q2_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q3_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q4_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q5_K);
+    GGML_METAL_DEL_KERNEL(get_rows_q6_K);
+    GGML_METAL_DEL_KERNEL(rms_norm);
+    GGML_METAL_DEL_KERNEL(norm);
+    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_1_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q8_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q2_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q3_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q4_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q5_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_q6_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q8_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_1_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q2_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q3_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q4_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q5_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mm_q6_K_f32);
+    GGML_METAL_DEL_KERNEL(rope);
+    GGML_METAL_DEL_KERNEL(alibi_f32);
+    GGML_METAL_DEL_KERNEL(cpy_f32_f16);
+    GGML_METAL_DEL_KERNEL(cpy_f32_f32);
+    GGML_METAL_DEL_KERNEL(cpy_f16_f16);
+
+#undef GGML_METAL_DEL_KERNEL
+
     for (int i = 0; i < ctx->n_buffers; ++i) {
         [ctx->buffers[i].metal release];
     }
+
+    [ctx->library release];
+    [ctx->queue release];
+    [ctx->device release];
+
+    dispatch_release(ctx->d_queue);
+
     free(ctx);
 }
 
@@ -249,7 +312,7 @@ void * ggml_metal_host_malloc(size_t n) {
     void * data = NULL;
     const int result = posix_memalign((void **) &data, getpagesize(), n);
     if (result != 0) {
-        fprintf(stderr, "%s: error: posix_memalign failed\n", __func__);
+        metal_printf("%s: error: posix_memalign failed\n", __func__);
         return NULL;
     }
 
@@ -261,7 +324,7 @@ void ggml_metal_host_free(void * data) {
 }
 
 void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb) {
-    ctx->n_cb = n_cb;
+    ctx->n_cb = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
 }
 
 int ggml_metal_if_optimized(struct ggml_metal_context * ctx) {
@@ -277,7 +340,7 @@ int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
 // Metal buffer based on the host memory pointer
 //
 static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, struct ggml_tensor * t, size_t * offs) {
-    //fprintf(stderr, "%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
+    //metal_printf("%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
     const int64_t tsize = ggml_nbytes(t);
 
@@ -288,13 +351,13 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, stru
         if (ioffs >= 0 && ioffs + tsize <= (int64_t) ctx->buffers[i].size) {
             *offs = (size_t) ioffs;
 
-            //fprintf(stderr, "%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
+            //metal_printf("%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
 
             return ctx->buffers[i].metal;
         }
     }
 
-    fprintf(stderr, "%s: error: buffer is nil\n", __func__);
+    metal_printf("%s: error: buffer is nil\n", __func__);
 
     return nil;
 }
@@ -306,7 +369,7 @@ bool ggml_metal_add_buffer(
                          size_t   size,
                          size_t   max_size) {
     if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
-        fprintf(stderr, "%s: too many buffers\n", __func__);
+        metal_printf("%s: too many buffers\n", __func__);
         return false;
     }
 
@@ -316,7 +379,7 @@ bool ggml_metal_add_buffer(
             const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
 
             if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
-                fprintf(stderr, "%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+                metal_printf("%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
                 return false;
             }
         }
@@ -337,11 +400,11 @@ bool ggml_metal_add_buffer(
             ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
             if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+                metal_printf("%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
                 return false;
             }
 
-            fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
+            metal_printf("%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
 
             ++ctx->n_buffers;
         } else {
@@ -361,27 +424,27 @@ bool ggml_metal_add_buffer(
                 ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
                 if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                    fprintf(stderr, "%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
+                    metal_printf("%s: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
                     return false;
                 }
 
-                fprintf(stderr, "%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+                metal_printf("%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
                 if (i + size_step < size) {
-                    fprintf(stderr, "\n");
+                    metal_printf("\n");
                 }
 
                 ++ctx->n_buffers;
             }
         }
 
-        fprintf(stderr, ", (%8.2f / %8.2f)",
+        metal_printf(", (%8.2f / %8.2f)",
                 ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
                 ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
 
         if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
-            fprintf(stderr, ", warning: current allocated size is greater than the recommended max working set size\n");
+            metal_printf(", warning: current allocated size is greater than the recommended max working set size\n");
         } else {
-            fprintf(stderr, "\n");
+            metal_printf("\n");
         }
     }
 
@@ -391,8 +454,6 @@ bool ggml_metal_add_buffer(
 void ggml_metal_set_tensor(
         struct ggml_metal_context * ctx,
         struct ggml_tensor * t) {
-    metal_printf("%s: set input for tensor '%s'\n", __func__, t->name);
-
     size_t offs;
     id<MTLBuffer> id_dst = ggml_metal_get_buffer(ctx, t, &offs);
 
@@ -402,8 +463,6 @@ void ggml_metal_set_tensor(
 void ggml_metal_get_tensor(
         struct ggml_metal_context * ctx,
         struct ggml_tensor * t) {
-    metal_printf("%s: extract results for tensor '%s'\n", __func__, t->name);
-
     size_t offs;
     id<MTLBuffer> id_src = ggml_metal_get_buffer(ctx, t, &offs);
 
@@ -498,14 +557,14 @@ void ggml_metal_graph_find_concurrency(
     }
 
     if (ctx->concur_list_len > GGML_MAX_CONCUR) {
-        fprintf(stderr, "%s: too many elements for metal ctx->concur_list!\n", __func__);
+        metal_printf("%s: too many elements for metal ctx->concur_list!\n", __func__);
     }
 }
 
 void ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
-    metal_printf("%s: evaluating graph\n", __func__);
+    @autoreleasepool {
 
     // if there is ctx->concur_list, dispatch concurrently
     // else fallback to serial dispatch
@@ -521,29 +580,25 @@ void ggml_metal_graph_compute(
 
     const int n_cb = ctx->n_cb;
 
-    NSMutableArray * command_buffers = [NSMutableArray arrayWithCapacity:n_cb];
-
     for (int i = 0; i < n_cb; ++i) {
-        command_buffers[i] = [ctx->queue commandBuffer];
+        ctx->command_buffers[i] = [ctx->queue commandBuffer];
 
         // enqueue the command buffers in order to specify their execution order
-        [command_buffers[i] enqueue];
-    }
+        [ctx->command_buffers[i] enqueue];
 
-    // TODO: is this the best way to start threads?
-    dispatch_queue_t queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
+        ctx->command_encoders[i] = [ctx->command_buffers[i] computeCommandEncoderWithDescriptor: edesc];
+    }
 
     for (int cb_idx = 0; cb_idx < n_cb; ++cb_idx) {
         const int n_nodes_per_cb = (n_nodes + n_cb - 1) / n_cb;
 
-        dispatch_async(queue, ^{
+        dispatch_async(ctx->d_queue, ^{
             size_t offs_src0 = 0;
             size_t offs_src1 = 0;
             size_t offs_dst  = 0;
 
-            id<MTLCommandBuffer> command_buffer = command_buffers[cb_idx];
-
-            id<MTLComputeCommandEncoder> encoder = [command_buffer computeCommandEncoderWithDescriptor: edesc];
+            id<MTLCommandBuffer> command_buffer  = ctx->command_buffers[cb_idx];
+            id<MTLComputeCommandEncoder> encoder = ctx->command_encoders[cb_idx];
 
             const int node_start =                                      (cb_idx + 0) * n_nodes_per_cb;
             const int node_end   = MIN((cb_idx == n_cb - 1) ? n_nodes : (cb_idx + 1) * n_nodes_per_cb, n_nodes);
@@ -556,7 +611,7 @@ void ggml_metal_graph_compute(
                     continue;
                 }
 
-                metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+                //metal_printf("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
                 struct ggml_tensor * src0 = gf->nodes[i]->src[0];
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
@@ -704,7 +759,7 @@ void ggml_metal_graph_compute(
                                 } break;
                             default:
                                 {
-                                    fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                                    metal_printf("%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                                     GGML_ASSERT(false);
                                 }
                         } break;
@@ -863,7 +918,7 @@ void ggml_metal_graph_compute(
                                         } break;
                                     default:
                                         {
-                                            fprintf(stderr, "Asserting on type %d\n",(int)src0t);
+                                            metal_printf("Asserting on type %d\n",(int)src0t);
                                             GGML_ASSERT(false && "not implemented");
                                         }
                                 };
@@ -1101,7 +1156,7 @@ void ggml_metal_graph_compute(
                         } break;
                     default:
                         {
-                            fprintf(stderr, "%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                            metal_printf("%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                             GGML_ASSERT(false);
                         }
                 }
@@ -1117,17 +1172,19 @@ void ggml_metal_graph_compute(
     }
 
     // wait for all threads to finish
-    dispatch_barrier_sync(queue, ^{});
-
-    [command_buffers[n_cb - 1] waitUntilCompleted];
+    dispatch_barrier_sync(ctx->d_queue, ^{});
 
     // check status of command buffers
     // needed to detect if the device ran out-of-memory for example (#1881)
     for (int i = 0; i < n_cb; i++) {
-        MTLCommandBufferStatus status = (MTLCommandBufferStatus) [command_buffers[i] status];
+        [ctx->command_buffers[i] waitUntilCompleted];
+
+        MTLCommandBufferStatus status = (MTLCommandBufferStatus) [ctx->command_buffers[i] status];
         if (status != MTLCommandBufferStatusCompleted) {
-            fprintf(stderr, "%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            metal_printf("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             GGML_ASSERT(false);
         }
+    }
+
     }
 }

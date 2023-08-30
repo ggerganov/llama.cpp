@@ -11,6 +11,10 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
+- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+
+- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
+
 - Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
 
 - A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
@@ -109,6 +113,7 @@ as the main playground for developing new features for the [ggml](https://github
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
 - Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
+- React Native: [mybigday/llama.rn](https://github.com/mybigday/llama.rn)
 
 **UI:**
 
@@ -724,8 +729,6 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
   - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
   - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
   - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
-- Specify `-eps 1e-5` for best generation quality
-- Specify `-gqa 8` for 70B models to work
 
 ### Verifying the model files
 
