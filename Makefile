@@ -1,6 +1,10 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search tests/test-c.o
 
+ifndef LLAMA_NO_METAL
+BUILD_TARGETS += metal
+endif
+
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
 
@@ -235,13 +239,23 @@ endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework.
-	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
+	# Mac OS - include Accelerate framework.
+	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS  += -DGGML_USE_ACCELERATE
 		LDFLAGS += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
+
+ifndef LLAMA_NO_METAL
+	# By default - use GPU acceleration on Mac OS
+	ifeq ($(UNAME_S),Darwin)
+		CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
+		CXXFLAGS += -DGGML_USE_METAL
+		LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
+		OBJS     += ggml-metal.o
+	endif
+endif # LLAMA_NO_METAL
 
 ifdef LLAMA_MPI
 	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
@@ -352,17 +366,10 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 endif # LLAMA_HIPBLAS
 
-ifdef LLAMA_METAL
-	CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
-	CXXFLAGS += -DGGML_USE_METAL
-	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-	OBJS     += ggml-metal.o
-endif # LLAMA_METAL
-
-ifdef LLAMA_METAL
+ifndef LLAMA_NO_METAL
 ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_METAL
+endif # LLAMA_NO_METAL
 
 ifdef LLAMA_MPI
 ggml-mpi.o: ggml-mpi.c ggml-mpi.h
@@ -475,11 +482,7 @@ baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o common.o $(OBJS)
 beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
-BUILD_TARGETS += metal
-endif
-
-ifdef LLAMA_METAL
+ifndef LLAMA_NO_METAL
 metal: examples/metal/metal.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif
