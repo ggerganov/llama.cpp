@@ -960,6 +960,7 @@ struct llama_vocab {
     id linefeed_id = 13;
 
     // codellama FIM special tokens
+    // TODO: load these from the vocabulary.
     id special_prefix_id = 32007;
     id special_middle_id = 32009;
     id special_suffix_id = 32008;
