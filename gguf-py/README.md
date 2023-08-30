@@ -35,7 +35,7 @@ There's a GitHub workflow to make a release automatically upon creation of tags 
 2. Create a tag named `gguf-vx.x.x` where `x.x.x` is the semantic version number.
 
 ```sh
-git tag -a v1.0.0 -m "Version 1.0 release"
+git tag -a gguf-v1.0.0 -m "Version 1.0 release"
 ```
 
 3. Push the tags.
