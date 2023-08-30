@@ -126,19 +126,6 @@ extern "C"
                 return true;
             }
         }
-        else if(file_format==FileFormat::RWKV_1 || file_format==FileFormat::RWKV_2)
-        {
-            printf("\n---\nIdentified as RWKV model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
-            if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
-            {
-                return false;
-            }
-            else
-            {
-                return true;
-            }
-        }
         else if(file_format==FileFormat::NEOX_1 || file_format==FileFormat::NEOX_2 || file_format==FileFormat::NEOX_3 || file_format==FileFormat::NEOX_4 || file_format==FileFormat::NEOX_5 || file_format==FileFormat::NEOX_6 || file_format==FileFormat::NEOX_7)
         {
             printf("\n---\nIdentified as GPT-NEO-X model: (ver %d)\nAttempting to Load...\n---\n", file_format);
@@ -173,22 +160,24 @@ extern "C"
                 return true;
             }
         }
-        else if(file_format==FileFormat::MPT_1)
+        else
         {
-            printf("\n---\nIdentified as MPT model: (ver %d)\nAttempting to Load...\n---\n", file_format);
-            ModelLoadResult lr = gpttype_load_model(inputs, file_format);
-            if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
+            if(file_format==FileFormat::MPT_1)
             {
-                return false;
+                printf("\n---\nIdentified as MPT model: (ver %d)\nAttempting to Load...\n---\n", file_format);
+            }
+            else if(file_format==FileFormat::RWKV_1 || file_format==FileFormat::RWKV_2)
+            {
+                printf("\n---\nIdentified as RWKV model: (ver %d)\nAttempting to Load...\n---\n", file_format);
+            }
+            else if(file_format==FileFormat::GGUF_FALCON)
+            {
+                printf("\n---\nIdentified as FALCON model: (ver %d)\nAttempting to Load...\n---\n", file_format);
             }
             else
             {
-                return true;
+                printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);
             }
-        }
-        else
-        {
-            printf("\n---\nIdentified as LLAMA model: (ver %d)\nAttempting to Load...\n---\n", file_format);
             ModelLoadResult lr = gpttype_load_model(inputs, file_format);
             if (lr == ModelLoadResult::FAIL || lr == ModelLoadResult::RETRY_LOAD)
             {
