@@ -8,6 +8,7 @@
 *.bin
 *.exe
 *.dll
+*.log
 .DS_Store
 .build/
 .cache/
