@@ -627,50 +627,6 @@ struct ggml_tensor * llama_build_train_graphs(
     return t36;
 }
 
-void set_f32_3d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, int64_t i2, float value) {
-    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2]);
-    *ptr = value;
-}
-
-void set_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, float value) {
-    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    *ptr = value;
-}
-
-void set_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1, int32_t value) {
-    int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    *ptr = value;
-}
-
-float get_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
-    float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    return *ptr;
-}
-
-int32_t get_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
-    int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-    return *ptr;
-}
-
-void print_row(struct ggml_tensor * probs, int i) {
-    for (int k = 0; k < probs->ne[0]; ++k) {
-        float p = get_f32_2d(probs, k, i);
-        printf(" %.2f", p);
-    }
-    printf("\n");
-}
-
-void print_matrix(struct ggml_tensor * probs) {
-    assert(probs->n_dims == 2);
-    for (int i = 0; i < probs->ne[1]; ++i) {
-        for (int k = 0; k < probs->ne[0]; ++k) {
-            float p = get_f32_2d(probs, k, i);
-            printf(" %.2f", p);
-        }
-        printf("\n");
-    }
-}
-
 void get_example_targets(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_logits, struct ggml_tensor * target_probs) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab  = target_logits->ne[0];
@@ -683,8 +639,8 @@ void get_example_targets(struct llama_context * lctx, const int * train_samples,
     ggml_set_i32_1d(tokens_input, 0, llama_token_bos(lctx));
     for (int i=1; i<n_tokens+1; ++i) {
         int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
-        set_f32_2d(target_logits, token, i-1, +1.0f);
-        set_f32_2d(target_probs,  token, i-1, +1.0f);
+        ggml_set_f32_nd(target_logits, token, i-1, 0, 0, +1.0f);
+        ggml_set_f32_nd(target_probs,  token, i-1, 0, 0, +1.0f);
         if (i<n_tokens) {
             ggml_set_i32_1d(tokens_input, i, token);
         }
@@ -714,13 +670,13 @@ void get_example_targets_batch(struct llama_context * lctx, const int * train_sa
         // printf("%s: sample_idx=%zu sample=%zu\n", __func__, sample_idx, sample);
         GGML_ASSERT(sample+n_tokens-1 < n_train_data);
 
-        set_i32_2d(tokens_input, 0, k, llama_token_bos(lctx));
+        ggml_set_i32_nd(tokens_input, 0, k, 0, 0, llama_token_bos(lctx));
         for (int i=1; i<n_tokens+1; ++i) {
             int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
-            set_f32_3d(target_logits, token, i-1, k, +1.0f);
-            set_f32_3d(target_probs,  token, i-1, k, +1.0f);
+            ggml_set_f32_nd(target_logits, token, i-1, k, 0, +1.0f);
+            ggml_set_f32_nd(target_probs,  token, i-1, k, 0, +1.0f);
             if (i<n_tokens) {
-                set_i32_2d(tokens_input, i, k, token);
+                ggml_set_i32_nd(tokens_input, i, k, 0, 0, token);
             }
         }
     }
