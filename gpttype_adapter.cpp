@@ -369,7 +369,8 @@ static void TokenizeString(const std::string & str_to_tokenize, std::vector<int>
 static float LowestLogit(const std::vector<float> & logits)
 {
     int topid = std::min_element(logits.begin(), logits.end()) - logits.begin();
-    return (logits[topid] < 0 ? logits[topid] : 0);
+    float v = logits[topid];
+    return (v < 0 ? (v-1) : 0);
 }
 static float LowestLogit(const float *logits, size_t size)
 {
@@ -378,7 +379,8 @@ static float LowestLogit(const float *logits, size_t size)
         return 0.0;
     }
     int topid = std::min_element(logits, logits + size) - logits;
-    return (logits[topid] < 0 ? logits[topid] : 0);
+    float v = logits[topid];
+    return (v < 0 ? (v-1) : 0);
 }
 
 static std::string RemoveBell(const std::string & input) //removes the bell character
