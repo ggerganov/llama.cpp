@@ -596,6 +596,10 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
         // assume llama2.c vocabulary
         printf("Assuming llama2.c vocabulary since %s is not a gguf file\n", filename);
         llama_file file(filename, "rb");
+        if (!file.fp) {
+            fprintf(stderr, "error: %s: %s\n", strerror(errno), filename);
+            exit(1);
+        }
         const int  n_vocab = config->vocab_size;
         /* uint32_t max_token_length =  */ file.read_u32(); // unused
         vocab->id_to_token.resize(n_vocab);
