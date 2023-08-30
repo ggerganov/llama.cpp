@@ -4,6 +4,7 @@
 #endif
 
 #include "common.h"
+
 #include "console.h"
 #include "llama.h"
 #include "build-info.h"
@@ -112,6 +113,15 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+#ifndef LOG_DISABLE_LOGS
+    log_set_target(log_filename_generator("main", "log"));
+    LOG_TEE("Log start\n");
+    log_dump_cmdline(argc,argv);
+#endif // LOG_DISABLE_LOGS
+
+    // TODO: Dump params ?
+    //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity));
+
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
@@ -134,34 +144,35 @@ int main(int argc, char ** argv) {
     }
 
     if (params.rope_freq_base != 10000.0) {
-        fprintf(stderr, "%s: warning: changing RoPE frequency base to %g (default 10000.0)\n", __func__, params.rope_freq_base);
+        LOG_TEE("%s: warning: changing RoPE frequency base to %g (default 10000.0)\n", __func__, params.rope_freq_base);
     }
 
     if (params.rope_freq_scale != 1.0) {
-        fprintf(stderr, "%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
+        LOG_TEE("%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
     }
 
     if (params.n_ctx > 2048) {
         // TODO: determine the actual max context of the model (e.g. 4096 for LLaMA v2) and use that instead of 2048
-        fprintf(stderr, "%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
+        LOG_TEE("%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
     } else if (params.n_ctx < 8) {
-        fprintf(stderr, "%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
 
-    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
+    LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
         params.prompt = gpt_random_prompt(rng);
     }
 
+    LOG("%s: llama backend init\n", __func__);
     llama_backend_init(params.numa);
 
     llama_model * model;
@@ -171,6 +182,7 @@ int main(int argc, char ** argv) {
     g_ctx = &ctx;
 
     // load the model and apply lora adapter, if any
+    LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
     if (params.cfg_scale > 1.f) {
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
@@ -178,14 +190,14 @@ int main(int argc, char ** argv) {
     }
 
     if (model == NULL) {
-        fprintf(stderr, "%s: error: unable to load model\n", __func__);
+        LOG_TEE("%s: error: unable to load model\n", __func__);
         return 1;
     }
 
     // print system information
     {
-        fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
+        LOG_TEE("\n");
+        LOG_TEE("system_info: n_threads = %d / %d | %s\n",
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
@@ -193,7 +205,7 @@ int main(int argc, char ** argv) {
     // uncomment the "used_mem" line in llama.cpp to see the results
     if (params.mem_test) {
         {
-            fprintf(stderr, "%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
+            LOG_TEE("%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
 
             const std::vector<llama_token> tmp(params.n_batch, llama_token_bos(ctx));
             llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
@@ -219,7 +231,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> session_tokens;
 
     if (!path_session.empty()) {
-        fprintf(stderr, "%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
+        LOG_TEE("%s: attempting to load saved session from '%s'\n", __func__, path_session.c_str());
 
         // fopen to check for existing session
         FILE * fp = std::fopen(path_session.c_str(), "rb");
@@ -229,33 +241,38 @@ int main(int argc, char ** argv) {
             session_tokens.resize(params.n_ctx);
             size_t n_token_count_out = 0;
             if (!llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
-                fprintf(stderr, "%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
+                LOG_TEE("%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
                 return 1;
             }
             session_tokens.resize(n_token_count_out);
             llama_set_rng_seed(ctx, params.seed);
 
-            fprintf(stderr, "%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
+            LOG_TEE("%s: loaded a session with prompt size of %d tokens\n", __func__, (int) session_tokens.size());
         } else {
-            fprintf(stderr, "%s: session file does not exist, will create\n", __func__);
+            LOG_TEE("%s: session file does not exist, will create\n", __func__);
         }
     }
 
-    // Add BOS if SPM tokenizer
     const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    LOG("add_bos: %d\n", add_bos);
 
-    // tokenize the prompt
     std::vector<llama_token> embd_inp;
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
+        LOG("tokenize the prompt\n");
         embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
+        LOG("use session tokens\n");
         embd_inp = session_tokens;
     }
+
+    LOG("prompt: \"%s\"\n", log_tostr(params.prompt));
+    LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp));
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
         embd_inp.push_back(llama_token_bos(ctx));
+        LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp));
     }
 
     // Tokenize negative prompt
@@ -263,23 +280,31 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
+        LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(params.cfg_negative_prompt));
+
         guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
+        LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
 
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp));
+
         original_prompt_len = original_inp.size();
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
+        LOG("original_prompt_len: %s", log_tostr(original_prompt_len));
+        LOG("guidance_offset:     %s", log_tostr(guidance_offset));
     }
 
     const int n_ctx = llama_n_ctx(ctx);
+    LOG("n_ctx: %d\n", n_ctx);
 
     if ((int) embd_inp.size() > n_ctx - 4) {
-        fprintf(stderr, "%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
+        LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
         return 1;
     }
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
-    if (session_tokens.size()) {
+    if (session_tokens.size() > 0) {
         for (llama_token id : session_tokens) {
             if (n_matching_session_tokens >= embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
                 break;
@@ -287,22 +312,27 @@ int main(int argc, char ** argv) {
             n_matching_session_tokens++;
         }
         if (params.prompt.empty() && n_matching_session_tokens == embd_inp.size()) {
-            fprintf(stderr, "%s: using full prompt from session file\n", __func__);
+            LOG_TEE("%s: using full prompt from session file\n", __func__);
         } else if (n_matching_session_tokens >= embd_inp.size()) {
-            fprintf(stderr, "%s: session file has exact match for prompt!\n", __func__);
+            LOG_TEE("%s: session file has exact match for prompt!\n", __func__);
         } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
-            fprintf(stderr, "%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
+            LOG_TEE("%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
                 __func__, n_matching_session_tokens, embd_inp.size());
         } else {
-            fprintf(stderr, "%s: session file matches %zu / %zu tokens of prompt\n",
+            LOG_TEE("%s: session file matches %zu / %zu tokens of prompt\n",
                 __func__, n_matching_session_tokens, embd_inp.size());
         }
     }
 
+    LOGLN(
+            "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
+            log_tostr(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size());
+
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token token to recalculate the cached logits
-    if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() &&
-            session_tokens.size() > embd_inp.size()) {
+    if (!embd_inp.empty() && n_matching_session_tokens == embd_inp.size() && session_tokens.size() > embd_inp.size()) {
+        LOGLN("recalculate the cached logits (do): session_tokens.resize( %zu )", embd_inp.size() - 1);
+
         session_tokens.resize(embd_inp.size() - 1);
     }
 
@@ -314,6 +344,9 @@ int main(int argc, char ** argv) {
     // prefix & suffix for instruct mode
     const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
     const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
+
+    LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx));
+    LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx));
 
     // in instruct mode, we inject a prefix and a suffix to each input by the user
     if (params.instruct) {
@@ -327,30 +360,30 @@ int main(int argc, char ** argv) {
     }
 
     if (params.verbose_prompt) {
-        fprintf(stderr, "\n");
-        fprintf(stderr, "%s: prompt: '%s'\n", __func__, params.prompt.c_str());
-        fprintf(stderr, "%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
+        LOG_TEE("\n");
+        LOG_TEE("%s: prompt: '%s'\n", __func__, params.prompt.c_str());
+        LOG_TEE("%s: number of tokens in prompt = %zu\n", __func__, embd_inp.size());
         for (int i = 0; i < (int) embd_inp.size(); i++) {
-            fprintf(stderr, "%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
+            LOG_TEE("%6d -> '%s'\n", embd_inp[i], llama_token_to_piece(ctx, embd_inp[i]).c_str());
         }
 
         if (ctx_guidance) {
-            fprintf(stderr, "\n");
-            fprintf(stderr, "%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
-            fprintf(stderr, "%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
+            LOG_TEE("\n");
+            LOG_TEE("%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
+            LOG_TEE("%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
-                fprintf(stderr, "%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
+                LOG_TEE("%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
         }
 
         if (params.n_keep > 0) {
-        fprintf(stderr, "%s: static prompt based on n_keep: '", __func__);
+        LOG_TEE("%s: static prompt based on n_keep: '", __func__);
             for (int i = 0; i < params.n_keep; i++) {
-                fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
+                LOG_TEE("%s", llama_token_to_piece(ctx, embd_inp[i]).c_str());
             }
-            fprintf(stderr, "'\n");
+            LOG_TEE("'\n");
         }
-        fprintf(stderr, "\n");
+        LOG_TEE("\n");
     }
 
     if (params.interactive) {
@@ -367,30 +400,30 @@ int main(int argc, char ** argv) {
         SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
 #endif
 
-        fprintf(stderr, "%s: interactive mode on.\n", __func__);
+        LOG_TEE("%s: interactive mode on.\n", __func__);
 
         if (params.antiprompt.size()) {
-            for (auto antiprompt : params.antiprompt) {
-                fprintf(stderr, "Reverse prompt: '%s'\n", antiprompt.c_str());
+            for (const auto & antiprompt : params.antiprompt) {
+                LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
             }
         }
 
         if (params.input_prefix_bos) {
-            fprintf(stderr, "Input prefix with BOS\n");
+            LOG_TEE("Input prefix with BOS\n");
         }
 
         if (!params.input_prefix.empty()) {
-            fprintf(stderr, "Input prefix: '%s'\n", params.input_prefix.c_str());
+            LOG_TEE("Input prefix: '%s'\n", params.input_prefix.c_str());
         }
 
         if (!params.input_suffix.empty()) {
-            fprintf(stderr, "Input suffix: '%s'\n", params.input_suffix.c_str());
+            LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
-    fprintf(stderr, "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
+    LOG_TEE("sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
             params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
-    fprintf(stderr, "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
-    fprintf(stderr, "\n\n");
+    LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+    LOG_TEE("\n\n");
 
     grammar_parser::parse_state parsed_grammar;
     llama_grammar *             grammar = NULL;
@@ -400,14 +433,14 @@ int main(int argc, char ** argv) {
         if (parsed_grammar.rules.empty()) {
             return 1;
         }
-        fprintf(stderr, "%s: grammar:\n", __func__);
+        LOG_TEE("%s: grammar:\n", __func__);
         grammar_parser::print_grammar(stderr, parsed_grammar);
-        fprintf(stderr, "\n");
+        LOG_TEE("\n");
 
         {
             auto it = params.logit_bias.find(llama_token_eos(ctx));
             if (it != params.logit_bias.end() && it->second == -INFINITY) {
-                fprintf(stderr, "%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
+                LOG_TEE("%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
             }
         }
 
@@ -430,11 +463,11 @@ int main(int argc, char ** argv) {
                               " - To return control without starting a new line, end your input with '/'.\n"
                               " - If you want to submit another line, end your input with '\\'.\n";
         }
-        fprintf(stderr, "== Running in interactive mode. ==\n"
+        LOG_TEE("== Running in interactive mode. ==\n");
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-               " - Press Ctrl+C to interject at any time.\n"
+        LOG_TEE(       " - Press Ctrl+C to interject at any time.\n");
 #endif
-               "%s\n", control_message);
+        LOG_TEE(       "%s\n", control_message);
 
         is_interacting = params.interactive_first;
     }
@@ -459,8 +492,9 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
-    // do one empty run to warm up the model
     {
+        LOG("warming up the model with an empty run\n");
+
         const std::vector<llama_token> tmp = { llama_token_bos(ctx), };
         llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
         llama_reset_timings(ctx);
@@ -471,15 +505,17 @@ int main(int argc, char ** argv) {
         if (embd.size() > 0) {
             // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
             // --prompt or --file which uses the same value.
-            auto max_embd_size = n_ctx - 4;
+            int max_embd_size = n_ctx - 4;
+
             // Ensure the input doesn't exceed the context size by truncating embd if necessary.
-            if ((int)embd.size() > max_embd_size) {
-                auto skipped_tokens = embd.size() - max_embd_size;
+            if ((int) embd.size() > max_embd_size) {
+                const int skipped_tokens = (int) embd.size() - max_embd_size;
+                embd.resize(max_embd_size);
+
                 console::set_display(console::error);
-                printf("<<input too long: skipped %zu token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
+                printf("<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
                 console::set_display(console::reset);
                 fflush(stdout);
-                embd.resize(max_embd_size);
             }
 
             // infinite text generation via context swapping
@@ -488,28 +524,26 @@ int main(int argc, char ** argv) {
             // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
             if (n_past + (int) embd.size() + std::max<int>(0, guidance_offset) > n_ctx) {
                 if (params.n_predict == -2) {
-                    fprintf(stderr, "\n\n%s: context full, stopping generation\n", __func__);
+                    LOG_TEE("\n\n%s: context full and n_predict == -%d => stopping\n", __func__, params.n_predict);
                     break;
                 }
 
                 const int n_left = n_past - params.n_keep;
+                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d\n", n_past, n_left, n_ctx, params.n_keep);
+
                 // always keep the first token - BOS
-                n_past = std::max(1, params.n_keep);
+                n_past          = std::max(1, params.n_keep);
                 n_past_guidance = std::max(1, params.n_keep + guidance_offset);
+
+                LOG("after swap: n_past = %d, n_past_guidance = %d\n", n_past, n_past_guidance);
 
                 // insert n_left/2 tokens at the start of embd from last_n_tokens
                 embd.insert(embd.begin(), last_n_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_n_tokens.end() - embd.size());
 
-                // stop saving session if we run out of context
-                path_session.clear();
+                LOG("embd: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
 
-                //printf("\n---\n");
-                //printf("resetting: '");
-                //for (int i = 0; i < (int) embd.size(); i++) {
-                //    printf("%s", llama_token_to_piece(ctx, embd[i]));
-                //}
-                //printf("'\n");
-                //printf("\n---\n");
+                LOG("clear session path\n");
+                path_session.clear();
             }
 
             // try to reuse a matching prefix from the loaded session instead of re-eval (via n_past)
@@ -539,7 +573,7 @@ int main(int argc, char ** argv) {
 
             if (ctx_guidance) {
                 int input_size = 0;
-                llama_token* input_buf = NULL;
+                llama_token * input_buf = NULL;
 
                 if (n_past_guidance < (int) guidance_inp.size()) {
                     // Guidance context should have the same data with these modifications:
@@ -555,22 +589,19 @@ int main(int argc, char ** argv) {
                         );
                     }
 
-                    input_buf = embd_guidance.data();
+                    input_buf  = embd_guidance.data();
                     input_size = embd_guidance.size();
-                    //fprintf(stderr, "\n---------------------\n");
-                    //for (int i = 0; i < (int) embd_guidance.size(); i++) {
-                        //fprintf(stderr, "%s", llama_token_to_piece(ctx, embd_guidance[i]));
-                    //}
-                    //fprintf(stderr, "\n---------------------\n");
+
+                    LOG("guidance context: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_guidance));
                 } else {
-                    input_buf = embd.data();
+                    input_buf  = embd.data();
                     input_size = embd.size();
                 }
 
                 for (int i = 0; i < input_size; i += params.n_batch) {
                     int n_eval = std::min(input_size - i, params.n_batch);
                     if (llama_eval(ctx_guidance, input_buf + i, n_eval, n_past_guidance, params.n_threads)) {
-                        fprintf(stderr, "%s : failed to eval\n", __func__);
+                        LOG_TEE("%s : failed to eval\n", __func__);
                         return 1;
                     }
 
@@ -583,11 +614,17 @@ int main(int argc, char ** argv) {
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
                 }
+
+                LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
+
                 if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads)) {
-                    fprintf(stderr, "%s : failed to eval\n", __func__);
+                    LOG_TEE("%s : failed to eval\n", __func__);
                     return 1;
                 }
+
                 n_past += n_eval;
+
+                LOG("n_past = %d\n", n_past);
             }
 
             if (embd.size() > 0 && !path_session.empty()) {
@@ -600,7 +637,6 @@ int main(int argc, char ** argv) {
         embd_guidance.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
-            // out of user input, sample next token
             const float   temp            = params.temp;
             const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
             const float   top_p           = params.top_p;
@@ -619,6 +655,8 @@ int main(int argc, char ** argv) {
             if (!path_session.empty() && need_to_save_session && !params.prompt_cache_ro) {
                 need_to_save_session = false;
                 llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
+
+                LOG("saved session to %s\n", path_session.c_str());
             }
 
             llama_token id = 0;
@@ -638,55 +676,68 @@ int main(int argc, char ** argv) {
                     candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
                 }
 
-                llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+                llama_token_data_array cur_p = { candidates.data(), candidates.size(), false };
 
                 if (ctx_guidance) {
-                    llama_sample_classifier_free_guidance(ctx, &candidates_p, ctx_guidance, params.cfg_scale);
+                    llama_sample_classifier_free_guidance(ctx, &cur_p, ctx_guidance, params.cfg_scale);
                 }
 
                 // Apply penalties
                 float nl_logit = logits[llama_token_nl(ctx)];
                 auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
-                llama_sample_repetition_penalty(ctx, &candidates_p,
+                llama_sample_repetition_penalty(ctx, &cur_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, repeat_penalty);
-                llama_sample_frequency_and_presence_penalties(ctx, &candidates_p,
+                llama_sample_frequency_and_presence_penalties(ctx, &cur_p,
                     last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                     last_n_repeat, alpha_frequency, alpha_presence);
                 if (!penalize_nl) {
-                    for (size_t idx = 0; idx < candidates_p.size; idx++) {
-                        if (candidates_p.data[idx].id == llama_token_nl(ctx)) {
-                            candidates_p.data[idx].logit = nl_logit;
+                    for (size_t idx = 0; idx < cur_p.size; idx++) {
+                        if (cur_p.data[idx].id == llama_token_nl(ctx)) {
+                            cur_p.data[idx].logit = nl_logit;
                             break;
                         }
                     }
                 }
 
                 if (grammar != NULL) {
-                    llama_sample_grammar(ctx, &candidates_p, grammar);
+                    llama_sample_grammar(ctx, &cur_p, grammar);
                 }
 
                 if (temp <= 0) {
                     // Greedy sampling
-                    id = llama_sample_token_greedy(ctx, &candidates_p);
+                    id = llama_sample_token_greedy(ctx, &cur_p);
                 } else {
                     if (mirostat == 1) {
                         static float mirostat_mu = 2.0f * mirostat_tau;
                         const int mirostat_m = 100;
-                        llama_sample_temperature(ctx, &candidates_p, temp);
-                        id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
+                        llama_sample_temperature(ctx, &cur_p, temp);
+                        id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
                     } else if (mirostat == 2) {
                         static float mirostat_mu = 2.0f * mirostat_tau;
-                        llama_sample_temperature(ctx, &candidates_p, temp);
-                        id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+                        llama_sample_temperature(ctx, &cur_p, temp);
+                        id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                     } else {
                         // Temperature sampling
-                        llama_sample_top_k(ctx, &candidates_p, top_k, 1);
-                        llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
-                        llama_sample_typical(ctx, &candidates_p, typical_p, 1);
-                        llama_sample_top_p(ctx, &candidates_p, top_p, 1);
-                        llama_sample_temperature(ctx, &candidates_p, temp);
-                        id = llama_sample_token(ctx, &candidates_p);
+                        llama_sample_top_k      (ctx, &cur_p, top_k, 1);
+                        llama_sample_tail_free  (ctx, &cur_p, tfs_z, 1);
+                        llama_sample_typical    (ctx, &cur_p, typical_p, 1);
+                        llama_sample_top_p      (ctx, &cur_p, top_p, 1);
+                        llama_sample_temperature(ctx, &cur_p, temp);
+
+                        {
+                            const int n_top = 10;
+                            LOG("top %d candidates:\n", n_top);
+
+                            for (int i = 0; i < n_top; i++) {
+                                const llama_token id = cur_p.data[i].id;
+                                LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx, id).c_str(), cur_p.data[i].p);
+                            }
+                        }
+
+                        id = llama_sample_token(ctx, &cur_p);
+
+                        LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx, id).c_str());
                     }
                 }
                 // printf("`%d`", candidates_p.size);
@@ -697,9 +748,10 @@ int main(int argc, char ** argv) {
 
                 last_n_tokens.erase(last_n_tokens.begin());
                 last_n_tokens.push_back(id);
+
+                LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, last_n_tokens));
             }
 
-            // add it to the context
             embd.push_back(id);
 
             // echo this to console
@@ -707,8 +759,11 @@ int main(int argc, char ** argv) {
 
             // decrement remaining sampling budget
             --n_remain;
+
+            LOG("n_remain: %d\n", n_remain);
         } else {
             // some user input remains from prompt or interaction, forward it to processing
+            LOG("embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
             while ((int) embd_inp.size() > n_consumed) {
                 embd.push_back(embd_inp[n_consumed]);
                 last_n_tokens.erase(last_n_tokens.begin());
@@ -736,13 +791,12 @@ int main(int argc, char ** argv) {
             fflush(stdout);
         }
         // reset color to default if we there is no pending user input
-        if (input_echo && (int)embd_inp.size() == n_consumed) {
+        if (input_echo && (int) embd_inp.size() == n_consumed) {
             console::set_display(console::reset);
         }
 
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
-
             // check for reverse prompt
             if (params.antiprompt.size()) {
                 std::string last_output;
@@ -760,7 +814,7 @@ int main(int argc, char ** argv) {
                         ? last_output.length() - static_cast<size_t>(antiprompt.length() + extra_padding)
                         : 0;
 
-                    if (last_output.find(antiprompt.c_str(), search_start_pos) != std::string::npos) {
+                    if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
                         if (params.interactive) {
                             is_interacting = true;
                             console::set_display(console::user_input);
@@ -770,10 +824,16 @@ int main(int argc, char ** argv) {
                         break;
                     }
                 }
+
+                if (is_antiprompt) {
+                    LOG("found antiprompt: %s\n", last_output.c_str());
+                }
             }
 
             // deal with end of text token in interactive mode
             if (last_n_tokens.back() == llama_token_eos(ctx)) {
+                LOG("found EOS token\n");
+
                 if (params.interactive) {
                     if (params.antiprompt.size() != 0) {
                         // tokenize and inject first reverse prompt
@@ -792,16 +852,20 @@ int main(int argc, char ** argv) {
             }
 
             if (n_past > 0 && is_interacting) {
+                LOG("waiting for user input\n");
+
                 if (params.instruct) {
                     printf("\n> ");
                 }
 
                 if (params.input_prefix_bos) {
+                    LOG("adding input prefix BOS token\n");
                     embd_inp.push_back(llama_token_bos(ctx));
                 }
 
                 std::string buffer;
                 if (!params.input_prefix.empty()) {
+                    LOG("appending input prefix: '%s'\n", params.input_prefix.c_str());
                     buffer += params.input_prefix;
                     printf("%s", buffer.c_str());
                 }
@@ -821,23 +885,30 @@ int main(int argc, char ** argv) {
                 if (buffer.length() > 1) {
                     // append input suffix if any
                     if (!params.input_suffix.empty()) {
+                        LOG("appending input suffix: '%s'\n", params.input_suffix.c_str());
                         buffer += params.input_suffix;
                         printf("%s", params.input_suffix.c_str());
                     }
+
+                    LOG("buffer: '%s'\n", buffer.c_str());
 
                     const size_t original_size = embd_inp.size();
 
                     // instruct mode: insert instruction prefix
                     if (params.instruct && !is_antiprompt) {
+                        LOG("inserting instruction prefix\n");
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
 
-                    auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp));
+
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
 
                     // instruct mode: insert response suffix
                     if (params.instruct) {
+                        LOG("inserting instruction suffix\n");
                         embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
                     }
 
@@ -848,6 +919,9 @@ int main(int argc, char ** argv) {
                     }
 
                     n_remain -= line_inp.size();
+                    LOG("n_remain: %d\n", n_remain);
+                } else {
+                    LOG("empty line, passing control back\n");
                 }
 
                 input_echo = false; // do not echo this again
@@ -871,7 +945,7 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (!embd.empty() && embd.back() == llama_token_eos(ctx) && !(params.instruct || params.interactive)) {
-            fprintf(stderr, " [end of text]\n");
+            LOG_TEE(" [end of text]\n");
             break;
         }
 
@@ -884,7 +958,7 @@ int main(int argc, char ** argv) {
     }
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
-        fprintf(stderr, "\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
+        LOG_TEE("\n%s: saving final output to session file '%s'\n", __func__, path_session.c_str());
         llama_save_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
@@ -899,6 +973,10 @@ int main(int argc, char ** argv) {
         llama_grammar_free(grammar);
     }
     llama_backend_free();
+
+#ifndef LOG_DISABLE_LOGS
+    LOG_TEE("Log end\n")
+#endif // LOG_DISABLE_LOGS
 
     return 0;
 }

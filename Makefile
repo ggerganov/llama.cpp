@@ -326,6 +326,11 @@ k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
+ifdef LLAMA_DISABLE_LOGS
+	CFLAGS   += -DLOG_DISABLE_LOGS
+	CXXFLAGS += -DLOG_DISABLE_LOGS
+endif # LLAMA_DISABLE_LOGS
+
 #
 # Print build information
 #
@@ -356,7 +361,7 @@ OBJS += ggml-alloc.o
 llama.o: llama.cpp ggml.h ggml-alloc.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-common.o: common/common.cpp common/common.h build-info.h
+common.o: common/common.cpp common/common.h build-info.h common/log.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 console.o: common/console.cpp common/console.h
