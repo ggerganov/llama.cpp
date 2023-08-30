@@ -4851,7 +4851,6 @@ struct ggml_tensor * ggml_set_f32(struct ggml_tensor * tensor, float value) {
 }
 
 void ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3) {
-    const int64_t ne3 = tensor->ne[3];
     const int64_t ne2 = tensor->ne[2];
     const int64_t ne1 = tensor->ne[1];
     const int64_t ne0 = tensor->ne[0];
@@ -16214,16 +16213,16 @@ struct hash_map {
     void * vals[GGML_GRAPH_HASHTABLE_SIZE];
 };
 
-struct hash_map * new_hash_map() {
+static struct hash_map * new_hash_map(void) {
     struct hash_map * result = malloc(sizeof(struct hash_map));
     for (int i=0; i<GGML_GRAPH_HASHTABLE_SIZE; ++i) {
         result->keys[i] = NULL;
         result->vals[i] = NULL;
     }
     return result;
-};
+}
 
-void free_hash_map(struct hash_map * map) {
+static void free_hash_map(struct hash_map * map) {
     free(map);
 }
 
@@ -19176,7 +19175,6 @@ static enum ggml_opt_result linesearch_backtracking(
         float * step,
         const float * xp,
         struct ggml_tensor * f,
-        struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
         struct ggml_cplan  * cplan,
         const int np,
@@ -19421,7 +19419,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gf, gb, &cplan, np, ps, callback, callback_data);
+        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, callback, callback_data);
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return

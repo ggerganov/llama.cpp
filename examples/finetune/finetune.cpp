@@ -406,18 +406,13 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
     hparams.n_layer = llama_model_n_layer(input);
     hparams.n_rot   = llama_model_n_rot(input);
 
-    const uint32_t n_embd  = hparams.n_embd;
-    const uint32_t n_layer = hparams.n_layer;
-    const uint32_t n_vocab = hparams.n_vocab;
-    const uint32_t n_ff    = hparams.n_ff;
-
     model->tok_embeddings = llama_get_model_tensor(input, tn(LLM_TENSOR_TOKEN_EMBD));
     model->norm           = llama_get_model_tensor(input, tn(LLM_TENSOR_OUTPUT_NORM));
     model->output         = llama_get_model_tensor(input, tn(LLM_TENSOR_OUTPUT));
 
-    model->layers.resize(n_layer);
+    model->layers.resize(hparams.n_layer);
 
-    for (uint32_t i = 0; i < n_layer; ++i) {
+    for (uint32_t i = 0; i < hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
         layer.attention_norm = llama_get_model_tensor(input, tni(LLM_TENSOR_ATTN_NORM, i));
@@ -654,7 +649,7 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     const float rope_freq_base  = lora->hparams.rope_freq_base;
     const float rope_freq_scale = lora->hparams.rope_freq_scale;
 
-    GGML_ASSERT(n_layer == lora->layers.size());
+    GGML_ASSERT((size_t) n_layer == lora->layers.size());
 
     auto set_name = [](struct ggml_tensor * t, const char * n) {
         ggml_set_name(t, n);
@@ -828,14 +823,11 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
 
         // allocating checkpoints in one block to reduce memory fragmentation
         // note: they will be freed in reverse order
-        for (int i = 0; i < checkpoints.size(); ++i) {
+        for (unsigned int i = 0; i < checkpoints.size(); ++i) {
             if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
                 ggml_allocr_alloc(alloc, checkpoints[i]);
             }
         }
-
-        int n_leafs_after = gb->n_leafs;
-        int n_nodes_after = gb->n_nodes;
 
         ggml_allocr_alloc_graph(alloc, gb);
 
