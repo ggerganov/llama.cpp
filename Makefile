@@ -108,7 +108,8 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 # old library NEEDS mf16c to work. so we must build with it. new one doesnt
 	ifeq ($(OS),Windows_NT)
 		CFLAGS +=
-		NONECFLAGS += -mno-sse3
+		NONECFLAGS +=
+# -mno-sse3
 		SIMPLECFLAGS += -mavx -msse3
 		FULLCFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
 	else
