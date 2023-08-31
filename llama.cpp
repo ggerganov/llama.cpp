@@ -325,6 +325,44 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
+    {
+        LLM_ARCH_GPT2,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_GPTJ,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_GPTNEOX,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
+            { LLM_TENSOR_OUTPUT,          "output" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_MPT,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_UNKNOWN,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
 };
 
 static llm_arch llm_arch_from_string(const std::string & name) {
@@ -1605,9 +1643,13 @@ static void llm_load_hparams(
 
         GGUF_GET_KEY(ctx, hparams.n_rot, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ROPE_DIMENSION_COUNT));
 
-        if (hparams.n_rot != hparams.n_embd / hparams.n_head) {
-            throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd / hparams.n_head));
+        if (model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON) {
+            if (hparams.n_rot != hparams.n_embd / hparams.n_head) {
+                throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd / hparams.n_head));
+            }
         }
+        // gpt-neox n_rot = rotary_pct * (n_embd / n_head)
+        // gpt-j n_rot = rotary_dim
     }
 
     // arch-specific KVs

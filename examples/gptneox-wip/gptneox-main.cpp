@@ -660,9 +660,10 @@ bool gpt_neox_model_load(const std::string & fname, gpt_neox_model & model, gpt2
 ggml_tensor * gpt_neox_ff(
         const gpt_neox_block &block,
         ggml_context * ctx0,
-        ggml_tensor * inp) {
+        ggml_tensor * inp,
+        const gpt_neox_hparams &hparams) {
 
-    ggml_tensor * cur = ggml_norm(ctx0, inp);
+    ggml_tensor * cur = ggml_norm(ctx0, inp, hparams.norm_eps);
 
     cur = ggml_add(ctx0, ggml_mul(ctx0, ggml_repeat(ctx0, block.ln_2_g, cur), cur), ggml_repeat(ctx0, block.ln_2_b, cur));
     cur = ggml_mul_mat(ctx0, block.c_mlp_fc_w, cur);
@@ -753,7 +754,7 @@ bool gpt_neox_eval(
         // self-attention
         {
             {
-                cur = ggml_norm(ctx0, inpL);
+                cur = ggml_norm(ctx0, inpL, hparams.norm_eps);
 
                 cur = ggml_add(ctx0,
                         ggml_mul(ctx0, ggml_repeat(ctx0, model.blocks[il].ln_1_g, cur), cur),
@@ -844,7 +845,7 @@ bool gpt_neox_eval(
         if (hparams.par_res == 0) {
             struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpL);
 
-            cur = gpt_neox_ff(model.blocks[il], ctx0, inpFF);
+            cur = gpt_neox_ff(model.blocks[il], ctx0, inpFF, hparams);
 
             // input for next layer
             inpL = ggml_add(ctx0, cur, inpFF);
@@ -853,7 +854,7 @@ bool gpt_neox_eval(
 
             // this is independent of the self-attention result, so it could be done in parallel to the self-attention
             // note here we pass inpL instead of cur
-            cur = gpt_neox_ff(model.blocks[il], ctx0, inpL);
+            cur = gpt_neox_ff(model.blocks[il], ctx0, inpL, hparams);
 
             // layer input + FF
             cur  = ggml_add(ctx0, cur, inpFF);
@@ -867,7 +868,7 @@ bool gpt_neox_eval(
 
     // norm
     {
-        inpL = ggml_norm(ctx0, inpL);
+        inpL = ggml_norm(ctx0, inpL, hparams.norm_eps);
 
         // inpL = ln_f_g*inpL + ln_f_b
         inpL = ggml_add(ctx0,
