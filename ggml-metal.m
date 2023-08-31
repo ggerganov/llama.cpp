@@ -864,7 +864,10 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:8];
                                 [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:9];
                                 [encoder setBytes:&gqa  length:sizeof(gqa)  atIndex:10];
-                                [encoder setThreadgroupMemoryLength:8 * buffer_size_aligned atIndex:0];
+                                // only for k-quants we use threadgroup memory
+                                if (ggml_blck_size(src0t) >= 64){
+                                    [encoder setThreadgroupMemoryLength:8 * buffer_size_aligned atIndex:0];
+                                }
                                 [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(64, 1, 1)];
                             } else {
                                 switch (src0->type) {
