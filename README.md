@@ -811,9 +811,7 @@ It's possible to include OpenBlas while building:
 ```
 pkg install libopenblas
 cd llama.cpp
-cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
-cd build
-cmake --build . --config Release
+make LLAMA_OPENBLAS=1
 ```
 
 Move your model to the home directory (`~/`), for example:
