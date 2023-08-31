@@ -606,7 +606,9 @@ set(LLAMA_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}
     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR ${CMAKE_INSTALL_BINDIR}
     CACHE PATH "Location of binary files")
-set(LLAMA_INSTALL_VERSION 0.0.1) #TODO: Use patch from build-info number
+set(LLAMA_BUILD_NUMBER ${BUILD_NUMBER})
+set(LLAMA_BUILD_COMMIT ${BUILD_COMMIT})
+set(LLAMA_INSTALL_VERSION 0.0.${BUILD_NUMBER})
 
 configure_package_config_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LlamaConfig.cmake.in
@@ -615,6 +617,8 @@ configure_package_config_file(
     PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
               LLAMA_LIB_INSTALL_DIR
               LLAMA_BIN_INSTALL_DIR
+              LLAMA_BUILD_NUMBER
+              LLAMA_BUILD_COMMIT
               LLAMA_INSTALL_VERSION)
 
 write_basic_package_version_file(
