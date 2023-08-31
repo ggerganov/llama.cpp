@@ -11,10 +11,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import gguf
 import numpy as np
 import torch
 from transformers import AutoTokenizer  # type: ignore[import]
+
+if os.environ.get('NO_LOCAL_GGUF') is None and Path('gguf-py', 'gguf', '__init__.py').is_file():
+    sys.path.insert(1, str(Path('gguf-py', 'gguf').absolute()))
+import gguf
 
 
 def bytes_to_unicode():

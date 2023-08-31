@@ -25,9 +25,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
 
-import gguf
 import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+
+import os
+if os.environ.get('NO_LOCAL_GGUF') is None and Path('gguf-py', 'gguf', '__init__.py').is_file():
+    sys.path.insert(1, str(Path('gguf-py', 'gguf').absolute()))
+import gguf
 
 if TYPE_CHECKING:
     from typing import TypeAlias
