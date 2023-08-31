@@ -1,13 +1,14 @@
-<!--
-An embedded version of Kobold Lite for use in koboldcpp
-Current version: 58
-Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
-Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-- Concedo
--->
-
 <!DOCTYPE html>
 <html lang="en">
+<!--
+Kobold Lite WebUI is a standalone WebUI for use with KoboldAI United, AI Horde, or koboldcpp.
+It requires no dependencies, installation or setup.
+Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
+Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
+Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
+Current version: 59
+-Concedo
+-->
 
 <script>
 	const urlParams = new URLSearchParams(window.location.search);
@@ -402,8 +403,11 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 		.nspopup.higher {
 			margin-top: 120px;
 		}
-		.nspopup.highest {
+		.nspopup.evenhigher {
 			margin-top: 80px;
+		}
+		.nspopup.highest {
+			margin-top: 40px;
 		}
 		.nspopup.fixsize {
 			width: 330px;
@@ -9278,7 +9282,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 	<div class="popupcontainer flex hidden" id="memorycontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize highest">
+		<div class="nspopup flexsize evenhigher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Memory</div>
 			</div>
@@ -9484,7 +9488,7 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 	<div class="popupcontainer flex hidden" id="aestheticsettingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup highest" style="margin-left: 20px; margin-right: 20px;">
+		<div class="nspopup evenhigher" style="margin-left: 20px; margin-right: 20px;">
 			<div class="popuptitlebar" id="aesthetic_customization_panel">
 				<div class="popuptitletext">Aesthetic Instruct UI customization panel</div>
 			</div>

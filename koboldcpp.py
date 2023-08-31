@@ -897,14 +897,6 @@ def show_new_gui():
     # Quick Launch Tab
     quick_tab = tabcontent["Quick Launch"]
 
-    # gpu options
-    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50)
-    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
-    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
-    CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
-    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0)
-    quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
-
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
@@ -959,6 +951,14 @@ def show_new_gui():
     # Tell user how many backends are available
     setup_backend_tooltip(quick_tab)
 
+    # gpu options
+    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
+    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","All"], width=60, variable=gpu_choice_var, state="readonly")
+    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50)
+    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0)
+    quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
+
     # threads
     makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50)
 
@@ -978,24 +978,22 @@ def show_new_gui():
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
 
-    # gpu options
-    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
-    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
-    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
-    CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3", "All"], width=60, variable=gpu_choice_var, state="readonly")
-    lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
-    mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
-
     # presets selector
     makelabel(hardware_tab, "Presets:", 1)
     runoptbox = ctk.CTkComboBox(hardware_tab, values=runopts,  width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
     runoptbox.set(runopts[0]) # Set to first available option
-    runopts_var.trace('w', changerunmode)
-    changerunmode(1,1,1)
 
     # Tell user how many backends are available
     setup_backend_tooltip(hardware_tab)
+
+    # gpu options
+    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
+    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3"], width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3", "All"], width=60, variable=gpu_choice_var, state="readonly")
+    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
+    lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
+    mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
 
     # threads
     makelabelentry(hardware_tab, "Threads:" , threads_var, 8, 50)
@@ -1012,6 +1010,9 @@ def show_new_gui():
     makeslider(hardware_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
     # force version
     makelabelentry(hardware_tab, "Force Version:" , version_var, 100, 50)
+
+    runopts_var.trace('w', changerunmode)
+    changerunmode(1,1,1)
 
     # Tokens Tab
     tokens_tab = tabcontent["Tokens"]
