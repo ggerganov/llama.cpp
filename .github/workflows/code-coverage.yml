@@ -1,5 +1,11 @@
 name: Code Coverage
 on: [push, pull_request]
+
+env:
+  GGML_NLOOP: 3
+  GGML_NITER: 1
+  GGML_N_THREADS: 1
+
 jobs:
   run:
     runs-on: ubuntu-20.04
