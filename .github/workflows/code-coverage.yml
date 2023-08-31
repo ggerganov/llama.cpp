@@ -19,7 +19,7 @@ jobs:
           sudo apt-get install build-essential gcc-8
 
       - name: Build
-        run: CC=gcc-8 make -j tests
+        run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
 
       - name: Run tests
         run: CC=gcc-8 make test
