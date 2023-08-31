@@ -114,6 +114,7 @@ as the main playground for developing new features for the [ggml](https://github
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
 - Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
 - React Native: [mybigday/llama.rn](https://github.com/mybigday/llama.rn)
+- Java: [kherud/java-llama.cpp](https://github.com/kherud/java-llama.cpp)
 
 **UI:**
 
