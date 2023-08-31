@@ -10,9 +10,8 @@ from pathlib import Path
 import numpy as np
 
 import os
-# Use local gguf module if available.
-if 'NO_LOCAL_GGUF' not in os.environ and Path(__file__).parent.absolute().joinpath('gguf-py', 'gguf', '__init__.py').is_file():
-    sys.path.insert(1, str(Path(__file__).parent.absolute().joinpath('gguf-py', 'gguf')))
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
 
 # Note: Does not support GGML_QKK_64

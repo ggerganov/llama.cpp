@@ -29,9 +29,8 @@ import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
 import os
-# Use local gguf module if available.
-if 'NO_LOCAL_GGUF' not in os.environ and Path(__file__).parent.absolute().joinpath('gguf-py', 'gguf', '__init__.py').is_file():
-    sys.path.insert(1, str(Path(__file__).parent.absolute().joinpath('gguf-py', 'gguf')))
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
 
 if TYPE_CHECKING:
