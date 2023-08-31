@@ -24,7 +24,7 @@ test:
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
 coverage: ## Run code coverage
-	gcov tests/*.cpp
+	gcov -pb tests/*.cpp
 
 lcov-report: coverage ## Generate lcov report
 	mkdir -p lcov-report
