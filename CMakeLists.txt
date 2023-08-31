@@ -616,10 +616,7 @@ configure_package_config_file(
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama
     PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
               LLAMA_LIB_INSTALL_DIR
-              LLAMA_BIN_INSTALL_DIR
-              LLAMA_BUILD_NUMBER
-              LLAMA_BUILD_COMMIT
-              LLAMA_INSTALL_VERSION)
+              LLAMA_BIN_INSTALL_DIR )
 
 write_basic_package_version_file(
         ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
