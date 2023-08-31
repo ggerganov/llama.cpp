@@ -791,56 +791,56 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
         ggml_build_backward_expand(ctx, gf, gb, true);
     }
 
-    if (alloc) {
-        // make sure some tensors are not reallocated by inserting new temporary nodes depending on them
-        int n_leafs_before = gb->n_leafs;
-        int n_nodes_before = gb->n_nodes;
-        struct ggml_tensor * one = ggml_new_f32(ctx, 1.0f);
-        // output tensors
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
-        // input gradient
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
-        GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
-        ggml_allocr_alloc(alloc, t36->grad);
+    GGML_ASSERT(alloc != NULL);
 
-        // make sure base model tensors data cannot be used in viewable operations
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->norm, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->output, one));
-        for (int il = 0; il < n_layer; ++il) {
-            struct my_llama_layer & layer = model->layers[il];
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.attention_norm, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_norm, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wq, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wk, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wv, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wo, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w1, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w2, one));
-            ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, one));
-        }
+    // make sure some tensors are not reallocated by inserting new temporary nodes depending on them
+    int n_leafs_before = gb->n_leafs;
+    int n_nodes_before = gb->n_nodes;
+    struct ggml_tensor * one = ggml_new_f32(ctx, 1.0f);
+    // output tensors
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
+    // input gradient
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
+    GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
+    ggml_allocr_alloc(alloc, t36->grad);
 
-        // allocating checkpoints in one block to reduce memory fragmentation
-        // note: they will be freed in reverse order
-        for (unsigned int i = 0; i < checkpoints.size(); ++i) {
-            if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
-                ggml_allocr_alloc(alloc, checkpoints[i]);
-            }
-        }
-
-        ggml_allocr_alloc_graph(alloc, gb);
-
-        // remove the additional nodes and leafs
-        for (int i = n_leafs_before; i < gb->n_leafs; ++i) {
-            gb->leafs[i] = NULL;
-        }
-        for (int i = n_nodes_before; i < gb->n_nodes; ++i) {
-            gb->nodes[i] = NULL;
-        }
-        gb->n_leafs = n_leafs_before;
-        gb->n_nodes = n_nodes_before;
+    // make sure base model tensors data cannot be used in viewable operations
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->norm, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->output, one));
+    for (int il = 0; il < n_layer; ++il) {
+        struct my_llama_layer & layer = model->layers[il];
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.attention_norm, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_norm, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wq, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wk, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wv, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wo, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w1, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w2, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, one));
     }
+
+    // allocating checkpoints in one block to reduce memory fragmentation
+    // note: they will be freed in reverse order
+    for (unsigned int i = 0; i < checkpoints.size(); ++i) {
+        if (checkpoints[i]->data == NULL && checkpoints[i]->view_src == NULL) {
+            ggml_allocr_alloc(alloc, checkpoints[i]);
+        }
+    }
+
+    ggml_allocr_alloc_graph(alloc, gb);
+
+    // remove the additional nodes and leafs
+    for (int i = n_leafs_before; i < gb->n_leafs; ++i) {
+        gb->leafs[i] = NULL;
+    }
+    for (int i = n_nodes_before; i < gb->n_nodes; ++i) {
+        gb->nodes[i] = NULL;
+    }
+    gb->n_leafs = n_leafs_before;
+    gb->n_nodes = n_nodes_before;
 
     *logits = t35;
     return t36;
@@ -1596,7 +1596,6 @@ struct train_params {
     bool use_adam;
     bool use_flash;
     bool use_checkpointing;
-    bool use_alloc;
 
     // only adam
     int   warmup;
@@ -1670,7 +1669,6 @@ struct train_params get_default_train_params() {
     params.use_adam               = true;
     params.use_flash              = true;
     params.use_checkpointing      = true;
-    params.use_alloc              = true;
 
     params.opt_past               = 0;
     params.opt_delta              = 1e-5f;
@@ -1982,10 +1980,6 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
             params->use_checkpointing = false;
         } else if (arg == "--use-checkpointing") {
             params->use_checkpointing = true;
-        } else if (arg == "--no-alloc") {
-            params->use_alloc = false;
-        } else if (arg == "--use-alloc") {
-            params->use_alloc = true;
         } else if (arg == "--warmup") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2346,11 +2340,8 @@ int main(int argc, char ** argv) {
     size_t size_buf_0 = 1024ll*1024ll*1024ll*((size_t) params.mem_compute0_gb);
     uint8_t * compute_buf_0 = new uint8_t[size_buf_0];
 
-    ggml_allocr * alloc = NULL;
-    if (params.use_alloc) {
-        static const size_t tensor_alignment = 32;
-        alloc = ggml_allocr_new(compute_buf_0, size_buf_0, tensor_alignment);
-    }
+    static const size_t tensor_alignment = 32;
+    ggml_allocr * alloc = ggml_allocr_new(compute_buf_0, size_buf_0, tensor_alignment);
 
     std::vector<int> train_samples;
     if (params.n_examples > 0) {
@@ -2405,15 +2396,13 @@ int main(int argc, char ** argv) {
         ggml_set_no_alloc(ctx0, false);
 
         // don't use alloc for input tensors, so we can safely fill them with data
-        struct ggml_tensor * tokens_input           = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
-        struct ggml_tensor * target_logits          = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
-        struct ggml_tensor * target_probs           = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
+        struct ggml_tensor * tokens_input  = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_tokens, n_batch);
+        struct ggml_tensor * target_logits = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
+        struct ggml_tensor * target_probs  = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
 
-        ggml_set_no_alloc(ctx0, (alloc != NULL));
+        ggml_set_no_alloc(ctx0, true);
 
-        if (alloc) {
-            ggml_allocr_reset(alloc);
-        }
+        ggml_allocr_reset(alloc);
 
         opt_cb_data.tokens_input  = tokens_input;
         opt_cb_data.target_logits = target_logits;
@@ -2461,7 +2450,6 @@ int main(int argc, char ** argv) {
 
         size_t used_mem_after_opt = ggml_used_mem(ctx0);
 
-
         if (params.print_info_interval > 0 && ex % params.print_info_interval == 0) {
             printf("Example %d, opt iter %d\n", ex, opt->iter);
             printf("error_before_opt: %.6f\n", opt->loss_before);
@@ -2495,10 +2483,7 @@ int main(int argc, char ** argv) {
 
     opt_cb_data.last_save_iter = opt->iter;
 
-    if (alloc) {
-        ggml_allocr_free(alloc);
-    }
-
+    ggml_allocr_free(alloc);
     delete[] compute_addr;
     delete[] compute_buf_0;
     ggml_free(lora.ctx);
