@@ -339,8 +339,7 @@ class BpeVocab:
         actual_ids      = sorted(added_tokens.values())
         if expected_ids != actual_ids:
             expected_end_id = vocab_size + len(actual_ids) - 1
-            if actual_ids[0] != vocab_size or actual_ids[-1] != expected_end_id:
-                raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
+            raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
 
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
         self.added_tokens_list    = [text for (text, idx) in items]
