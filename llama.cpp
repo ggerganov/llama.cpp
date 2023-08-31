@@ -613,20 +613,25 @@ struct llama_mmap {
         }
 
         #ifndef USE_FAILSAFE
-        #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
         if (prefetch) {
-            // Advise the kernel to preload the mapped memory
-            WIN32_MEMORY_RANGE_ENTRY range;
-            range.VirtualAddress = addr;
-            range.NumberOfBytes = (SIZE_T)size;
-            if (!PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
-                fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
-                        llama_format_win_err(GetLastError()).c_str());
+            // PrefetchVirtualMemory is only present on Windows 8 and above, so we dynamically load it
+            BOOL (WINAPI *pPrefetchVirtualMemory) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
+            HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
+
+            // may fail on pre-Windows 8 systems
+            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> (GetProcAddress(hKernel32, "PrefetchVirtualMemory"));
+
+            if (pPrefetchVirtualMemory) {
+                // advise the kernel to preload the mapped memory
+                WIN32_MEMORY_RANGE_ENTRY range;
+                range.VirtualAddress = addr;
+                range.NumberOfBytes = (SIZE_T)size;
+                if (!pPrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
+                    fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
+                            llama_format_win_err(GetLastError()).c_str());
+                }
             }
         }
-        #else
-        #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
-        #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
         #else
         printf("\nPrefetchVirtualMemory skipped in compatibility mode.\n");
         #endif
@@ -5296,7 +5301,7 @@ struct llama_context_params llama_context_default_params() {
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
-        /*.mul_mat_q                   =*/ false,
+        /*.mul_mat_q                   =*/ true,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,

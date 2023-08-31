@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # HF falcon--> gguf conversion
 
-import gguf
-import os
-import sys
-import struct
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import Any
+
+import gguf
 import numpy as np
 import torch
-import argparse
+from transformers import AutoTokenizer  # type: ignore[import]
 
-from typing import Any, List
-from pathlib import Path
-from transformers import AutoTokenizer
 
 def bytes_to_unicode():
     # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
@@ -114,9 +117,9 @@ gguf_writer.add_file_type(ftype)
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytearray] = []
-scores: List[float] = []
-toktypes: List[int] = []
+tokens: list[bytearray] = []
+scores: list[float] = []
+toktypes: list[int] = []
 
 tokenizer_json_file = dir_model / 'tokenizer.json'
 if not tokenizer_json_file.is_file():

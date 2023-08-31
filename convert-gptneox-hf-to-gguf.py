@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 # HF gptneox--> gguf conversion
 
-import gguf
-import os
-import sys
-import struct
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import Any
+
+import gguf
 import numpy as np
 import torch
-import argparse
-
-from typing import Any, List
-from pathlib import Path
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer  # type: ignore[import]
 
 # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
 
@@ -112,7 +114,7 @@ gguf_writer.add_layer_norm_eps(hparams["layer_norm_eps"])
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytearray] = []
+tokens: list[bytearray] = []
 
 tokenizer_json_file = dir_model / 'tokenizer.json'
 if not tokenizer_json_file.is_file():
