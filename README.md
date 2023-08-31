@@ -823,7 +823,7 @@ cd storage/downloads
 mv 7b-model.gguf.q4_0.bin ~/
 ```
 
-Usage example:`./main -m ~/7b-model.gguf.q4_0.bin --color -c 2048 --keep -1 -n -2 -b 7 -ins -p 'Below is an instruction that describes a task. Write a response that appropriately completes the request.'\n\n'### Instruction:'\n'Hi!'\n\n'### Response:Hi! How may I assist you?'
+Usage example:`./main -m ~/7b-model.gguf.q4_0.bin --color -c 2048 --keep -1 -n -2 -b 7 -ins -p 'Below is an instruction that describes a task. Write a response that appropriately completes the request.'\n\n'### Instruction:'\n'Hi!'\n\n'### Response:Hi! How may I assist you?'`
 
 Alternatively, to enable CLBlast then install the requisite OpenCL packages:
 ```
