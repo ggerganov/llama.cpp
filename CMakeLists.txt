@@ -544,8 +544,6 @@ endif()
 # libraries
 #
 
-include(GNUInstallDirs)
-
 # ggml
 
 add_library(ggml OBJECT
@@ -572,13 +570,6 @@ if (BUILD_SHARED_LIBS)
     install(TARGETS ggml_shared LIBRARY)
 endif()
 
-set(GGML_PUBLIC_HEADERS "ggml.h"
-        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
-        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
-
-set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
-install(TARGETS ggml PUBLIC_HEADER)
-
 # llama
 
 add_library(llama
@@ -601,12 +592,49 @@ if (BUILD_SHARED_LIBS)
     endif()
 endif()
 
-set_target_properties(llama PROPERTIES PUBLIC_HEADER llama.h)
-install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 #
 # install
 #
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}
+    CACHE PATH "Location of header files")
+set(LLAMA_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}
+    CACHE PATH "Location of library files")
+set(LLAMA_BIN_INSTALL_DIR ${CMAKE_INSTALL_BINDIR}
+    CACHE PATH "Location of binary files")
+set(LLAMA_INSTALL_VERSION 0.0.1) #TODO: Use patch from build-info number
+
+configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LlamaConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama
+    PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
+              LLAMA_LIB_INSTALL_DIR
+              LLAMA_BIN_INSTALL_DIR
+              LLAMA_INSTALL_VERSION)
+
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+    VERSION ${LLAMA_INSTALL_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
+
+set(GGML_PUBLIC_HEADERS "ggml.h"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+
+set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+install(TARGETS ggml PUBLIC_HEADER)
+
+set_target_properties(llama PROPERTIES PUBLIC_HEADER llama.h)
+install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
     FILES convert.py
