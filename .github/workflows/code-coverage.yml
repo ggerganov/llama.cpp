@@ -25,9 +25,13 @@ jobs:
         run: CC=gcc-8 make test
 
       - name: Generate coverage report
-        run: make coverage
+        run: |
+          make coverage
+          make lcov-report
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
+        env:
+            CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: lcov-report/coverage.info
