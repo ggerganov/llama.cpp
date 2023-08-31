@@ -79,6 +79,11 @@ ifdef LLAMA_SERVER_VERBOSE
 	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
+ifdef LLAMA_DISABLE_LOGS
+	CFLAGS   += -DLOG_DISABLE_LOGS
+	CXXFLAGS += -DLOG_DISABLE_LOGS
+endif # LLAMA_DISABLE_LOGS
+
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
 			-Wmissing-prototypes -Werror=implicit-int
@@ -342,11 +347,6 @@ ifdef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
-
-ifdef LLAMA_DISABLE_LOGS
-	CFLAGS   += -DLOG_DISABLE_LOGS
-	CXXFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 
 #
 # Print build information
