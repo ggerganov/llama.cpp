@@ -271,6 +271,7 @@ struct llama_v3_mmap {
             throw std::runtime_error(format_old("MapViewOfFile failed: %s", llama_v3_format_win_err(error).c_str()));
         }
 
+        #ifndef USE_FAILSAFE
         if (prefetch) {
             // The PrefetchVirtualMemory API is only present on Windows 8 and above, so we
             // will dynamically load it using GetProcAddress.
@@ -294,6 +295,9 @@ struct llama_v3_mmap {
                 }
             }
         }
+        #else
+        printf("\nPrefetchVirtualMemory skipped in compatibility mode.\n");
+        #endif
     }
 
     ~llama_v3_mmap() {

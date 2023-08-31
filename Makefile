@@ -341,15 +341,15 @@ $(info )
 
 ggml.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) -c $< -o $@
-ggml_openblas.o: ggml.c ggml.h
+ggml_openblas.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) $(OPENBLAS_FLAGS) -c $< -o $@
-ggml_failsafe.o: ggml.c ggml.h
+ggml_failsafe.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(NONECFLAGS) -c $< -o $@
-ggml_noavx2.o: ggml.c ggml.h
+ggml_noavx2.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(SIMPLECFLAGS) -c $< -o $@
-ggml_clblast.o: ggml.c ggml.h
+ggml_clblast.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) $(CLBLAST_FLAGS) -c $< -o $@
-ggml_cublas.o: ggml.c ggml.h
+ggml_cublas.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) $(CUBLAS_FLAGS) $(HIPFLAGS) -c $< -o $@
 
 #quants K

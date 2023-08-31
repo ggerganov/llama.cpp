@@ -7847,12 +7847,25 @@ Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please
 
 			if(foundself!=null && foundself.length>0)
 			{
-				myturnchat = true;
-				chatunits.push({
-					name:foundself[0].substring(0,foundself[0].length-2),
-					msg:tempfullsearchable.split(foundself[0])[1],
-					myturn:myturnchat});
-			}else if(foundopponent != null && foundopponent.length > 0)
+				//exception: check to see if it's actually opponent naming us and not our turn
+				if(localsettings.chatopponent!="" && tempfullsearchable.startsWith(localsettings.chatopponent+": "))
+				{
+					myturnchat = false;
+					chatunits.push({
+						name:localsettings.chatopponent,
+						msg:tempfullsearchable.split(localsettings.chatopponent+": ")[1],
+						myturn:myturnchat});
+				}
+				else
+				{
+					myturnchat = true;
+					chatunits.push({
+						name:foundself[0].substring(0,foundself[0].length-2),
+						msg:tempfullsearchable.split(foundself[0])[1],
+						myturn:myturnchat});
+				}
+			}
+			else if(foundopponent != null && foundopponent.length > 0)
 			{
 				myturnchat = false;
 				chatunits.push({
