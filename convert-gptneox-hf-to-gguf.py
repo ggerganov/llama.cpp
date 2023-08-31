@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import gguf
 import numpy as np
 import torch
 from transformers import AutoTokenizer  # type: ignore[import]
