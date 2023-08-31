@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
 # HF llama --> gguf conversion
 
-import gguf
-import os
-import sys
-import struct
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import gguf
 import numpy as np
 import torch
-import argparse
+from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
-from typing import Any, List, Optional, TypeAlias
-from pathlib import Path
-from sentencepiece import SentencePieceProcessor
+if TYPE_CHECKING:
+    from typing import TypeAlias
 
-#NDArray = np.ndarray[Any, Any]
-# compatible with python < 3.9
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 # reverse HF permute back to original pth layout
 # https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py
 
 
-def reverse_hf_permute(weights: NDArray, n_head: int, n_kv_head: Optional[int] = None) -> NDArray:
+def reverse_hf_permute(weights: NDArray, n_head: int, n_kv_head: int | None = None) -> NDArray:
     if n_kv_head is not None and n_head != n_kv_head:
         n_head //= n_kv_head
 
@@ -136,9 +139,9 @@ if "rope_scaling" in hparams and hparams["rope_scaling"] != None and "factor" in
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytes] = []
-scores: List[float] = []
-toktypes: List[int] = []
+tokens: list[bytes] = []
+scores: list[float] = []
+toktypes: list[int] = []
 
 tokenizer_model_file = dir_model / 'tokenizer.model'
 if not tokenizer_model_file.is_file():
