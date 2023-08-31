@@ -125,7 +125,7 @@ static std::map<e_model3, size_t> MEM_REQ_SCRATCH0_3(int n_ctx)
         { MODEL_7B_3,   ((size_t) n_ctx / 16ull + 164ull) * MB3 },
         { MODEL_13B_3,  ((size_t) n_ctx / 12ull + 184ull) * MB3 },
         { MODEL_30B_3,  ((size_t) n_ctx /  9ull + 224ull) * MB3 },
-        { MODEL_34B_3,  ((size_t) n_ctx /  8ull + 250ull) * MB3 }, // guess
+        { MODEL_34B_3,  ((size_t) n_ctx /  8ull + 256ull) * MB3 }, // guess
         { MODEL_65B_3,  ((size_t) n_ctx /  6ull + 320ull) * MB3 }, // guess
         { MODEL_70B_3,  ((size_t) n_ctx /  7ull + 320ull) * MB3 },
     };
@@ -139,7 +139,7 @@ static const std::map<e_model3, size_t> & MEM_REQ_SCRATCH1_3()
         { MODEL_7B_3,  224ull * MB3 },
         { MODEL_13B_3, 256ull * MB3 },
         { MODEL_30B_3, 320ull * MB3 },
-        { MODEL_34B_3, 38ull * MB3 }, // guess
+        { MODEL_34B_3, 380ull * MB3 }, // guess
         { MODEL_65B_3, 448ull * MB3 }, // guess
         { MODEL_70B_3, 448ull * MB3 },
     };
@@ -186,7 +186,7 @@ static const std::map<e_model3, size_t> & VRAM_REQ_SCRATCH_PER_CONTEXT_3()
         { MODEL_7B_3,  128ull },
         { MODEL_13B_3, 160ull },
         { MODEL_30B_3, 208ull },
-        { MODEL_34B_3, 356ull },
+        { MODEL_34B_3, 256ull },
         { MODEL_65B_3, 320ull },
         { MODEL_70B_3, 320ull },
     };
