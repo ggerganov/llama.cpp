@@ -6,12 +6,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Build
-        run: make LLAMA_CODE_COVERAGE=1 all
-      - name: Run tests
+
+      - name: Dependencies
+        id: depends
         run: |
-            make test
-            make coverage
+          sudo apt-get update
+          sudo apt-get install build-essential gcc-8
+
+      - name: Build
+        run: make -j LLAMA_CODE_COVERAGE=1 tests
+
+      - name: Run tests
+        run: make test
+
+      - name: Generate coverage report
+        run: make coverage
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
