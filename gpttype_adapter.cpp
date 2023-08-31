@@ -370,7 +370,7 @@ static float LowestLogit(const std::vector<float> & logits)
 {
     int topid = std::min_element(logits.begin(), logits.end()) - logits.begin();
     float v = logits[topid];
-    return (v < 0 ? (v-1) : 0);
+    return (v < 0 ? (v-8) : 0);
 }
 static float LowestLogit(const float *logits, size_t size)
 {
@@ -380,7 +380,7 @@ static float LowestLogit(const float *logits, size_t size)
     }
     int topid = std::min_element(logits, logits + size) - logits;
     float v = logits[topid];
-    return (v < 0 ? (v-1) : 0);
+    return (v < 0 ? (v-8) : 0);
 }
 
 static std::string RemoveBell(const std::string & input) //removes the bell character
