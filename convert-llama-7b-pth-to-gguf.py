@@ -3,22 +3,25 @@
 # Only models with a single datafile are supported, like 7B
 # HF files required in the model dir: config.json tokenizer_config.json tokenizer.json tokenizer.model
 
-import gguf
-import os
-import sys
-import struct
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import gguf
 import numpy as np
 import torch
-import argparse
+from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
-from typing import Any, List, TypeAlias
-from pathlib import Path
-from sentencepiece import SentencePieceProcessor
+if TYPE_CHECKING:
+    from typing import TypeAlias
 
-#NDArray = np.ndarray[Any, Any]
-# compatible with python < 3.9
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 
 def count_model_parts(dir_model: Path) -> int:
@@ -129,9 +132,9 @@ if "rope_scaling" in hparams and hparams["rope_scaling"] != None and "factor" in
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytes] = []
-scores: List[float] = []
-toktypes: List[int] = []
+tokens: list[bytes] = []
+scores: list[float] = []
+toktypes: list[int] = []
 
 tokenizer_model_file = dir_model / 'tokenizer.model'
 if not tokenizer_model_file.is_file():
