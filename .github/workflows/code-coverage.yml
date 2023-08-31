@@ -14,10 +14,10 @@ jobs:
           sudo apt-get install build-essential gcc-8
 
       - name: Build
-        run: make -j LLAMA_CODE_COVERAGE=1 tests
+        run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
 
       - name: Run tests
-        run: make test
+        run: CC=gcc-8 make test
 
       - name: Generate coverage report
         run: make coverage
