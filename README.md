@@ -835,11 +835,11 @@ make LLAMA_CLBLAST=1
 
 Use one of the following to enable GPU:
 ```
-export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/vendor/lib64
 ```
 or
 ```
-export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/system/vendor/lib64
 ```
 then `./main ... --gpu-layers 1`
 
