@@ -530,7 +530,7 @@ class LazyTensor:
             raise ValueError(f'Cannot validate conversion from {self.data_type} to {data_type}.')
 
 
-LazyModel = dict[str, LazyTensor]
+LazyModel: TypeAlias = 'dict[str, LazyTensor]'
 
 
 @dataclass
