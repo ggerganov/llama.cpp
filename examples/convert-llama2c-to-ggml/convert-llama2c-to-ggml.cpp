@@ -637,7 +637,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
     }
 }
 
-void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, float * karpathy_weights){
+void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
     int ct;
     switch (gg_weights->n_dims){
         case 1:

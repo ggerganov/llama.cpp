@@ -4393,7 +4393,7 @@ struct llama_logit_info {
         }
         return min_heap;
     }
-    float probability_from_logit(float logit) {
+    float probability_from_logit(float logit) const {
         return normalizer * std::exp(logit - max_l);
     }
 };
