@@ -857,7 +857,7 @@ void ggml_metal_graph_compute(
                                         {
                                             nth0 = 32;
                                             nth1 = 1;
-                                            if (ne11 * ne12 < 2) {
+                                            if (ne11 * ne12 < 4) {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
                                             } else {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
