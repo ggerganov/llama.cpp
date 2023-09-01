@@ -4,6 +4,9 @@
 
 #include "llama.h"
 
+#define LOG_NO_FILE_LINE_FUNCTION
+#include "log.h"
+
 #include <string>
 #include <vector>
 #include <random>

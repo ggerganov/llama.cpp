@@ -892,8 +892,8 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:15];
                                 [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:16];
                                 [encoder setBytes:&gqa  length:sizeof(gqa)  atIndex:17];
-                                [encoder setThreadgroupMemoryLength:64*sizeof(float) atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(64, 1, 1)];
+                                [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
+                                [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                             }
                         } break;
                     case GGML_OP_GET_ROWS:

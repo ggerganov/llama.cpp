@@ -2,12 +2,15 @@
 # train-text-from-scratch checkpoint --> gguf conversion
 
 import argparse
-import gguf
 import os
 import struct
 import sys
 import numpy as np
 from pathlib import Path
+
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / '..' / '..' / 'gguf-py' / 'gguf'))
+import gguf
 
 # gguf constants
 LLM_KV_OPTIMIZER_TYPE = "optimizer.type"
