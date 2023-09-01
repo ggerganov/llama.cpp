@@ -8,6 +8,7 @@
 //Python will ALWAYS provide the memory, we just write to it.
 
 #include <time.h>
+#include <mutex>
 #include "model_adapter.h"
 #include "otherarch.h"
 
@@ -85,7 +86,9 @@ static std::vector<int> banned_token_ids;
 static std::vector<llama_token_data> top_picks;
 static int remaining_tokens = 0;
 static int stopper_unused_tokens = 0;
+static std::mutex concat_output_mtx;
 static std::string concat_output = "";
+static std::string concat_output_reader_copy = "";
 
 inline bool IsNanCheck(float f)
 {
@@ -1039,12 +1042,17 @@ int gpttype_token_count(const std::string & input)
 
 const std::string & gpttype_get_pending_output()
 {
-    return concat_output;
+    concat_output_mtx.lock();
+    concat_output_reader_copy = concat_output;
+    concat_output_mtx.unlock();
+    return concat_output_reader_copy;
 }
 
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output)
 {
+    concat_output_mtx.lock();
     concat_output = "";
+    concat_output_mtx.unlock();
     last_stop_reason = stop_reason::OUT_OF_TOKENS;
     stop_sequence.clear();
     for(int x=0;x<stop_token_max;++x)
@@ -1570,7 +1578,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 {
                     generated_tokens.push_back(tokenizedstr);
                 }
+                concat_output_mtx.lock();
                 concat_output += tokenizedstr;
+                concat_output_mtx.unlock();
             }
 
             if (startedsampling && debugmode!=-1)
