@@ -183,13 +183,9 @@ static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t
         int ntry, float alpha) {
     float min = x[0];
     float max = x[0];
-    float sum_x = 0;
-    float sum_x2 = 0;
     for (int i = 1; i < n; ++i) {
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
-        sum_x += x[i];
-        sum_x2 += x[i]*x[i];
     }
     if (max == min) {
         for (int i = 0; i < n; ++i) L[i] = 0;
@@ -2060,7 +2056,7 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
 
     __m256 acc = _mm256_setzero_ps();
 
-    uint32_t *aux;
+    const uint32_t *aux;
 
     for (int i = 0; i < nb; ++i) {
 
@@ -2070,7 +2066,7 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
         const int8_t  * restrict q8 = y[i].qs;
 
         // Set up scales
-        aux = (uint32_t *)x[i].scales;
+        aux = (const uint32_t *)x[i].scales;
         __m128i scales128 = _mm_set_epi32(
                 ((aux[1] >> 4) & kmask2) | (((aux[2] >> 6) & kmask1) << 4),
                 ((aux[0] >> 4) & kmask2) | (((aux[2] >> 4) & kmask1) << 4),
