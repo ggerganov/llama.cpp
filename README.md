@@ -833,13 +833,17 @@ cd llama.cpp
 make LLAMA_CLBLAST=1
 ```
 
-Use the following to enable GPU:
+Use one of the following to enable GPU:
 ```
 export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
 ```
+or
+```
+export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH
+```
 then `./main ... --gpu-layers 1`
 
-(Note: Use `unset LD_LIBRARY_PATH` to re-link executables)
+(Note: Use `unset LD_LIBRARY_PATH` to re-link executables.)
 
 ### Docker
 
