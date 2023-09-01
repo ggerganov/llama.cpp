@@ -55,11 +55,9 @@ find_library(llama_LIBRARY llama
     REQUIRED
     HINTS ${LLAMA_LIB_DIR})
 
-select_library_configurations(llama)
-
 set(_llama_link_deps "Threads::Threads" "@LLAMA_EXTRA_LIBS@")
-add_library(Llama::llama $<IF:$<BOOL:${LLAMA_SHARED_LIB}>,SHARED,STATIC> IMPORTED)
-set_target_properties(Llama::llama
+add_library(llama UNKNOWN IMPORTED)
+set_target_properties(llama
     PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${LLAMA_INCLUDE_DIR}"
         INTERFACE_LINK_LIBRARIES "${_llama_link_deps}"
