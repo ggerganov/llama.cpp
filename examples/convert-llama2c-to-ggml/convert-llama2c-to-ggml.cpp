@@ -637,7 +637,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
     }
 }
 
-void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
+void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
     int ct;
     switch (gg_weights->n_dims){
         case 1:
@@ -674,13 +674,13 @@ void stuff_karpathy_weights_into_gg(struct ggml_tensor * gg_weights, const float
 }
 
 void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename) {
-    // stuff AK weights into GG weights one by one.
+    // convert AK weights into GG weights one by one.
     // w->token_embedding_table -> model->tok_embeddings
     // float*                   -> struct ggml_tensor
-    stuff_karpathy_weights_into_gg(model->tok_embeddings, w->token_embedding_table);
-    stuff_karpathy_weights_into_gg(model->output, w->wcls ? w->wcls : w->token_embedding_table);
+    convert_weights_ak_to_gg(model->tok_embeddings, w->token_embedding_table);
+    convert_weights_ak_to_gg(model->output, w->wcls ? w->wcls : w->token_embedding_table);
 
-    stuff_karpathy_weights_into_gg(model->norm, w->rms_final_weight);
+    convert_weights_ak_to_gg(model->norm, w->rms_final_weight);
     //print_row(model->norm, 0);
 
     // for rms-att-weight
@@ -690,18 +690,18 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i){
         auto & layer = model->layers[i];
         // 1d
-        stuff_karpathy_weights_into_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
-        stuff_karpathy_weights_into_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
+        convert_weights_ak_to_gg(layer.attention_norm, &w->rms_att_weight[i*row_length]);
+        convert_weights_ak_to_gg(layer.ffn_norm      , &w->rms_ffn_weight[i*row_length]);
 
         // from 3d matrix layer x dim x dim to 2d matrix dim x dim
-        stuff_karpathy_weights_into_gg(layer.wq            , &w->wq[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wk            , &w->wk[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wv            , &w->wv[i*row_length*row_length]);
-        stuff_karpathy_weights_into_gg(layer.wo            , &w->wo[i*row_length*row_length]);
+        convert_weights_ak_to_gg(layer.wq            , &w->wq[i*row_length*row_length]);
+        convert_weights_ak_to_gg(layer.wk            , &w->wk[i*row_length*row_length]);
+        convert_weights_ak_to_gg(layer.wv            , &w->wv[i*row_length*row_length]);
+        convert_weights_ak_to_gg(layer.wo            , &w->wo[i*row_length*row_length]);
 
-        stuff_karpathy_weights_into_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
-        stuff_karpathy_weights_into_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
-        stuff_karpathy_weights_into_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
+        convert_weights_ak_to_gg(layer.w1            , &w->w1[i*row_length*n_ff]);
+        convert_weights_ak_to_gg(layer.w2            , &w->w2[i*n_ff*row_length]);
+        convert_weights_ak_to_gg(layer.w3            , &w->w3[i*row_length*n_ff]);
     }
 
     struct gguf_context * ctx = gguf_init_empty();
