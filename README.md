@@ -807,7 +807,7 @@ cd llama.cpp
 make
 ```
 
-It's possible to include OpenBlas while building:
+It's possible to enable `OpenBlas` while building:
 ```
 pkg install libopenblas
 cd llama.cpp
