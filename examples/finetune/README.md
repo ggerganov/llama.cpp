@@ -15,8 +15,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
         --train-data "shakespeare.txt" \
         --save-every 10 \
         --threads 6 --adam-iter 30 --batch 4 --ctx 64 \
-        --use-checkpointing --use-alloc \
-        --mem-lora 2 --mem-compute 1 --mem-compute0 20
+        --use-checkpointing
 
 # predict
 ./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
@@ -27,8 +26,6 @@ The pattern "ITERATION" in the output filenames will be replaced with the iterat
 
 Gradient checkpointing reduces the memory requirements by ~50% but increases the runtime.
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.
-
-To change the amount of memory for finetuning with memory allocator (`--use-alloc`, used by default), you can use `--mem-compute0 N` to specify the number of gigabytes.
 
 The LORA rank is configured for each model tensor type separately with these command line options:
 
