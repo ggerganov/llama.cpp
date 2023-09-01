@@ -1,10 +1,11 @@
 [tool.poetry]
 name = "gguf"
-version = "0.2.1"
+version = "0.3.1"
 description = "Write ML models in GGUF for GGML"
 authors = ["GGML <ggml@ggml.ai>"]
 packages = [
     {include = "gguf"},
+    {include = "gguf/py.typed"},
 ]
 readme = "README.md"
 homepage = "https://ggml.ai"
