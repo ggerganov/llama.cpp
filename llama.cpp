@@ -1844,11 +1844,11 @@ static void llm_load_tensors(
             model.mlock_buf.grow_to(model.buf.size);
         }
 
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ model.buf.size,
-            /*.mem_buffer =*/ model.buf.data,
-            /*.no_alloc   =*/ ml.use_mmap,
-        };
+        struct ggml_init_params params;
+        /*.mem_size   =*/ params.mem_size = model.buf.size;
+        /*.mem_buffer =*/ params.mem_buffer = model.buf.data;
+        /*.no_alloc   =*/ params.no_alloc = ml.use_mmap;
+
 
         model.ctx = ggml_init(params);
         if (!model.ctx) {
