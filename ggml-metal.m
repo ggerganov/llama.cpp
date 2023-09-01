@@ -840,7 +840,7 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F16:
                                         {
-                                            nth0 = 64;
+                                            nth0 = 32;
                                             nth1 = 1;
                                             [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
                                         } break;
