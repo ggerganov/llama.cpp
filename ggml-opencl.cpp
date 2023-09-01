@@ -1493,7 +1493,7 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
         d_X = (cl_mem) src0->data;
     } else {
-        d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
+        d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size);
     }
     cl_mem d_Y = ggml_cl_pool_malloc(sizeof(float) * y_ne, &y_size);
     cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
