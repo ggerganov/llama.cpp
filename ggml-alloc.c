@@ -554,3 +554,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
 size_t ggml_allocr_alloc_graph(struct ggml_allocr * alloc, struct ggml_cgraph * graph) {
     return ggml_allocator_alloc_graph_tensors_n(alloc, &graph, 1, NULL, NULL);
 }
+
+size_t ggml_allocr_max_size(struct ggml_allocr * alloc) {
+    return alloc->max_size;
+}
