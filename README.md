@@ -826,14 +826,18 @@ Usage example:
 ./main -m ~/7b-model.gguf.q4_0.bin --color -c 2048 --keep -1 -n -2 -b 7 -ins -p 'Below is an instruction that describes a task. Write a response that appropriately completes the request.'\n\n'### Instruction:'\n'Hi!'\n\n'### Response:Hi! How may I assist you?'
 ```
 
-To build with `OpenCL` then install the requisite packages:
+For building with `OpenCL` then install the requisite packages:
 ```
 pkg install ocl-icd opencl-headers clblast
 cd llama.cpp
 make LLAMA_CLBLAST=1
 ```
 
-Finally, use `export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH` to enable GPU, then `./main ... -ngl 1`
+Use the following to enable GPU:
+```
+export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
+```
+then `./main ... --gpu-layers 1`
 
 (Note: Use `unset LD_LIBRARY_PATH` to re-link executables)
 
