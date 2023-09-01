@@ -35,6 +35,11 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+ifdef RISCV_CROSS_COMPILE
+CC	:= riscv64-unknown-linux-gnu-gcc
+CXX	:= riscv64-unknown-linux-gnu-g++
+endif
+
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
@@ -150,6 +155,9 @@ endif
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
+
+ifndef RISCV
+
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
 	CFLAGS   += -march=native -mtune=native
@@ -196,6 +204,11 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	ifeq ($(UNAME_M),ppc64)
 		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
 	endif
+endif
+
+else
+	CFLAGS += -march=rv64gcv -mabi=lp64d
+	CXXFLAGS +=  -march=rv64gcv -mabi=lp64d
 endif
 
 ifndef LLAMA_NO_K_QUANTS
