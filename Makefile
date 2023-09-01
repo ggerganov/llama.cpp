@@ -177,6 +177,14 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	#CXXFLAGS += -mssse3
 endif
 
+# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
+# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
+# https://github.com/ggerganov/llama.cpp/issues/2922
+ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
+	CFLAGS   += -Xassembler -muse-unaligned-vector-move
+	CXXFLAGS += -Xassembler -muse-unaligned-vector-move
+endif
+
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
