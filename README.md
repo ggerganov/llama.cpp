@@ -833,7 +833,7 @@ cd llama.cpp
 make LLAMA_CLBLAST=1
 ```
 
-Finally, use `export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH`, to enable GPU then `./main ... -ngl 1`
+Finally, use `export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH` to enable GPU, then `./main ... -ngl 1`
 
 (Note: Use `unset LD_LIBRARY_PATH` to re-link executables)
 
