@@ -826,36 +826,16 @@ Usage example:
 ./main -m ~/7b-model.gguf.q4_0.bin --color -c 2048 --keep -1 -n -2 -b 7 -ins -p 'Below is an instruction that describes a task. Write a response that appropriately completes the request.'\n\n'### Instruction:'\n'Hi!'\n\n'### Response:Hi! How may I assist you?'
 ```
 
-Alternatively, to enable CLBlast then install the requisite OpenCL packages:
+To build with `OpenCL` then install the requisite packages:
 ```
-apt install ocl-icd opencl-headers opencl-clhpp clinfo
-```
-
-In order to compile CLBlast, you'll need to first clone the respective Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
-```
-cmake .
-make
-cp libclblast.so* $PREFIX/lib
-cp ./include/clblast.h ../llama.cpp
+pkg install ocl-icd opencl-headers clblast
+cd llama.cpp
+make LLAMA_CLBLAST=1
 ```
 
-Following the previous steps, navigate to the LlamaCpp directory. To compile it with OpenBLAS and CLBlast, execute the command provided below:
-```
-cp /data/data/com.termux/files/usr/include/openblas/cblas.h .
-cp /data/data/com.termux/files/usr/include/openblas/openblas_config.h .
-make LLAMA_CLBLAST=1 //(sometimes you need to run this command twice)
-```
+Finally, use `export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH`, to enable GPU then `./main ... -ngl 1`
 
-Upon completion of the aforementioned steps, you will have successfully compiled the project. To run it using CLBlast, a slight adjustment is required: a command must be issued to direct the operations towards your device's physical GPU, rather than the virtual one. The necessary command is detailed below:
-```
-GGML_OPENCL_PLATFORM=0
-GGML_OPENCL_DEVICE=0
-export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
-```
-
-(Note: some Android devices, like the Zenfone 8, need the following command instead - "export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH". Source: https://www.reddit.com/r/termux/comments/kc3ynp/opencl_working_in_termux_more_in_comments/ )
-
-For easy and swift re-execution, consider documenting this final part in a .sh script file. This will allow you to run `./main (...)` with minimal hassle.
+(Note: Use `unset LD_LIBRARY_PATH` to re-link executables)
 
 ### Docker
 
