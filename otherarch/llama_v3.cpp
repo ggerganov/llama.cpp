@@ -2663,7 +2663,10 @@ void llama_v3_sample_typical(struct llama_v3_context * ctx, llama_v3_token_data_
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
-        entropy += -candidates->data[i].p * logf(candidates->data[i].p);
+        if(candidates->data[i].p>0)
+        {
+            entropy += -candidates->data[i].p * logf(candidates->data[i].p);
+        }
     }
 
     // Compute the absolute difference between negative log probability and entropy for each candidate

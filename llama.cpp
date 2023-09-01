@@ -1234,6 +1234,7 @@ struct llama_model_loader {
 
         // determine file type based on the number of tensors for each quantization and print meta data
         // TODO: make optional
+        if(false) //disable this log for now
         {
             std::map<enum ggml_type, uint32_t> n_type;
 
@@ -3974,7 +3975,10 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
-        entropy += -candidates->data[i].p * logf(candidates->data[i].p);
+        if(candidates->data[i].p>0)
+        {
+            entropy += -candidates->data[i].p * logf(candidates->data[i].p);
+        }
     }
 
     // Compute the absolute difference between negative log probability and entropy for each candidate
