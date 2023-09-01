@@ -4683,6 +4683,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llm_load_arch(*ml, model);
     llm_load_hparams(*ml, model, 0, 0, 0);
 
+    if (params->only_copy) {
+        ftype = model.ftype;
+    }
+
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
 
@@ -4769,18 +4773,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // quantize only 2D tensors
         quantize &= (tensor->n_dims == 2);
         quantize &= params->quantize_output_tensor || name != "output.weight";
-        quantize &= quantized_type != tensor->type;
+        quantize &= !params->only_copy;
 
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
 
-        if (!quantize) {
-            new_type = tensor->type;
-            new_data = tensor->data;
-            new_size = ggml_nbytes(tensor);
-            LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
-        } else {
+        if (quantize) {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
             // TODO: avoid hardcoded tensor names - use the TN_* constants
@@ -4879,7 +4878,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
             }
 #endif
-
+            // If we've decided to quantize to the same type the tensor is already
+            // in then there's nothing to do.
+            quantize = tensor->type != new_type;
+        }
+        if (!quantize) {
+            new_type = tensor->type;
+            new_data = tensor->data;
+            new_size = ggml_nbytes(tensor);
+            LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
+        } else {
             const size_t nelements = ggml_nelements(tensor);
 
             float * f32_data;
@@ -5310,6 +5318,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
         /*.ftype                       =*/ LLAMA_FTYPE_MOSTLY_Q5_1,
         /*.allow_requantize            =*/ false,
         /*.quantize_output_tensor      =*/ true,
+        /*.only_copy                   =*/ false,
     };
 
     return result;
