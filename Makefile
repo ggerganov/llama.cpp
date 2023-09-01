@@ -64,7 +64,9 @@ OPT = -O3
 endif
 CFLAGS   = -I.            $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC
-LDFLAGS  =
+
+# Changed to += to not wipe out LDFLAGS from the build pipeline.
+LDFLAGS  +=
 
 ifdef LLAMA_DEBUG
 	CFLAGS   += -O0 -g
