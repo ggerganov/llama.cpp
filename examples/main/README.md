@@ -276,9 +276,9 @@ These options help improve the performance and memory usage of the LLaMA models.
 
 -   `--numa`: Attempt optimizations that help on some systems with non-uniform memory access. This currently consists of pinning an equal proportion of the threads to the cores on each NUMA node, and disabling prefetch and readahead for mmap. The latter causes mapped pages to be faulted in on first access instead of all at once, and in combination with pinning threads to NUMA nodes, more of the pages end up on the NUMA node where they are used. Note that if the model is already in the system page cache, for example because of a previous run without this option, this will have little effect unless you drop the page cache first. This can be done by rebooting the system or on Linux by writing '3' to '/proc/sys/vm/drop_caches' as root.
 
-### Memory Float 32
+### KV cache type
 
--   `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. This doubles the context memory requirement and cached prompt file size but does not appear to increase generation quality in a measurable way. Not recommended.
+-   `-kvt, --kv-type`: The data type to use for the KV cache. Uses q8_0 by default. Alternatives are f16 and f32. The alternatives increase memory consumption for marginal quality differences.
 
 ### Batch Size
 

@@ -26,7 +26,7 @@ int main(int argc, char ** argv) {
 
     lparams.n_ctx     = params.n_ctx;
     lparams.seed      = params.seed;
-    lparams.f16_kv    = params.memory_f16;
+    lparams.kv_type   = params.kv_type;
     lparams.use_mmap  = params.use_mmap;
     lparams.use_mlock = params.use_mlock;
 

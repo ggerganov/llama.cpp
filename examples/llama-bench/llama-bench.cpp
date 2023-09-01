@@ -127,7 +127,7 @@ struct cmd_params {
     std::vector<int> n_prompt;
     std::vector<int> n_gen;
     std::vector<int> n_batch;
-    std::vector<bool> f32_kv;
+    std::vector<ggml_type> kv_type;
     std::vector<int> n_threads;
     std::vector<int> n_gpu_layers;
     std::vector<int> main_gpu;
@@ -144,7 +144,7 @@ static const cmd_params cmd_params_defaults = {
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
     /* n_batch       */ {512},
-    /* f32_kv        */ {false},
+    /* kv_type       */ {GGML_TYPE_Q8_0},
     /* n_threads     */ {get_num_physical_cores()},
     /* n_gpu_layers  */ {99},
     /* main_gpu      */ {0},
@@ -165,7 +165,16 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -p, --n-prompt <n>                (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
     printf("  -n, --n-gen <n>                   (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
     printf("  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
-    printf("  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
+
+    std::string kv_type_default;
+    for (unsigned int i = 0; i < cmd_params_defaults.kv_type.size(); ++i) {
+        if (i > 0) {
+            kv_type_default += ",";
+        }
+        kv_type_default += ggml_type_name(cmd_params_defaults.kv_type[i]);
+    }
+    printf("  -kvt, --kv_type <q8_0|f16|f32>    (default: %s)\n", kv_type_default.c_str());
+
     printf("  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
     printf("  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
     printf("  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
@@ -177,7 +186,6 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     printf("\n");
     printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
-
 }
 
 static cmd_params parse_cmd_params(int argc, char ** argv) {
@@ -228,13 +236,32 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<int>(argv[i], split_delim);
             params.n_batch.insert(params.n_batch.end(), p.begin(), p.end());
-        } else if (arg == "--memory-f32") {
+        } else if (arg == "-kvt" || arg == "--kv-type") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
-            params.f32_kv.insert(params.f32_kv.end(), p.begin(), p.end());
+            auto p = split<std::string>(argv[i], split_delim);
+
+            std::vector<ggml_type> kvt;
+            for (const std::string & type_name : p) {
+                if (type_name == "q8_0") {
+                    kvt.push_back(GGML_TYPE_Q8_0);
+                } else if (type_name == "f16") {
+                    kvt.push_back(GGML_TYPE_F16);
+                } else if (type_name == "f32") {
+                    kvt.push_back(GGML_TYPE_F32);
+                } else {
+                    invalid_param = true;
+                    break;
+                }
+            }
+            if (invalid_param) {
+                fprintf(stderr, "error: unknown KV type: %s. Known types: Q8_0, F16, F32.\n", argv[i]);
+                break;
+            }
+
+            params.kv_type.insert(params.kv_type.end(), kvt.begin(), kvt.end());
         } else if (arg == "-t" || arg == "--threads") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -332,7 +359,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.n_prompt.empty())     { params.n_prompt = cmd_params_defaults.n_prompt; }
     if (params.n_gen.empty())        { params.n_gen = cmd_params_defaults.n_gen; }
     if (params.n_batch.empty())      { params.n_batch = cmd_params_defaults.n_batch; }
-    if (params.f32_kv.empty())       { params.f32_kv = cmd_params_defaults.f32_kv; }
+    if (params.kv_type.empty())      { params.kv_type = cmd_params_defaults.kv_type; }
     if (params.n_gpu_layers.empty()) { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
@@ -348,7 +375,7 @@ struct cmd_params_instance {
     int n_prompt;
     int n_gen;
     int n_batch;
-    bool f32_kv;
+    ggml_type kv_type;
     int n_threads;
     int n_gpu_layers;
     int main_gpu;
@@ -360,7 +387,7 @@ struct cmd_params_instance {
         llama_context_params lparams = llama_context_default_params();
         lparams.n_ctx = n_prompt + n_gen;
         lparams.n_batch = n_batch;
-        lparams.f16_kv = !f32_kv;
+        lparams.kv_type = kv_type;
         lparams.n_gpu_layers = n_gpu_layers;
         lparams.main_gpu = main_gpu;
         lparams.mul_mat_q = mul_mat_q;
@@ -376,7 +403,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
 
     for (const auto & m : params.model)
     for (const auto & nb : params.n_batch)
-    for (const auto & fk : params.f32_kv)
+    for (const auto & kvt : params.kv_type)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & mg : params.main_gpu)
     for (const auto & mmq : params.mul_mat_q)
@@ -388,7 +415,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
             /* .n_prompt     = */ n_prompt,
             /* .n_gen        = */ n_gen,
             /* .n_batch      = */ nb,
-            /* .f32_kv       = */ fk,
+            /* .kv_type      = */ kvt,
             /* .n_threads    = */ nt,
             /* .n_gpu_layers = */ nl,
             /* .main_gpu     = */ mg,
@@ -439,7 +466,7 @@ struct test {
     uint64_t model_n_params;
     int n_batch;
     int n_threads;
-    bool f32_kv;
+    ggml_type kv_type;
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
@@ -459,7 +486,7 @@ struct test {
         model_n_params = llama_model_n_params(lmodel);
         n_batch = inst.n_batch;
         n_threads = inst.n_threads;
-        f32_kv = inst.f32_kv;
+        kv_type = inst.kv_type;
         n_gpu_layers = inst.n_gpu_layers;
         main_gpu = inst.main_gpu;
         mul_mat_q = inst.mul_mat_q;
@@ -523,7 +550,7 @@ struct test {
             "cuda", "opencl", "metal", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
-            "n_batch", "n_threads", "f16_kv",
+            "n_batch", "n_threads", "kv_type",
             "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
@@ -543,7 +570,7 @@ struct test {
             return INT;
         }
         if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas" ||
-            field == "f16_kv" || field == "mul_mat_q" || field == "low_vram") {
+            field == "mul_mat_q" || field == "low_vram") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -573,7 +600,7 @@ struct test {
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
-            std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
+            std::to_string(n_batch), std::to_string(n_threads), std::string(ggml_type_name(kv_type)),
             std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
@@ -757,8 +784,8 @@ struct markdown_printer : public printer {
         if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
             fields.push_back("n_batch");
         }
-        if (params.f32_kv.size() > 1 || params.f32_kv != cmd_params_defaults.f32_kv) {
-            fields.push_back("f16_kv");
+        if (params.kv_type.size() > 1 || params.kv_type != cmd_params_defaults.kv_type) {
+            fields.push_back("kv_type");
         }
         if (params.main_gpu.size() > 1 || params.main_gpu != cmd_params_defaults.main_gpu) {
             fields.push_back("main_gpu");
@@ -825,6 +852,9 @@ struct markdown_printer : public printer {
                 value = buf;
             } else if (field == "t/s") {
                 snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.avg_ts(), t.stdev_ts());
+                value = buf;
+            } else if (field == "kv_type") {
+                snprintf(buf, sizeof(buf), "%s", ggml_type_name(t.kv_type));
                 value = buf;
             } else if (vmap.find(field) != vmap.end()) {
                 value = vmap.at(field);

@@ -704,8 +704,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
     printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    printf("  -kvt, --kv-type       the type to use for the KV cache (default: q8_0; alternatives: f16, f32)\n");
     if (llama_mlock_supported())
     {
         printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -838,9 +837,33 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.rope_freq_scale = std::stof(argv[i]);
         }
+        else if (arg == "--kv-type" || arg == "-kvt")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+
+            std::string type_name(argv[i]);
+            for (char & c : type_name) {
+                c = std::tolower(c);
+            }
+
+            if (type_name == "q8_0") {
+                params.kv_type = GGML_TYPE_Q8_0;
+            } else if (type_name == "f16") {
+                params.kv_type = GGML_TYPE_F16;
+            } else if (type_name == "f32") {
+                params.kv_type = GGML_TYPE_F32;
+            } else {
+                fprintf(stderr, "error: unknown KV type: %s. Known types: q8_0, f16, f32.\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+        }
         else if (arg == "--memory-f32" || arg == "--memory_f32")
         {
-            params.memory_f16 = false;
+            params.kv_type = GGML_TYPE_F32;
         }
         else if (arg == "--threads" || arg == "-t")
         {

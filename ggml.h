@@ -1062,6 +1062,12 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    // a -> b, pad row size of a to a multiple of block size of b, return view(b)
+    GGML_API struct ggml_tensor * ggml_cpy_pad(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b);
+
     // make contiguous
     GGML_API struct ggml_tensor * ggml_cont(
             struct ggml_context * ctx,
@@ -1145,6 +1151,22 @@ extern "C" {
             size_t                nb2, // slice stride in bytes
             size_t                nb3,
             size_t                offset);
+
+    GGML_API struct ggml_tensor * ggml_view_blck_1d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int64_t               ne0,
+            size_t                offset,
+            size_t                i_blck);
+
+    GGML_API struct ggml_tensor * ggml_view_blck_2d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int64_t               ne0,
+            int64_t               ne1,
+            size_t                nb1, // row stride in bytes
+            size_t                offset,
+            size_t                i_blck);
 
     GGML_API struct ggml_tensor * ggml_permute(
             struct ggml_context * ctx,

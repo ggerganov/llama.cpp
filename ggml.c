@@ -1117,10 +1117,18 @@ static void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * r
 
 static void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
     assert(QK8_0 == 32);
-    assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
 
     block_q8_0 * restrict y = vy;
+
+    if (k % QK8_0 != 0) {
+        float x_end[QK8_0] = {0};
+        memcpy(x_end, x + nb*QK8_0, sizeof(float) * (k % QK8_0));
+
+        block_q8_0 * y_end = y + nb;
+
+        quantize_row_q8_0(x_end, y_end, QK8_0);
+    }
 
 #if defined(__ARM_NEON)
     for (int i = 0; i < nb; i++) {
@@ -4384,8 +4392,13 @@ static inline bool ggml_is_matrix(const struct ggml_tensor * tensor) {
 static inline bool ggml_can_mul_mat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
-    return (t0->ne[0]           == t1->ne[0])  &&
-           (t1->ne[2]%t0->ne[2] == 0)          && // verify t0 is broadcastable
+    const int64_t blck_size = ggml_blck_size(t0->type);
+
+    const int64_t nblcks00_padded = (t0->ne[0] + blck_size - 1) / blck_size;
+    const int64_t nblcks10_padded = (t1->ne[0] + blck_size - 1) / blck_size;
+
+    return (nblcks00_padded     == nblcks10_padded) && // ensure same number of blocks after padding
+           (t1->ne[2]%t0->ne[2] == 0)               && // verify t0 is broadcastable
            (t1->ne[3]%t0->ne[3] == 0);
 }
 
@@ -6333,8 +6346,15 @@ static struct ggml_tensor * ggml_cpy_impl(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b,
-        bool inplace) {
-    GGML_ASSERT(ggml_nelements(a) == ggml_nelements(b));
+        const bool inplace,
+        const bool pad) {
+    if (pad) {
+        const int64_t blck_size = ggml_blck_size(b->type);
+        const int64_t ne00_padded = ((a->ne[0] + blck_size - 1) / blck_size) * blck_size;
+        GGML_ASSERT(ne00_padded*ggml_nrows(a) == ggml_nelements(b));
+    } else {
+        GGML_ASSERT(ggml_nelements(a) == ggml_nelements(b));
+    }
 
     bool is_node = false;
 
@@ -6350,6 +6370,8 @@ static struct ggml_tensor * ggml_cpy_impl(
         ggml_format_name(result, "%s (copy)", a->name);
     }
 
+    ggml_set_op_params_i32(result, 0, pad ? 1 : 0);
+
     result->op   = GGML_OP_CPY;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
@@ -6362,14 +6384,21 @@ struct ggml_tensor * ggml_cpy(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b) {
-    return ggml_cpy_impl(ctx, a, b, false);
+    return ggml_cpy_impl(ctx, a, b, false, false);
 }
 
 struct ggml_tensor * ggml_cpy_inplace(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b) {
-    return ggml_cpy_impl(ctx, a, b, true);
+    return ggml_cpy_impl(ctx, a, b, true, false);
+}
+
+struct ggml_tensor * ggml_cpy_pad(
+        struct ggml_context * ctx,
+        struct ggml_tensor * a,
+        struct ggml_tensor * b) {
+    return ggml_cpy_impl(ctx, a, b, false, true);
 }
 
 // ggml_cont
@@ -6544,7 +6573,8 @@ static struct ggml_tensor * ggml_view_impl(
         struct ggml_tensor  * a,
         int                   n_dims,
         const int64_t       * ne,
-        size_t                offset) {
+        size_t                offset,
+        size_t                i_blck) {
 
     bool is_node = false;
 
@@ -6555,7 +6585,8 @@ static struct ggml_tensor * ggml_view_impl(
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, n_dims, ne, a, offset);
     ggml_format_name(result, "%s (view)", a->name);
 
-    ggml_set_op_params(result, &offset, sizeof(offset));
+    size_t params[2] = {offset, i_blck};
+    ggml_set_op_params(result, &params, sizeof(params));
 
     result->op   = GGML_OP_VIEW;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -6572,7 +6603,7 @@ struct ggml_tensor * ggml_view_1d(
         int64_t               ne0,
         size_t                offset) {
 
-    struct ggml_tensor * result = ggml_view_impl(ctx, a, 1, &ne0, offset);
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 1, &ne0, offset, 0);
 
     return result;
 }
@@ -6589,7 +6620,7 @@ struct ggml_tensor * ggml_view_2d(
 
     const int64_t ne[2] = { ne0, ne1 };
 
-    struct ggml_tensor * result = ggml_view_impl(ctx, a, 2, ne, offset);
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 2, ne, offset, 0);
 
     result->nb[1] = nb1;
     result->nb[2] = result->nb[1]*ne1;
@@ -6612,7 +6643,7 @@ struct ggml_tensor * ggml_view_3d(
 
     const int64_t ne[3] = { ne0, ne1, ne2 };
 
-    struct ggml_tensor * result = ggml_view_impl(ctx, a, 3, ne, offset);
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 3, ne, offset, 0);
 
     result->nb[1] = nb1;
     result->nb[2] = nb2;
@@ -6637,11 +6668,47 @@ struct ggml_tensor * ggml_view_4d(
 
     const int64_t ne[4] = { ne0, ne1, ne2, ne3 };
 
-    struct ggml_tensor * result = ggml_view_impl(ctx, a, 4, ne, offset);
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 4, ne, offset, 0);
 
     result->nb[1] = nb1;
     result->nb[2] = nb2;
     result->nb[3] = nb3;
+
+    return result;
+}
+
+// ggml_view_blck_1d
+
+struct ggml_tensor * ggml_view_blck_1d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        size_t                offset,
+        size_t                i_blck) {
+
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 1, &ne0, offset, i_blck);
+
+    return result;
+}
+
+// ggml_view_blck_2d
+
+struct ggml_tensor * ggml_view_blck_2d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        int64_t               ne1,
+        size_t                nb1,
+        size_t                offset,
+        size_t                i_blck) {
+
+    const int64_t ne[2] = { ne0, ne1 };
+
+    struct ggml_tensor * result = ggml_view_impl(ctx, a, 2, ne, offset, i_blck);
+
+    result->nb[1] = nb1;
+    result->nb[2] = result->nb[1]*ne1;
+    result->nb[3] = result->nb[2];
 
     return result;
 }
@@ -8216,6 +8283,8 @@ static void ggml_compute_forward_dup_f16(
 
     GGML_TENSOR_UNARY_OP_LOCALS;
 
+    GGML_ASSERT(dst->op_params[0] == 0);
+
     const int ith = params->ith; // thread index
     const int nth = params->nth; // number of threads
 
@@ -8479,13 +8548,20 @@ static void ggml_compute_forward_dup_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         struct ggml_tensor * dst) {
-    GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
-
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
     GGML_TENSOR_UNARY_OP_LOCALS;
+
+    const bool pad = dst->op_params[0] & 1;
+    const int blck_size = ggml_blck_size(dst->type);
+    const int ne00_padded = ((ne00 + blck_size - 1) / blck_size) * blck_size;
+    if (pad) {
+        GGML_ASSERT(ggml_nelements(dst) == ne00_padded*ggml_nrows(src0));
+    } else {
+        GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
+    }
 
     const int ith = params->ith; // thread index
     const int nth = params->nth; // number of threads
@@ -8544,15 +8620,20 @@ static void ggml_compute_forward_dup_f32(
                 ggml_from_float_t const quantize_row_q = type_traits[dst->type].from_float;
 
                 size_t id = 0;
-                size_t rs = nb0 * (ne00 / ggml_blck_size(dst->type));
+                const size_t rs = nb0 * ne00_padded / blck_size;
                 char * dst_ptr = (char *) dst->data;
+                float src0_padded[ne00_padded];
 
                 for (int i03 = 0; i03 < ne03; i03++) {
                     for (int i02 = 0; i02 < ne02; i02++) {
                         id += rs * ir0;
                         for (int i01 = ir0; i01 < ir1; i01++) {
                             const float * src0_ptr = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
-                            quantize_row_q(src0_ptr, dst_ptr + id, ne00);
+                            if (ne00 != ne00_padded) {
+                                memcpy(src0_padded, src0_ptr, ne00*sizeof(float));
+                                memset(src0_padded + ne00, 0, (ne00_padded - ne00) * sizeof(float));
+                            }
+                            quantize_row_q(ne00 == ne00_padded ? src0_ptr : src0_padded, dst_ptr + id, ne00_padded);
                             id += rs;
                         }
                         id += rs * (ne01 - ir1);
@@ -8714,6 +8795,48 @@ static void ggml_compute_forward_dup_f32(
                             if (++i13 == ne3) {
                                 i13 = 0;
                             }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (type_traits[dst->type].from_float) {
+        GGML_ASSERT(!pad);
+        GGML_ASSERT(ne00 == ne0);
+        GGML_ASSERT(ne01 == ne1);
+        GGML_ASSERT(ne02 == ne2);
+        GGML_ASSERT(ne03 == ne3);
+
+        size_t blck_index_0 = 0;
+        if (dst->src[1]->op == GGML_OP_VIEW) {
+            const size_t * op_params = (const size_t *) dst->src[1]->op_params;
+            blck_index_0 = op_params[1];
+        }
+
+        ggml_from_float_t const quantize_row_q = type_traits[dst->type].from_float;
+
+        for (int i03 = 0; i03 < ne03; i03++) {
+            for (int i02 = 0; i02 < ne02; i02++) {
+                for (int i01 = ir0; i01 < ir1; i01++) {
+                    const char * src0_row_ptr = (char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03;
+                    char * dst_row_ptr = (char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3;
+                    size_t blck_index = blck_index_0;
+
+                    for (int i00 = 0; i00 < ne00; ++i00) {
+                        char * dst_ptr = dst_row_ptr
+                            + ggml_element_size(dst) * ((i00 + blck_index_0) / ggml_blck_size(dst->type));
+                        float * dst_tmp_ptr = (float *) (dst_ptr + ggml_element_size(dst));
+
+                        if (blck_index == 0) {
+                            memset(dst_tmp_ptr, 0, ggml_blck_size(dst->type)*sizeof(float));
+                        }
+
+                        dst_tmp_ptr[blck_index] = *((const float *) (src0_row_ptr + i00*nb00));
+
+                        blck_index = (blck_index + 1) % ggml_blck_size(dst->type);
+
+                        if (blck_index == 0 || i00 == (ne00 - 1)) {
+                            quantize_row_q(dst_tmp_ptr, dst_ptr, ggml_blck_size(dst->type));
                         }
                     }
                 }
@@ -11333,7 +11456,8 @@ static void ggml_compute_forward_mul_mat(
     if (params->type == GGML_TASK_INIT) {
         if (src1->type != vec_dot_type) {
             char * wdata = params->wdata;
-            const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+            const size_t row_size = ggml_type_size(vec_dot_type)*((ne10 + ggml_blck_size(vec_dot_type) - 1)
+                / ggml_blck_size(vec_dot_type));
 
             for (int64_t i13 = 0; i13 < ne13; ++i13) {
                 for (int64_t i12 = 0; i12 < ne12; ++i12) {
@@ -11353,7 +11477,8 @@ static void ggml_compute_forward_mul_mat(
     }
 
     const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
-    const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+    const size_t row_size = ggml_type_size(vec_dot_type)*((ne10 + ggml_blck_size(vec_dot_type) - 1)
+        / ggml_blck_size(vec_dot_type));
 
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = ne11*ne12*ne13; // src1 rows

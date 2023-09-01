@@ -312,7 +312,7 @@ int main(int argc, char ** argv) {
 
         lparams.n_ctx      = 256;
         lparams.seed       = 1;
-        lparams.f16_kv     = false;
+        lparams.kv_type    = GGML_TYPE_F32;
         lparams.use_mlock  = false;
 
         model = llama_load_model_from_file(params.model.c_str(), lparams);

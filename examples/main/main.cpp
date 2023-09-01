@@ -36,7 +36,7 @@
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static gpt_params               * g_params;
-static std::vector<llama_token> * g_input_tokens;
+static std::vector<llama_token> * g_embd_inp;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
@@ -44,7 +44,7 @@ static bool is_interacting = false;
 
 static void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
-    const std::vector<llama_token> & input_tokens, const std::string & output,
+    const std::vector<llama_token> & embd_inp, const std::string & output,
     const std::vector<llama_token> & output_tokens
 ) {
     if (params.logdir.empty()) {
@@ -71,7 +71,7 @@ static void write_logfile(
     fprintf(logfile, "binary: main\n");
     char model_desc[128];
     llama_model_desc(model, model_desc, sizeof(model_desc));
-    dump_non_result_info_yaml(logfile, params, ctx, timestamp, input_tokens, model_desc);
+    dump_non_result_info_yaml(logfile, params, ctx, timestamp, embd_inp, model_desc);
 
     fprintf(logfile, "\n");
     fprintf(logfile, "######################\n");
@@ -95,7 +95,7 @@ static void sigint_handler(int signo) {
             console::cleanup();
             printf("\n");
             llama_print_timings(*g_ctx);
-            write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
+            write_logfile(*g_ctx, *g_params, *g_model, *g_embd_inp, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
     }
@@ -238,7 +238,7 @@ int main(int argc, char ** argv) {
     const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
     LOG("add_bos: %d\n", add_bos);
 
-    std::vector<llama_token> embd_inp;
+    std::vector<llama_token> embd_inp; g_embd_inp = &embd_inp;
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
@@ -465,7 +465,6 @@ int main(int argc, char ** argv) {
     int n_session_consumed = 0;
     int n_past_guidance    = 0;
 
-    std::vector<int>   input_tokens;  g_input_tokens  = &input_tokens;
     std::vector<int>   output_tokens; g_output_tokens = &output_tokens;
     std::ostringstream output_ss;     g_output_ss     = &output_ss;
 
@@ -661,9 +660,7 @@ int main(int argc, char ** argv) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
                 printf("%s", token_str.c_str());
 
-                if (embd.size() > 1) {
-                    input_tokens.push_back(id);
-                } else {
+                if (embd.size() == 1) {
                     output_tokens.push_back(id);
                     output_ss << token_str;
                 }
@@ -843,7 +840,7 @@ int main(int argc, char ** argv) {
     }
 
     llama_print_timings(ctx);
-    write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
+    write_logfile(ctx, params, model, embd_inp, output_ss.str(), output_tokens);
 
     if (ctx_guidance) { llama_free(ctx_guidance); }
     llama_free(ctx);
