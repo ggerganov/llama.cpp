@@ -505,6 +505,45 @@ kernel void kernel_mul_mat_q8_0_f32(
     }
 }
 
+kernel void kernel_mul_mat_f16_f32_1row(
+        device const  char * src0,
+        device const  char * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant   int64_t & ne12,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint tiisg[[thread_index_in_simdgroup]]) {
+
+    const int64_t r0 = tgpig.x;
+    const int64_t r1 = tgpig.y;
+    const int64_t im = tgpig.z;
+
+    device const half  * x = (device const half  *) (src0 + r0*nb01 + im/(ne12/ne02)*nb02);
+    device const float * y = (device const float *) (src1 + r1*nb11 + im*nb12);
+
+    float sumf = 0;
+    for (int i = tiisg; i < ne00; i += 32) {
+        sumf += (float) x[i] * (float) y[i];
+    }
+
+    float all_sum = simd_sum(sumf);
+    if (tiisg == 0) {
+        dst[im*ne1*ne0 + r1*ne0 + r0] = all_sum;
+    }
+}
+
 #define N_F16_F32 4
 
 kernel void kernel_mul_mat_f16_f32(
