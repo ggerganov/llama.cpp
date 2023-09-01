@@ -462,7 +462,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
     - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
-    
+
     - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
 
     - <details>
@@ -483,14 +483,14 @@ Building the program with BLAS support may lead to some performance improvements
       </details>
 
   ##### Installing CLBlast
-  
+
   Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
-  
+
   Alternatively, they may be built from source.
-  
+
   - <details>
     <summary>Windows:</summary>
-    
+
       ```cmd
       set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
       git clone https://github.com/CNugteren/CLBlast.git
