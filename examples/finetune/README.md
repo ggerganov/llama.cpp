@@ -11,7 +11,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
         --model-base open-llama-3b-v2-q8_0.gguf \
         --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf \
         --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.gguf \
-        --model-out lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
+        --lora-out lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
         --train-data "shakespeare.txt" \
         --save-every 10 \
         --threads 6 --adam-iter 30 --batch 4 --ctx 64 \
