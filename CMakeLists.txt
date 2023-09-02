@@ -372,41 +372,63 @@ if (LLAMA_CLBLAST)
 endif()
 
 if (LLAMA_HIPBLAS)
-    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+    if (WIN32)
+        # todo: also allow building with a separate compiler on windows
+        list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
 
-    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
-    endif()
-    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
-    endif()
-
-    find_package(hip)
-    find_package(hipblas)
-    find_package(rocblas)
-
-    if (${hipblas_FOUND} AND ${hip_FOUND})
-        message(STATUS "HIP and hipBLAS found")
-        add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
-        add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
-        if (BUILD_SHARED_LIBS)
-            set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
+            message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
         endif()
-        if (LLAMA_CUDA_FORCE_DMMV)
-            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
+        if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+            message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
         endif()
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
-        target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
-        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
-        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
 
+        find_package(hip)
+        find_package(hipblas)
+        find_package(rocblas)
+
+        if (${hipblas_FOUND} AND ${hip_FOUND})
+            message(STATUS "HIP and hipBLAS found")
+            add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+            add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
+            if (LLAMA_CUDA_FORCE_DMMV)
+                target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
+            endif()
+            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+            target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+            target_compile_definitions(ggml-rocm PRIVATE CC_TURING=1000000000)
+            set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
+            target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+
+            if (LLAMA_STATIC)
+                message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
+            endif()
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-rocm)
+        else()
+            message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
+        endif()
+    else()
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
         endif()
+        include(ExternalProject)
+        if (NOT DEFINED LLAMA_ROCM_PROJECT_CMAKE_ARGS)
+            set(LLAMA_ROCM_PROJECT_CMAKE_ARGS -DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++ -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
+        endif()
+        ExternalProject_Add(ggml-rocm-project
+            SOURCE_DIR ../ggml-rocm
+            PREFIX ggml-rocm
+            INSTALL_COMMAND ""
+            CMAKE_ARGS ${LLAMA_ROCM_PROJECT_CMAKE_ARGS}
+            BUILD_BYPRODUCTS ${CMAKE_BINARY_DIR}/bin/libggml-rocm.so
+        )
+        add_compile_definitions(GGML_USE_CUBLAS)
+        add_library(ggml-rocm SHARED IMPORTED)
+        add_dependencies(ggml-rocm ggml-rocm-project)
+        set_target_properties(ggml-rocm PROPERTIES IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/bin/libggml-rocm.so)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-rocm)
-    else()
-        message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
+        set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} ggml-cuda.h)
     endif()
 endif()
 
@@ -762,6 +784,14 @@ if (LLAMA_METAL)
             WORLD_READ
         DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
+install(
+    FILES ${CMAKE_BINARY_DIR}/../ggml-rocm/src/ggml-rocm-project-build/libggml-rocm.so
+    PERMISSIONS
+        OWNER_READ
+        OWNER_WRITE
+        GROUP_READ
+        WORLD_READ
+    DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 #
 # programs, examples and tests
