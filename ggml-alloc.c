@@ -181,7 +181,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     void * ptr = tensor->data;
 
-    if (ptr < alloc->data || (char*)ptr >= (char*)alloc->data + alloc->size) {
+    if (ptr < alloc->data || (char*)ptr >= (char*)alloc->data + alloc->max_size) {
         // the tensor was not allocated in this buffer
         // this can happen because the graph allocator will try to free weights and other tensors from different buffers
         // the easiest way to deal with this is just to ignore it
