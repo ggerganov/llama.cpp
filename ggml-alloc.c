@@ -1,3 +1,8 @@
+// defines MAP_ANONYMOUS
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "ggml-alloc.h"
 #include "ggml.h"
 #include <assert.h>
@@ -9,10 +14,8 @@
     #if __has_include(<unistd.h>)
         #include <unistd.h>
         #if defined(_POSIX_MAPPED_FILES)
+            #include <sys/types.h>
             #include <sys/mman.h>
-        #endif
-        #if defined(_POSIX_MEMLOCK_RANGE)
-            #include <sys/resource.h>
         #endif
     #endif
 #endif
@@ -313,7 +316,7 @@ static void * alloc_vmem(size_t size) {
 #ifdef _WIN32
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
 #else
-    return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
 #endif
 }
 
