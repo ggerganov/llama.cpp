@@ -223,21 +223,13 @@ def load_model(model_filename):
         else:
             inputs.tensor_split[n] = 0
 
-    # we must force an explicit tensor split
-    # otherwise the default will divide equally and multigpu crap will slow it down badly
     inputs.cublas_info = 0
     if (args.usecublas and "0" in args.usecublas):
-        inputs.cublas_info = 0
-        if not args.tensor_split:
-            inputs.tensor_split[inputs.cublas_info] = 100
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     elif (args.usecublas and "1" in args.usecublas):
-        inputs.cublas_info = 1
-        if not args.tensor_split:
-            inputs.tensor_split[inputs.cublas_info] = 100
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     elif (args.usecublas and "2" in args.usecublas):
-        inputs.cublas_info = 2
-        if not args.tensor_split:
-            inputs.tensor_split[inputs.cublas_info] = 100
+        os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
     inputs.executable_path = (getdirpath()+"/").encode("UTF-8")
     inputs.debugmode = args.debugmode
