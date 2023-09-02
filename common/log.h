@@ -346,6 +346,7 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         // Log is disabled
         return nullptr;
     }
+
     if (_initialized)
     {
         // with fallback in case something went wrong
