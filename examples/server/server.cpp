@@ -17,6 +17,8 @@
 #include "completion.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
+#include <cstddef>
+
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
 #endif
@@ -1038,7 +1040,7 @@ static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
 
-    assert(timings.n_eval == llama.num_tokens_predicted);
+    assert(timings.n_eval == ptrdiff_t(llama.num_tokens_predicted));
 
     return json{
         {"prompt_n", timings.n_p_eval},
@@ -1239,7 +1241,7 @@ void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
         const llama_token * tokens = beams_state.beam_views[0].tokens;
         const auto map = [](llama_token tok) { return completion_token_output{{},tok}; };
         std::transform(tokens, tokens + n, llama.generated_token_probs.end() - n, map);
-        printf("%lu", n);
+        printf("%zu", n);
     }
     fflush(stdout);
 #if 0 // DEBUG: print current beams for this iteration
@@ -1548,7 +1550,7 @@ int main(int argc, char **argv)
 
     svr.set_exception_handler([](const Request &, Response &res, std::exception_ptr ep)
                               {
-        const auto * fmt = "500 Internal Server Error\n%s";
+        const char fmt[] = "500 Internal Server Error\n%s";
         char buf[BUFSIZ];
         try {
             std::rethrow_exception(std::move(ep));
