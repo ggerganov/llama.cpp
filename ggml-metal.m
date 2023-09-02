@@ -117,9 +117,9 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     metal_printf("%s: allocating\n", __func__);
 
     // Show all the Metal device instances in the system
-    NSArray *devices = MTLCopyAllDevices();
+    NSArray * devices = MTLCopyAllDevices();
     id <MTLDevice> device;
-    NSString *s;
+    NSString * s;
     for (device in devices) {
         s = [device name];
         metal_printf("%s: found device: %s\n", __func__, [s UTF8String]);
@@ -134,7 +134,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
     ctx->device = device;
     ctx->n_cb   = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
-    ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
     ctx->concur_list_len = 0;
