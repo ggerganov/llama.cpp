@@ -621,7 +621,7 @@ void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora)
     }
 
     // allocate data
-    lora->data.resize(ggml_allocr_max_size(alloc));
+    lora->data.resize(ggml_allocr_max_size(alloc) + tensor_alignment);
     ggml_allocr_free(alloc);
     alloc = ggml_allocr_new(lora->data.data(), lora->data.size(), tensor_alignment);
     ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
@@ -2547,7 +2547,7 @@ int main(int argc, char ** argv) {
     alloc = ggml_allocr_new_measure(tensor_alignment);
     ggml_allocr_alloc(alloc, tokens_input);
     ggml_allocr_alloc(alloc, target_probs);
-    size_t max_input_size = ggml_allocr_max_size(alloc);
+    size_t max_input_size = ggml_allocr_max_size(alloc) + tensor_alignment;
     ggml_allocr_free(alloc);
     printf("%s: max_input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
@@ -2594,7 +2594,7 @@ int main(int argc, char ** argv) {
         params.use_flash,
         params.use_checkpointing
     );
-    size_t max_compute_size = ggml_allocr_max_size(alloc);
+    size_t max_compute_size = ggml_allocr_max_size(alloc) + tensor_alignment;
     ggml_allocr_free(alloc);
     printf("%s: max_compute_size = %zu bytes (%.1f MB)\n", __func__, max_compute_size, (float) max_compute_size / (1024.0f*1024.0f));
 
