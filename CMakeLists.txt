@@ -173,6 +173,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wpointer-arith
             -Wmissing-prototypes
             -Werror=implicit-int
+            -Wno-unused-function
         )
         set(cxx_flags
             -Wall
@@ -182,6 +183,10 @@ if (LLAMA_ALL_WARNINGS)
             -Wno-unused-function
             -Wno-multichar
         )
+        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            # g++ only
+            set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+        endif()
     else()
         # todo : msvc
     endif()

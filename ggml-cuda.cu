@@ -81,12 +81,29 @@
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
 
+#ifndef __has_builtin
+    #define __has_builtin(x) 0
+#endif
+
 typedef int8_t int8x4_t __attribute__((ext_vector_type(4)));
 static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
     const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
     const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
+#if __has_builtin(__builtin_elementwise_sub_sat)
     const int8x4_t c = __builtin_elementwise_sub_sat(va, vb);
     return reinterpret_cast<const int&>(c);
+#else
+    int8x4_t c;
+    int16_t tmp;
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+        tmp = va[i] - vb[i];
+        if(tmp > std::numeric_limits<int8_t>::max()) tmp = std::numeric_limits<int8_t>::max();
+        if(tmp < std::numeric_limits<int8_t>::min()) tmp = std::numeric_limits<int8_t>::min();
+        c[i] = tmp;
+    }
+    return reinterpret_cast<int&>(c);
+#endif // __has_builtin(__builtin_elementwise_sub_sat)
 }
 
 static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
