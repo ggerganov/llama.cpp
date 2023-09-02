@@ -464,6 +464,8 @@ Building the program with BLAS support may lead to some performance improvements
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
     - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
 
+    - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
+
     - <details>
         <summary>Installing the OpenCL SDK from source</summary>
 
@@ -481,10 +483,27 @@ Building the program with BLAS support may lead to some performance improvements
         ```
       </details>
 
-  Installing CLBlast: it may be found in your operating system's packages.
+  ##### Installing CLBlast
+
+  Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
+
+  Alternatively, they may be built from source.
 
   - <details>
-    <summary>If not, then installing from source:</summary>
+    <summary>Windows:</summary>
+
+      ```cmd
+      set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
+      git clone https://github.com/CNugteren/CLBlast.git
+      mkdir CLBlast\build
+      cd CLBlast\build
+      cmake .. -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
+      cmake --build . --config Release
+      cmake --install . --prefix C:/CLBlast
+      ```
+
+  - <details>
+    <summary>Unix:</summary>
 
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
@@ -498,21 +517,32 @@ Building the program with BLAS support may lead to some performance improvements
       Where `/some/path` is where the built library will be installed (default is `/usr/local`).
     </details>
 
-  Building:
+  ##### Building Llama with CLBlast
 
   - Build with make:
     ```sh
     make LLAMA_CLBLAST=1
     ```
-  - CMake:
+  - CMake (Unix):
     ```sh
     mkdir build
     cd build
     cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
     cmake --build . --config Release
     ```
+  - CMake (Windows):
+    ```cmd
+    set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
+    git clone https://github.com/ggerganov/llama.cpp
+    cd llama.cpp
+    mkdir build
+    cd build
+    cmake .. -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
+    cmake --build . --config Release
+    cmake --install . --prefix C:/LlamaCPP
+    ```
 
-  Running:
+  ##### Running Llama with CLBlast
 
   The CLBlast build supports `--gpu-layers|-ngl` like the CUDA version does.
 
