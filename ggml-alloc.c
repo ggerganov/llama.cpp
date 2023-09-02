@@ -158,7 +158,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
     }
 
     tensor->data = addr;
-    AT_PRINTF("%s: allocated data at 0x%p\n", __func__, tensor->data);
+    AT_PRINTF("%s: allocated data at %p\n", __func__, tensor->data);
 
 #ifdef GGML_ALLOCATOR_DEBUG
     add_allocated_tensor(alloc, tensor);
@@ -190,8 +190,8 @@ static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_t
 
     size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
-    AT_PRINTF("%s: freeing %s at 0x%p (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, ptr, size, alloc->n_free_blocks);
-    AT_PRINTF("%s: alloc->data = 0x%p alloc->data+alloc->size = 0x%p alloc->data+alloc->max_size = 0x%p\n", __func__, alloc->data, (char*)alloc->data + alloc->size, (char*)alloc->data + alloc->max_size);
+    AT_PRINTF("%s: freeing %s at %p (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, ptr, size, alloc->n_free_blocks);
+    AT_PRINTF("%s: alloc->data = %p alloc->data+alloc->size = %p alloc->data+alloc->max_size = %p\n", __func__, alloc->data, (char*)alloc->data + alloc->size, (char*)alloc->data + alloc->max_size);
 
 #ifdef GGML_ALLOCATOR_DEBUG
     remove_allocated_tensor(alloc, tensor);
@@ -384,7 +384,7 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                     // if the node's data is external, then we cannot re-use it
                     if ((char *) parent->data < (char *) alloc->data ||
                         (char *) parent->data >= ((char *) alloc->data + alloc->size)) {
-                        AT_PRINTF("not reusing parent %s for %s as 0x%p is external\n", parent->name, node->name, parent->data);
+                        AT_PRINTF("not reusing parent %s for %s as %p is external\n", parent->name, node->name, parent->data);
                         continue;
                     }
 
