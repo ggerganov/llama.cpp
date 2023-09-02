@@ -35,6 +35,11 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+ifdef RISCV_CROSS_COMPILE
+CC	:= riscv64-unknown-linux-gnu-gcc
+CXX	:= riscv64-unknown-linux-gnu-g++
+endif
+
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
 
@@ -79,10 +84,20 @@ ifdef LLAMA_SERVER_VERBOSE
 	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
+ifdef LLAMA_DISABLE_LOGS
+	CFLAGS   += -DLOG_DISABLE_LOGS
+	CXXFLAGS += -DLOG_DISABLE_LOGS
+endif # LLAMA_DISABLE_LOGS
+
 # warnings
 CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-			-Wmissing-prototypes -Werror=implicit-int
+			-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
 CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
+
+ifeq '' '$(findstring clang++,$(CXX))'
+	# g++ only
+	CXXFLAGS += -Wno-format-truncation
+endif
 
 # OS specific
 # TODO: support Windows
@@ -145,6 +160,9 @@ endif
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
+
+ifndef RISCV
+
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
 	CFLAGS   += -march=native -mtune=native
@@ -157,6 +175,14 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Usage SSSE3-only (Not is SSE3!)
 	#CFLAGS   += -mssse3
 	#CXXFLAGS += -mssse3
+endif
+
+# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
+# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
+# https://github.com/ggerganov/llama.cpp/issues/2922
+ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
+	CFLAGS   += -Xassembler -muse-unaligned-vector-move
+	CXXFLAGS += -Xassembler -muse-unaligned-vector-move
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -191,6 +217,11 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	ifeq ($(UNAME_M),ppc64)
 		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
 	endif
+endif
+
+else
+	CFLAGS += -march=rv64gcv -mabi=lp64d
+	CXXFLAGS +=  -march=rv64gcv -mabi=lp64d
 endif
 
 ifndef LLAMA_NO_K_QUANTS
@@ -342,11 +373,6 @@ ifdef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
-
-ifdef LLAMA_DISABLE_LOGS
-	CFLAGS   += -DLOG_DISABLE_LOGS
-	CXXFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 
 #
 # Print build information

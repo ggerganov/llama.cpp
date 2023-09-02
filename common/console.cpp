@@ -235,6 +235,7 @@ namespace console {
 
     int estimateWidth(char32_t codepoint) {
 #if defined(_WIN32)
+        (void)codepoint;
         return 1;
 #else
         return wcwidth(codepoint);
