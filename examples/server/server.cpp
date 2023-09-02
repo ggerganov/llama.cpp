@@ -1379,7 +1379,13 @@ int main(int argc, char **argv)
                 }
             }
 
-            const json data = format_final_response(llama, llama.generated_text, llama.generated_token_probs);
+            auto probs = llama.generated_token_probs;
+            if (llama.params.n_probs > 0 && llama.stopped_word) {
+                const std::vector<llama_token> stop_word_toks = llama_tokenize(llama.ctx, llama.stopping_word, false);
+                probs = std::vector<completion_token_output>(llama.generated_token_probs.begin(), llama.generated_token_probs.end() - stop_word_toks.size());
+            }
+
+            const json data = format_final_response(llama, llama.generated_text, probs);
 
             llama_print_timings(llama.ctx);
 
@@ -1456,7 +1462,11 @@ int main(int argc, char **argv)
 
                     if (!llama.has_next_token) {
                         // Generation is done, send extra information.
-                        const json data = format_final_response(llama, "", llama.generated_token_probs);
+                        const json data = format_final_response(
+                            llama,
+                            "",
+                            std::vector<completion_token_output>(llama.generated_token_probs.begin(), llama.generated_token_probs.begin() + sent_token_probs_index)
+                        );
 
                         const std::string str =
                             "data: " +
