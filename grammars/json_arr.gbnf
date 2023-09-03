@@ -5,10 +5,10 @@ root   ::= arr
 value  ::= object | array | string | number | ("true" | "false" | "null") ws
 
 arr  ::=
-  "{\n\t[\n" ws (
+  "[\n" ws (
             value
     (",\n" ws value)*
-  )? "\t]\n}"
+  )? "]"
 
 object ::=
   "{" ws (
