@@ -3,6 +3,7 @@
 #pragma once
 
 #include "llama.h"
+#include "build-info.h"
 
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
@@ -19,6 +20,10 @@
 #else
 #define DIRECTORY_SEPARATOR '/'
 #endif // _WIN32
+
+#define print_build_info() do {
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT); \
+} while (0)
 
 //
 // CLI argument parsing
