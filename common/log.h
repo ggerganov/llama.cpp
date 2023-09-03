@@ -341,14 +341,14 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         }
     }
 
+    if (_disabled)
+    {
+        // Log is disabled
+        return nullptr;
+    }
+
     if (_initialized)
     {
-        if (_disabled)
-        {
-            // Log is disabled
-            return nullptr;
-        }
-
         // with fallback in case something went wrong
         return logfile ? logfile : stderr;
     }
