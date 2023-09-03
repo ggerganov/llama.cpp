@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #ifdef __has_include
     #if __has_include(<unistd.h>)
         #include <unistd.h>
@@ -123,7 +124,6 @@ static void remove_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tens
 }
 #endif
 
-
 static size_t ggml_allocr_get_alloc_size(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     return ggml_nbytes(tensor);
 
@@ -131,7 +131,7 @@ static size_t ggml_allocr_get_alloc_size(struct ggml_allocr * alloc, struct ggml
 }
 
 // check if a tensor is allocated by this buffer
-static bool ggml_allocr_is_own(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
+static bool ggml_allocr_is_own(struct ggml_allocr * alloc, const struct ggml_tensor * tensor) {
     void * ptr = tensor->data;
     return ptr >= alloc->data && (char *)ptr < (char *)alloc->data + alloc->max_size;
 }
@@ -311,20 +311,29 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
     return alloc;
 }
 
-// os specific functions to allocate and free uncommitted virtual memory
+// OS specific functions to allocate and free uncommitted virtual memory
 static void * alloc_vmem(size_t size) {
-#ifdef _WIN32
+#if defined(_WIN32)
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
-#else
+#elif defined(_POSIX_MAPPED_FILES)
     return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+#else
+    // use a fixed address for other platforms
+    uintptr_t base_addr = (uintptr_t)-size - 0x100;
+    return (void *)base_addr;
 #endif
 }
 
 static void free_vmem(void * base_addr, size_t size) {
-#ifdef _WIN32
+#if defined(_WIN32)
     VirtualFree(base_addr, 0, MEM_RELEASE);
-#else
+    UNUSED(size);
+#elif defined(_POSIX_MAPPED_FILES)
     munmap(base_addr, size);
+#else
+    // nothing to do
+    UNUSED(base_addr);
+    UNUSED(size);
 #endif
 }
 
@@ -335,7 +344,7 @@ static void alloc_measure_vmem(void ** base_addr, size_t * size) {
     do {
         *base_addr = alloc_vmem(*size);
         if (*base_addr != NULL) {
-            AT_PRINTF("allocated %.2f GB of virtual memory for measure buffer\n", *size / 1024.0 / 1024.0 / 1024.0);
+            AT_PRINTF("allocated %.2f GB of virtual memory for measure buffer at %p\n", *size / 1024.0 / 1024.0 / 1024.0, *base_addr);
             return;
         }
         // try again with half the size
@@ -563,11 +572,10 @@ static size_t ggml_allocr_alloc_graph_tensors_n(
                 AT_PRINTF("\n");
             }
 
-
             // update parents
             // update immediately if there is no parse_seq
             // update only at barriers if there is parse_seq
-            if ((alloc->parse_seq_len==0) || alloc->parse_seq[ind] == -1) {
+            if ((alloc->parse_seq_len == 0) || alloc->parse_seq[ind] == -1) {
                 int update_start = alloc->parse_seq_len ? last_barrier_pos : ind;
                 int update_end   = alloc->parse_seq_len ? ind              : ind + 1;
                 for (int i = update_start; i < update_end; i++) {
