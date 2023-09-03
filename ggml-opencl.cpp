@@ -1334,7 +1334,7 @@ void ggml_cl_free_data(const struct ggml_tensor* tensor) {
         return;
     }
 
-    cl_mem mem = (cl_mem)tensor->data;
+    cl_mem mem = (cl_mem)tensor->extra;
     clReleaseMemObject(mem);
 }
 
@@ -1393,7 +1393,7 @@ static void ggml_cl_mul_f32(const ggml_tensor * src0, const ggml_tensor * src1, 
     size_t d_size;
 
     cl_mem d_X = ggml_cl_pool_malloc(ne0 * sizeof(float), &x_size); // src0
-    cl_mem d_Y = (cl_mem) src1->data; // src1 is already on device, broadcasted.
+    cl_mem d_Y = (cl_mem) src1->extra; // src1 is already on device, broadcasted.
     cl_mem d_D = ggml_cl_pool_malloc(ne0 * sizeof(float), &d_size); // dst
 
 
@@ -1491,7 +1491,7 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     size_t d_size;
     cl_mem d_X;
     if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
-        d_X = (cl_mem) src0->data;
+        d_X = (cl_mem) src0->extra;
     } else {
         d_X = ggml_cl_pool_malloc(sizeof(float) * x_ne, &x_size);
     }
@@ -1567,7 +1567,7 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     size_t d_size;
     cl_mem d_X;
     if (src0->backend == GGML_BACKEND_GPU) { // NOLINT
-        d_X = (cl_mem) src0->data;
+        d_X = (cl_mem) src0->extra;
     } else {
         d_X = ggml_cl_pool_malloc(sizeof(ggml_fp16_t) * x_ne, &x_size);
     }
@@ -1697,7 +1697,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 events.emplace_back();
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
             } else if (src0->backend == GGML_BACKEND_GPU) {
-                d_Q = (cl_mem) src0->data;
+                d_Q = (cl_mem) src0->extra;
             } else {
                 GGML_ASSERT(false);
             }
@@ -1860,6 +1860,6 @@ void ggml_cl_transform_tensor(void * data, ggml_tensor * tensor) {
 
     CL_CHECK(clFinish(queue));
 
-    tensor->data = dst;
+    tensor->extra = dst;
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 }
