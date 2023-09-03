@@ -67,21 +67,21 @@ OPT = -Ofast
 else
 OPT = -O3
 endif
-CFLAGS   = -I.            $(OPT) -std=c11   -fPIC
-CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC
-LDFLAGS  =
+MK_CPPFLAGS = -I. -Icommon
+MK_CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
+MK_CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
+MK_LDFLAGS  =
 
 ifdef LLAMA_DEBUG
-	CFLAGS   += -O0 -g
-	CXXFLAGS += -O0 -g
-	LDFLAGS  += -g
+	MK_CFLAGS   += -O0 -g
+	MK_CXXFLAGS += -O0 -g
+	MK_LDFLAGS  += -g
 else
-	CFLAGS   += -DNDEBUG
-	CXXFLAGS += -DNDEBUG
+	MK_CPPFLAGS += -DNDEBUG
 endif
 
 ifdef LLAMA_SERVER_VERBOSE
-	CXXFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
 
 ifdef LLAMA_DISABLE_LOGS
@@ -90,9 +90,9 @@ ifdef LLAMA_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
 # warnings
-CFLAGS   += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-			-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
-CXXFLAGS += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
+MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
+				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
+MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
 ifeq '' '$(findstring clang++,$(CXX))'
 	# g++ only
@@ -101,29 +101,9 @@ endif
 
 # OS specific
 # TODO: support Windows
-ifeq ($(UNAME_S),Linux)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
-endif
-ifeq ($(UNAME_S),Darwin)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
-endif
-ifeq ($(UNAME_S),FreeBSD)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
-endif
-ifeq ($(UNAME_S),NetBSD)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
-endif
-ifeq ($(UNAME_S),OpenBSD)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
-endif
-ifeq ($(UNAME_S),Haiku)
-	CFLAGS   += -pthread
-	CXXFLAGS += -pthread
+ifneq '' '$(filter $(UNAME_S),Linux Darwin FreeBSD NetBSD OpenBSD Haiku)'
+	MK_CFLAGS   += -pthread
+	MK_CXXFLAGS += -pthread
 endif
 
 # detect Windows
@@ -149,12 +129,11 @@ ifeq ($(_WIN32),1)
 endif
 
 ifdef LLAMA_GPROF
-	CFLAGS   += -pg
-	CXXFLAGS += -pg
+	MK_CFLAGS   += -pg
+	MK_CXXFLAGS += -pg
 endif
 ifdef LLAMA_PERF
-	CFLAGS   += -DGGML_PERF
-	CXXFLAGS += -DGGML_PERF
+	MK_CPPFLAGS += -DGGML_PERF
 endif
 
 # Architecture specific
@@ -165,16 +144,16 @@ ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
-	CFLAGS   += -march=native -mtune=native
-	CXXFLAGS += -march=native -mtune=native
+	MK_CFLAGS   += -march=native -mtune=native
+	MK_CXXFLAGS += -march=native -mtune=native
 
 	# Usage AVX-only
-	#CFLAGS   += -mfma -mf16c -mavx
-	#CXXFLAGS += -mfma -mf16c -mavx
+	#MK_CFLAGS   += -mfma -mf16c -mavx
+	#MK_CXXFLAGS += -mfma -mf16c -mavx
 
 	# Usage SSSE3-only (Not is SSE3!)
-	#CFLAGS   += -mssse3
-	#CXXFLAGS += -mssse3
+	#MK_CFLAGS   += -mssse3
+	#MK_CXXFLAGS += -mssse3
 endif
 
 # The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
@@ -188,34 +167,33 @@ endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
-	CFLAGS   += -mcpu=native
-	CXXFLAGS += -mcpu=native
+	MK_CFLAGS   += -mcpu=native
+	MK_CXXFLAGS += -mcpu=native
 endif
 
 ifneq ($(filter armv6%,$(UNAME_M)),)
 	# Raspberry Pi 1, Zero
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+	MK_CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
+	MK_CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access
 endif
 
 ifneq ($(filter armv7%,$(UNAME_M)),)
 	# Raspberry Pi 2
-	CFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+	MK_CFLAGS   += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
+	MK_CXXFLAGS += -mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations
 endif
 
 ifneq ($(filter armv8%,$(UNAME_M)),)
 	# Raspberry Pi 3, 4, Zero 2 (32-bit)
-	CFLAGS += -mfp16-format=ieee -mno-unaligned-access
+	MK_CFLAGS   += -mfp16-format=ieee -mno-unaligned-access
+	MK_CXXFLAGS += -mfp16-format=ieee -mno-unaligned-access
 endif
 
 ifneq ($(filter ppc64%,$(UNAME_M)),)
 	POWER9_M := $(shell grep "POWER9" /proc/cpuinfo)
 	ifneq (,$(findstring POWER9,$(POWER9_M)))
-		CFLAGS   += -mcpu=power9
-		CXXFLAGS += -mcpu=power9
-	endif
-	# Require c++23's std::byteswap for big-endian support.
-	ifeq ($(UNAME_M),ppc64)
-		CXXFLAGS += -std=c++23 -DGGML_BIG_ENDIAN
+		MK_CFLAGS   += -mcpu=power9
+		MK_CXXFLAGS += -mcpu=power9
 	endif
 endif
 
@@ -225,12 +203,10 @@ else
 endif
 
 ifndef LLAMA_NO_K_QUANTS
-	CFLAGS   += -DGGML_USE_K_QUANTS
-	CXXFLAGS += -DGGML_USE_K_QUANTS
+	MK_CPPFLAGS += -DGGML_USE_K_QUANTS
 	OBJS     += k_quants.o
 ifdef LLAMA_QKK_64
-	CFLAGS   += -DGGML_QKK_64
-	CXXFLAGS += -DGGML_QKK_64
+	MK_CPPFLAGS += -DGGML_QKK_64
 endif
 endif
 
@@ -238,31 +214,32 @@ ifndef LLAMA_NO_ACCELERATE
 	# Mac M1 - include Accelerate framework.
 	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
 	ifeq ($(UNAME_S),Darwin)
-		CFLAGS  += -DGGML_USE_ACCELERATE
-		LDFLAGS += -framework Accelerate
+		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
+		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
 
 ifdef LLAMA_MPI
-	CFLAGS += -DGGML_USE_MPI -Wno-cast-qual
-	CXXFLAGS += -DGGML_USE_MPI -Wno-cast-qual
+	MK_CPPFLAGS += -DGGML_USE_MPI
+	MK_CFLAGS   += -Wno-cast-qual
+	MK_CXXFLAGS += -Wno-cast-qual
 	OBJS     += ggml-mpi.o
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
-	CFLAGS  += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags openblas)
-	LDFLAGS += $(shell pkg-config --libs openblas)
+	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
+	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
+	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_BLIS
-	CFLAGS  += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	LDFLAGS += -lblis -L/usr/local/lib
+	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_LDFLAGS  += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	CFLAGS    += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	CXXFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
+	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
+	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS      += ggml-cuda.o
 	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
 ifdef LLAMA_CUDA_NVCC
@@ -313,14 +290,15 @@ endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
 
-	CFLAGS   += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
-	CXXFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags clblast OpenCL)
+	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
+	MK_CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
+	MK_CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
 
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
-		LDFLAGS += -lclblast -framework OpenCL
+		MK_LDFLAGS += -lclblast -framework OpenCL
 	else
-		LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
+		MK_LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
 	endif
 	OBJS    += ggml-opencl.o
 
@@ -335,10 +313,9 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
-	CFLAGS      += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
-	CXXFLAGS    += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
-	LDFLAGS     += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
-	LDFLAGS		+= -lhipblas -lamdhip64 -lrocblas
+	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
+	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
@@ -353,10 +330,9 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
-	CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
-	CXXFLAGS += -DGGML_USE_METAL
-	LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-	OBJS     += ggml-metal.o
+	MK_CPPFLAGS += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
+	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
+	OBJS		+= ggml-metal.o
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
@@ -369,10 +345,16 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
-ifdef LLAMA_NO_K_QUANTS
+ifndef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
+
+# combine build flags with cmdline overrides
+override CPPFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS)
+override CFLAGS   := $(MK_CFLAGS) $(CFLAGS)
+override CXXFLAGS := $(MK_CXXFLAGS) $(CXXFLAGS)
+override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
 
 #
 # Print build information
