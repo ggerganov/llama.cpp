@@ -4,6 +4,9 @@ BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-tex
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
 
+# Code coverage output files
+COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
+
 default: $(BUILD_TARGETS)
 
 test:
@@ -407,7 +410,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vrf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report *.dot $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 
 #
 # Examples
