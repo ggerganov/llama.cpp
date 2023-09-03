@@ -1556,6 +1556,7 @@ bool load_checkpoint_lora_file(const char * filename, struct my_llama_model * mo
 
     load_checkpoint_lora_gguf(fctx, f_ggml_ctx, model, lora, opt);
 
+    gguf_free(fctx);
     return true;
 }
 
