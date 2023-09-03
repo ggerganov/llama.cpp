@@ -487,7 +487,7 @@ metal: examples/metal/metal.cpp ggml.o $(OBJS)
 endif
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
-	@sh scripts/build-info.sh > $@.tmp
+	@sh scripts/build-info.sh $(CC) > $@.tmp
 	@if ! cmp -s $@.tmp $@; then \
 		mv $@.tmp $@; \
 	else \

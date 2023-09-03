@@ -21,9 +21,10 @@
 #define DIRECTORY_SEPARATOR '/'
 #endif // _WIN32
 
-#define print_build_info() do {
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT); \
-} while (0)
+#define print_build_info() do {                                                             \
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);         \
+    fprintf(stderr, "%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);  \
+} while(0)
 
 //
 // CLI argument parsing
