@@ -305,6 +305,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_keep = std::stoi(argv[i]);
+        } else if (arg == "--draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_draft = std::stoi(argv[i]);
         } else if (arg == "--chunks") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -317,6 +323,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-md" || arg == "--model-draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_draft = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -638,6 +650,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
         fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -669,6 +682,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
     fprintf(stdout, "  -m FNAME, --model FNAME\n");
     fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "  -md FNAME, --model-draft FNAME\n");
+    fprintf(stdout, "                        draft model for speculative decoding (default: %s)\n", params.model.c_str());
     fprintf(stdout, "  -ld LOGDIR, --logdir LOGDIR\n");
     fprintf(stdout, "                        path under which to save YAML logs (no logging if unset)\n");
     fprintf(stdout, "\n");
@@ -831,6 +846,130 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
 
     return result;
 }
+
+//
+// Sampling utils
+//
+
+llama_token llama_sample_token(
+                  struct llama_context * ctx,
+                  struct llama_context * ctx_guidance,
+                  struct llama_grammar * grammar,
+               const struct gpt_params & params,
+        const std::vector<llama_token> & last_tokens,
+         std::vector<llama_token_data> & candidates,
+                                   int   idx) {
+    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_vocab = llama_n_vocab(ctx);
+
+    const float   temp            = params.temp;
+    const int32_t top_k           = params.top_k <= 0 ? n_vocab : params.top_k;
+    const float   top_p           = params.top_p;
+    const float   tfs_z           = params.tfs_z;
+    const float   typical_p       = params.typical_p;
+    const int32_t repeat_last_n   = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
+    const float   repeat_penalty  = params.repeat_penalty;
+    const float   alpha_presence  = params.presence_penalty;
+    const float   alpha_frequency = params.frequency_penalty;
+    const int     mirostat        = params.mirostat;
+    const float   mirostat_tau    = params.mirostat_tau;
+    const float   mirostat_eta    = params.mirostat_eta;
+    const bool    penalize_nl     = params.penalize_nl;
+
+    llama_token id = 0;
+
+    float * logits = llama_get_logits(ctx) + idx * n_vocab;
+
+    // Apply params.logit_bias map
+    for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
+        logits[it->first] += it->second;
+    }
+
+    candidates.clear();
+    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+        candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+    }
+
+    llama_token_data_array cur_p = { candidates.data(), candidates.size(), false };
+
+    if (ctx_guidance) {
+        llama_sample_classifier_free_guidance(ctx, &cur_p, ctx_guidance, params.cfg_scale);
+    }
+
+    // apply penalties
+    if (!last_tokens.empty()) {
+        const float nl_logit = logits[llama_token_nl(ctx)];
+        const int last_n_repeat = std::min(std::min((int)last_tokens.size(), repeat_last_n), n_ctx);
+
+        llama_sample_repetition_penalty(ctx, &cur_p,
+                last_tokens.data() + last_tokens.size() - last_n_repeat,
+                last_n_repeat, repeat_penalty);
+        llama_sample_frequency_and_presence_penalties(ctx, &cur_p,
+                last_tokens.data() + last_tokens.size() - last_n_repeat,
+                last_n_repeat, alpha_frequency, alpha_presence);
+
+        if (!penalize_nl) {
+            for (size_t idx = 0; idx < cur_p.size; idx++) {
+                if (cur_p.data[idx].id == llama_token_nl(ctx)) {
+                    cur_p.data[idx].logit = nl_logit;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (grammar != NULL) {
+        llama_sample_grammar(ctx, &cur_p, grammar);
+    }
+
+    if (temp <= 0) {
+        // Greedy sampling
+        id = llama_sample_token_greedy(ctx, &cur_p);
+    } else {
+        if (mirostat == 1) {
+            static float mirostat_mu = 2.0f * mirostat_tau;
+            const int mirostat_m = 100;
+            llama_sample_temperature(ctx, &cur_p, temp);
+            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
+        } else if (mirostat == 2) {
+            static float mirostat_mu = 2.0f * mirostat_tau;
+            llama_sample_temperature(ctx, &cur_p, temp);
+            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+        } else {
+            // Temperature sampling
+            llama_sample_top_k      (ctx, &cur_p, top_k, 1);
+            llama_sample_tail_free  (ctx, &cur_p, tfs_z, 1);
+            llama_sample_typical    (ctx, &cur_p, typical_p, 1);
+            llama_sample_top_p      (ctx, &cur_p, top_p, 1);
+            llama_sample_temperature(ctx, &cur_p, temp);
+
+            {
+                const int n_top = 10;
+                LOG("top %d candidates:\n", n_top);
+
+                for (int i = 0; i < n_top; i++) {
+                    const llama_token id = cur_p.data[i].id;
+                    LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx, id).c_str(), cur_p.data[i].p);
+                }
+            }
+
+            id = llama_sample_token(ctx, &cur_p);
+
+            LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx, id).c_str());
+        }
+    }
+    // printf("`%d`", candidates_p.size);
+
+    if (grammar != NULL) {
+        llama_grammar_accept_token(ctx, grammar, id);
+    }
+
+    return id;
+}
+
+//
+// YAML utils
+//
 
 // returns true if successful, false otherwise
 bool create_directory_with_parents(const std::string & path) {
@@ -1070,6 +1209,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "mirostat_lr: %f # default: 0.1\n", params.mirostat_eta);
     fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
     fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
+    fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "mtest: %s # default: false\n", params.mem_test ? "true" : "false");
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
     fprintf(stream, "n_gpu_layers: %d # default: 0\n", params.n_gpu_layers);
