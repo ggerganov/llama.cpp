@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 59
+Current version: 60
 -Concedo
 -->
 
@@ -2744,7 +2744,7 @@ Current version: 59
 	const stablehorde_output_endpoint = stablehorde_url + "/api/v2/generate/status";
 	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
 
-	const kobold_custom_gen_endpoint = "/api/v1/generate/";
+	const kobold_custom_gen_endpoint = "/api/v1/generate";
 	const kobold_custom_mdl_endpoint = "/api/v1/model";
 	const kobold_custom_version_endpoint = "/api/v1/info/version";
 	const kobold_custom_maxctxlen_endpoint = "/api/v1/config/max_context_length";
@@ -4624,18 +4624,20 @@ Current version: 59
 				tmpep = tmpep.endsWith('#') ? tmpep.slice(0, -1) : tmpep;
 				tmpep = tmpep.endsWith('/') ? tmpep.slice(0, -1) : tmpep;
 
+				if (tmpep != "" && (tmpep.trim().endsWith("/api") || tmpep.trim().endsWith("/api/v1")))
+				{
+					tmpep = tmpep.split("/api")[0];
+				}
 
-				let urls = [
+				let urls1 = [
 					apply_proxy_url(tmpep + kobold_custom_mdl_endpoint),
-					apply_proxy_url(tmpep + kobold_custom_version_endpoint),
 				];
 
-				Promise.all(urls.map(url => fetch(url)
+				Promise.all(urls1.map(url => fetch(url)
 					.then(response => response.json())))
 					.then(values => {
-						console.log(values)
+						console.log(values);
 						let mdlname = values[0].result;
-						let ep_version = values[1].result;
 						if (!mdlname) {
 							msgbox("Error at Custom Kobold Endpoint!\n\nThe custom endpoint failed to respond correctly.");
 							selected_models = [];
@@ -4649,9 +4651,24 @@ Current version: 59
 							custom_kobold_endpoint = "";
 							render_gametext();
 						} else {
+
+							//now we get the version number, however this is optional
+							//if it fails we can still proceed
+							let urls2 = [
+								apply_proxy_url(tmpep + kobold_custom_version_endpoint),
+							];
+							Promise.all(urls2.map(url => fetch(url)
+							.then(response => response.json())))
+							.then(values2 => {
+								console.log(values2);
+								let ep_version = values2[0].result;
+								kobold_endpoint_version = (ep_version?ep_version:"");
+							}).catch(error => {
+								console.log("Failed to get KAI version number: " + error);
+							});
+
 							//good to go
 							custom_kobold_endpoint = tmpep;
-							kobold_endpoint_version = (ep_version?ep_version:"");
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 							selected_workers = [];
 							if (perfdata == null) {
@@ -5912,6 +5929,37 @@ Current version: 59
 		show_abort_button(false);
 	}
 
+	var addimgLongPressTimer = null;
+	function btn_addimg_longpress_start()
+	{
+		addimgLongPressTimer = setTimeout(()=>{
+			inputBox("Enter a prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
+				let userinput = document.getElementById("inputboxcontainerinput").value;
+				if(userinput.trim()!="")
+				{
+					var sentence = userinput.trim().substring(0, 300);
+					do_manual_gen_image(sentence);
+				}
+			},false);
+		}, 2000);
+	}
+	function btn_addimg_longpress_end()
+	{
+		clearTimeout(addimgLongPressTimer);
+	}
+
+	function do_manual_gen_image(sentence)
+	{
+		generate_new_image(sentence);
+		document.getElementById("btn_genimg").disabled = true;
+		document.getElementById("btn_genimg2").disabled = true;
+		//disable it for 10 sec to prevent spam
+		setTimeout(() => {
+			document.getElementById("btn_genimg").disabled = false;
+			document.getElementById("btn_genimg2").disabled = false;
+		}, 10000);
+	}
+
 	function manual_gen_image() {
 		let truncated_context = concat_gametext(true, "");
 		truncated_context = replace_placeholders(truncated_context);
@@ -5921,15 +5969,8 @@ Current version: 59
 			sentence = start_trim_to_sentence(sentence);
 			sentence = end_trim_to_sentence(sentence,true);
 			if (sentence.length > 0) {
-				generate_new_image(sentence);
 				nextgeneratedimagemilestone = tclen + generateimagesinterval;
-				document.getElementById("btn_genimg").disabled = true;
-				document.getElementById("btn_genimg2").disabled = true;
-				//disable it for 10 sec to prevent spam
-				setTimeout(() => {
-					document.getElementById("btn_genimg").disabled = false;
-					document.getElementById("btn_genimg2").disabled = false;
-				}, 10000);
+				do_manual_gen_image(sentence);
 			}
 		}
 	}
@@ -8138,7 +8179,7 @@ Current version: 59
 			render_gametext();
 		}
 
-		}, 3000);
+		}, 2000);
 	}
 	function btn_back_longpress_end()
 	{
@@ -8178,7 +8219,7 @@ Current version: 59
 			render_gametext();
 		}
 
-		}, 3000);
+		}, 2000);
 	}
 	function btn_redo_longpress_end()
 	{
@@ -8301,21 +8342,49 @@ Current version: 59
 				var obj = JSON.parse(jsonString);
 				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
 			}
-		}else{
-			//reset to defaults
-			localStorage.setItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
-		}
-		// Initialize text colorPicker and background color pickers. Text colorPicker should change the foreground, and background colorPicker should change the background.
+		}	// If persist session isn't toggled, reset to the default settings.
+		else { localStorage.setItem((localmode ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
+
+		// Initialize foregroundColorPickers and backgroundColorPickers.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
-			element.addEventListener('click', (e) => {
-				let clrPicker = e.target.classList.contains('enhancedTextColorPicker') ? colorPicker : colorPicker_background;
-				clrPicker.clickedElement = e.target;
-				clrPicker.click();
+			// Create a fully transparent colorPicker for each element and initialize it as child of the textblock element.
+			// ..this happens because we want the colorPicker to open right below the element.
+			let useBackground = !element.classList.contains('enhancedTextColorPicker');
+			let colorPicker = document.createElement('input');
+			colorPicker.type = 'color';
+			colorPicker.style.opacity = '0';
+			colorPicker.style.position = 'absolute';
+			colorPicker.style.width = '100%';
+			colorPicker.style.height = '100%';
+			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
+			element.style.position = 'relative';
+			element.appendChild(colorPicker);
+
+			// If we're on Safari browser and in iOS, we need some adjustments for the colorpickers to work.
+			// ..this happens because the clicks need to be directly done on the colorPicker for iOS in Safari.
+			if (/^((?!Chrome|Firefox).)*Safari/i.test(navigator.userAgent) && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+				// Create a wrapper for the existing content. This will fix the offset slightly.
+				let contentWrapper = document.createElement('div');
+				contentWrapper.style.position = 'relative';
+				contentWrapper.style.zIndex = '0';
+				element.appendChild(contentWrapper);
+
+				// Finally, make the colorPicker directly clickable, and offset it slightly towards the text block.
+				colorPicker.style.zIndex = '1';
+				colorPicker.style.margin = '-20px';
+			}
+			else {
+				colorPicker.style.zIndex = '-1';
+				element.addEventListener('click', () => colorPicker.click());
+			}
+
+			// Initialize the functionalities of the colorPicker
+			colorPicker.addEventListener('change', function() {
+				element.style[`${useBackground ? 'backgroundColor' : 'color'}`] = this.value;
+				refreshPreview();
 			});
 			element.addEventListener('mouseover', () => element.style.cursor = "pointer");
 		});
-		document.getElementById('colorPicker').addEventListener('change', 			 function() { this.clickedElement.style.color           = this.value; this.clickedElement = null; refreshPreview(); });
-		document.getElementById('colorPicker_background').addEventListener('change', function() { this.clickedElement.style.backgroundColor = this.value; this.clickedElement = null; refreshPreview(); });
 
 		// Initialize functionality for the margin & padding input fields.
 		document.querySelectorAll('.instruct-settings-input').forEach(element => {
@@ -8514,14 +8583,14 @@ Current version: 59
 		// We'll transform the input to a well-formatted HTML string.
 		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
-		newbodystr = replaceAll(newbodystr,you + '\n', you);
+		newbodystr = replaceAll(newbodystr, you + '\n', you);
 		newbodystr = replaceAll(newbodystr, bot + '\n', bot);
 		newbodystr = replaceAll(newbodystr, you + ' ', you);
-		newbodystr = replaceAll(newbodystr,bot + ' ', bot);
+		newbodystr = replaceAll(newbodystr, bot + ' ', bot);
 		newbodystr = replaceAll(newbodystr,'"', '&quot;');
-		newbodystr = replaceAll(newbodystr,you + '\n', you);
-		newbodystr = replaceAll(newbodystr,you, style('you'));
-		newbodystr = replaceAll(newbodystr,bot, style('AI'));
+		newbodystr = replaceAll(newbodystr, you + '\n', you);
+		newbodystr = replaceAll(newbodystr, you, style('you'));
+		newbodystr = replaceAll(newbodystr, bot, style('AI'));
 		newbodystr += contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
 		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
 			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
@@ -8540,7 +8609,12 @@ Current version: 59
 		let ret = newbodystr;
 		ret = replaceAll(ret,'\r\n','<br>');
 		ret = replaceAll(ret,'\n','<br>');
-		return portraitsStyling + ret + '</p></div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+		let ret2 = ""
+		if(synchro_pending_stream!="")
+		{
+			ret2 += `<div class="incoming_msg"><p>`+"<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div>`;
+		}
+		return portraitsStyling + ret + '</p>'+ret2+'</div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
 		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
@@ -8670,7 +8744,7 @@ Current version: 59
 					<button type="button" class="btn btn-primary" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg"  onclick="manual_gen_image()">Add Img</button>
+					<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 				</div>
 				<div class="box flex flex-push-right">
 					<input type="checkbox" id="entersubmit" checked>
@@ -8713,7 +8787,7 @@ Current version: 59
 					<button type="button" class="btn btn-primary" id="btn_actundo2" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2"  onclick="manual_gen_image()">Add Img</button>
+					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 					<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()">Customize UI</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
@@ -9356,7 +9430,6 @@ Current version: 59
 		</div>
 	</div>
 
-
 	<div class="popupcontainer flex hidden" id="workercontainer">
 		<div class="popupbg flex"></div>
 		<div class="workerpopup">
@@ -9665,8 +9738,6 @@ Current version: 59
 					<p>Style Preview</p>
 					<div id="aesthetic_text_preview" style="background-color: black; margin: 2px; text-align: left; word-wrap: break-word;"></div>
 				</div>
-				<input type="color" id="colorPicker" style="display: none;">
-				<input type="color" id="colorPicker_background" style="display: none;">
 				<input type="file" id="portraitFileInput" style="display:none" accept="image/*">
 			</div>
 		</div>

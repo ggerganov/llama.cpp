@@ -230,10 +230,13 @@ def load_model(model_filename):
     if not args.tensor_split:
         if (args.usecublas and "0" in args.usecublas):
             os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+            os.environ["HIP_VISIBLE_DEVICES"] = "0"
         elif (args.usecublas and "1" in args.usecublas):
             os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+            os.environ["HIP_VISIBLE_DEVICES"] = "1"
         elif (args.usecublas and "2" in args.usecublas):
             os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+            os.environ["HIP_VISIBLE_DEVICES"] = "2"
     else:
         if (args.usecublas and "0" in args.usecublas):
             inputs.cublas_info = 0
@@ -712,7 +715,7 @@ def show_new_gui():
         import tkinter as tk
         root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
         root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
@@ -1097,7 +1100,7 @@ def show_new_gui():
     # launch
     def guilaunch():
         if model_var.get() == "":
-            tmp = askopenfilename(title="Select ggml model .bin files")
+            tmp = askopenfilename(title="Select ggml model .bin or .gguf files")
             model_var.set(tmp)
         nonlocal nextstate
         nextstate = 1
@@ -1465,7 +1468,7 @@ def show_old_gui():
 
         root = tk.Tk()
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
         root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
@@ -1475,7 +1478,7 @@ def show_old_gui():
     else:
         root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
         root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
