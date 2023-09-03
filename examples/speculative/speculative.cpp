@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "llama.h"
+#include "grammar-parser.h"
 
 #include <cmath>
 #include <cstdio>
@@ -109,6 +110,41 @@ int main(int argc, char ** argv) {
     // used to determine end of generation
     bool has_eos = false;
 
+    // grammar stuff
+    struct llama_grammar * grammar_dft = NULL;
+    struct llama_grammar * grammar_tgt = NULL;
+
+    grammar_parser::parse_state parsed_grammar_dft;
+    grammar_parser::parse_state parsed_grammar_tgt;
+
+    std::vector<llama_grammar *> grammar_mem(n_draft, NULL);
+
+    if (!params.grammar.empty()) {
+        // dft
+        {
+            parsed_grammar_dft = grammar_parser::parse(params.grammar.c_str());
+            // will be empty (default) if there are parse errors
+            if (parsed_grammar_dft.rules.empty()) {
+                return 1;
+            }
+
+            std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar_dft.c_rules());
+            grammar_dft = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar_dft.symbol_ids.at("root"));
+        }
+
+        // tgt
+        {
+            parsed_grammar_tgt = grammar_parser::parse(params.grammar.c_str());
+            // will be empty (default) if there are parse errors
+            if (parsed_grammar_tgt.rules.empty()) {
+                return 1;
+            }
+
+            std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar_tgt.c_rules());
+            grammar_tgt = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar_tgt.symbol_ids.at("root"));
+        }
+    }
+
     const auto t_dec_start = ggml_time_us();
 
     while (true) {
@@ -117,7 +153,7 @@ int main(int argc, char ** argv) {
         // sample from the drafted tokens if any
         int i_dft = 0;
         while (true) {
-            const llama_token id = llama_sample_token(ctx_tgt, NULL, NULL, params, last_tokens, candidates, i_dft);
+            const llama_token id = llama_sample_token(ctx_tgt, NULL, grammar_tgt, params, last_tokens, candidates, i_dft);
 
             last_tokens.erase(last_tokens.begin());
             last_tokens.push_back(id);
@@ -144,12 +180,34 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
+            if (i_dft < (int) drafted.size()) {
+                LOG("drafted token %d rejected\n", id);
+
+                if (grammar_mem[i_dft]) {
+                    grammar_dft = llama_grammar_copy(grammar_mem[i_dft]);
+                    LOG("restored grammar %d\n", i_dft);
+                }
+            }
+
+            for (auto & g : grammar_mem) {
+                if (g) {
+                    llama_grammar_free(g);
+                    g = NULL;
+                }
+            }
+
+            LOG("i_dft = %d, drafted.size() = %d\n", i_dft, (int) drafted.size());
+
             // the drafted token was rejected or we are out of drafted tokens
             llama_eval(ctx_dft, &id, 1, n_past_dft, params.n_threads);
             ++n_past_dft;
 
             drafted.clear();
             drafted.push_back(id);
+
+            if (grammar_dft != NULL) {
+                llama_grammar_accept_token(ctx_dft, grammar_dft, id);
+            }
 
             break;
         }
@@ -161,6 +219,11 @@ int main(int argc, char ** argv) {
         // sample n_draft tokens from the draft model picking the best token
         int n_past_cur = n_past_dft;
         for (int i = 0; i < n_draft; ++i) {
+            // remember the grammar state
+            if (grammar_dft != NULL) {
+                grammar_mem[i] = llama_grammar_copy(grammar_dft);
+            }
+
             float * logits = llama_get_logits(ctx_dft);
 
             candidates.clear();
@@ -169,6 +232,10 @@ int main(int argc, char ** argv) {
             }
 
             llama_token_data_array cur_p = { candidates.data(), candidates.size(), false };
+
+            if (grammar_dft != NULL) {
+                llama_sample_grammar(ctx_dft, &cur_p, grammar_dft);
+            }
 
             // computes softmax and sorts the candidates
             llama_sample_softmax(ctx_dft, &cur_p);
@@ -182,7 +249,13 @@ int main(int argc, char ** argv) {
                 break;
             }
 
-            drafted.push_back(cur_p.data[0].id);
+            const llama_token id = cur_p.data[0].id;
+
+            if (grammar_dft != NULL) {
+                llama_grammar_accept_token(ctx_dft, grammar_dft, id);
+            }
+
+            drafted.push_back(id);
             ++n_drafted;
 
             if (i < n_draft - 1) {
@@ -226,6 +299,10 @@ int main(int argc, char ** argv) {
     llama_free(ctx_dft);
     llama_free_model(model_dft);
 
+    if (grammar_dft != NULL) {
+        llama_grammar_free(grammar_dft);
+        llama_grammar_free(grammar_tgt);
+    }
     llama_backend_free();
 
     fprintf(stderr, "\n\n");
