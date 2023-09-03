@@ -1,23 +1,21 @@
 #!/bin/sh
 
-BUILD_NUMBER="0"
-BUILD_COMMIT="unknown"
+build_number="0"
+build_commit="unknown"
 
 # git is broken on WSL so we need to strip extra newlines
-REV_LIST=$(git rev-list --count HEAD | tr -d '\n')
-if [ $? -eq 0 ]; then
-  BUILD_NUMBER=$REV_LIST
+if out=$(git rev-list --count HEAD | tr -d '\n'); then
+  build_number=$out
 fi
 
-REV_PARSE=$(git rev-parse --short HEAD | tr -d '\n')
-if [ $? -eq 0 ]; then
-  BUILD_COMMIT=$REV_PARSE
+if out=$(git rev-parse --short HEAD | tr -d '\n'); then
+  build_commit=$out
 fi
 
 echo "#ifndef BUILD_INFO_H"
 echo "#define BUILD_INFO_H"
 echo
-echo "#define BUILD_NUMBER $BUILD_NUMBER"
-echo "#define BUILD_COMMIT \"$BUILD_COMMIT\""
+echo "#define BUILD_NUMBER $build_number"
+echo "#define BUILD_COMMIT \"$build_commit\""
 echo
 echo "#endif // BUILD_INFO_H"
