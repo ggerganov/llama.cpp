@@ -20,7 +20,7 @@ endif
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
 	ifndef LLAMA_NO_METAL
-		BUILD_TARGETS += metal
+		LLAMA_METAL := 1
 	endif
 
 	ifneq ($(UNAME_P),arm)
@@ -31,6 +31,10 @@ ifeq ($(UNAME_S),Darwin)
 			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
 		endif
 	endif
+endif
+
+ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
+BUILD_TARGETS += metal
 endif
 
 default: $(BUILD_TARGETS)
@@ -223,7 +227,7 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif # LLAMA_NO_ACCELERATE
 
-ifndef LLAMA_NO_METAL
+ifdef LLAMA_METAL
 	# By default - use GPU acceleration on Mac OS
 	ifeq ($(UNAME_S),Darwin)
 		CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
@@ -231,7 +235,7 @@ ifndef LLAMA_NO_METAL
 		LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 		OBJS     += ggml-metal.o
 	endif
-endif # LLAMA_NO_METAL
+endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
 	MK_CPPFLAGS += -DGGML_USE_MPI
@@ -343,16 +347,16 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 endif # LLAMA_HIPBLAS
 
-ifndef LLAMA_NO_METAL
+ifdef LLAMA_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS		+= ggml-metal.o
 endif # LLAMA_METAL
 
-ifndef LLAMA_NO_METAL
+ifdef LLAMA_METAL
 ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_NO_METAL
+endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
 ggml-mpi.o: ggml-mpi.c ggml-mpi.h
@@ -471,7 +475,7 @@ baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o common.o $(OBJS)
 beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-ifndef LLAMA_NO_METAL
+ifdef LLAMA_METAL
 metal: examples/metal/metal.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif
