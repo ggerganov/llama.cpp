@@ -22,7 +22,46 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
 ```
 
 Finetune output files will be saved every N iterations (config with `--save-every N`).
-The pattern "ITERATION" in the output filenames will be replaced with the iteration number and "LATEST" for the latest output.
+The pattern 'ITERATION' in the output filenames will be replaced with the iteration number and with 'LATEST' for the latest output.
+So in above example after 10 iterations these files will be written:
+- chk-lora-open-llama-3b-v2-q8_0-shakespeare-10.gguf
+- chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf
+- lora-open-llama-3b-v2-q8_0-shakespeare-10.bin
+- lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+
+After 10 more iterations:
+- chk-lora-open-llama-3b-v2-q8_0-shakespeare-20.gguf
+- chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf
+- lora-open-llama-3b-v2-q8_0-shakespeare-20.bin
+- lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+
+Checkpoint files (`--checkpoint-in FN`, `--checkpoint-out FN`) store the training process. When the input checkpoint file does not exist, it will begin finetuning a new randomly initialized adapter.
+
+llama.cpp compatible LORA adapters will be saved with filename specified by `--lora-out FN`.
+These LORA adapters can then be used by `main` together with the base model, like in the 'predict' example command above.
+
+In `main` you can also load multiple LORA adapters, which will then be mixed together.
+
+For example if you have two LORA adapters `lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin` and `lora-open-llama-3b-v2-q8_0-bible-LATEST.bin`, you can mix them together like this:
+
+```bash
+./bin/main -m open-llama-3b-v2-q8_0.gguf \
+  --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin \
+  --lora lora-open-llama-3b-v2-q8_0-bible-LATEST.bin
+```
+
+You can change how strong each LORA adapter is applied to the base model by using `--lora-scaled FN SCALE` instead of `--lora FN`.
+
+For example to apply 40% of the 'shakespeare' LORA adapter, 80% of the 'bible' LORA adapter and 100% of yet another one:
+
+```bash
+./bin/main -m open-llama-3b-v2-q8_0.gguf \
+  --lora-scaled lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin 0.4 \
+  --lora-scaled lora-open-llama-3b-v2-q8_0-bible-LATEST.bin 0.8 \
+  --lora lora-open-llama-3b-v2-q8_0-yet-another-one-LATEST.bin
+```
+
+The scale numbers don't need to add up to one, and you can also use numbers creater than 1 to further increase the influence of an adapter. But making the values to big will sometimes result in worse output. Play around to find good values.
 
 Gradient checkpointing reduces the memory requirements by ~50% but increases the runtime.
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.
@@ -43,5 +82,7 @@ The LORA rank is configured for each model tensor type separately with these com
   --rank-w2 N                LORA rank for w2 tensor (default 4)
   --rank-w3 N                LORA rank for w3 tensor (default 4)
 ```
+
+The LORA rank of 'norm' tensors should always be 1.
 
 To see all available options use `finetune --help`.
