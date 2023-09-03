@@ -67,10 +67,16 @@ int main(int argc, char ** argv) {
 
     fflush(stderr);
 
+    const int n_input = inp.size();
+
+    const auto t_enc_start = ggml_time_us();
+
     // eval the prompt with both models
     llama_eval(ctx_tgt,  inp.data(), int(inp.size() - 1), 0, params.n_threads);
     llama_eval(ctx_tgt, &inp.back(),      1, inp.size() - 1, params.n_threads);
     llama_eval(ctx_dft,  inp.data(),     int(inp.size()), 0, params.n_threads);
+
+    const auto t_enc_end = ggml_time_us();
 
     // the 2 models should have the same vocab
     const int n_ctx   = llama_n_ctx(ctx_tgt);
@@ -103,7 +109,7 @@ int main(int argc, char ** argv) {
     // used to determine end of generation
     bool has_eos = false;
 
-    const auto t_gen_start = ggml_time_us();
+    const auto t_dec_start = ggml_time_us();
 
     while (true) {
         LOG("drafted: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_dft, drafted));
@@ -193,11 +199,12 @@ int main(int argc, char ** argv) {
         drafted.erase(drafted.begin());
     }
 
-    auto t_gen_end = ggml_time_us();
+    auto t_dec_end = ggml_time_us();
 
     LOG_TEE("\n\n");
 
-    LOG_TEE("generated %d tokens in %.3f seconds, speed: %.3f t/s\n", n_predict, (t_gen_end - t_gen_start) / 1e6f, n_predict / ((t_gen_end - t_gen_start) / 1e6f));
+    LOG_TEE("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));
+    LOG_TEE("decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_predict, (t_dec_end - t_dec_start) / 1e6f, n_predict / ((t_dec_end - t_dec_start) / 1e6f));
 
     // TODO: make sure these numbers are computed correctly
     LOG_TEE("\n");
