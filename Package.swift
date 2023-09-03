@@ -16,13 +16,18 @@ let package = Package(
                 "ggml.c",
                 "llama.cpp",
                 "ggml-alloc.c",
-                "k_quants.c"
+                "k_quants.c",
+                "common/common.cpp",
+                "common/console.cpp",
+                "common/grammar-parser.cpp",
             ],
             publicHeadersPath: "spm-headers",
             cSettings: [
+                .headerSearchPath("common"),
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
                 .define("GGML_USE_K_QUANTS"),
-                .define("GGML_USE_ACCELERATE")
+                .define("GGML_USE_ACCELERATE"),
+                .define("LLAMA_USE_SWIFT")
             ],
             linkerSettings: [
                 .linkedFramework("Accelerate")

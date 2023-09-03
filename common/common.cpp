@@ -1,5 +1,7 @@
 #include "common.h"
+#ifndef LLAMA_USE_SWIFT
 #include "build-info.h"
+#endif
 #include "llama.h"
 
 #include <algorithm>
@@ -971,8 +973,10 @@ std::string get_sortable_timestamp() {
 
 void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const llama_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
+#ifndef LLAMA_USE_SWIFT
     fprintf(stream, "build_commit: %s\n", BUILD_COMMIT);
     fprintf(stream, "build_number: %d\n", BUILD_NUMBER);
+#endif
     fprintf(stream, "cpu_has_arm_fma: %s\n", ggml_cpu_has_arm_fma() ? "true" : "false");
     fprintf(stream, "cpu_has_avx: %s\n", ggml_cpu_has_avx() ? "true" : "false");
     fprintf(stream, "cpu_has_avx2: %s\n", ggml_cpu_has_avx2() ? "true" : "false");
