@@ -67,8 +67,8 @@ OPT = -Ofast
 else
 OPT = -O3
 endif
-CFLAGS   = -I.            $(OPT) -std=c11   -fPIC
-CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC
+CFLAGS   = -I.            $(OPT) -std=c11   -fPIC -g -fsanitize=address
+CXXFLAGS = -I. -I./common $(OPT) -std=c++11 -fPIC -g -fsanitize=address
 LDFLAGS  =
 
 ifdef LLAMA_DEBUG
