@@ -250,7 +250,7 @@ if (LLAMA_CUBLAS)
         message(STATUS "cuBLAS found")
 
         enable_language(CUDA)
-        
+
         set(GGML_HEADERS_CUDA ggml-cuda.h)
         set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
