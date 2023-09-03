@@ -102,6 +102,9 @@ struct ggml_metal_context {
 #undef GGML_METAL_DECL_KERNEL
 };
 
+const char ggml_metal_file[];
+const size_t ggml_metal_file_len;
+
 // MSL code
 // TODO: move the contents here when ready
 //       for now it is easier to work in a separate file
@@ -140,7 +143,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     ctx->d_queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
-#if 0
+#if 1
+    NSString * const msl_library_source = [[NSString alloc] initWithBytes: ggml_metal_file length: ggml_metal_file_len encoding: NSASCIIStringEncoding];
     // compile from source string and show compile log
     {
         NSError * error = nil;
@@ -151,6 +155,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             return NULL;
         }
     }
+    [msl_library_source release];
 #else
     UNUSED(msl_library_source);
 
