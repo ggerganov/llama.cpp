@@ -323,15 +323,27 @@ class BpeVocab:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
+            # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
-            added_tokens = {}
+            # Fall back to trying to find the added tokens in tokenizer.json
+            tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
+            if not tokenizer_json_file.is_file():
+                added_tokens = {}
+            else:
+                tokenizer_json = json.load(open(tokenizer_json_file, encoding="utf-8"))
+                added_tokens = dict(
+                    (item['content'], item['id'])
+                    for item in tokenizer_json.get('added_tokens', [])
+                    # Added tokens here can be duplicates of the main vocabulary.
+                    if item['content'] not in self.bpe_tokenizer )
 
         vocab_size: int = len(self.bpe_tokenizer)
         expected_ids    = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids      = sorted(added_tokens.values())
         if expected_ids != actual_ids:
-            raise Exception(f"Expected added token IDs to be sequential and start at {len(added_tokens)}; got {actual_ids}")
+            expected_end_id = vocab_size + len(actual_ids) - 1
+            raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
 
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
         self.added_tokens_list    = [text for (text, idx) in items]
@@ -345,10 +357,22 @@ class BpeVocab:
         from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
         byte_encoder = tokenization_gpt2.bytes_to_unicode()
         byte_decoder = {v: k for k, v in byte_encoder.items()}
+        score = 0.0
         for i, item in enumerate(tokenizer):
             text: bytes = item.encode("utf-8")
-            score: float = -i
-            yield text, score, gguf.TokenType.USER_DEFINED
+            # FIXME: These shouldn't be hardcoded, but it's probably better than the current behavior?
+            if i <= 258 and text.startswith(b'<') and text.endswith(b'>'):
+                if i == 0 and text == b'<unk>':
+                    toktype = gguf.TokenType.UNKNOWN
+                elif i == 1 or i == 2:
+                    toktype = gguf.TokenType.CONTROL
+                elif i >= 3 and text.startswith(b'<0x'):
+                    toktype = gguf.TokenType.BYTE
+                else:
+                    toktype = gguf.TokenType.NORMAL
+            else:
+                toktype = gguf.TokenType.NORMAL
+            yield text, score, toktype
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
