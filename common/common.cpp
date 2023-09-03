@@ -752,6 +752,14 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         params.logit_bias[llama_token_eos(lctx)] = -INFINITY;
     }
 
+    {
+        LOG("warming up the model with an empty run\n");
+
+        const std::vector<llama_token> tmp = { llama_token_bos(lctx), };
+        llama_eval(lctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        llama_reset_timings(lctx);
+    }
+
     return std::make_tuple(model, lctx);
 }
 

@@ -492,14 +492,6 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
-    {
-        LOG("warming up the model with an empty run\n");
-
-        const std::vector<llama_token> tmp = { llama_token_bos(ctx), };
-        llama_eval(ctx, tmp.data(), tmp.size(), 0, params.n_threads);
-        llama_reset_timings(ctx);
-    }
-
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (embd.size() > 0) {
