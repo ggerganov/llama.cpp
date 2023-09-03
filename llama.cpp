@@ -325,6 +325,44 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
+    {
+        LLM_ARCH_GPT2,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_GPTJ,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_GPTNEOX,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
+            { LLM_TENSOR_OUTPUT,          "output" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_MPT,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
+    {
+        LLM_ARCH_UNKNOWN,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+        },
+    },
 };
 
 static llm_arch llm_arch_from_string(const std::string & name) {
@@ -611,20 +649,25 @@ struct llama_mmap {
             throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
         }
 
-        #if _WIN32_WINNT >= _WIN32_WINNT_WIN8
         if (prefetch) {
-            // Advise the kernel to preload the mapped memory
-            WIN32_MEMORY_RANGE_ENTRY range;
-            range.VirtualAddress = addr;
-            range.NumberOfBytes = (SIZE_T)size;
-            if (!PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
-                fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
-                        llama_format_win_err(GetLastError()).c_str());
+            // PrefetchVirtualMemory is only present on Windows 8 and above, so we dynamically load it
+            BOOL (WINAPI *pPrefetchVirtualMemory) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
+            HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
+
+            // may fail on pre-Windows 8 systems
+            pPrefetchVirtualMemory = reinterpret_cast<decltype(pPrefetchVirtualMemory)> (GetProcAddress(hKernel32, "PrefetchVirtualMemory"));
+
+            if (pPrefetchVirtualMemory) {
+                // advise the kernel to preload the mapped memory
+                WIN32_MEMORY_RANGE_ENTRY range;
+                range.VirtualAddress = addr;
+                range.NumberOfBytes = (SIZE_T)size;
+                if (!pPrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
+                    fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
+                            llama_format_win_err(GetLastError()).c_str());
+                }
             }
         }
-        #else
-        #pragma message("warning: You are building for pre-Windows 8; prefetch not supported")
-        #endif // _WIN32_WINNT >= _WIN32_WINNT_WIN8
     }
 
     ~llama_mmap() {
@@ -1600,9 +1643,13 @@ static void llm_load_hparams(
 
         GGUF_GET_KEY(ctx, hparams.n_rot, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ROPE_DIMENSION_COUNT));
 
-        if (hparams.n_rot != hparams.n_embd / hparams.n_head) {
-            throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd / hparams.n_head));
+        if (model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON) {
+            if (hparams.n_rot != hparams.n_embd / hparams.n_head) {
+                throw std::runtime_error(format("invalid n_rot: %u, expected %u", hparams.n_rot, hparams.n_embd / hparams.n_head));
+            }
         }
+        // gpt-neox n_rot = rotary_pct * (n_embd / n_head)
+        // gpt-j n_rot = rotary_dim
     }
 
     // arch-specific KVs
@@ -3595,7 +3642,7 @@ static void llama_grammar_advance_stack(
         std::vector<std::vector<const llama_grammar_element *>> & new_stacks) {
 
     if (stack.empty()) {
-        new_stacks.push_back(stack);
+        new_stacks.emplace_back(stack);
         return;
     }
 
@@ -3632,7 +3679,7 @@ static void llama_grammar_advance_stack(
         }
         case LLAMA_GRETYPE_CHAR:
         case LLAMA_GRETYPE_CHAR_NOT:
-            new_stacks.push_back(stack);
+            new_stacks.emplace_back(stack);
             break;
         default:
             // end of alternate (LLAMA_GRETYPE_END, LLAMA_GRETYPE_ALT) or middle of char range
@@ -4388,7 +4435,7 @@ struct llama_logit_info {
         }
         return min_heap;
     }
-    float probability_from_logit(float logit) {
+    float probability_from_logit(float logit) const {
         return normalizer * std::exp(logit - max_l);
     }
 };
@@ -4678,6 +4725,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llm_load_arch(*ml, model);
     llm_load_hparams(*ml, model, 0, 0, 0);
 
+    if (params->only_copy) {
+        ftype = model.ftype;
+    }
+
     const size_t align = GGUF_DEFAULT_ALIGNMENT;
     struct gguf_context * ctx_out = gguf_init_empty();
 
@@ -4764,18 +4815,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         // quantize only 2D tensors
         quantize &= (tensor->n_dims == 2);
         quantize &= params->quantize_output_tensor || name != "output.weight";
-        quantize &= quantized_type != tensor->type;
+        quantize &= !params->only_copy;
 
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
 
-        if (!quantize) {
-            new_type = tensor->type;
-            new_data = tensor->data;
-            new_size = ggml_nbytes(tensor);
-            LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
-        } else {
+        if (quantize) {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
             // TODO: avoid hardcoded tensor names - use the TN_* constants
@@ -4874,7 +4920,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 }
             }
 #endif
-
+            // If we've decided to quantize to the same type the tensor is already
+            // in then there's nothing to do.
+            quantize = tensor->type != new_type;
+        }
+        if (!quantize) {
+            new_type = tensor->type;
+            new_data = tensor->data;
+            new_size = ggml_nbytes(tensor);
+            LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
+        } else {
             const size_t nelements = ggml_nelements(tensor);
 
             float * f32_data;
@@ -5287,7 +5342,7 @@ struct llama_context_params llama_context_default_params() {
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
-        /*.mul_mat_q                   =*/ false,
+        /*.mul_mat_q                   =*/ true,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.vocab_only                  =*/ false,
@@ -5305,6 +5360,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
         /*.ftype                       =*/ LLAMA_FTYPE_MOSTLY_Q5_1,
         /*.allow_requantize            =*/ false,
         /*.quantize_output_tensor      =*/ true,
+        /*.only_copy                   =*/ false,
     };
 
     return result;

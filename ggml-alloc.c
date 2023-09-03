@@ -284,7 +284,14 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
 // address and size of the buffer when measuring
 // it needs to be large enough to fit all the tensors, but it cannot overlap with other existing buffers
 static void * const MEASURE_BASE_ADDR = (void *) 0x1000;
+#if defined(__ARM_NEON) && !defined(__aarch64__)
+// 32-bit
+// TODO: Use for 32-bit x86 as well
+static const size_t MEASURE_MAX_SIZE  = (1ULL<<32) - 1; // 4 GB
+#else
+// 64-bit
 static const size_t MEASURE_MAX_SIZE  = 1ULL<<40; // 1 TB
+#endif
 
 struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
     struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);

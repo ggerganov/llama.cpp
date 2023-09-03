@@ -24,7 +24,9 @@
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
 #include <codecvt>
 #include <locale>
 #include <windows.h>
@@ -1027,7 +1029,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     dump_string_yaml_multiline(stream, "grammar", params.grammar.c_str());
     fprintf(stream, "grammar-file: # never logged, see grammar instead. Can still be specified for input.\n");
     fprintf(stream, "hellaswag: %s # default: false\n", params.hellaswag ? "true" : "false");
-    fprintf(stream, "hellaswag_tasks: %ld # default: 400\n", params.hellaswag_tasks);
+    fprintf(stream, "hellaswag_tasks: %zu # default: 400\n", params.hellaswag_tasks);
 
     const auto logit_bias_eos = params.logit_bias.find(llama_token_eos(lctx));
     const bool ignore_eos = logit_bias_eos != params.logit_bias.end() && logit_bias_eos->second == -INFINITY;
