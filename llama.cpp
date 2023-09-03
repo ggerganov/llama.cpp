@@ -5334,7 +5334,7 @@ struct llama_context_params llama_context_default_params() {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
-        /*.gpu_layers                  =*/ 0,
+        /*.n_gpu_layers                =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
@@ -5350,6 +5350,10 @@ struct llama_context_params llama_context_default_params() {
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
     };
+
+#ifdef GGML_USE_METAL
+    result.n_gpu_layers = 1;
+#endif
 
     return result;
 }

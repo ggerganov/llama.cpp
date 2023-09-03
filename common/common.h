@@ -33,7 +33,7 @@ struct gpt_params {
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
-    int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
+    int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
