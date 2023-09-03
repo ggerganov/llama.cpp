@@ -2243,10 +2243,9 @@ void print_duration(float fmillis) {
     int64_t seconds = (millis - days*one_day - hours*one_hour - minutes*one_min)/one_sec;
 
     if (days > 0) {
-        printf("%ldd %02ld:%02ld:%02ld", days, hours, minutes, seconds);
-    } else {
-        printf("%02ld:%02ld:%02ld", hours, minutes, seconds);
+        printf("%lldd ", days);
     }
+    printf("%02lld:%02lld:%02lld", hours, minutes, seconds);
 }
 
 void opt_callback(void * vdata, float * sched) {
@@ -2697,8 +2696,10 @@ int main(int argc, char ** argv) {
 
     int64_t t1 = ggml_time_ms();
     int64_t d  = t1-t0;
-    double  dd = (double) d * 1e-3;
-    printf("%s: total training time=%f seconds\n", __func__, dd);
+    float  fd  = (float) d * 1e-3;
+    printf("%s: total training ", __func__);
+    print_duration(fd);
+    printf("\n");
 
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
     if (new_iters > 0) {
