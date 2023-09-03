@@ -552,7 +552,7 @@ kernel void kernel_mul_mat_f16_f32_1row(
         }
         float all_sum = simd_sum(sumf);
         if (tiisg == 0) {
-            for (int i = 4*(ne00/4); i < ne00; ++i) sumf += (float) x[i] * y[i];
+            for (int i = 4*(ne00/4); i < ne00; ++i) all_sum += (float) x[i] * y[i];
             dst[im*ne1*ne0 + r1*ne0 + r0] = all_sum;
         }
     }
@@ -625,7 +625,7 @@ kernel void kernel_mul_mat_f16_f32(
 
             float all_sum = simd_sum(sumf);
             if (tiisg == 0) {
-                for (int i = 4*(ne00/4); i < ne00; ++i) sumf += (float) x[i] * y[i];
+                for (int i = 4*(ne00/4); i < ne00; ++i) all_sum += (float) x[i] * y[i];
                 dst[im*ne1*ne0 + r1*ne0 + r0] = all_sum;
             }
         }
