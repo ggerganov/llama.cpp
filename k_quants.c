@@ -2526,7 +2526,13 @@ void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restri
 
         memcpy(utmp, x[i].scales, 12);
 
-        const uint32x2_t mins8 = {utmp[1] & kmask1, ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4)};
+#ifndef _MSC_VER
+        uint32x2_t mins8 = {utmp[1] & kmask1, ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4)};
+#else
+        uint32x2_t mins8;
+        mins8.n64_u32[0] = utmp[1] & kmask1;
+        mins8.n64_u32[1] = ((utmp[2] >> 4) & kmask2) | (((utmp[1] >> 6) & kmask3) << 4);
+#endif
         utmp[1] = (utmp[2] & kmask2) | (((utmp[0] >> 6) & kmask3) << 4);
         utmp[0] &= kmask1;
 

@@ -255,7 +255,7 @@
 extern "C" {
 #endif
 
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON) && !defined(_MSC_VER)
     // we use the built-in 16-bit float type
     typedef __fp16 ggml_fp16_t;
 #else
