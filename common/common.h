@@ -32,6 +32,7 @@ struct gpt_params {
     int32_t n_ctx                           = 512;  // context size
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
+    int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
     int32_t n_gpu_layers                    = 0;    // number of layers to store in VRAM
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
@@ -63,7 +64,7 @@ struct gpt_params {
     float       cfg_scale         = 1.f;   // How strong is guidance
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
-    std::string model_draft       = "";                              // draft model for speculative sampling
+    std::string model_draft       = "";                              // draft model for speculative decoding
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state

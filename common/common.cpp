@@ -305,6 +305,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_keep = std::stoi(argv[i]);
+        } else if (arg == "--draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_draft = std::stoi(argv[i]);
         } else if (arg == "--chunks") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -644,6 +650,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    fprintf(stdout, "  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
         fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -676,7 +683,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     fprintf(stdout, "  -m FNAME, --model FNAME\n");
     fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
     fprintf(stdout, "  -md FNAME, --model-draft FNAME\n");
-    fprintf(stdout, "                        draft model for speculative sampling (default: %s)\n", params.model.c_str());
+    fprintf(stdout, "                        draft model for speculative decoding (default: %s)\n", params.model.c_str());
     fprintf(stdout, "  -ld LOGDIR, --logdir LOGDIR\n");
     fprintf(stdout, "                        path under which to save YAML logs (no logging if unset)\n");
     fprintf(stdout, "\n");
