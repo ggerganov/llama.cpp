@@ -1,3 +1,8 @@
+// defines MAP_ANONYMOUS
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "ggml-alloc.h"
 #include "ggml.h"
 #include <assert.h>
@@ -5,6 +10,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef __has_include
+    #if __has_include(<unistd.h>)
+        #include <unistd.h>
+        #if defined(_POSIX_MAPPED_FILES)
+            #include <sys/types.h>
+            #include <sys/mman.h>
+        #endif
+    #endif
+#endif
+
+#if defined(_WIN32)
+    #define WIN32_LEAN_AND_MEAN
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
+    #include <windows.h>
+    #include <memoryapi.h>
+#endif
+
 
 #define UNUSED(x) (void)(x)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -99,11 +124,16 @@ static void remove_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tens
 }
 #endif
 
-
-static size_t ggml_allocator_get_alloc_size(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
+static size_t ggml_allocr_get_alloc_size(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     return ggml_nbytes(tensor);
 
     UNUSED(alloc);
+}
+
+// check if a tensor is allocated by this buffer
+static bool ggml_allocr_is_own(struct ggml_allocr * alloc, const struct ggml_tensor * tensor) {
+    void * ptr = tensor->data;
+    return ptr >= alloc->data && (char *)ptr < (char *)alloc->data + alloc->max_size;
 }
 
 void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
@@ -111,7 +141,7 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
     GGML_ASSERT(ggml_is_view(tensor) == false); // views generally get data pointer from one of their sources
     GGML_ASSERT(tensor->data == NULL); // avoid allocating tensor which already has memory allocated
 #endif
-    size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
+    size_t size = ggml_allocr_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
 
     AT_PRINTF("%s: allocating %s (%zu bytes) - ", __func__, tensor->name, size);
@@ -177,17 +207,17 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 }
 
 // this is a very naive implementation, but for our case the number of free blocks should be very small
-static void ggml_allocator_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
+static void ggml_allocr_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
     void * ptr = tensor->data;
 
-    if (ptr < alloc->data || (char*)ptr >= (char*)alloc->data + alloc->max_size) {
+    if (ggml_allocr_is_own(alloc, tensor) == false) {
         // the tensor was not allocated in this buffer
         // this can happen because the graph allocator will try to free weights and other tensors from different buffers
         // the easiest way to deal with this is just to ignore it
         return;
     }
 
-    size_t size = ggml_allocator_get_alloc_size(alloc, tensor);
+    size_t size = ggml_allocr_get_alloc_size(alloc, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
     AT_PRINTF("%s: freeing %s (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, size, alloc->n_free_blocks);
 
@@ -281,24 +311,64 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
     return alloc;
 }
 
-// address and size of the buffer when measuring
-// it needs to be large enough to fit all the tensors, but it cannot overlap with other existing buffers
-static void * const MEASURE_BASE_ADDR = (void *) 0x1000;
-#if defined(__ARM_NEON) && !defined(__aarch64__)
-// 32-bit
-// TODO: Use for 32-bit x86 as well
-static const size_t MEASURE_MAX_SIZE  = (1ULL<<32) - 1; // 4 GB
+// OS specific functions to allocate and free uncommitted virtual memory
+static void * alloc_vmem(size_t size) {
+#if defined(_WIN32)
+    return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
+#elif defined(_POSIX_MAPPED_FILES)
+    return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
 #else
-// 64-bit
-static const size_t MEASURE_MAX_SIZE  = 1ULL<<40; // 1 TB
+    // use a fixed address for other platforms
+    uintptr_t base_addr = (uintptr_t)-size - 0x100;
+    return (void *)base_addr;
 #endif
+}
+
+static void free_vmem(void * base_addr, size_t size) {
+#if defined(_WIN32)
+    VirtualFree(base_addr, 0, MEM_RELEASE);
+    UNUSED(size);
+#elif defined(_POSIX_MAPPED_FILES)
+    munmap(base_addr, size);
+#else
+    // nothing to do
+    UNUSED(base_addr);
+    UNUSED(size);
+#endif
+}
+
+// allocate uncommitted virtual memory to measure the size of the graph
+static void alloc_measure_vmem(void ** base_addr, size_t * size) {
+    // 1TB for 64-bit, 1GB for 32-bit
+    *size = sizeof(void *) == 4 ? 1ULL<<30 : 1ULL<<40;
+    do {
+        *base_addr = alloc_vmem(*size);
+        if (*base_addr != NULL) {
+            AT_PRINTF("allocated %.2f GB of virtual memory for measure buffer at %p\n", *size / 1024.0 / 1024.0 / 1024.0, *base_addr);
+            return;
+        }
+        // try again with half the size
+        *size /= 2;
+    } while (*size > 0);
+
+    GGML_ASSERT(!"failed to allocate virtual memory for measure buffer");
+}
+
+static void free_measure_vmem(void * base_addr, size_t size) {
+    free_vmem(base_addr, size);
+}
 
 struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
     struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
 
+    void * base_addr;
+    size_t size;
+
+    alloc_measure_vmem(&base_addr, &size);
+
     *alloc = (struct ggml_allocr){
-        /*.data          = */ MEASURE_BASE_ADDR,
-        /*.size          = */ MEASURE_MAX_SIZE,
+        /*.data          = */ base_addr,
+        /*.size          = */ size,
         /*.alignment     = */ alignment,
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},
@@ -318,6 +388,9 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
 }
 
 void ggml_allocr_free(struct ggml_allocr * alloc) {
+    if (alloc->measure) {
+        free_measure_vmem(alloc->data, alloc->size);
+    }
     free(alloc);
 }
 
@@ -387,8 +460,7 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                     }
 
                     // if the node's data is external, then we cannot re-use it
-                    if ((char *) parent->data < (char *) alloc->data ||
-                        (char *) parent->data >= ((char *) alloc->data + alloc->size)) {
+                    if (ggml_allocr_is_own(alloc, parent) == false) {
                         AT_PRINTF("not reusing parent %s for %s as %p is external\n", parent->name, node->name, parent->data);
                         continue;
                     }
@@ -422,7 +494,7 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
     }
 }
 
-static size_t ggml_allocator_alloc_graph_tensors_n(
+static size_t ggml_allocr_alloc_graph_tensors_n(
     struct ggml_allocr * alloc,
     struct ggml_cgraph ** graphs, int n_graphs,
     struct ggml_tensor *** inputs, struct ggml_tensor *** outputs) {
@@ -500,11 +572,10 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                 AT_PRINTF("\n");
             }
 
-
             // update parents
             // update immediately if there is no parse_seq
             // update only at barriers if there is parse_seq
-            if ((alloc->parse_seq_len==0) || alloc->parse_seq[ind] == -1) {
+            if ((alloc->parse_seq_len == 0) || alloc->parse_seq[ind] == -1) {
                 int update_start = alloc->parse_seq_len ? last_barrier_pos : ind;
                 int update_end   = alloc->parse_seq_len ? ind              : ind + 1;
                 for (int i = update_start; i < update_end; i++) {
@@ -528,12 +599,12 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
                                 view_src_hn->n_views -= 1;
                                 AT_PRINTF("view_src %s: %d children, %d views\n", view_src->name, view_src_hn->n_children, view_src_hn->n_views);
                                 if (view_src_hn->n_views == 0 && view_src_hn->n_children == 0 && view_src->data != node->data) {
-                                    ggml_allocator_free_tensor(alloc, view_src);
+                                    ggml_allocr_free_tensor(alloc, view_src);
                                 }
                             }
                             else {
                                 if (parent->data != node->data) {
-                                    ggml_allocator_free_tensor(alloc, parent);
+                                    ggml_allocr_free_tensor(alloc, parent);
                                 }
                             }
                         }
@@ -550,7 +621,7 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
             for (int i = 0; outputs[g][i] != NULL; i++) {
                 struct ggml_tensor * output = outputs[g][i];
                 AT_PRINTF("output: %s\n", output->name);
-                ggml_allocator_free_tensor(alloc, output);
+                ggml_allocr_free_tensor(alloc, output);
             }
         }
     }
@@ -559,5 +630,5 @@ static size_t ggml_allocator_alloc_graph_tensors_n(
 }
 
 size_t ggml_allocr_alloc_graph(struct ggml_allocr * alloc, struct ggml_cgraph * graph) {
-    return ggml_allocator_alloc_graph_tensors_n(alloc, &graph, 1, NULL, NULL);
+    return ggml_allocr_alloc_graph_tensors_n(alloc, &graph, 1, NULL, NULL);
 }
