@@ -4285,7 +4285,7 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 }
 
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
-    size_t nbytes = tensor->ne[0]*tensor->nb[0]/ggml_blck_size(tensor->type);
+    size_t nbytes = (tensor->ne[0]*tensor->nb[0])/ggml_blck_size(tensor->type);
     for (int i = 1; i < GGML_MAX_DIMS; ++i) {
         nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
     }
