@@ -151,14 +151,6 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
     }
 
-    if (params.n_ctx > 2048) {
-        // TODO: determine the actual max context of the model (e.g. 4096 for LLaMA v2) and use that instead of 2048
-        LOG_TEE("%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
-    } else if (params.n_ctx < 8) {
-        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
-        params.n_ctx = 8;
-    }
-
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
@@ -192,6 +184,13 @@ int main(int argc, char ** argv) {
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
         return 1;
+    }
+
+    if (params.n_ctx > llama_n_ctx(ctx)) {
+        LOG_TEE("%s: warning: base model only supports context sizes no greater than %d tokens (%d specified)\n", __func__, llama_n_ctx(ctx), params.n_ctx);
+    } else if (params.n_ctx < 8) {
+        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        params.n_ctx = 8;
     }
 
     // print system information
