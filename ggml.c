@@ -5213,6 +5213,8 @@ struct ggml_tensor * ggml_view_tensor(
         result->nb[i] = src->nb[i];
     }
 
+    result->op = GGML_OP_VIEW;
+
     return result;
 }
 
