@@ -12,12 +12,7 @@ let package = Package(
             name: "llama",
             path: ".",
             exclude: ["ggml-metal.metal"],
-            sources: [
-                "ggml.c",
-                "llama.cpp",
-                "ggml-alloc.c",
-                "k_quants.c"
-            ],
+            sources: ["ggml.c", "llama.cpp", "ggml-alloc.c", "k_quants.c", "ggml-metal.m"],
             publicHeadersPath: "spm-headers",
             cSettings: [
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
@@ -25,9 +20,12 @@ let package = Package(
                 .define("GGML_USE_ACCELERATE")
             ],
             linkerSettings: [
-                .linkedFramework("Accelerate")
+                .linkedFramework("Accelerate"),
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit")
             ]
         ),
     ],
+    cLanguageStandard: .c11,
     cxxLanguageStandard: .cxx11
 )
