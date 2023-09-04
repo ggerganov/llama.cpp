@@ -1,8 +1,17 @@
-import sys, struct, math, argparse
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import math
+import struct
+import sys
 from pathlib import Path
 
 import numpy as np
 
+import os
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
 
 # Note: Does not support GGML_QKK_64
@@ -71,10 +80,10 @@ class Vocab:
 class Tensor:
     def __init__(self):
         self.name = None
-        self.dims = ()
+        self.dims: tuple[int, ...] = ()
         self.dtype = None
         self.start_offset = 0
-        self.len_bytes = 0
+        self.len_bytes = np.int64(0)
 
     def load(self, data, offset):
         orig_offset = offset
@@ -93,7 +102,7 @@ class Tensor:
         pad = ((offset + 31) & ~31) - offset
         offset += pad
         n_elems = np.prod(self.dims)
-        n_bytes = (n_elems * tysize) // blksize
+        n_bytes = np.int64(np.int64(n_elems) * np.int64(tysize)) // np.int64(blksize)
         self.start_offset = offset
         self.len_bytes = n_bytes
         offset += n_bytes
@@ -118,7 +127,7 @@ class GGMLV3Model:
         offset += hp.load(data, offset)
         vocab = Vocab()
         offset += vocab.load(data, offset, hp.n_vocab)
-        tensors = []
+        tensors: list[Tensor] = []
         tensor_map = {}
         while offset < len(data):
             tensor = Tensor()
@@ -133,13 +142,14 @@ class GGMLV3Model:
         return offset
 
 class GGMLToGGUF:
-    def __init__(self, ggml_model, data, cfg, params_override = None, vocab_override = None):
+    def __init__(self, ggml_model, data, cfg, params_override = None, vocab_override = None, special_vocab = None):
         hp = ggml_model.hyperparameters
         self.model = ggml_model
         self.data = data
         self.cfg = cfg
         self.params_override = params_override
         self.vocab_override = vocab_override
+        self.special_vocab = special_vocab
         if params_override is not None:
             n_kv_head = params_override.n_head_kv
         else:
@@ -161,6 +171,8 @@ class GGMLToGGUF:
         gguf_writer = gguf.GGUFWriter(self.cfg.output, gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA], use_temp_file = False)
         self.add_params(gguf_writer)
         self.add_vocab(gguf_writer)
+        if self.special_vocab is not None:
+            self.special_vocab.add_to_gguf(gguf_writer)
         self.add_tensors(gguf_writer)
         print("    gguf: write header")
         gguf_writer.write_header_to_file()
@@ -215,15 +227,10 @@ class GGMLToGGUF:
         if self.vocab_override is not None:
             vo = self.vocab_override
             print('* Adding vocab item(s)')
-            for (idx, vitem) in enumerate(vo.all_tokens()):
-                if len(vitem) == 3:
-                    tokens.append(vitem[0])
-                    scores.append(vitem[1])
-                    toktypes.append(vitem[2])
-                else:
-                    # Maybe try to guess the token type here?
-                    tokens.append(vitem[0])
-                    scores.append(vitem[1])
+            for (idx, (vbytes, score, ttype)) in enumerate(vo.all_tokens()):
+                tokens.append(vbytes)
+                scores.append(score)
+                toktypes.append(ttype)
             assert len(tokens) == hp.n_vocab, f'Override vocab has a different number of items than hyperparameters - override = {len(tokens)} but n_vocab={hp.n_vocab}'
             gguf_writer.add_token_list(tokens)
             gguf_writer.add_token_scores(scores)
@@ -231,9 +238,21 @@ class GGMLToGGUF:
                 gguf_writer.add_token_types(toktypes)
             return
         print(f'* Adding {hp.n_vocab} vocab item(s)')
+        assert len(self.model.vocab.items) >= 3, 'Cannot handle unexpectedly short model vocab'
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
             tt = 1 # Normal
-            if len(vbytes) == 0:
+            # Special handling for UNK, BOS, EOS tokens.
+            if tokid <= 2:
+                if tokid == 0:
+                    vbytes = b'<unk>'
+                    tt = 2
+                elif tokid == 1:
+                    vbytes = b'<s>'
+                    tt = 3
+                else:
+                    vbytes = b'</s>'
+                    tt = 3
+            elif len(vbytes) == 0:
                 tt = 3 # Control
             elif tokid >= 3 and tokid <= 258 and len(vbytes) == 1:
                 vbytes = bytes(f'<0x{vbytes[0]:02X}>', encoding = 'UTF-8')
@@ -246,22 +265,18 @@ class GGMLToGGUF:
         gguf_writer.add_token_list(tokens)
         gguf_writer.add_token_scores(scores)
         gguf_writer.add_token_types(toktypes)
+        gguf_writer.add_unk_token_id(0)
+        gguf_writer.add_bos_token_id(1)
+        gguf_writer.add_eos_token_id(2)
 
     def add_tensors(self, gguf_writer):
-        nm = self.name_map
+        tensor_map = self.name_map
         data = self.data
         print(f'* Adding {len(self.model.tensors)} tensor(s)')
         for tensor in self.model.tensors:
             name = str(tensor.name, 'UTF-8')
-            if name.endswith('.weight'):
-                name = name[:-7]
-                suffix = '.weight'
-            elif name.endswith('.bias'):
-                name = name[:-5]
-                suffix = '.bias'
-            mapped_name = nm.get(name)
+            mapped_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
             assert mapped_name is not None, f'Bad name {name}'
-            mapped_name += suffix
             tempdims = list(tensor.dims[:])
             if len(tempdims) > 1:
                 temp = tempdims[1]
@@ -291,13 +306,15 @@ def handle_metadata(cfg, hp):
     else:
         raise ValueError('Unable to load metadata')
     vocab = convert.load_vocab(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir, cfg.vocabtype)
+    # FIXME: Respect cfg.vocab_dir?
+    svocab = gguf.SpecialVocab(cfg.model_metadata_dir)
     convert.check_vocab_size(params, vocab)
-    return (params, vocab)
+    return (params, vocab, svocab)
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
-    parser.add_argument('--input', '-i', type = Path, help = 'Input GGMLv3 filename')
-    parser.add_argument('--output', '-o', type = Path, help ='Output GGUF filename')
+    parser.add_argument('--input', '-i', type = Path, required = True, help = 'Input GGMLv3 filename')
+    parser.add_argument('--output', '-o', type = Path, required = True, help ='Output GGUF filename')
     parser.add_argument('--name', help = 'Set model name')
     parser.add_argument('--desc', help = 'Set model description')
     parser.add_argument('--gqa', type = int, default = 1, help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
@@ -319,15 +336,18 @@ def main():
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
+    special_vocab = None
     if cfg.model_metadata_dir is not None:
-        (params_override, vocab_override) = handle_metadata(cfg, model.hyperparameters)
+        (params_override, vocab_override, special_vocab) = handle_metadata(cfg, model.hyperparameters)
         print('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
         print(f'* Overriding params: {params_override}')
         print(f'* Overriding vocab: {vocab_override}')
+        print(f'* Special vocab: {special_vocab}')
     else:
         print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
-    converter = GGMLToGGUF(model, data, cfg, params_override = params_override, vocab_override = vocab_override)
+    converter = GGMLToGGUF(model, data, cfg, params_override = params_override, vocab_override = vocab_override, special_vocab = special_vocab)
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
 
-main()
+if __name__ == '__main__':
+    main()

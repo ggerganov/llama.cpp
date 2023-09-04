@@ -102,6 +102,17 @@
       padding: 0.5em;
     }
 
+    .prob-set {
+      padding: 0.3em;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .popover-content {
+      position: absolute;
+      background-color: white;
+      padding: 0.2em;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
 
     textarea {
       padding: 5px;
@@ -133,11 +144,17 @@
       font-size: 80%;
       color: #888;
     }
+
+    @media (prefers-color-scheme: dark) {
+      .popover-content {
+        background-color: black;
+      }
+    }
   </style>
 
   <script type="module">
     import {
-      html, h, signal, effect, computed, render, useSignal, useEffect, useRef
+      html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
     } from '/index.js';
 
     import { llama } from '/completion.js';
@@ -168,6 +185,7 @@
       mirostat_tau: 5, // target entropy
       mirostat_eta: 0.1, // learning rate
       grammar: '',
+      n_probs: 0, // no completion_probabilities
     })
 
     /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
@@ -334,10 +352,21 @@
 
       const prompt = template(session.value.template, {
         message: msg,
-        history: session.value.transcript.flatMap(([name, message]) => template(session.value.historyTemplate, {name, message})).join("\n"),
+        history: session.value.transcript.flatMap(
+          ([name, data]) =>
+            template(
+              session.value.historyTemplate,
+              {
+                name,
+                message: Array.isArray(data) ?
+                  data.map(msg => msg.content).join('').replace(/^\s/, '') :
+                  data,
+              }
+            )
+        ).join("\n"),
       });
 
-      let currentMessage = '';
+      const currentMessages = [];
       const history = session.value.transcript
 
       const llamaParams = {
@@ -347,15 +376,19 @@
 
       for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
         const data = chunk.data;
-        currentMessage += data.content;
-
-        // remove leading whitespace
-        currentMessage = currentMessage.replace(/^\s+/, "")
-
-        transcriptUpdate([...history, ["{{char}}", currentMessage]])
 
         if (data.stop) {
-          console.log("Completion finished: '", currentMessage, "', summary: ", data);
+          while (
+            currentMessages.length > 0 &&
+            currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
+          ) {
+            currentMessages.pop();
+          }
+          transcriptUpdate([...history, ["{{char}}", currentMessages]])
+          console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
+        } else {
+          currentMessages.push(data);
+          transcriptUpdate([...history, ["{{char}}", currentMessages]])
         }
 
         if (data.timings) {
@@ -420,8 +453,18 @@
         }
       }, [messages])
 
-      const chatLine = ([user, msg]) => {
-        return html`<p key=${msg}><strong>${template(user)}:</strong> <${Markdownish} text=${template(msg)} /></p>`
+      const chatLine = ([user, data], index) => {
+        let message
+        const isArrayMessage = Array.isArray(data)
+        if (params.value.n_probs > 0 && isArrayMessage) {
+          message = html`<${Probabilities} data=${data} />`
+        } else {
+          const text = isArrayMessage ?
+            data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+            data;
+          message = html`<${Markdownish} text=${template(text)} />`
+        }
+        return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
       };
 
       return html`
@@ -568,10 +611,71 @@
               ${FloatField({label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau})}
               ${FloatField({label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta})}
             </fieldset>
+            <fieldset>
+              ${IntField({label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs})}
+            </fieldset>
           </details>
         </form>
       `
     }
+
+    const probColor = (p) => {
+      const r = Math.floor(192 * (1 - p));
+      const g = Math.floor(192 * p);
+      return `rgba(${r},${g},0,0.3)`;
+    }
+
+    const Probabilities = (params) => {
+      return params.data.map(msg => {
+        const { completion_probabilities } = msg;
+        if (
+          !completion_probabilities ||
+          completion_probabilities.length === 0
+        ) return msg.content
+
+        if (completion_probabilities.length > 1) {
+          // Not for byte pair
+          if (completion_probabilities[0].content.startsWith('byte: \\')) return msg.content
+
+          const splitData = completion_probabilities.map(prob => ({
+            content: prob.content,
+            completion_probabilities: [prob]
+          }))
+          return html`<${Probabilities} data=${splitData} />`
+        }
+
+        const { probs, content } = completion_probabilities[0]
+        const found = probs.find(p => p.tok_str === msg.content)
+        const pColor = found ? probColor(found.prob) : 'transparent'
+
+        const popoverChildren = html`
+          <div class="prob-set">
+            ${probs.map((p, index) => {
+              return html`
+                <div
+                  key=${index}
+                  title=${`prob: ${p.prob}`}
+                  style=${{
+                    padding: '0.3em',
+                    backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+                  }}
+                >
+                  <span>${p.tok_str}: </span>
+                  <span>${Math.floor(p.prob * 100)}%</span>
+                </div>
+              `
+            })}
+          </div>
+        `
+
+        return html`
+          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
+            ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
+          </>
+        `
+      });
+    }
+
     // poor mans markdown replacement
     const Markdownish = (params) => {
       const md = params.text
@@ -600,10 +704,121 @@
       `
     }
 
+    // simple popover impl
+    const Popover = (props) => {
+      const isOpen = useSignal(false);
+      const position = useSignal({ top: '0px', left: '0px' });
+      const buttonRef = useRef(null);
+      const popoverRef = useRef(null);
+
+      const togglePopover = () => {
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          position.value = {
+            top: `${rect.bottom + window.scrollY}px`,
+            left: `${rect.left + window.scrollX}px`,
+          };
+        }
+        isOpen.value = !isOpen.value;
+      };
+
+      const handleClickOutside = (event) => {
+        if (popoverRef.current && !popoverRef.current.contains(event.target) && !buttonRef.current.contains(event.target)) {
+          isOpen.value = false;
+        }
+      };
+
+      useEffect(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+        };
+      }, []);
+
+      return html`
+        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
+        ${isOpen.value && html`
+          <${Portal} into="#portal">
+            <div
+              ref=${popoverRef}
+              class="popover-content"
+              style=${{
+                top: position.value.top,
+                left: position.value.left,
+              }}
+            >
+              ${props.popoverChildren}
+            </div>
+          </${Portal}>
+        `}
+      `;
+    };
+
+    // Source: preact-portal (https://github.com/developit/preact-portal/blob/master/src/preact-portal.js)
+    /** Redirect rendering of descendants into the given CSS selector */
+    class Portal extends Component {
+      componentDidUpdate(props) {
+        for (let i in props) {
+          if (props[i] !== this.props[i]) {
+            return setTimeout(this.renderLayer);
+          }
+        }
+      }
+
+      componentDidMount() {
+        this.isMounted = true;
+        this.renderLayer = this.renderLayer.bind(this);
+        this.renderLayer();
+      }
+
+      componentWillUnmount() {
+        this.renderLayer(false);
+        this.isMounted = false;
+        if (this.remote && this.remote.parentNode) this.remote.parentNode.removeChild(this.remote);
+      }
+
+      findNode(node) {
+        return typeof node === 'string' ? document.querySelector(node) : node;
+      }
+
+      renderLayer(show = true) {
+        if (!this.isMounted) return;
+
+        // clean up old node if moving bases:
+        if (this.props.into !== this.intoPointer) {
+          this.intoPointer = this.props.into;
+          if (this.into && this.remote) {
+            this.remote = render(html`<${PortalProxy} />`, this.into, this.remote);
+          }
+          this.into = this.findNode(this.props.into);
+        }
+
+        this.remote = render(html`
+          <${PortalProxy} context=${this.context}>
+            ${show && this.props.children || null}
+          </${PortalProxy}>
+        `, this.into, this.remote);
+      }
+
+      render() {
+        return null;
+      }
+    }
+    // high-order component that renders its first child if it exists.
+    // used as a conditional rendering proxy.
+    class PortalProxy extends Component {
+      getChildContext() {
+        return this.props.context;
+      }
+      render({ children }) {
+        return children || null;
+      }
+    }
+
     function App(props) {
 
       return html`
-        <div id="container">
+        <div>
           <header>
             <h1>llama.cpp</h1>
           </header>
@@ -624,11 +839,13 @@
       `;
     }
 
-    render(h(App), document.body);
+    render(h(App), document.querySelector('#container'));
   </script>
 </head>
 
 <body>
+  <div id="container"></div>
+  <div id="portal"></div>
 </body>
 
 </html>
