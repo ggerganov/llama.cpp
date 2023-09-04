@@ -5,7 +5,10 @@
 #include <sstream>
 #include <iostream>
 #include <thread>
+#include <mutex>
+#include <atomic>
 #include <vector>
+#include <set>
 #include <algorithm>
 #include <cinttypes>
 
@@ -46,6 +49,238 @@
 // End of Basic usage.
 //
 // --------------------------------
+
+class LogTargetWrapper
+{
+    private:
+        LogTargetWrapper( LogTargetWrapper& other ) = delete;
+        void operator=( const LogTargetWrapper& )   = delete;
+
+    public:
+        LogTargetWrapper( FILE* handle )
+        :   _type(Type::Stream),
+            _opened(true),
+            _handle(handle)
+        {}
+
+        LogTargetWrapper( const std::string && filename )
+        : LogTargetWrapper(filename)
+        {}
+        LogTargetWrapper( const std::string & filename )
+        :   _filename(filename)
+        {
+            if(_filename.empty())
+            {
+                _type = Type::Stream;
+                _handle = stderr;
+                _opened = true;
+            }
+            else
+            {
+                _type = Type::File;
+            }
+        }
+
+        ~LogTargetWrapper()
+        {
+            if(_type == Type::File && _handle != nullptr) {std::fclose(_handle);}
+        }
+
+        enum Type{
+            Invalid,
+            File,
+            Stream
+        };
+
+    public:
+        operator FILE*()
+        {
+            // Assigning lambda result to a static variable guarantees one time thread-safe execution
+            //  while completly removing the need for conditional if(initialized).
+            //
+            // This noticeably reduces performance overhead of LOG macro invocations.
+            //
+            // Initializing log file here, prevents creating a file before first LOG use,
+            //  simplifying initial conditions and overrides from command line arguments.
+            //
+            // TODO: MSVC
+            //
+            static const auto dummy_init __attribute__((unused)) = [&](){
+                std::lock_guard<std::mutex> lock(_mutex);
+                if(!_opened && _type == Type::File)
+                {
+                    auto result = std::fopen(_filename.c_str(), "w");
+                    if( result )
+                    {
+                        _handle = result;
+                    }
+                    else
+                    {
+                        std::fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", _filename.c_str(), std::strerror(errno));
+                        std::fflush(stderr);
+                        _handle = stderr;
+                    }
+                    _opened = true;
+                }
+                return _opened;
+            }();
+            return _handle;
+        }
+
+        void flush()
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if(_opened && _type != Type::Invalid && _handle)
+            {
+                std::fflush(_handle);
+            }
+        }
+
+    private:
+        std::mutex         _mutex;
+        Type               _type                   {Type::Invalid};
+        std::string        _filename;
+        bool               _opened                 {false};
+        std::atomic<FILE*> _handle                 {nullptr};
+};
+
+class LogStateWrapper
+{
+    protected:
+        LogStateWrapper(){};
+
+        virtual ~LogStateWrapper()
+        {
+            flush_all_targets();
+            for(auto t: _targets){delete t;}
+        }
+
+    private:
+        LogStateWrapper( LogStateWrapper& other ) = delete;
+		void operator=( const LogStateWrapper& )  = delete;
+
+    private:
+        static LogStateWrapper& instance()
+        {
+            static LogStateWrapper inst;
+            return inst;
+        }
+
+    private:
+        std::mutex                     _mutex;
+        bool                           _enabled{true};
+        bool                           _global_enabled{true};
+        std::set<LogTargetWrapper*>    _targets;
+        LogTargetWrapper               _null_target        {nullptr};
+        LogTargetWrapper               _stderr_target      {stderr};
+        std::atomic<LogTargetWrapper*> _current_target     {&_null_target};
+        std::atomic<LogTargetWrapper*> _current_tee_target {&_stderr_target};
+        std::atomic<LogTargetWrapper*> _stored_target      {&_null_target};
+        std::atomic<LogTargetWrapper*> _stored_tee_target  {&_null_target};
+
+        LogTargetWrapper* log_set_target_impl( const std::string && filename ) {return log_set_target_impl(filename);}
+        LogTargetWrapper* log_set_target_impl( const std::string & filename )  {return log_add_select_target(new LogTargetWrapper(filename));}
+        LogTargetWrapper* log_set_target_impl( FILE* handle )                  {return log_add_select_target(new LogTargetWrapper(handle));}
+        LogTargetWrapper* log_set_target_impl( LogTargetWrapper * target )
+        {
+            flush_all_targets();
+            std::lock_guard<std::mutex> lock(_mutex);
+            _current_target.store(target);
+            return target;
+        }
+
+        LogTargetWrapper* log_set_tee_target_impl( const std::string && filename ) {return log_set_tee_target_impl(filename);}
+        LogTargetWrapper* log_set_tee_target_impl( const std::string & filename )  {return log_add_select_tee_target(new LogTargetWrapper(filename));}
+        LogTargetWrapper* log_set_tee_target_impl( FILE* handle )                  {return log_add_select_tee_target(new LogTargetWrapper(handle));}
+        LogTargetWrapper* log_set_tee_target_impl( LogTargetWrapper * target )
+        {
+            flush_all_targets();
+            std::lock_guard<std::mutex> lock(_mutex);
+            _current_tee_target.store(target);
+            return target;
+        }
+
+        LogTargetWrapper* log_add_select_target(LogTargetWrapper* t)
+        {
+            flush_all_targets();
+            std::lock_guard<std::mutex> lock(_mutex);
+            _current_target.store(t);
+            _targets.insert(t);
+            return t;
+        }
+
+        LogTargetWrapper* log_add_select_tee_target(LogTargetWrapper* t)
+        {
+            flush_all_targets();
+            std::lock_guard<std::mutex> lock(_mutex);
+            _current_tee_target.store(t);
+            _targets.insert(t);
+            return t;
+        }
+
+        void flush_all_targets()
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            for(auto t: _targets){ t->flush(); }
+        }
+
+        FILE* log_handler_impl()
+        {
+            return *_current_target;
+        }
+
+        FILE* log_tee_handler_impl()
+        {
+            return *_current_tee_target;
+        }
+
+        void log_global_disable()
+        {
+            {
+                std::lock_guard<std::mutex> lock(_mutex);
+                _global_enabled = false;
+            }
+            log_disable_impl();
+        }
+
+        void log_disable_impl()
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if(_enabled)
+            {
+                _stored_target.store      (_current_target);
+                _stored_tee_target.store  (_current_tee_target);
+                _current_target.store     (&_null_target);
+                _current_tee_target.store (&_stderr_target);
+                _enabled =                false;
+            }
+        }
+
+        void log_enable_impl()
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if(!_enabled && _global_enabled)
+            {
+                _current_target.store     (_stored_target);
+                _current_tee_target.store (_stored_tee_target);
+                _enabled =                true;
+            }
+        }
+
+    public:
+        static LogTargetWrapper* log_set_target( const std::string && filename )     {return log_set_target(filename);}
+        static LogTargetWrapper* log_set_target( const std::string & filename )      {return instance().log_set_target_impl(filename);}
+        static LogTargetWrapper* log_set_target( FILE* handle )                      {return instance().log_set_target_impl(handle);}
+        static LogTargetWrapper* log_set_target( LogTargetWrapper * target )         {return instance().log_set_target_impl(target);}
+        static LogTargetWrapper* log_set_tee_target( const std::string && filename ) {return log_set_tee_target(filename);}
+        static LogTargetWrapper* log_set_tee_target( const std::string & filename )  {return instance().log_set_tee_target_impl(filename);}
+        static LogTargetWrapper* log_set_tee_target( FILE* handle )                  {return instance().log_set_tee_target_impl(handle);}
+        static LogTargetWrapper* log_set_tee_target( LogTargetWrapper * target )     {return instance().log_set_tee_target_impl(target);}
+        static FILE*             log_handler()                                       {return instance().log_handler_impl();}
+        static FILE*             log_tee_handler()                                   {return instance().log_tee_handler_impl();}
+        static void              log_disable()                                       {instance().log_disable_impl();}
+        static void              log_enable()                                        {instance().log_enable_impl();}
+};
 
 // Specifies a log target.
 //  default uses log_handler() with "llama.log" log file
@@ -90,11 +325,11 @@
 //  }
 //
 #ifndef LOG_TARGET
-    #define LOG_TARGET log_handler()
+    #define LOG_TARGET LogStateWrapper::log_handler()
 #endif
 
 #ifndef LOG_TEE_TARGET
-    #define LOG_TEE_TARGET stderr
+    #define LOG_TEE_TARGET LogStateWrapper::log_tee_handler()
 #endif
 
 // Utility to obtain "pid" like unique process id and use it when creating log files.
@@ -225,7 +460,7 @@ enum LogTriState
 //  USE LOG() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_IMPL(str, ...)                                                                                          \
+    #define LOG_IMPL(str, ...)                                                                                      \
     {                                                                                                               \
         if (LOG_TARGET != nullptr)                                                                                  \
         {                                                                                                           \
@@ -234,7 +469,7 @@ enum LogTriState
         }                                                                                                           \
     }
 #else
-    #define LOG_IMPL(str, ...)                                                                                               \
+    #define LOG_IMPL(str, ...)                                                                                           \
     {                                                                                                                    \
         if (LOG_TARGET != nullptr)                                                                                       \
         {                                                                                                                \
@@ -248,7 +483,7 @@ enum LogTriState
 //  USE LOG_TEE() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_TEE_IMPL(str, ...)                                                                                                          \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                      \
     {                                                                                                                                   \
         if (LOG_TARGET != nullptr)                                                                                                      \
         {                                                                                                                               \
@@ -262,7 +497,7 @@ enum LogTriState
         }                                                                                                                               \
     }
 #else
-    #define LOG_TEE_IMPL(str, ...)                                                                                                               \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                           \
     {                                                                                                                                        \
         if (LOG_TARGET != nullptr)                                                                                                           \
         {                                                                                                                                    \
@@ -405,7 +640,8 @@ inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTri
 // Disables logs entirely at runtime.
 //  Makes LOG() and LOG_TEE() produce no output,
 //  untill enabled back.
-#define log_disable() log_disable_impl()
+//#define log_disable() log_disable_impl()
+#define log_disable() LogStateWrapper::log_disable()
 
 // INTERNAL, DO NOT USE
 inline FILE *log_disable_impl()
@@ -414,7 +650,8 @@ inline FILE *log_disable_impl()
 }
 
 // Enables logs at runtime.
-#define log_enable() log_enable_impl()
+//#define log_enable() log_enable_impl()
+#define log_enable() LogStateWrapper::log_enable()
 
 // INTERNAL, DO NOT USE
 inline FILE *log_enable_impl()
@@ -423,7 +660,8 @@ inline FILE *log_enable_impl()
 }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
-#define log_set_target(target) log_set_target_impl(target)
+//#define log_set_target(target) log_set_target_impl(target)
+#define log_set_target(target) LogStateWrapper::log_set_target(target)
 
 // INTERNAL, DO NOT USE
 inline FILE *log_set_target_impl(const std::string & filename) { return log_handler1_impl(true, LogTriStateSame, filename); }
@@ -513,16 +751,16 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
 
 inline void log_print_usage()
 {
-    fprintf(stdout, "log options:\n");
+    printf("log options:\n");
     /* format
-    fprintf(stdout, "  -h, --help            show this help message and exit\n");*/
+    printf("  -h, --help            show this help message and exit\n");*/
     /* spacing
-    fprintf(stdout, "__-param----------------Description\n");*/
-    fprintf(stdout, "  --log-test            Run simple logging test\n");
-    fprintf(stdout, "  --log-disable         Disable trace logs\n");
-    fprintf(stdout, "  --log-enable          Enable trace logs\n");
-    fprintf(stdout, "  --log-file            Specify a log filename (without extension)\n");
-    fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+    printf("__-param----------------Description\n");*/
+    printf("  --log-test            Run simple logging test\n");
+    printf("  --log-disable         Disable trace logs\n");
+    printf("  --log-enable          Enable trace logs\n");
+    printf("  --log-file            Specify a log filename (without extension)\n");
+    printf("                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)
