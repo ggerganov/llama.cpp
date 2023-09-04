@@ -196,7 +196,7 @@ typedef void * thread_ret_t;
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
     if (size == 0) {
-        GGML_PRINT("WARNING: Behavior may be unexpected when allocate 0 byte for ggml_aligned_malloc!");
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
         return NULL;
     }
     void * aligned_memory = NULL;
