@@ -241,7 +241,7 @@ int main(int argc, char ** argv) {
             llama_sample_softmax(ctx_dft, &cur_p);
 
             for (int i = 0; i < 3; ++i) {
-                LOG(" - draft candidate %d: %d (%.3f)\n", i, cur_p.data[i].id, cur_p.data[i].p);
+                LOG(" - draft candidate %3d: %6d (%8.3f) '%s'\n", i, cur_p.data[i].id, cur_p.data[i].p, llama_token_to_piece(ctx_dft, cur_p.data[i].id).c_str());
             }
 
             // too low probability, stop drafting
