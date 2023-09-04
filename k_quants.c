@@ -83,7 +83,7 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         float ax = fabsf(x[i]);
         if (ax > amax) { amax = ax; max = x[i]; }
     }
-    if (!amax) { // all zero
+    if (amax < 1e-30f) { // all zero
         for (int i = 0; i < n; ++i) {
             L[i] = 0;
         }
