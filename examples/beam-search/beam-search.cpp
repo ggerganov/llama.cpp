@@ -22,7 +22,9 @@
 #include <unistd.h>
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
 #include <windows.h>
 #include <signal.h>
 #endif
@@ -73,7 +75,7 @@ void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_stat
         assert(0u < beams_state.n_beams);
         const llama_token * tokens = beams_state.beam_views[0].tokens;
         std::copy(tokens, tokens + n, callback_data.response.end() - n);
-        printf("%lu", n);
+        printf("%zu", n);
     }
     fflush(stdout);
 #if 1 // DEBUG: print current beams for this iteration
@@ -145,7 +147,7 @@ int main(int argc, char ** argv)
 
     if (tokens_list.size() > max_tokens_list_size)
     {
-        fprintf( stderr , "%s: error: prompt too long (%lu tokens, max %lu)\n" ,
+        fprintf( stderr , "%s: error: prompt too long (%zu tokens, max %zu)\n" ,
              __func__ , tokens_list.size() , max_tokens_list_size );
         return 1;
     }

@@ -76,6 +76,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(rms_norm);
     GGML_METAL_DECL_KERNEL(norm);
     GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_1row);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q8_0_f32);
@@ -116,10 +117,24 @@ static NSString * const msl_library_source = @"see metal.metal";
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
     metal_printf("%s: allocating\n", __func__);
 
-    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+    // Show all the Metal device instances in the system
+    NSArray * devices = MTLCopyAllDevices();
+    id <MTLDevice> device;
+    NSString * s;
+    for (device in devices) {
+        s = [device name];
+        metal_printf("%s: found device: %s\n", __func__, [s UTF8String]);
+    }
 
+    // Pick and show default Metal device
+    device = MTLCreateSystemDefaultDevice();
+    s = [device name];
+    metal_printf("%s: picking default device: %s\n", __func__, [s UTF8String]);
+
+    // Configure context
+    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+    ctx->device = device;
     ctx->n_cb   = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
-    ctx->device = MTLCreateSystemDefaultDevice();
     ctx->queue  = [ctx->device newCommandQueue];
     ctx->n_buffers = 0;
     ctx->concur_list_len = 0;
@@ -205,6 +220,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(rms_norm);
         GGML_METAL_ADD_KERNEL(norm);
         GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
+        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_1row);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_1_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q8_0_f32);
@@ -270,6 +286,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(rms_norm);
     GGML_METAL_DEL_KERNEL(norm);
     GGML_METAL_DEL_KERNEL(mul_mat_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32_1row);
     GGML_METAL_DEL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DEL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DEL_KERNEL(mul_mat_q8_0_f32);
@@ -680,6 +697,12 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_ADD:
                         {
+                            GGML_ASSERT(ggml_is_contiguous(src0));
+
+                            // utilize float4
+                            GGML_ASSERT(ne00 % 4 == 0);
+                            const int64_t nb = ne00/4;
+
                             if (ggml_nelements(src1) == ne10) {
                                 // src1 is a row
                                 [encoder setComputePipelineState:ctx->pipeline_add_row];
@@ -689,14 +712,20 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
+                            [encoder setBytes:&nb     length:sizeof(nb) atIndex:3];
 
-                            const int64_t n = ggml_nelements(dst);
+                            const int64_t n = ggml_nelements(dst)/4;
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
                     case GGML_OP_MUL:
                         {
+                            GGML_ASSERT(ggml_is_contiguous(src0));
+
+                            // utilize float4
+                            GGML_ASSERT(ne00 % 4 == 0);
+                            const int64_t nb = ne00/4;
+
                             if (ggml_nelements(src1) == ne10) {
                                 // src1 is a row
                                 [encoder setComputePipelineState:ctx->pipeline_mul_row];
@@ -706,9 +735,9 @@ void ggml_metal_graph_compute(
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
-                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
+                            [encoder setBytes:&nb     length:sizeof(nb) atIndex:3];
 
-                            const int64_t n = ggml_nelements(dst);
+                            const int64_t n = ggml_nelements(dst)/4;
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
@@ -840,9 +869,13 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F16:
                                         {
-                                            nth0 = 64;
+                                            nth0 = 32;
                                             nth1 = 1;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                            if (ne11 * ne12 < 4) {
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
+                                            } else {
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                            }
                                         } break;
                                     case GGML_TYPE_Q4_0:
                                         {
@@ -894,8 +927,8 @@ void ggml_metal_graph_compute(
                                             GGML_ASSERT(ne02 == 1);
                                             GGML_ASSERT(ne12 == 1);
 
-                                            nth0 = 2;
-                                            nth1 = 32;
+                                            nth0 = 4; //1;
+                                            nth1 = 8; //32;
                                             [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_K_f32];
                                         } break;
                                     case GGML_TYPE_Q5_K:
@@ -943,8 +976,11 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&gqa  length:sizeof(gqa)  atIndex:17];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 || src0t == GGML_TYPE_Q8_0 ||
-                                    src0t == GGML_TYPE_Q2_K || src0t == GGML_TYPE_Q4_K) {
+                                    src0t == GGML_TYPE_Q2_K) {// || src0t == GGML_TYPE_Q4_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                }
+                                else if (src0t == GGML_TYPE_Q4_K) {
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 3)/4, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q3_K) {
 #ifdef GGML_QKK_64
@@ -959,8 +995,8 @@ void ggml_metal_graph_compute(
                                 else if (src0t == GGML_TYPE_Q6_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 } else {
-                                    [encoder setThreadgroupMemoryLength:nth0*sizeof(float) atIndex:0];
-                                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                    int64_t ny = (ne11 + 3)/4;
+                                    [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                             }
                         } break;

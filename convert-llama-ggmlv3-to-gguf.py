@@ -7,8 +7,12 @@ import struct
 import sys
 from pathlib import Path
 
-import gguf
 import numpy as np
+
+import os
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+import gguf
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256

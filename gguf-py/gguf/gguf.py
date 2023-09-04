@@ -801,7 +801,7 @@ class SpecialVocab:
             else:
                 continue
             for maybe_token_id in (atok.get('id') for atok in added_tokens if atok.get('content') == tc_content):
-                if isinstance(maybe_token_id, int):
+                if isinstance(maybe_token_id, int) and maybe_token_id >= 0:
                     self.special_token_ids[typ] = maybe_token_id
                 break
         return True
@@ -814,7 +814,7 @@ class SpecialVocab:
             config = json.load(f)
         for typ in self.special_token_types:
             maybe_token_id = config.get(f'{typ}_token_id')
-            if isinstance(maybe_token_id, int):
+            if isinstance(maybe_token_id, int) and maybe_token_id >= 0:
                 self.special_token_ids[typ] = maybe_token_id
         return True
 
