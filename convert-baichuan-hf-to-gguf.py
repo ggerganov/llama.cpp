@@ -120,6 +120,8 @@ if "max_sequence_length" in hparams:
     ctx_length = hparams["max_sequence_length"]
 elif "max_position_embeddings" in hparams:
     ctx_length = hparams["max_position_embeddings"]
+elif "model_max_length" in hparams:
+    ctx_length = hparams["model_max_length"]
 else:
     print("gguf: can not find ctx length parameter.")
 
@@ -231,12 +233,7 @@ for part_name in part_names:
 
     tmp=model_part
     for i in itertools.count():
-        if f"model.layers.{i}.self_attn.q_proj.weight" in model_part:
-            print(f"Permuting layer {i}")
-            tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = reverse_hf_permute(model_part[f"model.layers.{i}.self_attn.q_proj.weight"], head_count, head_count)
-            tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = reverse_hf_permute(model_part[f"model.layers.{i}.self_attn.k_proj.weight"], head_count, head_count_kv)
-           #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
-        elif f"model.layers.{i}.self_attn.W_pack.weight" in model_part:
+        if f"model.layers.{i}.self_attn.W_pack.weight" in model_part:
             print(f"Unpacking and permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"]=reverse_hf_permute_part(model_part[f"model.layers.{i}.self_attn.W_pack.weight"],0,head_count,head_count)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"]=reverse_hf_permute_part(model_part[f"model.layers.{i}.self_attn.W_pack.weight"],1,head_count,head_count_kv)
@@ -258,14 +255,6 @@ for part_name in part_names:
             data = data.to(torch.float32)
 
         data = data.squeeze().numpy()
-
-        # reverse permute these
-        # if name.endswith(".q_proj.weight"):
-        #     data = reverse_hf_permute(data, head_count)
-        # if name.endswith(".k_proj.weight"):
-        #     data = reverse_hf_permute(data, head_count, head_count_kv)
-        
-
 
         # map tensor names
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
@@ -289,8 +278,6 @@ for part_name in part_names:
             data = data.astype(np.float16)
 
         print(name + " -> " +  new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
-      
-
         gguf_writer.add_tensor(new_name, data)
 
 

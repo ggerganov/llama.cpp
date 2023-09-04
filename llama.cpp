@@ -1948,7 +1948,6 @@ static void llm_load_tensors(
         const int64_t n_vocab    = hparams.n_vocab;
 
         const auto tn = LLM_TN(model.arch);
-        
         switch (model.arch) {
             case LLM_ARCH_LLAMA:
                 {
@@ -2777,13 +2776,11 @@ static struct ggml_cgraph * llm_build_baichaun(
 
             struct ggml_tensor * Kcur;
             struct ggml_tensor * Qcur;
-            switch (model.type)
-            {
+            switch (model.type) {
                 case MODEL_7B:
                     Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base, freq_scale);
-                    Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale);  
+                    Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale); 
                     break;
-                
                 case MODEL_13B:
                     Kcur  = ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N);
                     Qcur = ggml_reshape_3d(ctx0, tmpq, n_embd/n_head, n_head, N);
@@ -2797,8 +2794,6 @@ static struct ggml_cgraph * llm_build_baichaun(
 
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
-            
-
 
             // store key and value to memory
             {
@@ -2853,13 +2848,11 @@ static struct ggml_cgraph * llm_build_baichaun(
 
             struct ggml_tensor * KQ_masked;
             struct ggml_tensor * KQ_scaled_alibi;
-            // if model.type == MODEL_13B,here add kq_scaled_alibi 
-            switch (model.type)
-            {
+
+            switch (model.type) {
                 case MODEL_7B:
                     KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
                     break;
-                
                 case MODEL_13B:
                     KQ_scaled_alibi =ggml_alibi(ctx0, KQ_scaled, n_past, n_head, 8);
                     ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
