@@ -5406,7 +5406,7 @@ void llama_backend_init(bool numa) {
 
     // needed to initialize f16 tables
     {
-        struct ggml_init_params params = { 1, NULL, false };
+        struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
