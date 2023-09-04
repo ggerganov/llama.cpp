@@ -1708,7 +1708,7 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
-    typedef void (*ggml_opt_callback)(void * data, float * sched);
+    typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched);
 
     // optimization parameters
     //
@@ -1738,6 +1738,8 @@ extern "C" {
 
         bool print_forward_graph;
         bool print_backward_graph;
+
+        int n_gradient_accumulation;
 
         // ADAM parameters
         struct {
@@ -1784,6 +1786,7 @@ extern "C" {
         float loss_after;
 
         struct {
+            struct ggml_tensor * g;  // current gradient
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
             struct ggml_tensor * pf; // past function values

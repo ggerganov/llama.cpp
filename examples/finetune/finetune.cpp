@@ -1730,6 +1730,7 @@ struct train_params {
     int n_ctx;
     int n_threads;
     int n_batch;
+    int n_gradient_accumulation;
 
     bool custom_n_ctx;
 
@@ -1804,6 +1805,7 @@ struct train_params get_default_train_params() {
     params.n_ctx      =  128;
     params.n_threads  =    6;
     params.n_batch    =    8;
+    params.n_gradient_accumulation = 1;
 
     params.custom_n_ctx = false;
 
@@ -1880,6 +1882,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  -c N, --ctx N              Context size used during training (default %d)\n", params->n_ctx);
     fprintf(stderr, "  -t N, --threads N          Number of threads (default %d)\n", params->n_threads);
     fprintf(stderr, "  -b N, --batch N            Parallel batch size (default %d)\n", params->n_batch);
+    fprintf(stderr, "  --grad-acc N               Number of gradient accumulation steps (simulates larger batch size of batch*gradacc) (default %d)\n", params->n_gradient_accumulation);
     fprintf(stderr, "  --norm-rms-eps F           RMS-Norm epsilon value (default %f)\n", params->f_norm_rms_eps);
     fprintf(stderr, "  --rope-freq-base F         Frequency base for ROPE (default %f)\n", params->rope_freq_base);
     fprintf(stderr, "  --rope-freq-scale F        Frequency scale for ROPE (default %f)\n", params->rope_freq_scale);
@@ -2015,6 +2018,12 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
                 break;
             }
             params->n_batch = std::stoi(argv[i]);
+        } else if (arg == "--grad-acc") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params->n_gradient_accumulation = std::stoi(argv[i]);
         } else if (arg == "--norm-rms-eps") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2299,83 +2308,85 @@ void print_duration(float fmillis) {
     printf("%02lld:%02lld:%02lld", hours, minutes, seconds);
 }
 
-void opt_callback(void * vdata, float * sched) {
+void opt_callback(void * vdata, int accum_step, float * sched) {
     struct opt_callback_data * data = (struct opt_callback_data *) vdata;
     struct train_params * params    = data->params;
     struct ggml_opt_context * opt   = data->opt;
     int n_batch = params->n_batch;
     int n_ctx = params->n_ctx;
 
-    int64_t now = ggml_time_ms();
-    if (now > data->last_time) {
-        float dt = now - data->last_time;
-        if (data->time_per_iter == 0) {
-            data->time_per_iter = dt;
-        } else {
-            const float gain = 0.7f;
-            data->time_per_iter = data->time_per_iter*(1.0f-gain) + dt*gain;
+    if (accum_step == 0) {
+        int64_t now = ggml_time_ms();
+        if (now > data->last_time) {
+            float dt = now - data->last_time;
+            if (data->time_per_iter == 0) {
+                data->time_per_iter = dt;
+            } else {
+                const float gain = 0.7f;
+                data->time_per_iter = data->time_per_iter*(1.0f-gain) + dt*gain;
+            }
         }
-    }
-    data->last_time = now;
-    float remaining_time = 0;
-    if (data->time_per_iter > 0) {
-        const int n_iter = params->use_adam ? params->adam_n_iter : params->lbfgs_n_iter;
-        const int done_iter = opt->iter - data->first_iter;
-        const int remaining_iter = n_iter - done_iter;
-        remaining_time = remaining_iter * data->time_per_iter;
-    }
-
-    const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
-    if (save_now) {
-        int new_iters = opt->iter - data->last_save_iter;
-        data->lora->train_its += new_iters;
-        data->lora->train_samples += new_iters * n_batch;
-        data->lora->train_tokens  += new_iters * n_batch * n_ctx;
-
-        if (strlen(params->fn_checkpoint_out) > 0) {
-            save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
-            save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, -1, params->fn_latest);
+        data->last_time = now;
+        float remaining_time = 0;
+        if (data->time_per_iter > 0) {
+            const int n_iter = params->use_adam ? params->adam_n_iter : params->lbfgs_n_iter;
+            const int done_iter = opt->iter - data->first_iter;
+            const int remaining_iter = n_iter - done_iter;
+            remaining_time = remaining_iter * data->time_per_iter;
         }
-        if (strlen(params->fn_lora_out) > 0) {
-            save_as_llama_lora(data->lora, params->fn_lora_out, params->pattern_fn_it, opt->iter, params->fn_latest);
-            save_as_llama_lora(data->lora, params->fn_lora_out, params->pattern_fn_it, -1, params->fn_latest);
+
+        const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
+        if (save_now) {
+            int new_iters = opt->iter - data->last_save_iter;
+            data->lora->train_its += new_iters;
+            data->lora->train_samples += new_iters * n_batch;
+            data->lora->train_tokens  += new_iters * n_batch * n_ctx;
+
+            if (strlen(params->fn_checkpoint_out) > 0) {
+                save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
+                save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, -1, params->fn_latest);
+            }
+            if (strlen(params->fn_lora_out) > 0) {
+                save_as_llama_lora(data->lora, params->fn_lora_out, params->pattern_fn_it, opt->iter, params->fn_latest);
+                save_as_llama_lora(data->lora, params->fn_lora_out, params->pattern_fn_it, -1, params->fn_latest);
+            }
+            data->last_save_iter = opt->iter;
         }
-        data->last_save_iter = opt->iter;
-    }
 
-    *sched = (opt->iter < params->warmup)
-                ? (float) opt->iter / (float) params->warmup
-                : cosine_decay_restart(
-                    params->cos_decay_steps,
-                    params->cos_decay_min,
-                    opt->iter - params->warmup,
-                    params->cos_decay_restart,
-                    params->enable_restart);
-    float min_sched = params->adam_min_alpha / params->adam_alpha;
-    *sched = min_sched + *sched * (1.0f - min_sched);
+        *sched = (opt->iter < params->warmup)
+                    ? (float) opt->iter / (float) params->warmup
+                    : cosine_decay_restart(
+                        params->cos_decay_steps,
+                        params->cos_decay_min,
+                        opt->iter - params->warmup,
+                        params->cos_decay_restart,
+                        params->enable_restart);
+        float min_sched = params->adam_min_alpha / params->adam_alpha;
+        *sched = min_sched + *sched * (1.0f - min_sched);
 
-    int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
-    if (impr_plot > 0) impr_plot = 0;
-    if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
-    printf("%s: iter=%*d sched=%f loss=%f",
-        __func__, 6, opt->iter, *sched, opt->loss_after);
-    if (data->time_per_iter > 0) {
-        printf(" dt=");
-        print_duration(data->time_per_iter);
-        printf(" eta=");
-        print_duration(remaining_time);
-    }
+        int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
+        if (impr_plot > 0) impr_plot = 0;
+        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
+        printf("%s: iter=%*d sched=%f loss=%f",
+            __func__, 6, opt->iter, *sched, opt->loss_after);
+        if (data->time_per_iter > 0) {
+            printf(" dt=");
+            print_duration(data->time_per_iter);
+            printf(" eta=");
+            print_duration(remaining_time);
+        }
 
-    float improvement = opt->loss_before - opt->loss_after;
-    const float plot_scale = 10.0f;
-    int bar_len = (int)(1 + improvement*plot_scale + 0.5);
-    printf(" |");
-    for (int i=0; i<bar_len; ++i) {
-        printf("-");
+        float improvement = opt->loss_before - opt->loss_after;
+        const float plot_scale = 10.0f;
+        int bar_len = (int)(1 + improvement*plot_scale + 0.5);
+        printf(" |");
+        for (int i=0; i<bar_len; ++i) {
+            printf("-");
+        }
+        printf(">");
+        // printf("improvement: %*d>", impr_plot, (int)0);
+        printf("\n");
     }
-    printf(">");
-    // printf("improvement: %*d>", impr_plot, (int)0);
-    printf("\n");
 
     if (data->shuffle_countdown < n_batch) {
         printf("%s: reshuffle samples\n", __func__);
@@ -2491,30 +2502,32 @@ int main(int argc, char ** argv) {
     // set opt params from command line
     if (params.use_adam) {
         opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
-        opt->params.print_forward_graph  = false;
-        opt->params.print_backward_graph = false;
-        opt->params.n_threads            = params.n_threads;
-        opt->params.past                 = params.opt_past;
-        opt->params.delta                = params.opt_delta;
-        opt->params.max_no_improvement   = params.opt_max_no_improvement;
-        opt->params.adam.n_iter          = params.adam_n_iter;
-        opt->params.adam.sched           = 1.0f;
-        opt->params.adam.alpha           = params.adam_alpha;
-        opt->params.adam.decay           = params.adam_decay;
-        opt->params.adam.decay_min_ndim  = params.adam_decay_min_ndim;
-        opt->params.adam.beta1           = params.adam_beta1;
-        opt->params.adam.beta2           = params.adam_beta2;
-        opt->params.adam.gclip           = params.adam_gclip;
-        opt->params.adam.eps_f           = params.adam_eps_f;
+        opt->params.print_forward_graph     = false;
+        opt->params.print_backward_graph    = false;
+        opt->params.n_threads               = params.n_threads;
+        opt->params.past                    = params.opt_past;
+        opt->params.delta                   = params.opt_delta;
+        opt->params.max_no_improvement      = params.opt_max_no_improvement;
+        opt->params.n_gradient_accumulation = params.n_gradient_accumulation;
+        opt->params.adam.n_iter             = params.adam_n_iter;
+        opt->params.adam.sched              = 1.0f;
+        opt->params.adam.alpha              = params.adam_alpha;
+        opt->params.adam.decay              = params.adam_decay;
+        opt->params.adam.decay_min_ndim     = params.adam_decay_min_ndim;
+        opt->params.adam.beta1              = params.adam_beta1;
+        opt->params.adam.beta2              = params.adam_beta2;
+        opt->params.adam.gclip              = params.adam_gclip;
+        opt->params.adam.eps_f              = params.adam_eps_f;
     } else {
         opt->params = ggml_opt_default_params(GGML_OPT_LBFGS);
-        opt->params.print_forward_graph  = false;
-        opt->params.print_backward_graph = false;
-        opt->params.n_threads            = params.n_threads;
-        opt->params.past                 = params.opt_past;
-        opt->params.delta                = params.opt_delta;
-        opt->params.max_no_improvement   = params.opt_max_no_improvement;
-        opt->params.lbfgs.n_iter         = params.lbfgs_n_iter;
+        opt->params.print_forward_graph     = false;
+        opt->params.print_backward_graph    = false;
+        opt->params.n_threads               = params.n_threads;
+        opt->params.past                    = params.opt_past;
+        opt->params.delta                   = params.opt_delta;
+        opt->params.max_no_improvement      = params.opt_max_no_improvement;
+        opt->params.n_gradient_accumulation = params.n_gradient_accumulation;
+        opt->params.lbfgs.n_iter            = params.lbfgs_n_iter;
     }
 
     ggml_allocr * alloc = NULL;
