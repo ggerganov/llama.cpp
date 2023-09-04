@@ -2418,11 +2418,11 @@ static struct ggml_cgraph * llm_build_llama(
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
-                ggml_view_3d(ctx0, kv_self.v,
+                ggml_cont(ctx0, ggml_view_3d(ctx0, kv_self.v,
                         n_past + N, n_embd_head, n_head_kv,
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
-                        ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
+                        ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il));
             offload_func_v(V);
             ggml_set_name(V, "V");
 
