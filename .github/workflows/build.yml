@@ -18,7 +18,6 @@ on:
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
-  GGML_NITER: 1
   GGML_N_THREADS: 1
 
 jobs:

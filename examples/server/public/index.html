@@ -145,7 +145,29 @@
       color: #888;
     }
 
+
+    @keyframes loading-bg-wipe {
+      0% {
+        background-position: 0%;
+      }
+      100% {
+        background-position: 100%;
+      }
+    }
+
+    .loading {
+      --loading-color-1: #eeeeee00;
+      --loading-color-2: #eeeeeeff;
+      background-size: 50% 100%;
+      background-image: linear-gradient(90deg, var(--loading-color-1), var(--loading-color-2), var(--loading-color-1));
+      animation: loading-bg-wipe 2s linear infinite;
+    }
+
     @media (prefers-color-scheme: dark) {
+      .loading {
+        --loading-color-1: #22222200;
+        --loading-color-2: #222222ff;
+      }
       .popover-content {
         background-color: black;
       }
@@ -321,7 +343,10 @@
     const llamaStats = signal(null)
     const controller = signal(null)
 
-    const generating = computed(() => controller.value == null )
+    // currently generating a completion?
+    const generating = computed(() => controller.value != null)
+
+    // has the user started a chat?
     const chatStarted = computed(() => session.value.transcript.length > 0)
 
     const transcriptUpdate = (transcript) => {
@@ -430,11 +455,19 @@
       return html`
         <form onsubmit=${submit}>
           <div>
-            <textarea type="text" rows=2 onkeypress=${enterSubmits} value="${message}" oninput=${(e) => message.value = e.target.value} placeholder="Say something..."/>
+            <textarea
+               className=${generating.value ? "loading" : null}
+               oninput=${(e) => message.value = e.target.value}
+               onkeypress=${enterSubmits}
+               placeholder="Say something..."
+               rows=2
+               type="text"
+               value="${message}"
+            />
           </div>
           <div class="right">
-            <button type="submit" disabled=${!generating.value} >Send</button>
-            <button onclick=${stop} disabled=${generating}>Stop</button>
+            <button type="submit" disabled=${generating.value}>Send</button>
+            <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>
         </form>

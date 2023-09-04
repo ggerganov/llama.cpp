@@ -6,6 +6,10 @@
 *.exe
 *.dll
 *.log
+*.gcov
+*.gcno
+*.gcda
+*.dot
 .DS_Store
 .build/
 .cache/
@@ -16,6 +20,9 @@
 .clang-tidy
 .vs/
 .vscode/
+
+lcov-report/
+gcovr-report/
 
 build*/
 out/
@@ -45,6 +52,7 @@ models-mnt
 /baby-llama
 /beam-search
 /save-load-state
+/speculative
 build-info.h
 arm_neon.h
 compile_commands.json

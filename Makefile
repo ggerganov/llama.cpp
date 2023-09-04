@@ -1,8 +1,11 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search tests/test-c.o
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search speculative tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
+
+# Code coverage output files
+COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
 
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
@@ -56,6 +59,18 @@ test:
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
+coverage: ## Run code coverage
+	gcov -pb tests/*.cpp
+
+lcov-report: coverage ## Generate lcov report
+	mkdir -p lcov-report
+	lcov --capture --directory . --output-file lcov-report/coverage.info
+	genhtml lcov-report/coverage.info --output-directory lcov-report
+
+gcovr-report: coverage ## Generate gcovr report
+	mkdir -p gcovr-report
+	gcovr --root . --html --html-details --output gcovr-report/coverage.html
+
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
@@ -90,6 +105,11 @@ endif
 
 ifdef LLAMA_SERVER_VERBOSE
 	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
+endif
+
+
+ifdef LLAMA_CODE_COVERAGE
+	CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
 endif
 
 ifdef LLAMA_DISABLE_LOGS
@@ -417,7 +437,7 @@ libllama.so: llama.o ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -vf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.o tests/*.o *.so *.dll benchmark-matmult build-info.h *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 
 #
 # Examples
@@ -475,6 +495,16 @@ baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o common.o $(OBJS)
 beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
+<<<<<<< HEAD
+=======
+speculative: examples/speculative/speculative.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
+BUILD_TARGETS += metal
+endif
+
+>>>>>>> master
 ifdef LLAMA_METAL
 metal: examples/metal/metal.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
