@@ -163,7 +163,7 @@ int main(int argc, char ** argv) {
             n_draft += 2;
             LOG("all drafted tokens accepted, n_draft = %d\n", n_draft);
         } else {
-            n_draft -= 1;
+            n_draft = std::max(2, n_draft - 1);
             LOG("drafted token rejected, n_draft = %d\n", n_draft);
         }
 
