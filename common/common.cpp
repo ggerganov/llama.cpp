@@ -702,7 +702,9 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
     lparams.n_ctx           = params.n_ctx;
     lparams.n_batch         = params.n_batch;
-    lparams.n_gpu_layers    = params.n_gpu_layers != -1 ? params.n_gpu_layers : lparams.n_gpu_layers;
+    if (params.n_gpu_layers != -1) {
+        lparams.n_gpu_layers = params.n_gpu_layers;
+    }
     lparams.main_gpu        = params.main_gpu;
     lparams.tensor_split    = params.tensor_split;
     lparams.low_vram        = params.low_vram;
