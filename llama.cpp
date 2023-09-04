@@ -2779,7 +2779,7 @@ static struct ggml_cgraph * llm_build_baichaun(
             switch (model.type) {
                 case MODEL_7B:
                     Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base, freq_scale);
-                    Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale); 
+                    Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale);
                     break;
                 case MODEL_13B:
                     Kcur  = ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N);
