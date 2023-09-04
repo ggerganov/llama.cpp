@@ -1086,6 +1086,12 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
 
         }
 
+        if (!max_abs_scale) {
+            memset(&y[i], 0, sizeof(block_q6_K));
+            y[i].d = ggml_fp32_to_fp16(0.f);
+            continue;
+        }
+
         float iscale = -128.f/max_scale;
         y[i].d = ggml_fp32_to_fp16(1/iscale);
         for (int ib = 0; ib < QK_K/16; ++ib) {
