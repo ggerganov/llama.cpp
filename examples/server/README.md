@@ -5,7 +5,7 @@ This example demonstrates a simple HTTP API server and a simple web front end to
 Command line options:
 
 -   `--threads N`, `-t N`: Set the number of threads to use during computation.
--   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.bin`).
+-   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 -   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
@@ -48,15 +48,14 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./server -m models/7B/ggml-model.bin -c 2048
+./server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows:
 
 ```powershell
-server.exe -m models\7B\ggml-model.bin -c 2048
+server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
-
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
@@ -78,34 +77,31 @@ You need to have [Node.js](https://nodejs.org/en) installed.
 ```bash
 mkdir llama-client
 cd llama-client
-npm init
-npm install axios
 ```
 
 Create a index.js file and put inside this:
 
 ```javascript
-const axios = require("axios");
-
 const prompt = `Building a website can be done in 10 simple steps:`;
 
 async function Test() {
-    let result = await axios.post("http://127.0.0.1:8080/completion", {
-        prompt,
-        n_predict: 512,
-    });
-
-    // the response is received until completion finish
-    console.log(result.data.content);
+    let response = await fetch("http://127.0.0.1:8080/completion", {
+        method: 'POST',
+        body: JSON.stringify({
+            prompt,
+            n_predict: 512,
+        })
+    })
+    console.log((await response.json()).content)
 }
 
-Test();
+Test()
 ```
 
 And run it:
 
 ```bash
-node .
+node index.js
 ```
 
 ## API Endpoints
@@ -127,7 +123,7 @@ node .
 
     `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
 
-    `prompt`: Provide a prompt. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate. A space is inserted in the front like main.cpp does.
+    `prompt`: Provide a prompt as a string, or as an array of strings and numbers representing tokens. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate. If the prompt is a string, or an array with the first element given as a string, a space is inserted in the front like main.cpp does.
 
     `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
@@ -167,6 +163,12 @@ node .
     `content`: Set the text to tokenize.
 
     Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
+
+-   **POST** `/detokenize`: Convert tokens to text.
+
+    *Options:*
+
+    `tokens`: Set the tokens to detokenize.
 
 -   **POST** `/embedding`: Generate embedding of a given text just as [the embedding example](../embedding) does.
 

@@ -24,6 +24,7 @@
 
 // max memory buffers that can be mapped to the device
 #define GGML_METAL_MAX_BUFFERS 16
+#define GGML_METAL_MAX_COMMAND_BUFFERS 32
 
 struct ggml_tensor;
 struct ggml_cgraph;
@@ -37,6 +38,9 @@ struct ggml_metal_context;
 // number of command buffers to use
 struct ggml_metal_context * ggml_metal_init(int n_cb);
 void ggml_metal_free(struct ggml_metal_context * ctx);
+
+void * ggml_metal_host_malloc(size_t n);
+void   ggml_metal_host_free  (void * data);
 
 // set the number of command buffers to use
 void ggml_metal_set_n_cb(struct ggml_metal_context * ctx, int n_cb);

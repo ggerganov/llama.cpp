@@ -2,9 +2,9 @@
 #undef NDEBUG
 #endif
 
-#include "llama.cpp"
-#include "examples/common.cpp"
-#include "examples/grammar-parser.cpp"
+#include "llama.cpp" // TODO: not great
+#include "grammar-parser.h"
+
 #include <cassert>
 
 int main()

@@ -34,7 +34,7 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " \
+./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
 'User: Hi
 AI: Hello. I am an AI chatbot. Would you like to talk?
 User: Sure!
@@ -45,7 +45,7 @@ User:'
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -e --prompt "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
 ```
 
 The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
@@ -287,6 +287,10 @@ These options help improve the performance and memory usage of the LLaMA models.
 ### Prompt Caching
 
 -   `--prompt-cache FNAME`: Specify a file to cache the model state after the initial prompt. This can significantly speed up the startup time when you're using longer prompts. The file is created during the first run and is reused and updated in subsequent runs. **Note**: Restoring a cached prompt does not imply restoring the exact state of the session at the point it was saved. So even when specifying a specific seed, you are not guaranteed to get the same sequence of tokens as the original generation.
+
+### Grammars
+
+-   `--grammar GRAMMAR`, `--grammar-file FILE`: Specify a grammar (defined inline or in a file) to constrain model output to a specific format. For example, you could force the model to output JSON or to speak only in emojis. See the [GBNF guide](../../grammars/README.md) for details on the syntax.
 
 ### Quantization
 

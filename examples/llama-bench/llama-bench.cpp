@@ -3,6 +3,9 @@
 #include <cassert>
 #include <chrono>
 #include <cinttypes>
+#include <clocale>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <iterator>
@@ -10,7 +13,6 @@
 #include <numeric>
 #include <regex>
 #include <sstream>
-#include <stdio.h>
 #include <string>
 #include <vector>
 
@@ -18,9 +20,7 @@
 #include "llama.h"
 #include "common.h"
 #include "build-info.h"
-#ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#endif
 
 // utils
 static uint64_t get_time_ns() {
@@ -148,7 +148,7 @@ struct cmd_params {
 };
 
 static const cmd_params cmd_params_defaults = {
-    /* model         */ {"models/7B/ggml-model-q4_0.bin"},
+    /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
     /* n_batch       */ {512},
@@ -179,12 +179,12 @@ static void print_usage(int /* argc */, char ** argv) {
     fprintf(stdout, "  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     fprintf(stdout, "  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
     fprintf(stdout, "  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
-    fprintf(stdout, "  -ts, --tensor_split <ts>                       \n");
+    fprintf(stdout, "  -ts, --tensor_split <ts0/ts1/..>               \n");
     fprintf(stdout, "  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
-    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : "md");
+    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : cmd_params_defaults.output_format == MARKDOWN ? "md" : "sql");
     fprintf(stdout, "  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     fprintf(stdout, "\n");
-    fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by repeating the parameter.\n");
+    fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 
 }
 
@@ -443,6 +443,8 @@ struct test {
     static const std::string gpu_info;
     std::string model_filename;
     std::string model_type;
+    uint64_t model_size;
+    uint64_t model_n_params;
     int n_batch;
     int n_threads;
     bool f32_kv;
@@ -459,8 +461,10 @@ struct test {
     test(const cmd_params_instance & inst, const llama_model * lmodel, const llama_context * ctx) {
         model_filename = inst.model;
         char buf[128];
-        llama_model_type(lmodel, buf, sizeof(buf));
+        llama_model_desc(lmodel, buf, sizeof(buf));
         model_type = buf;
+        model_size = llama_model_size(lmodel);
+        model_n_params = llama_model_n_params(lmodel);
         n_batch = inst.n_batch;
         n_threads = inst.n_threads;
         f32_kv = inst.f32_kv;
@@ -504,7 +508,7 @@ struct test {
 
     static std::string get_backend() {
         if (cuda) {
-            return "CUDA";
+            return GGML_CUDA_NAME;
         }
         if (opencl) {
             return "OpenCL";
@@ -526,7 +530,7 @@ struct test {
             "build_commit", "build_number",
             "cuda", "opencl", "metal", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
-            "model_filename", "model_type",
+            "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "f16_kv",
             "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
             "n_prompt", "n_gen", "test_time",
@@ -540,6 +544,7 @@ struct test {
 
     static field_type get_field_type(const std::string & field) {
         if (field == "build_number" || field == "n_batch" || field == "n_threads" ||
+            field == "model_size" || field == "model_n_params" ||
             field == "n_gpu_layers" || field == "main_gpu" ||
             field == "n_prompt" || field == "n_gen" ||
             field == "avg_ns" || field == "stddev_ns") {
@@ -575,7 +580,7 @@ struct test {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(opencl), std::to_string(metal), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
-            model_filename, model_type,
+            model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
             std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
@@ -606,6 +611,8 @@ const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
 struct printer {
+    virtual ~printer() {}
+
     FILE * fout;
     virtual void print_header(const cmd_params & params) { (void) params; };
     virtual void print_test(const test & t) = 0;
@@ -709,8 +716,15 @@ struct markdown_printer : public printer {
             return -30;
         }
         if (field == "t/s") {
-            return 15;
+            return 16;
         }
+        if (field == "size" || field == "params") {
+            return 10;
+        }
+        if (field == "n_gpu_layers") {
+            return 3;
+        }
+
         int width = std::max((int)field.length(), 10);
 
         if (test::get_field_type(field) == test::STRING) {
@@ -719,14 +733,33 @@ struct markdown_printer : public printer {
         return width;
     }
 
+    static std::string get_field_display_name(const std::string & field) {
+        if (field == "n_gpu_layers") {
+            return "ngl";
+        }
+        if (field == "n_threads") {
+            return "threads";
+        }
+        if (field == "mul_mat_q") {
+            return "mmq";
+        }
+        if (field == "tensor_split") {
+            return "ts";
+        }
+        return field;
+    }
+
     void print_header(const cmd_params & params) override {
         // select fields to print
-        fields = { "model", "backend" };
+        fields.push_back("model");
+        fields.push_back("size");
+        fields.push_back("params");
+        fields.push_back("backend");
         bool is_cpu_backend = test::get_backend() == "CPU" || test::get_backend() == "BLAS";
         if (!is_cpu_backend) {
             fields.push_back("n_gpu_layers");
         }
-        if (params.n_batch.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
+        if (params.n_threads.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
             fields.push_back("n_threads");
         }
         if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
@@ -752,7 +785,7 @@ struct markdown_printer : public printer {
 
         fprintf(fout, "|");
         for (const auto & field : fields) {
-            fprintf(fout, " %*s |", get_field_width(field), field.c_str());
+            fprintf(fout, " %*s |", get_field_width(field), get_field_display_name(field).c_str());
         }
         fprintf(fout, "\n");
         fprintf(fout, "|");
@@ -769,12 +802,26 @@ struct markdown_printer : public printer {
         fprintf(fout, "|");
         for (const auto & field : fields) {
             std::string value;
+            char buf[128];
             if (field == "model") {
                 value = t.model_type;
+            } else if (field == "size") {
+                if (t.model_size < 1024*1024*1024) {
+                    snprintf(buf, sizeof(buf), "%.2f MiB", t.model_size / 1024.0 / 1024.0);
+                } else {
+                    snprintf(buf, sizeof(buf), "%.2f GiB", t.model_size / 1024.0 / 1024.0 / 1024.0);
+                }
+                value = buf;
+            } else if (field == "params") {
+                if (t.model_n_params < 1000*1000*1000) {
+                    snprintf(buf, sizeof(buf), "%.2f M", t.model_n_params / 1e6);
+                } else {
+                    snprintf(buf, sizeof(buf), "%.2f B", t.model_n_params / 1e9);
+                }
+                value = buf;
             } else if (field == "backend") {
                 value = test::get_backend();
             } else if (field == "test") {
-                char buf[128];
                 if (t.n_prompt > 0 && t.n_gen == 0) {
                     snprintf(buf, sizeof(buf), "pp %d", t.n_prompt);
                 } else if (t.n_gen > 0 && t.n_prompt == 0) {
@@ -785,7 +832,6 @@ struct markdown_printer : public printer {
                 }
                 value = buf;
             } else if (field == "t/s") {
-                char buf[128];
                 snprintf(buf, sizeof(buf), "%.2f ± %.2f", t.avg_ts(), t.stdev_ts());
                 value = buf;
             } else if (vmap.find(field) != vmap.end()) {
@@ -849,7 +895,7 @@ struct sql_printer : public printer {
 };
 
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
-    std::vector<llama_token> tokens(n_batch, llama_token_bos());
+    std::vector<llama_token> tokens(n_batch, llama_token_bos(ctx));
     int n_processed = 0;
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
@@ -859,7 +905,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
-    llama_token token = llama_token_bos();
+    llama_token token = llama_token_bos(ctx);
     for (int i = 0; i < n_gen; i++) {
         llama_eval(ctx, &token, 1, n_past + i, n_threads);
     }
@@ -872,6 +918,9 @@ static void llama_null_log_callback(enum llama_log_level level, const char * tex
 }
 
 int main(int argc, char ** argv) {
+    // try to set locale for unicode characters in markdown
+    setlocale(LC_CTYPE, ".UTF-8");
+
 #if !defined(NDEBUG)
     fprintf(stderr, "warning: asserts enabled, performance may be affected\n");
 #endif
