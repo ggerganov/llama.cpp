@@ -455,7 +455,7 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 #   define llama_host_free(data) ggml_metal_host_free(data)
 #elif GGML_USE_CPU_HBM
 #   define llama_host_malloc(n)  hbw_malloc(n)
-#   define llama_host_free(data) if(data != NULL) hbw_free(data)
+#   define llama_host_free(data) if (data != NULL) hbw_free(data)
 #else
 #   define llama_host_malloc(n)  malloc(n)
 #   define llama_host_free(data) free(data)
