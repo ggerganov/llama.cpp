@@ -7,6 +7,39 @@ TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-dou
 # Code coverage output files
 COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
 
+ifndef UNAME_S
+UNAME_S := $(shell uname -s)
+endif
+
+ifndef UNAME_P
+UNAME_P := $(shell uname -p)
+endif
+
+ifndef UNAME_M
+UNAME_M := $(shell uname -m)
+endif
+
+# Mac OS + Arm can report x86_64
+# ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
+ifeq ($(UNAME_S),Darwin)
+	ifndef LLAMA_NO_METAL
+		LLAMA_METAL := 1
+	endif
+
+	ifneq ($(UNAME_P),arm)
+		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
+		ifeq ($(SYSCTL_M),1)
+			# UNAME_P := arm
+			# UNAME_M := arm64
+			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
+		endif
+	endif
+endif
+
+ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
+BUILD_TARGETS += metal
+endif
+
 default: $(BUILD_TARGETS)
 
 test:
@@ -38,18 +71,6 @@ gcovr-report: coverage ## Generate gcovr report
 	mkdir -p gcovr-report
 	gcovr --root . --html --html-details --output gcovr-report/coverage.html
 
-ifndef UNAME_S
-UNAME_S := $(shell uname -s)
-endif
-
-ifndef UNAME_P
-UNAME_P := $(shell uname -p)
-endif
-
-ifndef UNAME_M
-UNAME_M := $(shell uname -m)
-endif
-
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
@@ -57,19 +78,6 @@ endif
 
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
-
-# Mac OS + Arm can report x86_64
-# ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
-ifeq ($(UNAME_S),Darwin)
-	ifneq ($(UNAME_P),arm)
-		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
-		ifeq ($(SYSCTL_M),1)
-			# UNAME_P := arm
-			# UNAME_M := arm64
-			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
-		endif
-	endif
-endif
 
 #
 # Compile flags
@@ -231,13 +239,23 @@ endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework.
-	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
+	# Mac OS - include Accelerate framework.
+	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
 		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
 		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
+
+ifdef LLAMA_METAL
+	# By default - use GPU acceleration on Mac OS
+	ifeq ($(UNAME_S),Darwin)
+		CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
+		CXXFLAGS += -DGGML_USE_METAL
+		LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
+		OBJS     += ggml-metal.o
+	endif
+endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
 	MK_CPPFLAGS += -DGGML_USE_MPI
@@ -479,10 +497,6 @@ beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o co
 
 speculative: examples/speculative/speculative.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
-
-ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
-BUILD_TARGETS += metal
-endif
 
 ifdef LLAMA_METAL
 metal: examples/metal/metal.cpp ggml.o $(OBJS)

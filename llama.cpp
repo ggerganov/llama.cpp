@@ -5340,7 +5340,7 @@ struct llama_context_params llama_context_default_params() {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
-        /*.gpu_layers                  =*/ 0,
+        /*.n_gpu_layers                =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
@@ -5356,6 +5356,10 @@ struct llama_context_params llama_context_default_params() {
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
     };
+
+#ifdef GGML_USE_METAL
+    result.n_gpu_layers = 1;
+#endif
 
     return result;
 }
@@ -5549,43 +5553,43 @@ struct llama_context * llama_new_context_with_model(
             }
 #endif
         }
-    }
 
 #ifdef GGML_USE_METAL
-    if (params.n_gpu_layers > 0) {
-        // this allocates all Metal resources and memory buffers
+        if (params.n_gpu_layers > 0) {
+            // this allocates all Metal resources and memory buffers
 
-        void * data_ptr  = NULL;
-        size_t data_size = 0;
+            void * data_ptr  = NULL;
+            size_t data_size = 0;
 
-        if (params.use_mmap) {
-            data_ptr  = ctx->model.mapping->addr;
-            data_size = ctx->model.mapping->size;
-        } else {
-            data_ptr  = ggml_get_mem_buffer(ctx->model.ctx);
-            data_size = ggml_get_mem_size  (ctx->model.ctx);
-        }
+            if (params.use_mmap) {
+                data_ptr  = ctx->model.mapping->addr;
+                data_size = ctx->model.mapping->size;
+            } else {
+                data_ptr  = ggml_get_mem_buffer(ctx->model.ctx);
+                data_size = ggml_get_mem_size  (ctx->model.ctx);
+            }
 
-        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
+            const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
 
-        LLAMA_LOG_INFO("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+            LLAMA_LOG_INFO("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
 
 #define LLAMA_METAL_CHECK_BUF(result)                            \
-    if (!(result)) {                                             \
-        LLAMA_LOG_ERROR("%s: failed to add buffer\n", __func__); \
-        llama_free(ctx);                                         \
-        return NULL;                                             \
-    }
+            if (!(result)) {                                             \
+                LLAMA_LOG_ERROR("%s: failed to add buffer\n", __func__); \
+                llama_free(ctx);                                         \
+                return NULL;                                             \
+            }
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "data", data_ptr, data_size, max_size));
+            LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "data", data_ptr, data_size, max_size));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.data, ctx->buf_compute.size, 0));
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.data, ctx->kv_self.buf.size, 0));
+            LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "eval", ctx->buf_compute.data, ctx->buf_compute.size, 0));
+            LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "kv",   ctx->kv_self.buf.data, ctx->kv_self.buf.size, 0));
 
-        LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "alloc", ctx->buf_alloc.data, ctx->buf_alloc.size, 0));
+            LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "alloc", ctx->buf_alloc.data, ctx->buf_alloc.size, 0));
 #undef LLAMA_METAL_CHECK_BUF
-    }
+        }
 #endif
+    }
 
 #ifdef GGML_USE_MPI
     ctx->ctx_mpi = ggml_mpi_init();

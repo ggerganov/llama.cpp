@@ -717,7 +717,9 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
     lparams.n_ctx           = params.n_ctx;
     lparams.n_batch         = params.n_batch;
-    lparams.n_gpu_layers    = params.n_gpu_layers;
+    if (params.n_gpu_layers != -1) {
+        lparams.n_gpu_layers = params.n_gpu_layers;
+    }
     lparams.main_gpu        = params.main_gpu;
     lparams.tensor_split    = params.tensor_split;
     lparams.low_vram        = params.low_vram;
@@ -1212,7 +1214,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "mtest: %s # default: false\n", params.mem_test ? "true" : "false");
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
-    fprintf(stream, "n_gpu_layers: %d # default: 0\n", params.n_gpu_layers);
+    fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", params.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
