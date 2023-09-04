@@ -783,11 +783,11 @@ kernel void kernel_cpy_f16_f16(
     const int64_t i1 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0) / ne0;
     const int64_t i0 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0 - i1*ne0);
 
-    device half * dst_data = (device half *) ((device char *) dst + i3*nb3 + i2*nb2 + i1*nb1 + i0*nb0);
-
     for (int64_t i00 = tpitg.x; i00 < ne00; i00 += ntg.x) {
-        device const half * src = (device half *)((device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
-        dst_data[i00] = src[0];
+        device const half * src      = (device half *) ((device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
+        device       half * dst_data = (device half *) ((device char *) dst  +  i3*nb3  +  i2*nb2   + i1*nb1  + i00*nb0);
+
+        *dst_data = *src;
     }
 }
 
