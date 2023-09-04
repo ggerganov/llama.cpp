@@ -195,12 +195,12 @@ typedef void * thread_ret_t;
 #define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
-    void * aligned_memory = NULL;
-#ifdef GGML_USE_CPU_HBM
     if (size == 0) {
-        GGML_PRINT("WARNING: Behavior may be unexpected when allocate 0 byte for hbw_posix_memalign!");
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocate 0 byte for ggml_aligned_malloc!");
         return NULL;
     }
+    void * aligned_memory = NULL;
+#ifdef GGML_USE_CPU_HBM
     int result = hbw_posix_memalign(&aligned_memory, 16, size);
 #elif GGML_USE_METAL
     int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
