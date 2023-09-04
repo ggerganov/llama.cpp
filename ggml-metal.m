@@ -541,10 +541,7 @@ void ggml_metal_graph_find_concurrency(
                     int64_t data_start = (int64_t) gf->nodes[i]->data;
                     int64_t length     = (int64_t) ggml_nbytes(gf->nodes[i]);
                     for (int j = n_start; j < i; j++) {
-                        if (nodes_unused[j] && gf->nodes[j]->op != GGML_OP_RESHAPE \
-                                            && gf->nodes[j]->op != GGML_OP_VIEW \
-                                            && gf->nodes[j]->op != GGML_OP_TRANSPOSE \
-                                            && gf->nodes[j]->op != GGML_OP_PERMUTE) {
+                        if (nodes_unused[j] && gf->nodes[j]->view_src == NULL) {
                             if (((int64_t)gf->nodes[j]->data) >= data_start + length || \
                                 ((int64_t)gf->nodes[j]->data) + (int64_t) ggml_nbytes(gf->nodes[j]) <= data_start) {
                                 continue;
