@@ -116,8 +116,6 @@ int main(int argc, char ** argv) {
 
     grammar_parser::parse_state parsed_grammar;
 
-    std::vector<llama_grammar *> grammar_mem(n_draft, NULL);
-
     // if requested - load the grammar, error checking is omitted for brevity
     if (!params.grammar.empty()) {
         parsed_grammar = grammar_parser::parse(params.grammar.c_str());
@@ -127,7 +125,6 @@ int main(int argc, char ** argv) {
         }
 
         std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
-        grammar_dft = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
         grammar_tgt = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
     }
 
@@ -173,11 +170,6 @@ int main(int argc, char ** argv) {
             if (i_dft < (int) drafted.size()) {
                 LOG("the %dth drafted token (%d, '%s') does not match the sampled target token (%d, '%s') - rejected\n",
                         i_dft, drafted[i_dft], llama_token_to_piece(ctx_dft, drafted[i_dft]).c_str(), id, token_str.c_str());
-
-                if (grammar_mem[i_dft]) {
-                    grammar_dft = llama_grammar_copy(grammar_mem[i_dft]);
-                    LOG("restored draft grammar state %d\n", i_dft);
-                }
             } else {
                 LOG("out of drafted tokens\n");
             }
@@ -188,34 +180,25 @@ int main(int argc, char ** argv) {
             drafted.clear();
             drafted.push_back(id);
 
-            if (grammar_dft != NULL) {
-                llama_grammar_accept_token(ctx_dft, grammar_dft, id);
-            }
-
             break;
-        }
-
-        for (int i = 0; i < (int) grammar_mem.size(); ++i) {
-            auto & g = grammar_mem[i];
-            if (g) {
-                LOG("freeing grammar state %d\n", i);
-                llama_grammar_free(g);
-                g = NULL;
-            }
         }
 
         if (n_predict > params.n_predict || has_eos) {
             break;
         }
 
+        if (grammar_tgt) {
+            if (grammar_dft) {
+                llama_grammar_free(grammar_dft);
+            }
+            grammar_dft = llama_grammar_copy(grammar_tgt);
+
+            LOG("copied target grammar to draft grammar\n");
+        }
+
         // sample n_draft tokens from the draft model using greedy decoding
         int n_past_cur = n_past_dft;
         for (int i = 0; i < n_draft; ++i) {
-            // remember the grammar state
-            if (grammar_dft != NULL) {
-                grammar_mem[i] = llama_grammar_copy(grammar_dft);
-            }
-
             float * logits = llama_get_logits(ctx_dft);
 
             candidates.clear();
@@ -238,16 +221,12 @@ int main(int argc, char ** argv) {
 
             // TODO: better logic?
             if (cur_p.data[0].p < 2*cur_p.data[1].p) {
-                LOG("stopping drafting, probability too low: %8.f < 2*%8.f\n", cur_p.data[0].p, cur_p.data[1].p);
+                LOG("stopping drafting, probability too low: %.3f < 2*%.3f\n", cur_p.data[0].p, cur_p.data[1].p);
                 break;
             }
 
             // drafted token
             const llama_token id = cur_p.data[0].id;
-
-            if (grammar_dft != NULL) {
-                llama_grammar_accept_token(ctx_dft, grammar_dft, id);
-            }
 
             drafted.push_back(id);
             ++n_drafted;
@@ -260,6 +239,10 @@ int main(int argc, char ** argv) {
             // evaluate the drafted token on the draft model
             llama_eval(ctx_dft, &drafted.back(), 1, n_past_cur, params.n_threads);
             ++n_past_cur;
+
+            if (grammar_dft != NULL) {
+                llama_grammar_accept_token(ctx_dft, grammar_dft, id);
+            }
         }
 
         // evaluate the target model on the drafted tokens
