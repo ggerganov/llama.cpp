@@ -270,7 +270,7 @@ extern "C" {
 
 #if defined(__ARM_NEON) && defined(__CUDACC__)
     typedef half ggml_fp16_t;
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && !defined(_MSC_VER)
     typedef __fp16 ggml_fp16_t;
 #else
     typedef uint16_t ggml_fp16_t;
