@@ -450,6 +450,13 @@ endif()
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
+if (MSVC)
+  string( TOLOWER "${CMAKE_GENERATOR_PLATFORM}" CMAKE_GENERATOR_PLATFORM_LWR)
+  message(STATUS "CMAKE_GENERATOR_PLATFORM: ${CMAKE_GENERATOR_PLATFORM}")
+else () 
+  set(CMAKE_GENERATOR_PLATFORM_LWR "")
+endif ()
+
 if (NOT MSVC)
     if (LLAMA_STATIC)
         add_link_options(-static)
@@ -465,7 +472,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "ARM64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+if (${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "arm" OR ${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "arm64" OR ${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "aarch64")
     message(STATUS "ARM detected")
     if (MSVC)
         # TODO: arm msvc?
@@ -489,7 +496,7 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
             add_compile_options(-mfp16-format=ieee -mno-unaligned-access)
         endif()
     endif()
-elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR ${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "^(x86_64|i686|amd64|x64)$" )
     message(STATUS "x86 detected")
     if (MSVC)
         if (LLAMA_AVX512)
