@@ -368,7 +368,7 @@ results_perplexity perplexity(llama_context * ctx, const gpt_params & params) {
         // Example, we have a context window of 512, we will compute perplexity for each of the
         // last 256 tokens.  Then, we split the input up into context window size chunks to
         // process the entire prompt.
-        const int first = std::min(512, params.n_ctx/2);
+        const int first = params.n_ctx/2;
         process_logits(n_vocab, logits.data() + first*n_vocab, tokens.data() + start + first, params.n_ctx - 1 - first,
                        workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
         count += params.n_ctx - first - 1;
@@ -668,11 +668,6 @@ int main(int argc, char ** argv) {
         params.n_ctx += params.ppl_stride/2;
     }
 
-    if (params.n_ctx > 2048) {
-        fprintf(stderr, "%s: warning: model might not support context sizes greater than 2048 tokens (%d specified);"
-                "expect poor results\n", __func__, params.n_ctx);
-    }
-
     fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
@@ -696,6 +691,11 @@ int main(int argc, char ** argv) {
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;
+    }
+
+    if (params.n_ctx > llama_n_ctx(ctx)) {
+        fprintf(stderr, "%s: warning: model might not support context sizes greater than %d tokens (%d specified);"
+                "expect poor results\n", __func__, llama_n_ctx(ctx), params.n_ctx);
     }
 
     // print system information

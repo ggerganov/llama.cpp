@@ -410,6 +410,8 @@ extern "C" {
 
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
 
+    LLAMA_API struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar);
+
     //
     // Sampling functions
     //
