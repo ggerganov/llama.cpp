@@ -2942,7 +2942,12 @@ static bool llama_eval_internal(
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    // TODO: this is mostly important for Apple Silicon where CBLAS is still performing very well
+    //       we still need some threads to process all non-mul_mat ops, but not too much to avoid interfering
+    //       with the BLAS calls. need a better solution
+    if (N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
+        n_threads = std::min(4, n_threads);
+    }
 
     struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
@@ -3848,6 +3853,25 @@ struct llama_grammar * llama_grammar_init(
 
 void llama_grammar_free(struct llama_grammar * grammar) {
     delete grammar;
+}
+
+struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
+    llama_grammar * result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
+
+    // redirect elements in stacks to point to new rules
+    for (size_t is = 0; is < result->stacks.size(); is++) {
+        for (size_t ie = 0; ie < result->stacks[is].size(); ie++) {
+            for (size_t ir0 = 0; ir0 < grammar->rules.size(); ir0++) {
+                for (size_t ir1 = 0; ir1 < grammar->rules[ir0].size(); ir1++) {
+                    if (grammar->stacks[is][ie] == &grammar->rules[ir0][ir1]) {
+                         result->stacks[is][ie]  =  &result->rules[ir0][ir1];
+                    }
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 //

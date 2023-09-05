@@ -305,9 +305,9 @@ struct ggml_tensor * get_tensor_ex( struct ggml_context * ctx, std::string name)
 
     struct ggml_tensor * cur = ggml_get_tensor(ctx, name.c_str());
     if( cur == NULL ) {
-        fprintf(stdout, "%s: tensor '%s' not found!\n", __func__, name.c_str());
+        printf("%s: tensor '%s' not found!\n", __func__, name.c_str());
     } else {
-//        fprintf(stdout, "%s: n_dims = %d, name = '%s'\n", __func__, cur->n_dims, cur->name);
+//        printf("%s: n_dims = %d, name = '%s'\n", __func__, cur->n_dims, cur->name);
     }
 
     return cur;
@@ -333,21 +333,21 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         return false;
     }
 
-    fprintf(stdout, "%s: gguf version     = %d\n", __func__, gguf_get_version(ggufctx));
-    fprintf(stdout, "%s: gguf alignment   = %zu\n", __func__, gguf_get_alignment(ggufctx));
-    fprintf(stdout, "%s: gguf data offset = %zu\n", __func__, gguf_get_data_offset(ggufctx));
+    printf("%s: gguf version     = %d\n", __func__, gguf_get_version(ggufctx));
+    printf("%s: gguf alignment   = %zu\n", __func__, gguf_get_alignment(ggufctx));
+    printf("%s: gguf data offset = %zu\n", __func__, gguf_get_data_offset(ggufctx));
 
     // print all kv
     #if 0
     {
         const int n_kv = gguf_get_n_kv(ggufctx);
 
-        fprintf(stdout, "%s: n_kv: %d\n", __func__, n_kv);
+        printf("%s: n_kv: %d\n", __func__, n_kv);
 
         for (int i = 0; i < n_kv; ++i) {
             const char * key = gguf_get_key(ggufctx, i);
 
-            fprintf(stdout, "%s: kv[%d]: key = %s\n", __func__, i, key);
+            printf("%s: kv[%d]: key = %s\n", __func__, i, key);
         }
     }
     #endif
@@ -357,21 +357,21 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         int keyidx;
 
         keyidx = gguf_find_key(ggufctx, "general.name");
-        if (keyidx != -1) { fprintf(stdout, "%s: model name           = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model name           = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.description");
-        if (keyidx != -1) { fprintf(stdout, "%s: model description    = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model description    = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.author");
-        if (keyidx != -1) { fprintf(stdout, "%s: model author         = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model author         = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.license");
-        if (keyidx != -1) { fprintf(stdout, "%s: model license        = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model license        = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.architecture");
-        if (keyidx != -1) { fprintf(stdout, "%s: model architecture   = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model architecture   = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.file_type");
-        if (keyidx != -1) { fprintf(stdout, "%s: model file type      = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model file type      = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "gptneox.tensor_data_layout");
-        if (keyidx != -1) { fprintf(stdout, "%s: model data layout    = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model data layout    = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
         keyidx = gguf_find_key(ggufctx, "general.source.hugginface.repository");
-        if (keyidx != -1) { fprintf(stdout, "%s: model source HF repo = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
+        if (keyidx != -1) { printf("%s: model source HF repo = %s\n", __func__, gguf_get_val_str(ggufctx, keyidx)); }
     }
 
     // check required metadata
@@ -382,11 +382,11 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         keyidx = gguf_find_key(ggufctx, "general.architecture");
         if (keyidx != -1) {
             if ( strcmp(gguf_get_val_str(ggufctx, keyidx), "falcon") != 0) {
-                fprintf(stdout, "%s: model architecture not supported!\n", __func__);
+                printf("%s: model architecture not supported!\n", __func__);
                 return false;
             }
         } else {
-            fprintf(stdout, "%s: gguf model architecture not found!\n", __func__);
+            printf("%s: gguf model architecture not found!\n", __func__);
             return false;
         }
 
@@ -394,11 +394,11 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         keyidx = gguf_find_key(ggufctx, "falcon.tensor_data_layout");
         if (keyidx != -1) {
             if ( strcmp(gguf_get_val_str(ggufctx, keyidx), "jploski") != 0) {
-                fprintf(stdout, "%s: model tensor data layout not supported!\n", __func__);
+                printf("%s: model tensor data layout not supported!\n", __func__);
                 return false;
             }
         } else {
-            fprintf(stdout, "%s: gguf model tensor data layout not found!\n", __func__);
+            printf("%s: gguf model tensor data layout not found!\n", __func__);
             return false;
         }
 
@@ -455,11 +455,11 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
 
         if (keyidx != -1) {
             if ( strcmp(gguf_get_val_str(ggufctx, keyidx), "gpt2") != 0) {
-                fprintf(stdout, "%s: tokenizer model not supported!\n", __func__);
+                printf("%s: tokenizer model not supported!\n", __func__);
                 return false;
             }
         } else {
-            fprintf(stdout, "%s: tokenizer model not found!\n", __func__);
+            printf("%s: tokenizer model not found!\n", __func__);
             return false;
         }
 
@@ -467,22 +467,22 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         int tokens_keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.tokens");
 
         if (tokens_keyidx == -1) {
-            fprintf(stdout, "%s: gpt2 tokenizer vocab not found!\n", __func__);
+            printf("%s: gpt2 tokenizer vocab not found!\n", __func__);
             return false;
         }
 
         int merges_keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.merges");
 
         if (merges_keyidx == -1) {
-            fprintf(stdout, "%s: gpt2 tokenizer merges not found!\n", __func__);
+            printf("%s: gpt2 tokenizer merges not found!\n", __func__);
             return false;
         }
 
         hparams.n_vocab = gguf_get_arr_n(ggufctx,tokens_keyidx);
         hparams.n_merges = gguf_get_arr_n(ggufctx,merges_keyidx);
 
-        fprintf(stdout, "%s: gpt2 tokenizer vocab  = %zu\n", __func__, hparams.n_vocab);
-        fprintf(stdout, "%s: gpt2 tokenizer merges = %zu\n", __func__, hparams.n_merges);
+        printf("%s: gpt2 tokenizer vocab  = %zu\n", __func__, hparams.n_vocab);
+        printf("%s: gpt2 tokenizer merges = %zu\n", __func__, hparams.n_merges);
 
         for (size_t i = 0; i < hparams.n_vocab; i++) {
             std::string word = gguf_get_arr_str(ggufctx, tokens_keyidx, i);
@@ -523,12 +523,12 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
         keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.separator_token_id"); if( keyidx != -1 ) { vocab.special_sep_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
         keyidx = gguf_find_key(ggufctx, "tokenizer.ggml.padding_token_id"); if( keyidx != -1 ) {   vocab.special_pad_id = (int32_t)gguf_get_val_u32(ggufctx, keyidx); }
 
-        if( vocab.special_bos_id != -1 ) { fprintf(stdout, "%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].c_str() ); }
-        if( vocab.special_eos_id != -1 ) { fprintf(stdout, "%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].c_str() ); }
-        if( vocab.special_unk_id != -1 ) { fprintf(stdout, "%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].c_str() ); }
-        if( vocab.special_sep_id != -1 ) { fprintf(stdout, "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].c_str() ); }
-        if( vocab.special_pad_id != -1 ) { fprintf(stdout, "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].c_str() ); }
-        if( vocab.linefeed_id    != -1 ) { fprintf(stdout, "%s: LF token  = %d\n",      __func__, vocab.linefeed_id ); }
+        if( vocab.special_bos_id != -1 ) { printf("%s: BOS token = %d '%s'\n", __func__, vocab.special_bos_id, vocab.id_to_token[vocab.special_bos_id].c_str() ); }
+        if( vocab.special_eos_id != -1 ) { printf("%s: EOS token = %d '%s'\n", __func__, vocab.special_eos_id, vocab.id_to_token[vocab.special_eos_id].c_str() ); }
+        if( vocab.special_unk_id != -1 ) { printf("%s: UNK token = %d '%s'\n", __func__, vocab.special_unk_id, vocab.id_to_token[vocab.special_unk_id].c_str() ); }
+        if( vocab.special_sep_id != -1 ) { printf("%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].c_str() ); }
+        if( vocab.special_pad_id != -1 ) { printf("%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].c_str() ); }
+        if( vocab.linefeed_id    != -1 ) { printf("%s: LF token  = %d\n",      __func__, vocab.linefeed_id ); }
 
     }
 
@@ -543,13 +543,13 @@ bool falcon_model_load(const std::string & fname, falcon_model & model, gpt2bpe_
     {
         const int n_tensors = gguf_get_n_tensors(ggufctx);
 
-        fprintf(stdout, "%s: n_tensors: %d\n", __func__, n_tensors);
+        printf("%s: n_tensors: %d\n", __func__, n_tensors);
 
         for (int i = 0; i < n_tensors; ++i) {
             const char * name   = gguf_get_tensor_name  (ggufctx, i);
             const size_t offset = gguf_get_tensor_offset(ggufctx, i);
 
-            fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
+            printf("%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
         }
     }
     #endif

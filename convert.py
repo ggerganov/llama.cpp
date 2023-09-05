@@ -673,7 +673,7 @@ class LazyUnpickler(pickle.Unpickler):
         assert isinstance(pid[1], LazyStorageKind)
         data_type = pid[1].data_type
         filename_stem = pid[2]
-        filename = self.data_base_path + '/' + filename_stem
+        filename = f'{self.data_base_path}/{filename_stem}'
         info = self.zip_file.getinfo(filename)
 
         def load(offset: int, elm_count: int) -> NDArray:
@@ -689,7 +689,6 @@ class LazyUnpickler(pickle.Unpickler):
 
     @staticmethod
     def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
-                               # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
