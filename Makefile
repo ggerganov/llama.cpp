@@ -121,6 +121,22 @@ ifeq ($(UNAME_S),DragonFly)
 	MK_CXXFLAGS += -D__BSD_VISIBLE
 endif
 
+# alloca is a non-standard interface that is not visible on BSDs when
+# POSIX conformance is specified, but not all of them provide a clean way
+# to enable it in such cases
+ifeq ($(UNAME_S),FreeBSD)
+	MK_CFLAGS   += -D__BSD_VISIBLE
+	MK_CXXFLAGS += -D__BSD_VISIBLE
+endif
+ifeq ($(UNAME_S),NetBSD)
+	MK_CFLAGS   += -D_NETBSD_SOURCE
+	MK_CXXFLAGS += -D_NETBSD_SOURCE
+endif
+ifeq ($(UNAME_S),OpenBSD)
+	MK_CFLAGS   += -D_BSD_SOURCE
+	MK_CXXFLAGS += -D_BSD_SOURCE
+endif
+
 ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
 	MK_CXXFLAGS += -O0 -g
