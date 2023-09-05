@@ -2339,8 +2339,8 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         if (save_now) {
             int new_iters = opt->iter - data->last_save_iter;
             data->lora->train_its += new_iters;
-            data->lora->train_samples += new_iters * n_batch;
-            data->lora->train_tokens  += new_iters * n_batch * n_ctx;
+            data->lora->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+            data->lora->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
 
             if (strlen(params->fn_checkpoint_out) > 0) {
                 save_checkpoint_lora_file(params->fn_checkpoint_out, data->model, data->lora, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
@@ -2779,8 +2779,8 @@ int main(int argc, char ** argv) {
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
     if (new_iters > 0) {
         lora.train_its += new_iters;
-        lora.train_samples += new_iters * n_batch;
-        lora.train_tokens  += new_iters * n_batch * n_tokens;
+        lora.train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+        lora.train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
 
         if (strlen(params.fn_checkpoint_out) > 0) {
             save_checkpoint_lora_file(params.fn_checkpoint_out, &model, &lora, opt, params.pattern_fn_it, opt->iter, params.fn_latest);

@@ -1800,8 +1800,8 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         if (save_now) {
             int new_iters = opt->iter - data->last_save_iter;
             data->model->train_its += new_iters;
-            data->model->train_samples += new_iters * n_batch;
-            data->model->train_tokens  += new_iters * n_batch * n_ctx;
+            data->model->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+            data->model->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
 
             if (strlen(params->fn_checkpoint_out) > 0) {
                 save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
@@ -2122,8 +2122,8 @@ int main(int argc, char ** argv) {
 
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
     model.train_its += new_iters;
-    model.train_samples += new_iters * n_batch;
-    model.train_tokens  += new_iters * n_batch * n_tokens;
+    model.train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+    model.train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
 
     if (params.n_examples > 0) {
         save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, opt, params.pattern_fn_it, opt->iter, params.fn_latest);
