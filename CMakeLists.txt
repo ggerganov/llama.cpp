@@ -83,6 +83,7 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
+option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
@@ -174,7 +175,9 @@ if (LLAMA_METAL)
     set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
 
     add_compile_definitions(GGML_USE_METAL)
-    #add_compile_definitions(GGML_METAL_NDEBUG)
+    if (LLAMA_METAL_NDEBUG)
+        add_compile_definitions(GGML_METAL_NDEBUG)
+    endif()
 
     # get full path to the file
     #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
