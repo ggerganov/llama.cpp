@@ -472,7 +472,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" OR ${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "arm64")
+if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64")
     message(STATUS "ARM detected")
     if (MSVC)
         # TODO: arm msvc?
@@ -496,7 +496,7 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES
             add_compile_options(-mfp16-format=ieee -mno-unaligned-access)
         endif()
     endif()
-elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR ${CMAKE_GENERATOR_PLATFORM_LWR} MATCHES "^(x86_64|i686|amd64|x64)$" )
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
     message(STATUS "x86 detected")
     if (MSVC)
         if (LLAMA_AVX512)
