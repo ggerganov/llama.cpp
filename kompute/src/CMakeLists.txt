@@ -8,7 +8,7 @@ endif()
 
 cmake_minimum_required(VERSION 3.20)
 
-add_library(kompute Algorithm.cpp
+add_library(kompute STATIC Algorithm.cpp
     Manager.cpp
     OpAlgoDispatch.cpp
     OpMemoryBarrier.cpp
@@ -27,7 +27,8 @@ add_library(kompute::kompute ALIAS kompute)
 set_target_properties(kompute
     PROPERTIES
     VERSION ${${PROJECT_NAME}_VERSION}
-    SOVERSION ${${PROJECT_NAME}_VERSION_MAJOR})
+    SOVERSION ${${PROJECT_NAME}_VERSION_MAJOR}
+    POSITION_INDEPENDENT_CODE TRUE)
 
 # Import GNU common install directory variables
 include(GNUInstallDirs)
@@ -56,12 +57,12 @@ if(KOMPUTE_OPT_ANDROID_BUILD)
         android
         kp_logger
         kp_shader
-        fmt::fmt)
+        fmt::fmt-header-only)
 else()
     target_link_libraries(kompute PUBLIC Vulkan::Vulkan
         kp_logger
         kp_shader
-        fmt::fmt)
+        fmt::fmt-header-only)
 endif()
 
 if(KOMPUTE_OPT_BUILD_PYTHON)
