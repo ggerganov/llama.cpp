@@ -360,6 +360,9 @@ ifdef LLAMA_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS		+= ggml-metal.o
+ifdef LLAMA_METAL_NDEBUG
+	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
+endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
