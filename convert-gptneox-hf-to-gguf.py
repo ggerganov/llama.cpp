@@ -149,7 +149,7 @@ for i in range(vocab_size):
             text = bytearray()
             for c in reverse_vocab[i]:
                 if ord(c) < 256:  # single byte character
-                    text.append(byte_decoder[ord(c)])
+                    text.append(byte_encoder[ord(c)])
                 else:  # multibyte special token character
                     text.extend(c.encode('utf-8'))
     else:
