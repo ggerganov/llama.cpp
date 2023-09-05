@@ -180,15 +180,15 @@ int main(int argc, char ** argv) {
 
             // heuristic for n_draft
             {
-                const int  n_dradt_cur  = (int) drafted.size();
-                const bool all_accepted = i_dft == n_dradt_cur;
+                const int  n_draft_cur  = (int) drafted.size();
+                const bool all_accepted = i_dft == n_draft_cur;
 
                 LOG("n_draft      = %d\n", n_draft);
-                LOG("n_draft_cur  = %d\n", n_dradt_cur);
+                LOG("n_draft_cur  = %d\n", n_draft_cur);
                 LOG("i_dft        = %d\n", i_dft);
                 LOG("all_accepted = %d\n", all_accepted);
 
-                if (all_accepted && n_draft == n_dradt_cur) {
+                if (all_accepted && n_draft == n_draft_cur) {
                     LOG(" - max drafted tokens accepted - n_draft += 8\n");
                     n_draft = std::min(30, n_draft + 8);
                 } else if (all_accepted) {
