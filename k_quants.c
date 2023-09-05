@@ -83,7 +83,7 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         float ax = fabsf(x[i]);
         if (ax > amax) { amax = ax; max = x[i]; }
     }
-    if (!amax) { // all zero
+    if (amax < 1e-30f) { // all zero
         for (int i = 0; i < n; ++i) {
             L[i] = 0;
         }
@@ -1084,6 +1084,12 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
                 max_scale = scale;
             }
 
+        }
+
+        if (!max_abs_scale) {
+            memset(&y[i], 0, sizeof(block_q6_K));
+            y[i].d = ggml_fp32_to_fp16(0.f);
+            continue;
         }
 
         float iscale = -128.f/max_scale;
