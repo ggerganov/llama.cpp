@@ -2942,7 +2942,12 @@ static bool llama_eval_internal(
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
+    // TODO: this is mostly important for Apple Silicon where CBLAS is still performing very well
+    //       we still need some threads to process all non-mul_mat ops, but not too much to avoid interfering
+    //       with the BLAS calls. need a better solution
+    if (N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
+        n_threads = std::min(4, n_threads);
+    }
 
     struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
