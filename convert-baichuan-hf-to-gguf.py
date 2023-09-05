@@ -239,8 +239,6 @@ for part_name in part_names:
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"]=reverse_hf_permute_part(model_part[f"model.layers.{i}.self_attn.W_pack.weight"],1,head_count,head_count_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"]=reverse_hf_part(model_part[f"model.layers.{i}.self_attn.W_pack.weight"],2)
             del tmp[f"model.layers.{i}.self_attn.W_pack.weight"]
-        else:
-            break
 
     for name in model_part.keys():
         data = model_part[name]
