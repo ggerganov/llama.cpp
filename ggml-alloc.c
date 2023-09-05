@@ -167,12 +167,11 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
         struct free_block * block = &alloc->free_blocks[alloc->n_free_blocks - 1];
         if (block->size >= size) {
             best_fit_block = alloc->n_free_blocks - 1;
-            max_avail = MAX(max_avail, block->size);
         } else {
             fprintf(stderr, "%s: not enough space in the buffer (needed %zu, largest block available %zu)\n",
                     __func__, size, max_avail);
             GGML_ASSERT(!"not enough space in the buffer");
-        return;
+            return;
         }
     }
     struct free_block * block = &alloc->free_blocks[best_fit_block];
