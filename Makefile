@@ -42,9 +42,9 @@ endif
 
 default: $(BUILD_TARGETS)
 
-test:
-	@echo "Running tests..."
-	@for test_target in $(TEST_TARGETS); do \
+test: $(TEST_TARGETS)
+	@failures=0; \
+	for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
@@ -52,10 +52,21 @@ test:
 		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
 			continue; \
 		else \
+			echo "Running test $$test_target..."; \
 			./$$test_target; \
 		fi; \
-	done
-	@echo "All tests have been run."
+		if [ $$? -ne 0 ]; then \
+			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			failures=$$(( failures + 1 )); \
+		else \
+			printf 'Test %s passed.\n\n' $$test_target; \
+		fi; \
+	done; \
+	if [ $$failures -gt 0 ]; then \
+		printf '\n%s tests failed.\n' $$failures; \
+		exit 1; \
+	fi
+	@echo 'All tests passed.'
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
