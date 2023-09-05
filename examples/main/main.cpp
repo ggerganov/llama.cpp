@@ -48,8 +48,9 @@ static bool is_interacting = false;
 
 void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
-    const std::vector<llama_token> input_tokens, const std::string output, const std::vector<llama_token> output_tokens) {
-
+    const std::vector<llama_token> & input_tokens, const std::string & output,
+    const std::vector<llama_token> & output_tokens
+) {
     if (params.logdir.empty()) {
         return;
     }
