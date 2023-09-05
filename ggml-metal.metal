@@ -597,53 +597,41 @@ kernel void kernel_alibi_f32(
     }
 }
 
-static float rope_ntkv2_ramp(const float low, const float high, const int i0) {
+static float rope_yarn_ramp(const float low, const float high, const int i0) {
     const float y = (i0 / 2 - low) / min(0.001f, high - low);
     return 1.0f - min(1.0f, max(0.0f, y));
 }
 
-// NTKv2 algorithm based on LlamaPartNTKScaledRotaryEmbedding.py from https://github.com/jquesnelle/scaled-rope
+// YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
-static float rope_ntkv2(
-        const float theta_base,
-        const float theta_linear,
-        const float theta_ntk,
-        const float corr_factors[4],
-        const int64_t i0,
-        const float ntk_factor,
-        const float ext_factor) {
-    float ramp_mix;
-    float theta;
+static void rope_yarn(
+    float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,
+    float * cos_theta, float * sin_theta
+) {
+    // Get n-d rotational scaling corrected for extrapolation
+    float theta_interp = freq_scale * theta_extrap;
+    float ramp_mix = rope_yarn_ramp(corr_dims[0], corr_dims[1], i0) * ext_factor;
+    float theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
 
-    ramp_mix = rope_ntkv2_ramp(corr_factors[0], corr_factors[1], i0) * ntk_factor;
-    theta = theta_linear * (1 - ramp_mix) + theta_ntk  * ramp_mix;
-
-    ramp_mix = rope_ntkv2_ramp(corr_factors[2], corr_factors[3], i0) * ext_factor;
-    theta = theta        * (1 - ramp_mix) + theta_base * ramp_mix;
-    return theta;
+    // Get n-d magnitude scaling corrected for interpolation
+    if (freq_scale > 1.0f)
+        mscale *= 1.0f + 0.1f * logf(freq_scale);
+    *cos_theta = cosf(theta) * mscale;
+    *sin_theta = sinf(theta) * mscale;
 }
-
-// Interpolation constants found experimentally for LLaMA (might not be totally optimal though)
-// Do not change unless there is a good reason for doing so!
-constant float BETA_0  = 1.75f;
-constant float BETA_1  = 1.25f;
-constant float GAMMA_0 = 16.0f;
-constant float GAMMA_1 = 2.0f;
 
 constant float max_pos_emb = 2048;
 
 // Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
 // `corr_fac(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
-static float rope_ntkv2_corr_factor(const int n_dims, const float n_rot, const float base) {
+static float rope_yarn_corr_factor(const int n_dims, const float n_rot, const float base) {
     return n_dims * log(max_pos_emb / (n_rot * 2 * M_PI_F)) / (2 * log(base));
 }
 
-static void rope_ntkv2_corr_factors(int n_dims, const float freq_base, float factors[4]) {
-    // start and end correction factors
-    factors[0] = max(0.0f,         floor(rope_ntkv2_corr_factor(n_dims, BETA_0,  freq_base)));
-    factors[1] = min(n_dims - 1.0f, ceil(rope_ntkv2_corr_factor(n_dims, BETA_1,  freq_base)));
-    factors[2] = max(0.0f,         floor(rope_ntkv2_corr_factor(n_dims, GAMMA_0, freq_base)));
-    factors[3] = min(n_dims - 1.0f, ceil(rope_ntkv2_corr_factor(n_dims, GAMMA_1, freq_base)));
+static void rope_yarn_corr_dims(int n_dims, const float freq_base, float beta_fast, float beta_slow, float dims[2]) {
+    // start and end correction dims
+    dims[0] = max(0.0f,         floor(rope_yarn_corr_factor(n_dims, beta_fast, freq_base)));
+    dims[1] = min(n_dims - 1.0f, ceil(rope_yarn_corr_factor(n_dims, beta_slow, freq_base)));
 }
 
 kernel void kernel_rope(
@@ -670,33 +658,29 @@ kernel void kernel_rope(
         constant       int & mode,
         constant     float & freq_base,
         constant     float & freq_scale,
-        constant     float & ntk_factor,
         constant     float & ext_factor,
+        constant     float & attn_factor,
+        constant     float & beta_fast,
+        constant     float & beta_slow,
         uint3 tpig[[thread_position_in_grid]]) {
     const int64_t i3 = tpig[2];
     const int64_t i2 = tpig[1];
     const int64_t i1 = tpig[0];
 
     const float theta_scale = pow(freq_base, -2.0f/n_dims);
-    const float theta_ntk_scale = pow(freq_base * pow(freq_scale, (n_dims / (n_dims - 2.0f))), -2.0f/n_dims);
-    float corr_factors[4];
-    rope_ntkv2_corr_factors(n_dims, freq_base, corr_factors);
+    float corr_dims[2];
+    rope_yarn_corr_dims(n_dims, freq_base, beta_fast, beta_slow, corr_dims);
 
     float theta_base = (mode & 1) == 0 ? n_past + i2 : i2;
-    float theta_ntk = theta_base;
 
     const bool is_neox = mode & 2;
 
     if (!is_neox) {
         for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-            const float theta_linear = freq_scale * theta_base;
-            const float theta = rope_ntkv2(theta_base, theta_linear, theta_ntk, corr_factors,
-                    i0, ntk_factor, ext_factor);
-            const float cos_theta = cos(theta);
-            const float sin_theta = sin(theta);
+            float cos_theta, sin_theta;
+            rope_yarn(theta_base, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
             theta_base *= theta_scale;
-            theta_ntk *= theta_ntk_scale;
 
             device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
             device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);

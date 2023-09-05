@@ -1195,8 +1195,10 @@ extern "C" {
             int                   n_ctx,
             float                 freq_base,
             float                 freq_scale,
-            float                 ntk_factor,
-            float                 ext_factor);
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow);
 
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_rope_custom_inplace(
@@ -1208,11 +1210,13 @@ extern "C" {
             int                   n_ctx,
             float                 freq_base,
             float                 freq_scale,
-            float                 ntk_factor,
-            float                 ext_factor);
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow);
 
-    // compute correction factors for NTKv2 RoPE scaling
-    void ggml_rope_ntkv2_corr_factors(int n_dims, const float freq_base, float factors[4]);
+    // compute correction dims for YaRN RoPE scaling
+    void ggml_rope_yarn_corr_dims(int n_dims, const float freq_base, float beta_fast, float beta_slow, float dims[2]);
 
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy

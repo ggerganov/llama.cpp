@@ -194,10 +194,12 @@ struct llama_hparams {
     float f_ffn_mult = 1.0f;
     float f_rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 
-    float rope_freq_base  = 10000.0f;
-    float rope_freq_scale = 1.0f;
-    float rope_ntk_factor = 0.0f;
-    float rope_ext_factor = 0.0f;
+    float rope_freq_base   = 10000.0f;
+    float rope_freq_scale  = 1.0f;
+    float rope_ext_factor  = 0.0f;
+    float rope_attn_factor = 1.0f;
+    float rope_beta_fast  = 0.0f;
+    float rope_beta_slow  = 0.0f;
 
     enum llama_ftype ftype = LLAMA_FTYPE_MOSTLY_F16;
 
@@ -900,8 +902,10 @@ struct llama_context_params llama_context_default_params() {
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 10000.0f,
         /*.rope_freq_scale             =*/ 1.0f,
-        /*.rope_ntk_factor             =*/ 0.0f,
         /*.rope_ext_factor             =*/ 0.0f,
+        /*.rope_attn_factor            =*/ 1.0f,
+        /*.rope_beta_fast              =*/ 32.0f,
+        /*.rope_beta_slow              =*/ 1.0f,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
@@ -1036,8 +1040,10 @@ static void llama_model_load_internal(
         const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
-        float rope_ntk_factor,
         float rope_ext_factor,
+        float rope_attn_factor,
+        float rope_beta_fast,
+        float rope_beta_slow,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1087,10 +1093,12 @@ static void llama_model_load_internal(
             hparams.f_ffn_mult = 1.3f; // from the params.json of the 70B model
         }
 
-        hparams.rope_freq_base  = rope_freq_base;
-        hparams.rope_freq_scale = rope_freq_scale;
-        hparams.rope_ntk_factor = rope_ntk_factor;
-        hparams.rope_ext_factor = rope_ext_factor;
+        hparams.rope_freq_base   = rope_freq_base;
+        hparams.rope_freq_scale  = rope_freq_scale;
+        hparams.rope_ext_factor  = rope_ext_factor;
+        hparams.rope_attn_factor = rope_attn_factor;
+        hparams.rope_beta_fast   = rope_beta_fast;
+        hparams.rope_beta_slow   = rope_beta_slow;
     }
 
     // ref: https://github.com/facebookresearch/llama/blob/6c7fe276574e78057f917549435a2554000a876d/llama/model.py#L194-L199
@@ -1100,24 +1108,26 @@ static void llama_model_load_internal(
     //const uint32_t n_ff = 28672;
 
     {
-        fprintf(stderr, "%s: format     = %s\n",   __func__, llama_file_version_name(file_version));
-        fprintf(stderr, "%s: n_vocab    = %u\n",   __func__, hparams.n_vocab);
-        fprintf(stderr, "%s: n_ctx      = %u\n",   __func__, hparams.n_ctx);
-        fprintf(stderr, "%s: n_embd     = %u\n",   __func__, hparams.n_embd);
-        fprintf(stderr, "%s: n_mult     = %u\n",   __func__, hparams.n_mult);
-        fprintf(stderr, "%s: n_head     = %u\n",   __func__, hparams.n_head);
-        fprintf(stderr, "%s: n_head_kv  = %u\n",   __func__, hparams.n_head_kv);
-        fprintf(stderr, "%s: n_layer    = %u\n",   __func__, hparams.n_layer);
-        fprintf(stderr, "%s: n_rot      = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
-        fprintf(stderr, "%s: n_gqa      = %u\n",   __func__, hparams.n_gqa());
-        fprintf(stderr, "%s: rnorm_eps  = %.1e\n", __func__, hparams.f_rms_norm_eps);
-        fprintf(stderr, "%s: n_ff       = %u\n",   __func__, n_ff);
-        fprintf(stderr, "%s: freq_base  = %.1f\n", __func__, hparams.rope_freq_base);
-        fprintf(stderr, "%s: freq_scale = %g\n",   __func__, hparams.rope_freq_scale);
-        fprintf(stderr, "%s: ntk_factor = %g\n",   __func__, hparams.rope_ntk_factor);
-        fprintf(stderr, "%s: ext_factor = %g\n",   __func__, hparams.rope_ext_factor);
-        fprintf(stderr, "%s: ftype      = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
-        fprintf(stderr, "%s: model size = %s\n",   __func__, llama_model_type_name(model.type));
+        fprintf(stderr, "%s: format      = %s\n",   __func__, llama_file_version_name(file_version));
+        fprintf(stderr, "%s: n_vocab     = %u\n",   __func__, hparams.n_vocab);
+        fprintf(stderr, "%s: n_ctx       = %u\n",   __func__, hparams.n_ctx);
+        fprintf(stderr, "%s: n_embd      = %u\n",   __func__, hparams.n_embd);
+        fprintf(stderr, "%s: n_mult      = %u\n",   __func__, hparams.n_mult);
+        fprintf(stderr, "%s: n_head      = %u\n",   __func__, hparams.n_head);
+        fprintf(stderr, "%s: n_head_kv   = %u\n",   __func__, hparams.n_head_kv);
+        fprintf(stderr, "%s: n_layer     = %u\n",   __func__, hparams.n_layer);
+        fprintf(stderr, "%s: n_rot       = %u\n",   __func__, hparams.n_rot); // a.k.a. n_embd_head, n_head_dim
+        fprintf(stderr, "%s: n_gqa       = %u\n",   __func__, hparams.n_gqa());
+        fprintf(stderr, "%s: rnorm_eps   = %.1e\n", __func__, hparams.f_rms_norm_eps);
+        fprintf(stderr, "%s: n_ff        = %u\n",   __func__, n_ff);
+        fprintf(stderr, "%s: freq_base   = %.1f\n", __func__, hparams.rope_freq_base);
+        fprintf(stderr, "%s: freq_scale  = %g\n",   __func__, hparams.rope_freq_scale);
+        fprintf(stderr, "%s: ext_factor  = %g\n",   __func__, hparams.rope_ext_factor);
+        fprintf(stderr, "%s: attn_factor = %g\n",   __func__, hparams.rope_attn_factor);
+        fprintf(stderr, "%s: beta_fast   = %g\n",   __func__, hparams.rope_beta_fast);
+        fprintf(stderr, "%s: beta_slow   = %g\n",   __func__, hparams.rope_beta_slow);
+        fprintf(stderr, "%s: ftype       = %u (%s)\n", __func__, hparams.ftype, llama_ftype_name(hparams.ftype));
+        fprintf(stderr, "%s: model size  = %s\n",   __func__, llama_model_type_name(model.type));
     }
 
     if (file_version < LLAMA_FILE_VERSION_GGJT_V2) {
@@ -1384,8 +1394,10 @@ static bool llama_model_load(
         const bool mul_mat_q,
         float rope_freq_base,
         float rope_freq_scale,
-        float rope_ntk_factor,
         float rope_ext_factor,
+        float rope_attn_factor,
+        float rope_beta_fast,
+        float rope_beta_slow,
         bool low_vram,
         ggml_type memory_type,
         bool use_mmap,
@@ -1394,10 +1406,11 @@ static bool llama_model_load(
         llama_progress_callback progress_callback,
         void *progress_callback_user_data) {
     try {
-        llama_model_load_internal(fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers, main_gpu,
-                                  tensor_split, mul_mat_q, rope_freq_base, rope_freq_scale, rope_ntk_factor,
-                                  rope_ext_factor, low_vram, memory_type, use_mmap, use_mlock, vocab_only,
-                                  progress_callback, progress_callback_user_data);
+        llama_model_load_internal(
+            fname, model, vocab, n_ctx, n_batch, n_gqa, rms_norm_eps, n_gpu_layers, main_gpu, tensor_split, mul_mat_q,
+            rope_freq_base, rope_freq_scale, rope_ext_factor, rope_attn_factor, rope_beta_fast, rope_beta_slow,
+            low_vram, memory_type, use_mmap, use_mlock, vocab_only, progress_callback, progress_callback_user_data
+        );
         return true;
     } catch (const std::exception & err) {
         fprintf(stderr, "error loading model: %s\n", err.what());
@@ -1433,10 +1446,12 @@ static struct ggml_cgraph * llama_build_graph(
 
     LLAMA_ASSERT(n_embd_head == hparams.n_rot);
 
-    const float freq_base  = hparams.rope_freq_base;
-    const float freq_scale = hparams.rope_freq_scale;
-    const float ntk_factor = hparams.rope_ntk_factor;
-    const float ext_factor = hparams.rope_ext_factor;
+    const float freq_base    = hparams.rope_freq_base;
+    const float freq_scale   = hparams.rope_freq_scale;
+    const float ext_factor   = hparams.rope_ext_factor;
+    const float attn_factor  = hparams.rope_attn_factor;
+    const float beta_fast    = hparams.rope_beta_fast;
+    const float beta_slow    = hparams.rope_beta_slow;
     const float rms_norm_eps = hparams.f_rms_norm_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
@@ -1567,14 +1582,16 @@ static struct ggml_cgraph * llama_build_graph(
             ggml_set_name(tmpq, "tmpq");
 
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
-                    ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base,
-                    freq_scale, ntk_factor, ext_factor);
+                ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base,
+                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+            );
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
-                    ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base,
-                    freq_scale, ntk_factor, ext_factor);
+                ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base,
+                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+            );
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -3216,11 +3233,13 @@ struct llama_model * llama_load_model_from_file(
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    if (!llama_model_load(path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gqa,
-                params.rms_norm_eps, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.mul_mat_q,
-                params.rope_freq_base, params.rope_freq_scale, params.rope_ntk_factor, params.rope_ext_factor,
-                params.low_vram, memory_type, params.use_mmap, params.use_mlock, params.vocab_only,
-                params.progress_callback, params.progress_callback_user_data)) {
+    if (!llama_model_load(
+        path_model, *model, model->vocab, params.n_ctx, params.n_batch, params.n_gqa, params.rms_norm_eps,
+        params.n_gpu_layers, params.main_gpu, params.tensor_split, params.mul_mat_q, params.rope_freq_base,
+        params.rope_freq_scale, params.rope_ext_factor, params.rope_attn_factor, params.rope_beta_fast,
+        params.rope_beta_slow, params.low_vram, memory_type, params.use_mmap, params.use_mlock, params.vocab_only,
+        params.progress_callback, params.progress_callback_user_data
+    )) {
         delete model;
         fprintf(stderr, "%s: failed to load model\n", __func__);
         return nullptr;

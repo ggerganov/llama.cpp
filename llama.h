@@ -98,10 +98,12 @@ extern "C" {
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float    rope_freq_base;  // RoPE base frequency
-        float    rope_freq_scale; // RoPE frequency scaling factor
-        float    rope_ntk_factor; // RoPE NTK mix factor
-        float    rope_ext_factor; // RoPE extrapolation mix factor
+        float    rope_freq_base;   // RoPE base frequency
+        float    rope_freq_scale;  // RoPE frequency scaling factor
+        float    rope_ext_factor;  // RoPE extrapolation mix factor
+        float    rope_attn_factor; // RoPE magnitude scaling factor
+        float    rope_beta_fast;   // RoPE low correction dim
+        float    rope_beta_slow;   // RoPE high correction dim
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;

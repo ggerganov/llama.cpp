@@ -3558,34 +3558,31 @@ static __global__ void cpy_f32_f16(const char * cx, char * cdst, const int ne,
     cpy_1(cx + x_offset, cdst + dst_offset);
 }
 
-static __device__ float rope_ntkv2_ramp(const float low, const float high, const int i0) {
+static __device__ float rope_yarn_ramp(const float low, const float high, const int i0) {
     const float y = (i0 / 2 - low) / min(0.001f, high - low);
     return 1.0f - min(1.0f, max(0.0f, y));
 }
 
-struct rope_corr_factors {
+struct rope_corr_dims {
     float v[4];
 };
 
-// NTKv2 algorithm based on LlamaPartNTKScaledRotaryEmbedding.py from https://github.com/jquesnelle/scaled-rope
+// YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
-static __device__ float rope_ntkv2(
-        const float theta_base,
-        const float theta_linear,
-        const float theta_ntk,
-        const rope_corr_factors corr_factors,
-        const int64_t i0,
-        const float ntk_factor,
-        const float ext_factor) {
-    float ramp_mix;
-    float theta;
+static __device__ void rope_yarn(
+    float theta_extrap, float freq_scale, rope_corr_dims corr_dims, int64_t i0, float ext_factor, float mscale,
+    float * cos_theta, float * sin_theta
+) {
+    // Get n-d rotational scaling corrected for extrapolation
+    float theta_interp = freq_scale * theta_extrap;
+    float ramp_mix = rope_yarn_ramp(corr_dims.v[0], corr_dims.v[1], i0) * ext_factor;
+    float theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
 
-    ramp_mix = rope_ntkv2_ramp(corr_factors.v[0], corr_factors.v[1], i0) * ntk_factor;
-    theta = theta_linear * (1 - ramp_mix) + theta_ntk  * ramp_mix;
-
-    ramp_mix = rope_ntkv2_ramp(corr_factors.v[2], corr_factors.v[3], i0) * ext_factor;
-    theta = theta        * (1 - ramp_mix) + theta_base * ramp_mix;
-    return theta;
+    // Get n-d magnitude scaling corrected for interpolation
+    if (freq_scale > 1.0f)
+        mscale *= 1.0f + 0.1f * logf(freq_scale);
+    *cos_theta = cosf(theta) * mscale;
+    *sin_theta = sinf(theta) * mscale;
 }
 
 // rope == RoPE == rotary positional embedding
@@ -3594,13 +3591,11 @@ static __global__ void rope_f32(
         float       * dst,
         const int     ncols,
         const float   freq_scale,
-        const float   ntk_factor,
         const float   ext_factor,
         const float   theta_scale,
-        const float   theta_ntk_scale,
         const float   p0,
         const int     p_delta_rows,
-        const rope_corr_factors corr_factors) {
+        const rope_corr_dims corr_dims) {
     const int col = 2*(blockDim.x*blockIdx.x + threadIdx.x);
 
     if (col >= ncols) {
@@ -3612,11 +3607,9 @@ static __global__ void rope_f32(
 
     const float p = p0 + row / p_delta_rows;
     const float theta_base   = p*powf(theta_scale,     col/2);
-    const float theta_linear = freq_scale * theta_base;
-    const float theta_ntk    = p*powf(theta_ntk_scale, col/2);
-    const float theta = rope_ntkv2(theta_base, theta_linear, theta_ntk, corr_factors, col, ntk_factor, ext_factor);
-    const float sin_theta = sinf(theta);
-    const float cos_theta = cosf(theta);
+
+    float cos_theta, sin_theta;
+    rope_yarn(theta_base, freq_scale, corr_dims, col, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
     const float x0 = x[i + 0];
     const float x1 = x[i + 1];
@@ -4284,20 +4277,19 @@ static void rope_f32_cuda(
         const int     ncols,
         const int     nrows,
         const float   freq_scale,
-        const float   ntk_factor,
         const float   ext_factor,
         const float   theta_scale,
-        const float   theta_ntk_scale,
         const float   p0,
         const int     p_delta_rows,
-        const rope_corr_factors corr_factors,
+        const rope_corr_dims corr_dims,
         cudaStream_t  stream) {
     GGML_ASSERT(nrows % 2 == 0);
     const dim3 block_dims(2*CUDA_ROPE_BLOCK_SIZE, 1, 1);
     const int num_blocks_x = (ncols + 2*CUDA_ROPE_BLOCK_SIZE - 1) / (2*CUDA_ROPE_BLOCK_SIZE);
     const dim3 block_nums(num_blocks_x, nrows, 1);
-    rope_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, freq_scale, ntk_factor, ext_factor, theta_scale,
-            theta_ntk_scale, p0, p_delta_rows, corr_factors);
+    rope_f32<<<block_nums, block_dims, 0, stream>>>(
+        x, dst, ncols, freq_scale, ext_factor, theta_scale, p0, p_delta_rows, corr_dims
+    );
 }
 
 static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p, const float block_p, const float theta_scale, cudaStream_t stream) {
@@ -5000,11 +4992,13 @@ inline void ggml_cuda_op_rope(
     const int n_ctx  = ((int32_t *) dst->op_params)[3];
 
     // RoPE alteration for extended context
-    float freq_base, freq_scale, ntk_factor, ext_factor;
-    memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
-    memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
-    memcpy(&ntk_factor, (int32_t *) dst->op_params + 6, sizeof(float));
-    memcpy(&ext_factor, (int32_t *) dst->op_params + 7, sizeof(float));
+    float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
+    memcpy(&freq_base,   (int32_t *) dst->op_params + 4, sizeof(float));
+    memcpy(&freq_scale,  (int32_t *) dst->op_params + 5, sizeof(float));
+    memcpy(&ext_factor,  (int32_t *) dst->op_params + 6, sizeof(float));
+    memcpy(&attn_factor, (int32_t *) dst->op_params + 7, sizeof(float));
+    memcpy(&beta_fast,   (int32_t *) dst->op_params + 8, sizeof(float));
+    memcpy(&beta_slow,   (int32_t *) dst->op_params + 9, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
@@ -5018,12 +5012,13 @@ inline void ggml_cuda_op_rope(
         rope_glm_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, id_p, block_p, theta_scale, cudaStream_main);
     } else {
         const float p0 = (mode & 1) == 0 ? n_past : 0;
-        const float theta_ntk_scale = powf(freq_base * powf(freq_scale, (n_dims / (n_dims - 2.0f))), -2.0f/n_dims);
-        rope_corr_factors corr_factors;
-        ggml_rope_ntkv2_corr_factors(n_dims, freq_base, corr_factors.v);
+        rope_corr_dims corr_dims;
+        ggml_rope_yarn_corr_dims(n_dims, freq_base, beta_fast, beta_slow, corr_dims.v);
 
-        rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, freq_scale, ntk_factor, ext_factor, theta_scale,
-                theta_ntk_scale, p0, ne01, corr_factors, cudaStream_main);
+        rope_f32_cuda(
+            src0_ddf_i, dst_ddf_i, ne00, i01_diff, freq_scale, ext_factor, theta_scale, p0, ne01, corr_dims,
+            cudaStream_main
+        );
     }
 
     (void) src1;
