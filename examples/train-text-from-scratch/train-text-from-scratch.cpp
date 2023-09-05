@@ -1962,7 +1962,7 @@ void opt_callback(void * vdata, float * sched) {
     float min_sched = params->adam_min_alpha / params->adam_alpha;
     *sched = min_sched + *sched * (1.0f - min_sched);
 
-    int impr_plot = std::isnan(opt->loss_after) ? 0 : -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
+    int impr_plot = std::isnan(opt->loss_after) ? 0 : -std::lround(1 + (opt->loss_before - opt->loss_after) * 10.0f);
     printf("%s: iter=%*d, sched=%f loss0=%f loss=%f | improvement: %*d>\n", __func__, 6, opt->iter, *sched, opt->loss_before, opt->loss_after, impr_plot, (int)0);
 
     if (data->shuffle_countdown < n_batch) {
