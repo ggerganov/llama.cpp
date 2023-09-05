@@ -1747,18 +1747,18 @@ struct train_params {
     int32_t lora_r;
     int32_t lora_alpha;
 
-    int n_rank_attention_norm;
-    int n_rank_wq;
-    int n_rank_wk;
-    int n_rank_wv;
-    int n_rank_wo;
-    int n_rank_ffn_norm;
-    int n_rank_w1;
-    int n_rank_w2;
-    int n_rank_w3;
-    int n_rank_tok_embeddings;
-    int n_rank_norm;
-    int n_rank_output;
+    uint32_t n_rank_attention_norm;
+    uint32_t n_rank_wq;
+    uint32_t n_rank_wk;
+    uint32_t n_rank_wv;
+    uint32_t n_rank_wo;
+    uint32_t n_rank_ffn_norm;
+    uint32_t n_rank_w1;
+    uint32_t n_rank_w2;
+    uint32_t n_rank_w3;
+    uint32_t n_rank_tok_embeddings;
+    uint32_t n_rank_norm;
+    uint32_t n_rank_output;
 
     bool samples_start_after_nl;
     bool use_adam;

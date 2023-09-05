@@ -16476,7 +16476,7 @@ static struct ggml_tensor * ggml_recompute_graph_node(
     ggml_format_name(clone, "%s (clone)", ggml_get_name(node));
 
     return clone;
-};
+}
 
 void ggml_build_backward_gradient_checkpointing(
         struct ggml_context   * ctx,
