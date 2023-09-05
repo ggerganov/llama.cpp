@@ -189,8 +189,8 @@ int main(int argc, char ** argv) {
                 LOG("all_accepted = %d\n", all_accepted);
 
                 if (all_accepted && n_draft == n_dradt_cur) {
-                    LOG(" - max drafted tokens accepted - n_draft += 2\n");
-                    n_draft += 2;
+                    LOG(" - max drafted tokens accepted - n_draft += 8\n");
+                    n_draft = std::min(30, n_draft + 8);
                 } else if (all_accepted) {
                     LOG(" - partially drafted tokens accepted - no change\n");
                 } else {
