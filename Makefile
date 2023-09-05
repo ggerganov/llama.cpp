@@ -109,12 +109,11 @@ endif
 
 
 ifdef LLAMA_CODE_COVERAGE
-	CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
+	MK_CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
 endif
 
 ifdef LLAMA_DISABLE_LOGS
-	CFLAGS   += -DLOG_DISABLE_LOGS
-	CXXFLAGS += -DLOG_DISABLE_LOGS
+	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
 # warnings
@@ -124,7 +123,7 @@ MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-m
 
 ifeq '' '$(findstring clang++,$(CXX))'
 	# g++ only
-	CXXFLAGS += -Wno-format-truncation
+	MK_CXXFLAGS += -Wno-format-truncation
 endif
 
 # OS specific
@@ -188,8 +187,8 @@ endif
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
 # https://github.com/ggerganov/llama.cpp/issues/2922
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
-	CFLAGS   += -Xassembler -muse-unaligned-vector-move
-	CXXFLAGS += -Xassembler -muse-unaligned-vector-move
+	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
+	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -226,8 +225,8 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 endif
 
 else
-	CFLAGS += -march=rv64gcv -mabi=lp64d
-	CXXFLAGS +=  -march=rv64gcv -mabi=lp64d
+	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
+	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
 
 ifndef LLAMA_NO_K_QUANTS
@@ -246,16 +245,6 @@ ifndef LLAMA_NO_ACCELERATE
 		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
-
-ifdef LLAMA_METAL
-	# By default - use GPU acceleration on Mac OS
-	ifeq ($(UNAME_S),Darwin)
-		CFLAGS   += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
-		CXXFLAGS += -DGGML_USE_METAL
-		LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-		OBJS     += ggml-metal.o
-	endif
-endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
 	MK_CPPFLAGS += -DGGML_USE_MPI
@@ -368,7 +357,7 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
-	MK_CPPFLAGS += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
+	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS		+= ggml-metal.o
 endif # LLAMA_METAL
