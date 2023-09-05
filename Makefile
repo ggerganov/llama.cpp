@@ -102,6 +102,14 @@ MK_LDFLAGS  =
 MK_CFLAGS   += -D_XOPEN_SOURCE=600
 MK_CXXFLAGS += -D_XOPEN_SOURCE=600
 
+# Somehow in OpenBSD whenever POSIX conformance is specified
+# some string functions rely on locale_t availability,
+# which was introduced in POSIX.1-2008, forcing us to go higher
+ifeq ($(UNAME_S),OpenBSD)
+	MK_CFLAGS   += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+	MK_CXXFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+endif
+
 # Data types, macros and functions related to controlling CPU affinity and
 # some memory allocation are available on Linux through GNU extensions in libc
 ifeq ($(UNAME_S),Linux)
