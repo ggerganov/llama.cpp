@@ -245,7 +245,7 @@ class GGMLToGGUF:
     def add_params(self, gguf_writer):
         hp = self.model.hyperparameters
         cfg = self.cfg
-        desc = cfg.desc if cfg.desc is not None else 'converted from legacy GGJTv3 format'
+        desc = cfg.desc if cfg.desc is not None else f'converted from legacy {self.model.file_format.name}v{self.model.format_version} {hp.ftype.name} format'
         try:
             # Filenames aren't necessarily valid UTF8.
             name = cfg.name if cfg.name is not None else cfg.input.name
