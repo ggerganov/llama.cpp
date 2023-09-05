@@ -12,6 +12,7 @@ For a quick summary of what's going on here, see issue #2818.
 static inline struct llama_context*
 codellama_create_fim_context(const char* model_path, const char** error_message) {
     struct llama_context_params params = llama_context_default_params();
+    params.use_mlock = 1;
     struct llama_model* model = llama_load_model_from_file(model_path,  params);
     if (!model) {
         *error_message = "Failed to load model.";
@@ -43,7 +44,7 @@ codellama_fill_in_middle(struct llama_context* ctx, const char* prefix, const ch
 
     // Append first part of prompt
     *tokens_end++ = spm ? llama_token_suffix(ctx) : llama_token_prefix(ctx);
-    tokens_end += num_tokens = llama_tokenize(ctx, spm ? suffix : prefix, tokens_end, n_max_tokens, 1);
+    tokens_end += num_tokens = llama_tokenize(ctx, spm ? suffix : prefix, tokens_end, n_max_tokens, 0);
     if (num_tokens < 0) {
         *error_message = "Failed to tokenize the prompt.";
         free(tokens);
@@ -52,7 +53,7 @@ codellama_fill_in_middle(struct llama_context* ctx, const char* prefix, const ch
 
     // Append second part of prompt
     *tokens_end++ = spm ? llama_token_prefix(ctx) : llama_token_suffix(ctx);
-    tokens_end += num_tokens = llama_tokenize(ctx, spm ? prefix : suffix, tokens_end, n_max_tokens, 1);
+    tokens_end += num_tokens = llama_tokenize(ctx, spm ? prefix : suffix, tokens_end, n_max_tokens, 0);
     if (num_tokens < 0) {
         *error_message = "Failed to tokenize the prompt.";
         free(tokens);
@@ -112,6 +113,12 @@ codellama_fill_in_middle(struct llama_context* ctx, const char* prefix, const ch
 
         // Append the token, so it's there for subsequent evaluations.
         generated_tokens[num_generated_tokens++] = likeliest_token;
+
+        // Translate the token to a string.
+        char cs[20] = {0};
+        int token_length = llama_token_to_piece(ctx, likeliest_token, cs, 20);
+        cs[token_length] = '\0';
+        printf("%s\n", cs);
     }
 
     // Allocate memory for the final result
