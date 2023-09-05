@@ -13,7 +13,7 @@ int main(int argc, char ** argv) {
     params.repeat_last_n = 64;
     params.prompt = "The quick brown fox";
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 

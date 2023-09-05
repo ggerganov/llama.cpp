@@ -109,7 +109,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
@@ -303,7 +303,7 @@ int main(int argc, char ** argv) {
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
-    if (session_tokens.size() > 0) {
+    if (!session_tokens.empty()) {
         for (llama_token id : session_tokens) {
             if (n_matching_session_tokens >= embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
                 break;
@@ -401,7 +401,7 @@ int main(int argc, char ** argv) {
 
         LOG_TEE("%s: interactive mode on.\n", __func__);
 
-        if (params.antiprompt.size()) {
+        if (!params.antiprompt.empty()) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
             }
@@ -499,7 +499,7 @@ int main(int argc, char ** argv) {
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
-        if (embd.size() > 0) {
+        if (!embd.empty()) {
             // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
             // --prompt or --file which uses the same value.
             int max_embd_size = n_ctx - 4;
@@ -624,7 +624,7 @@ int main(int argc, char ** argv) {
                 LOG("n_past = %d\n", n_past);
             }
 
-            if (embd.size() > 0 && !path_session.empty()) {
+            if (!embd.empty() && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();
             }
@@ -695,7 +695,7 @@ int main(int argc, char ** argv) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // check for reverse prompt
-            if (params.antiprompt.size()) {
+            if (!params.antiprompt.empty()) {
                 std::string last_output;
                 for (auto id : last_tokens) {
                     last_output += llama_token_to_piece(ctx, id);
@@ -732,7 +732,7 @@ int main(int argc, char ** argv) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
-                    if (params.antiprompt.size() != 0) {
+                    if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
                         const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());

@@ -5926,7 +5926,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         rng_ss.str(std::string(&rng_buf[0], rng_size));
         rng_ss >> ctx->rng;
 
-        GGML_ASSERT(rng_ss.fail() == false);
+        GGML_ASSERT(!rng_ss.fail());
     }
 
     // set logits
