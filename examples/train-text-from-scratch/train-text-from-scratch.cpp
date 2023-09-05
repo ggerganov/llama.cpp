@@ -169,10 +169,6 @@ struct my_llama_hparams {
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
-
-    bool operator!=(const my_llama_hparams& other) const {
-        return memcmp(this, &other, sizeof(my_llama_hparams));
-    }
 };
 
 struct my_llama_layer {
