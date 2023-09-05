@@ -17,3 +17,6 @@ indent_style = tab
 
 [prompts/*.txt]
 insert_final_newline = unset
+
+[examples/server/public/*]
+indent_size = 2

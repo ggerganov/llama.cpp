@@ -1617,15 +1617,10 @@ int main(int argc, char ** argv) {
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
-        struct ggml_opt_params opt_params_adam = ggml_opt_default_params(GGML_OPT_ADAM);
         struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_LBFGS);
-        opt_params_adam.print_forward_graph = false;
-        opt_params_adam.print_backward_graph = false;
         opt_params_lbfgs.print_forward_graph = false;
         opt_params_lbfgs.print_backward_graph = false;
-        opt_params_adam.adam.n_iter = 16;
         opt_params_lbfgs.lbfgs.n_iter = 16;
-        // ggml_opt(ctx0, opt_params_adam, e);
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);
