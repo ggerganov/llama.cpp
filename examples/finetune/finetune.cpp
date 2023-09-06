@@ -2449,7 +2449,7 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         data->samples_size,
         data->tokens_data,
         data->tokens_size,
-        opt->iter * params->n_gradient_accumulation,
+        opt->iter*params->n_gradient_accumulation + accum_step,
         data->tokens_input,
         data->target_probs);
 
