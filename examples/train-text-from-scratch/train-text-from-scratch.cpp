@@ -1599,7 +1599,7 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
                 invalid_param = true;
                 break;
             }
-            params->n_gradient_accumulation = std::stoi(argv[i]);
+            params->n_gradient_accumulation = std::max(1, std::stoi(argv[i]));
         } else if (arg == "-n" || arg == "--examples") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1846,7 +1846,7 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         data->samples_size,
         data->tokens_data,
         data->tokens_size,
-        opt->iter,
+        opt->iter * params->n_gradient_accumulation,
         data->tokens_input,
         data->target_logits,
         data->target_probs);
