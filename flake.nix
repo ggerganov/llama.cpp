@@ -93,6 +93,10 @@
           type = "app";
           program = "${self.packages.${system}.default}/bin/quantize";
         };
+        apps.train-text-from-scratch = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/train-text-from-scratch";
+        };
         apps.default = self.apps.${system}.llama;
         devShells.default = pkgs.mkShell {
           buildInputs = [ llama-python ];
