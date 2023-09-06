@@ -862,7 +862,7 @@ class OutputFile:
         if params.f_rope_scale:
             self.gguf.add_rope_scale_linear(params.f_rope_scale)
 
-        if params.ftype:
+        if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
