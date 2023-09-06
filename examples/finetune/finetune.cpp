@@ -2283,12 +2283,12 @@ struct opt_callback_data {
     struct ggml_tensor *      target_probs;
     int                       first_iter;
     int64_t                   last_time;
-    float                     time_per_iter;
+    double                    millis_per_iter;
 };
 
-void print_duration(float fmillis) {
+void print_duration(double fmillis) {
     if (fmillis < 1000.0f) {
-        printf("%.1fms", fmillis);
+        printf("%.1fms", (float) fmillis);
         return;
     }
     const int64_t one_sec  = 1000;
@@ -2296,16 +2296,17 @@ void print_duration(float fmillis) {
     const int64_t one_hour = one_min  * 60;
     const int64_t one_day  = one_hour * 24;
 
-    int64_t millis  = fmillis;
+    int64_t millis  = (int64_t) fmillis;
     int64_t days    = millis/one_day;
     int64_t hours   = (millis - days*one_day)/one_hour;
     int64_t minutes = (millis - days*one_day - hours*one_hour)/one_min;
     int64_t seconds = (millis - days*one_day - hours*one_hour - minutes*one_min)/one_sec;
 
+    // to print int64_t either cast to (long long int) or use macro PRId64 from <inttypes.h>
     if (days > 0) {
-        printf("%lldd ", days);
+        printf("%lldd ", (long long int) days);
     }
-    printf("%02lld:%02lld:%02lld", hours, minutes, seconds);
+    printf("%02lld:%02lld:%02lld", (long long int) hours, (long long int) minutes, (long long int) seconds);
 }
 
 void opt_callback(void * vdata, int accum_step, float * sched) {
@@ -2316,25 +2317,27 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
     int n_ctx = params->n_ctx;
 
     if (accum_step == 0) {
+        // time measurement
         int64_t now = ggml_time_ms();
-        if (now > data->last_time) {
-            float dt = now - data->last_time;
-            if (data->time_per_iter == 0) {
-                data->time_per_iter = dt;
+        if (now > data->last_time && opt->iter > data->first_iter) {
+            double dt = now - data->last_time;
+            if (data->millis_per_iter == 0.0) {
+                data->millis_per_iter = dt;
             } else {
-                const float gain = 0.7f;
-                data->time_per_iter = data->time_per_iter*(1.0f-gain) + dt*gain;
+                const double gain = 0.7;
+                data->millis_per_iter = data->millis_per_iter*(1.0-gain) + dt*gain;
             }
         }
-        data->last_time = now;
-        float remaining_time = 0;
-        if (data->time_per_iter > 0) {
+
+        double remaining_millis = 0.0;
+        if (data->millis_per_iter > 0.0) {
             const int n_iter = params->use_adam ? params->adam_n_iter : params->lbfgs_n_iter;
             const int done_iter = opt->iter - data->first_iter;
             const int remaining_iter = n_iter - done_iter;
-            remaining_time = remaining_iter * data->time_per_iter;
+            remaining_millis = remaining_iter * data->millis_per_iter;
         }
 
+        // file saving
         const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
         if (save_now) {
             int new_iters = opt->iter - data->last_save_iter;
@@ -2353,6 +2356,9 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
             data->last_save_iter = opt->iter;
         }
 
+        // exclude file saving from time measurement, by measuring last_time after saving
+        data->last_time = ggml_time_ms();
+
         *sched = (opt->iter < params->warmup)
                     ? (float) opt->iter / (float) params->warmup
                     : cosine_decay_restart(
@@ -2369,11 +2375,13 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
         printf("%s: iter=%*d sched=%f loss=%f",
             __func__, 6, opt->iter, *sched, opt->loss_after);
-        if (data->time_per_iter > 0) {
+
+
+        if (data->millis_per_iter > 0) {
             printf(" dt=");
-            print_duration(data->time_per_iter);
+            print_duration(data->millis_per_iter);
             printf(" eta=");
-            print_duration(remaining_time);
+            print_duration(remaining_millis);
         }
 
         float improvement = opt->loss_before - opt->loss_after;
@@ -2747,7 +2755,7 @@ int main(int argc, char ** argv) {
     opt_cb_data.target_probs      = target_probs;
     opt_cb_data.first_iter        = opt->iter;
     opt_cb_data.last_time         = ggml_time_ms();
-    opt_cb_data.time_per_iter     = 0;
+    opt_cb_data.millis_per_iter   = 0.0;
 
     // measure required memory for work buffer
     size_t max_work_size = ggml_graph_plan(gb, params.n_threads).work_size + GGML_OBJECT_SIZE;
@@ -2770,10 +2778,8 @@ int main(int argc, char ** argv) {
     ggml_free(ctx_input);
 
     int64_t t1 = ggml_time_ms();
-    int64_t d  = t1-t0;
-    float  fd  = (float) d * 1e-3;
-    printf("%s: total training ", __func__);
-    print_duration(fd);
+    printf("%s: total training time: ", __func__);
+    print_duration((double) (t1 - t0));
     printf("\n");
 
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
