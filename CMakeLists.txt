@@ -36,6 +36,12 @@ endif()
 # Option list
 #
 
+if (APPLE)
+    set(LLAMA_METAL_DEFAULT ON)
+else()
+    set(LLAMA_METAL_DEFAULT OFF)
+endif()
+
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
@@ -76,7 +82,8 @@ option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some 
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
-option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
+option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
+option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
@@ -158,6 +165,32 @@ if (APPLE AND LLAMA_ACCELERATE)
     endif()
 endif()
 
+if (LLAMA_METAL)
+    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
+    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
+    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
+
+    message(STATUS "Metal framework found")
+    set(GGML_HEADERS_METAL ggml-metal.h)
+    set(GGML_SOURCES_METAL ggml-metal.m)
+
+    add_compile_definitions(GGML_USE_METAL)
+    if (LLAMA_METAL_NDEBUG)
+        add_compile_definitions(GGML_METAL_NDEBUG)
+    endif()
+
+    # get full path to the file
+    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
+
+    # copy ggml-metal.metal to bin directory
+    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
+        ${FOUNDATION_LIBRARY}
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        )
+endif()
 if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -293,30 +326,6 @@ if (LLAMA_CUBLAS)
     else()
         message(WARNING "cuBLAS not found")
     endif()
-endif()
-
-if (LLAMA_METAL)
-    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
-    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
-    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-
-    set(GGML_HEADERS_METAL ggml-metal.h)
-    set(GGML_SOURCES_METAL ggml-metal.m)
-
-    add_compile_definitions(GGML_USE_METAL)
-    #add_compile_definitions(GGML_METAL_NDEBUG)
-
-    # get full path to the file
-    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
-
-    # copy ggml-metal.metal to bin directory
-    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
-
-    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
-        ${FOUNDATION_LIBRARY}
-        ${METAL_FRAMEWORK}
-        ${METALKIT_FRAMEWORK}
-        )
 endif()
 
 if (LLAMA_MPI)

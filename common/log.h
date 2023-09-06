@@ -341,14 +341,14 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         }
     }
 
+    if (_disabled)
+    {
+        // Log is disabled
+        return nullptr;
+    }
+
     if (_initialized)
     {
-        if (_disabled)
-        {
-            // Log is disabled
-            return nullptr;
-        }
-
         // with fallback in case something went wrong
         return logfile ? logfile : stderr;
     }
@@ -513,16 +513,16 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
 
 inline void log_print_usage()
 {
-    fprintf(stdout, "log options:\n");
+    printf("log options:\n");
     /* format
-    fprintf(stdout, "  -h, --help            show this help message and exit\n");*/
+    printf("  -h, --help            show this help message and exit\n");*/
     /* spacing
-    fprintf(stdout, "__-param----------------Description\n");*/
-    fprintf(stdout, "  --log-test            Run simple logging test\n");
-    fprintf(stdout, "  --log-disable         Disable trace logs\n");
-    fprintf(stdout, "  --log-enable          Enable trace logs\n");
-    fprintf(stdout, "  --log-file            Specify a log filename (without extension)\n");
-    fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+    printf("__-param----------------Description\n");*/
+    printf("  --log-test            Run simple logging test\n");
+    printf("  --log-disable         Disable trace logs\n");
+    printf("  --log-enable          Enable trace logs\n");
+    printf("  --log-file            Specify a log filename (without extension)\n");
+    printf("                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)
