@@ -76,7 +76,7 @@ bool gguf_ex_write(const std::string & fname) {
 
     gguf_write_to_file(ctx, fname.c_str(), false);
 
-    fprintf(stdout, "%s: wrote file '%s;\n", __func__, fname.c_str());
+    printf("%s: wrote file '%s;\n", __func__, fname.c_str());
 
     ggml_free(ctx_data);
     gguf_free(ctx);
@@ -93,20 +93,20 @@ bool gguf_ex_read_0(const std::string & fname) {
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 
-    fprintf(stdout, "%s: version:      %d\n", __func__, gguf_get_version(ctx));
-    fprintf(stdout, "%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
-    fprintf(stdout, "%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
+    printf("%s: version:      %d\n", __func__, gguf_get_version(ctx));
+    printf("%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
+    printf("%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
 
     // kv
     {
         const int n_kv = gguf_get_n_kv(ctx);
 
-        fprintf(stdout, "%s: n_kv: %d\n", __func__, n_kv);
+        printf("%s: n_kv: %d\n", __func__, n_kv);
 
         for (int i = 0; i < n_kv; ++i) {
             const char * key = gguf_get_key(ctx, i);
 
-            fprintf(stdout, "%s: kv[%d]: key = %s\n", __func__, i, key);
+            printf("%s: kv[%d]: key = %s\n", __func__, i, key);
         }
     }
 
@@ -116,10 +116,10 @@ bool gguf_ex_read_0(const std::string & fname) {
 
         const int keyidx = gguf_find_key(ctx, findkey);
         if (keyidx == -1) {
-            fprintf(stdout, "%s: find key: %s not found.\n", __func__, findkey);
+            printf("%s: find key: %s not found.\n", __func__, findkey);
         } else {
             const char * key_value = gguf_get_val_str(ctx, keyidx);
-            fprintf(stdout, "%s: find key: %s found, kv[%d] value = %s\n", __func__, findkey, keyidx, key_value);
+            printf("%s: find key: %s found, kv[%d] value = %s\n", __func__, findkey, keyidx, key_value);
         }
     }
 
@@ -127,13 +127,13 @@ bool gguf_ex_read_0(const std::string & fname) {
     {
         const int n_tensors = gguf_get_n_tensors(ctx);
 
-        fprintf(stdout, "%s: n_tensors: %d\n", __func__, n_tensors);
+        printf("%s: n_tensors: %d\n", __func__, n_tensors);
 
         for (int i = 0; i < n_tensors; ++i) {
             const char * name   = gguf_get_tensor_name  (ctx, i);
             const size_t offset = gguf_get_tensor_offset(ctx, i);
 
-            fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
+            printf("%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
         }
     }
 
@@ -153,20 +153,20 @@ bool gguf_ex_read_1(const std::string & fname) {
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 
-    fprintf(stdout, "%s: version:      %d\n", __func__, gguf_get_version(ctx));
-    fprintf(stdout, "%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
-    fprintf(stdout, "%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
+    printf("%s: version:      %d\n", __func__, gguf_get_version(ctx));
+    printf("%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
+    printf("%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
 
     // kv
     {
         const int n_kv = gguf_get_n_kv(ctx);
 
-        fprintf(stdout, "%s: n_kv: %d\n", __func__, n_kv);
+        printf("%s: n_kv: %d\n", __func__, n_kv);
 
         for (int i = 0; i < n_kv; ++i) {
             const char * key = gguf_get_key(ctx, i);
 
-            fprintf(stdout, "%s: kv[%d]: key = %s\n", __func__, i, key);
+            printf("%s: kv[%d]: key = %s\n", __func__, i, key);
         }
     }
 
@@ -174,13 +174,13 @@ bool gguf_ex_read_1(const std::string & fname) {
     {
         const int n_tensors = gguf_get_n_tensors(ctx);
 
-        fprintf(stdout, "%s: n_tensors: %d\n", __func__, n_tensors);
+        printf("%s: n_tensors: %d\n", __func__, n_tensors);
 
         for (int i = 0; i < n_tensors; ++i) {
             const char * name   = gguf_get_tensor_name  (ctx, i);
             const size_t offset = gguf_get_tensor_offset(ctx, i);
 
-            fprintf(stdout, "%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
+            printf("%s: tensor[%d]: name = %s, offset = %zu\n", __func__, i, name, offset);
         }
     }
 
@@ -189,13 +189,13 @@ bool gguf_ex_read_1(const std::string & fname) {
         const int n_tensors = gguf_get_n_tensors(ctx);
 
         for (int i = 0; i < n_tensors; ++i) {
-            fprintf(stdout, "%s: reading tensor %d data\n", __func__, i);
+            printf("%s: reading tensor %d data\n", __func__, i);
 
             const char * name = gguf_get_tensor_name(ctx, i);
 
             struct ggml_tensor * cur = ggml_get_tensor(ctx_data, name);
 
-            fprintf(stdout, "%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n", __func__, i, cur->n_dims, cur->name, cur->data);
+            printf("%s: tensor[%d]: n_dims = %d, name = %s, data = %p\n", __func__, i, cur->n_dims, cur->name, cur->data);
 
             // print first 10 elements
             const float * data = (const float *) cur->data;
@@ -219,7 +219,7 @@ bool gguf_ex_read_1(const std::string & fname) {
         }
     }
 
-    fprintf(stdout, "%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
+    printf("%s: ctx_data size: %zu\n", __func__, ggml_get_mem_size(ctx_data));
 
     ggml_free(ctx_data);
     gguf_free(ctx);
@@ -229,7 +229,7 @@ bool gguf_ex_read_1(const std::string & fname) {
 
 int main(int argc, char ** argv) {
     if (argc < 3) {
-        fprintf(stdout, "usage: %s data.gguf r|w\n", argv[0]);
+        printf("usage: %s data.gguf r|w\n", argv[0]);
         return -1;
     }
 
