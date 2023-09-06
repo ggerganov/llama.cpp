@@ -61,7 +61,8 @@ class GGMLFType(IntEnum):
 
 class Hyperparameters:
     def __init__(self):
-        self.n_vocab = self.n_embd = self.n_mult = self.n_head = self.n_layer = self.n_rot = self.n_ff = 0
+        self.n_vocab = self.n_embd = self.n_mult = self.n_head = 0
+        self.n_layer = self.n_rot = self.n_ff = 0
         self.ftype = GGMLFType.ALL_F32
 
     def set_n_ff(self, model):
@@ -174,10 +175,16 @@ class GGMLModel:
         raise ValueError(f"Unexpected file magic {magic!r}! This doesn't look like a GGML format file.")
 
     def validate_conversion(self, ftype):
-        if (self.file_format < GGMLFormat.GGJT or self.format_version < 2) and ftype not in (GGMLFType.ALL_F32, GGMLFType.MOSTLY_F16):
-            raise ValueError(f'Quantizations changed in GGJTv2. Can only convert unquantized GGML files older than GGJTv2. Sorry, your {self.file_format.name}v{self.format_version} file of type {ftype.name} is not eligible for conversion.')
-        if (self.file_format == GGMLFormat.GGJT and self.format_version == 2) and ftype in (GGMLFType.MOSTLY_Q4_0, GGMLFType.MOSTLY_Q4_1, GGMLFType.MOSTLY_Q4_1_SOME_F16, GGMLFType.MOSTLY_Q8_0):
-            raise ValueError(f'Q4 and Q8 quantizations changed in GGJTv3. Sorry, your {self.file_format.name}v{self.format_version} file of type {ftype.name} is not eligible for conversion.')
+        err = ''
+        if (self.file_format < GGMLFormat.GGJT or self.format_version < 2):
+            if ftype not in (GGMLFType.ALL_F32, GGMLFType.MOSTLY_F16):
+                err = 'Quantizations changed in GGJTv2. Can only convert unquantized GGML files older than GGJTv2.'
+        elif (self.file_format == GGMLFormat.GGJT and self.format_version == 2):
+            if ftype in ( GGMLFType.MOSTLY_Q4_0, GGMLFType.MOSTLY_Q4_1,
+                          GGMLFType.MOSTLY_Q4_1_SOME_F16, GGMLFType.MOSTLY_Q8_0):
+                err = 'Q4 and Q8 quantizations changed in GGJTv3.'
+        if len(err) > 0:
+            raise ValueError(f'{err} Sorry, your {self.file_format.name}v{self.format_version} file of type {ftype.name} is not eligible for conversion.')
 
     def load(self, data, offset):
         offset += self.validate_header(data, offset)
@@ -228,7 +235,10 @@ class GGMLToGGUF:
 
     def save(self):
         print('* Preparing to save GGUF file')
-        gguf_writer = gguf.GGUFWriter(self.cfg.output, gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA], use_temp_file = False)
+        gguf_writer = gguf.GGUFWriter(
+            self.cfg.output,
+            gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA],
+            use_temp_file = False )
         self.add_params(gguf_writer)
         self.add_vocab(gguf_writer)
         if self.special_vocab is not None:
@@ -245,7 +255,10 @@ class GGMLToGGUF:
     def add_params(self, gguf_writer):
         hp = self.model.hyperparameters
         cfg = self.cfg
-        desc = cfg.desc if cfg.desc is not None else f'converted from legacy {self.model.file_format.name}v{self.model.format_version} {hp.ftype.name} format'
+        if cfg.desc is not None:
+            desc = cfg.desc
+        else:
+            desc = f'converted from legacy {self.model.file_format.name}v{self.model.format_version} {hp.ftype.name} format'
         try:
             # Filenames aren't necessarily valid UTF8.
             name = cfg.name if cfg.name is not None else cfg.input.name
@@ -292,7 +305,8 @@ class GGMLToGGUF:
                 tokens.append(vbytes)
                 scores.append(score)
                 toktypes.append(ttype)
-            assert len(tokens) == hp.n_vocab, f'Override vocab has a different number of items than hyperparameters - override = {len(tokens)} but n_vocab={hp.n_vocab}'
+            assert len(tokens) == hp.n_vocab, \
+                f'Override vocab has a different number of items than hyperparameters - override = {len(tokens)} but n_vocab={hp.n_vocab}'
             gguf_writer.add_token_list(tokens)
             gguf_writer.add_token_scores(scores)
             if len(toktypes) > 0:
@@ -344,7 +358,11 @@ class GGMLToGGUF:
                 tempdims[1] = tempdims[0]
                 tempdims[0] = temp
             # print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
-            gguf_writer.add_tensor(mapped_name, data[tensor.start_offset:tensor.start_offset + tensor.len_bytes], raw_shape = tempdims, raw_dtype = tensor.dtype)
+            gguf_writer.add_tensor(
+                mapped_name,
+                data[tensor.start_offset:tensor.start_offset + tensor.len_bytes],
+                raw_shape = tempdims,
+                raw_dtype = tensor.dtype )
 
 def handle_metadata(cfg, hp):
     import convert
@@ -366,30 +384,44 @@ def handle_metadata(cfg, hp):
         params = convert.Params.loadOriginalParamsJson(fakemodel, orig_config_path)
     else:
         raise ValueError('Unable to load metadata')
-    vocab = convert.load_vocab(cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir, cfg.vocabtype)
+    vocab = convert.load_vocab(
+        cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir,
+        cfg.vocabtype )
     # FIXME: Respect cfg.vocab_dir?
     svocab = gguf.SpecialVocab(cfg.model_metadata_dir)
     convert.check_vocab_size(params, vocab)
     return (params, vocab, svocab)
 
 def handle_args():
-    parser = argparse.ArgumentParser(description = 'Convert GGMLv3 models to GGUF')
-    parser.add_argument('--input', '-i', type = Path, required = True, help = 'Input GGMLv3 filename')
-    parser.add_argument('--output', '-o', type = Path, required = True, help ='Output GGUF filename')
-    parser.add_argument('--name', help = 'Set model name')
-    parser.add_argument('--desc', help = 'Set model description')
-    parser.add_argument('--gqa', type = int, default = 1, help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
-    parser.add_argument('--eps', default = '5.0e-06', help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
-    parser.add_argument('--context-length', '-c', type=int, default = 2048, help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
-    parser.add_argument('--model-metadata-dir', '-m', type = Path, help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
-    parser.add_argument("--vocab-dir", type=Path, help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
-    parser.add_argument("--vocabtype", choices=["spm", "bpe"], help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)", default="spm")
+    parser = argparse.ArgumentParser(description = 'Convert GGML models to GGUF')
+    parser.add_argument('--input', '-i', type = Path, required = True,
+        help = 'Input GGMLv3 filename')
+    parser.add_argument('--output', '-o', type = Path, required = True,
+        help ='Output GGUF filename')
+    parser.add_argument('--name',
+        help = 'Set model name')
+    parser.add_argument('--desc',
+        help = 'Set model description')
+    parser.add_argument('--gqa', type = int, default = 1,
+        help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
+    parser.add_argument('--eps', default = '5.0e-06',
+        help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
+    parser.add_argument('--context-length', '-c', type=int, default = 2048,
+        help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
+    parser.add_argument('--model-metadata-dir', '-m', type = Path,
+        help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
+    parser.add_argument("--vocab-dir", type=Path,
+        help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
+    parser.add_argument("--vocabtype", choices=["spm", "bpe"], default="spm",
+        help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)")
     return parser.parse_args()
 
 def main():
     cfg = handle_args()
     print(f'* Using config: {cfg}')
     print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
+    if cfg.model_metadata_dir is None and (cfg.gqa == 1 or cfg.eps == '5.0e-06'):
+        print('- Note: If converting LLaMA2, specifying "--eps 1e-5" is required. 70B models also need "--gqa 8".')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLModel()
     print('* Scanning GGML input file')
@@ -408,7 +440,10 @@ def main():
         print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
         if model.file_format == GGMLFormat.GGML:
             print('! This is a very old GGML file that does not contain vocab scores. Strongly recommend using model metadata!')
-    converter = GGMLToGGUF(model, data, cfg, params_override = params_override, vocab_override = vocab_override, special_vocab = special_vocab)
+    converter = GGMLToGGUF(model, data, cfg,
+        params_override = params_override,
+        vocab_override = vocab_override,
+        special_vocab = special_vocab )
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
 
