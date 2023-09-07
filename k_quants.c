@@ -1089,6 +1089,7 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
         if (!max_abs_scale) {
             memset(&y[i], 0, sizeof(block_q6_K));
             y[i].d = ggml_fp32_to_fp16(0.f);
+            x += QK_K;
             continue;
         }
 
