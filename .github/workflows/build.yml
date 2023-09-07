@@ -346,8 +346,7 @@ jobs:
         id: cuda-toolkit
         with:
           cuda: ${{ matrix.cuda }}
-          # TODO(green-sky): _dev seems to fail, and non dev are not enought
-          #sub-packages: '["nvcc", "cudart", "cublas", "cudart_dev", "cublas_dev"]'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
 
       - name: Build
         id: cmake_build
