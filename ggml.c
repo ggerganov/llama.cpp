@@ -194,7 +194,7 @@ typedef void * thread_ret_t;
 inline static void * ggml_aligned_malloc(size_t size) {
     void * aligned_memory = NULL;
 #ifdef GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, getpagesize(), size);
+    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
 #endif
