@@ -111,7 +111,7 @@ kernel void kernel_soft_max(
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
-    const int64_t i03 = tgpig[2];
+        const int64_t i03 = tgpig[2];
     const int64_t i02 = tgpig[1];
     const int64_t i01 = tgpig[0];
 
@@ -220,27 +220,26 @@ kernel void kernel_norm(
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    //// broadcast
-    //if (tpitg == 0) {
-    //    sum[0] /= ne00;
-    //}
-    //threadgroup_barrier(mem_flags::mem_threadgroup);
+    // broadcast
+    if (tpitg == 0) {
+        sum[0] /= ne00;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
     const float mean  = sum[0];
 
-    // recenter and VARIANCE
+    // recenter
     device float * y = dst + tgpig*ne00;
-    sum[tpitg] = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
         y[i00] = x[i00] - mean;
+    }
+
+    // VARIANCE
+    // parallel sum
+    sum[tpitg] = 0.0f;
+    for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
         sum[tpitg] += y[i00] * y[i00];
     }
 
-    //// VARIANCE
-    //// parallel sum
-    //sum[tpitg] = 0.0f;
-    //for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-    //    sum[tpitg] += y[i00] * y[i00];
-    //}
     // reduce
     threadgroup_barrier(mem_flags::mem_threadgroup);
     for (uint i = ntg/2; i > 0; i /= 2) {
@@ -249,11 +248,11 @@ kernel void kernel_norm(
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    //// broadcast
-    //if (tpitg == 0) {
-    //    sum[0] /= ne00;
-    //}
-    //threadgroup_barrier(mem_flags::mem_threadgroup);
+    // broadcast
+    if (tpitg == 0) {
+        sum[0] /= ne00;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
     const float variance = sum[0];
 
     const float scale = 1.0f/sqrt(variance + eps);
@@ -261,7 +260,6 @@ kernel void kernel_norm(
         y[i00] = y[i00] * scale;
     }
 }
-
 
 kernel void kernel_rms_norm(
         device const  void * src0,
@@ -630,7 +628,6 @@ kernel void kernel_mul_mat_f16_f32(
             }
         }
     }
-
 }
 
 kernel void kernel_alibi_f32(
