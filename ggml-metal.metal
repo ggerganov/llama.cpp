@@ -682,24 +682,26 @@ kernel void kernel_rope(
         constant       int & mode,
         constant     float & freq_base,
         constant     float & freq_scale,
-        uint3 tpig[[thread_position_in_grid]]) {
-    const int64_t i3 = tpig[2];
-    const int64_t i2 = tpig[1];
-    const int64_t i1 = tpig[0];
+        uint  tiitg[[thread_index_in_threadgroup]],
+        uint3 tptg[[threads_per_threadgroup]],
+        uint3 tgpig[[threadgroup_position_in_grid]]) {
+    const int64_t i3 = tgpig[2];
+    const int64_t i2 = tgpig[1];
+    const int64_t i1 = tgpig[0];
 
     const bool is_neox = mode & 2;
-    const float theta_scale = pow(freq_base, -2.0f/n_dims);
 
     const int64_t p = ((mode & 1) == 0 ? n_past + i2 : i2);
 
-    float theta = freq_scale * (float)p;
+    const float theta_0 = freq_scale * (float)p;
+    const float inv_ndims = -1.f/n_dims;
 
     if (!is_neox) {
-        for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
+        for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+
+            const float theta = theta_0 * pow(freq_base, inv_ndims*i0);
             const float cos_theta = cos(theta);
             const float sin_theta = sin(theta);
-
-            theta *= theta_scale;
 
             device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
             device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -712,11 +714,11 @@ kernel void kernel_rope(
         }
     } else {
         for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-            for (int64_t ic = 0; ic < n_dims; ic += 2) {
+            for (int64_t ic = 2*tiitg; ic < n_dims; ic += 2*tptg.x) {
+
+                const float theta = theta_0 * pow(freq_base, inv_ndims*ic - ib);
                 const float cos_theta = cos(theta);
                 const float sin_theta = sin(theta);
-
-                theta *= theta_scale;
 
                 const int64_t i0 = ib*n_dims + ic/2;
 

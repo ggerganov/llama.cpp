@@ -1141,7 +1141,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&freq_base  length:sizeof(float) atIndex:21];
                             [encoder setBytes:&freq_scale length:sizeof(float) atIndex:22];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                         } break;
                     case GGML_OP_DUP:
                     case GGML_OP_CPY:
