@@ -235,6 +235,12 @@ kernel void kernel_norm(
 
     // VARIANCE
     // parallel sum
+    //
+    // WARNING: combining this loop with the one above will give you wrong results for nth == 256
+    //          I have no idea why, so for now I am keeping them separate. But this behavior is very concerning.
+    //          Tested with:
+    //          ./perplexity -m ./falcon-7b/ggml-model-q4_0.gguf -f wiki.test.raw -ngl 1 -t 4
+    //
     sum[tpitg] = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
         sum[tpitg] += y[i00] * y[i00];
