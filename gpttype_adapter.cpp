@@ -393,7 +393,7 @@ static std::string RemoveBell(const std::string & input) //removes the bell char
     return word2;
 }
 
-ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format)
+ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format, FileFormatExtraMeta file_format_meta)
 {
     ggml_time_init();
 
@@ -438,11 +438,11 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         {
             //approximate NTK aware ctx
             auto effectivenctx = params.n_ctx;
-            // if((file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON) && llama_ctx_v4->model.hparams.n_ctx_train>2048)
-            // {
-            //     float factor = llama_ctx_v4->model.hparams.n_ctx_train/2048;
-            //     effectivenctx = effectivenctx/factor;
-            // }
+            if((file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON) && file_format_meta.n_ctx_train > 2048)
+            {
+                float factor = file_format_meta.n_ctx_train/2048;
+                effectivenctx = effectivenctx/factor;
+            }
             rope_freq_base = (effectivenctx <= 3072 ? 26000.0f : (effectivenctx <= 4096 ? 32000.0f : (effectivenctx <= 6144 ? 54000.0f : (effectivenctx <= 8192 ? 82684.0f : (effectivenctx <= 12288 ? 140000.0f : 200000.0f)))));
 
         }

@@ -80,7 +80,7 @@ void print_tok_vec(std::vector<float> &embd)
 }
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
- FileFormat check_file_format(const std::string & fname)
+ FileFormat check_file_format(const std::string & fname, FileFormatExtraMeta * fileformatmeta)
  {
     std::vector<char> f_buf(1024*1024);
 
@@ -266,7 +266,7 @@ void print_tok_vec(std::vector<float> &embd)
         auto keyidx = gguf_find_key(ctx, "general.architecture");
         std::string modelarch = "";
         if (keyidx != -1) { modelarch = gguf_get_val_str(ctx, keyidx); }
-        gguf_free(ctx);
+
         if(modelarch=="llama")
         {
             fileformat = FileFormat::GGUF_LLAMA;
@@ -280,6 +280,16 @@ void print_tok_vec(std::vector<float> &embd)
         {
             printf("\nERROR: Detected unimplemented GGUF Arch: %s\n",modelarch.c_str());
         }
+
+        if(modelarch!="" && fileformatmeta!=nullptr)
+        {
+            std::string fkey = modelarch+".context_length";
+            auto keyidx = gguf_find_key(ctx, fkey.c_str());
+            if (keyidx != -1) {
+                fileformatmeta->n_ctx_train = gguf_get_val_u32(ctx, keyidx);
+            }
+        }
+        gguf_free(ctx);
     }
 
     if(fin.is_open())

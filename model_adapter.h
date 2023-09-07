@@ -51,6 +51,11 @@ enum FileFormat
 
 };
 
+struct FileFormatExtraMeta
+{
+    int n_ctx_train = 2048;
+};
+
 enum ModelLoadResult
 {
     FAIL = 0,
@@ -58,7 +63,7 @@ enum ModelLoadResult
     RETRY_LOAD = 2, //used if it's suspected that the model is an older format
 };
 
-ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format);
+ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in_file_format, FileFormatExtraMeta file_format_meta);
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output);
 bool gpttype_generate_abort();
 const std::string & gpttype_get_pending_output();
@@ -73,7 +78,7 @@ std::vector<int> LongestCommonSubseq(const std::vector<int> x, const std::vector
 bool ArrStartWith(const std::vector<int> targetArray, const std::vector<int> searchSeq);
 int ArrFindIndexOf(const std::vector<int> targetArray, const std::vector<int> searchSeq);
 
-FileFormat check_file_format(const std::string & fname);
+FileFormat check_file_format(const std::string & fname, FileFormatExtraMeta * fileformatmeta);
 void ContextFastForward(std::vector<int> &current_context_tokens, std::vector<int> &embd_inp,
  int &n_past, std::vector<int> &last_n_tokens, const int nctx, std::vector<int> &smartcontext,
  const bool useSmartContext, const bool requireFullSubset);
