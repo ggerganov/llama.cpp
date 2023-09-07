@@ -91,8 +91,8 @@ else
 OPT = -O3
 endif
 MK_CPPFLAGS = -I. -Icommon
-MK_CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
-MK_CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
+MK_CFLAGS   = $(OPT) -std=c11   -fPIC
+MK_CXXFLAGS = $(OPT) -std=c++11 -fPIC
 MK_LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -381,9 +381,8 @@ k_quants.o: k_quants.c k_quants.h
 endif # LLAMA_NO_K_QUANTS
 
 # combine build flags with cmdline overrides
-override CPPFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS)
-override CFLAGS   := $(MK_CFLAGS) $(CFLAGS)
-override CXXFLAGS := $(MK_CXXFLAGS) $(CXXFLAGS)
+override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
+override CXXFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
 
 #
