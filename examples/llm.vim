@@ -8,7 +8,7 @@ function! Llm()
   let buffer_content = join(getline(1, '$'), "\n")
 
   " Create the JSON payload
-  let json_payload = {"temp":0.72,"top_k":100,"top_p":0.73,"repeat_penalty":1.100000023841858,"n_predict":10,"stream": v:false}
+  let json_payload = {"temp":0.72,"top_k":100,"top_p":0.73,"repeat_penalty":1.100000023841858,"n_predict":256,"stop": ["\n\n\n"],"stream": v:false}
   let json_payload.prompt = buffer_content
 
   " Define the curl command
@@ -25,3 +25,4 @@ function! Llm()
 endfunction
 
 command! Llm call Llm()
+noremap <F2> :Llm<CR>

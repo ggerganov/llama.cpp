@@ -1,7 +1,15 @@
 *.o
 *.a
 *.so
+*.gguf
 *.bin
+*.exe
+*.dll
+*.log
+*.gcov
+*.gcno
+*.gcda
+*.dot
 .DS_Store
 .build/
 .cache/
@@ -13,47 +21,46 @@
 .vs/
 .vscode/
 
-build/
-build-em/
-build-debug/
-build-release/
-build-ci-debug/
-build-ci-release/
-build-static/
-build-cublas/
-build-opencl/
-build-metal/
-build-mpi/
-build-no-accel/
-build-sanitize-addr/
-build-sanitize-thread/
+lcov-report/
+gcovr-report/
+
+build*/
 out/
 tmp/
 
 models/*
 models-mnt
 
+/Pipfile
+/baby-llama
+/beam-search
+/benchmark-matmult
+/convert-llama2c-to-ggml
+/embd-input-test
+/embedding
+/gguf
+/gguf-llama-simple
+/libllama.so
+/llama-bench
 /main
+/metal
+/perplexity
 /quantize
 /quantize-stats
 /result
-/perplexity
-/embedding
-/train-text-from-scratch
-/convert-llama2c-to-ggml
-/simple
-/benchmark-matmult
-/vdot
+/save-load-state
 /server
-/Pipfile
-/embd-input-test
-/libllama.so
+/simple
+/speculative
+/train-text-from-scratch
+/vdot
 build-info.h
 arm_neon.h
 compile_commands.json
 CMakeSettings.json
 
 __pycache__
+dist
 
 zig-out/
 zig-cache/
@@ -64,18 +71,18 @@ perf-*.txt
 
 examples/jeopardy/results.txt
 
-
-pyproject.toml
 poetry.lock
 poetry.toml
 
 # Test binaries
 tests/test-grammar-parser
+tests/test-llama-grammar
 tests/test-double-float
 tests/test-grad0
 tests/test-opt
 tests/test-quantize-fns
 tests/test-quantize-perf
 tests/test-sampling
-tests/test-tokenizer-0
-
+tests/test-tokenizer-0-llama
+tests/test-tokenizer-0-falcon
+tests/test-tokenizer-1

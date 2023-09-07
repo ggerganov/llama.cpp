@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 from flask import Flask, jsonify, request, Response
 import urllib.parse
