@@ -247,7 +247,6 @@ kernel void kernel_norm(
     }
 }
 
-
 kernel void kernel_rms_norm(
         device const  void * src0,
         device       float * dst,
@@ -615,7 +614,6 @@ kernel void kernel_mul_mat_f16_f32(
             }
         }
     }
-
 }
 
 kernel void kernel_alibi_f32(
