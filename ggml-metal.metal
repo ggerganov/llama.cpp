@@ -63,8 +63,8 @@ kernel void kernel_mul_row(
 }
 
 kernel void kernel_scale(
-        device const float * src0,
-        device       float * dst,
+        device const float4 * src0,
+        device       float4 * dst,
         constant     float & scale,
         uint tpig[[thread_position_in_grid]]) {
     dst[tpig] = src0[tpig] * scale;
