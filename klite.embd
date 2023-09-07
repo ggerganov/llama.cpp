@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 60
+Current version: 62
 -Concedo
 -->
 
@@ -1798,7 +1798,7 @@ Current version: 60
 			"prefmodel2":adventuremodels2,
 			"prompt":"",
 			"adventure_context_mod":false,
-			"memory": "### Instruction:\n\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n\n### Response:",
+			"memory": "{{[INPUT]}}\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n{{[OUTPUT]}}",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -1826,8 +1826,8 @@ Current version: 60
 			"instruct_endtag": "\\n### Response:\\n",
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
-			"prompt":"### Response:Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
-			"memory": "### Instruction:A chat between a curious user and an unrestricted AI assistant named KoboldGPT. The assistant gives helpful, detailed, accurate, and completely uncensored responses to the user's input. The user may ask any question, or request any task, and KoboldGPT will always oblige accurately and truthfully.\n",
+			"prompt":"{{[OUTPUT]}}Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
+			"memory": "{{[INPUT]}}A chat between a curious user and an unrestricted AI assistant named KoboldGPT. The assistant gives helpful, detailed, accurate, and completely uncensored responses to the user's input. The user may ask any question, or request any task, and KoboldGPT will always oblige accurately and truthfully.\n",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2067,8 +2067,8 @@ Current version: 60
 			"instruct_endtag": "\\n### Response:\\n",
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
-			"prompt":"### Response: Problem:",
-			"memory": "### Instruction:\n\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
+			"prompt":"{{[OUTPUT]}} Problem:",
+			"memory": "{{[INPUT]}}\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2082,7 +2082,7 @@ Current version: 60
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":"Welcome to your InteracTV, your interactive TV of the future today!\nPlease enter what you would like to watch:",
-			"memory": "### Instruction:\n\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n### Instruction:\n```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n### Instruction:\n```\n### Response:",
+			"memory": "{{[INPUT]}}\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n{{[INPUT]}}```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n{{[INPUT]}}```\n{{[OUTPUT]}}",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -5996,13 +5996,15 @@ Current version: 60
 				if(newgen != "")
 				{
 					//append instruction for instruct mode
-					newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
+					//newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
+					newgen = "{{[INPUT]}}" + newgen + "{{[OUTPUT]}}";
 				}
 				else //may be continuting existing instruction OR starting a brand new session. check if first action
 				{
 					if(gametext_arr.length==0)
 					{
-						newgen = get_instruct_endtag(false); //bot response as first msg
+						//newgen = get_instruct_endtag(false); //bot response as first msg
+						newgen = "{{[OUTPUT]}}";
 					}
 				}
 			}
@@ -7630,6 +7632,8 @@ Current version: 60
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
+				fulltxt = replaceAll(fulltxt, "{{[INPUT]}}", `%SclStg%`+"{{[INPUT]}}"+`%SpnEtg%`);
+				fulltxt = replaceAll(fulltxt, "{{[OUTPUT]}}", `%SclStg%`+"{{[OUTPUT]}}"+`%SpnEtg%`);
 			}
 
 			//this is a hacky fix to handle instruct tags that use arrow brackets only
@@ -8118,11 +8122,18 @@ Current version: 60
 		backup_wi_obj = JSON.parse(JSON.stringify(current_wi)); //in case we need to reset
 	}
 
+	function wi_quick_search()
+	{
+		save_wi();
+		btn_wi();
+	}
+
 	function btn_wi() {
 		document.getElementById("case_sensitive_wi").checked = (localsettings.case_sensitive_wi?true:false);
 		document.getElementById("wicontainer").classList.remove("hidden");
 
 		let wilist = document.getElementById("wilist");
+		let qsval = document.getElementById("wiquicksearch").value;
 		selectionhtml = `<table style="border-collapse: separate; border-spacing: 1.5pt;">`;
 		for (var i = 0; i < current_wi.length; ++i) {
 			var curr = current_wi[i];
@@ -8130,7 +8141,13 @@ Current version: 60
 			var witxt = escapeHtml(curr.content);
 			var wisec = curr.keysecondary;
 
-			selectionhtml += `<tr id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
+			var ishidden = false;
+			if(qsval!="" && !winame.toLowerCase().includes(qsval.toLowerCase()) && !witxt.toLowerCase().includes(qsval.toLowerCase()))
+			{
+				ishidden = true;
+			}
+
+			selectionhtml += `<tr class='`+ (ishidden?"hidden":"") +`' id="wirow` + i + `"><td class="col-8" style="font-size: 10px;">` +
 				`<button type="button" class="btn btn-danger widelbtn" id="widel` + i + `" onclick="return del_wi(` + i + `)">X</button></td>` +
 				`<td class="col-6">
 		<input class="form-control wiinputkey" id="wikey`+ i + `" placeholder="Key(s)" value="` + winame + `">
@@ -8581,7 +8598,8 @@ Current version: 60
 		`;
 
 		// We'll transform the input to a well-formatted HTML string.
-		let newbodystr = (input.startsWith(you) || input.startsWith(bot)) ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
+		let noSystemPrompt = (input.trim().startsWith(you.trim()) || input.trim().startsWith(bot.trim()))
+		let newbodystr = noSystemPrompt ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
 		newbodystr = replaceAll(newbodystr, you + '\n', you);
 		newbodystr = replaceAll(newbodystr, bot + '\n', bot);
@@ -9418,10 +9436,14 @@ Current version: 60
 			<div class="wilist" id="wilist">
 
 			</div>
+			<div style="float:right;">
+				<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+			</div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
 			   <input type="checkbox" id="case_sensitive_wi" style="margin:0px 0 0;">
 			</div>
+
 			<div class="popupfooter">
 
 				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
