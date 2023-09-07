@@ -606,16 +606,16 @@ struct llama_mmap {
 
         if (prefetch > 0) {
             // Advise the kernel to preload the mapped memory
-            if (madvise(addr, std::min(file->size, prefetch), MADV_WILLNEED)) {
-                fprintf(stderr, "warning: madvise(.., MADV_WILLNEED) failed: %s\n",
+            if (posix_madvise(addr, std::min(file->size, prefetch), POSIX_MADV_WILLNEED)) {
+                fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }
         }
         if (numa) {
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
-            if (madvise(addr, file->size, MADV_RANDOM)) {
-                fprintf(stderr, "warning: madvise(.., MADV_RANDOM) failed: %s\n",
+            if (posix_madvise(addr, file->size, POSIX_MADV_RANDOM)) {
+                fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
         }
@@ -3052,31 +3052,8 @@ static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
 }
 
-static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token id) {
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
-}
-
-static bool llama_is_unused_token(const llama_vocab & vocab, llama_token id) {
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNUSED;
-}
-
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
-}
-
-static bool llama_is_bos_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(llama_is_control_token(vocab, id));
-    return id == vocab.special_bos_id;
-}
-
-static bool llama_is_eos_token(const llama_vocab & vocab, llama_token id ) {
-    GGML_ASSERT(llama_is_control_token(vocab, id));
-    return id == vocab.special_eos_id;
-}
-
-static bool llama_is_pad_token(const llama_vocab & vocab, llama_token id ) {
-    GGML_ASSERT(id < 0 || llama_is_control_token(vocab, id));
-    return id == vocab.special_pad_id;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
@@ -4800,9 +4777,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<std::thread> workers;
     std::mutex mutex;
 
+#ifdef GGML_USE_K_QUANTS
     auto use_more_bits = [] (int i_layer, int num_layers) -> bool {
         return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
     };
+#endif
 
     int idx = 0;
 
@@ -5947,7 +5926,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         rng_ss.str(std::string(&rng_buf[0], rng_size));
         rng_ss >> ctx->rng;
 
-        GGML_ASSERT(rng_ss.fail() == false);
+        GGML_ASSERT(!rng_ss.fail());
     }
 
     // set logits

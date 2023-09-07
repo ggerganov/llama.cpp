@@ -220,14 +220,10 @@ kernel void kernel_norm(
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    //// broadcast
-    //if (tpitg == 0) {
-    //    sum[0] /= ne00;
-    //}
-    //threadgroup_barrier(mem_flags::mem_threadgroup);
-    const float mean  = sum[0];
+    const float mean  = sum[0] / ne00;
 
     // recenter and VARIANCE
+    threadgroup_barrier(mem_flags::mem_threadgroup);
     device float * y = dst + tgpig*ne00;
     sum[tpitg] = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
@@ -235,12 +231,6 @@ kernel void kernel_norm(
         sum[tpitg] += y[i00] * y[i00];
     }
 
-    //// VARIANCE
-    //// parallel sum
-    //sum[tpitg] = 0.0f;
-    //for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-    //    sum[tpitg] += y[i00] * y[i00];
-    //}
     // reduce
     threadgroup_barrier(mem_flags::mem_threadgroup);
     for (uint i = ntg/2; i > 0; i /= 2) {
@@ -249,19 +239,13 @@ kernel void kernel_norm(
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    //// broadcast
-    //if (tpitg == 0) {
-    //    sum[0] /= ne00;
-    //}
-    //threadgroup_barrier(mem_flags::mem_threadgroup);
-    const float variance = sum[0];
+    const float variance = sum[0] / ne00;
 
     const float scale = 1.0f/sqrt(variance + eps);
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
         y[i00] = y[i00] * scale;
     }
 }
-
 
 kernel void kernel_rms_norm(
         device const  void * src0,
@@ -630,7 +614,6 @@ kernel void kernel_mul_mat_f16_f32(
             }
         }
     }
-
 }
 
 kernel void kernel_alibi_f32(
@@ -699,24 +682,26 @@ kernel void kernel_rope(
         constant       int & mode,
         constant     float & freq_base,
         constant     float & freq_scale,
-        uint3 tpig[[thread_position_in_grid]]) {
-    const int64_t i3 = tpig[2];
-    const int64_t i2 = tpig[1];
-    const int64_t i1 = tpig[0];
+        uint  tiitg[[thread_index_in_threadgroup]],
+        uint3 tptg[[threads_per_threadgroup]],
+        uint3 tgpig[[threadgroup_position_in_grid]]) {
+    const int64_t i3 = tgpig[2];
+    const int64_t i2 = tgpig[1];
+    const int64_t i1 = tgpig[0];
 
     const bool is_neox = mode & 2;
-    const float theta_scale = pow(freq_base, -2.0f/n_dims);
 
     const int64_t p = ((mode & 1) == 0 ? n_past + i2 : i2);
 
-    float theta = freq_scale * (float)p;
+    const float theta_0 = freq_scale * (float)p;
+    const float inv_ndims = -1.f/n_dims;
 
     if (!is_neox) {
-        for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
+        for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+
+            const float theta = theta_0 * pow(freq_base, inv_ndims*i0);
             const float cos_theta = cos(theta);
             const float sin_theta = sin(theta);
-
-            theta *= theta_scale;
 
             device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
             device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -729,11 +714,11 @@ kernel void kernel_rope(
         }
     } else {
         for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-            for (int64_t ic = 0; ic < n_dims; ic += 2) {
+            for (int64_t ic = 2*tiitg; ic < n_dims; ic += 2*tptg.x) {
+
+                const float theta = theta_0 * pow(freq_base, inv_ndims*ic - ib);
                 const float cos_theta = cos(theta);
                 const float sin_theta = sin(theta);
-
-                theta *= theta_scale;
 
                 const int64_t i0 = ib*n_dims + ic/2;
 

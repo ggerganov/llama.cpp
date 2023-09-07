@@ -195,7 +195,7 @@ typedef void * thread_ret_t;
 inline static void * ggml_aligned_malloc(size_t size) {
     void * aligned_memory = NULL;
 #ifdef GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, getpagesize(), size);
+    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
 #endif
@@ -4815,7 +4815,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
 
     size_t obj_alloc_size = 0;
 
-    if (view_src == NULL && ctx->no_alloc == false) {
+    if (view_src == NULL && !ctx->no_alloc) {
         if (ctx->scratch.data != NULL) {
             // allocate tensor data in the scratch buffer
             if (ctx->scratch.offs + data_size > ctx->scratch.size) {
@@ -5516,7 +5516,7 @@ static struct ggml_tensor * ggml_mul_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -5559,7 +5559,7 @@ static struct ggml_tensor * ggml_div_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -20006,7 +20006,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         struct ggml_tensor * data = NULL;
 
-        if (params.no_alloc == false) {
+        if (!params.no_alloc) {
             data = ggml_new_tensor_1d(ctx_data, GGML_TYPE_I8, ctx->size);
 
             ok = ok && data != NULL;
@@ -20047,7 +20047,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             }
 
             // point the data member to the appropriate location in the binary blob using the tensor infos
-            if (params.no_alloc == false) {
+            if (!params.no_alloc) {
               //cur->data = (char *) data->data + ctx->infos[i].offset - ctx->offset; // offset from start of file
                 cur->data = (char *) data->data + ctx->infos[i].offset;               // offset from data
             }

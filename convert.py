@@ -266,7 +266,7 @@ class Params:
         f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
-        if f_rope_freq_base and f_rope_freq_base == 1000000:
+        if f_rope_freq_base == 1000000:
             # CodeLlama
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
@@ -841,9 +841,9 @@ class OutputFile:
         name = "LLaMA"
 
         # TODO: better logic to determine model name
-        if (params.n_ctx == 4096):
+        if params.n_ctx == 4096:
             name = "LLaMA v2"
-        elif params.path_model:
+        elif params.path_model is not None:
             name = str(params.path_model.parent).split('/')[-1]
 
         self.gguf.add_name                (name)
@@ -856,13 +856,13 @@ class OutputFile:
         self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
 
-        if params.f_rope_freq_base:
+        if params.f_rope_freq_base is not None:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
 
-        if params.f_rope_scale:
+        if params.f_rope_scale is not None:
             self.gguf.add_rope_scale_linear(params.f_rope_scale)
 
-        if params.ftype:
+        if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:

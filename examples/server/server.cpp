@@ -139,7 +139,7 @@ static std::string tokens_to_output_formatted_string(const llama_context *ctx, c
 }
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> probs)
+static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> & probs)
 {
     json out = json::array();
     for (const auto &prob : probs)
@@ -271,7 +271,7 @@ struct llama_server_context
         return true;
     }
 
-    std::vector<llama_token> tokenize(json json_prompt, bool add_bos)
+    std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
     {
         // If `add_bos` is true, we only add BOS, when json_prompt is a string,
         // or the first element of the json_prompt array is a string.
@@ -611,7 +611,7 @@ struct llama_server_context
 
     completion_token_output doCompletion()
     {
-        const completion_token_output token_with_probs = nextToken();
+        auto token_with_probs = nextToken();
 
         const std::string token_text = token_with_probs.tok == -1 ? "" : llama_token_to_piece(ctx, token_with_probs.tok);
         generated_text += token_text;
@@ -1255,7 +1255,7 @@ void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
 struct token_translator {
     llama_context * ctx;
     std::string operator()(llama_token tok) const { return llama_token_to_piece(ctx, tok); }
-    std::string operator()(completion_token_output cto) const { return (*this)(cto.tok); }
+    std::string operator()(const completion_token_output & cto) const { return (*this)(cto.tok); }
 };
 
 void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {

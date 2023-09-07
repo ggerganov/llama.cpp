@@ -42,9 +42,9 @@ endif
 
 default: $(BUILD_TARGETS)
 
-test:
-	@echo "Running tests..."
-	@for test_target in $(TEST_TARGETS); do \
+test: $(TEST_TARGETS)
+	@failures=0; \
+	for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
@@ -52,10 +52,21 @@ test:
 		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
 			continue; \
 		else \
+			echo "Running test $$test_target..."; \
 			./$$test_target; \
 		fi; \
-	done
-	@echo "All tests have been run."
+		if [ $$? -ne 0 ]; then \
+			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			failures=$$(( failures + 1 )); \
+		else \
+			printf 'Test %s passed.\n\n' $$test_target; \
+		fi; \
+	done; \
+	if [ $$failures -gt 0 ]; then \
+		printf '\n%s tests failed.\n' $$failures; \
+		exit 1; \
+	fi
+	@echo 'All tests passed.'
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
@@ -91,8 +102,8 @@ else
 OPT = -O3
 endif
 MK_CPPFLAGS = -I. -Icommon
-MK_CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
-MK_CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
+MK_CFLAGS   = $(OPT) -std=c11   -fPIC
+MK_CXXFLAGS = $(OPT) -std=c++11 -fPIC
 MK_LDFLAGS  =
 
 ifdef LLAMA_DEBUG
@@ -123,7 +134,7 @@ MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-m
 
 ifeq '' '$(findstring clang++,$(CXX))'
 	# g++ only
-	MK_CXXFLAGS += -Wno-format-truncation
+	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
 
 # OS specific
@@ -360,6 +371,9 @@ ifdef LLAMA_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS		+= ggml-metal.o
+ifdef LLAMA_METAL_NDEBUG
+	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
+endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
@@ -378,9 +392,8 @@ k_quants.o: k_quants.c k_quants.h
 endif # LLAMA_NO_K_QUANTS
 
 # combine build flags with cmdline overrides
-override CPPFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS)
-override CFLAGS   := $(MK_CFLAGS) $(CFLAGS)
-override CXXFLAGS := $(MK_CXXFLAGS) $(CXXFLAGS)
+override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
+override CXXFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
 
 #
