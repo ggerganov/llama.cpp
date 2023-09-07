@@ -384,27 +384,11 @@ jobs:
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '12.1.0' }}
-        # TODO(green-sky): paths are cuda 12 specific
         run: |
           echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_12.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
-
-      - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '11.7.1' }}
-        # TODO(green-sky): paths are cuda 11 specific
-        run: |
-          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          ls "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin"
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_110.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_11.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_11.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+          set dst=.\build\bin\cudart\
+          robocopy "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin" %dst% cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip %dst%\*
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
