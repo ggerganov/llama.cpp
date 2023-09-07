@@ -434,11 +434,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         incomplete_token_buffer = bytearray()
         while not handle.has_finished():
-            while current_token < handle.get_stream_count():
+            streamcount = handle.get_stream_count()
+            while current_token < streamcount:
                 token = handle.new_token(current_token)
 
                 if token is None: # Token isnt ready yet, received nullpointer
-                    continue
+                    break
 
                 current_token += 1
 
@@ -451,7 +452,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     event_str = json.dumps(event_data)
                     await self.send_sse_event("message", event_str)
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.02) #this should keep things responsive
 
         # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
         self.wfile.flush()
