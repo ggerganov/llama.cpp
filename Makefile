@@ -134,7 +134,7 @@ MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-m
 
 ifeq '' '$(findstring clang++,$(CXX))'
 	# g++ only
-	MK_CXXFLAGS += -Wno-format-truncation
+	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
 
 # OS specific

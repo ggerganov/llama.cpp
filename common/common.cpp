@@ -57,7 +57,7 @@ int32_t get_num_physical_cores() {
             siblings.insert(line);
         }
     }
-    if (siblings.size() > 0) {
+    if (!siblings.empty()) {
         return static_cast<int32_t>(siblings.size());
     }
 #elif defined(__APPLE__) && defined(__MACH__)

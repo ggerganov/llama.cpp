@@ -143,10 +143,9 @@ int main(int argc, char ** argv) {
         if (!try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
             fprintf(stderr, "%s: invalid ftype '%s'\n", __func__, argv[3]);
             return 1;
-        } else {
-            if (ftype_str == "COPY") {
-               params.only_copy = true;
-            }
+        }
+        if (ftype_str == "COPY") {
+           params.only_copy = true;
         }
         arg_idx++;
     }

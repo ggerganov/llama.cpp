@@ -426,7 +426,7 @@ if (LLAMA_ALL_WARNINGS)
         )
         if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             # g++ only
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+            set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
         endif()
     else()
         # todo : msvc
