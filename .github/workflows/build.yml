@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -121,7 +121,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -149,7 +149,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -174,7 +174,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -224,7 +224,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Download OpenCL SDK
         id: get_opencl
@@ -340,7 +340,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - uses: Jimver/cuda-toolkit@v0.2.10
         id: cuda-toolkit
@@ -445,7 +445,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Determine tag name
         id: tag
@@ -503,7 +503,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -527,7 +527,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -551,7 +551,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -581,7 +581,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -620,7 +620,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -666,7 +666,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
