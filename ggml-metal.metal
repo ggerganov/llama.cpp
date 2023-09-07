@@ -111,7 +111,7 @@ kernel void kernel_soft_max(
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
-        const int64_t i03 = tgpig[2];
+    const int64_t i03 = tgpig[2];
     const int64_t i02 = tgpig[1];
     const int64_t i01 = tgpig[0];
 
