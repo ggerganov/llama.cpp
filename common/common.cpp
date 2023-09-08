@@ -57,7 +57,7 @@ int32_t get_num_physical_cores() {
             siblings.insert(line);
         }
     }
-    if (siblings.size() > 0) {
+    if (!siblings.empty()) {
         return static_cast<int32_t>(siblings.size());
     }
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -305,6 +305,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_keep = std::stoi(argv[i]);
+        } else if (arg == "--draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_draft = std::stoi(argv[i]);
         } else if (arg == "--chunks") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -317,6 +323,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.model = argv[i];
+        } else if (arg == "-md" || arg == "--model-draft") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.model_draft = argv[i];
         } else if (arg == "-a" || arg == "--alias") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -572,106 +584,109 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 }
 
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
-    fprintf(stdout, "usage: %s [options]\n", argv[0]);
-    fprintf(stdout, "\n");
-    fprintf(stdout, "options:\n");
-    fprintf(stdout, "  -h, --help            show this help message and exit\n");
-    fprintf(stdout, "  -i, --interactive     run in interactive mode\n");
-    fprintf(stdout, "  --interactive-first   run in interactive mode and wait for input right away\n");
-    fprintf(stdout, "  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
-    fprintf(stdout, "  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
-    fprintf(stdout, "  -r PROMPT, --reverse-prompt PROMPT\n");
-    fprintf(stdout, "                        halt generation at PROMPT, return control in interactive mode\n");
-    fprintf(stdout, "                        (can be specified more than once for multiple prompts).\n");
-    fprintf(stdout, "  --color               colorise output to distinguish prompt and user input from generations\n");
-    fprintf(stdout, "  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    fprintf(stdout, "  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    fprintf(stdout, "  -p PROMPT, --prompt PROMPT\n");
-    fprintf(stdout, "                        prompt to start generation with (default: empty)\n");
-    fprintf(stdout, "  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
-    fprintf(stdout, "  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
-    fprintf(stdout, "  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
-    fprintf(stdout, "                        not supported with --interactive or other interactive options\n");
-    fprintf(stdout, "  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
-    fprintf(stdout, "  --random-prompt       start with a randomized prompt.\n");
-    fprintf(stdout, "  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
-    fprintf(stdout, "  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
-    fprintf(stdout, "  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
-    fprintf(stdout, "  -f FNAME, --file FNAME\n");
-    fprintf(stdout, "                        prompt file to start generation.\n");
-    fprintf(stdout, "  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
-    fprintf(stdout, "  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    fprintf(stdout, "  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    fprintf(stdout, "  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
-    fprintf(stdout, "  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
-    fprintf(stdout, "  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
-    fprintf(stdout, "  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
-    fprintf(stdout, "  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
-    fprintf(stdout, "  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
-    fprintf(stdout, "  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
-    fprintf(stdout, "  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
-    fprintf(stdout, "  --mirostat N          use Mirostat sampling.\n");
-    fprintf(stdout, "                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
-    fprintf(stdout, "                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
-    fprintf(stdout, "  --mirostat-lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
-    fprintf(stdout, "  --mirostat-ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
-    fprintf(stdout, "  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
-    fprintf(stdout, "                        modifies the likelihood of token appearing in the completion,\n");
-    fprintf(stdout, "                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
-    fprintf(stdout, "                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
-    fprintf(stdout, "  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
-    fprintf(stdout, "  --grammar-file FNAME  file to read grammar from\n");
-    fprintf(stdout, "  --cfg-negative-prompt PROMPT\n");
-    fprintf(stdout, "                        negative prompt to use for guidance. (default: empty)\n");
-    fprintf(stdout, "  --cfg-negative-prompt-file FNAME\n");
-    fprintf(stdout, "                        negative prompt file to use for guidance. (default: empty)\n");
-    fprintf(stdout, "  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
-    fprintf(stdout, "  --rope-scale N        RoPE context linear scaling factor, inverse of --rope-freq-scale (default: %g)\n", 1.0f/params.rope_freq_scale);
-    fprintf(stdout, "  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: %.1f)\n", params.rope_freq_base);
-    fprintf(stdout, "  --rope-freq-scale N   RoPE frequency linear scaling factor, inverse of --rope-scale (default: %g)\n", params.rope_freq_scale);
-    fprintf(stdout, "  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
-    fprintf(stdout, "  --no-penalize-nl      do not penalize newline token\n");
-    fprintf(stdout, "  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    fprintf(stdout, "                        not recommended: doubles context memory required and no measurable increase in quality\n");
-    fprintf(stdout, "  --temp N              temperature (default: %.1f)\n", (double)params.temp);
-    fprintf(stdout, "  --perplexity          compute perplexity over each ctx window of the prompt\n");
-    fprintf(stdout, "  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
-    fprintf(stdout, "  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
-    fprintf(stdout, "  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
-    fprintf(stdout, "  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
+    printf("usage: %s [options]\n", argv[0]);
+    printf("\n");
+    printf("options:\n");
+    printf("  -h, --help            show this help message and exit\n");
+    printf("  -i, --interactive     run in interactive mode\n");
+    printf("  --interactive-first   run in interactive mode and wait for input right away\n");
+    printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
+    printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
+    printf("  -r PROMPT, --reverse-prompt PROMPT\n");
+    printf("                        halt generation at PROMPT, return control in interactive mode\n");
+    printf("                        (can be specified more than once for multiple prompts).\n");
+    printf("  --color               colorise output to distinguish prompt and user input from generations\n");
+    printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
+    printf("  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -p PROMPT, --prompt PROMPT\n");
+    printf("                        prompt to start generation with (default: empty)\n");
+    printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
+    printf("  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
+    printf("  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
+    printf("                        not supported with --interactive or other interactive options\n");
+    printf("  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
+    printf("  --random-prompt       start with a randomized prompt.\n");
+    printf("  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
+    printf("  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
+    printf("  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
+    printf("  -f FNAME, --file FNAME\n");
+    printf("                        prompt file to start generation.\n");
+    printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
+    printf("  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
+    printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
+    printf("  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
+    printf("  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
+    printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
+    printf("  --repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+    printf("  --presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
+    printf("  --frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
+    printf("  --mirostat N          use Mirostat sampling.\n");
+    printf("                        Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n");
+    printf("                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
+    printf("  --mirostat-lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
+    printf("  --mirostat-ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
+    printf("  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
+    printf("                        modifies the likelihood of token appearing in the completion,\n");
+    printf("                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
+    printf("                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
+    printf("  --grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)\n");
+    printf("  --grammar-file FNAME  file to read grammar from\n");
+    printf("  --cfg-negative-prompt PROMPT\n");
+    printf("                        negative prompt to use for guidance. (default: empty)\n");
+    printf("  --cfg-negative-prompt-file FNAME\n");
+    printf("                        negative prompt file to use for guidance. (default: empty)\n");
+    printf("  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
+    printf("  --rope-scale N        RoPE context linear scaling factor, inverse of --rope-freq-scale (default: %g)\n", 1.0f/params.rope_freq_scale);
+    printf("  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: %.1f)\n", params.rope_freq_base);
+    printf("  --rope-freq-scale N   RoPE frequency linear scaling factor, inverse of --rope-scale (default: %g)\n", params.rope_freq_scale);
+    printf("  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
+    printf("  --no-penalize-nl      do not penalize newline token\n");
+    printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
+    printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    printf("  --temp N              temperature (default: %.1f)\n", (double)params.temp);
+    printf("  --perplexity          compute perplexity over each ctx window of the prompt\n");
+    printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
+    printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
+    printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
+    printf("  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
+    printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     if (llama_mlock_supported()) {
-        fprintf(stdout, "  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
+        printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
     if (llama_mmap_supported()) {
-        fprintf(stdout, "  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
+        printf("  --no-mmap             do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
-    fprintf(stdout, "  --numa                attempt optimizations that help on some NUMA systems\n");
-    fprintf(stdout, "                        if run without this previously, it is recommended to drop the system page cache before using this\n");
-    fprintf(stdout, "                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
+    printf("  --numa                attempt optimizations that help on some NUMA systems\n");
+    printf("                        if run without this previously, it is recommended to drop the system page cache before using this\n");
+    printf("                        see https://github.com/ggerganov/llama.cpp/issues/1437\n");
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-    fprintf(stdout, "  -ngl N, --n-gpu-layers N\n");
-    fprintf(stdout, "                        number of layers to store in VRAM\n");
-    fprintf(stdout, "  -ts SPLIT --tensor-split SPLIT\n");
-    fprintf(stdout, "                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
-    fprintf(stdout, "  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    fprintf(stdout, "  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
+    printf("  -ngl N, --n-gpu-layers N\n");
+    printf("                        number of layers to store in VRAM\n");
+    printf("  -ts SPLIT --tensor-split SPLIT\n");
+    printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
+    printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
+    printf("  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
 #ifdef GGML_USE_CUBLAS
-    fprintf(stdout, "  -nommq, --no-mul-mat-q\n");
-    fprintf(stdout, "                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
-    fprintf(stdout, "                        Not recommended since this is both slower and uses more VRAM.\n");
+    printf("  -nommq, --no-mul-mat-q\n");
+    printf("                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
+    printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_CUBLAS
 #endif
-    fprintf(stdout, "  --mtest               compute maximum memory usage\n");
-    fprintf(stdout, "  --export              export the computation graph to 'llama.ggml'\n");
-    fprintf(stdout, "  --verbose-prompt      print prompt before generation\n");
+    printf("  --mtest               compute maximum memory usage\n");
+    printf("  --export              export the computation graph to 'llama.ggml'\n");
+    printf("  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
-    fprintf(stdout, "  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
-    fprintf(stdout, "  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
-    fprintf(stdout, "  -m FNAME, --model FNAME\n");
-    fprintf(stdout, "                        model path (default: %s)\n", params.model.c_str());
-    fprintf(stdout, "  -ld LOGDIR, --logdir LOGDIR\n");
-    fprintf(stdout, "                        path under which to save YAML logs (no logging if unset)\n");
-    fprintf(stdout, "\n");
+    printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
+    printf("  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
+    printf("  -m FNAME, --model FNAME\n");
+    printf("                        model path (default: %s)\n", params.model.c_str());
+    printf("  -md FNAME, --model-draft FNAME\n");
+    printf("                        draft model for speculative decoding (default: %s)\n", params.model.c_str());
+    printf("  -ld LOGDIR, --logdir LOGDIR\n");
+    printf("                        path under which to save YAML logs (no logging if unset)\n");
+    printf("\n");
 }
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
@@ -702,7 +717,9 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
     lparams.n_ctx           = params.n_ctx;
     lparams.n_batch         = params.n_batch;
-    lparams.n_gpu_layers    = params.n_gpu_layers;
+    if (params.n_gpu_layers != -1) {
+        lparams.n_gpu_layers = params.n_gpu_layers;
+    }
     lparams.main_gpu        = params.main_gpu;
     lparams.tensor_split    = params.tensor_split;
     lparams.low_vram        = params.low_vram;
@@ -750,6 +767,14 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 
     if (params.ignore_eos) {
         params.logit_bias[llama_token_eos(lctx)] = -INFINITY;
+    }
+
+    {
+        LOG("warming up the model with an empty run\n");
+
+        const std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
+        llama_eval(lctx, tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, params.n_threads);
+        llama_reset_timings(lctx);
     }
 
     return std::make_tuple(model, lctx);
@@ -823,6 +848,130 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
 
     return result;
 }
+
+//
+// Sampling utils
+//
+
+llama_token llama_sample_token(
+                  struct llama_context * ctx,
+                  struct llama_context * ctx_guidance,
+                  struct llama_grammar * grammar,
+               const struct gpt_params & params,
+        const std::vector<llama_token> & last_tokens,
+         std::vector<llama_token_data> & candidates,
+                                   int   idx) {
+    const int n_ctx   = llama_n_ctx(ctx);
+    const int n_vocab = llama_n_vocab(ctx);
+
+    const float   temp            = params.temp;
+    const int32_t top_k           = params.top_k <= 0 ? n_vocab : params.top_k;
+    const float   top_p           = params.top_p;
+    const float   tfs_z           = params.tfs_z;
+    const float   typical_p       = params.typical_p;
+    const int32_t repeat_last_n   = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
+    const float   repeat_penalty  = params.repeat_penalty;
+    const float   alpha_presence  = params.presence_penalty;
+    const float   alpha_frequency = params.frequency_penalty;
+    const int     mirostat        = params.mirostat;
+    const float   mirostat_tau    = params.mirostat_tau;
+    const float   mirostat_eta    = params.mirostat_eta;
+    const bool    penalize_nl     = params.penalize_nl;
+
+    llama_token id = 0;
+
+    float * logits = llama_get_logits(ctx) + idx * n_vocab;
+
+    // Apply params.logit_bias map
+    for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
+        logits[it->first] += it->second;
+    }
+
+    candidates.clear();
+    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+        candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+    }
+
+    llama_token_data_array cur_p = { candidates.data(), candidates.size(), false };
+
+    if (ctx_guidance) {
+        llama_sample_classifier_free_guidance(ctx, &cur_p, ctx_guidance, params.cfg_scale);
+    }
+
+    // apply penalties
+    if (!last_tokens.empty()) {
+        const float nl_logit = logits[llama_token_nl(ctx)];
+        const int last_n_repeat = std::min(std::min((int)last_tokens.size(), repeat_last_n), n_ctx);
+
+        llama_sample_repetition_penalty(ctx, &cur_p,
+                last_tokens.data() + last_tokens.size() - last_n_repeat,
+                last_n_repeat, repeat_penalty);
+        llama_sample_frequency_and_presence_penalties(ctx, &cur_p,
+                last_tokens.data() + last_tokens.size() - last_n_repeat,
+                last_n_repeat, alpha_frequency, alpha_presence);
+
+        if (!penalize_nl) {
+            for (size_t idx = 0; idx < cur_p.size; idx++) {
+                if (cur_p.data[idx].id == llama_token_nl(ctx)) {
+                    cur_p.data[idx].logit = nl_logit;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (grammar != NULL) {
+        llama_sample_grammar(ctx, &cur_p, grammar);
+    }
+
+    if (temp <= 0) {
+        // Greedy sampling
+        id = llama_sample_token_greedy(ctx, &cur_p);
+    } else {
+        if (mirostat == 1) {
+            static float mirostat_mu = 2.0f * mirostat_tau;
+            const int mirostat_m = 100;
+            llama_sample_temperature(ctx, &cur_p, temp);
+            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
+        } else if (mirostat == 2) {
+            static float mirostat_mu = 2.0f * mirostat_tau;
+            llama_sample_temperature(ctx, &cur_p, temp);
+            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+        } else {
+            // Temperature sampling
+            llama_sample_top_k      (ctx, &cur_p, top_k, 1);
+            llama_sample_tail_free  (ctx, &cur_p, tfs_z, 1);
+            llama_sample_typical    (ctx, &cur_p, typical_p, 1);
+            llama_sample_top_p      (ctx, &cur_p, top_p, 1);
+            llama_sample_temperature(ctx, &cur_p, temp);
+
+            {
+                const int n_top = 10;
+                LOG("top %d candidates:\n", n_top);
+
+                for (int i = 0; i < n_top; i++) {
+                    const llama_token id = cur_p.data[i].id;
+                    LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx, id).c_str(), cur_p.data[i].p);
+                }
+            }
+
+            id = llama_sample_token(ctx, &cur_p);
+
+            LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx, id).c_str());
+        }
+    }
+    // printf("`%d`", candidates_p.size);
+
+    if (grammar != NULL) {
+        llama_grammar_accept_token(ctx, grammar, id);
+    }
+
+    return id;
+}
+
+//
+// YAML utils
+//
 
 // returns true if successful, false otherwise
 bool create_directory_with_parents(const std::string & path) {
@@ -1062,9 +1211,10 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "mirostat_lr: %f # default: 0.1\n", params.mirostat_eta);
     fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
     fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
+    fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
     fprintf(stream, "mtest: %s # default: false\n", params.mem_test ? "true" : "false");
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
-    fprintf(stream, "n_gpu_layers: %d # default: 0\n", params.n_gpu_layers);
+    fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", params.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");

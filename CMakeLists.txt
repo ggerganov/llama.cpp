@@ -36,6 +36,12 @@ endif()
 # Option list
 #
 
+if (APPLE)
+    set(LLAMA_METAL_DEFAULT ON)
+else()
+    set(LLAMA_METAL_DEFAULT OFF)
+endif()
+
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
@@ -76,7 +82,8 @@ option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some 
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
-option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
+option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
+option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
@@ -156,6 +163,33 @@ if (APPLE AND LLAMA_ACCELERATE)
     else()
         message(WARNING "Accelerate framework not found")
     endif()
+endif()
+
+if (LLAMA_METAL)
+    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
+    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
+    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
+
+    message(STATUS "Metal framework found")
+
+    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
+
+    add_compile_definitions(GGML_USE_METAL)
+    if (LLAMA_METAL_NDEBUG)
+        add_compile_definitions(GGML_METAL_NDEBUG)
+    endif()
+
+    # get full path to the file
+    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
+
+    # copy ggml-metal.metal to bin directory
+    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
+
+    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
+        ${FOUNDATION_LIBRARY}
+        ${METAL_FRAMEWORK}
+        ${METALKIT_FRAMEWORK}
+        )
 endif()
 
 if (LLAMA_BLAS)
@@ -293,29 +327,6 @@ if (LLAMA_CUBLAS)
     endif()
 endif()
 
-if (LLAMA_METAL)
-    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
-    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
-    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
-
-    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
-
-    add_compile_definitions(GGML_USE_METAL)
-    #add_compile_definitions(GGML_METAL_NDEBUG)
-
-    # get full path to the file
-    #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
-
-    # copy ggml-metal.metal to bin directory
-    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
-
-    set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
-        ${FOUNDATION_LIBRARY}
-        ${METAL_FRAMEWORK}
-        ${METALKIT_FRAMEWORK}
-        )
-endif()
-
 if (LLAMA_MPI)
     cmake_minimum_required(VERSION 3.10)
     find_package(MPI)
@@ -415,7 +426,7 @@ if (LLAMA_ALL_WARNINGS)
         )
         if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             # g++ only
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+            set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
         endif()
     else()
         # todo : msvc
@@ -546,6 +557,11 @@ endif()
 
 # ggml
 
+if (GGML_USE_CPU_HBM)
+    add_definitions(-DGGML_USE_CPU_HBM)
+    find_library(memkind memkind REQUIRED)
+endif()
+
 add_library(ggml OBJECT
             ggml.c
             ggml.h
@@ -561,6 +577,9 @@ add_library(ggml OBJECT
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+if (GGML_USE_CPU_HBM)
+    target_link_libraries(ggml PUBLIC memkind)
+endif()
 
 add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 if (BUILD_SHARED_LIBS)
