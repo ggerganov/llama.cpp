@@ -682,6 +682,7 @@ kernel void kernel_mul_mat_f16_f32_l4(
     device const half4 * x4 = (device const half4 *) (src0 + r0*nb01 + im/(ne12/ne02)*nb02);
 
     for (int r1 = 0; r1 < nrows; ++r1) {
+
         device const float4 * y4 = (device const float4 *) (src1 + r1*nb11 + im*nb12);
 
         float sumf = 0;
