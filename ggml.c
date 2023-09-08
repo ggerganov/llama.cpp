@@ -4583,7 +4583,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     if (params.mem_size == 0) {
         params.mem_size = GGML_MEM_ALIGN;
     }
-    
+
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
     *ctx = (struct ggml_context) {
