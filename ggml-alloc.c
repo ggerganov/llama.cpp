@@ -316,7 +316,11 @@ static void * alloc_vmem(size_t size) {
 #if defined(_WIN32)
     return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
 #elif defined(_POSIX_MAPPED_FILES)
-    return mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    void * ptr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (ptr == MAP_FAILED) {
+        return NULL;
+    }
+    return ptr;
 #else
     // use a fixed address for other platforms
     uintptr_t base_addr = (uintptr_t)-size - 0x100;
