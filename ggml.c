@@ -104,6 +104,9 @@ typedef void * thread_ret_t;
 #include <unistd.h>
 
 #endif
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
+#endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
 #if defined(_MSC_VER) && (defined(__AVX2__) || defined(__AVX512F__))
@@ -192,8 +195,14 @@ typedef void * thread_ret_t;
 #define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
+    if (size == 0) {
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+        return NULL;
+    }
     void * aligned_memory = NULL;
-#ifdef GGML_USE_METAL
+#ifdef GGML_USE_CPU_HBM
+    int result = hbw_posix_memalign(&aligned_memory, 16, size);
+#elif GGML_USE_METAL
     int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
@@ -215,7 +224,11 @@ inline static void * ggml_aligned_malloc(size_t size) {
     return aligned_memory;
 }
 #define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
+#ifdef GGML_USE_CPU_HBM
+#define GGML_ALIGNED_FREE(ptr)    if(NULL != ptr) hbw_free(ptr)
+#else
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
+#endif
 #endif
 
 #define UNUSED GGML_UNUSED
@@ -4564,6 +4577,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         ggml_critical_section_end();
 
         return NULL;
+    }
+
+    // allow to call ggml_init with 0 size
+    if (params.mem_size == 0) {
+        params.mem_size = GGML_MEM_ALIGN;
     }
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);

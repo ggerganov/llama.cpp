@@ -126,6 +126,9 @@ void replace_all(std::string & s, const std::string & search, const std::string 
     }
     s = std::move(result);
 }
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
+#endif
 
 static void zeros(std::ofstream & file, size_t n) {
     char zero = 0;
@@ -450,6 +453,9 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 #elif GGML_USE_METAL
 #   define llama_host_malloc(n)  ggml_metal_host_malloc(n)
 #   define llama_host_free(data) ggml_metal_host_free(data)
+#elif GGML_USE_CPU_HBM
+#   define llama_host_malloc(n)  hbw_malloc(n)
+#   define llama_host_free(data) if (data != NULL) hbw_free(data)
 #else
 #   define llama_host_malloc(n)  malloc(n)
 #   define llama_host_free(data) free(data)
@@ -1489,7 +1495,11 @@ struct llama_model_loader {
             // allocate temp buffer if not using mmap
             if (!use_mmap && cur->data == NULL) {
                 GGML_ASSERT(cur->backend != GGML_BACKEND_CPU);
-                cur->data = malloc(ggml_nbytes(cur));
+                #ifdef GGML_USE_CPU_HBM
+                cur->data = (uint8_t*)hbw_malloc(ggml_nbytes(cur));
+                #else
+                cur->data = (uint8_t*)malloc(ggml_nbytes(cur));
+                #endif
             }
 
             load_data_for(cur);

@@ -557,6 +557,11 @@ endif()
 
 # ggml
 
+if (GGML_USE_CPU_HBM)
+    add_definitions(-DGGML_USE_CPU_HBM)
+    find_library(memkind memkind REQUIRED)
+endif()
+
 add_library(ggml OBJECT
             ggml.c
             ggml.h
@@ -572,6 +577,9 @@ add_library(ggml OBJECT
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+if (GGML_USE_CPU_HBM)
+    target_link_libraries(ggml PUBLIC memkind)
+endif()
 
 add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 if (BUILD_SHARED_LIBS)
