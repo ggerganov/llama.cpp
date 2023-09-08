@@ -141,9 +141,6 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     ctx->d_queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
-    MTLCompileOptions* options = [MTLCompileOptions new];
-    options.preprocessorMacros = @{ @"QK_K" : @(64) };
-
 #ifdef GGML_SWIFT
     // load the default.metallib file
     {
@@ -181,6 +178,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         }
 
 #ifdef GGML_QKK_64
+        MTLCompileOptions* options = [MTLCompileOptions new];
+        options.preprocessorMacros = @{ @"QK_K" : @(64) };
         ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
 #else
         ctx->library = [ctx->device newLibraryWithSource:src options:nil error:&error];
