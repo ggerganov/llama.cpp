@@ -65,6 +65,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(soft_max);
     GGML_METAL_DECL_KERNEL(soft_max_4);
     GGML_METAL_DECL_KERNEL(diag_mask_inf);
+    GGML_METAL_DECL_KERNEL(diag_mask_inf_8);
     GGML_METAL_DECL_KERNEL(get_rows_f16);
     GGML_METAL_DECL_KERNEL(get_rows_q4_0);
     GGML_METAL_DECL_KERNEL(get_rows_q4_1);
@@ -211,6 +212,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(soft_max);
         GGML_METAL_ADD_KERNEL(soft_max_4);
         GGML_METAL_ADD_KERNEL(diag_mask_inf);
+        GGML_METAL_ADD_KERNEL(diag_mask_inf_8);
         GGML_METAL_ADD_KERNEL(get_rows_f16);
         GGML_METAL_ADD_KERNEL(get_rows_q4_0);
         GGML_METAL_ADD_KERNEL(get_rows_q4_1);
@@ -278,7 +280,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(gelu);
     GGML_METAL_DEL_KERNEL(soft_max);
     GGML_METAL_DEL_KERNEL(soft_max_4);
-    GGML_METAL_DEL_KERNEL(diag_mask_inf);
+    GGML_METAL_DEL_KERNEL(diag_mask_inf_8);
     GGML_METAL_DEL_KERNEL(get_rows_f16);
     GGML_METAL_DEL_KERNEL(get_rows_q4_0);
     GGML_METAL_DEL_KERNEL(get_rows_q4_1);
@@ -819,14 +821,23 @@ void ggml_metal_graph_compute(
                         {
                             const int n_past = ((int32_t *)(dst->op_params))[0];
 
-                            [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
+                            if (ne00%8 == 0) {
+                                [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf_8];
+                            } else {
+                                [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
+                            }
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
                             [encoder setBytes:&ne00   length:sizeof(ne00) atIndex:2];
                             [encoder setBytes:&ne01   length:sizeof(ne01) atIndex:3];
                             [encoder setBytes:&n_past length:sizeof(int)  atIndex:4];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(ne00, ne01, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            if (ne00%8 == 0) {
+                                [encoder dispatchThreadgroups:MTLSizeMake(ne00*ne01*ne02/8, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            }
+                            else {
+                                [encoder dispatchThreadgroups:MTLSizeMake(ne00, ne01, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            }
                         } break;
                     case GGML_OP_MUL_MAT:
                         {
