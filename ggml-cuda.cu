@@ -4086,7 +4086,8 @@ static __global__ void rope_neox_f32(const float * x, float * dst, const int nco
     dst[i + ncols/2] = x0*sin_theta + x1*cos_theta;
 }
 
-static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const float p, const float block_p, const float theta_scale) {
+static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const float p0,
+                                    const float p_delta, const int p_delta_rows, const float theta_scale, const int n_ctx) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
     const int half_n_dims = ncols/4;
 
@@ -4098,8 +4099,9 @@ static __global__ void rope_glm_f32(const float * x, float * dst, const int ncol
     const int i = row*ncols + col;
 
     const float col_theta_scale = powf(theta_scale, col);
+    const float p = p0 + p_delta*(row/p_delta_rows);
 
-    const float theta = p*col_theta_scale;
+    const float theta = min(p, p_delta*(n_ctx - 2))*col_theta_scale;
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
@@ -4109,7 +4111,7 @@ static __global__ void rope_glm_f32(const float * x, float * dst, const int ncol
     dst[i + 0]           = x0*cos_theta - x1*sin_theta;
     dst[i + half_n_dims] = x0*sin_theta + x1*cos_theta;
 
-    const float block_theta = block_p*col_theta_scale;
+    const float block_theta = max(p - p_delta*(n_ctx - 2), 0.f)*col_theta_scale;
     const float sin_block_theta = sinf(block_theta);
     const float cos_block_theta = cosf(block_theta);
 
@@ -4984,12 +4986,13 @@ static void rope_neox_f32_cuda(const float * x, float * dst, const int ncols, co
     rope_neox_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale);
 }
 
-static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p, const float block_p, const float theta_scale, cudaStream_t stream) {
-    GGML_ASSERT(nrows % 4 == 0);
-    const dim3 block_dims(4*CUDA_ROPE_BLOCK_SIZE, 1, 1);
-    const int num_blocks_x = (ncols + 4*CUDA_ROPE_BLOCK_SIZE - 1) / (4*CUDA_ROPE_BLOCK_SIZE);
+static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p0,
+                              const float p_delta, const int p_delta_rows, const float theta_scale, const int n_ctx, cudaStream_t stream) {
+    GGML_ASSERT(ncols % 4 == 0);
+    const dim3 block_dims(CUDA_ROPE_BLOCK_SIZE/4, 1, 1);
+    const int num_blocks_x = (ncols + CUDA_ROPE_BLOCK_SIZE - 1) / CUDA_ROPE_BLOCK_SIZE;
     const dim3 block_nums(num_blocks_x, nrows, 1);
-    rope_glm_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p, block_p, theta_scale);
+    rope_glm_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale, n_ctx);
 }
 
 static void alibi_f32_cuda(const float * x, float * dst, const int ncols, const int nrows,
@@ -5723,22 +5726,18 @@ inline void ggml_cuda_op_rope(
     memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
 
     // compute
     if (is_glm) {
-        const float p = (((mode & 1) == 0 ? n_past + i02 : i02)) * freq_scale;
-        const float id_p = min(p, n_ctx - 2.f);
-        const float block_p = max(p - (n_ctx - 2.f), 0.f);
-        rope_glm_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, id_p, block_p, theta_scale, cudaStream_main);
+        rope_glm_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p0, freq_scale, ne01, theta_scale, n_ctx, cudaStream_main);
     } else if (is_neox) {
         GGML_ASSERT(ne00 == n_dims && "ne00 != n_dims is not implemented for CUDA yet");
-        const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
         rope_neox_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p0, freq_scale, ne01, theta_scale, cudaStream_main);
     } else {
-        const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
         rope_f32_cuda(src0_ddf_i, dst_ddf_i, ne00, i01_diff, p0, freq_scale, ne01, theta_scale, cudaStream_main);
     }
 
@@ -6400,10 +6399,7 @@ void ggml_cuda_rope(const ggml_tensor * src0, const ggml_tensor * src1, ggml_ten
     GGML_ASSERT(src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32);
     GGML_ASSERT(ggml_is_contiguous(src0)); // TODO: this restriction is temporary until non-cont support is implemented
 
-    const int mode = ((int32_t *) dst->op_params)[2];
-    const bool is_glm = mode & 4;
-
-    ggml_cuda_op(src0, src1, dst, ggml_cuda_op_rope, true, !is_glm); // flatten support not implemented for glm
+    ggml_cuda_op(src0, src1, dst, ggml_cuda_op_rope, true, true);
 }
 
 void ggml_cuda_alibi(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
