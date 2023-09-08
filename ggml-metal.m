@@ -78,6 +78,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(norm);
     GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_1row);
+    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_l4);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DECL_KERNEL(mul_mat_q8_0_f32);
@@ -223,6 +224,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(norm);
         GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_1row);
+        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_l4);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q4_1_f32);
         GGML_METAL_ADD_KERNEL(mul_mat_q8_0_f32);
@@ -290,6 +292,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(norm);
     GGML_METAL_DEL_KERNEL(mul_mat_f16_f32);
     GGML_METAL_DEL_KERNEL(mul_mat_f16_f32_1row);
+    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32_l4);
     GGML_METAL_DEL_KERNEL(mul_mat_q4_0_f32);
     GGML_METAL_DEL_KERNEL(mul_mat_q4_1_f32);
     GGML_METAL_DEL_KERNEL(mul_mat_q8_0_f32);
@@ -872,6 +875,7 @@ void ggml_metal_graph_compute(
                             } else {
                                 int nth0 = 32;
                                 int nth1 = 1;
+                                int nrows = 1;
 
                                 // use custom matrix x vector kernel
                                 switch (src0t) {
@@ -881,8 +885,12 @@ void ggml_metal_graph_compute(
                                             nth1 = 1;
                                             if (ne11 * ne12 < 4) {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
+                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_l4];
+                                                nrows = ne11;
                                             } else {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                                nrows = 4;
                                             }
                                         } break;
                                     case GGML_TYPE_Q4_0:
@@ -1003,7 +1011,7 @@ void ggml_metal_graph_compute(
                                 else if (src0t == GGML_TYPE_Q6_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 } else {
-                                    int64_t ny = (ne11 + 3)/4;
+                                    int64_t ny = (ne11 + nrows - 1)/nrows;
                                     [encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                             }

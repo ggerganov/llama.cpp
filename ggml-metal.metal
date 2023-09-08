@@ -630,6 +630,50 @@ kernel void kernel_mul_mat_f16_f32(
     }
 }
 
+// Assumes row size (ne00) is a multiple of 4
+kernel void kernel_mul_mat_f16_f32_l4(
+        device const  char * src0,
+        device const  char * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant   int64_t & ne12,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant  uint64_t & nb12,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint tiisg[[thread_index_in_simdgroup]]) {
+
+    const int nrows = ne11;
+    const int64_t r0 = tgpig.x;
+    const int64_t im = tgpig.z;
+
+    device const half4 * x4 = (device const half4 *) (src0 + r0*nb01 + im/(ne12/ne02)*nb02);
+
+    for (int r1 = 0; r1 < nrows; ++r1) {
+
+        device const float4 * y4 = (device const float4 *) (src1 + r1*nb11 + im*nb12);
+
+        float sumf = 0;
+        for (int i = tiisg; i < ne00/4; i += 32) {
+            for (int k = 0; k < 4; ++k) sumf += (float) x4[i][k] * y4[i][k];
+        }
+
+        float all_sum = simd_sum(sumf);
+        if (tiisg == 0) {
+            dst[im*ne1*ne0 + r1*ne0 + r0] = all_sum;
+        }
+    }
+}
+
 kernel void kernel_alibi_f32(
         device const float * src0,
         device       float * dst,
