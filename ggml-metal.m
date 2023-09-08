@@ -818,17 +818,15 @@ void ggml_metal_graph_compute(
                     case GGML_OP_DIAG_MASK_INF:
                         {
                             const int n_past = ((int32_t *)(dst->op_params))[0];
-                            const int64_t n00x01 = ne00*ne01;
-                            assert((n00x01*ne02)%8 == 0);
 
                             [encoder setComputePipelineState:ctx->pipeline_diag_mask_inf];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:2];
-                            [encoder setBytes:&n00x01  length:sizeof(n00x01) atIndex:3];
+                            [encoder setBytes:&ne00   length:sizeof(ne00) atIndex:2];
+                            [encoder setBytes:&ne01   length:sizeof(ne01) atIndex:3];
                             [encoder setBytes:&n_past length:sizeof(int)  atIndex:4];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(n00x01*ne02/8, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne00, ne01, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
                     case GGML_OP_MUL_MAT:
                         {
