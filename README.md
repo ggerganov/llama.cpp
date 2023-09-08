@@ -11,21 +11,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+- Local Falcon 180B inference on Mac Studio
 
-- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
-
-- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
-
-- A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
-
-  Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
-
-  ### Current `master` should be considered in Beta - expect some issues for a few days!
-
-  ### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
-
-  ### Issues with non-GGUF models will be considered with low priority!
+  https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
 
 ----
 
