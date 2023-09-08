@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "llama",
+    platforms: [.macOS(.v11)],
     products: [
         .library(name: "llama", targets: ["llama"]),
     ],
@@ -11,16 +12,19 @@ let package = Package(
         .target(
             name: "llama",
             path: ".",
-            exclude: ["ggml-metal.metal"],
             sources: [
                 "ggml.c",
                 "llama.cpp",
                 "ggml-alloc.c",
-                "k_quants.c"
+                "k_quants.c",
+                "ggml-metal.m",
             ],
             publicHeadersPath: "spm-headers",
             cSettings: [
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
+                .unsafeFlags(["-fno-objc-arc"]),
+                .define("GGML_SWIFT"),
+                .define("GGML_USE_METAL"),
                 .define("GGML_USE_K_QUANTS"),
                 .define("GGML_USE_ACCELERATE")
             ],
