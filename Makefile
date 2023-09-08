@@ -412,6 +412,9 @@ ifdef LLAMA_HIPBLAS
 ifdef LLAMA_CUDA_FORCE_DMMV
 	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
+ifdef LLAMA_CUDA_F16
+	HIPFLAGS	+= -DGGML_CUDA_F16
+endif # LLAMA_CUDA_F16
 	OBJS        += ggml-cuda.o
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
