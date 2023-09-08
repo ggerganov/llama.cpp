@@ -183,13 +183,15 @@ kernel void kernel_soft_max_4(
 }
 
 kernel void kernel_diag_mask_inf(
-        device const float4 * src0,
-        device       float4 * dst,
+        device const float * src0,
+        device       float * dst,
         constant   int64_t & ne00,
-        constant   int64_t & n00x01,
+        constant   int64_t & ne01,
         constant       int & n_past,
         uint3 tpig[[thread_position_in_grid]]) {
-    const int64_t i = 2*tpig[0];
+    const int64_t i02 = tpig[2];
+    const int64_t i01 = tpig[1];
+    const int64_t i00 = tpig[0];
 
     if (i00 > n_past + i01) {
         dst[i02*ne01*ne00 + i01*ne00 + i00] = -INFINITY;
