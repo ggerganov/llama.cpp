@@ -182,8 +182,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.n_ctx > llama_n_ctx(ctx)) {
-        LOG_TEE("%s: warning: base model only supports context sizes no greater than %d tokens (%d specified)\n", __func__, llama_n_ctx(ctx), params.n_ctx);
+    const int n_ctx_train = llama_n_ctx_train(ctx);
+    if (params.n_ctx > n_ctx_train) {
+        LOG_TEE("%s: warning: model was trained on only %d context tokens (%d specified)\n",
+                __func__, n_ctx_train, params.n_ctx);
     } else if (params.n_ctx < 8) {
         LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
