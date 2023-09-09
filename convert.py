@@ -161,15 +161,6 @@ class Params:
     path_model: Path | None = None
 
     @staticmethod
-    def find_n_mult(n_ff: int, n_embd: int) -> int:
-        # hardcoded magic range
-        for n_mult in range(8192, 1, -1):
-            calc_ff = (((8*n_embd) // 3 + n_mult - 1) // n_mult)*n_mult
-            if calc_ff == n_ff:
-                return n_mult
-        raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
-
-    @staticmethod
     def guessed(model: LazyModel) -> Params:
         # try transformer naming first
         n_vocab, n_embd = model["model.embed_tokens.weight"].shape if "model.embed_tokens.weight" in model else model["tok_embeddings.weight"].shape
@@ -253,7 +244,7 @@ class Params:
         n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
         n_embd           = config["dim"]
         n_layer          = config["n_layers"]
-        n_mult           = config["multiple_of"]
+        #n_mult           = config["multiple_of"]
         n_ff             = -1
         n_head           = config["n_heads"]
         n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
