@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search tests/test-c.o
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search speculative tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
@@ -7,11 +7,44 @@ TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-dou
 # Code coverage output files
 COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
 
+ifndef UNAME_S
+UNAME_S := $(shell uname -s)
+endif
+
+ifndef UNAME_P
+UNAME_P := $(shell uname -p)
+endif
+
+ifndef UNAME_M
+UNAME_M := $(shell uname -m)
+endif
+
+# Mac OS + Arm can report x86_64
+# ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
+ifeq ($(UNAME_S),Darwin)
+	ifndef LLAMA_NO_METAL
+		LLAMA_METAL := 1
+	endif
+
+	ifneq ($(UNAME_P),arm)
+		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
+		ifeq ($(SYSCTL_M),1)
+			# UNAME_P := arm
+			# UNAME_M := arm64
+			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
+		endif
+	endif
+endif
+
+ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
+BUILD_TARGETS += metal
+endif
+
 default: $(BUILD_TARGETS)
 
-test:
-	@echo "Running tests..."
-	@for test_target in $(TEST_TARGETS); do \
+test: $(TEST_TARGETS)
+	@failures=0; \
+	for test_target in $(TEST_TARGETS); do \
 		if [ "$$test_target" = "tests/test-tokenizer-0-llama" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
@@ -19,10 +52,21 @@ test:
 		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
 			continue; \
 		else \
+			echo "Running test $$test_target..."; \
 			./$$test_target; \
 		fi; \
-	done
-	@echo "All tests have been run."
+		if [ $$? -ne 0 ]; then \
+			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			failures=$$(( failures + 1 )); \
+		else \
+			printf 'Test %s passed.\n\n' $$test_target; \
+		fi; \
+	done; \
+	if [ $$failures -gt 0 ]; then \
+		printf '\n%s tests failed.\n' $$failures; \
+		exit 1; \
+	fi
+	@echo 'All tests passed.'
 
 all: $(BUILD_TARGETS) $(TEST_TARGETS)
 
@@ -38,18 +82,6 @@ gcovr-report: coverage ## Generate gcovr report
 	mkdir -p gcovr-report
 	gcovr --root . --html --html-details --output gcovr-report/coverage.html
 
-ifndef UNAME_S
-UNAME_S := $(shell uname -s)
-endif
-
-ifndef UNAME_P
-UNAME_P := $(shell uname -p)
-endif
-
-ifndef UNAME_M
-UNAME_M := $(shell uname -m)
-endif
-
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
@@ -57,19 +89,6 @@ endif
 
 CCV := $(shell $(CC) --version | head -n 1)
 CXXV := $(shell $(CXX) --version | head -n 1)
-
-# Mac OS + Arm can report x86_64
-# ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
-ifeq ($(UNAME_S),Darwin)
-	ifneq ($(UNAME_P),arm)
-		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
-		ifeq ($(SYSCTL_M),1)
-			# UNAME_P := arm
-			# UNAME_M := arm64
-			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
-		endif
-	endif
-endif
 
 #
 # Compile flags
@@ -83,9 +102,59 @@ else
 OPT = -O3
 endif
 MK_CPPFLAGS = -I. -Icommon
-MK_CFLAGS   = $(CPPFLAGS) $(OPT) -std=c11   -fPIC
-MK_CXXFLAGS = $(CPPFLAGS) $(OPT) -std=c++11 -fPIC
+MK_CFLAGS   = $(OPT) -std=c11   -fPIC
+MK_CXXFLAGS = $(OPT) -std=c++11 -fPIC
 MK_LDFLAGS  =
+
+# clock_gettime came in POSIX.1b (1993)
+# CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
+# posix_memalign came in POSIX.1-2001 / SUSv3
+# M_PI is an XSI extension since POSIX.1-2001 / SUSv3, came in XPG1 (1985)
+MK_CFLAGS   += -D_XOPEN_SOURCE=600
+MK_CXXFLAGS += -D_XOPEN_SOURCE=600
+
+# Somehow in OpenBSD whenever POSIX conformance is specified
+# some string functions rely on locale_t availability,
+# which was introduced in POSIX.1-2008, forcing us to go higher
+ifeq ($(UNAME_S),OpenBSD)
+	MK_CFLAGS   += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+	MK_CXXFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+endif
+
+# Data types, macros and functions related to controlling CPU affinity and
+# some memory allocation are available on Linux through GNU extensions in libc
+ifeq ($(UNAME_S),Linux)
+	MK_CFLAGS   += -D_GNU_SOURCE
+	MK_CXXFLAGS += -D_GNU_SOURCE
+endif
+
+# RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
+# and on macOS its availability depends on enabling Darwin extensions
+# similarly on DragonFly, enabling BSD extensions is necessary
+ifeq ($(UNAME_S),Darwin)
+	MK_CFLAGS   += -D_DARWIN_C_SOURCE
+	MK_CXXFLAGS += -D_DARWIN_C_SOURCE
+endif
+ifeq ($(UNAME_S),DragonFly)
+	MK_CFLAGS   += -D__BSD_VISIBLE
+	MK_CXXFLAGS += -D__BSD_VISIBLE
+endif
+
+# alloca is a non-standard interface that is not visible on BSDs when
+# POSIX conformance is specified, but not all of them provide a clean way
+# to enable it in such cases
+ifeq ($(UNAME_S),FreeBSD)
+	MK_CFLAGS   += -D__BSD_VISIBLE
+	MK_CXXFLAGS += -D__BSD_VISIBLE
+endif
+ifeq ($(UNAME_S),NetBSD)
+	MK_CFLAGS   += -D_NETBSD_SOURCE
+	MK_CXXFLAGS += -D_NETBSD_SOURCE
+endif
+ifeq ($(UNAME_S),OpenBSD)
+	MK_CFLAGS   += -D_BSD_SOURCE
+	MK_CXXFLAGS += -D_BSD_SOURCE
+endif
 
 ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
@@ -101,12 +170,11 @@ endif
 
 
 ifdef LLAMA_CODE_COVERAGE
-	CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
+	MK_CXXFLAGS += -fprofile-arcs -ftest-coverage -dumpbase ''
 endif
 
 ifdef LLAMA_DISABLE_LOGS
-	CFLAGS   += -DLOG_DISABLE_LOGS
-	CXXFLAGS += -DLOG_DISABLE_LOGS
+	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
 # warnings
@@ -116,7 +184,7 @@ MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-m
 
 ifeq '' '$(findstring clang++,$(CXX))'
 	# g++ only
-	CXXFLAGS += -Wno-format-truncation
+	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
 
 # OS specific
@@ -180,8 +248,8 @@ endif
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
 # https://github.com/ggerganov/llama.cpp/issues/2922
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
-	CFLAGS   += -Xassembler -muse-unaligned-vector-move
-	CXXFLAGS += -Xassembler -muse-unaligned-vector-move
+	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
+	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
@@ -218,8 +286,8 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 endif
 
 else
-	CFLAGS += -march=rv64gcv -mabi=lp64d
-	CXXFLAGS +=  -march=rv64gcv -mabi=lp64d
+	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
+	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
 
 ifndef LLAMA_NO_K_QUANTS
@@ -231,8 +299,8 @@ endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
-	# Mac M1 - include Accelerate framework.
-	# `-framework Accelerate` works on Mac Intel as well, with negliable performance boost (as of the predict time).
+	# Mac OS - include Accelerate framework.
+	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
 		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
 		MK_LDFLAGS  += -framework Accelerate
@@ -350,9 +418,12 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 endif # LLAMA_HIPBLAS
 
 ifdef LLAMA_METAL
-	MK_CPPFLAGS += -DGGML_USE_METAL #-DGGML_METAL_NDEBUG
+	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
 	OBJS		+= ggml-metal.o
+ifdef LLAMA_METAL_NDEBUG
+	MK_CPPFLAGS += -DGGML_METAL_NDEBUG
+endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
@@ -371,9 +442,8 @@ k_quants.o: k_quants.c k_quants.h
 endif # LLAMA_NO_K_QUANTS
 
 # combine build flags with cmdline overrides
-override CPPFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS)
-override CFLAGS   := $(MK_CFLAGS) $(CFLAGS)
-override CXXFLAGS := $(MK_CXXFLAGS) $(CXXFLAGS)
+override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
+override CXXFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
 
 #
@@ -477,9 +547,8 @@ baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o common.o $(OBJS)
 beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-ifneq '' '$(or $(filter clean,$(MAKECMDGOALS)),$(LLAMA_METAL))'
-BUILD_TARGETS += metal
-endif
+speculative: examples/speculative/speculative.cpp build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 ifdef LLAMA_METAL
 metal: examples/metal/metal.cpp ggml.o $(OBJS)

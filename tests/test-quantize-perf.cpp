@@ -76,7 +76,7 @@ void * align_with_offset(void * ptr, int offset) {
     return (char *) std::align(MAX_ALIGNMENT, MAX_ALIGNMENT, ptr, dummy_size) + offset;
 }
 
-void benchmark_function(size_t size, size_t q_size, int64_t iterations, std::function<size_t(void)> function) {
+void benchmark_function(size_t size, size_t q_size, int64_t iterations, const std::function<size_t(void)> & function) {
     int64_t min_time_us = INT64_MAX;
     int64_t total_time_us = 0;
     int64_t min_time_cycles = INT64_MAX;

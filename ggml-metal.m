@@ -327,7 +327,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
 
 void * ggml_metal_host_malloc(size_t n) {
     void * data = NULL;
-    const int result = posix_memalign((void **) &data, getpagesize(), n);
+    const int result = posix_memalign((void **) &data, sysconf(_SC_PAGESIZE), n);
     if (result != 0) {
         metal_printf("%s: error: posix_memalign failed\n", __func__);
         return NULL;
@@ -401,7 +401,7 @@ bool ggml_metal_add_buffer(
             }
         }
 
-        const size_t size_page = getpagesize();
+        const size_t size_page = sysconf(_SC_PAGESIZE);
 
         size_t size_aligned = size;
         if ((size_aligned % size_page) != 0) {
@@ -1141,7 +1141,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&freq_base  length:sizeof(float) atIndex:21];
                             [encoder setBytes:&freq_scale length:sizeof(float) atIndex:22];
 
-                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(32, 1, 1)];
                         } break;
                     case GGML_OP_DUP:
                     case GGML_OP_CPY:

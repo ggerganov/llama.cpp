@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+#include "common.h"
 
 #include <unordered_map>
 #include <vector>
@@ -499,10 +500,10 @@ struct llama_file {
         errno = 0;
         std::size_t ret = std::fread(ptr, size, 1, fp);
         if (ferror(fp)) {
-            throw std::runtime_error(format("read error: %s", strerror(errno)));
+            die_fmt("fread failed: %s", strerror(errno));
         }
         if (ret != 1) {
-            throw std::runtime_error(std::string("unexpectedly reached end of file"));
+            die("unexpectedly reached end of file");
         }
     }
 
@@ -597,8 +598,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
         printf("Assuming llama2.c vocabulary since %s is not a gguf file\n", filename);
         llama_file file(filename, "rb");
         if (!file.fp) {
-            fprintf(stderr, "error: %s: %s\n", strerror(errno), filename);
-            exit(1);
+            die_fmt("%s: %s", strerror(errno), filename);
         }
         const int  n_vocab = config->vocab_size;
         /* uint32_t max_token_length =  */ file.read_u32(); // unused
