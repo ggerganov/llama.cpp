@@ -150,9 +150,10 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         NSString * llamaBundlePath = [bundle pathForResource:@"llama_llama" ofType:@"bundle"];
         NSBundle * llamaBundle = [NSBundle bundleWithPath:llamaBundlePath];
         NSString * libPath = [llamaBundle pathForResource:@"default" ofType:@"metallib"];
+        NSURL * libURL = [NSURL fileURLWithPath:libPath];
 
         // Load the metallib file into a Metal library
-        ctx->library = [ctx->device newLibraryWithFile:libPath error:&error];
+        ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
 
         if (error) {
             metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
