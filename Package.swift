@@ -5,9 +5,9 @@ import PackageDescription
 #if arch(arm) || arch(arm64)
 let platforms: [SupportedPlatform]? = [
     .macOS(.v11),
-    .iOS(.v11),
+    .iOS(.v14),
     .watchOS(.v4),
-    .tvOS(.v11)
+    .tvOS(.v14)
 ]
 let exclude: [String] = []
 let additionalSources: [String] = ["ggml-metal.m"]
