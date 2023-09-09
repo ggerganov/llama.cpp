@@ -144,12 +144,20 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     ctx->d_queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
-#if 0
-    // compile from source string and show compile log
+#ifdef GGML_SWIFT
+    // load the default.metallib file
     {
         NSError * error = nil;
 
-        ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
+        NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
+        NSString * llamaBundlePath = [bundle pathForResource:@"llama_llama" ofType:@"bundle"];
+        NSBundle * llamaBundle = [NSBundle bundleWithPath:llamaBundlePath];
+        NSString * libPath = [llamaBundle pathForResource:@"default" ofType:@"metallib"];
+        NSURL * libURL = [NSURL fileURLWithPath:libPath];
+
+        // Load the metallib file into a Metal library
+        ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
+
         if (error) {
             metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
