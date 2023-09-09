@@ -1359,6 +1359,10 @@ int main(int argc, const char ** argv) {
                                                     ggml_new_f32(ctx0, eps))));
 
                 check_gradient("softmax", ctx0, x, f, ndims, nargs, 1e-3f, 2e-1f, INFINITY);
+                // NOTE: softmax forward is computed using f16 table lookup instead of using actual expf, but backward assumes actual expf.
+                // this may result in different gradients too finite differences.
+                // when this test reports errors, first try to replace the table lookup with actual expf and test again to see if just that was the cause.
+                // if only the table lookup causes gradients to differ this is acceptable.
             }
         }
 
@@ -1474,28 +1478,31 @@ int main(int argc, const char ** argv) {
 
             for (int masked = 0; masked <= 1; ++masked) {
                 for (int ndims = 2; ndims <= 4; ++ndims) {
-                    int64_t neq[4] = { D, N, B, ne[3] };
-                    int64_t nek[4] = { D, M, B, ne[3] };
-                    int64_t nev[4] = { M, D, B, ne[3] };
-                    if (ndims == 2) {
-                        neq[2] = 1; neq[3] = 1;
-                        nek[2] = 1; nek[3] = 1;
-                        nev[2] = 1; nev[3] = 1;
-                    } else if (ndims == 3) {
-                        neq[3] = 1;
-                        nek[3] = 1;
-                        nev[3] = 1;
+                    int max_nrep = (ndims >= 3) ? 2 : 1;
+                    for (int nrep = 1; nrep < max_nrep; ++nrep) {
+                        int64_t neq[4] = { D, N, B*nrep, ne[3] };
+                        int64_t nek[4] = { D, M, B, ne[3] };
+                        int64_t nev[4] = { M, D, B, ne[3] };
+                        if (ndims == 2) {
+                            neq[2] = 1; neq[3] = 1;
+                            nek[2] = 1; nek[3] = 1;
+                            nev[2] = 1; nev[3] = 1;
+                        } else if (ndims == 3) {
+                            neq[3] = 1;
+                            nek[3] = 1;
+                            nev[3] = 1;
+                        }
+                        x[0] = get_random_tensor_f32(ctx0, ndims, neq, -0.1250f, 0.1250f);
+                        x[1] = get_random_tensor_f32(ctx0, ndims, nek, -0.1250f, 0.1250f);
+                        x[2] = get_random_tensor_f32(ctx0, ndims, nev, -0.1250f, 0.1250f);
+                        ggml_set_param(ctx0, x[0]);
+                        ggml_set_param(ctx0, x[1]);
+                        ggml_set_param(ctx0, x[2]);
+
+                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_flash_attn(ctx0, x[0], x[1], x[2], (masked == 0)));
+
+                        check_gradient("flash_attn f32", ctx0, x, f, ndims, nargs, 1.5e-4f, 1e-3f, INFINITY);
                     }
-                    x[0] = get_random_tensor_f32(ctx0, ndims, neq, -0.1250f, 0.1250f);
-                    x[1] = get_random_tensor_f32(ctx0, ndims, nek, -0.1250f, 0.1250f);
-                    x[2] = get_random_tensor_f32(ctx0, ndims, nev, -0.1250f, 0.1250f);
-                    ggml_set_param(ctx0, x[0]);
-                    ggml_set_param(ctx0, x[1]);
-                    ggml_set_param(ctx0, x[2]);
-
-                    struct ggml_tensor * f = ggml_sum(ctx0, ggml_flash_attn(ctx0, x[0], x[1], x[2], (masked == 0)));
-
-                    check_gradient("flash_attn f32", ctx0, x, f, ndims, nargs, 1.5e-4f, 1e-3f, INFINITY);
                 }
             }
         }
