@@ -516,6 +516,12 @@ extern "C" {
     // #define GGML_GRAPH_HASHTABLE_SIZE 16411
     #define GGML_GRAPH_HASHTABLE_SIZE 32771
 
+    enum ggml_cgraph_eval_order {
+        GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT = 0,
+        GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT,
+        GGML_CGRAPH_EVAL_ORDER_COUNT
+    };
+
     // computation graph
     struct ggml_cgraph {
         int n_nodes;
@@ -526,6 +532,8 @@ extern "C" {
         struct ggml_tensor * leafs[GGML_MAX_NODES];
 
         void * visited_hash_table[GGML_GRAPH_HASHTABLE_SIZE];
+
+        enum ggml_cgraph_eval_order order;
 
         // performance
         int     perf_runs;

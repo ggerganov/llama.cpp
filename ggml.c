@@ -17398,8 +17398,12 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
     }
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
-        if (node->src[i]) {
-            ggml_visit_parents(cgraph, node->src[i]);
+        const int k =
+            (cgraph->order == GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT) ? i :
+            (cgraph->order == GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT) ? (GGML_MAX_SRC-1-i) :
+            /* unknown order, just fall back to using i*/ i;
+        if (node->src[k]) {
+            ggml_visit_parents(cgraph, node->src[k]);
         }
     }
 
@@ -17458,6 +17462,7 @@ struct ggml_cgraph ggml_build_forward(struct ggml_tensor * tensor) {
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
         /*.hash_table   =*/ { NULL },
+        /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
@@ -17531,6 +17536,7 @@ struct ggml_cgraph * ggml_new_graph(struct ggml_context * ctx) {
         /*.grads        =*/ { NULL },
         /*.leafs        =*/ { NULL },
         /*.hash_table   =*/ { NULL },
+        /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
         /*.perf_runs    =*/ 0,
         /*.perf_cycles  =*/ 0,
         /*.perf_time_us =*/ 0,
