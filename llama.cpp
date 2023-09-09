@@ -1301,6 +1301,7 @@ struct llama_model_loader {
                 case GGML_TYPE_Q4_K: ftype = LLAMA_FTYPE_MOSTLY_Q4_K_M; break;
                 case GGML_TYPE_Q5_K: ftype = LLAMA_FTYPE_MOSTLY_Q5_K_M; break;
                 case GGML_TYPE_Q6_K: ftype = LLAMA_FTYPE_MOSTLY_Q6_K;   break;
+                case GGML_TYPE_Q4_SQ: ftype = LLAMA_FTYPE_MOSTLY_Q4_SQ;   break;
                 default:
                      {
                          LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));
@@ -1565,6 +1566,9 @@ std::string llama_model_ftype_name(enum llama_ftype ftype) {
         case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "mostly Q5_K - Small";
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "mostly Q5_K - Medium";
         case LLAMA_FTYPE_MOSTLY_Q6_K:   return "mostly Q6_K";
+
+        //SQLLM
+        case LLAMA_FTYPE_MOSTLY_Q4_SQ: return "mostly Q4_SQ";
 
         default: return "unknown, may not work";
     }
@@ -2950,7 +2954,7 @@ static bool llama_eval_internal(
     // TODO: this is mostly important for Apple Silicon where CBLAS is still performing very well
     //       we still need some threads to process all non-mul_mat ops, but not too much to avoid interfering
     //       with the BLAS calls. need a better solution
-    if (N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
+    if (N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() && !(model.ftype == LLAMA_FTYPE_MOSTLY_Q4_SQ)) {
         n_threads = std::min(4, n_threads);
     }
 
@@ -4721,6 +4725,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
         case LLAMA_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
+#endif
+#ifdef GGML_USE_SQLLM
+        case LLAMA_FTYPE_MOSTLY_Q4_SQ:   quantized_type = GGML_TYPE_Q4_SQ; break;
 #endif
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }

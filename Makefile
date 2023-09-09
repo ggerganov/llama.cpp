@@ -298,6 +298,12 @@ ifdef LLAMA_QKK_64
 endif
 endif
 
+ifndef LLAMA_NO_SQLLM
+	MK_CPPFLAGS   += -DGGML_USE_SQLLM
+	OBJS     += sqllm.o
+endif
+
+
 ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
@@ -440,6 +446,11 @@ ifndef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
+
+ifndef LLAMA_NO_SQLLM
+sqllm.o: sqllm.c sqllm.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif # LLAMA_NO_SQLLM
 
 # combine build flags with cmdline overrides
 override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)

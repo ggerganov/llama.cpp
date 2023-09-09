@@ -33,6 +33,7 @@ GGML_QUANT_SIZES = {
     gguf.GGMLQuantizationType.Q5_K : (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
     gguf.GGMLQuantizationType.Q6_K : (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
     gguf.GGMLQuantizationType.Q8_K : (256, 4 + QK_K + QK_K // 8),
+    gguf.GGMLQuantizationType.Q4_SQ  : (1, 4),
 }
 
 class GGMLFormat(IntEnum):
@@ -58,6 +59,7 @@ class GGMLFType(IntEnum):
     MOSTLY_Q5_K_S        = 16
     MOSTLY_Q5_K_M        = 17
     MOSTLY_Q6_K          = 18
+    MOSTLY_Q4_SQ         = 19
 
 class Hyperparameters:
     def __init__(self):
@@ -120,7 +122,7 @@ class Tensor:
         self.len_bytes = np.int64(0)
         self.use_padding = use_padding
 
-    def load(self, data, offset):
+    def load(self, data, offset, squeezellm=False):
         orig_offset = offset
         (n_dims, name_len, dtype) = struct.unpack('<3I', data[offset:offset + 12])
         assert n_dims >= 0 and n_dims <= 4, f'Invalid tensor dimensions {n_dims}'
@@ -137,6 +139,9 @@ class Tensor:
         pad = ((offset + 31) & ~31) - offset if self.use_padding else 0
         offset += pad
         n_elems = np.prod(self.dims)
+        if squeezellm and n_dims > 1 and dtype == gguf.GGMLQuantizationType.Q4_SQ:
+            n_elems = n_elems / 8
+            n_elems += self.dims[1] * 8 # add 16 fp16 elements per row
         n_bytes = np.int64(np.int64(n_elems) * np.int64(tysize)) // np.int64(blksize)
         self.start_offset = offset
         self.len_bytes = n_bytes
@@ -186,19 +191,20 @@ class GGMLModel:
         if len(err) > 0:
             raise ValueError(f'{err} Sorry, your {self.file_format.name}v{self.format_version} file of type {ftype.name} is not eligible for conversion.')
 
-    def load(self, data, offset):
+    def load(self, data, offset, squeezellm=False):
         offset += self.validate_header(data, offset)
         hp = Hyperparameters()
         offset += hp.load(data, offset)
         print(f'* File format: {self.file_format.name}v{self.format_version} with ftype {hp.ftype.name}')
-        self.validate_conversion(hp.ftype)
+        if not squeezellm:
+            self.validate_conversion(hp.ftype)
         vocab = Vocab(load_scores = self.file_format > GGMLFormat.GGML)
         offset += vocab.load(data, offset, hp.n_vocab)
         tensors: list[Tensor] = []
         tensor_map = {}
         while offset < len(data):
             tensor = Tensor(use_padding = self.file_format > GGMLFormat.GGMF)
-            offset += tensor.load(data, offset)
+            offset += tensor.load(data, offset, squeezellm=squeezellm)
             tensor_map[tensor.name] = len(tensors)
             tensors.append(tensor)
         self.hyperparameters = hp
@@ -414,6 +420,7 @@ def handle_args():
         help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
     parser.add_argument("--vocabtype", choices=["spm", "bpe"], default="spm",
         help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)")
+    parser.add_argument("--squeezellm",  action="store_true",    help="Convert to SQLLM")
     return parser.parse_args()
 
 def main():
@@ -425,7 +432,7 @@ def main():
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLModel()
     print('* Scanning GGML input file')
-    offset = model.load(data, 0)
+    offset = model.load(data, 0, cfg.squeezellm)
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
