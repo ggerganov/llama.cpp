@@ -407,6 +407,7 @@ int main(int argc, const char ** argv) {
         }
     }
 
+    unsigned seed_iter = 1;
 
     // original loop: 1000
     int niter = 4;
@@ -418,6 +419,10 @@ int main(int argc, const char ** argv) {
         niter = atoi(argv[1]);
     }
     for (int iter = 0; iter < niter; ++iter) {
+        srand(seed_iter);
+        seed_iter = rand();
+        unsigned seed = rand();
+
         printf("test-grad0: iter:%d/%d\n", iter, niter);
         struct ggml_context * ctx0 = ggml_init(params);
 
@@ -427,6 +432,7 @@ int main(int argc, const char ** argv) {
 
         // add f32
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -443,6 +449,7 @@ int main(int argc, const char ** argv) {
 
         // add f16
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -459,6 +466,7 @@ int main(int argc, const char ** argv) {
 
         // sub
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -475,6 +483,7 @@ int main(int argc, const char ** argv) {
 
         // mul
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -491,6 +500,7 @@ int main(int argc, const char ** argv) {
 
         // div
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -507,6 +517,7 @@ int main(int argc, const char ** argv) {
 
         // sqr
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -523,6 +534,7 @@ int main(int argc, const char ** argv) {
 
         // sqrt
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -539,6 +551,7 @@ int main(int argc, const char ** argv) {
 
         // log
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -555,6 +568,7 @@ int main(int argc, const char ** argv) {
 
         // sum
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -572,6 +586,7 @@ int main(int argc, const char ** argv) {
 
         // sum_rows
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -589,6 +604,7 @@ int main(int argc, const char ** argv) {
         // mean, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -606,6 +622,7 @@ int main(int argc, const char ** argv) {
         // argmax
         if (0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -622,6 +639,7 @@ int main(int argc, const char ** argv) {
 
         // repeat
         {
+            srand(seed);
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
@@ -644,6 +662,7 @@ int main(int argc, const char ** argv) {
 
         // repeat back
         {
+            srand(seed);
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
@@ -682,6 +701,7 @@ int main(int argc, const char ** argv) {
 
         // sgn
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -698,6 +718,7 @@ int main(int argc, const char ** argv) {
 
         // neg
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -714,6 +735,7 @@ int main(int argc, const char ** argv) {
 
         // step
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -731,6 +753,7 @@ int main(int argc, const char ** argv) {
         // tanh, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -747,6 +770,7 @@ int main(int argc, const char ** argv) {
 
         // mul_mat
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 2; ndims <= 4; ++ndims) {
@@ -784,6 +808,7 @@ int main(int argc, const char ** argv) {
         // elu, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -800,6 +825,7 @@ int main(int argc, const char ** argv) {
 
         // relu
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -817,6 +843,7 @@ int main(int argc, const char ** argv) {
         // gelu, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -833,6 +860,7 @@ int main(int argc, const char ** argv) {
 
         // silu
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -854,6 +882,7 @@ int main(int argc, const char ** argv) {
 
         // rms_norm
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -870,6 +899,7 @@ int main(int argc, const char ** argv) {
 
         // scale
         {
+            srand(seed);
             const int nargs = 2;
 
             int64_t ne2[4];
@@ -890,6 +920,7 @@ int main(int argc, const char ** argv) {
 
         // cpy f32
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -907,6 +938,7 @@ int main(int argc, const char ** argv) {
 
         // cpy f16
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -924,6 +956,7 @@ int main(int argc, const char ** argv) {
 
         // reshape (1d->nd)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -947,6 +980,7 @@ int main(int argc, const char ** argv) {
 
         // reshape (nd->1d)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -970,6 +1004,7 @@ int main(int argc, const char ** argv) {
 
         // acc 1d
         {
+            srand(seed);
             int64_t ne2[4] = { 1, 1, 1, 1 };
 
             const int nargs = 2;
@@ -997,6 +1032,7 @@ int main(int argc, const char ** argv) {
 
         // acc 2d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1029,6 +1065,7 @@ int main(int argc, const char ** argv) {
 
         // acc 3d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1063,6 +1100,7 @@ int main(int argc, const char ** argv) {
 
         // acc 4d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1099,6 +1137,7 @@ int main(int argc, const char ** argv) {
 
         // set_1d
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 2;
@@ -1126,6 +1165,7 @@ int main(int argc, const char ** argv) {
 
         // set_2d
         {
+            srand(seed);
             int64_t ne2[4];
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1158,6 +1198,7 @@ int main(int argc, const char ** argv) {
 
         // view_1d
         {
+            srand(seed);
             const int nargs = 1;
             for (int ndims = 1; ndims <= 4; ++ndims) {
 
@@ -1181,6 +1222,7 @@ int main(int argc, const char ** argv) {
 
         // view_2d
         {
+            srand(seed);
             int64_t ne2[4];
             int64_t nb2[4];
 
@@ -1211,6 +1253,7 @@ int main(int argc, const char ** argv) {
 
         // view_3d
         {
+            srand(seed);
             int64_t ne2[4] = {1,1,1,1};
             int64_t nb2[4] = {0,0,0,0};
 
@@ -1242,6 +1285,7 @@ int main(int argc, const char ** argv) {
 
         // permute
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 1;
@@ -1275,6 +1319,7 @@ int main(int argc, const char ** argv) {
 
         // transpose
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 1;
@@ -1302,6 +1347,7 @@ int main(int argc, const char ** argv) {
 
         // get_rows
         {
+            srand(seed);
             int64_t ne2[4] = {ne[0], ne[1], 1, 1};
             int64_t ne3[4] = {1+irand(ne[1]), 1, 1, 1};
             const int nargs = 1;
@@ -1318,6 +1364,7 @@ int main(int argc, const char ** argv) {
 
         // diag_mask_inf
         {
+            srand(seed);
             const int nargs = 1;
             const int ndims = 2;
 
@@ -1333,6 +1380,7 @@ int main(int argc, const char ** argv) {
 
         // diag_mask_zero
         {
+            srand(seed);
             const int nargs = 1;
             const int ndims = 2;
 
@@ -1348,6 +1396,7 @@ int main(int argc, const char ** argv) {
 
         // softmax
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1378,6 +1427,7 @@ int main(int argc, const char ** argv) {
 
         // cross_entropy_loss
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1408,6 +1458,7 @@ int main(int argc, const char ** argv) {
 
         // rope f32
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1442,6 +1493,7 @@ int main(int argc, const char ** argv) {
 
         // rope f16
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1476,6 +1528,7 @@ int main(int argc, const char ** argv) {
 
         // flash_attn f32
         {
+            srand(seed);
             const int nargs = 3;
 
             int64_t ne2[4];
@@ -1520,6 +1573,7 @@ int main(int argc, const char ** argv) {
         // flash_attn f16, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 3;
 
             int64_t ne2[4];
