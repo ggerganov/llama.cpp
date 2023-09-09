@@ -655,7 +655,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     params.n_batch = 512;
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
@@ -693,9 +693,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.n_ctx > llama_n_ctx(ctx)) {
-        fprintf(stderr, "%s: warning: model might not support context sizes greater than %d tokens (%d specified);"
-                "expect poor results\n", __func__, llama_n_ctx(ctx), params.n_ctx);
+    const int n_ctx_train = llama_n_ctx_train(ctx);
+    if (params.n_ctx > n_ctx_train) {
+        fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
+                __func__, n_ctx_train, params.n_ctx);
     }
 
     // print system information

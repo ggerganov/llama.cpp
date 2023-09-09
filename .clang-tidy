@@ -3,6 +3,7 @@ Checks: >
     bugprone-*,
     -bugprone-easily-swappable-parameters,
     -bugprone-implicit-widening-of-multiplication-result,
+    -bugprone-misplaced-widening-cast,
     -bugprone-narrowing-conversions,
     readability-*,
     -readability-avoid-unconditional-preprocessor-if,
@@ -15,4 +16,8 @@ Checks: >
     -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
     performance-*,
     portability-*,
+    misc-*,
+    -misc-const-correctness,
+    -misc-non-private-member-variables-in-classes,
+    -misc-no-recursion,
 FormatStyle: none

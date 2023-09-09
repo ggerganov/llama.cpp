@@ -20,6 +20,9 @@
 #define DIRECTORY_SEPARATOR '/'
 #endif // _WIN32
 
+#define die(msg)          do { fputs("error: " msg "\n", stderr);                  exit(1); } while (0)
+#define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", ##__VA_ARGS__); exit(1); } while (0)
+
 //
 // CLI argument parsing
 //
