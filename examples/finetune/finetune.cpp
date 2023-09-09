@@ -2721,7 +2721,7 @@ int main(int argc, char ** argv) {
         NULL,                           // mem_buffer
         true,                           // no_alloc
     };
-    struct ggml_context * ctx_compute = ggml_init(ctx_compute_params);
+    struct ggml_context * ctx_compute = NULL;
 
     struct ggml_tensor * loss   = NULL;
     struct ggml_tensor * logits = NULL;
@@ -2731,32 +2731,47 @@ int main(int argc, char ** argv) {
     struct ggml_cgraph * gb_tmp = NULL;
 
     // measure required memory for compute tensors
-    alloc = ggml_allocr_new_measure(tensor_alignment);
-    gf = ggml_new_graph(ctx_compute);
-    gb = ggml_new_graph(ctx_compute);
-    gb_tmp = params.use_checkpointing
-        ? ggml_new_graph(ctx_compute)
-        : NULL;
-    loss = llama_build_lora_finetune_graphs(
-        &model, &lora, alloc, ctx_compute,
-        gf, gb, gb_tmp,
-        &logits, tokens_input, target_probs,
-        n_tokens, n_batch,
-        params.use_flash,
-        params.use_checkpointing
-    );
-    size_t max_compute_size = ggml_allocr_max_size(alloc) + tensor_alignment;
-    ggml_allocr_free(alloc);
+    size_t best_compute_size = SIZE_MAX;
+    enum ggml_cgraph_eval_order best_order = GGML_CGRAPH_EVAL_ORDER_COUNT;
+    // find best evaluation order
+    for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
+        ctx_compute = ggml_init(ctx_compute_params);
+        alloc = ggml_allocr_new_measure(tensor_alignment);
+        gf = ggml_new_graph(ctx_compute);
+        gf->order = (enum ggml_cgraph_eval_order) order;
+        gb = ggml_new_graph(ctx_compute);
+        gb_tmp = params.use_checkpointing
+            ? ggml_new_graph(ctx_compute)
+            : NULL;
+        loss = llama_build_lora_finetune_graphs(
+            &model, &lora, alloc, ctx_compute,
+            gf, gb, gb_tmp,
+            &logits, tokens_input, target_probs,
+            n_tokens, n_batch,
+            params.use_flash,
+            params.use_checkpointing
+        );
+        size_t max_compute_size = ggml_allocr_max_size(alloc) + tensor_alignment;
+        if (max_compute_size < best_compute_size) {
+            best_compute_size = max_compute_size;
+            best_order = gf->order;
+        }
+        ggml_allocr_free(alloc);
+        ggml_free(ctx_compute);
+    }
+    size_t max_compute_size = best_compute_size;
     printf("%s: max_compute_size = %zu bytes (%.1f MB)\n", __func__, max_compute_size, (float) max_compute_size / (1024.0f*1024.0f));
-
-    // reset compute context
-    ggml_free(ctx_compute);
-    ctx_compute = ggml_init(ctx_compute_params);
+    printf("%s: evaluation order = %s\n", __func__,
+        (best_order == GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT) ? "LEFT_TO_RIGHT" :
+        (best_order == GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT) ? "RIGHT_TO_LEFT" :
+        "invalid");
 
     // allocate compute tensors
     mem_compute_data.resize(max_compute_size);
+    ctx_compute = ggml_init(ctx_compute_params);
     alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
     gf = ggml_new_graph(ctx_compute);
+    gf->order = best_order;
     gb = ggml_new_graph(ctx_compute);
     gb_tmp = params.use_checkpointing
         ? ggml_new_graph(ctx_compute)
