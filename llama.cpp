@@ -4639,7 +4639,10 @@ void llama_beam_search(llama_context * ctx,
 // quantization
 //
 
-static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vector<float> & output, const size_t nelements, const int nthread) {
+static void llama_convert_tensor_internal(
+    struct ggml_tensor * tensor, std::vector<float> & output, std::vector<std::thread> & workers,
+    const size_t nelements, const int nthread
+) {
     if (output.size() < nelements) {
         output.resize(nelements);
     }
@@ -4674,7 +4677,6 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
     auto blocks_per_thread = nblocks / nthread;
     auto spare_blocks = nblocks - (blocks_per_thread * nthread); // if blocks aren't divisible by thread count
 
-    std::vector<std::thread> workers;
     for (auto tnum = 0, in_buff_offs = 0, out_buff_offs = 0; tnum < nthread; tnum++) {
         auto thr_blocks = blocks_per_thread + (tnum == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
         auto thr_elems = thr_blocks * block_size; // number of elements for this thread
@@ -4687,13 +4689,12 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
                 qtype.to_float(inbuf, outbuf, nels);
             }
         };
-        workers.push_back(std::thread(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems));
+        workers.emplace_back(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
         in_buff_offs += thr_block_bytes;
         out_buff_offs += thr_elems;
     }
-    for (auto & worker : workers) {
-        worker.join();
-    }
+    for (auto & w : workers) { w.join(); }
+    workers.clear();
 }
 
 #ifdef GGML_USE_K_QUANTS
@@ -4889,12 +4890,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<int64_t> hist_all(1 << 4, 0);
 
     std::vector<std::thread> workers;
+    workers.reserve(nthread);
     std::mutex mutex;
 
     int idx = 0;
 
     std::vector<uint8_t> read_data;
     std::vector<uint8_t> work;
+    std::vector<float> f32_conv_buf;
 
     // populate the original tensors so we get an initial meta data
     for (int i = 0; i < ml->n_tensors; ++i) {
@@ -4916,7 +4919,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         const std::string name = ggml_get_name(tensor);
 
-        read_data.resize(ggml_nbytes(tensor));
+        if (read_data.size() < ggml_nbytes(tensor)) {
+            read_data.resize(ggml_nbytes(tensor));
+        }
         tensor->data = read_data.data();
         ml->load_data_for(tensor);
 
@@ -4958,23 +4963,24 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             const size_t nelements = ggml_nelements(tensor);
 
             float * f32_data;
-            std::vector<float> f32_conv_buf;
 
             if (tensor->type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor->data;
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
-                llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
+                llama_convert_tensor_internal(tensor, f32_conv_buf, workers, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
 
             LLAMA_LOG_INFO("quantizing to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
-            work.resize(nelements * 4); // upper bound on size
+            if (work.size() < nelements * 4) {
+                work.resize(nelements * 4); // upper bound on size
+            }
             new_data = work.data();
-            std::vector<int64_t> hist_cur(1 << 4, 0);
+            std::array<int64_t, 1 << 4> hist_cur = {};
 
             static const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
@@ -4985,13 +4991,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 size_t counter = 0;
                 new_size = 0;
                 auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
-                    std::vector<int64_t> local_hist;
+                    std::array<int64_t, 1 << 4> local_hist = {};
                     size_t local_size = 0;
                     while (true) {
                         std::unique_lock<std::mutex> lock(mutex);
                         size_t first = counter; counter += chunk_size;
                         if (first >= nelements) {
-                            if (!local_hist.empty()) {
+                            if (local_size > 0) {
                                 for (int j=0; j<int(local_hist.size()); ++j) {
                                     hist_cur[j] += local_hist[j];
                                 }
@@ -5001,22 +5007,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         }
                         lock.unlock();
                         size_t last = std::min(nelements, first + chunk_size);
-                        if (local_hist.empty()) {
-                            local_hist.resize(hist_cur.size(), 0);
-                        }
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
-                if ((int) workers.size() < nthread_use - 1) {
-                    workers.resize(nthread_use - 1);
-                }
                 for (int it = 0; it < nthread_use - 1; ++it) {
-                    workers[it] = std::thread(compute);
+                    workers.emplace_back(compute);
                 }
                 compute();
-                for (int it = 0; it < nthread_use - 1; ++it) {
-                    workers[it].join();
-                }
+                for (auto & w : workers) { w.join(); }
+                workers.clear();
             }
 
             LLAMA_LOG_INFO("size = %8.2f MB -> %8.2f MB | hist: ", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
