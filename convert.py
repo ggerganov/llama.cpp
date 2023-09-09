@@ -145,7 +145,6 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 class Params:
     n_vocab:    int
     n_embd:     int
-    n_mult:     int
     n_layer:    int
     n_ctx:      int
     n_ff:       int
@@ -197,7 +196,6 @@ class Params:
         return Params(
             n_vocab    = n_vocab,
             n_embd     = n_embd,
-            n_mult     = n_mult,
             n_layer    = n_layer,
             n_ctx      = -1,
             n_ff       = n_ff,
@@ -225,8 +223,6 @@ class Params:
         else:
             f_rope_scale = None
 
-        n_mult = Params.find_n_mult(n_ff, n_embd)
-
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
         elif "max_position_embeddings" in config:
@@ -238,7 +234,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,
@@ -285,7 +280,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,
