@@ -1952,8 +1952,6 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --use-flash                Use flash attention (default)\n");
     fprintf(stderr, "  --no-checkpointing         Don't use gradient checkpointing\n");
     fprintf(stderr, "  --use-checkpointing        Use gradient checkpointing (default)\n");
-    fprintf(stderr, "  --no-alloc                 Don't use allocator\n");
-    fprintf(stderr, "  --use-alloc                Use allocator (default)\n");
     fprintf(stderr, "  --warmup N                 Only for Adam optimizer. Number of warmup steps (default %d)\n", params->warmup);
     fprintf(stderr, "  --cos-decay-steps N        Only for Adam optimizer. Number of cosine decay steps (default %d)\n", params->cos_decay_steps);
     fprintf(stderr, "  --cos-decay-restart N      Only for Adam optimizer. Increase of cosine decay steps after restart (default %f)\n", params->cos_decay_restart);
