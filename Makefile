@@ -49,7 +49,7 @@ test: $(TEST_TARGETS)
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
 			continue; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
+		elif [ "$$test_target" = "tests/test-tokenizer-1-llama" ]; then \
 			continue; \
 		else \
 			echo "Running test $$test_target..."; \
@@ -606,7 +606,7 @@ tests/test-tokenizer-0-falcon: tests/test-tokenizer-0-falcon.cpp build-info.h gg
 tests/test-tokenizer-0-llama: tests/test-tokenizer-0-llama.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-tokenizer-1: tests/test-tokenizer-1.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-tokenizer-1-llama: tests/test-tokenizer-llama-1.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 tests/test-c.o: tests/test-c.c llama.h
