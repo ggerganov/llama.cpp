@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     // We need this for unicode console support
     console::init(false, false);
     atexit([]() { console::cleanup(); });
-#endif    
+#endif
 
     const int n_vocab = llama_n_vocab(ctx);
 
