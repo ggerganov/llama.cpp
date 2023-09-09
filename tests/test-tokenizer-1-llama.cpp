@@ -74,8 +74,11 @@ int main(int argc, char **argv) {
 
     GGML_ASSERT(llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM);
 
+#ifdef _WIN32
+    // We need this for unicode console support
     console::init(false, false);
     atexit([]() { console::cleanup(); });
+#endif    
 
     const int n_vocab = llama_n_vocab(ctx);
 
@@ -84,7 +87,7 @@ int main(int argc, char **argv) {
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_spm(ctx, tokens);
         if (check != str) {
-            fprintf(stderr, "%s : error: token %d detokenizes to >%s<(%d) but tokenization of this detokenizes to >%s<(%d)\n",
+            fprintf(stderr, "%s : error: token %d detokenizes to >%s<(%llu) but tokenization of this detokenizes to >%s<(%llu)\n",
                 __func__, i, str.c_str(), str.length(), check.c_str(), check.length());
             if(i != 3)
                 return 2;
@@ -97,7 +100,7 @@ int main(int argc, char **argv) {
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
             std::string check = llama_detokenize_spm(ctx, tokens);
             if (str != check) {
-                fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%d) instead of >%s<(%d)\n",
+                fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
                     __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
                 if(cp != 0 && cp != 9601)
                     return 3;
@@ -109,7 +112,7 @@ int main(int argc, char **argv) {
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_spm(ctx, tokens);
         if (str != check) {
-            fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%d) instead of >%s<(%d)\n",
+            fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
                 __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
             return 4;
         }
