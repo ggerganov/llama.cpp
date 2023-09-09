@@ -5669,6 +5669,10 @@ int llama_n_head(const struct llama_context * ctx) {
     return ctx->model.hparams.n_head;
 }
 
+int llama_n_head_kv(const struct llama_context * ctx) {
+    return ctx->model.hparams.n_head_kv;
+}
+
 int llama_n_rot(const struct llama_context * ctx) {
     return ctx->model.hparams.n_rot;
 }
@@ -5699,6 +5703,10 @@ int llama_model_n_ff(const struct llama_model * model) {
 
 int llama_model_n_head(const struct llama_model * model) {
     return model->hparams.n_head;
+}
+
+int llama_model_n_head_kv(const struct llama_model * model) {
+    return model->hparams.n_head_kv;
 }
 
 int llama_model_n_rot(const struct llama_model * model) {

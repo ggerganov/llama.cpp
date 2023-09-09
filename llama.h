@@ -245,13 +245,14 @@ extern "C" {
     LLAMA_API bool llama_mmap_supported (void);
     LLAMA_API bool llama_mlock_supported(void);
 
-    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
-    LLAMA_API int llama_n_ff   (const struct llama_context * ctx);
-    LLAMA_API int llama_n_head (const struct llama_context * ctx);
-    LLAMA_API int llama_n_rot  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_layer(const struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab  (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx    (const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd   (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ff     (const struct llama_context * ctx);
+    LLAMA_API int llama_n_head   (const struct llama_context * ctx);
+    LLAMA_API int llama_n_head_kv(const struct llama_context * ctx);
+    LLAMA_API int llama_n_rot    (const struct llama_context * ctx);
+    LLAMA_API int llama_n_layer  (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
 
@@ -260,6 +261,7 @@ extern "C" {
     LLAMA_API int llama_model_n_embd (const struct llama_model * model);
     LLAMA_API int llama_model_n_ff   (const struct llama_model * model);
     LLAMA_API int llama_model_n_head (const struct llama_model * model);
+    LLAMA_API int llama_model_n_head_kv(const struct llama_model * model);
     LLAMA_API int llama_model_n_rot  (const struct llama_model * model);
     LLAMA_API int llama_model_n_layer(const struct llama_model * model);
 
