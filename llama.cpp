@@ -4639,8 +4639,14 @@ void llama_beam_search(llama_context * ctx,
 // quantization
 //
 
+template <typename T>
+struct no_init {
+    T value;
+    no_init() { /* do nothing */ }
+};
+
 static void llama_convert_tensor_internal(
-    struct ggml_tensor * tensor, std::vector<float> & output, std::vector<std::thread> & workers,
+    struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<std::thread> & workers,
     const size_t nelements, const int nthread
 ) {
     if (output.size() < nelements) {
@@ -4895,9 +4901,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     int idx = 0;
 
-    std::vector<uint8_t> read_data;
-    std::vector<uint8_t> work;
-    std::vector<float> f32_conv_buf;
+    std::vector<no_init<uint8_t>> read_data;
+    std::vector<no_init<uint8_t>> work;
+    std::vector<no_init<float>> f32_conv_buf;
 
     // populate the original tensors so we get an initial meta data
     for (int i = 0; i < ml->n_tensors; ++i) {
