@@ -197,6 +197,36 @@ jobs:
           cd build
           ctest --verbose --timeout 900
 
+      - name: Build for iOS
+        id: cmake_build_ios
+        run: |
+          sysctl -a
+          rm -rf build
+          mkdir build
+          cd build
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release
+
+      - name: Build for tvOS
+        id: cmake_build_tvos
+        run: |
+          sysctl -a
+          rm -rf build
+          mkdir build
+          cd build
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=tvOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release
+
   windows-latest-cmake:
     runs-on: windows-latest
 
