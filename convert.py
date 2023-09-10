@@ -236,7 +236,7 @@ class Params:
         )
 
     # LLaMA v2 70B params.json
-    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
@@ -244,7 +244,6 @@ class Params:
         n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
         n_embd           = config["dim"]
         n_layer          = config["n_layers"]
-        #n_mult           = config["multiple_of"]
         n_ff             = -1
         n_head           = config["n_heads"]
         n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
