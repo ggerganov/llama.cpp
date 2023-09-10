@@ -334,7 +334,7 @@ jobs:
 
     strategy:
       matrix:
-        cuda: ['12.1.0', '11.7.1']
+        cuda: ['12.2.0', '11.7.1']
         build: ['cublas']
 
     steps:
