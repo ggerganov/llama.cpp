@@ -342,7 +342,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v3
 
-      - uses: Jimver/cuda-toolkit@v0.2.10
+      - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
         with:
           cuda: ${{ matrix.cuda }}
