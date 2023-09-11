@@ -108,7 +108,8 @@ class LogTargetWrapper
             // TODO: MSVC
             //
             static const auto dummy_init __attribute__((unused)) = [&](){
-                std::lock_guard<std::mutex> lock(_mutex);
+                //std::lock_guard<std::mutex> lock(_mutex);
+                while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
                 if(!_opened && _type == Type::File)
                 {
                     auto result = std::fopen(_filename.c_str(), "w");
@@ -124,26 +125,30 @@ class LogTargetWrapper
                     }
                     _opened = true;
                 }
-                return _opened;
+                _lock.clear(std::memory_order_release);
+                return _opened.load();
             }();
             return _handle;
         }
 
         void flush()
         {
-            std::lock_guard<std::mutex> lock(_mutex);
+            //std::lock_guard<std::mutex> lock(_mutex);
+            while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
             if(_opened && _type != Type::Invalid && _handle)
             {
                 std::fflush(_handle);
             }
+            _lock.clear(std::memory_order_release);
         }
 
     private:
-        std::mutex         _mutex;
-        Type               _type                   {Type::Invalid};
+        //std::mutex         _mutex;
+        std::atomic_flag   _lock      = ATOMIC_FLAG_INIT;
+        Type               _type      {Type::Invalid};
         std::string        _filename;
-        bool               _opened                 {false};
-        std::atomic<FILE*> _handle                 {nullptr};
+        std::atomic<bool>  _opened    {false};
+        std::atomic<FILE*> _handle    {nullptr};
 };
 
 // Utility for synchronizing log configuration state
@@ -346,12 +351,13 @@ class LogStateWrapper
 
         bool log_param_single_parse_impl(const std::string & param)
         {
+#ifdef LOG_WITH_TEST
             if ( param == "--log-test")
             {
                 log_test();
                 return true;
             }
-
+#endif
             if ( param == "--log-disable")
             {
                 {
@@ -804,6 +810,7 @@ inline FILE *log_set_target_impl(FILE *target) { return log_handler2_impl(true, 
 inline FILE *log_handler() { return log_handler1_impl(); }
 */
 
+#ifdef LOG_WITH_TEST
 inline void log_test()
 {
     auto log_default_logfile = log_set_target(log_filename_generator("llama","log"));
@@ -847,6 +854,7 @@ inline void log_test()
     LOGLN("22 Hello msvc LOGLN with (%d)(%s) arguments\n", 1, "test")
 #endif
 }
+#endif
 
 #define log_param_single_parse(param) LogStateWrapper::log_param_single_parse(param)
 #define log_param_pair_parse(...) LogStateWrapper::log_param_pair_parse(__VA_ARGS__)
@@ -858,7 +866,9 @@ inline void log_print_usage()
     printf("  -h, --help            show this help message and exit\n");*/
     /* spacing
     printf("__-param----------------Description\n");*/
+#ifdef LOG_WITH_TEST
     printf("  --log-test            Run simple logging test\n");
+#endif
     printf("  --log-disable         Disable trace logs\n");
     printf("  --log-enable          Enable trace logs\n");
     printf("  --log-file            Specify a log filename (without extension)\n");
