@@ -909,11 +909,6 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F16:
                                         {
-                                            //[encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
-                                            //nth0 = 32;
-                                            //nth1 = 1;
-                                            //if (ne11 * ne12 < 4) {
-                                            //    [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
                                             if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_l4];
                                                 nx = ne01;
@@ -1044,12 +1039,6 @@ void ggml_metal_graph_compute(
                                 else if (src0t == GGML_TYPE_Q6_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 1)/2, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 } else {
-                                    ////printf("f16xf32: %d x %d x %d,  %d x %d x %d -> %d\n",(int)ne00,(int)ne01,(int)ne02,
-                                    ////        (int)ne10,(int)ne11,(int)ne12,nrows);
-                                    //int64_t ny = (ne11 + nrows - 1)/nrows;
-                                    //[encoder dispatchThreadgroups:MTLSizeMake(ne01, ny, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
-                                    //[encoder dispatchThreadgroups:MTLSizeMake(ne10*ne11*ne12, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
-                                    //int n = ne01 >= 32 ? 32 : ne01 >= 16 ? 16 : ne01 >= 8 ? 8 : ne01 >= 4 ? 4 : ne01 >= 2 ? 2 : 1;
                                     [encoder dispatchThreadgroups:MTLSizeMake(nx, ny, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, 1, 1)];
                                 }
                             }
