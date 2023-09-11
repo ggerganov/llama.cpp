@@ -232,7 +232,7 @@ for part_name in part_names:
     model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
 
     tmp=model_part
-    for i in itertools.count():
+    for i in range(block_count):
         if f"model.layers.{i}.self_attn.W_pack.weight" in model_part:
             print(f"Unpacking and permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"]=reverse_hf_permute_part(model_part[f"model.layers.{i}.self_attn.W_pack.weight"],0,head_count,head_count)
