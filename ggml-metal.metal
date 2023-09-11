@@ -213,10 +213,9 @@ kernel void kernel_diag_mask_inf_8(
     dst[i+0] = src0[i+0];
     dst[i+1] = src0[i+1];
     int64_t i4 = 4*i;
-    const int64_t i02 = i4/(ne00*ne01);
-    i4 -= i02*ne00*ne01;
-    const int64_t i01 = i4/ne00;
-    const int64_t i00 = i4 - i01*ne00;
+    const int64_t i02 = i4/(ne00*ne01); i4 -= i02*ne00*ne01;
+    const int64_t i01 = i4/(ne00);      i4 -= i01*ne00;
+    const int64_t i00 = i4;
     for (int k = 3; k >= 0; --k) {
         if (i00 + 4 + k <= n_past + i01) {
             break;
@@ -678,7 +677,6 @@ kernel void kernel_mul_mat_f16_f32_l4(
     device const half4 * x4 = (device const half4 *) (src0 + r0*nb01 + im/(ne12/ne02)*nb02);
 
     for (int r1 = 0; r1 < nrows; ++r1) {
-
         device const float4 * y4 = (device const float4 *) (src1 + r1*nb11 + im*nb12);
 
         float sumf = 0;
