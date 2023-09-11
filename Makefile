@@ -373,7 +373,7 @@ ifdef LLAMA_CUDA_CCBIN
 	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) $(subst -Ofast,-O3,$(CXXFLAGS)) -Wno-pedantic -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS_CUDA) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -445,6 +445,11 @@ endif # LLAMA_NO_K_QUANTS
 override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
 override CXXFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
+
+COMMA := ,
+CXXFLAGS_CUDA := $(CXXFLAGS)
+CXXFLAGS_CUDA := $(subst -march=native -mtune=native,--compiler-options=-march=native$(COMMA)-mtune=native,$(CXXFLAGS_CUDA))
+CXXFLAGS_CUDA := $(subst -Ofast,-O3,$(CXXFLAGS_CUDA))
 
 #
 # Print build information
