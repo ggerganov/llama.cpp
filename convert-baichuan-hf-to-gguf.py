@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# HF llama --> gguf conversion
+# HF baichuan --> gguf conversion
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 # reverse HF permute back to original pth layout
-# https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/convert_llama_weights_to_hf.py
 
 
 def reverse_hf_permute(weights: NDArray, n_head: int, n_kv_head: int | None = None) -> NDArray:
