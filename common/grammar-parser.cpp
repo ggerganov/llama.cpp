@@ -405,7 +405,7 @@ namespace grammar_parser {
             for (size_t i = 0, end = state.rules.size(); i < end; i++) {
                 // fprintf(file, "%zu: ", i);
                 // print_rule_binary(file, state.rules[i]);
-                print_rule(file, i, state.rules[i], symbol_id_names);
+                print_rule(file, uint32_t(i), state.rules[i], symbol_id_names);
                 // fprintf(file, "\n");
             }
         } catch (const std::exception & err) {
@@ -415,6 +415,7 @@ namespace grammar_parser {
 
     std::vector<const llama_grammar_element *> parse_state::c_rules() {
         std::vector<const llama_grammar_element *> ret;
+        ret.reserve(rules.size());
         for (const auto & rule : rules) {
             ret.push_back(rule.data());
         }

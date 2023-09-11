@@ -24,7 +24,7 @@
 #endif
 
 struct quantize_stats_params {
-    std::string model = "models/7B/ggml-model-f16.bin";
+    std::string model = "models/7B/ggml-model-f16.gguf";
     bool verbose = false;
     bool per_layer_stats = false;
     bool print_histogram = false;
@@ -71,7 +71,7 @@ void quantize_stats_print_usage(int /*argc*/, char ** argv) {
 }
 
 // Check if a layer is included/excluded by command line
-bool layer_included(const quantize_stats_params params, const std::string & layer) {
+bool layer_included(const quantize_stats_params & params, const std::string & layer) {
     for (const auto& excluded : params.exclude_layers) {
         if (std::regex_search(layer, std::regex(excluded))) {
             return false;

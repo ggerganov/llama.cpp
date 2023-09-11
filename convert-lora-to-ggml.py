@@ -1,28 +1,29 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+from __future__ import annotations
+
 import json
 import os
 import re
 import struct
 import sys
-from typing import Any, Dict, Sequence, TextIO
+from typing import Any, BinaryIO, Sequence
 
+import numpy as np
 import torch
 
-from convert import DATA_TYPE_TO_FTYPE, NUMPY_TYPE_TO_DATA_TYPE, DataType
+NUMPY_TYPE_TO_FTYPE: dict[str, int] = {"float32": 0, "float16": 1}
+
 
 HF_SUBLAYER_TO_GGML = {
-    "self_attn.q_proj": "attention.wq",
-    "self_attn.k_proj": "attention.wk",
-    "self_attn.v_proj": "attention.wv",
-    "self_attn.o_proj": "attention.wo",
-    "mlp.gate_proj": "feed_forward.w1",
-    "mlp.down_proj": "feed_forward.w2",
-    "mlp.up_proj": "feed_forward.w3",
-    "input_layernorm": "attention_norm",
+    "self_attn.q_proj": "attn_q",
+    "self_attn.k_proj": "attn_k",
+    "self_attn.v_proj": "attn_v",
+    "self_attn.o_proj": "attn_output",
+    "mlp.gate_proj": "ffn_gate",
+    "mlp.down_proj": "ffn_down",
+    "mlp.up_proj": "ffn_up",
+    "input_layernorm": "attn_norm",
     "post_attention_layernorm": "ffn_norm",
-    # "norm": "norm",
-    # "embed_tokens": "tok_embeddings",
-    # "lm_head": "output",
 }
 
 
@@ -39,7 +40,7 @@ def translate_tensor_name(t: str) -> str:
             sys.exit(1)
 
         output_string = (
-            f"layers.{nn}.{HF_SUBLAYER_TO_GGML[sub_layer]}.weight.lora{lora_type}"
+            f"blk.{nn}.{HF_SUBLAYER_TO_GGML[sub_layer]}.weight.lora{lora_type}"
         )
         return output_string
     else:
@@ -47,19 +48,21 @@ def translate_tensor_name(t: str) -> str:
         sys.exit(1)
 
 
-def write_file_header(fout: TextIO, params: Dict[str, Any]) -> None:
+def write_file_header(fout: BinaryIO, params: dict[str, Any]) -> None:
     fout.write(b"ggla"[::-1])  # magic (ggml lora)
     fout.write(struct.pack("i", 1))  # file version
     fout.write(struct.pack("i", params["r"]))
     # https://opendelta.readthedocs.io/en/latest/modules/deltas.html says that `lora_alpha` is an int
     # but some models ship a float value instead
     # let's convert to int, but fail if lossless conversion is not possible
-    assert int(params["lora_alpha"]) == params["lora_alpha"], "cannot convert float to int losslessly"
+    assert (
+        int(params["lora_alpha"]) == params["lora_alpha"]
+    ), "cannot convert float to int losslessly"
     fout.write(struct.pack("i", int(params["lora_alpha"])))
 
 
 def write_tensor_header(
-    self, name: str, shape: Sequence[int], data_type: DataType
+    self, name: str, shape: Sequence[int], data_type: np.dtype[Any]
 ) -> None:
     sname = name.encode("utf-8")
     fout.write(
@@ -67,7 +70,7 @@ def write_tensor_header(
             "iii",
             len(shape),
             len(sname),
-            DATA_TYPE_TO_FTYPE[NUMPY_TYPE_TO_DATA_TYPE[data_type]],
+            NUMPY_TYPE_TO_FTYPE[data_type.name],
         )
     )
     fout.write(struct.pack("i" * len(shape), *shape[::-1]))
