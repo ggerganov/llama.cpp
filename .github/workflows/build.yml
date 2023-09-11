@@ -197,11 +197,24 @@ jobs:
           cd build
           ctest --verbose --timeout 900
 
-      - name: Build for iOS
-        id: cmake_build_ios
+  macOS-latest-cmake-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
         run: |
           sysctl -a
-          rm -rf build
           mkdir build
           cd build
           cmake -G Xcode .. \
@@ -212,11 +225,24 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
           cmake --build . --config Release
 
-      - name: Build for tvOS
-        id: cmake_build_tvos
+  macOS-latest-cmake-tvos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
         run: |
           sysctl -a
-          rm -rf build
           mkdir build
           cd build
           cmake -G Xcode .. \
