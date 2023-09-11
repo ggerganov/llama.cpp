@@ -414,3 +414,6 @@ tests/test-sampling: tests/test-sampling.cpp build-info.h ggml.o llama.o common.
 
 tests/test-tokenizer-0: tests/test-tokenizer-0.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.txt,$^) -o $@ $(LDFLAGS)
+
+docker:
+	docker build . -t ghcr.io/johnjones4/llama.cpp-$(shell uname | tr '[:upper:]' '[:lower:]')-$(shell uname -m | tr '[:upper:]' '[:lower:]')
