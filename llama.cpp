@@ -1966,7 +1966,7 @@ static void llm_load_tensors(
 
                     model.layers.resize(n_layer);
 
-                    for (uint32_t i = 0; i < n_layer; ++i) {
+                    for (uint32_t i = 0; i < 1; ++i) {
                         const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
                         const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
@@ -2515,6 +2515,7 @@ static struct ggml_cgraph * llm_build_llama(
 
         // input for next layer
         inpL = cur;
+        printf(" Final inpL = %f  \n", *(float*)inpL->data);
     }
 
     cur = inpL;

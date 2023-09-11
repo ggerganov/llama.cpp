@@ -9658,6 +9658,14 @@ static void ggml_compute_forward_div_f32(
             }
         }
     }
+    printf("lj.ggml_compute_forward_mul = %f", *(float*)dst->data);
+
+    for (int i = 1; i < 3; i++) {
+
+      printf("   %f", ((float*)dst->data)[i]);
+
+    }
+    printf("\n");
 }
 
 static void ggml_compute_forward_div(
@@ -10897,6 +10905,14 @@ static void ggml_compute_forward_rms_norm_f32(
             }
         }
     }
+    printf("lj.ggml_compute_forward_rms = %f", *(float*)dst->data);
+
+    for (int i = 1; i < 3; i++) {
+
+      printf("   %f", ((float*)dst->data)[i]);
+
+    }
+    printf("\n");
 }
 
 static void ggml_compute_forward_rms_norm(
@@ -11423,6 +11439,14 @@ static void ggml_compute_forward_mul_mat(
             }
         }
     }
+        printf("lj.ggml_compute_forward_mul_mat = %f", *(float*)dst->data);
+
+    for (int i = 1; i < 3; i++) {
+
+      printf("   %f", ((float*)dst->data)[i]);
+
+    }
+    printf("\n");
 }
 
 // ggml_compute_forward_out_prod
@@ -12256,6 +12280,14 @@ static void ggml_compute_forward_soft_max_f32(
         }
 #endif
     }
+    printf("lj.ggml_compute_forward_softmax = %f", *(float*)dst->data);
+
+    for (int i = 1; i < 3; i++) {
+
+      printf("   %f", ((float*)dst->data)[i]);
+
+    }
+    printf("\n");
 }
 
 static void ggml_compute_forward_soft_max(
@@ -12744,8 +12776,18 @@ static void ggml_compute_forward_rope_f32(
                 }
             }
         }
+
     }
+    printf("lj.ggml_compute_forward_rope = %f", *(float*)dst->data);
+
+    for (int i = 1; i < 3; i++) {
+
+      printf("   %f", ((float*)dst->data)[i]);
+
+    }
+    printf("\n");
 }
+
 
 static void ggml_compute_forward_rope_f16(
         const struct ggml_compute_params * params,
