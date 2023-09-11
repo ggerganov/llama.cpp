@@ -1,7 +1,3 @@
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "common.h"
 #include "llama.h"
 #include "build-info.h"

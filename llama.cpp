@@ -1,8 +1,3 @@
-// Defines fileno on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "llama.h"
 
 #include "ggml.h"
@@ -5638,15 +5633,19 @@ void llama_free(struct llama_context * ctx) {
 }
 
 int llama_n_vocab(const struct llama_context * ctx) {
-    return ctx->model.vocab.id_to_token.size();
+    return llama_model_n_vocab(&ctx->model);
 }
 
 int llama_n_ctx(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_ctx;
+    return llama_model_n_ctx(&ctx->model);
+}
+
+int llama_n_ctx_train(const struct llama_context * ctx) {
+    return llama_model_n_ctx_train(&ctx->model);
 }
 
 int llama_n_embd(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_embd;
+    return llama_model_n_embd(&ctx->model);
 }
 
 enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx) {
@@ -5659,6 +5658,10 @@ int llama_model_n_vocab(const struct llama_model * model) {
 
 int llama_model_n_ctx(const struct llama_model * model) {
     return model->hparams.n_ctx;
+}
+
+int llama_model_n_ctx_train(const struct llama_model * model) {
+    return model->hparams.n_ctx_train;
 }
 
 int llama_model_n_embd(const struct llama_model * model) {
