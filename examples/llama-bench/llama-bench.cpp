@@ -15,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "ggml.h"
 #include "llama.h"
@@ -143,6 +144,7 @@ struct cmd_params {
     std::vector<bool> low_vram;
     std::vector<std::array<float, LLAMA_MAX_DEVICES>> tensor_split;
     int reps;
+    int sleep;
     bool verbose;
     output_formats output_format;
 };
@@ -160,6 +162,7 @@ static const cmd_params cmd_params_defaults = {
     /* low_vram      */ {false},
     /* tensor_split  */ {{}},
     /* reps          */ 5,
+    /* sleep         */ 0,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
 };
@@ -181,6 +184,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>               \n");
     printf("  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
+    printf("  -s, --sleep <n ms>                (default: %d)\n", cmd_params_defaults.sleep);
     printf("  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : cmd_params_defaults.output_format == MARKDOWN ? "md" : "sql");
     printf("  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     printf("\n");
@@ -305,6 +309,12 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             params.reps = std::stoi(argv[i]);
+        } else if (arg == "-s" || arg == "--sleep") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.sleep = std::stoi(argv[i]);
         } else if (arg == "-o" || arg == "--output") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1003,6 +1013,9 @@ int main(int argc, char ** argv) {
             }
             uint64_t t_ns = get_time_ns() - t_start;
             t.samples_ns.push_back(t_ns);
+            if (i < params.reps-1 && params.sleep > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(params.sleep));
+            }
         }
 
         p->print_test(t);
