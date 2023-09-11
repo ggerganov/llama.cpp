@@ -11,21 +11,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+- Local Falcon 180B inference on Mac Studio
 
-- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
-
-- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
-
-- A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
-
-  Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
-
-  ### Current `master` should be considered in Beta - expect some issues for a few days!
-
-  ### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
-
-  ### Issues with non-GGUF models will be considered with low priority!
+  https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
 
 ----
 
@@ -413,7 +401,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### hipBLAS
 
-  This provide BLAS acceleation on HIP supported GPU like AMD GPU.
+  This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
   You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
   Windows support is coming soon...
@@ -737,12 +725,12 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 
 - Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
 - Alternatively, if you want to save time and space, you can download already converted and quantized models from [TheBloke](https://huggingface.co/TheBloke), including:
-  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGML)
-  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGML)
-  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGML)
-  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
-  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
-  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
+  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGUF)
+  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGUF)
+  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGUF)
+  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGUF)
+  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGUF)
+  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGUF)
 
 ### Verifying the model files
 

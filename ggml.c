@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // Defines CLOCK_MONOTONIC on Linux
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
 #include "ggml.h"
@@ -47,6 +46,10 @@
 // disable "possible loss of data" to avoid hundreds of casts
 // we should just be careful :)
 #pragma warning(disable: 4244 4267)
+
+// disable POSIX deprecation warnigns
+// these functions are never going away, anyway
+#pragma warning(disable: 4996)
 #endif
 
 #if defined(_WIN32)
@@ -103,6 +106,9 @@ typedef void * thread_ret_t;
 #include <sys/stat.h>
 #include <unistd.h>
 
+#endif
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
 #endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
@@ -192,8 +198,14 @@ typedef void * thread_ret_t;
 #define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
+    if (size == 0) {
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+        return NULL;
+    }
     void * aligned_memory = NULL;
-#ifdef GGML_USE_METAL
+#ifdef GGML_USE_CPU_HBM
+    int result = hbw_posix_memalign(&aligned_memory, 16, size);
+#elif GGML_USE_METAL
     int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
@@ -215,7 +227,11 @@ inline static void * ggml_aligned_malloc(size_t size) {
     return aligned_memory;
 }
 #define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
+#ifdef GGML_USE_CPU_HBM
+#define GGML_ALIGNED_FREE(ptr)    if(NULL != ptr) hbw_free(ptr)
+#else
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
+#endif
 #endif
 
 #define UNUSED GGML_UNUSED
@@ -294,8 +310,10 @@ typedef double ggml_float;
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
+#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__) || defined(__SSE3__)
 #if !defined(__riscv)
 #include <immintrin.h>
+#endif
 #endif
 #endif
 #endif
@@ -4566,6 +4584,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         return NULL;
     }
 
+    // allow to call ggml_init with 0 size
+    if (params.mem_size == 0) {
+        params.mem_size = GGML_MEM_ALIGN;
+    }
+
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
     *ctx = (struct ggml_context) {
@@ -4768,7 +4791,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
 
     size_t obj_alloc_size = 0;
 
-    if (view_src == NULL && ctx->no_alloc == false) {
+    if (view_src == NULL && !ctx->no_alloc) {
         if (ctx->scratch.data != NULL) {
             // allocate tensor data in the scratch buffer
             if (ctx->scratch.offs + data_size > ctx->scratch.size) {
@@ -5469,7 +5492,7 @@ static struct ggml_tensor * ggml_mul_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -5512,7 +5535,7 @@ static struct ggml_tensor * ggml_div_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -18854,7 +18877,6 @@ static enum ggml_opt_result linesearch_backtracking(
                     // strong Wolfe condition (GGML_LINESEARCH_BACKTRACKING_STRONG_WOLFE)
                     return count;
                 }
-                return count;
             }
         }
 
@@ -19957,7 +19979,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         struct ggml_tensor * data = NULL;
 
-        if (params.no_alloc == false) {
+        if (!params.no_alloc) {
             data = ggml_new_tensor_1d(ctx_data, GGML_TYPE_I8, ctx->size);
 
             ok = ok && data != NULL;
@@ -19998,7 +20020,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             }
 
             // point the data member to the appropriate location in the binary blob using the tensor infos
-            if (params.no_alloc == false) {
+            if (!params.no_alloc) {
               //cur->data = (char *) data->data + ctx->infos[i].offset - ctx->offset; // offset from start of file
                 cur->data = (char *) data->data + ctx->infos[i].offset;               // offset from data
             }

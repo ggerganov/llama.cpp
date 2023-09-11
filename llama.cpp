@@ -1,8 +1,3 @@
-// Defines fileno on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "llama.h"
 
 #include "ggml.h"
@@ -126,6 +121,9 @@ void replace_all(std::string & s, const std::string & search, const std::string 
     }
     s = std::move(result);
 }
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
+#endif
 
 static void zeros(std::ofstream & file, size_t n) {
     char zero = 0;
@@ -450,6 +448,9 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 #elif GGML_USE_METAL
 #   define llama_host_malloc(n)  ggml_metal_host_malloc(n)
 #   define llama_host_free(data) ggml_metal_host_free(data)
+#elif GGML_USE_CPU_HBM
+#   define llama_host_malloc(n)  hbw_malloc(n)
+#   define llama_host_free(data) if (data != NULL) hbw_free(data)
 #else
 #   define llama_host_malloc(n)  malloc(n)
 #   define llama_host_free(data) free(data)
@@ -1489,7 +1490,11 @@ struct llama_model_loader {
             // allocate temp buffer if not using mmap
             if (!use_mmap && cur->data == NULL) {
                 GGML_ASSERT(cur->backend != GGML_BACKEND_CPU);
-                cur->data = malloc(ggml_nbytes(cur));
+                #ifdef GGML_USE_CPU_HBM
+                cur->data = (uint8_t*)hbw_malloc(ggml_nbytes(cur));
+                #else
+                cur->data = (uint8_t*)malloc(ggml_nbytes(cur));
+                #endif
             }
 
             load_data_for(cur);
@@ -3052,31 +3057,8 @@ static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
 }
 
-static bool llama_is_user_defined_token(const llama_vocab & vocab, llama_token id) {
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
-}
-
-static bool llama_is_unused_token(const llama_vocab & vocab, llama_token id) {
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNUSED;
-}
-
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
-}
-
-static bool llama_is_bos_token(const llama_vocab & vocab, llama_token id) {
-    GGML_ASSERT(llama_is_control_token(vocab, id));
-    return id == vocab.special_bos_id;
-}
-
-static bool llama_is_eos_token(const llama_vocab & vocab, llama_token id ) {
-    GGML_ASSERT(llama_is_control_token(vocab, id));
-    return id == vocab.special_eos_id;
-}
-
-static bool llama_is_pad_token(const llama_vocab & vocab, llama_token id ) {
-    GGML_ASSERT(id < 0 || llama_is_control_token(vocab, id));
-    return id == vocab.special_pad_id;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
@@ -4800,9 +4782,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<std::thread> workers;
     std::mutex mutex;
 
+#ifdef GGML_USE_K_QUANTS
     auto use_more_bits = [] (int i_layer, int num_layers) -> bool {
         return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
     };
+#endif
 
     int idx = 0;
 
@@ -5649,15 +5633,19 @@ void llama_free(struct llama_context * ctx) {
 }
 
 int llama_n_vocab(const struct llama_context * ctx) {
-    return ctx->model.vocab.id_to_token.size();
+    return llama_model_n_vocab(&ctx->model);
 }
 
 int llama_n_ctx(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_ctx;
+    return llama_model_n_ctx(&ctx->model);
+}
+
+int llama_n_ctx_train(const struct llama_context * ctx) {
+    return llama_model_n_ctx_train(&ctx->model);
 }
 
 int llama_n_embd(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_embd;
+    return llama_model_n_embd(&ctx->model);
 }
 
 enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx) {
@@ -5670,6 +5658,10 @@ int llama_model_n_vocab(const struct llama_model * model) {
 
 int llama_model_n_ctx(const struct llama_model * model) {
     return model->hparams.n_ctx;
+}
+
+int llama_model_n_ctx_train(const struct llama_model * model) {
+    return model->hparams.n_ctx_train;
 }
 
 int llama_model_n_embd(const struct llama_model * model) {
@@ -5947,7 +5939,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         rng_ss.str(std::string(&rng_buf[0], rng_size));
         rng_ss >> ctx->rng;
 
-        GGML_ASSERT(rng_ss.fail() == false);
+        GGML_ASSERT(!rng_ss.fail());
     }
 
     // set logits

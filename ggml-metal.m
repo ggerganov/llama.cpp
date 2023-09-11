@@ -120,14 +120,17 @@ static NSString * const msl_library_source = @"see metal.metal";
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
     metal_printf("%s: allocating\n", __func__);
 
-    // Show all the Metal device instances in the system
-    NSArray * devices = MTLCopyAllDevices();
     id <MTLDevice> device;
     NSString * s;
+
+#if TARGET_OS_OSX
+    // Show all the Metal device instances in the system
+    NSArray * devices = MTLCopyAllDevices();
     for (device in devices) {
         s = [device name];
         metal_printf("%s: found device: %s\n", __func__, [s UTF8String]);
     }
+#endif
 
     // Pick and show default Metal device
     device = MTLCreateSystemDefaultDevice();
@@ -144,12 +147,20 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
     ctx->d_queue = dispatch_queue_create("llama.cpp", DISPATCH_QUEUE_CONCURRENT);
 
-#if 0
-    // compile from source string and show compile log
+#ifdef GGML_SWIFT
+    // load the default.metallib file
     {
         NSError * error = nil;
 
-        ctx->library = [ctx->device newLibraryWithSource:msl_library_source options:nil error:&error];
+        NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
+        NSString * llamaBundlePath = [bundle pathForResource:@"llama_llama" ofType:@"bundle"];
+        NSBundle * llamaBundle = [NSBundle bundleWithPath:llamaBundlePath];
+        NSString * libPath = [llamaBundle pathForResource:@"default" ofType:@"metallib"];
+        NSURL * libURL = [NSURL fileURLWithPath:libPath];
+
+        // Load the metallib file into a Metal library
+        ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
+
         if (error) {
             metal_printf("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
@@ -253,13 +264,15 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
-    metal_printf("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
     metal_printf("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
+#if TARGET_OS_OSX
+    metal_printf("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
     if (ctx->device.maxTransferRate != 0) {
         metal_printf("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
     } else {
         metal_printf("%s: maxTransferRate               = built-in GPU\n", __func__);
     }
+#endif
 
     return ctx;
 }
@@ -462,6 +475,7 @@ bool ggml_metal_add_buffer(
             }
         }
 
+#if TARGET_OS_OSX
         metal_printf(", (%8.2f / %8.2f)",
                 ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
                 ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
@@ -471,6 +485,9 @@ bool ggml_metal_add_buffer(
         } else {
             metal_printf("\n");
         }
+#else
+        metal_printf(", (%8.2f)\n", ctx->device.currentAllocatedSize / 1024.0 / 1024.0);
+#endif
     }
 
     return true;
