@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 # HF falcon--> gguf conversion
 
-import gguf
-import os
-import sys
-import struct
+from __future__ import annotations
+
+import argparse
 import json
+import os
+import struct
+import sys
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import torch
-import argparse
+from transformers import AutoTokenizer  # type: ignore[import]
 
-from typing import Any, List
-from pathlib import Path
-from transformers import AutoTokenizer
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+import gguf
+
 
 def bytes_to_unicode():
     # ref: https://github.com/openai/gpt-2/blob/master/src/encoder.py
@@ -49,10 +55,10 @@ def count_model_parts(dir_model: Path) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a Falcon model to a GGML compatible file")
-    parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
-    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.bin)")
-    parser.add_argument("ftype",     type=int, choices=[0, 1],   help="output format - use 0 for float32, 1 for float16", default = 1)
+    parser.add_argument("--vocab-only", action="store_true", help="extract only the vocab")
+    parser.add_argument("--outfile",    type=Path,           help="path to write to; default: based on input")
+    parser.add_argument("model",        type=Path,           help="directory containing model file, or model file itself (*.bin)")
+    parser.add_argument("ftype",        type=int,            help="output format - use 0 for float32, 1 for float16", choices=[0, 1], default = 1)
     return parser.parse_args()
 
 args = parse_args()
@@ -114,9 +120,9 @@ gguf_writer.add_file_type(ftype)
 
 print("gguf: get tokenizer metadata")
 
-tokens: List[bytearray] = []
-scores: List[float] = []
-toktypes: List[int] = []
+tokens: list[bytearray] = []
+scores: list[float] = []
+toktypes: list[int] = []
 
 tokenizer_json_file = dir_model / 'tokenizer.json'
 if not tokenizer_json_file.is_file():

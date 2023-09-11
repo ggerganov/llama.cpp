@@ -154,7 +154,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_TIMESTAMPS
-    #ifndef _WIN32
+    #ifndef _MSC_VER
         #define LOG_TIMESTAMP_FMT "[%" PRIu64 "] "
         #define LOG_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
     #else
@@ -167,7 +167,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 #endif
 
 #ifdef LOG_TEE_TIMESTAMPS
-    #ifndef _WIN32
+    #ifndef _MSC_VER
         #define LOG_TEE_TIMESTAMP_FMT "[%" PRIu64 "] "
         #define LOG_TEE_TIMESTAMP_VAL , (std::chrono::duration_cast<std::chrono::duration<std::uint64_t>>(std::chrono::system_clock::now().time_since_epoch())).count()
     #else
@@ -187,7 +187,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 //  #include "log.h"
 //
 #ifndef LOG_NO_FILE_LINE_FUNCTION
-    #ifndef _WIN32
+    #ifndef _MSC_VER
         #define LOG_FLF_FMT "[%24s:%5d][%24s] "
         #define LOG_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
     #else
@@ -200,7 +200,7 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
 #endif
 
 #ifdef LOG_TEE_FILE_LINE_FUNCTION
-    #ifndef _WIN32
+    #ifndef _MSC_VER
         #define LOG_TEE_FLF_FMT "[%24s:%5d][%24s] "
         #define LOG_TEE_FLF_VAL , __FILE__, __LINE__, __FUNCTION__
     #else
@@ -224,7 +224,7 @@ enum LogTriState
 // INTERNAL, DO NOT USE
 //  USE LOG() INSTEAD
 //
-#ifndef _WIN32
+#ifndef _MSC_VER
     #define LOG_IMPL(str, ...)                                                                                          \
     {                                                                                                               \
         if (LOG_TARGET != nullptr)                                                                                  \
@@ -247,7 +247,7 @@ enum LogTriState
 // INTERNAL, DO NOT USE
 //  USE LOG_TEE() INSTEAD
 //
-#ifndef _WIN32
+#ifndef _MSC_VER
     #define LOG_TEE_IMPL(str, ...)                                                                                                          \
     {                                                                                                                                   \
         if (LOG_TARGET != nullptr)                                                                                                      \
@@ -284,7 +284,7 @@ enum LogTriState
 // Main LOG macro.
 //  behaves like printf, and supports arguments the exact same way.
 //
-#ifndef _WIN32
+#ifndef _MSC_VER
     #define LOG(...) LOG_IMPL(__VA_ARGS__, "")
 #else
     #define LOG(str, ...) LOG_IMPL("%s" str, "", __VA_ARGS__, "")
@@ -298,14 +298,14 @@ enum LogTriState
 // Secondary target can be changed just like LOG_TARGET
 //  by defining LOG_TEE_TARGET
 //
-#ifndef _WIN32
+#ifndef _MSC_VER
     #define LOG_TEE(...) LOG_TEE_IMPL(__VA_ARGS__, "")
 #else
     #define LOG_TEE(str, ...) LOG_TEE_IMPL("%s" str, "", __VA_ARGS__, "")
 #endif
 
 // LOG macro variants with auto endline.
-#ifndef _WIN32
+#ifndef _MSC_VER
     #define LOGLN(...) LOG_IMPL(__VA_ARGS__, "\n")
     #define LOG_TEELN(...) LOG_TEE_IMPL(__VA_ARGS__, "\n")
 #else
@@ -341,14 +341,14 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
         }
     }
 
+    if (_disabled)
+    {
+        // Log is disabled
+        return nullptr;
+    }
+
     if (_initialized)
     {
-        if (_disabled)
-        {
-            // Log is disabled
-            return nullptr;
-        }
-
         // with fallback in case something went wrong
         return logfile ? logfile : stderr;
     }
@@ -461,7 +461,7 @@ inline void log_test()
     LOG("13 Hello World this time in yet new file?\n")
     log_set_target(log_filename_generator("llama_autonamed", "log"));
     LOG("14 Hello World in log with generated filename!\n")
-#ifdef _WIN32
+#ifdef _MSC_VER
     LOG_TEE("15 Hello msvc TEE without arguments\n")
     LOG_TEE("16 Hello msvc TEE with (%d)(%s) arguments\n", 1, "test")
     LOG_TEELN("17 Hello msvc TEELN without arguments\n")
@@ -513,16 +513,16 @@ inline bool log_param_pair_parse(bool check_but_dont_parse, const std::string & 
 
 inline void log_print_usage()
 {
-    fprintf(stdout, "log options:\n");
+    printf("log options:\n");
     /* format
-    fprintf(stdout, "  -h, --help            show this help message and exit\n");*/
+    printf("  -h, --help            show this help message and exit\n");*/
     /* spacing
-    fprintf(stdout, "__-param----------------Description\n");*/
-    fprintf(stdout, "  --log-test            Run simple logging test\n");
-    fprintf(stdout, "  --log-disable         Disable trace logs\n");
-    fprintf(stdout, "  --log-enable          Enable trace logs\n");
-    fprintf(stdout, "  --log-file            Specify a log filename (without extension)\n");
-    fprintf(stdout, "                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+    printf("__-param----------------Description\n");*/
+    printf("  --log-test            Run simple logging test\n");
+    printf("  --log-disable         Disable trace logs\n");
+    printf("  --log-enable          Enable trace logs\n");
+    printf("  --log-file            Specify a log filename (without extension)\n");
+    printf("                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)

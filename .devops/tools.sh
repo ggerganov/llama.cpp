@@ -7,15 +7,12 @@ arg1="$1"
 # Shift the arguments to remove the first one
 shift
 
-# Join the remaining arguments into a single string
-arg2="$@"
-
 if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
-    python3 ./convert.py "$arg2"
+    python3 ./convert.py "$@"
 elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
-    ./quantize "$arg2"
+    ./quantize "$@"
 elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
-    ./main "$arg2"
+    ./main "$@"
 elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
@@ -27,7 +24,7 @@ elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
         fi
     done
 elif [[ "$arg1" == '--server' || "$arg1" == '-s' ]]; then
-    ./server "$arg2"
+    ./server "$@"
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "

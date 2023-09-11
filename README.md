@@ -11,21 +11,9 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+- Local Falcon 180B inference on Mac Studio
 
-- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
-
-- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
-
-- A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
-
-  Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
-
-  ### Current `master` should be considered in Beta - expect some issues for a few days!
-
-  ### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
-
-  ### Issues with non-GGUF models will be considered with low priority!
+  https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
 
 ----
 
@@ -114,11 +102,13 @@ as the main playground for developing new features for the [ggml](https://github
 - Scala 3: [donderom/llm4s](https://github.com/donderom/llm4s)
 - Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
 - React Native: [mybigday/llama.rn](https://github.com/mybigday/llama.rn)
+- Java: [kherud/java-llama.cpp](https://github.com/kherud/java-llama.cpp)
 
 **UI:**
 
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
+- [withcatai/catai](https://github.com/withcatai/catai)
 
 ---
 
@@ -278,29 +268,11 @@ In order to build llama.cpp you have three different options.
 
 ### Metal Build
 
-Using Metal allows the computation to be executed on the GPU for Apple devices:
+On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
+To disable the Metal build at compile time use the `LLAMA_NO_METAL=1` flag or the `LLAMA_METAL=OFF` cmake option.
 
-- Using `make`:
-
-  ```bash
-  LLAMA_METAL=1 make
-  ```
-
-- Using `CMake`:
-
-    ```bash
-    mkdir build-metal
-    cd build-metal
-    cmake -DLLAMA_METAL=ON ..
-    cmake --build . --config Release
-    ```
-
-When built with Metal support, you can enable GPU inference with the `--gpu-layers|-ngl` command-line argument.
-Any value larger than 0 will offload the computation to the GPU. For example:
-
-```bash
-./main -m ./models/7B/ggml-model-q4_0.gguf -n 128 -ngl 1
-```
+When built with Metal support, you can explicitly disable GPU inference with the `--gpu-layers|-ngl 0` command-line
+argument.
 
 ### MPI Build
 
@@ -429,7 +401,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### hipBLAS
 
-  This provide BLAS acceleation on HIP supported GPU like AMD GPU.
+  This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
   You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
   Windows support is coming soon...
@@ -463,6 +435,8 @@ Building the program with BLAS support may lead to some performance improvements
   You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
     - For Ubuntu or Debian, the packages `opencl-headers`, `ocl-icd` may be needed.
 
+    - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
+
     - <details>
         <summary>Installing the OpenCL SDK from source</summary>
 
@@ -480,10 +454,27 @@ Building the program with BLAS support may lead to some performance improvements
         ```
       </details>
 
-  Installing CLBlast: it may be found in your operating system's packages.
+  ##### Installing CLBlast
+
+  Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
+
+  Alternatively, they may be built from source.
 
   - <details>
-    <summary>If not, then installing from source:</summary>
+    <summary>Windows:</summary>
+
+      ```cmd
+      set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
+      git clone https://github.com/CNugteren/CLBlast.git
+      mkdir CLBlast\build
+      cd CLBlast\build
+      cmake .. -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
+      cmake --build . --config Release
+      cmake --install . --prefix C:/CLBlast
+      ```
+
+  - <details>
+    <summary>Unix:</summary>
 
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
@@ -497,21 +488,32 @@ Building the program with BLAS support may lead to some performance improvements
       Where `/some/path` is where the built library will be installed (default is `/usr/local`).
     </details>
 
-  Building:
+  ##### Building Llama with CLBlast
 
   - Build with make:
     ```sh
     make LLAMA_CLBLAST=1
     ```
-  - CMake:
+  - CMake (Unix):
     ```sh
     mkdir build
     cd build
     cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
     cmake --build . --config Release
     ```
+  - CMake (Windows):
+    ```cmd
+    set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
+    git clone https://github.com/ggerganov/llama.cpp
+    cd llama.cpp
+    mkdir build
+    cd build
+    cmake .. -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
+    cmake --build . --config Release
+    cmake --install . --prefix C:/LlamaCPP
+    ```
 
-  Running:
+  ##### Running Llama with CLBlast
 
   The CLBlast build supports `--gpu-layers|-ngl` like the CUDA version does.
 
@@ -723,12 +725,12 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 
 - Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
 - Alternatively, if you want to save time and space, you can download already converted and quantized models from [TheBloke](https://huggingface.co/TheBloke), including:
-  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGML)
-  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGML)
-  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGML)
-  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
-  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
-  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
+  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGUF)
+  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGUF)
+  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGUF)
+  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGUF)
+  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGUF)
+  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGUF)
 
 ### Verifying the model files
 

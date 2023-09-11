@@ -13,6 +13,26 @@
 //
 #include <arm_neon.h>
 
+#if !defined(__aarch64__)
+inline static int32_t vaddvq_s16(int16x8_t v) {
+    return
+        (int32_t)vgetq_lane_s16(v, 0) + (int32_t)vgetq_lane_s16(v, 1) +
+        (int32_t)vgetq_lane_s16(v, 2) + (int32_t)vgetq_lane_s16(v, 3) +
+        (int32_t)vgetq_lane_s16(v, 4) + (int32_t)vgetq_lane_s16(v, 5) +
+        (int32_t)vgetq_lane_s16(v, 6) + (int32_t)vgetq_lane_s16(v, 7);
+}
+
+inline static int16x8_t vpaddq_s16(int16x8_t a, int16x8_t b) {
+    int16x4_t a0 = vpadd_s16(vget_low_s16(a), vget_high_s16(a));
+    int16x4_t b0 = vpadd_s16(vget_low_s16(b), vget_high_s16(b));
+    return vcombine_s16(a0, b0);
+}
+
+inline static int32_t vaddvq_s32(int32x4_t v) {
+    return vgetq_lane_s32(v, 0) + vgetq_lane_s32(v, 1) + vgetq_lane_s32(v, 2) + vgetq_lane_s32(v, 3);
+}
+#endif
+
 #else
 
 #ifdef __wasm_simd128__
@@ -63,7 +83,7 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         float ax = fabsf(x[i]);
         if (ax > amax) { amax = ax; max = x[i]; }
     }
-    if (!amax) { // all zero
+    if (amax < 1e-30f) { // all zero
         for (int i = 0; i < n; ++i) {
             L[i] = 0;
         }
@@ -183,13 +203,9 @@ static float make_qkx1_quants(int n, int nmax, const float * restrict x, uint8_t
         int ntry, float alpha) {
     float min = x[0];
     float max = x[0];
-    float sum_x = 0;
-    float sum_x2 = 0;
     for (int i = 1; i < n; ++i) {
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
-        sum_x += x[i];
-        sum_x2 += x[i]*x[i];
     }
     if (max == min) {
         for (int i = 0; i < n; ++i) L[i] = 0;
@@ -1070,6 +1086,13 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
 
         }
 
+        if (!max_abs_scale) {
+            memset(&y[i], 0, sizeof(block_q6_K));
+            y[i].d = ggml_fp32_to_fp16(0.f);
+            x += QK_K;
+            continue;
+        }
+
         float iscale = -128.f/max_scale;
         y[i].d = ggml_fp32_to_fp16(1/iscale);
         for (int ib = 0; ib < QK_K/16; ++ib) {
@@ -1306,7 +1329,9 @@ void ggml_vec_dot_q2_K_q8_K(const int n, float * restrict s, const void * restri
 
     const uint8x16_t m3 = vdupq_n_u8(0x3);
     const uint8x16_t m4 = vdupq_n_u8(0xF);
+#if defined(__ARM_FEATURE_DOTPROD)
     const int32x4_t  vzero = vdupq_n_s32(0);
+#endif
 
     int8x16x2_t q2bytes;
     uint8_t aux[16];
@@ -1612,7 +1637,9 @@ void ggml_vec_dot_q2_K_q8_K(const int n, float * restrict s, const void * restri
 #ifdef __ARM_NEON
 
     const uint8x16_t m3 = vdupq_n_u8(0x3);
+#if defined(__ARM_FEATURE_DOTPROD)
     const int32x4_t  vzero = vdupq_n_s32(0);
+#endif
 
     int8x16x4_t q2bytes;
 
@@ -2060,7 +2087,7 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
 
     __m256 acc = _mm256_setzero_ps();
 
-    uint32_t *aux;
+    const uint32_t *aux;
 
     for (int i = 0; i < nb; ++i) {
 
@@ -2070,7 +2097,7 @@ void ggml_vec_dot_q3_K_q8_K(const int n, float * restrict s, const void * restri
         const int8_t  * restrict q8 = y[i].qs;
 
         // Set up scales
-        aux = (uint32_t *)x[i].scales;
+        aux = (const uint32_t *)x[i].scales;
         __m128i scales128 = _mm_set_epi32(
                 ((aux[1] >> 4) & kmask2) | (((aux[2] >> 6) & kmask1) << 4),
                 ((aux[0] >> 4) & kmask2) | (((aux[2] >> 4) & kmask1) << 4),
@@ -2596,8 +2623,6 @@ void ggml_vec_dot_q4_K_q8_K(const int n, float * restrict s, const void * restri
         const uint8_t * restrict q4 = x[i].qs;
         const int8_t  * restrict q8 = y[i].qs;
 
-        //int32x4_t isum = mzero;
-
         int32_t sumi1 = 0;
         int32_t sumi2 = 0;
 
@@ -3096,9 +3121,11 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
 #ifdef __ARM_NEON
 
     const uint8x16_t m4b = vdupq_n_u8(0xf);
-    const int32x4_t mzero = vdupq_n_s32(0);
     const uint8x16_t mone = vdupq_n_u8(1);
     const uint8x16_t mtwo = vdupq_n_u8(2);
+#if defined(__ARM_FEATURE_DOTPROD)
+    const int32x4_t mzero = vdupq_n_s32(0);
+#endif
 
     int8x16x4_t q5bytes;
 
@@ -3441,8 +3468,10 @@ void ggml_vec_dot_q5_K_q8_K(const int n, float * restrict s, const void * restri
 #ifdef __ARM_NEON
 
     const uint8x16_t m4b = vdupq_n_u8(0xf);
-    const int32x4_t mzero = vdupq_n_s32(0);
     const uint8x16_t mh = vdupq_n_u8(16);
+#if defined(__ARM_FEATURE_DOTPROD)
+    const int32x4_t mzero = vdupq_n_s32(0);
+#endif
 
     int8x16x4_t q5bytes;
     uint8x16x4_t q5h;
@@ -3660,7 +3689,9 @@ void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restri
     float sum = 0;
 
     const uint8x16_t m4b = vdupq_n_u8(0xF);
+#if defined(__ARM_FEATURE_DOTPROD)
     const int32x4_t  vzero = vdupq_n_s32(0);
+#endif
     //const int8x16_t  m32s = vdupq_n_s8(32);
 
     const uint8x16_t mone = vdupq_n_u8(3);
@@ -4049,8 +4080,10 @@ void ggml_vec_dot_q6_K_q8_K(const int n, float * restrict s, const void * restri
     float sum = 0;
 
     const uint8x16_t m4b = vdupq_n_u8(0xF);
-    const int32x4_t  vzero = vdupq_n_s32(0);
     const int8x16_t  m32s = vdupq_n_s8(32);
+#if defined(__ARM_FEATURE_DOTPROD)
+    const int32x4_t  vzero = vdupq_n_s32(0);
+#endif
 
     const uint8x16_t mone = vdupq_n_u8(3);
 
