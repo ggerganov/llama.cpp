@@ -476,7 +476,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64"))
     message(STATUS "ARM detected")
     if (MSVC)
         # TODO: arm msvc?
@@ -578,10 +578,12 @@ endif()
 # RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
 # and on macOS its availability depends on enabling Darwin extensions
 # similarly on DragonFly, enabling BSD extensions is necessary
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    add_compile_definitions(_DARWIN_C_SOURCE)
-endif()
-if (CMAKE_SYSTEM_NAME MATCHES "DragonFly")
+if (
+    CMAKE_SYSTEM_NAME MATCHES "Darwin" OR
+    CMAKE_SYSTEM_NAME MATCHES "iOS" OR
+    CMAKE_SYSTEM_NAME MATCHES "tvOS" OR
+    CMAKE_SYSTEM_NAME MATCHES "DragonFly"
+)
     add_compile_definitions(_DARWIN_C_SOURCE)
 endif()
 
