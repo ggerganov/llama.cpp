@@ -4001,7 +4001,7 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "CROSS_ENTROPY_LOSS_BACK",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+static_assert(GGML_OP_COUNT == 69, "GGML_OP_COUNT != 69");
 
 static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "none",
@@ -4083,7 +4083,7 @@ static const char * GGML_OP_SYMBOL[GGML_OP_COUNT] = {
     "cross_entropy_loss_back(x,y)",
 };
 
-static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
+static_assert(GGML_OP_COUNT == 69, "GGML_OP_COUNT != 69");
 
 static_assert(GGML_OP_POOL_COUNT == 2, "GGML_OP_POOL_COUNT != 2");
 
@@ -6950,6 +6950,32 @@ struct ggml_tensor * ggml_soft_max_back_inplace(
         struct ggml_tensor  * a,
         struct ggml_tensor  * b) {
     return ggml_soft_max_back_impl(ctx, a, b, true);
+}
+
+struct ggml_tensor * ggml_scale_diag_mask_inf_softmax_inplace(
+        struct ggml_context * ctx,
+        float                 scale,
+        int                   n_past,
+        struct ggml_tensor  * a) {
+    //bool is_node = false;
+
+    //if (a->grad) {
+    //    is_node = true;
+    //}
+
+    struct ggml_tensor * result = ggml_view_tensor(ctx, a);
+
+    int32_t params[2];
+    memcpy(&params[0], &scale, sizeof(scale));
+    params[1] = n_past;
+    ggml_set_op_params(result, params, sizeof(params));
+
+    result->op   = GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX;
+    //result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->grad = NULL;
+    result->src[0] = a;
+
+    return result;
 }
 
 // ggml_rope
@@ -15993,6 +16019,11 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             {
                 // nop
             } break;
+        case GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX:
+            {
+                fprintf(stderr, "GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX not implemented\n");
+                GGML_ASSERT(false);
+            } break;
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
@@ -16861,6 +16892,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 // nop
             } break;
+        case GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX:
+            {
+                fprintf(stderr, "GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX not implemented\n");
+                GGML_ASSERT(false);
+            } break;
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
@@ -17697,6 +17733,11 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
             case GGML_OP_NONE:
                 {
                     n_tasks = 1;
+                } break;
+            case GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX:
+                {
+                    fprintf(stderr, "GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX not implemented\n");
+                    GGML_ASSERT(false);
                 } break;
             case GGML_OP_COUNT:
                 {

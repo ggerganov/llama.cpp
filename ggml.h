@@ -415,6 +415,8 @@ extern "C" {
         GGML_OP_CROSS_ENTROPY_LOSS,
         GGML_OP_CROSS_ENTROPY_LOSS_BACK,
 
+        GGML_OP_SCALE_DIAG_MASK_INF_SOFTMAX,
+
         GGML_OP_COUNT,
     };
 
@@ -1208,6 +1210,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_scale_diag_mask_inf_softmax_inplace(
+            struct ggml_context * ctx,
+            float                 scale,
+            int                   n_past,
+            struct ggml_tensor  * a);
 
     // rotary position embedding
     // if mode & 1 == 1, skip n_past elements

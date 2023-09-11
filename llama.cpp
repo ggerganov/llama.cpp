@@ -2316,6 +2316,8 @@ static struct ggml_cgraph * llm_build_llama(
     }
     ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
+    const float kq_scale = 1.0f/sqrtf(float(n_embd)/n_head);
+
     for (int il = 0; il < n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
 
@@ -2405,21 +2407,25 @@ static struct ggml_cgraph * llm_build_llama(
             offload_func_kq(KQ);
             ggml_set_name(KQ, "KQ");
 
-            // KQ_scaled = KQ / sqrt(n_embd_head)
-            // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
-            offload_func_kq(KQ_scaled);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
-
-            // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
-            offload_func_kq(KQ_masked);
-            ggml_set_name(KQ_masked, "KQ_masked");
-
-            // KQ = soft_max(KQ_masked)
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_scale_diag_mask_inf_softmax_inplace(ctx0, kq_scale, n_past, KQ);
             offload_func_v(KQ_soft_max);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
+
+            //// KQ_scaled = KQ / sqrt(n_embd_head)
+            //// KQ_scaled shape [n_past + N, N, n_head, 1]
+            //struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
+            //offload_func_kq(KQ_scaled);
+            //ggml_set_name(KQ_scaled, "KQ_scaled");
+
+            //// KQ_masked = mask_past(KQ_scaled)
+            //struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
+            //offload_func_kq(KQ_masked);
+            //ggml_set_name(KQ_masked, "KQ_masked");
+
+            //// KQ = soft_max(KQ_masked)
+            //struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            //offload_func_v(KQ_soft_max);
+            //ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -2647,6 +2653,8 @@ static struct ggml_cgraph * llm_build_falcon(
     }
     ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
+    const float kq_scale = 1.0f/sqrtf(float(n_embd)/n_head);
+
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * attn_norm;
 
@@ -2764,17 +2772,21 @@ static struct ggml_cgraph * llm_build_falcon(
             offload_func_kq(KQ);
             ggml_set_name(KQ, "KQ");
 
-            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
-            offload_func_kq(KQ_scaled);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
-
-            struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
-            offload_func_kq(KQ_masked);
-            ggml_set_name(KQ_masked, "KQ_masked");
-
-            struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            struct ggml_tensor * KQ_soft_max = ggml_scale_diag_mask_inf_softmax_inplace(ctx0, kq_scale, n_past, KQ);
             offload_func_v(KQ_soft_max);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
+
+            //struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
+            //offload_func_kq(KQ_scaled);
+            //ggml_set_name(KQ_scaled, "KQ_scaled");
+
+            //struct ggml_tensor * KQ_masked = ggml_diag_mask_inf_inplace(ctx0, KQ_scaled, n_past);
+            //offload_func_kq(KQ_masked);
+            //ggml_set_name(KQ_masked, "KQ_masked");
+
+            //struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
+            //offload_func_v(KQ_soft_max);
+            //ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,

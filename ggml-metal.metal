@@ -182,6 +182,48 @@ kernel void kernel_soft_max_4(
     }
 }
 
+kernel void kernel_scale_diag_inf_soft_max(
+        device const float * src0,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant   float   & scale,
+        constant   int     & n_past,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]]) {
+    const int64_t i03 = tgpig[2];
+    const int64_t i02 = tgpig[1];
+    const int64_t i01 = tgpig[0];
+
+    device const float * psrc0 = src0 + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
+    device       float * pdst  = dst  + i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
+
+    // parallel max
+    float lmax = psrc0[tpitg[0]];
+    for (int i00 = tpitg[0] + ntg[0]; i00 < ne00; i00 += ntg[0]) {
+        lmax = MAX(lmax, psrc0[i00]);
+    }
+    const float max = simd_max(lmax) * scale;
+
+    // parallel sum
+    float lsum = 0.0f;
+    for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {
+        const float exp_psrc0 = i00 > n_past + i01 ? 0.f : exp(scale*psrc0[i00] - max);
+        lsum += exp_psrc0;
+        // Remember the result of exp here. exp is expensive, so we really do not
+        // whish to compute it twice.
+        pdst[i00] = exp_psrc0;
+    }
+
+    const float sum = simd_sum(lsum);
+
+    for (int i00 = tpitg[0]; i00 < ne00; i00 += ntg[0]) {
+        pdst[i00] /= sum;
+    }
+}
+
 kernel void kernel_diag_mask_inf(
         device const float * src0,
         device       float * dst,
