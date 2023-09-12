@@ -335,7 +335,7 @@ maxhordectx = 1024
 maxhordelen = 256
 modelbusy = threading.Lock()
 defaultport = 5001
-KcppVersion = "1.43"
+KcppVersion = "1.44"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -1757,6 +1757,15 @@ def main(launch_args,start_server=True):
         horde_thread.daemon = True
         horde_thread.start()
 
+    #if post-ready script specified, execute it
+    if args.onready:
+        def onready_subprocess():
+            import subprocess
+            print("Starting Post-Load subprocess...")
+            subprocess.Popen(args.onready[0], shell=True)
+        timer_thread = threading.Timer(1, onready_subprocess) #1 second delay
+        timer_thread.start()
+
     if start_server:
         print(f"Please connect to custom endpoint at {epurl}")
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite))
@@ -1808,5 +1817,6 @@ if __name__ == '__main__':
     compatgroup.add_argument("--usecublas", help="Use CuBLAS/hipBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs.", nargs='*',metavar=('[lowvram|normal] [main GPU ID] [mmq]'), choices=['normal', 'lowvram', '0', '1', '2', '3', 'mmq'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
+    parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
 
     main(parser.parse_args(),start_server=True)
