@@ -40,6 +40,7 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired);
 bool ggml_vk_init_device(size_t memoryRequired, const std::string &device);
 bool ggml_vk_init_device(const ggml_vk_device &device);
 bool ggml_vk_init_device(int device);
+bool ggml_vk_free_device();
 bool ggml_vk_has_vulkan();
 bool ggml_vk_has_device();
 ggml_vk_device ggml_vk_current_device();

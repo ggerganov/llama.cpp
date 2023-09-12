@@ -45,6 +45,7 @@ class Algorithm
      */
     template<typename S = float, typename P = float>
     Algorithm(std::shared_ptr<vk::Device> device,
+              vk::PipelineCache *pipelineCache,
               vk::DescriptorPool *pool,
               const std::vector<std::shared_ptr<Tensor>>& tensors = {},
               const std::vector<uint32_t>& spirv = {},
@@ -55,6 +56,7 @@ class Algorithm
         KP_LOG_DEBUG("Kompute Algorithm Constructor with device");
 
         this->mDevice = device;
+        this->mPipelineCache = pipelineCache;
         this->mDescriptorPool = pool;
 
         if (tensors.size() && spirv.size()) {
@@ -310,8 +312,7 @@ class Algorithm
     bool mFreeShaderModule = false;
     std::shared_ptr<vk::PipelineLayout> mPipelineLayout;
     bool mFreePipelineLayout = false;
-    std::shared_ptr<vk::PipelineCache> mPipelineCache;
-    bool mFreePipelineCache = false;
+    vk::PipelineCache *mPipelineCache = nullptr;
     std::shared_ptr<vk::Pipeline> mPipeline;
     bool mFreePipeline = false;
 

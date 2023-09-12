@@ -3439,6 +3439,9 @@ void llama_free(struct llama_context * ctx) {
     ggml_vk_free(ctx->ctx_kompute);
 #endif
     delete ctx;
+#ifdef GGML_USE_KOMPUTE
+    ggml_vk_free_device();
+#endif
 }
 
 int llama_model_quantize(

@@ -88,15 +88,14 @@ Manager::destroy()
         this->mManagedSequences.clear();
     }
 
-    if (this->mManageResources && this->mManagedAlgorithms.size()) {
+    if (this->mManageResources && !this->mManagedAlgorithmsMap.empty()) {
         KP_LOG_DEBUG("Kompute Manager explicitly freeing algorithms");
-        for (const std::weak_ptr<Algorithm>& weakAlgorithm :
-             this->mManagedAlgorithms) {
-            if (std::shared_ptr<Algorithm> algorithm = weakAlgorithm.lock()) {
+        for (const auto& kv : this->mManagedAlgorithmsMap) {
+            if (std::shared_ptr<Algorithm> algorithm = kv.second) {
                 algorithm->destroy();
             }
         }
-        this->mManagedAlgorithms.clear();
+        this->mManagedAlgorithmsMap.clear();
     }
 
     if (this->mManageResources && this->mManagedTensors.size()) {
@@ -107,6 +106,18 @@ Manager::destroy()
             }
         }
         this->mManagedTensors.clear();
+    }
+
+    if (this->mPipelineCache) {
+        KP_LOG_DEBUG("Kompute Manager Destroying pipeline cache");
+        if (!this->mPipelineCache) {
+            KP_LOG_WARN("Kompute Manager Error requested to destroy "
+                        "pipeline cache but it is null");
+        }
+        this->mDevice->destroy(
+          *this->mPipelineCache,
+          (vk::Optional<const vk::AllocationCallbacks>)nullptr);
+        this->mPipelineCache = nullptr;
     }
 
     if (this->mFreeDevice) {
@@ -269,12 +280,14 @@ Manager::clear()
                          end(this->mManagedTensors),
                          [](std::weak_ptr<Tensor> t) { return t.expired(); }),
           end(this->mManagedTensors));
-        this->mManagedAlgorithms.erase(
-          std::remove_if(
-            begin(this->mManagedAlgorithms),
-            end(this->mManagedAlgorithms),
-            [](std::weak_ptr<Algorithm> t) { return t.expired(); }),
-          end(this->mManagedAlgorithms));
+        for (auto it = this->mManagedAlgorithmsMap.begin();
+             it != this->mManagedAlgorithmsMap.end();) {
+            if (it->second) {
+                it = this->mManagedAlgorithmsMap.erase(it);
+            } else {
+                ++it;
+            }
+        }
         this->mManagedSequences.erase(
           std::remove_if(begin(this->mManagedSequences),
                          end(this->mManagedSequences),
@@ -452,6 +465,12 @@ Manager::createDevice(const std::vector<uint32_t>& familyQueueIndices,
     }
 
     KP_LOG_DEBUG("Kompute Manager compute queue obtained");
+
+    mPipelineCache = std::make_shared<vk::PipelineCache>();
+    vk::PipelineCacheCreateInfo pipelineCacheInfo =
+        vk::PipelineCacheCreateInfo();
+    this->mDevice->createPipelineCache(
+        &pipelineCacheInfo, nullptr, mPipelineCache.get());
 }
 
 std::shared_ptr<Sequence>

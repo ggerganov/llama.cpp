@@ -39,6 +39,10 @@ class Manager
      */
     ~Manager();
 
+    bool hasInstance() const {
+        return this->mInstance.get();
+    }
+
     bool hasDevice() const {
         return this->mDevice.get();
     }
@@ -149,6 +153,7 @@ class Manager
      * @returns Shared pointer with initialised algorithm
      */
     std::shared_ptr<Algorithm> algorithm(
+      const std::string &name,
       vk::DescriptorPool *pool,
       const std::vector<std::shared_ptr<Tensor>>& tensors = {},
       const std::vector<uint32_t>& spirv = {},
@@ -157,7 +162,7 @@ class Manager
       const std::vector<float>& pushConstants = {})
     {
         return this->algorithm<>(
-          pool, tensors, spirv, workgroup, specializationConstants, pushConstants);
+          name, pool, tensors, spirv, workgroup, specializationConstants, pushConstants);
     }
 
     /**
@@ -176,6 +181,7 @@ class Manager
      */
     template<typename S = float, typename P = float>
     std::shared_ptr<Algorithm> algorithm(
+      const std::string &name,
       vk::DescriptorPool *pool,
       const std::vector<std::shared_ptr<Tensor>>& tensors,
       const std::vector<uint32_t>& spirv,
@@ -188,6 +194,7 @@ class Manager
 
         std::shared_ptr<Algorithm> algorithm{ new kp::Algorithm(
           this->mDevice,
+          mPipelineCache.get(),
           pool,
           tensors,
           spirv,
@@ -196,10 +203,22 @@ class Manager
           pushConstants) };
 
         if (this->mManageResources) {
-            this->mManagedAlgorithms.push_back(algorithm);
+            this->mManagedAlgorithmsMap.insert({name, algorithm});
         }
 
         return algorithm;
+    }
+
+    bool hasAlgorithm(const std::string &name) const {
+        return mManagedAlgorithmsMap.find(name) != mManagedAlgorithmsMap.end();
+    }
+
+    std::shared_ptr<Algorithm> getAlgorithm(const std::string &name) const {
+        auto it = mManagedAlgorithmsMap.find(name);
+        if (it != mManagedAlgorithmsMap.end()) {
+            return it->second;
+        }
+        return nullptr;
     }
 
     /**
@@ -237,6 +256,7 @@ class Manager
 
     std::shared_ptr<vk::Device> device() const { return mDevice; }
     std::shared_ptr<vk::PhysicalDevice> physicalDevice() const { return mPhysicalDevice; }
+    std::shared_ptr<vk::PipelineCache> pipelineCache() const { return mPipelineCache; }
 
   private:
     // -------------- OPTIONALLY OWNED RESOURCES
@@ -250,10 +270,11 @@ class Manager
     // -------------- ALWAYS OWNED RESOURCES
     std::vector<std::weak_ptr<Tensor>> mManagedTensors;
     std::vector<std::weak_ptr<Sequence>> mManagedSequences;
-    std::vector<std::weak_ptr<Algorithm>> mManagedAlgorithms;
+    std::unordered_map<std::string, std::shared_ptr<Algorithm>> mManagedAlgorithmsMap;
 
     std::vector<uint32_t> mComputeQueueFamilyIndices;
     std::vector<std::shared_ptr<vk::Queue>> mComputeQueues;
+    std::shared_ptr<vk::PipelineCache> mPipelineCache;
 
     bool mManageResources = false;
 
