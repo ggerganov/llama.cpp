@@ -1,8 +1,3 @@
-// Defines sigaction on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "embd-input.h"
 
 #include <cassert>
@@ -23,7 +18,7 @@ extern "C" {
 struct MyModel* create_mymodel(int argc, char ** argv) {
     gpt_params params;
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return nullptr;
     }
 

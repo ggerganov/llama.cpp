@@ -169,10 +169,6 @@ struct my_llama_hparams {
 
     float rope_freq_base  = 10000.0f;
     float rope_freq_scale = 1.0f;
-
-    bool operator!=(const my_llama_hparams& other) const {
-        return memcmp(this, &other, sizeof(my_llama_hparams));
-    }
 };
 
 struct my_llama_layer {
@@ -929,28 +925,6 @@ void get_example_targets_batch(struct llama_context * lctx, const int * train_sa
     }
 }
 
-
-#ifdef __GNUC__
-#ifdef __MINGW32__
-__attribute__((format(gnu_printf, 1, 2)))
-#else
-__attribute__((format(printf, 1, 2)))
-#endif
-#endif
-static std::string format(const char * fmt, ...) {
-    va_list ap, ap2;
-    va_start(ap, fmt);
-    va_copy(ap2, ap);
-    int size = vsnprintf(NULL, 0, fmt, ap);
-    GGML_ASSERT(size >= 0 && size < INT_MAX);
-    std::vector<char> buf(size + 1);
-    int size2 = vsnprintf(buf.data(), size + 1, fmt, ap2);
-    GGML_ASSERT(size2 == size);
-    va_end(ap2);
-    va_end(ap);
-    return std::string(buf.data(), size);
-}
-
 int tokenize_file(struct llama_context * lctx, const char * filename, std::vector<llama_token>& out) {
     FILE * fp = std::fopen(filename, "rb");
     if (fp == NULL) {
@@ -983,10 +957,10 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     out.resize(size+1);
 
     if (std::fread(buf.data(), size, 1, fp) != 1) {
-        throw std::runtime_error(std::string("unexpectedly reached end of file"));
+        die("unexpectedly reached end of file");
     }
     if (ferror(fp)) {
-        throw std::runtime_error(format("read error: %s", strerror(errno)));
+        die_fmt("fread failed: %s", strerror(errno));
     }
 
     buf[size] = '\0';
@@ -1047,11 +1021,11 @@ void shuffle_ints(int * begin, int * end) {
     if (kid >= 0) { \
         enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
         if (ktype != (type)) { \
-            throw std::runtime_error(format("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype))); \
+            die_fmt("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype)); \
         } \
         (dst) = func(ctx, kid); \
     } else if (req) { \
-        throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
+        die_fmt("key not found in model: %s", skey.c_str()); \
     } \
 }
 
@@ -1136,7 +1110,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         read_tensor_by_name(opt->lbfgs.lms,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S);
         read_tensor_by_name(opt->lbfgs.lmy,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y);
     } else {
-        throw std::runtime_error("unknown optimizer type\n");
+        die("unknown optimizer type");
     }
 }
 
@@ -1315,20 +1289,20 @@ void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vocab_mod
 
         const int token_idx = gguf_find_key(vctx, kv(LLM_KV_TOKENIZER_LIST));
         if (token_idx == -1) {
-            throw std::runtime_error("cannot find tokenizer vocab in model file\n");
+            die("cannot find tokenizer vocab in model file");
         }
         const uint32_t n_vocab = gguf_get_arr_n(vctx, token_idx);
 
         const int score_idx = gguf_find_key(vctx, kv(LLM_KV_TOKENIZER_SCORES));
         if (score_idx == -1) {
-            throw std::runtime_error("cannot find tokenizer scores in model file\n");
+            die("cannot find tokenizer scores in model file");
         }
 
         const float * scores = (const float * ) gguf_get_arr_data(vctx, score_idx);
 
         const int toktype_idx = gguf_find_key(vctx, kv(LLM_KV_TOKENIZER_TOKEN_TYPE));
         if (toktype_idx == -1) {
-            throw std::runtime_error("cannot find token type list in GGUF file\n");
+            die("cannot find token type list in GGUF file");
         }
 
         const int * toktypes = (const int * ) gguf_get_arr_data(vctx, toktype_idx);
@@ -1356,7 +1330,7 @@ void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vocab_mod
             // read and copy bpe merges
             const int merges_keyidx = gguf_find_key(vctx, kv(LLM_KV_TOKENIZER_MERGES));
             if (merges_keyidx == -1) {
-                throw std::runtime_error("cannot find tokenizer merges in model file\n");
+                die("cannot find tokenizer merges in model file");
             }
 
             const int n_merges = gguf_get_arr_n(vctx, merges_keyidx);
@@ -1988,7 +1962,7 @@ void opt_callback(void * vdata, float * sched) {
     float min_sched = params->adam_min_alpha / params->adam_alpha;
     *sched = min_sched + *sched * (1.0f - min_sched);
 
-    int impr_plot = std::isnan(opt->loss_after) ? 0 : -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
+    int impr_plot = std::isnan(opt->loss_after) ? 0 : -std::lround(1 + (opt->loss_before - opt->loss_after) * 10.0f);
     printf("%s: iter=%*d, sched=%f loss0=%f loss=%f | improvement: %*d>\n", __func__, 6, opt->iter, *sched, opt->loss_before, opt->loss_after, impr_plot, (int)0);
 
     if (data->shuffle_countdown < n_batch) {
