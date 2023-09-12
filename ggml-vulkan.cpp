@@ -123,21 +123,20 @@ static std::string ggml_vk_getVendorName(uint32_t vendorID) {
 }
 
 std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
-    std::vector<vk::PhysicalDevice> physicalDevices = mgr.listDevices();
-    uint32_t deviceCount = physicalDevices.size();
 
     std::vector<ggml_vk_device> results;
+    if (!mgr.hasVulkan())
+        return results;
+
+    std::vector<vk::PhysicalDevice> physicalDevices = mgr.listDevices();
+    uint32_t deviceCount = physicalDevices.size();
 
     if (deviceCount == 0)
         return results;
 
     for (uint32_t i = 0; i < deviceCount; i++) {
-        VkPhysicalDeviceProperties properties;
-        vkGetPhysicalDeviceProperties(physicalDevices.at(i), &properties);
-
-        VkPhysicalDeviceMemoryProperties memoryProperties;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevices.at(i), &memoryProperties);
-
+        VkPhysicalDeviceProperties properties = physicalDevices.at(i).getProperties();
+        VkPhysicalDeviceMemoryProperties memoryProperties = physicalDevices.at(i).getMemoryProperties();
         const uint32_t major = VK_VERSION_MAJOR(properties.apiVersion);
         const uint32_t minor = VK_VERSION_MINOR(properties.apiVersion);
         if (major < 1 || minor < 2)

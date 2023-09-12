@@ -158,6 +158,8 @@ else()
     find_package(fmt REQUIRED)
 endif()
 
+add_compile_definitions(VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
+
 # ####################################################
 # Preprocessor Macros
 # ####################################################

@@ -59,7 +59,7 @@ if(KOMPUTE_OPT_ANDROID_BUILD)
         kp_shader
         fmt::fmt-header-only)
 else()
-    target_link_libraries(kompute PUBLIC Vulkan::Vulkan
+    target_link_libraries(kompute PUBLIC
         kp_logger
         kp_shader
         fmt::fmt-header-only)
