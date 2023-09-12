@@ -1259,7 +1259,22 @@ void ggml_metal_graph_compute(
 
         MTLCommandBufferStatus status = (MTLCommandBufferStatus) [ctx->command_buffers[i] status];
         if (status != MTLCommandBufferStatusCompleted) {
-            metal_printf("%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            if (status == MTLCommandBufferStatusError) {
+                // Check Metal error code
+                NSError *error = (MTLCommandBufferError) [ctx->command_buffers[i] error];
+                int mtl_error_code = [error code];
+                if (([error domain] == MTLCommandBufferErrorDomain) && ([error code] == MTLCommandBufferErrorOutOfMemory)) {
+                    metal_printf("%s: command buffer %d failed with status MTLCommandBufferStatus.error (5) and error code \
+MTLCommandBufferError.outOfMemory (8)\n");
+                    printf("Metal ran out of memory. Maybe try a smaller context size, or a smaller (more coarsely quantized) model, \
+preferably one under the recommended max working set size, or else fall back to running on CPU only.\n");
+                } else {
+                    metal_printf("%s: command buffer %d failed with status MTLCommandBufferStatus.error (5) and error code %d\n",
+                                 __func__, i, mtl_error_code);
+                }
+            } else {
+                metal_printf("%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            }
             GGML_ASSERT(false);
         }
     }
