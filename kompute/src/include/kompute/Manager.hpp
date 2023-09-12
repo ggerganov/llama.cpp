@@ -43,6 +43,10 @@ class Manager
         return this->mDevice.get();
     }
 
+    bool hasVulkan() const {
+        return this->mDynamicLoader.get();
+    }
+
     /**
      * Initialize a device.
      *
@@ -240,6 +244,7 @@ class Manager
     bool mFreeInstance = false;
     std::shared_ptr<vk::PhysicalDevice> mPhysicalDevice = nullptr;
     std::shared_ptr<vk::Device> mDevice = nullptr;
+    std::shared_ptr<vk::DynamicLoader> mDynamicLoader = nullptr;
     bool mFreeDevice = false;
 
     // -------------- ALWAYS OWNED RESOURCES
