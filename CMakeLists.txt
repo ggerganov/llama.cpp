@@ -43,7 +43,7 @@ if (NOT MSVC)
 endif()
 
 # 3rd party libs
-option(LLAMA_CUBLAS                          "llama: use CUDA"                                OFF)
+option(LLAMA_CUBLAS                          "llama: use CUDA"                                ON)
 set(LLAMA_CUDA_MMQ_Y       "64" CACHE STRING "llama: y tile size for mmq CUDA kernels")
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_DMMV_Y       "1" CACHE STRING "llama: y block size for dmmv CUDA kernels")
@@ -68,6 +68,10 @@ find_package(Threads REQUIRED)
 add_compile_definitions(GGML_USE_K_QUANTS)
 add_compile_definitions(LOG_DISABLE_LOGS)
 
+set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
+set(GGML_V2_CUDA_SOURCES otherarch/ggml_v2-cuda.cu otherarch/ggml_v2-cuda.h)
+set(GGML_V2_LEGACY_CUDA_SOURCES otherarch/ggml_v2-cuda-legacy.cu otherarch/ggml_v2-cuda-legacy.h)
+
 if (LLAMA_CUBLAS)
     cmake_minimum_required(VERSION 3.17)
 
@@ -76,10 +80,6 @@ if (LLAMA_CUBLAS)
         message(STATUS "cuBLAS found")
 
         enable_language(CUDA)
-
-        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
-        set(GGML_V2_CUDA_SOURCES otherarch/ggml_v2-cuda.cu otherarch/ggml_v2-cuda.h)
-        set(GGML_V2_LEGACY_CUDA_SOURCES otherarch/ggml_v2-cuda-legacy.cu otherarch/ggml_v2-cuda-legacy.h)
 
         add_compile_definitions(GGML_USE_CUBLAS)
         #add_compile_definitions(GGML_CUDA_CUBLAS) #remove to not use cublas
