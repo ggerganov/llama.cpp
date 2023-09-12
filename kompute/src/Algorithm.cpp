@@ -58,18 +58,6 @@ Algorithm::destroy()
         this->mPipeline = nullptr;
     }
 
-    if (this->mFreePipelineCache && this->mPipelineCache) {
-        KP_LOG_DEBUG("Kompute Algorithm Destroying pipeline cache");
-        if (!this->mPipelineCache) {
-            KP_LOG_WARN("Kompute Algorithm Error requested to destroy "
-                        "pipeline cache but it is null");
-        }
-        this->mDevice->destroy(
-          *this->mPipelineCache,
-          (vk::Optional<const vk::AllocationCallbacks>)nullptr);
-        this->mPipelineCache = nullptr;
-    }
-
     if (this->mFreePipelineLayout && this->mPipelineLayout) {
         KP_LOG_DEBUG("Kompute Algorithm Destroying pipeline layout");
         if (!this->mPipelineLayout) {
@@ -317,16 +305,6 @@ Algorithm::createPipeline()
       "main",
       &specializationInfo);
 
-    static std::shared_ptr<vk::PipelineCache> globalPipelineCache = std::make_shared<vk::PipelineCache>();
-    if(!*globalPipelineCache) {
-       vk::PipelineCacheCreateInfo pipelineCacheInfo =
-         vk::PipelineCacheCreateInfo();
-      this->mPipelineCache = globalPipelineCache;
-      this->mFreePipelineCache = true;
-      this->mDevice->createPipelineCache(
-        &pipelineCacheInfo, nullptr, globalPipelineCache.get());
-    }
-
     vk::ComputePipelineCreateInfo pipelineInfo(vk::PipelineCreateFlags(),
                                                shaderStage,
                                                *this->mPipelineLayout,
@@ -335,7 +313,7 @@ Algorithm::createPipeline()
 
 #ifdef KOMPUTE_CREATE_PIPELINE_RESULT_VALUE
     vk::ResultValue<vk::Pipeline> pipelineResult =
-      this->mDevice->createComputePipeline(*globalPipelineCache, pipelineInfo);
+      this->mDevice->createComputePipeline(*mPipelineCache, pipelineInfo);
 
     if (pipelineResult.result != vk::Result::eSuccess) {
         throw std::runtime_error("Failed to create pipeline result: " +
@@ -347,7 +325,7 @@ Algorithm::createPipeline()
     this->mFreePipeline = true;
 #else
     vk::Pipeline pipeline =
-      this->mDevice->createComputePipeline(*globalPipelineCache, pipelineInfo)
+      this->mDevice->createComputePipeline(*mPipelineCache, pipelineInfo)
         .value;
     this->mPipeline = std::make_shared<vk::Pipeline>(pipeline);
     this->mFreePipeline = true;
