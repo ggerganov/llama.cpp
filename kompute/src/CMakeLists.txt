@@ -73,6 +73,8 @@ endif()
 
 if(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER)
     target_link_libraries(kompute PUBLIC Vulkan-Headers)
+else()
+    target_link_libraries(kompute PUBLIC Vulkan::Headers)
 endif()
 
 # ####################################################
