@@ -5247,7 +5247,8 @@ static cudaError_t ggml_cuda_cpy_tensor_2d(
     if (src->backend == GGML_BACKEND_CPU) {
         kind = cudaMemcpyHostToDevice;
         src_ptr = (char *) src->data;
-    } else if (src->backend == GGML_BACKEND_GPU) {
+    } else if (src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT) {
+        GGML_ASSERT(src->backend != GGML_BACKEND_GPU_SPLIT || (i1_low == 0 && i1_high == src->ne[1]));
         kind = cudaMemcpyDeviceToDevice;
         struct ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
         int id;
@@ -5289,9 +5290,7 @@ inline void ggml_cuda_op_add(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
-    GGML_ASSERT(src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
     const int64_t ne10 = src1->ne[0];
     const int64_t ne11 = src1->ne[1];
@@ -5631,10 +5630,15 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const int64_t ne0 = dst->ne[0];
     const int64_t row_diff = row_high - row_low;
 
-    const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src0->type);
-    size_t src0_as;
-    float * src0_ddf_i = (float *) ggml_cuda_pool_malloc(row_diff*ne00 * sizeof(float), &src0_as);
-    to_fp32_cuda(src0_dd_i, src0_ddf_i, row_diff*ne00, stream);
+    float * src0_ddq_as_f32;
+    size_t src0_as = 0;
+
+    if (src0->type != GGML_TYPE_F32) {
+        const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src0->type);
+        src0_ddq_as_f32 = (float *) ggml_cuda_pool_malloc(row_diff*ne00 * sizeof(float), &src0_as); // NOLINT
+        to_fp32_cuda(src0_dd_i, src0_ddq_as_f32, row_diff*ne00, stream);
+    }
+    const float * src0_ddf_i = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i : src0_ddq_as_f32;
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
@@ -5651,10 +5655,11 @@ inline void ggml_cuda_op_mul_mat_cublas(
                         src1_ddf_i,  ne10,
                 &beta,  dst_dd_i,   ldc));
 
-    ggml_cuda_pool_free(src0_ddf_i, src0_as);
+    if (src0_as > 0) {
+        ggml_cuda_pool_free(src0_ddq_as_f32, src0_as);
+    }
 
     (void) dst;
-    (void) src0_dd_i;
     (void) src1_ddq_i;
     (void) src1_padded_row_size;
 }
@@ -5793,7 +5798,6 @@ static void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * s
     const bool use_src1 = src1 != nullptr;
     const int64_t nrows1 = use_src1 ? ggml_nrows(src1) : 1;
 
-    GGML_ASSERT(             src0->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(!use_src1 || src1->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(              dst->backend != GGML_BACKEND_GPU_SPLIT);
 
@@ -5801,7 +5805,7 @@ static void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * s
     struct ggml_tensor_extra_gpu * src1_extra = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
     struct ggml_tensor_extra_gpu * dst_extra  =            (ggml_tensor_extra_gpu *)  dst->extra;
 
-    const bool src0_on_device =             src0->backend == GGML_BACKEND_GPU;
+    const bool src0_on_device =             src0->backend == GGML_BACKEND_GPU || src0->backend == GGML_BACKEND_GPU_SPLIT;
     const bool src1_on_device = use_src1 && src1->backend == GGML_BACKEND_GPU;
     const bool  dst_on_device =              dst->backend == GGML_BACKEND_GPU;
 
