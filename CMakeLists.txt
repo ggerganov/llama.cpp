@@ -185,7 +185,7 @@ if (LLAMA_ALL_WARNINGS)
         )
         if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             # g++ only
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+            set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
         endif()
     else()
         # todo : msvc
@@ -235,7 +235,7 @@ if (NOT MSVC)
     endif()
 endif()
 
-if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64"))
     message(STATUS "ARM detected")
     if (MSVC)
         # TODO: arm msvc?

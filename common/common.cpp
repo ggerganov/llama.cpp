@@ -57,7 +57,7 @@ int32_t get_num_physical_cores() {
             siblings.insert(line);
         }
     }
-    if (siblings.size() > 0) {
+    if (!siblings.empty()) {
         return static_cast<int32_t>(siblings.size());
     }
 #elif defined(__APPLE__) && defined(__MACH__)
@@ -773,7 +773,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         LOG("warming up the model with an empty run\n");
 
         const std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
-        llama_eval(lctx, tmp.data(), tmp.size(), 0, params.n_threads);
+        llama_eval(lctx, tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, params.n_threads);
         llama_reset_timings(lctx);
     }
 

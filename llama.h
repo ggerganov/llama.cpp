@@ -245,15 +245,17 @@ extern "C" {
     LLAMA_API bool llama_mmap_supported (void);
     LLAMA_API bool llama_mlock_supported(void);
 
-    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd     (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
 
-    LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx  (const struct llama_model * model);
-    LLAMA_API int llama_model_n_embd (const struct llama_model * model);
+    LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx      (const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
+    LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
