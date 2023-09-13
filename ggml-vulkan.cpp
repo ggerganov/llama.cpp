@@ -145,6 +145,8 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
     if (deviceCount == 0)
         return results;
 
+    std::unordered_map<std::string, size_t> count_by_name;
+
     for (uint32_t i = 0; i < deviceCount; i++) {
         VkPhysicalDeviceProperties properties = physicalDevices.at(i).getProperties();
         VkPhysicalDeviceMemoryProperties memoryProperties = physicalDevices.at(i).getMemoryProperties();
@@ -173,6 +175,10 @@ std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
         d.type = properties.deviceType;
         d.heapSize = heapSize;
         d.name = properties.deviceName;
+        size_t n_idx = ++count_by_name[d.name];
+        if (n_idx > 1) {
+            d.name += " (" + std::to_string(n_idx) + ")";
+        }
         d.vendor = ggml_vk_getVendorName(properties.vendorID);
         results.push_back(d);
     }
