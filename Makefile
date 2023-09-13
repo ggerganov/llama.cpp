@@ -182,7 +182,7 @@ MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
 MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
-ifeq '' '$(findstring clang++,$(CXX))'
+ifeq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# g++ only
 	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
