@@ -45,6 +45,8 @@
         postInstall = ''
           mv $out/bin/main $out/bin/llama
           mv $out/bin/server $out/bin/llama-server
+          mkdir $out/include
+          cp ${src}/llama.h $out/include/
         '';
         cmakeFlags = [ "-DLLAMA_BUILD_SERVER=ON" "-DLLAMA_MPI=ON" "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=ON" ];
       in
