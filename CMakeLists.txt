@@ -135,6 +135,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+include(CheckCXXCompilerFlag)
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
@@ -491,17 +492,21 @@ if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATC
         # add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) # MSVC doesn't support vdupq_n_f16, vld1q_f16, vst1q_f16
         add_compile_definitions(__aarch64__) # MSVC defines _M_ARM64 instead
     else()
+        check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
+        if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
+            add_compile_options(-mfp16-format=ieee)
+        endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
             # Raspberry Pi 1, Zero
-            add_compile_options(-mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access)
+            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
             # Raspberry Pi 2
-            add_compile_options(-mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations)
+            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
-            add_compile_options(-mfp16-format=ieee -mno-unaligned-access)
+            add_compile_options(-mno-unaligned-access)
         endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
