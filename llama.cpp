@@ -3121,10 +3121,9 @@ struct llm_tokenizer_spm {
         while (offs < text.size()) {
             llm_symbol sym;
             size_t len = utf8_len(text[offs]);
-            GGML_ASSERT(offs + len <= text.size());
             sym.text = text.c_str() + offs;
-            sym.n = len;
-            offs += len;
+            sym.n = std::min(len, text.size() - offs);
+            offs += sym.n;
             sym.prev = index - 1;
             sym.next = offs == text.size() ? -1 : index + 1;
             index++;
@@ -6218,7 +6217,7 @@ int llama_tokenize_with_model(
     auto res = llama_tokenize_internal(model->vocab, text, add_bos);
 
     if (n_max_tokens < (int) res.size()) {
-        LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
+        // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
         return -((int) res.size());
     }
 
