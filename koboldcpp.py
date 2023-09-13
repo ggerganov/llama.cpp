@@ -167,9 +167,10 @@ def init_library():
     abs_path = getabspath()
 
     #add all potential paths
-    os.add_dll_directory(dir_path)
-    os.add_dll_directory(abs_path)
-    os.add_dll_directory(os.getcwd())
+    if os.name=='nt':
+        os.add_dll_directory(dir_path)
+        os.add_dll_directory(abs_path)
+        os.add_dll_directory(os.getcwd())
     handle = ctypes.CDLL(os.path.join(dir_path, libname))
 
     handle.load_model.argtypes = [load_model_inputs]
