@@ -121,6 +121,8 @@ void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
 std::string gpt_random_prompt(std::mt19937 & rng);
 
+void process_escapes(std::string& input);
+
 //
 // Model utils
 //

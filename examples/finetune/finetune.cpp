@@ -1,6 +1,7 @@
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "llama.h"
+#include "common.h"
 #include <unordered_map>
 #include <vector>
 #include <cassert>
@@ -12,6 +13,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <string>
+#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -284,9 +286,16 @@ struct my_llama_lora {
 
     std::vector<my_llama_lora_layer> layers;
 
-    uint32_t train_its = 0;
-    uint32_t train_samples = 0;
-    uint32_t train_tokens = 0;
+    uint64_t train_its = 0;
+    uint64_t train_samples = 0;
+    uint64_t train_tokens = 0;
+    uint64_t train_epochs = 0;
+
+    size_t      shuffle_samples_hash; // fn, sample_count, *zip(sample_begins, sample_sizes)
+    std::string shuffle_rng_state_current;
+    std::string shuffle_rng_state_next;
+    size_t      shuffle_sample_count;
+    size_t      shuffle_next_sample;
 };
 
 // gguf constants
@@ -331,6 +340,12 @@ const char * LLM_KV_TRAINING_FILE_VERSION       = "training.file_version";
 const char * LLM_KV_TRAINING_ITERATION_COUNT    = "training.iteration_count";
 const char * LLM_KV_TRAINING_SAMPLE_COUNT       = "training.sample_count";
 const char * LLM_KV_TRAINING_TOKEN_COUNT        = "training.token_count";
+const char * LLM_KV_TRAINING_EPOCH_COUNT        = "training.epoch_count";
+const char * LLM_KV_TRAINING_SAMPLES_HASH       = "training.samples_hash";
+const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
+const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
+const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
+const char * LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE  = "training.shuffle.next_sample";
 
 const char * LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD  = "training.lora.rank.token_embd";
 const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM = "training.lora.rank.output_norm";
@@ -1004,25 +1019,20 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     return t36;
 }
 
-void get_example_targets(struct llama_context * lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_probs) {
-    int n_tokens = tokens_input->ne[0];
-    int n_vocab  = target_probs->ne[0];
+int get_example_targets_batch(
+        struct llama_context * lctx,
+        const size_t         * samples_begin,
+        const size_t         * samples_size,
+              size_t           samples_count,
+        const llama_token    * train_data,
+        size_t                 n_train_data,
+        int                    example_id,
+        struct ggml_tensor   * tokens_input,
+        struct ggml_tensor   * target_probs,
+        bool                   separate_with_eos,
+        bool                   separate_with_bos,
+        bool                   fill_with_next_samples) {
 
-    size_t sample = train_samples[example_id % n_train_samples];
-    GGML_ASSERT(sample+n_tokens-1 < n_train_data);
-
-    ggml_set_f32(target_probs, 0.0f);
-    ggml_set_i32_1d(tokens_input, 0, llama_token_bos(lctx));
-    for (int i=1; i<n_tokens+1; ++i) {
-        int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
-        ggml_set_f32_nd(target_probs,  token, i-1, 0, 0, +1.0f);
-        if (i<n_tokens) {
-            ggml_set_i32_1d(tokens_input, i, token);
-        }
-    }
-}
-
-void get_example_targets_batch(struct llama_context* lctx, const int * train_samples, size_t n_train_samples, const llama_token * train_data, size_t n_train_data, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * target_probs) {
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_probs->n_dims  == 3);
     int n_vocab  = target_probs->ne[0];
@@ -1032,24 +1042,60 @@ void get_example_targets_batch(struct llama_context* lctx, const int * train_sam
     GGML_ASSERT(n_tokens == target_probs->ne[1]);
     GGML_ASSERT(n_batch  == target_probs->ne[2]);
 
+    int used_samples = 0;
+
     ggml_set_f32(target_probs, 0.0f);
+    int bos = llama_token_bos(lctx);
+    int eos = llama_token_eos(lctx);
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
-        size_t sample_idx = (example_id*n_batch + k) % n_train_samples;
-        size_t sample = train_samples[sample_idx];
-        // printf("%s: sample_idx=%zu sample=%zu\n", __func__, sample_idx, sample);
-        GGML_ASSERT(sample+n_tokens-1 < n_train_data);
+        size_t sample_offs  = 0;
+        size_t sample_idx   = (example_id + used_samples) % samples_count;
+        size_t sample_begin = samples_begin[sample_idx];
+        size_t sample_size  = samples_size[sample_idx];
+        ++used_samples;
 
-        ggml_set_i32_nd(tokens_input, 0, k, 0, 0, llama_token_bos(lctx));
-        for (int i=1; i<n_tokens+1; ++i) {
-            int token = clamp(train_data[sample+i-1], 0, n_vocab-1);
-            ggml_set_f32_nd(target_probs,  token, i-1, k, 0, +1.0f);
-            if (i<n_tokens) {
-                ggml_set_i32_nd(tokens_input, i, k, 0, 0, token);
+        // printf("%s: sample_idx=%zu sample=%zu\n", __func__, sample_idx, sample);
+        GGML_ASSERT(sample_begin+sample_size-1 < n_train_data);
+
+        ggml_set_i32_nd(tokens_input, 0, k, 0, 0, bos);
+        bool sample_separation_eos = !separate_with_eos;
+        bool sample_separation_bos = !separate_with_bos;
+        for (int i=0; i<n_tokens; ++i) {
+            int token = eos;
+            if (sample_offs >= sample_size && fill_with_next_samples) {
+                if (!sample_separation_eos) {
+                    // insert eos token to separate samples
+                    sample_separation_eos = true;
+                } else if (!sample_separation_bos) {
+                    // insert bos token to separate samples
+                    sample_separation_bos = true;
+                    token = bos;
+                } else {
+                    // sample separation is done, continue with next sample
+                    sample_separation_eos = !separate_with_eos;
+                    sample_separation_bos = !separate_with_bos;
+                    sample_offs  = 0;
+                    sample_idx   = (example_id + used_samples) % samples_count;
+                    sample_begin = samples_begin[sample_idx];
+                    sample_size  = samples_size[sample_idx];
+                    ++used_samples;
+                }
+            }
+            // note: no else-if here
+            if (sample_offs < sample_size) {
+                token = clamp(train_data[sample_begin+sample_offs], 0, n_vocab-1);
+                ++sample_offs;
+            }
+            ggml_set_f32_nd(target_probs,  token, i, k, 0, +1.0f);
+            if (i+1<n_tokens) {
+                ggml_set_i32_nd(tokens_input, i+1, k, 0, 0, token);
             }
         }
     }
+
+    return used_samples;
 }
 
 #ifdef __GNUC__
@@ -1156,8 +1202,53 @@ struct llama_file {
     }
 };
 
-int tokenize_file(struct llama_context * lctx, const char * filename, std::vector<llama_token>& out) {
+static size_t utf8_len(char src) {
+    const size_t lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
+    uint8_t highbits = static_cast<uint8_t>(src) >> 4;
+    return lookup[highbits];
+}
+
+// mark each byte with its utf8 unit number.
+// returns the number of utf8 characters.
+// e.g. when bytes == '\x61\xD0\xB0\x62',
+// then utf8_units will become [0,0,1,0]
+// utf8_nunits will become [1,2,2,1] and 3 is returned.
+// bytes where utf8_units is zero, are the begin of an utf8 character.
+static size_t mark_utf8_units(const char* bytes, int * utf8_units, int * utf8_nunits, size_t count) {
+    size_t offs = 0;
+    size_t count_utf8 = 0;
+    while(offs < count) {
+        size_t len = utf8_len(bytes[offs]);
+        for (size_t i=0; i<len; ++i) {
+            utf8_units[offs+i] = i;
+            utf8_nunits[offs+i] = len;
+        }
+        offs += len;
+        ++count_utf8;
+    }
+    return count_utf8;
+}
+
+size_t tokenize_file(
+        struct llama_context     * lctx,
+        const char               * filename,
+        const std::string        & sample_start,
+        bool                       include_sample_start,
+        bool                       overlapping_samples,
+        unsigned                   context_length,
+        std::vector<llama_token> & out_tokens,
+        std::vector<size_t>      & out_samples_begin,
+        std::vector<size_t>      & out_samples_size) {
     struct llama_file f(filename, "rb");
+
+    if (f.size == 0) {
+        out_tokens.clear();
+        out_samples_begin.clear();
+        out_samples_size.clear();
+        printf("%s: warning: empty or not existing training data file '%s'\n",
+            __func__, filename);
+        return out_tokens.size();
+    }
 
     std::vector<char> buf;
     buf.resize(f.size+1);
@@ -1165,52 +1256,224 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
     f.read_raw(buf.data(), f.size);
     buf[f.size] = '\0';
 
-    out.resize(buf.size());
+    std::vector<int> utf8_units;
+    std::vector<int> utf8_nunits;
+    utf8_units.resize(buf.size());
+    utf8_nunits.resize(buf.size());
+    size_t n_utf8_chars = mark_utf8_units(buf.data(), utf8_units.data(), utf8_nunits.data(), buf.size());
 
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), buf.size(), false);
-    if (n_tokens >= 0) {
-        out.resize(n_tokens);
-    }
+    if (sample_start.size() == 0) {
+        // tokenize all data at once
+        out_tokens.resize(buf.size());
 
-    bool verify = false;
-    if (verify) {
-        const char * in  = buf.data();
-        const char * end = buf.data() + buf.size();
-        for (int i = 0; i < (int) out.size(); ++i) {
-            const char * s = llama_token_get_text(lctx, out[i]);
-            int len = strlen(s);
-            if (in >= end) {
-                printf("%s: unexpected end of original text.\n", __func__);
-                break;
+        int n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), buf.size(), false);
+        if (n_tokens < 0) {
+            out_tokens.resize(-n_tokens);
+            n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), buf.size(), false);
+        }
+        if (n_tokens >= 0) {
+            out_tokens.resize(n_tokens);
+        }
+
+        // generate sample starts at all token positions
+        out_samples_begin.clear();
+        out_samples_begin.push_back(0);
+        out_samples_size.push_back(std::min((size_t) context_length, out_tokens.size()));
+        size_t end = (out_tokens.size() >= context_length) ? (out_tokens.size() - context_length) : 0;
+        for (size_t sample_begin = 1; sample_begin < end; ++sample_begin) {
+            out_samples_begin.push_back(sample_begin);
+            out_samples_size.push_back(context_length);
+        }
+    } else {
+        // split data into samples and tokenize each sample
+        std::string data_str(buf.data(), buf.size()-1);
+        out_samples_begin.clear();
+        out_samples_size.clear();
+        out_tokens.clear();
+
+        // find all positions of pattern sample_start
+        size_t sample_begin = data_str.find(sample_start, 0);
+        while (sample_begin != std::string::npos) {
+            out_samples_begin.push_back(sample_begin);
+            const size_t search_start = sample_begin + sample_start.size();
+            sample_begin = data_str.find(sample_start, search_start);
+        }
+        if (out_samples_begin.size() == 0) {
+            printf("%s: warning: sample start pattern '%s' not found. inserting single sample at data begin\n",
+                __func__, sample_start.c_str());
+            out_samples_begin.push_back(0);
+        }
+
+        out_samples_size.resize(out_samples_begin.size(), 0);
+
+        std::vector<char>        buf_sample;
+        std::vector<llama_token> tok_sample;
+
+        const size_t sample_begin_offset = (include_sample_start ? 0 : sample_start.size());
+        size_t found_too_big_sample   = 0;
+        size_t found_too_small_sample = 0;
+        size_t found_empty_sample     = 0;
+        size_t found_min_sample_size  = SIZE_MAX;
+        size_t found_max_sample_size  = 0;
+
+        size_t max_token_text_size = 0;
+        int n_vocab = llama_n_vocab(lctx);
+        for (llama_token token=0; token < n_vocab; ++token) {
+            max_token_text_size = std::max(
+                max_token_text_size,
+                strlen(llama_token_get_text(lctx, token)));
+        }
+
+        // upper bound of context byte length.
+        // strings with this byte length should always tokenize to at least context_length tokens.
+        size_t context_byte_len = max_token_text_size*context_length;
+
+        for (unsigned i=0; i<out_samples_begin.size(); ++i) {
+            // determine sample begin and end from pattern positions
+            size_t sample_begin = out_samples_begin[i] + sample_begin_offset;
+            size_t sample_end   = overlapping_samples
+                                    ? std::min(
+                                        data_str.size(),
+                                        sample_begin + context_byte_len)
+                                    : (i+1 < out_samples_begin.size()
+                                        ? out_samples_begin[i+1]
+                                        : data_str.size());
+            if (utf8_units[sample_end] > 0) {
+                // sample end is in the middle of an utf8 character.
+                // advance sample_end to the begin of the next utf8 character.
+                sample_end += utf8_nunits[sample_end] - utf8_units[sample_end];
             }
-            const bool matches = (strncmp(in, s, len) == 0);
-            if (matches) {
-                in += len;
+            size_t sample_size = sample_end - sample_begin;
+            if (sample_size == 0) {
+                ++found_empty_sample;
+            }
+
+            if (sample_size > 0) {
+                // llama_tokenize expects zero terminated string,
+                // copy sample into buffer and zero terminate it.
+                buf_sample.resize(sample_size+1);
+                memcpy(buf_sample.data(), data_str.data() + sample_begin, sample_size);
+                buf_sample[sample_size] = '\0';
+
+                // printf("sample: '%s'\n", buf_sample.data());
+
+                // tokenize the sample
+                tok_sample.resize(sample_size);
+                int n_tokens = llama_tokenize(lctx,
+                    buf_sample.data(),
+                    tok_sample.data(),
+                    sample_size, false);
+                if (n_tokens < 0) {
+                    tok_sample.resize(-n_tokens);
+                    n_tokens = llama_tokenize(lctx,
+                        buf_sample.data(),
+                        tok_sample.data(),
+                        sample_size, false);
+                    GGML_ASSERT(n_tokens >= 0);
+                }
+                GGML_ASSERT(n_tokens <= tok_sample.size());
+
+                if ((size_t) n_tokens > context_length) {
+                    ++found_too_big_sample;
+                } else if ((size_t) n_tokens < context_length) {
+                    ++found_too_small_sample;
+                }
+                found_max_sample_size = std::max(found_max_sample_size, (size_t) n_tokens);
+                found_min_sample_size = std::min(found_min_sample_size, (size_t) n_tokens);
+
+                // write out tokens, start and size of sample
+                // overwrite the string start position with the token start position
+                out_samples_begin[i] = out_tokens.size();
+                out_samples_size[i] = (size_t) n_tokens;
+                out_tokens.insert(out_tokens.end(), tok_sample.begin(), tok_sample.begin() + n_tokens);
             } else {
-                printf("%s: mismatch: expected '%s', but got '%s'\n", __func__, std::string(in, len).c_str(), s);
+                out_samples_begin[i] = out_tokens.size();
+                out_samples_size[i] = 0;
             }
+
+        }
+        if (found_too_big_sample > 0) {
+            printf("%s: warning: found %zu samples (max length %zu) that exceed context length of %u. samples will be cut off.\n",
+                __func__, found_too_big_sample, found_max_sample_size, context_length);
+        }
+
+        if (found_too_small_sample > 0) {
+            printf("%s: warning: found %zu samples (min length %zu) that are shorter than context length of %u.\n",
+                __func__, found_too_small_sample, found_min_sample_size, context_length);
+        }
+
+        if (found_empty_sample) {
+            printf("%s: warning: found %zu empty samples.\n",
+                __func__, found_empty_sample);
         }
     }
+    printf("%s: total number of samples: %zu\n",
+        __func__, out_samples_begin.size());
 
-    return n_tokens;
+    GGML_ASSERT(out_samples_begin.size() == out_samples_size.size());
+
+    return out_tokens.size();
 }
 
-void shuffle_ints(int * begin, int * end) {
-    if (end <= begin) return;
-    int max=begin[0];
-    for (int i=1; i<end-begin; ++i) {
-        if (begin[i] > max) {
-            max = begin[i];
+void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
+    std::stringstream s_rng_state;
+    s_rng_state.imbue(std::locale::classic());
+    s_rng_state.exceptions(std::stringstream::eofbit | std::stringstream::failbit | std::stringstream::badbit);
+    s_rng_state.str(rng_state);
+    s_rng_state >> rng;
+}
+
+std::string mt19937_get_state(const std::mt19937& rng) {
+    std::stringstream s_rng_state;
+    s_rng_state.imbue(std::locale::classic());
+    s_rng_state.exceptions(std::stringstream::badbit);
+    s_rng_state << rng;
+    return s_rng_state.str();
+}
+
+std::string mt19937_seed_to_state(unsigned seed) {
+    std::mt19937 rng(seed);
+    return mt19937_get_state(rng);
+}
+
+std::string shuffle_samples(const std::string& rng_state, size_t * begins, size_t * sizes, size_t count) {
+    if (count == 0) return rng_state;
+
+    std::mt19937 rng;
+    mt19937_set_state(rng, rng_state);
+
+    // sort indices by random value for each index
+    std::vector<size_t> idcs;
+    {
+        std::vector<unsigned> rnd;
+        idcs.resize(count);
+        rnd.resize(count);
+        for (unsigned i=0; i<count; ++i) {
+            idcs[i] = i;
+            rnd[i]  = rng();
         }
+
+        std::sort(idcs.begin(), idcs.end(), [&rnd](size_t a, size_t b){
+            // stable sort for reproducibility
+            return (rnd[a] == rnd[b]) ? (a < b) : (rnd[a] < rnd[b]);
+        });
     }
-    std::vector<float> vals;
-    vals.resize(max+1);
-    for (int i=0; i<max+1; ++i) {
-       vals[i] = frand();
+
+    // reorder begins and sizes by sorted indices
+    std::vector<size_t> reordered;
+    reordered.resize(count);
+
+    for (unsigned i=0; i<count; ++i) {
+        reordered[i] = begins[idcs[i]];
     }
-    std::sort(begin, end, [&vals](int a, int b){
-       return vals.at(a) < vals.at(b);
-    });
+    memcpy(begins, reordered.data(), sizeof(*begins)*reordered.size());
+
+    for (unsigned i=0; i<count; ++i) {
+        reordered[i] = sizes[idcs[i]];
+    }
+    memcpy(sizes, reordered.data(), sizeof(*sizes)*reordered.size());
+
+    return mt19937_get_state(rng);
 }
 
 std::string replace_str(const char * s, const char * needle, const char * replacement) {
@@ -1572,15 +1835,30 @@ void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context *
 
     uint32_t file_version;
     GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
-    GGML_ASSERT(file_version == 0);
+    GGML_ASSERT(file_version <= 1);
 
     std::string train_type = LLM_KV_TRAINING_TYPE_FINETUNE_LORA;
     GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
     GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
 
-    GGUF_GET_KEY(fctx, lora->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
-    GGUF_GET_KEY(fctx, lora->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
-    GGUF_GET_KEY(fctx, lora->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
+    if (file_version == 0) {
+
+        GGUF_GET_KEY(fctx, lora->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
+        GGUF_GET_KEY(fctx, lora->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, lora->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
+
+    } else if (file_version == 1) {
+
+        GGUF_GET_KEY(fctx, lora->train_its,     gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_ITERATION_COUNT);
+        GGUF_GET_KEY(fctx, lora->train_samples, gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, lora->train_tokens,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_TOKEN_COUNT);
+        GGUF_GET_KEY(fctx, lora->train_epochs,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_EPOCH_COUNT);
+
+        GGUF_GET_KEY(fctx, lora->shuffle_samples_hash,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH);
+        GGUF_GET_KEY(fctx, lora->shuffle_rng_state_current, gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_SHUFFLE_RNG_STATE);
+        GGUF_GET_KEY(fctx, lora->shuffle_sample_count,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, lora->shuffle_next_sample,       gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE);
+    }
 
     load_opt_context_gguf(fctx, f_ggml_ctx, opt);
 }
@@ -1588,11 +1866,17 @@ void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context *
 void save_checkpoint_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
     save_llama_lora_gguf(fctx, model, lora);
 
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    0);
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    1);
     gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_ITERATION_COUNT, lora->train_its);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    lora->train_samples);
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     lora->train_tokens);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_ITERATION_COUNT, lora->train_its);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    lora->train_samples);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     lora->train_tokens);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_EPOCH_COUNT,     lora->train_epochs);
+
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH, (uint64_t) lora->shuffle_samples_hash);
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_SHUFFLE_RNG_STATE,    lora->shuffle_rng_state_current.c_str());
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT, (uint64_t) lora->shuffle_sample_count);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE,  (uint64_t) lora->shuffle_next_sample);
 
     save_opt_context_gguf(fctx, opt);
 }
@@ -1792,10 +2076,19 @@ struct train_params {
     bool custom_n_rank_norm;
     bool custom_n_rank_output;
 
-    bool samples_start_after_nl;
     bool use_adam;
     bool use_flash;
     bool use_checkpointing;
+
+    std::string sample_start;
+    bool include_sample_start;
+    bool escape;
+    bool overlapping_samples;
+    bool fill_with_next_samples;
+    bool separate_with_eos;
+    bool separate_with_bos;
+
+    bool force_reshuffle;
 
     // only adam
     int   warmup;
@@ -1880,10 +2173,18 @@ struct train_params get_default_train_params() {
     params.custom_n_rank_norm           = false;
     params.custom_n_rank_output         = false;
 
-    params.samples_start_after_nl = false;
     params.use_adam               = true;
     params.use_flash              = true;
     params.use_checkpointing      = true;
+
+    params.sample_start           = "";
+    params.include_sample_start   = false;
+    params.escape                 = false;
+    params.overlapping_samples    = false;
+    params.fill_with_next_samples = false;
+    params.separate_with_eos      = false;
+    params.separate_with_bos      = true;
+    params.force_reshuffle        = false;
 
     params.opt_past               = 0;
     params.opt_delta              = 1e-5f;
@@ -1945,8 +2246,16 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "  --rank-w1 N                LORA rank for w1 tensor, overrides default rank.\n");
     fprintf(stderr, "  --rank-w2 N                LORA rank for w2 tensor, overrides default rank.\n");
     fprintf(stderr, "  --rank-w3 N                LORA rank for w3 tensor, overrides default rank.\n");
-    fprintf(stderr, "  --samples-after-nl         Training samples start after newlines. (default %s)\n", params->samples_start_after_nl ? "on" : "off");
-    fprintf(stderr, "  --use-lbfgs                Use LBFGS optimizer instead of default Adam\n");
+    fprintf(stderr, "  --sample-start STR         Sets the starting point for samples after the specified pattern. If empty use every token position as sample start. (default '%s')\n", params->sample_start.c_str());
+    fprintf(stderr, "  --include-sample-start     Include the sample start in the samples. (default off)\n");
+    fprintf(stderr, "  --escape                   process sample start escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
+    fprintf(stderr, "  --overlapping-samples      Samples my overlap, will include sample-start of second and following samples. When off, samples will end at begin of next sample. (default off)\n");
+    fprintf(stderr, "  --fill-with-next-samples   Samples shorter than context length will be followed by the next (shuffled) samples. (default off)\n");
+    fprintf(stderr, "  --separate-with-eos        When fill-with-next-samples, insert end-of-sequence token between samples.%s\n", params->separate_with_eos ? " (default)" : "");
+    fprintf(stderr, "  --separate-with-bos        When fill-with-next-samples, insert begin-of-sequence token between samples.%s\n", params->separate_with_bos ? " (default)" : "");
+    fprintf(stderr, "  --no-separate-with-eos     When fill-with-next-samples, don't insert end-of-sequence token between samples.%s\n", !params->separate_with_eos ? " (default)" : "");
+    fprintf(stderr, "  --no-separate-with-bos     When fill-with-next-samples, don't insert begin-of-sequence token between samples.%s\n", !params->separate_with_bos ? " (default)" : "");
+    fprintf(stderr, "  --force-reshuffle          Force a reshuffling of data at program start, otherwise the shuffling of loaded checkpoint is resumed.\n");
     fprintf(stderr, "  --use-adam                 Use Adam optimizer (default)\n");
     fprintf(stderr, "  --no-flash                 Don't use flash attention \n");
     fprintf(stderr, "  --use-flash                Use flash attention (default)\n");
@@ -2184,8 +2493,30 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
             }
             params->n_rank_w3 = std::stoi(argv[i]);
             params->custom_n_rank_w3 = true;
-        } else if (arg == "--samples-after-nl") {
-            params->samples_start_after_nl = true;
+        } else if (arg == "--sample-start") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params->sample_start = std::string(argv[i]);
+        } else if (arg == "--escape") {
+            params->escape = true;
+        } else if (arg == "--include-sample-start") {
+            params->include_sample_start = true;
+        } else if (arg == "--overlapping-samples") {
+            params->overlapping_samples = true;
+        } else if (arg == "--fill-with-next-samples") {
+            params->fill_with_next_samples = true;
+        } else if (arg == "--separate-with-eos") {
+            params->separate_with_eos = true;
+        } else if (arg == "--separate-with-bos") {
+            params->separate_with_bos = true;
+        } else if (arg == "--no-separate-with-eos") {
+            params->separate_with_eos = false;
+        } else if (arg == "--no-separate-with-bos") {
+            params->separate_with_bos = false;
+        } else if (arg == "--force-reshuffle") {
+            params->force_reshuffle = true;
         } else if (arg == "--use-lbfgs") {
             params->use_adam = false;
         } else if (arg == "--use-adam") {
@@ -2318,7 +2649,9 @@ bool train_params_parse(int argc, char ** argv, struct train_params * params) {
         train_print_usage(argc, argv, &default_params);
         exit(1);
     }
-
+    if (params->escape) {
+        process_escapes(params->sample_start);
+    }
     return true;
 }
 
@@ -2331,9 +2664,9 @@ struct opt_callback_data {
     int                       last_save_iter;
     llama_token *             tokens_data;
     size_t                    tokens_size;
-    int *                     samples_data;
-    size_t                    samples_size;
-    int                       shuffle_countdown;
+    size_t *                  samples_begin;
+    size_t *                  samples_size;
+    size_t                    samples_count;
     struct ggml_tensor *      tokens_input;
     struct ggml_tensor *      target_probs;
     int                       first_iter;
@@ -2428,8 +2761,9 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
         if (impr_plot > 0) impr_plot = 0;
         if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
-        printf("%s: iter=%*d sched=%f loss=%f",
-            __func__, 6, opt->iter, *sched, opt->loss_after);
+        printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
+            __func__, opt->iter, std::min(1+data->lora->shuffle_next_sample, data->lora->shuffle_sample_count), data->lora->shuffle_sample_count,
+            *sched, opt->loss_after);
 
 
         if (data->millis_per_iter > 0) {
@@ -2451,26 +2785,33 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         printf("\n");
     }
 
-    if (data->shuffle_countdown < n_batch) {
-        printf("%s: reshuffle samples\n", __func__);
-        shuffle_ints(data->samples_data, data->samples_data + data->samples_size);
-        for (int i = 0; i < (int) data->samples_size; ++i) {
-            GGML_ASSERT(data->samples_data[i]+params->n_ctx-1 < (int) data->tokens_size);
-        }
-        data->shuffle_countdown = data->samples_size;
-    }
-
-    get_example_targets_batch(
+    int used_samples = get_example_targets_batch(
         data->lctx,
-        data->samples_data,
+        data->samples_begin,
         data->samples_size,
+        data->samples_count,
         data->tokens_data,
         data->tokens_size,
-        opt->iter*params->n_gradient_accumulation + accum_step,
+        data->lora->shuffle_next_sample,
         data->tokens_input,
-        data->target_probs);
+        data->target_probs,
+        params->separate_with_eos,
+        params->separate_with_bos,
+        params->fill_with_next_samples);
 
-    data->shuffle_countdown -= n_batch;
+    data->lora->shuffle_next_sample += used_samples;
+
+    if (data->lora->shuffle_next_sample >= data->lora->shuffle_sample_count) {
+        ++data->lora->train_epochs;
+        printf("%s: reshuffle samples. completed epochs: %llu\n", __func__, (long long unsigned) data->lora->train_epochs);
+        // note: we may have used some samples from the current shuffling more than once
+        data->lora->shuffle_rng_state_next = shuffle_samples(
+            data->lora->shuffle_rng_state_next,
+            data->samples_begin,
+            data->samples_size,
+            data->samples_count);
+        data->lora->shuffle_next_sample = 0;
+    }
 }
 
 int64_t get_parameter_count(struct my_llama_lora* lora) {
@@ -2504,6 +2845,22 @@ int64_t get_parameter_count(struct my_llama_lora* lora) {
         nx += ggml_nelements(layer.w3_b);
     }
     return nx;
+}
+
+size_t hash_combine(size_t h1, size_t h2) {
+    return h1 ^ (h2 << 1);
+}
+
+size_t compute_samples_hash(const char* fn, const size_t* samples_begin, const size_t* samples_size, size_t sample_count) {
+    std::hash<std::string> h_string;
+    std::hash<unsigned long long> h_ull;
+    size_t h = h_string(std::string(fn));
+    h = hash_combine(h, h_ull((unsigned long long) sample_count));
+    for (size_t i=0; i< sample_count; ++i) {
+        h = hash_combine(h, h_ull((unsigned long long) samples_begin[i]));
+        h = hash_combine(h, h_ull((unsigned long long) samples_size[i]));
+    }
+    return h;
 }
 
 int main(int argc, char ** argv) {
@@ -2654,6 +3011,10 @@ int main(int argc, char ** argv) {
 
     print_params(&model.hparams);
     print_lora_params(&lora.hparams);
+    printf("%s: total train_iterations %llu\n", __func__, (long long unsigned) lora.train_its);
+    printf("%s: seen train_samples     %llu\n", __func__, (long long unsigned) lora.train_samples);
+    printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) lora.train_tokens);
+    printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) lora.train_epochs);
     printf("%s: max_lora_size = %zu bytes (%.1f MB)\n", __func__, lora.data.size(), (float) lora.data.size() / (1024.0f*1024.0f));
     printf("%s: max_opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
     opt->iter = lora.train_its;
@@ -2786,11 +3147,21 @@ int main(int argc, char ** argv) {
 
     // tokenize data
     std::vector<llama_token> train_tokens;
+    std::vector<size_t> train_samples_begin;
+    std::vector<size_t> train_samples_size;
     printf("%s: tokenize training data\n", __func__);
-    if (tokenize_file(lctx, params.fn_train_data, train_tokens) < 0) {
-        fprintf(stderr, "%s: failed to tokenize file '%s'\n", __func__, params.fn_train_data);
-    }
-    printf("%s: number of training tokens: %d\n", __func__, (int) train_tokens.size());
+    tokenize_file(lctx,
+            params.fn_train_data,
+            params.sample_start,
+            params.include_sample_start,
+            params.overlapping_samples,
+            n_tokens,
+            train_tokens,
+            train_samples_begin,
+            train_samples_size);
+    GGML_ASSERT(train_samples_begin.size() == train_samples_size.size());
+
+    printf("%s: number of training tokens: %zu\n", __func__, train_tokens.size());
 
     std::vector<size_t> token_noccurs;
     token_noccurs.resize(model.hparams.n_vocab, 0);
@@ -2804,20 +3175,25 @@ int main(int argc, char ** argv) {
     }
     printf("%s: number of unique tokens: %d\n", __func__, n_unique_tokens);
 
-    // generate token positions of training samples
-    std::vector<int> train_samples;
-    GGML_ASSERT(n_tokens < (int) train_tokens.size());
-    train_samples.push_back(0);
-    for (int i = 1; i < (int) train_tokens.size() - n_tokens; ++i) {
-        const bool is_valid_sample_start = !params.samples_start_after_nl || (train_tokens[i-1] == llama_token_nl(lctx));
-        if (is_valid_sample_start) {
-            train_samples.push_back(i);
-        }
+    size_t shuffle_samples_hash = compute_samples_hash(params.fn_train_data, train_samples_begin.data(), train_samples_size.data(), train_samples_size.size());
+    const bool changed_train_data = (shuffle_samples_hash != lora.shuffle_samples_hash) || (lora.shuffle_sample_count != train_samples_size.size());
+    if (changed_train_data) {
+        printf("%s: train data seems to have changed. restarting shuffled epoch.\n", __func__);
     }
-    shuffle_ints(train_samples.data(), train_samples.data() + train_samples.size());
-    for (int i = 0; i < (int) train_samples.size(); ++i) {
-        GGML_ASSERT(train_samples[i]+n_tokens-1 < (int) train_tokens.size());
+    if (params.force_reshuffle) {
+        printf("%s: forced reshuffling of data. restarting with newly shuffled epoch.\n", __func__);
     }
+    if ((lora.shuffle_rng_state_current == "") || changed_train_data || params.force_reshuffle) {
+        lora.shuffle_rng_state_current = mt19937_seed_to_state(params.seed);
+        lora.shuffle_sample_count = train_samples_size.size();
+        lora.shuffle_next_sample = 0;
+        lora.shuffle_samples_hash = shuffle_samples_hash;
+    }
+    lora.shuffle_rng_state_next = shuffle_samples(
+        lora.shuffle_rng_state_current,
+        train_samples_begin.data(),
+        train_samples_size.data(),
+        train_samples_size.size());
 
     printf("%s: begin training\n", __func__);
 
@@ -2827,17 +3203,17 @@ int main(int argc, char ** argv) {
     opt_cb_data.model  = &model;
     opt_cb_data.lora   = &lora;
     opt_cb_data.lctx   = lctx;
-    opt_cb_data.last_save_iter    = opt->iter;
-    opt_cb_data.tokens_data       = train_tokens.data();
-    opt_cb_data.tokens_size       = train_tokens.size();
-    opt_cb_data.samples_data      = train_samples.data();
-    opt_cb_data.samples_size      = train_samples.size();
-    opt_cb_data.shuffle_countdown = train_samples.size();
-    opt_cb_data.tokens_input      = tokens_input;
-    opt_cb_data.target_probs      = target_probs;
-    opt_cb_data.first_iter        = opt->iter;
-    opt_cb_data.last_time         = ggml_time_ms();
-    opt_cb_data.millis_per_iter   = 0.0;
+    opt_cb_data.last_save_iter         = opt->iter;
+    opt_cb_data.tokens_data            = train_tokens.data();
+    opt_cb_data.tokens_size            = train_tokens.size();
+    opt_cb_data.samples_begin          = train_samples_begin.data();
+    opt_cb_data.samples_size           = train_samples_size.data();
+    opt_cb_data.samples_count          = train_samples_size.size();
+    opt_cb_data.tokens_input           = tokens_input;
+    opt_cb_data.target_probs           = target_probs;
+    opt_cb_data.first_iter             = opt->iter;
+    opt_cb_data.last_time              = ggml_time_ms();
+    opt_cb_data.millis_per_iter        = 0.0;
 
     // measure required memory for work buffer
     size_t max_work_size = ggml_graph_plan(gb, params.n_threads).work_size + GGML_OBJECT_SIZE;
