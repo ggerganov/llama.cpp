@@ -325,7 +325,7 @@ vk::Buffer *ggml_vk_allocate_buffer(size_t size) {
     vk::Buffer *vkBuffer = new vk::Buffer;
     vk::Result r = komputeManager()->device()->createBuffer(&bufferCreateInfo, nullptr, vkBuffer);
     if (r != vk::Result::eSuccess)
-        std::cerr << "Error allocating buffer" << vk::to_string(r);
+        std::cerr << "Error allocating buffer " << vk::to_string(r) << std::endl;
     return vkBuffer;
 }
 
@@ -358,8 +358,10 @@ vk::DeviceMemory *ggml_vk_allocate(size_t size, vk::MemoryPropertyFlags flags, v
     allocInfo.memoryTypeIndex = memoryTypeIndex;
     vk::DeviceMemory *vkDeviceMemory =  new vk::DeviceMemory;
     vk::Result r = komputeManager()->device()->allocateMemory(&allocInfo, nullptr, vkDeviceMemory);
-    if (r != vk::Result::eSuccess)
-        std::cerr << "Error allocating memory" << vk::to_string(r);
+    if (r != vk::Result::eSuccess) {
+        std::cerr << "Error allocating memory " << vk::to_string(r) << std::endl;
+        throw std::runtime_error("Error allocating vulkan memory.");
+    }
     return vkDeviceMemory;
 }
 
