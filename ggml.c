@@ -1790,10 +1790,10 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .type_size                = sizeof(int32_t),
         .is_quantized             = true,
         .to_float                 = NULL,
-        .from_float               = NULL,
+        .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
         .from_float_reference     = NULL,
         .vec_dot                  = ggml_vec_dot_q4_sq_fp16,
-        .vec_dot_type             = GGML_TYPE_F32,
+        .vec_dot_type             = GGML_TYPE_F16,
     }
 #endif
 };
@@ -11351,8 +11351,9 @@ static void ggml_compute_forward_mul_mat(
     }
 #endif
 
-    if (params->type == GGML_TASK_INIT && src0->type != GGML_TYPE_Q4_SQ) {
+    if (params->type == GGML_TASK_INIT){
         if (src1->type != vec_dot_type) {
+
             char * wdata = params->wdata;
             const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
 
@@ -11366,21 +11367,6 @@ static void ggml_compute_forward_mul_mat(
             }
         }
 
-        return;
-    } else if (params->type == GGML_TASK_INIT) { //SQLLM - copy fp32 vec over
-        ggml_fp16_t * wdata = params->wdata;
-        float * srcvec;
-        for (int64_t i13 = 0; i13 < ne13; ++i13) {
-            for (int64_t i12 = 0; i12 < ne12; ++i12) {
-                for (int64_t i11 = 0; i11 < ne11; ++i11) {
-                    srcvec = (float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11);
-                    for (int64_t i10 = 0; i10 < ne10; ++i10) {
-                        *wdata = ggml_fp32_to_fp16(srcvec[i10]);
-                        wdata += 1;
-                    }
-                }
-            }
-        }
         return;
     }
 

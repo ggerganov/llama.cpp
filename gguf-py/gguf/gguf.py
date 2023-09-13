@@ -389,7 +389,7 @@ class GGMLQuantizationType(IntEnum):
     Q5_K = 13
     Q6_K = 14
     Q8_K = 15
-    Q4_SQ = 16
+    Q4_SQ = 19
 
 
 class GGUFValueType(IntEnum):
