@@ -16,7 +16,9 @@
 #define ggml_metal_log_warn(...)
 #define ggml_metal_log_error(...)
 #else
-#import "llama.h"
+#define ggml_metal_log_info(...)  ggml_metal_log(LLAMA_LOG_LEVEL_INFO, __VA_ARGS__)
+#define ggml_metal_log_warn(...)  ggml_metal_log(LLAMA_LOG_LEVEL_WARN, __VA_ARGS__)
+#define ggml_metal_log_error(...) ggml_metal_log(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
 #endif
 
 #define UNUSED(x) (void)(x)
@@ -145,15 +147,6 @@ static void ggml_metal_log(enum llama_log_level level, const char* format, ...){
   }
 }
 
-#ifdef GGML_METAL_NDEBU
-#define ggml_metal_log_info(...)
-#define ggml_metal_log_warn(...)
-#define ggml_metal_log_error(...)
-#else
-#define ggml_metal_log_info(...)  ggml_metal_log(LLAMA_LOG_LEVEL_INFO, __VA_ARGS__)
-#define ggml_metal_log_warn(...)  ggml_metal_log(LLAMA_LOG_LEVEL_WARN, __VA_ARGS__)
-#define ggml_metal_log_error(...) ggml_metal_log(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
-#endif
 
 
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
