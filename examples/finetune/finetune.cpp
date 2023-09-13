@@ -1418,7 +1418,7 @@ size_t tokenize_file(
 void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
     std::stringstream s_rng_state;
     s_rng_state.imbue(std::locale::classic());
-    s_rng_state.exceptions(std::stringstream::eofbit | std::stringstream::failbit | std::stringstream::badbit);
+    s_rng_state.exceptions(std::stringstream::failbit);
     s_rng_state.str(rng_state);
     s_rng_state >> rng;
 }
@@ -1426,7 +1426,6 @@ void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
 std::string mt19937_get_state(const std::mt19937& rng) {
     std::stringstream s_rng_state;
     s_rng_state.imbue(std::locale::classic());
-    s_rng_state.exceptions(std::stringstream::badbit);
     s_rng_state << rng;
     return s_rng_state.str();
 }
