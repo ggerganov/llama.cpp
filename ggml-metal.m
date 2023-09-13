@@ -12,9 +12,9 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #ifdef GGML_METAL_NDEBUG
-#define LLAMA_LOG_INFO(...)
-#define LLAMA_LOG_WARN(...)
-#define LLAMA_LOG_ERROR(...)
+#define ggml_metal_log_info(...)
+#define ggml_metal_log_warn(...)
+#define ggml_metal_log_error(...)
 #else
 #import "llama.h"
 #endif
@@ -118,8 +118,37 @@ static NSString * const msl_library_source = @"see metal.metal";
 @implementation GGMLMetalClass
 @end
 
+void (*ggml_metal_log_callback)(enum llama_log_level level, const char * text, void * user_data) = NULL;
+void *ggml_metal_log_user_data = NULL;
+
+void ggml_metal_log_set_callback(void (*log_callback)(enum llama_log_level level, const char * text, void * user_data), void * user_data) {
+  ggml_metal_log_callback = log_callback;
+  ggml_metal_log_user_data = user_data;
+}
+
+static void ggml_metal_log(enum llama_log_level level, const char* format, ...) {
+  if ( ggml_metal_log_callback != NULL ) {
+    va_list arg;
+    va_start(arg, format);
+    char const* text = va_arg(arg, char const*);
+    ggml_metal_log_callback(level, text, ggml_metal_log_user_data);
+    va_end(arg);
+  }
+}
+
+#ifdef GGML_METAL_NDEBU
+#define ggml_metal_log_info(...)
+#define ggml_metal_log_warn(...)
+#define ggml_metal_log_error(...)
+#else
+#define ggml_metal_log_info(...)  ggml_metal_log(LLAMA_LOG_LEVEL_INFO, __VA_ARGS__)
+#define ggml_metal_log_warn(...)  ggml_metal_log(LLAMA_LOG_LEVEL_WARN, __VA_ARGS__)
+#define ggml_metal_log_error(...) ggml_metal_log(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
+#endif
+
+
 struct ggml_metal_context * ggml_metal_init(int n_cb) {
-    LLAMA_LOG_INFO("%s: allocating\n", __func__);
+    ggml_metal_log_info("%s: allocating\n", __func__);
 
     id <MTLDevice> device;
     NSString * s;
@@ -129,14 +158,14 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     NSArray * devices = MTLCopyAllDevices();
     for (device in devices) {
         s = [device name];
-        LLAMA_LOG_INFO("%s: found device: %s\n", __func__, [s UTF8String]);
+        ggml_metal_log_info("%s: found device: %s\n", __func__, [s UTF8String]);
     }
 #endif
 
     // Pick and show default Metal device
     device = MTLCreateSystemDefaultDevice();
     s = [device name];
-    LLAMA_LOG_INFO("%s: picking default device: %s\n", __func__, [s UTF8String]);
+    ggml_metal_log_info("%s: picking default device: %s\n", __func__, [s UTF8String]);
 
     // Configure context
     struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
@@ -163,7 +192,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
 
         if (error) {
-            LLAMA_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+            ggml_metal_log_error("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
     }
@@ -177,11 +206,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
         NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
         NSString * path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
-        LLAMA_LOG_INFO("%s: loading '%s'\n", __func__, [path UTF8String]);
+        ggml_metal_log_info("%s: loading '%s'\n", __func__, [path UTF8String]);
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
         if (error) {
-            LLAMA_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+            ggml_metal_log_error("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
 
@@ -193,7 +222,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         ctx->library = [ctx->device newLibraryWithSource:src options:nil error:&error];
 #endif
         if (error) {
-            LLAMA_LOG_ERROR("%s: error: %s\n", __func__, [[error description] UTF8String]);
+            ggml_metal_log_error("%s: error: %s\n", __func__, [[error description] UTF8String]);
             return NULL;
         }
     }
@@ -205,11 +234,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #define GGML_METAL_ADD_KERNEL(name) \
         ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
         ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
-        LLAMA_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name, \
+        ggml_metal_log_info("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name, \
                 (int) ctx->pipeline_##name.maxTotalThreadsPerThreadgroup, \
                 (int) ctx->pipeline_##name.threadExecutionWidth); \
         if (error) { \
-          LLAMA_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
+          ggml_metal_log_error("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
             return NULL; \
         }
 
@@ -265,13 +294,13 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
-    LLAMA_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
+    ggml_metal_log_info("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
 #if TARGET_OS_OSX
-    LLAMA_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+    ggml_metal_log_info("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
     if (ctx->device.maxTransferRate != 0) {
-        LLAMA_LOG_INFO("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
+        ggml_metal_log_info("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
     } else {
-        LLAMA_LOG_INFO("%s: maxTransferRate               = built-in GPU\n", __func__);
+        ggml_metal_log_info("%s: maxTransferRate               = built-in GPU\n", __func__);
     }
 #endif
 
@@ -279,7 +308,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 }
 
 void ggml_metal_free(struct ggml_metal_context * ctx) {
-    LLAMA_LOG_INFO("%s: deallocating\n", __func__);
+    ggml_metal_log_info("%s: deallocating\n", __func__);
 #define GGML_METAL_DEL_KERNEL(name) \
     [ctx->function_##name release]; \
     [ctx->pipeline_##name release];
@@ -351,7 +380,7 @@ void * ggml_metal_host_malloc(size_t n) {
     void * data = NULL;
     const int result = posix_memalign((void **) &data, sysconf(_SC_PAGESIZE), n);
     if (result != 0) {
-        LLAMA_LOG_ERROR("%s: error: posix_memalign failed\n", __func__);
+        ggml_metal_log_error("%s: error: posix_memalign failed\n", __func__);
         return NULL;
     }
 
@@ -379,7 +408,7 @@ int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
 // Metal buffer based on the host memory pointer
 //
 static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, struct ggml_tensor * t, size_t * offs) {
-    //LLAMA_LOG_INFO("%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
+    //ggml_metal_log_info("%s: data tensor '%16s', offs_data = %8ld, offs_eval = %8ld, offs_cach = %8ld\n", __func__, t->name, offs_data, offs_eval, offs_cach);
 
     const int64_t tsize = ggml_nbytes(t);
 
@@ -390,13 +419,13 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, stru
         if (ioffs >= 0 && ioffs + tsize <= (int64_t) ctx->buffers[i].size) {
             *offs = (size_t) ioffs;
 
-            //LLAMA_LOG_INFO("%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
+            //ggml_metal_log_info("%s: '%s' tensor '%16s', offs = %8ld\n", __func__, ctx->buffers[i].name, t->name, *offs);
 
             return ctx->buffers[i].metal;
         }
     }
 
-    LLAMA_LOG_ERROR("%s: error: buffer is nil\n", __func__);
+    ggml_metal_log_error("%s: error: buffer is nil\n", __func__);
 
     return nil;
 }
@@ -408,7 +437,7 @@ bool ggml_metal_add_buffer(
                          size_t   size,
                          size_t   max_size) {
     if (ctx->n_buffers >= GGML_METAL_MAX_BUFFERS) {
-        LLAMA_LOG_ERROR("%s: error: too many buffers\n", __func__);
+        ggml_metal_log_error("%s: error: too many buffers\n", __func__);
         return false;
     }
 
@@ -418,7 +447,7 @@ bool ggml_metal_add_buffer(
             const int64_t ioffs = (int64_t) data - (int64_t) ctx->buffers[i].data;
 
             if (ioffs >= 0 && ioffs < (int64_t) ctx->buffers[i].size) {
-                LLAMA_LOG_ERROR("%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
+                ggml_metal_log_error("%s: error: buffer '%s' overlaps with '%s'\n", __func__, name, ctx->buffers[i].name);
                 return false;
             }
         }
@@ -439,11 +468,11 @@ bool ggml_metal_add_buffer(
             ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
             if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                LLAMA_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+                ggml_metal_log_error("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
                 return false;
             }
 
-            LLAMA_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
+            ggml_metal_log_info("%s: allocated '%-16s' buffer, size = %8.2f MB", __func__, name, size_aligned / 1024.0 / 1024.0);
 
             ++ctx->n_buffers;
         } else {
@@ -463,13 +492,13 @@ bool ggml_metal_add_buffer(
                 ctx->buffers[ctx->n_buffers].metal = [ctx->device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
                 if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                    LLAMA_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
+                    ggml_metal_log_error("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
                     return false;
                 }
 
-                LLAMA_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+                ggml_metal_log_info("%s: allocated '%-16s' buffer, size = %8.2f MB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
                 if (i + size_step < size) {
-                    LLAMA_LOG_INFO("\n");
+                    ggml_metal_log_info("\n");
                 }
 
                 ++ctx->n_buffers;
@@ -477,17 +506,17 @@ bool ggml_metal_add_buffer(
         }
 
 #if TARGET_OS_OSX
-        LLAMA_LOG_INFO(", (%8.2f / %8.2f)",
+        ggml_metal_log_info(", (%8.2f / %8.2f)",
                 ctx->device.currentAllocatedSize / 1024.0 / 1024.0,
                 ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
 
         if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
-            LLAMA_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+            ggml_metal_log_warn("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
         } else {
-            LLAMA_LOG_INFO("\n");
+            ggml_metal_log_info("\n");
         }
 #else
-        LLAMA_LOG_INFO(", (%8.2f)\n", ctx->device.currentAllocatedSize / 1024.0 / 1024.0);
+        ggml_metal_log_info(", (%8.2f)\n", ctx->device.currentAllocatedSize / 1024.0 / 1024.0);
 #endif
     }
 
@@ -600,7 +629,7 @@ void ggml_metal_graph_find_concurrency(
     }
 
     if (ctx->concur_list_len > GGML_MAX_CONCUR) {
-        LLAMA_LOG_WARN("%s: too many elements for metal ctx->concur_list!\n", __func__);
+        ggml_metal_log_warn("%s: too many elements for metal ctx->concur_list!\n", __func__);
     }
 }
 
@@ -654,7 +683,7 @@ void ggml_metal_graph_compute(
                     continue;
                 }
 
-                //LLAMA_LOG_INFO("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
+                //ggml_metal_log_info("%s: encoding node %3d, op = %8s\n", __func__, i, ggml_op_name(gf->nodes[i]->op));
 
                 struct ggml_tensor * src0 = gf->nodes[i]->src[0];
                 struct ggml_tensor * src1 = gf->nodes[i]->src[1];
@@ -698,17 +727,17 @@ void ggml_metal_graph_compute(
                 id<MTLBuffer> id_src1 = src1 ? ggml_metal_get_buffer(ctx, src1, &offs_src1) : nil;
                 id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
-                //LLAMA_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
+                //ggml_metal_log_info("%s: op - %s\n", __func__, ggml_op_name(dst->op));
                 //if (src0) {
-                //    LLAMA_LOG_INFO("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
+                //    ggml_metal_log_info("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
                 //            ggml_is_contiguous(src0), src0->name);
                 //}
                 //if (src1) {
-                //    LLAMA_LOG_INFO("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
+                //    ggml_metal_log_info("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
                 //            ggml_is_contiguous(src1), src1->name);
                 //}
                 //if (dst) {
-                //    LLAMA_LOG_INFO("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
+                //    ggml_metal_log_info("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
                 //            dst->name);
                 //}
 
@@ -814,7 +843,7 @@ void ggml_metal_graph_compute(
                                 } break;
                             default:
                                 {
-                                    LLAMA_LOG_WARN("%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                                    ggml_metal_log_warn("%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                                     GGML_ASSERT(false);
                                 }
                         } break;
@@ -994,7 +1023,7 @@ void ggml_metal_graph_compute(
                                         } break;
                                     default:
                                         {
-                                            LLAMA_LOG_ERROR("Asserting on type %d\n",(int)src0t);
+                                            ggml_metal_log_error("Asserting on type %d\n",(int)src0t);
                                             GGML_ASSERT(false && "not implemented");
                                         }
                                 };
@@ -1235,7 +1264,7 @@ void ggml_metal_graph_compute(
                         } break;
                     default:
                         {
-                            LLAMA_LOG_ERROR("%s: error: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
+                            ggml_metal_log_error("%s: error: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                             GGML_ASSERT(false);
                         }
                 }
@@ -1260,7 +1289,7 @@ void ggml_metal_graph_compute(
 
         MTLCommandBufferStatus status = (MTLCommandBufferStatus) [ctx->command_buffers[i] status];
         if (status != MTLCommandBufferStatusCompleted) {
-            LLAMA_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
+            ggml_metal_log_info("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             GGML_ASSERT(false);
         }
     }

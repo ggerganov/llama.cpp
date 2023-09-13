@@ -615,7 +615,6 @@ add_library(ggml OBJECT
             ggml.c
             ggml.h
             ggml-alloc.c
-            llama.cpp
             ggml-alloc.h
             ${GGML_SOURCES_CUDA}
             ${GGML_SOURCES_OPENCL}

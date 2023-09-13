@@ -76,6 +76,31 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#ifdef __GNUC__
+#ifdef __MINGW32__
+#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#else
+#define LLAMA_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#endif
+#else
+#define LLAMA_ATTRIBUTE_FORMAT(...)
+#endif
+
+//
+// logging
+//
+
+LLAMA_ATTRIBUTE_FORMAT(2, 3)
+static void llama_log_internal        (enum llama_log_level level, const char* format, ...);
+static void llama_log_callback_default(enum llama_log_level level, const char * text, void * user_data);
+
+#define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
+#define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
+#define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
+
+
+
+
 //
 // helpers
 //
@@ -5510,6 +5535,7 @@ struct llama_context * llama_new_context_with_model(
                     llama_free(ctx);
                     return NULL;
                 }
+                ggml_metal_log_set_callback(llama_log_callback_default, NULL); 
                 ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
@@ -6344,7 +6370,7 @@ void llama_log_set(llama_log_callback log_callback, void * user_data) {
     g_state.log_callback_user_data = user_data;
 }
 
-void llama_log_v(llama_log_level level, const char * format, va_list args) {
+static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -6361,14 +6387,14 @@ void llama_log_v(llama_log_level level, const char * format, va_list args) {
     va_end(args_copy);
 }
 
-void llama_log(llama_log_level level, const char * format, ...) {
+static void llama_log_internal(llama_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
-    llama_log_v(level, format, args);
+    llama_log_internal_v(level, format, args);
     va_end(args);
 }
 
-void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
+static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
     fputs(text, stderr);

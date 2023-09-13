@@ -22,6 +22,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#include "llama.h"
+
 // max memory buffers that can be mapped to the device
 #define GGML_METAL_MAX_BUFFERS 16
 #define GGML_METAL_MAX_COMMAND_BUFFERS 32
@@ -32,6 +34,8 @@ struct ggml_cgraph;
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void ggml_metal_log_set_callback(void (*log_callback)(enum llama_log_level level, const char * text, void * user_data), void * user_data);
 
 struct ggml_metal_context;
 
