@@ -73,6 +73,8 @@ handle = None
 
 def getdirpath():
     return os.path.dirname(os.path.realpath(__file__))
+def getabspath():
+    return os.path.dirname(os.path.abspath(__file__))
 def file_exists(filename):
     return os.path.exists(os.path.join(getdirpath(), filename))
 
@@ -162,8 +164,12 @@ def init_library():
 
     print("Initializing dynamic library: " + libname)
     dir_path = getdirpath()
+    abs_path = getabspath()
 
-    #OpenBLAS should provide about a 2x speedup on prompt ingestion if compatible.
+    #add all potential paths
+    os.add_dll_directory(dir_path)
+    os.add_dll_directory(abs_path)
+    os.add_dll_directory(os.getcwd())
     handle = ctypes.CDLL(os.path.join(dir_path, libname))
 
     handle.load_model.argtypes = [load_model_inputs]
