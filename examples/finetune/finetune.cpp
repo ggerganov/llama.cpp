@@ -2805,8 +2805,9 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
         ++data->lora->train_epochs;
         printf("%s: reshuffle samples. completed epochs: %llu\n", __func__, (long long unsigned) data->lora->train_epochs);
         // note: we may have used some samples from the current shuffling more than once
+        data->lora->shuffle_rng_state_current = data->lora->shuffle_rng_state_next;
         data->lora->shuffle_rng_state_next = shuffle_samples(
-            data->lora->shuffle_rng_state_next,
+            data->lora->shuffle_rng_state_current,
             data->samples_begin,
             data->samples_size,
             data->samples_count);
