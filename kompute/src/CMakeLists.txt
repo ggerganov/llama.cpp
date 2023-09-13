@@ -46,8 +46,8 @@ configure_package_config_file(${PROJECT_SOURCE_DIR}/cmake/komputeConfig.cmake.in
     "${PROJECT_BINARY_DIR}/kompute/komputeConfig.cmake"
     INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/kompute)
 
-install(FILES ${PROJECT_BINARY_DIR}/kompute/komputeConfig.cmake
-    ${PROJECT_BINARY_DIR}/kompute/komputeConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/kompute)
+#install(FILES ${PROJECT_BINARY_DIR}/kompute/komputeConfig.cmake
+#    ${PROJECT_BINARY_DIR}/kompute/komputeConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/kompute)
 
 # ####################################################
 # Linking
