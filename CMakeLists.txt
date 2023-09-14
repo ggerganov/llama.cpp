@@ -412,26 +412,25 @@ endif()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
-        set(c_flags
+        set(warning_flags
             -Wall
             -Wextra
             -Wpedantic
             -Wcast-qual
+            -Wno-unused-function
+        )
+        set(c_flags
+            ${warning_flags}
             -Wdouble-promotion
             -Wshadow
             -Wstrict-prototypes
             -Wpointer-arith
             -Wmissing-prototypes
             -Werror=implicit-int
-            -Wno-unused-function
         )
         set(cxx_flags
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wcast-qual
+            ${warning_flags}
             -Wmissing-declarations
-            -Wno-unused-function
         )
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")  # clang++ only
             set(cxx_flags ${cxx_flags} -Wmissing-prototypes)

@@ -173,9 +173,10 @@ ifdef LLAMA_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
 # warnings
-MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
-MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wmissing-declarations -Wno-unused-function
+WARN_FLAGS    = -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+MK_CFLAGS    += $(WARN_FLAGS) -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes \
+				-Werror=implicit-int
+MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations
 
 # TODO(cebtenzzre): remove this once PR #2632 gets merged
 TTFS_CXXFLAGS = $(CXXFLAGS) -Wno-missing-declarations
