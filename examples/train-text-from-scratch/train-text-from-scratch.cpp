@@ -497,7 +497,7 @@ struct hash_map * new_hash_map() {
         result->vals[i] = NULL;
     }
     return result;
-};
+}
 
 void free_hash_map(struct hash_map * map) {
     delete map;
@@ -594,7 +594,7 @@ struct ggml_tensor * ggml_recompute_graph_node(
     ggml_format_name(clone, "%s (clone)", ggml_get_name(node));
 
     return clone;
-};
+}
 
 void ggml_build_backward_gradient_checkpointing(
         struct ggml_context   * ctx,
