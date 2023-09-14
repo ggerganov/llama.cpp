@@ -374,6 +374,7 @@ extern "C" {
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
@@ -381,6 +382,7 @@ extern "C" {
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
