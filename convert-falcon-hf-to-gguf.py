@@ -137,7 +137,9 @@ with open(tokenizer_json_file, "r", encoding="utf-8") as f:
 
 print("gguf: get gpt2 tokenizer vocab")
 
-vocab_size = len(tokenizer_json["model"]["vocab"])
+# The number of tokens in tokenizer.json can differ from the expected vocab size.
+# This causes downstream issues with mismatched tensor sizes when running the inference
+vocab_size = hparams["vocab_size"] if "vocab_size" in hparams else len(tokenizer_json["model"]["vocab"])
 
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
