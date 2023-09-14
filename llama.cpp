@@ -929,23 +929,22 @@ static const size_t kB = 1024;
 static const size_t MB = kB*kB;
 static const size_t GB = kB*kB*kB;
 
-// default hparams (LLaMA 7B)
 struct llama_hparams {
-    uint32_t n_vocab     = 32000;
-    uint32_t n_ctx_train = 2048;  // the context size used during training
-    uint32_t n_ctx       = 512;   // the context size used during inference
-    uint32_t n_embd      = 4096;
-    uint32_t n_head      = 32;
-    uint32_t n_head_kv   = 32;
-    uint32_t n_layer     = 32;
-    uint32_t n_rot       = 64;
-    uint32_t n_ff        = 11008;
+    uint32_t n_vocab;
+    uint32_t n_ctx_train; // context size the model was trained on
+    uint32_t n_ctx;       // context size used during inference
+    uint32_t n_embd;
+    uint32_t n_head;
+    uint32_t n_head_kv;
+    uint32_t n_layer;
+    uint32_t n_rot;
+    uint32_t n_ff;
 
-    float f_norm_eps     = 1e-5;
-    float f_norm_rms_eps = 1e-5;
+    float f_norm_eps;
+    float f_norm_rms_eps;
 
-    float rope_freq_base  = 10000.0f;
-    float rope_freq_scale = 1.0f;
+    float rope_freq_base;
+    float rope_freq_scale;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -1076,7 +1075,7 @@ struct llama_model {
 
     std::string name = "n/a";
 
-    llama_hparams hparams;
+    llama_hparams hparams = {};
     llama_vocab   vocab;
 
     struct ggml_tensor * tok_embeddings;
