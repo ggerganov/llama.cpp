@@ -43,6 +43,7 @@ bool ggml_vk_init_device(int device);
 bool ggml_vk_free_device();
 bool ggml_vk_has_vulkan();
 bool ggml_vk_has_device();
+bool ggml_vk_using_vulkan();
 ggml_vk_device ggml_vk_current_device();
 struct ggml_kompute_context * ggml_vk_init(void);
 bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx);

@@ -54,22 +54,17 @@
 #define QK4_1 32
 
 typedef ggml_fp16_t half;
-
 struct ggml_kompute_context {
     bool hasH2DAll = false;
     std::vector<ggml_vk_memory> buffers;
     std::shared_ptr<vk::DescriptorPool> pool;
-    static ggml_kompute_context *instance;
-    ggml_kompute_context() {
-        instance = this;
-    }
 };
 
 // FIXME: It would be good to consolidate the kompute manager and the kompute context into one object
 // and consolidate the init functions and simplify object lifetime management. As it currently stands,
 // we *have* to have the kompute manager no matter what for device discovery, but the kompute context
 // is only created when a device is set and vulkan is explicitly turned on.
-ggml_kompute_context *ggml_kompute_context::instance;
+ggml_kompute_context *s_kompute_context = nullptr;
 kp::Manager *komputeManager() {
     static kp::Manager *s_mgr = nullptr;
     if (s_mgr && !s_mgr->hasInstance()) {
@@ -266,6 +261,10 @@ bool ggml_vk_has_device() {
     return komputeManager()->hasDevice();
 }
 
+bool ggml_vk_using_vulkan() {
+    return s_kompute_context != nullptr;
+}
+
 ggml_vk_device ggml_vk_current_device() {
     if (!komputeManager()->hasDevice())
         return ggml_vk_device();
@@ -276,7 +275,8 @@ ggml_vk_device ggml_vk_current_device() {
 }
 
 ggml_kompute_context *ggml_vk_init() {
-    return new ggml_kompute_context;
+    s_kompute_context = new ggml_kompute_context;
+    return s_kompute_context;
 }
 
 bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx) {
@@ -284,6 +284,8 @@ bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx) {
 }
 
 void ggml_vk_free(struct ggml_kompute_context * ctx) {
+    assert(ctx == s_kompute_context);
+    s_kompute_context = nullptr;
     delete ctx;
 }
 
@@ -569,13 +571,13 @@ void ggml_vk_add(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -600,13 +602,13 @@ void ggml_vk_addrow(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -629,13 +631,13 @@ void ggml_vk_mul(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -660,13 +662,13 @@ void ggml_vk_mulrow(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -689,13 +691,13 @@ void ggml_vk_scale(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -713,13 +715,13 @@ void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -767,13 +769,13 @@ void ggml_vk_soft_max(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -800,13 +802,13 @@ void ggml_vk_norm_(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {(uint32_t)nrows}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {(uint32_t)nrows}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({(uint32_t)nrows});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -848,13 +850,13 @@ void ggml_vk_diag_mask_inf(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {unsigned(ne00), unsigned(ne01), unsigned(ne02)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne00), unsigned(ne01), unsigned(ne02)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne00), unsigned(ne01), unsigned(ne02)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -885,13 +887,13 @@ void ggml_vk_mul_mat_f16(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne11), unsigned(ne12)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne11), unsigned(ne12)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne11), unsigned(ne12)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -913,13 +915,13 @@ void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_siz
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne11)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned(ne01), unsigned(ne11)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne11)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -964,13 +966,13 @@ void ggml_vk_get_rows(const std::vector<uint32_t>& spirv,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {size}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -1040,13 +1042,13 @@ void ggml_vk_rope(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
@@ -1080,13 +1082,13 @@ void ggml_vk_cpy(const std::vector<uint32_t>& spirv,
                                      "_o_" + std::to_string(out_element_size);
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(unique_name))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(unique_name, ggml_kompute_context::instance->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
+        s_algo = komputeManager()->algorithm<float, PushConstants>(unique_name, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
     else {
         s_algo = komputeManager()->getAlgorithm(unique_name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
-        s_algo->updateDescriptors(ggml_kompute_context::instance->pool.get());
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
