@@ -42,6 +42,7 @@ int main(int argc, char ** argv) {
 
     // load the draft model
     params.model = params.model_draft;
+    params.n_gpu_layers = params.n_gpu_layers_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     // tokenize the prompt
