@@ -432,7 +432,6 @@ if (LLAMA_ALL_WARNINGS)
             -Wcast-qual
             -Wmissing-declarations
             -Wno-unused-function
-            -Wno-multichar
         )
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")  # clang++ only
             set(cxx_flags ${cxx_flags} -Wmissing-prototypes)
