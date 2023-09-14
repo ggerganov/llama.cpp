@@ -530,6 +530,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.endswith(('/api/v1/info/version', '/api/latest/info/version')):
             response_body = (json.dumps({"result":"1.2.4"}).encode())
 
+        elif self.path.endswith(('/api/extra/true_max_context_length')): #do not advertise this to horde
+            response_body = (json.dumps({"value": maxctx}).encode())
+
         elif self.path.endswith(('/api/extra/version')):
             response_body = (json.dumps({"result":"KoboldCpp","version":KcppVersion}).encode())
 
