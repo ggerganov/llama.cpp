@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_spm(ctx, tokens);
         if (check != str) {
-            fprintf(stderr, "%s : error: token %d detokenizes to >%s<(%llu) but tokenization of this detokenizes to >%s<(%llu)\n",
+            fprintf(stderr, "%s : error: token %d detokenizes to >%s<(%zu) but tokenization of this detokenizes to >%s<(%zu)\n",
                 __func__, i, str.c_str(), str.length(), check.c_str(), check.length());
             return 2;
         }
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
             std::string check = llama_detokenize_spm(ctx, tokens);
             if (cp != 9601 && str != check) {
-                fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
+                fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%zu) instead of >%s<(%zu)\n",
                     __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
                 return 3;
             }
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_spm(ctx, tokens);
         if (str != check) {
-            fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
+            fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%zu) instead of >%s<(%zu)\n",
                 __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
             return 4;
         }
