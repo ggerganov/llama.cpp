@@ -115,6 +115,8 @@ struct TransformerWeights {
     }
 };
 
+namespace {
+
 void malloc_weights(TransformerWeights* w, Config* p, bool shared_weights) {
     // we calloc instead of malloc to keep valgrind happy
     w->token_embedding_table = new float[p->vocab_size * p->dim]();
@@ -444,7 +446,7 @@ __attribute__((format(gnu_printf, 1, 2)))
 __attribute__((format(printf, 1, 2)))
 #endif
 #endif
-static std::string format(const char * fmt, ...) {
+std::string format(const char * fmt, ...) {
     va_list ap, ap2;
     va_start(ap, fmt);
     va_copy(ap2, ap);
@@ -540,7 +542,7 @@ bool is_ggml_file(const char *filename) {
     return magic == GGUF_MAGIC;
 }
 
-static std::string llama_escape_whitespaces(const std::string& text) {
+std::string llama_escape_whitespaces(const std::string& text) {
     std::ostringstream out;
     for (char c : text) {
         if (c == ' ') out << "\xe2\x96\x81";
@@ -908,6 +910,8 @@ std::string basename(const std::string &path) {
     }
     return path.substr(pos + 1);
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     struct train_params params = get_default_train_params();

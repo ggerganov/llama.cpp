@@ -172,7 +172,7 @@ endif # LLAMA_DISABLE_LOGS
 # warnings
 MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
-MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
+MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wmissing-declarations -Wno-unused-function -Wno-multichar
 
 ifeq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# g++ only

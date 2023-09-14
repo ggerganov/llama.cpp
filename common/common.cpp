@@ -78,7 +78,7 @@ int32_t get_num_physical_cores() {
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
-void process_escapes(std::string& input) {
+static void process_escapes(std::string& input) {
     std::size_t input_len = input.length();
     std::size_t output_idx = 0;
 

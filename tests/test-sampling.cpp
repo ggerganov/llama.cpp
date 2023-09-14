@@ -12,6 +12,9 @@
 #include <vector>
 #include <algorithm>
 
+
+namespace {
+
 void dump(const llama_token_data_array * candidates) {
     for (size_t i = 0; i < candidates->size; i++) {
         printf("%d: %f (%f)\n", candidates->data[i].id, candidates->data[i].p, candidates->data[i].logit);
@@ -172,6 +175,8 @@ void test_frequency_presence_penalty(
         assert(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
+
+} // namespace
 
 int main(void) {
     ggml_time_init();

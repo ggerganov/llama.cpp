@@ -427,6 +427,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wextra
             -Wpedantic
             -Wcast-qual
+            -Wmissing-declarations
             -Wno-unused-function
             -Wno-multichar
         )

@@ -60,6 +60,8 @@ inline int64_t cpu_cycles() {
 #endif
 
 
+namespace {
+
 // Generate synthetic data
 void generate_data(float offset, size_t n, float * dst) {
     for (size_t i = 0; i < n; i++) {
@@ -136,6 +138,8 @@ void usage(char * argv[]) {
     printf("  -i NUM, --iterations NUM\n");
     printf("                        set test iteration number (%d)\n", ITERATIONS);
 }
+
+} // namespace
 
 int main(int argc, char * argv[]) {
     quantize_perf_params params {};

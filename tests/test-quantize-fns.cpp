@@ -13,14 +13,16 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001f;
-const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002f;
-const float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
-const float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
-const float MAX_DOT_PRODUCT_ERROR = 0.02f;
+constexpr float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR = 0.002f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
+constexpr float MAX_DOT_PRODUCT_ERROR = 0.02f;
+
+
+namespace {
 
 const char* RESULT_STR[] = {"ok", "FAILED"};
-
 
 // Generate synthetic data
 void generate_data(float offset, size_t n, float * dst) {
@@ -89,6 +91,8 @@ float dot_product_error(ggml_type_traits_t & qfns, size_t test_size, const float
 
     return fabsf(result - dot_ref) / test_size;
 }
+
+} // namespace
 
 int main(int argc, char * argv[]) {
     bool verbose = false;

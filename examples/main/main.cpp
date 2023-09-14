@@ -33,13 +33,15 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static llama_context           ** g_ctx;
-static llama_model             ** g_model;
-static gpt_params               * g_params;
-static std::vector<llama_token> * g_input_tokens;
-static std::ostringstream       * g_output_ss;
-static std::vector<llama_token> * g_output_tokens;
-static bool is_interacting = false;
+namespace {
+
+llama_context           ** g_ctx;
+llama_model             ** g_model;
+gpt_params               * g_params;
+std::vector<llama_token> * g_input_tokens;
+std::ostringstream       * g_output_ss;
+std::vector<llama_token> * g_output_tokens;
+bool is_interacting = false;
 
 void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
@@ -100,6 +102,8 @@ void sigint_handler(int signo) {
     }
 }
 #endif
+
+} // namespace
 
 int main(int argc, char ** argv) {
     gpt_params params;

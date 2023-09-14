@@ -13,8 +13,10 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+namespace {
+
 template<typename T>
-static std::string to_string(const T & val) {
+std::string to_string(const T & val) {
     std::stringstream ss;
     ss << val;
     return ss.str();
@@ -226,6 +228,8 @@ bool gguf_ex_read_1(const std::string & fname) {
 
     return true;
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     if (argc < 3) {

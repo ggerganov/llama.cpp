@@ -36,6 +36,8 @@
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
 
+namespace {
+
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -116,6 +118,8 @@ float get_element(const struct ggml_tensor * t, int idx) {
 void set_element(struct ggml_tensor * t, int idx, float value) {
     ((float *)t->data)[idx] = value;
 }
+
+} // namespace
 
 int main(void) {
     struct ggml_init_params params = {

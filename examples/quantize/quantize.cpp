@@ -7,13 +7,15 @@
 #include <vector>
 #include <string>
 
+namespace {
+
 struct quant_option {
     std::string name;
     llama_ftype ftype;
     std::string desc;
 };
 
-static const std::vector<struct quant_option> QUANT_OPTIONS = {
+const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q4_0",   LLAMA_FTYPE_MOSTLY_Q4_0,   " 3.56G, +0.2166 ppl @ LLaMA-v1-7B", },
     { "Q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1,   " 3.90G, +0.1585 ppl @ LLaMA-v1-7B", },
     { "Q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0,   " 4.33G, +0.0683 ppl @ LLaMA-v1-7B", },
@@ -87,6 +89,8 @@ void usage(const char * executable) {
     }
     exit(1);
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     if (argc < 3) {

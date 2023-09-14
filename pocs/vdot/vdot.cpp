@@ -16,6 +16,8 @@
 
 constexpr int kVecSize = 1 << 18;
 
+namespace {
+
 float drawFromGaussianPdf(std::mt19937& rndm) {
     constexpr double kScale = 1./(1. + std::mt19937::max());
     constexpr double kTwoPiTimesScale = 6.28318530717958647692*kScale;
@@ -217,6 +219,8 @@ static void dot_q4_q8(const int n, float* s, const void* vx, const void* vy) {
     }
     *s = sumf;
 }
+
+} // namespace
 
 int main(int argc, char** argv) {
 

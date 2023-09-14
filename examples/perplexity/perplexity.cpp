@@ -28,6 +28,8 @@ struct results_log_softmax {
     float  prob;
 };
 
+namespace {
+
 void write_logfile(const llama_context * ctx, const gpt_params & params,
                    const llama_model * model, const struct results_perplexity & results) {
 
@@ -650,6 +652,8 @@ void hellaswag_score(llama_context * ctx, const gpt_params & params) {
 
     printf("\n");
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     gpt_params params;

@@ -9,10 +9,12 @@
 #endif
 
 #ifdef LLAMA_DEFAULT_RMS_EPS
-static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 #else
-static const float rms_norm_eps = 5e-6f;
+constexpr float rms_norm_eps = 5e-6f;
 #endif
+
+namespace {
 
 float frand() {
     return (float)rand()/(float)RAND_MAX;
@@ -1503,6 +1505,8 @@ struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_t
                                 ggml_soft_max(ctx, b),
                                 ggml_new_f32(ctx, eps)))))));
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     if (argc < 1) {

@@ -18,6 +18,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+namespace {
+
 struct random_normal_distribution {
     std::mt19937 gen;
     std::normal_distribution<float> rd;
@@ -444,11 +446,11 @@ void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
     GGML_ASSERT(tensor->ne[3] == ne3);
 }
 
-static size_t hash(void * p) {
+size_t hash(void * p) {
     return (size_t)p % GGML_GRAPH_HASHTABLE_SIZE;
 }
 
-static size_t hash_find(void * hash_table[], void * p) {
+size_t hash_find(void * hash_table[], void * p) {
     size_t h = hash(p);
 
     // linear probing
@@ -463,7 +465,7 @@ static size_t hash_find(void * hash_table[], void * p) {
     return i;
 }
 
-static bool hash_insert(void * hash_table[], void * p) {
+bool hash_insert(void * hash_table[], void * p) {
     //size_t h = hash(p);
     size_t i = hash_find(hash_table, p);
 
@@ -479,7 +481,7 @@ static bool hash_insert(void * hash_table[], void * p) {
     return false;
 }
 
-static bool hash_contains(void * hash_table[], void * p) {
+bool hash_contains(void * hash_table[], void * p) {
     size_t i = hash_find(hash_table, p);
     return (i < GGML_GRAPH_HASHTABLE_SIZE) && (hash_table[i] == p);
 }
@@ -488,7 +490,6 @@ struct hash_map {
     void * keys[GGML_GRAPH_HASHTABLE_SIZE];
     void * vals[GGML_GRAPH_HASHTABLE_SIZE];
 };
-//static const size_t HASH_MAP_SIZE = sizeof(struct hash_map);
 
 struct hash_map * new_hash_map() {
     struct hash_map * result = new struct hash_map;
@@ -503,12 +504,12 @@ void free_hash_map(struct hash_map * map) {
     delete map;
 }
 
-static bool ggml_is_view(struct ggml_tensor * t) {
+bool ggml_is_view(struct ggml_tensor * t) {
     return t->op == GGML_OP_RESHAPE || t->op == GGML_OP_VIEW || t->op == GGML_OP_TRANSPOSE ||
            t->op == GGML_OP_PERMUTE || t->op == GGML_OP_CPY;
 }
 
-static struct ggml_tensor * get_view_parent(struct ggml_tensor * t) {
+struct ggml_tensor * get_view_parent(struct ggml_tensor * t) {
     switch (t->op) {
         case GGML_OP_PERMUTE:
         case GGML_OP_RESHAPE:
@@ -522,7 +523,7 @@ static struct ggml_tensor * get_view_parent(struct ggml_tensor * t) {
     }
 }
 
-static struct ggml_tensor * get_view_source(struct ggml_tensor * t) {
+struct ggml_tensor * get_view_source(struct ggml_tensor * t) {
     struct ggml_tensor * parent = t;
     do {
         parent = get_view_parent(parent);
@@ -1987,6 +1988,8 @@ void opt_callback(void * vdata, float * sched) {
 
     data->shuffle_countdown -= n_batch;
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     struct train_params params = get_default_train_params();

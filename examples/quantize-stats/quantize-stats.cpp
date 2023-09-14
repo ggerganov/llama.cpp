@@ -34,8 +34,8 @@ struct quantize_stats_params {
     std::vector<enum ggml_type> include_types;
 };
 
-const size_t HISTOGRAM_BUCKETS = 150;
-const double HISTOGRAM_RANGE = 0.03;
+constexpr size_t HISTOGRAM_BUCKETS = 150;
+constexpr double HISTOGRAM_RANGE = 0.03;
 
 struct error_stats {
     size_t num_samples;
@@ -44,6 +44,7 @@ struct error_stats {
     uint64_t error_histogram[HISTOGRAM_BUCKETS];
 };
 
+namespace {
 
 void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     quantize_stats_params params;
@@ -133,7 +134,7 @@ void print_error_stats(const std::string & name, const error_stats & stats, bool
 }
 
 // copied from ggml.h - verify that we can access this as a flat array
-static bool tensor_is_contiguous(const struct ggml_tensor * tensor) {
+bool tensor_is_contiguous(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return
@@ -237,6 +238,8 @@ void test_roundtrip_on_layer(
         combine_error_stats(total_error, layer_error);
     }
 }
+
+} // namespace
 
 int main(int argc, char ** argv) {
     ggml_time_init();

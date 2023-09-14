@@ -25,6 +25,8 @@
 #include <signal.h>
 #endif
 
+namespace {
+
 // Used for debugging to print out beam tokens.
 struct ostream_beam_view {
     llama_context * ctx;
@@ -81,6 +83,8 @@ void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_stat
     }
 #endif
 }
+
+} // namespace
 
 int main(int argc, char ** argv)
 {
