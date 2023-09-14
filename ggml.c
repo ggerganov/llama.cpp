@@ -283,7 +283,7 @@ typedef double ggml_float;
 // 16-bit float
 // on Arm, we use __fp16
 // on x86, we use uint16_t
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON) && !defined(_MSC_VER)
 
 // if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
 //
