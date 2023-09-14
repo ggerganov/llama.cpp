@@ -431,6 +431,7 @@ if (LLAMA_ALL_WARNINGS)
         set(cxx_flags
             ${warning_flags}
             -Wmissing-declarations
+            -Wmissing-noreturn
         )
         if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")  # clang++ only
             set(cxx_flags ${cxx_flags} -Wmissing-prototypes)
