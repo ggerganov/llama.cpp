@@ -181,12 +181,13 @@ MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 # TODO(cebtenzzre): remove this once PR #2632 gets merged
 TTFS_CXXFLAGS = $(CXXFLAGS) -Wno-missing-declarations
 
-ifneq '' '$(findstring clang,$(shell $(CXX) --version))'
-	# clang++ only
-	MK_HOST_CXXFLAGS += -Wmissing-prototypes
+ifneq '' '$(findstring clang,$(shell $(CC) --version))'
+	# clang only
+	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return
+	MK_HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes
 	TTFS_CXXFLAGS    += -Wno-missing-prototypes
 else
-	# g++ only
+	# gcc only
 	MK_HOST_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
 

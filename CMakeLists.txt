@@ -419,6 +419,9 @@ if (LLAMA_ALL_WARNINGS)
             -Wcast-qual
             -Wno-unused-function
         )
+        if (CMAKE_C_COMPILER_ID MATCHES "Clang")  # clang only
+            set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
+        endif()
         set(c_flags
             ${warning_flags}
             -Wdouble-promotion
