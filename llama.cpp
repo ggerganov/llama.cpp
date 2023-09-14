@@ -1889,6 +1889,10 @@ static bool llama_eval_internal(
         ggml_vk_graph_compute(lctx.ctx_kompute, gf);
         ggml_vk_d2h_tensor(lctx.ctx_kompute, res);
     } else {
+        if (lctx.ctx_kompute) {
+            ggml_vk_d2h_tensor(lctx.ctx_kompute, kv_self.k);
+            ggml_vk_d2h_tensor(lctx.ctx_kompute, kv_self.v);
+        }
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
         if (lctx.ctx_kompute) {
             ggml_vk_h2d_tensor(lctx.ctx_kompute, kv_self.k);
