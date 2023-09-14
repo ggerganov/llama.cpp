@@ -925,9 +925,7 @@ void ggml_metal_graph_compute(
                                             nth1 = 1;
                                             if (ne11 * ne12 < 4) {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
-                                            //} else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
-                                            } else if (false) {
-                                                // TODO: with ggml_mul_mat_pad this kernel no longer seems to be needed
+                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
                                                 [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_l4];
                                                 nrows = ne11;
                                             } else {
