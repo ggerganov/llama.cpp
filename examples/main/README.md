@@ -144,7 +144,7 @@ The `--ctx-size` option allows you to set the size of the prompt context used by
 
 Some fine-tuned models have extened the context length by scaling RoPE. For example, if the original pretrained model have a context length (max sequence length) of 4096 (4k) and the fine-tuned model have 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
 
-- `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
+-   `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
 
 ### Keep Prompt
 
@@ -274,7 +274,7 @@ These options help improve the performance and memory usage of the LLaMA models.
 
 ### NUMA support
 
--   `--numa`: Attempt optimizations that help on some systems with non-uniform memory access. This currently consists of pinning an equal proportion of the threads to the cores on each NUMA node, and disabling prefetch and readahead for mmap. The latter causes mapped pages to be faulted in on first access instead of all at once, and in combination with pinning threads to NUMA nodes, more of the pages end up on the NUMA node where they are used. Note that if the model is already in the system page cache, for example because of a previous run without this option, this will have little effect unless you drop the page cache first. This can be done by rebooting the system or on Linux by writing '3' to '/proc/sys/vm/drop\_caches' as root.
+-   `--numa`: Attempt optimizations that help on some systems with non-uniform memory access. This currently consists of pinning an equal proportion of the threads to the cores on each NUMA node, and disabling prefetch and readahead for mmap. The latter causes mapped pages to be faulted in on first access instead of all at once, and in combination with pinning threads to NUMA nodes, more of the pages end up on the NUMA node where they are used. Note that if the model is already in the system page cache, for example because of a previous run without this option, this will have little effect unless you drop the page cache first. This can be done by rebooting the system or on Linux by writing '3' to '/proc/sys/vm/drop_caches' as root.
 
 ### Memory Float 32
 
@@ -302,7 +302,6 @@ These options provide extra functionality and customization when running the LLa
 
 -   `-h, --help`: Display a help message showing all available options and their default values. This is particularly useful for checking the latest options and default values, as they can change frequently, and the information in this document may become outdated.
 -   `--verbose-prompt`: Print the prompt before generating text.
--   `--mtest`: Test the model's functionality by running a series of tests to ensure it's working properly.
 -   `-ngl N, --n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 -   `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
 -   `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default the data is split in proportion to VRAM but this may not be optimal for performance. Requires cuBLAS.
