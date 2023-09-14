@@ -110,50 +110,42 @@ MK_LDFLAGS  =
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
 # posix_memalign came in POSIX.1-2001 / SUSv3
 # M_PI is an XSI extension since POSIX.1-2001 / SUSv3, came in XPG1 (1985)
-MK_CFLAGS   += -D_XOPEN_SOURCE=600
-MK_CXXFLAGS += -D_XOPEN_SOURCE=600
+MK_CPPFLAGS += -D_XOPEN_SOURCE=600
 
 # Somehow in OpenBSD whenever POSIX conformance is specified
 # some string functions rely on locale_t availability,
 # which was introduced in POSIX.1-2008, forcing us to go higher
 ifeq ($(UNAME_S),OpenBSD)
-	MK_CFLAGS   += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
-	MK_CXXFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+	MK_CPPFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
 endif
 
 # Data types, macros and functions related to controlling CPU affinity and
 # some memory allocation are available on Linux through GNU extensions in libc
 ifeq ($(UNAME_S),Linux)
-	MK_CFLAGS   += -D_GNU_SOURCE
-	MK_CXXFLAGS += -D_GNU_SOURCE
+	MK_CPPFLAGS += -D_GNU_SOURCE
 endif
 
 # RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
 # and on macOS its availability depends on enabling Darwin extensions
 # similarly on DragonFly, enabling BSD extensions is necessary
 ifeq ($(UNAME_S),Darwin)
-	MK_CFLAGS   += -D_DARWIN_C_SOURCE
-	MK_CXXFLAGS += -D_DARWIN_C_SOURCE
+	MK_CPPFLAGS += -D_DARWIN_C_SOURCE
 endif
 ifeq ($(UNAME_S),DragonFly)
-	MK_CFLAGS   += -D__BSD_VISIBLE
-	MK_CXXFLAGS += -D__BSD_VISIBLE
+	MK_CPPFLAGS += -D__BSD_VISIBLE
 endif
 
 # alloca is a non-standard interface that is not visible on BSDs when
 # POSIX conformance is specified, but not all of them provide a clean way
 # to enable it in such cases
 ifeq ($(UNAME_S),FreeBSD)
-	MK_CFLAGS   += -D__BSD_VISIBLE
-	MK_CXXFLAGS += -D__BSD_VISIBLE
+	MK_CPPFLAGS += -D__BSD_VISIBLE
 endif
 ifeq ($(UNAME_S),NetBSD)
-	MK_CFLAGS   += -D_NETBSD_SOURCE
-	MK_CXXFLAGS += -D_NETBSD_SOURCE
+	MK_CPPFLAGS += -D_NETBSD_SOURCE
 endif
 ifeq ($(UNAME_S),OpenBSD)
-	MK_CFLAGS   += -D_BSD_SOURCE
-	MK_CXXFLAGS += -D_BSD_SOURCE
+	MK_CPPFLAGS += -D_BSD_SOURCE
 endif
 
 ifdef LLAMA_DEBUG
@@ -182,7 +174,7 @@ MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
 MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
-ifeq '' '$(findstring clang++,$(CXX))'
+ifeq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# g++ only
 	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
