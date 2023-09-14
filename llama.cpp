@@ -438,6 +438,50 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
     ggml_graph_compute(graph, &plan);
 }
 
+//// EXPERIMENTAL:
+////
+//// faster matrix multiplications for tensors that do not have dimension 0 divisible by "pad"
+//// the idea is to represent the original matrix multiplication:
+////
+////   Z = X @ Y
+////
+//// with the sum of two matrix multiplications:
+////
+////   Z = (X_0 @ Y_0) + (X_1 @ Y_1)
+////
+//// here X_0 and Y_0 are views of X and Y that have dimension 0 divisible by "pad"
+//// and X_1 and Y_1 are the remaining views. X_1 and Y_1 end up being small matrices that can be processed with more
+//// general-purpose kernels
+////
+//static struct ggml_tensor * ggml_mul_mat_pad(struct ggml_context * ctx, struct ggml_tensor * x, struct ggml_tensor * y, int pad = 32) {
+////#if !defined(GGML_USE_METAL)
+////    return ggml_mul_mat(ctx, x, y);
+////#endif
+//
+//    // use padding only if dimension 0 is at least 8 times larger than the padding
+//    // else we won't get much benefit from the optimization
+//    const int n_pad_req = 8;
+//
+//    if (x->ne[0] % pad == 0 || x->ne[0] / pad < n_pad_req) {
+//        return ggml_mul_mat(ctx, x, y);
+//    }
+//
+//    struct ggml_tensor * x_0 = ggml_view_3d(ctx, x, (x->ne[0]/pad)*pad, x->ne[1], x->ne[2], x->nb[1], x->nb[2], 0);
+//    struct ggml_tensor * x_1 = ggml_view_3d(ctx, x,  x->ne[0]%pad,      x->ne[1], x->ne[2], x->nb[1], x->nb[2], x_0->ne[0]*x_0->nb[0]);
+//
+//    struct ggml_tensor * y_0 = ggml_view_3d(ctx, y, (y->ne[0]/pad)*pad, y->ne[1], y->ne[2], y->nb[1], y->nb[2], 0);
+//    struct ggml_tensor * y_1 = ggml_view_3d(ctx, y,  y->ne[0]%pad,      y->ne[1], y->ne[2], y->nb[1], y->nb[2], y_0->ne[0]*y_0->nb[0]);
+//
+//    return ggml_add(ctx,
+//            ggml_mul_mat(ctx, x_0, y_0),
+//            ggml_mul_mat(ctx, x_1, y_1));
+//}
+//
+//// TODO: check if other backends benefit from this and enable for all
+//#if defined(GGML_USE_METAL)
+////#define ggml_mul_mat ggml_mul_mat_pad
+//#endif
+
 //
 // llama helpers
 //
@@ -2968,11 +3012,7 @@ static bool llama_eval_internal(
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
-        ggml_metal_graph_compute(lctx.ctx_metal, gf);
-        ggml_metal_get_tensor   (lctx.ctx_metal, res);
-        if (!lctx.embedding.empty()) {
-            ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
-        }
+        ggml_metal_graph_compute(lctx.ctx_metal, gf, n_tokens > 1);
     } else {
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
