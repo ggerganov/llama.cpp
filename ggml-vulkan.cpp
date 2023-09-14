@@ -250,6 +250,10 @@ bool ggml_vk_free_device() {
     if (!ggml_vk_has_device())
         return false;
     komputeManager()->destroy();
+    // FIXME: The lifetime of these two needs to be tied together as we're relying upon the fact
+    // the llama_free(ctx) destroys this memory and we just set the singleton to nullptr here which
+    // is very brittle
+    s_kompute_context = nullptr;
     return true;
 }
 
