@@ -1266,10 +1266,10 @@ size_t tokenize_file(
         // tokenize all data at once
         out_tokens.resize(buf.size());
 
-        int n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), buf.size(), false);
+        int n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), out_tokens.size(), false);
         if (n_tokens < 0) {
             out_tokens.resize(-n_tokens);
-            n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), buf.size(), false);
+            n_tokens = llama_tokenize(lctx, buf.data(), out_tokens.data(), out_tokens.size(), false);
         }
         if (n_tokens >= 0) {
             out_tokens.resize(n_tokens);
@@ -1362,13 +1362,13 @@ size_t tokenize_file(
                 int n_tokens = llama_tokenize(lctx,
                     buf_sample.data(),
                     tok_sample.data(),
-                    sample_size, false);
+                    tok_sample.size(), false);
                 if (n_tokens < 0) {
                     tok_sample.resize(-n_tokens);
                     n_tokens = llama_tokenize(lctx,
                         buf_sample.data(),
                         tok_sample.data(),
-                        sample_size, false);
+                        tok_sample.size(), false);
                     GGML_ASSERT(n_tokens >= 0);
                 }
                 GGML_ASSERT(n_tokens <= tok_sample.size());
