@@ -172,8 +172,8 @@ if (LLAMA_METAL)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
 
     message(STATUS "Metal framework found")
-
-    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
+    set(GGML_HEADERS_METAL ggml-metal.h)
+    set(GGML_SOURCES_METAL ggml-metal.m)
 
     add_compile_definitions(GGML_USE_METAL)
     if (LLAMA_METAL_NDEBUG)
@@ -192,7 +192,6 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         )
 endif()
-
 if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -269,7 +268,8 @@ if (LLAMA_BLAS)
 endif()
 
 if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    set(GGML_HEADERS_EXTRA k_quants.h)
+    set(GGML_SOURCES_EXTRA k_quants.c)
     add_compile_definitions(GGML_USE_K_QUANTS)
     if (LLAMA_QKK_64)
         add_compile_definitions(GGML_QKK_64)
@@ -285,7 +285,8 @@ if (LLAMA_CUBLAS)
 
         enable_language(CUDA)
 
-        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
+        set(GGML_HEADERS_CUDA ggml-cuda.h)
+        set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
         add_compile_definitions(GGML_USE_CUBLAS)
 #        if (LLAMA_CUDA_CUBLAS)
@@ -333,6 +334,7 @@ if (LLAMA_MPI)
     find_package(MPI)
     if (MPI_C_FOUND)
         message(STATUS "MPI found")
+        set(GGML_HEADERS_MPI ggml-mpi.h)
         set(GGML_SOURCES_MPI ggml-mpi.c ggml-mpi.h)
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
@@ -355,7 +357,8 @@ if (LLAMA_CLBLAST)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
+        set(GGML_HEADERS_OPENCL ggml-opencl.h)
+        set(GGML_SOURCES_OPENCL ggml-opencl.cpp)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
@@ -631,11 +634,11 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
-            ${GGML_SOURCES_CUDA}
-            ${GGML_SOURCES_OPENCL}
-            ${GGML_SOURCES_METAL}
-            ${GGML_SOURCES_MPI}
-            ${GGML_SOURCES_EXTRA}
+            ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
@@ -673,14 +676,53 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-    install(TARGETS llama LIBRARY)
 endif()
+
 
 #
 # install
 #
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}
+    CACHE PATH "Location of header files")
+set(LLAMA_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}
+    CACHE PATH "Location of library files")
+set(LLAMA_BIN_INSTALL_DIR ${CMAKE_INSTALL_BINDIR}
+    CACHE PATH "Location of binary files")
+set(LLAMA_BUILD_NUMBER ${BUILD_NUMBER})
+set(LLAMA_BUILD_COMMIT ${BUILD_COMMIT})
+set(LLAMA_INSTALL_VERSION 0.0.${BUILD_NUMBER})
+
+configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LlamaConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama
+    PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
+              LLAMA_LIB_INSTALL_DIR
+              LLAMA_BIN_INSTALL_DIR )
+
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+    VERSION ${LLAMA_INSTALL_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
+
+set(GGML_PUBLIC_HEADERS "ggml.h"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+
+set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+install(TARGETS ggml PUBLIC_HEADER)
+
+set_target_properties(llama PROPERTIES PUBLIC_HEADER llama.h)
+install(TARGETS llama LIBRARY PUBLIC_HEADER)
+
 install(
     FILES convert.py
     PERMISSIONS
