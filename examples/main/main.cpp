@@ -198,23 +198,6 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters
-    // uncomment the "used_mem" line in llama.cpp to see the results
-    if (params.mem_test) {
-        {
-            LOG_TEE("%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
-
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos(ctx));
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
-        }
-
-        llama_print_timings(ctx);
-        llama_free(ctx);
-        llama_free_model(model);
-
-        return 0;
-    }
-
     // export the cgraph and exit
     if (params.export_cgraph) {
         llama_eval_export(ctx, "llama.ggml");
