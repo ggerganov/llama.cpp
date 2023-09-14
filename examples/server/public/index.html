@@ -7,172 +7,193 @@
   <title>llama.cpp - chat</title>
 
   <style>
+    /* Global styling */
     body {
-      font-family: system-ui;
-      font-size: 90%;
+        font-family: 'Poppins', sans-serif;
+        font-size: 16px;
+        max-width: 600px;
+        min-width: 300px;
+        line-height: 1.6;
+        margin: 0 auto;
+        padding: 1em;
+        background-color: #333333;
+        color: #F4F4F4;
     }
-
+    
+    /* Container stylings */
     #container {
-      margin: 0em auto;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      height: 100%;
+        margin: 1em auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
     }
-
+    
+    /* Main content area */
     main {
-      margin: 3px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 1em;
-
-      flex-grow: 1;
-      overflow-y: auto;
-
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 0.5em;
+        margin: 1em;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 1em;
+        flex-grow: 1;
+        overflow-y: auto;
+        border: 1px solid #4716C8;
+        border-radius: 8px;
+        padding: 1em;
+        background-color: #333333;
+        box-shadow: 0px 3px 15px rgba(0, 255, 171, 0.1);
     }
-
-    body {
-      max-width: 600px;
-      min-width: 300px;
-      line-height: 1.2;
-      margin: 0 auto;
-      padding: 0 0.5em;
-    }
-
+    
+    /* Paragraph styles */
     p {
-      overflow-wrap: break-word;
-      word-wrap: break-word;
-      hyphens: auto;
-      margin-top: 0.5em;
-      margin-bottom: 0.5em;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        hyphens: auto;
+        margin: 1em 0;
     }
-
+    
+    /* Writing area */
     #write form {
-      margin: 1em 0 0 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5em;
-      align-items: stretch;
+        margin-top: 1em;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        align-items: stretch;
     }
-
+    
     .right {
-      display: flex;
-      flex-direction: row;
-      gap: 0.5em;
-      justify-content: flex-end;
+        display: flex;
+        flex-direction: row;
+        gap: 0.5em;
+        justify-content: flex-end;
     }
-
+    
+    /* Fieldset configurations */
     fieldset {
-      border: none;
-      padding: 0;
-      margin: 0;
+        border: none;
+        padding: 0;
+        margin: 0;
     }
-
+    
     fieldset.two {
-      display: grid;
-      grid-template: "a a";
-      gap: 1em;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1em;
     }
-
+    
     fieldset.three {
-      display: grid;
-      grid-template: "a a a";
-      gap: 1em;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1em;
     }
-
+    
+    /* Interactive details section */
     details {
-      border: 1px solid #aaa;
-      border-radius: 4px;
-      padding: 0.5em 0.5em 0;
-      margin-top: 0.5em;
+        border: 1px solid #4716C8;
+        border-radius: 8px;
+        padding: 0.5em;
+        margin-top: 1em;
     }
-
+    
     summary {
-      font-weight: bold;
-      margin: -0.5em -0.5em 0;
-      padding: 0.5em;
-      cursor: pointer;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 0.5em;
+        background-color: #4716C8;
+        color: #F4F4F4;
     }
-
+    
     details[open] {
-      padding: 0.5em;
+        padding: 1em;
+    }
+    
+    /* Misc stylings */
+    .prob-set, .popover-content {
+        padding: 0.5em;
+        border-bottom: 1px solid #4716C8;
     }
 
-    .prob-set {
-      padding: 0.3em;
-      border-bottom: 1px solid #ccc;
+    h1 {
+        color: #00FFAB;
     }
 
-    .popover-content {
-      position: absolute;
-      background-color: white;
-      padding: 0.2em;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
-
+    
     textarea {
-      padding: 5px;
-      flex-grow: 1;
-      width: 100%;
+        padding: 0.5em;
+        flex-grow: 1;
+        width: 100%;
+        border-radius: 5px;
+        border: 1px solid #4716C8;
     }
-
+    
+    /* Code stylings */
     pre code {
-      display: block;
-      background-color: #222;
-      color: #ddd;
+        display: block;
+        background-color: #00FFAB;
+        color: #333333;
+        padding: 0.5em;
+        border-radius: 5px;
     }
+    
     code {
-      font-family: monospace;
-      padding: 0.1em 0.3em;
-      border-radius: 3px;
+        font-family: monospace;
+        padding: 0.2em 0.4em;
+        background-color: #00FFAB;
+        color: #333333;
+        border-radius: 4px;
     }
-
+    
+    /* Label styling */
     fieldset label {
-      margin: 0.5em 0;
-      display: block;
+        margin: 0.5em 0;
+        display: block;
+        color: #FFFFFF;
     }
-
+    
+    /* Header and footer */
     header, footer {
-      text-align: center;
+        text-align: center;
+        color: #4716C8;
     }
-
+    
     footer {
-      font-size: 80%;
-      color: #888;
+        font-size: 80%;
     }
-
-
+    
     @keyframes loading-bg-wipe {
-      0% {
-        background-position: 0%;
-      }
-      100% {
-        background-position: 100%;
-      }
+        0% {
+            background-position: 0%;
+        }
+        100% {
+            background-position: 100%;
+        }
     }
-
+    
     .loading {
-      --loading-color-1: #eeeeee00;
-      --loading-color-2: #eeeeeeff;
-      background-size: 50% 100%;
-      background-image: linear-gradient(90deg, var(--loading-color-1), var(--loading-color-2), var(--loading-color-1));
-      animation: loading-bg-wipe 2s linear infinite;
+        --loading-color-1: #333333;
+        --loading-color-2: #00FFAB;
+        background-size: 50% 100%;
+        background-image: linear-gradient(90deg, var(--loading-color-1), var(--loading-color-2), var(--loading-color-1));
+        animation: loading-bg-wipe 2s linear infinite;
     }
-
+    
     @media (prefers-color-scheme: dark) {
-      .loading {
-        --loading-color-1: #22222200;
-        --loading-color-2: #222222ff;
-      }
-      .popover-content {
-        background-color: black;
-      }
+        .loading {
+            --loading-color-1: #00FFAB;
+            --loading-color-2: #333333;
+        }
+        .popover-content {
+            background-color: #4716C8;
+            color: #F4F4F4;
+        }
     }
-  </style>
+    </style>
+    
+    
+
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/default.min.css">
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js"></script>
 
   <script type="module">
     import {
@@ -410,6 +431,8 @@
             currentMessages.pop();
           }
           transcriptUpdate([...history, ["{{char}}", currentMessages]])
+          // Add the syntax highlighting
+          highlightCodeBlocks();
           console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
         } else {
           currentMessages.push(data);
@@ -474,6 +497,15 @@
       `
     }
 
+    const highlightCodeBlocks = () => {
+      document.querySelectorAll('pre code:not(.highlighted)').forEach((block) => {
+        hljs.highlightElement(block);
+        block.classList.add('highlighted');  // Add 'highlighted' class
+      });
+    };
+
+
+
     const ChatLog = (props) => {
       const messages = session.value.transcript;
       const container = useRef(null)
@@ -497,7 +529,9 @@
             data;
           message = html`<${Markdownish} text=${template(text)} />`
         }
-        return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+        const renderedMessage = html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`;
+
+        return renderedMessage;
       };
 
       return html`
@@ -711,6 +745,7 @@
 
     // poor mans markdown replacement
     const Markdownish = (params) => {
+      
       const chunks = params.text.split('```');
 
       for (let i = 0; i < chunks.length; i++) {
@@ -735,6 +770,17 @@
 
       return html`<span dangerouslySetInnerHTML=${{ __html: restoredText }} />`;
     };
+
+    const ModelGenerationInfo = (params) => {
+      if (!llamaStats.value) {
+        return html`<span/>`
+      }
+      return html`
+        <span>
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+        </span>
+      `
+    }
 
 
     // simple popover impl
@@ -873,6 +919,7 @@
     }
 
     render(h(App), document.querySelector('#container'));
+
   </script>
 </head>
 
