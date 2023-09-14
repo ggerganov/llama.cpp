@@ -98,12 +98,10 @@ int main(int argc, char **argv) {
             std::string str = codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
             std::string check = llama_detokenize_spm(ctx, tokens);
-            if (str != check) {
-                if(cp != 9601) {
-                    fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
-                        __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
-                    return 3;
-                }
+            if (cp != 9601 && str != check) {
+                fprintf(stderr, "%s : error: codepoint %d detokenizes to >%s<(%llu) instead of >%s<(%llu)\n",
+                    __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
+                return 3;
             }
         }
     }
