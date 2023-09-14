@@ -52,7 +52,7 @@ int main(int argc, char ** argv) {
         ggml_metal_set_tensor(ctx_metal, input);
 
         // warmup
-        ggml_metal_graph_compute(ctx_metal, &gf, false);
+        ggml_metal_graph_compute(ctx_metal, &gf);
 
         const int n_iter = 16;
 
@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
 
         // the actual inference happens here
         for (int i = 0; i < n_iter; ++i) {
-            ggml_metal_graph_compute(ctx_metal, &gf, false);
+            ggml_metal_graph_compute(ctx_metal, &gf);
         }
 
         const int64_t t1 = ggml_time_us();

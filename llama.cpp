@@ -3012,7 +3012,7 @@ static bool llama_eval_internal(
 #ifdef GGML_USE_METAL
     if (lctx.ctx_metal) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
-        ggml_metal_graph_compute(lctx.ctx_metal, gf, n_tokens > 1);
+        ggml_metal_graph_compute(lctx.ctx_metal, gf);
     } else {
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
