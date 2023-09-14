@@ -736,6 +736,16 @@
       return html`<span dangerouslySetInnerHTML=${{ __html: restoredText }} />`;
     };
 
+    const ModelGenerationInfo = (params) => {
+      if (!llamaStats.value) {
+        return html`<span/>`
+      }
+      return html`
+        <span>
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+        </span>
+      `
+    }
 
     // simple popover impl
     const Popover = (props) => {
