@@ -204,7 +204,10 @@ enum llm_kv {
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
-    LLM_KV_ROPE_SCALE_LINEAR,
+    LLM_KV_ROPE_SCALING_TYPE,
+    LLM_KV_ROPE_SCALING_FACTOR,
+    LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,
+    LLM_KV_ROPE_SCALING_FINETUNED,
 
     LLM_KV_TOKENIZER_MODEL,
     LLM_KV_TOKENIZER_LIST,
@@ -246,9 +249,12 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_LAYERNORM_EPS,       "%s.attention.layer_norm_epsilon"     },
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
 
-    { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"  },
-    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"        },
-    { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"     },
+    { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
+    { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
+    { LLM_KV_ROPE_SCALING_TYPE,             "%s.rope.scaling.type"                    },
+    { LLM_KV_ROPE_SCALING_FACTOR,           "%s.rope.scaling.factor"                  },
+    { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
+    { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
     { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
@@ -943,12 +949,17 @@ struct llama_hparams {
     float f_norm_eps;
     float f_norm_rms_eps;
 
-    float rope_freq_base;
-    float rope_freq_scale;
-    float rope_ext_factor;
-    float rope_attn_factor;
-    float rope_beta_fast;
-    float rope_beta_slow;
+    float    rope_freq_base;
+    float    rope_freq_scale;
+    bool     rope_finetuned;
+    uint32_t n_yarn_orig_ctx;
+
+    // These hyperparameters are not exposed in GGUF, because all
+    // existing YaRN models use the same values for them.
+    float yarn_ext_factor;
+    float yarn_attn_factor;
+    float yarn_beta_fast;
+    float yarn_beta_slow;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -1660,10 +1671,10 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
     hparams.n_ctx            = params.n_ctx;
     hparams.rope_freq_base   = params.rope_freq_base;
     hparams.rope_freq_scale  = params.rope_freq_scale;
-    hparams.rope_ext_factor  = params.rope_ext_factor;
-    hparams.rope_attn_factor = params.rope_attn_factor;
-    hparams.rope_beta_fast   = params.rope_beta_fast;
-    hparams.rope_beta_slow   = params.rope_beta_slow;
+    hparams.yarn_ext_factor  = params.yarn_ext_factor;
+    hparams.yarn_attn_factor = params.yarn_attn_factor;
+    hparams.yarn_beta_fast   = params.yarn_beta_fast;
+    hparams.yarn_beta_slow   = params.yarn_beta_slow;
 
     // get general kv
     GGUF_GET_KEY(ctx, model.name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_NAME));
@@ -1680,6 +1691,14 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
     hparams.n_head_kv = hparams.n_head;
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
+    hparams.rope_finetuned = false;
+    GGUF_GET_KEY(ctx, hparams.rope_finetuned, gguf_get_val_bool, GGUF_TYPE_BOOL, false,
+                 kv(LLM_KV_ROPE_SCALING_FINETUNED));
+
+    hparams.n_yarn_orig_ctx = 0;
+    GGUF_GET_KEY(ctx, hparams.n_yarn_orig_ctx, gguf_get_val_u32, GGUF_TYPE_UINT32, false,
+                 kv(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN));
+
     // rope_freq_base (optional)
     if (hparams.rope_freq_base == 0.0f) {
         float rope_freq_base = 10000.0f;
@@ -1687,11 +1706,26 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
         hparams.rope_freq_base = rope_freq_base;
     }
 
+    llama_rope_scaling_type rope_scaling_type = params.rope_scaling_type;
+
+    if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
+        uint8_t type = LLAMA_ROPE_SCALING_LINEAR;
+        GGUF_GET_KEY(ctx, type, gguf_get_val_u8, GGUF_TYPE_UINT8, false, kv(LLM_KV_ROPE_SCALING_TYPE));
+        rope_scaling_type = llama_rope_scaling_type(type);
+    }
+    GGML_ASSERT(rope_scaling_type >= 0 && rope_scaling_type <= LLAMA_ROPE_SCALING_MAX_VALUE);
+
     // rope_freq_scale (inverse of the kv) is optional
-    if (hparams.rope_freq_scale == 0.0f) {
+    if (rope_scaling_type == LLAMA_ROPE_SCALING_NONE) {
+        hparams.rope_freq_scale = 1.0f;
+    } else if (hparams.rope_freq_scale == 0.0f) {
         float ropescale = 1.0f;
-        GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+        GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALING_FACTOR));
         hparams.rope_freq_scale = 1.0f/ropescale;
+    }
+
+    if (rope_scaling_type == LLAMA_ROPE_SCALING_YARN) {
+        hparams.yarn_ext_factor = 1.0f; // enable YaRN
     }
 
     // sanity check for n_rot (optional)
@@ -1902,6 +1936,11 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: n_ff           = %u\n",     __func__, hparams.n_ff);
     LLAMA_LOG_INFO("%s: freq_base      = %.1f\n",   __func__, hparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale     = %g\n",     __func__, hparams.rope_freq_scale);
+    LLAMA_LOG_INFO("%s: YaRN scaling   = %g\n",     __func__, hparams.yarn_ext_factor);
+    LLAMA_LOG_INFO("%s: YaRN orig ctx  = %u\n",     __func__, hparams.n_yarn_orig_ctx);
+    LLAMA_LOG_INFO("%s: YaRN beta_fast = %f\n",     __func__, hparams.yarn_beta_fast);
+    LLAMA_LOG_INFO("%s: YaRN beta_slow = %f\n",     __func__, hparams.yarn_beta_slow);
+    LLAMA_LOG_INFO("%s: RoPE finetuned = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "no");
     LLAMA_LOG_INFO("%s: model type     = %s\n",     __func__, llama_model_type_name(model.type));
     LLAMA_LOG_INFO("%s: model ftype    = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
     LLAMA_LOG_INFO("%s: model params   = %.2f B\n", __func__, ml.n_elements*1e-9);
@@ -2444,10 +2483,10 @@ static struct ggml_cgraph * llm_build_llama(
 
     const float freq_base    = hparams.rope_freq_base;
     const float freq_scale   = hparams.rope_freq_scale;
-    const float ext_factor   = hparams.rope_ext_factor;
-    const float attn_factor  = hparams.rope_attn_factor;
-    const float beta_fast    = hparams.rope_beta_fast;
-    const float beta_slow    = hparams.rope_beta_slow;
+    const float ext_factor   = hparams.yarn_ext_factor;
+    const float attn_factor  = hparams.yarn_attn_factor;
+    const float beta_fast    = hparams.yarn_beta_fast;
+    const float beta_slow    = hparams.yarn_beta_slow;
     const float norm_rms_eps = hparams.f_norm_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
@@ -2561,15 +2600,13 @@ static struct ggml_cgraph * llm_build_llama(
 
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
                 ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base,
-                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
-            );
+                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
                 ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base,
-                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
-            );
+                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -2786,6 +2823,10 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     const float freq_base    = hparams.rope_freq_base;
     const float freq_scale   = hparams.rope_freq_scale;
+    const float ext_factor   = hparams.yarn_ext_factor;
+    const float attn_factor  = hparams.yarn_attn_factor;
+    const float beta_fast    = hparams.yarn_beta_fast;
+    const float beta_slow    = hparams.yarn_beta_slow;
     const float norm_rms_eps = hparams.f_norm_rms_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
@@ -2901,8 +2942,16 @@ static struct ggml_cgraph * llm_build_baichaun(
             struct ggml_tensor * Qcur;
             switch (model.type) {
                 case MODEL_7B:
-                    Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base, freq_scale);
-                    Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base, freq_scale);
+                    Kcur = ggml_rope_custom_inplace(
+                        ctx0,
+                        ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N),
+                        n_past, n_embd_head, 0, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    );
+                    Qcur = ggml_rope_custom_inplace(
+                        ctx0,
+                        ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),
+                        n_past, n_embd_head, 0, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    );
                     break;
                 case MODEL_13B:
                     Kcur  = ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, N);
@@ -3146,10 +3195,10 @@ static struct ggml_cgraph * llm_build_falcon(
 
     const float freq_base   = hparams.rope_freq_base;
     const float freq_scale  = hparams.rope_freq_scale;
-    const float ext_factor  = hparams.rope_ext_factor;
-    const float attn_factor = hparams.rope_attn_factor;
-    const float beta_fast   = hparams.rope_beta_fast;
-    const float beta_slow   = hparams.rope_beta_slow;
+    const float ext_factor  = hparams.yarn_ext_factor;
+    const float attn_factor = hparams.yarn_attn_factor;
+    const float beta_fast   = hparams.yarn_beta_fast;
+    const float beta_slow   = hparams.yarn_beta_slow;
     const float norm_eps    = hparams.f_norm_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
@@ -3302,11 +3351,13 @@ static struct ggml_cgraph * llm_build_falcon(
 
             // using mode = 2 for neox mode
             struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
-                ctx0, tmpq, n_past, n_embd_head, 2, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                ctx0, tmpq, n_past, n_embd_head, 2, 0,
+                freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
             );
             offload_func_kq(Qcur);
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
-                ctx0, tmpk, n_past, n_embd_head, 2, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                ctx0, tmpk, n_past, n_embd_head, 2, 0,
+                freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
             );
             offload_func_kq(Kcur);
 
@@ -6186,10 +6237,11 @@ struct llama_context_params llama_context_default_params() {
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
-        /*.rope_ext_factor             =*/ 0.0f,
-        /*.rope_attn_factor            =*/ 1.0f,
-        /*.rope_beta_fast              =*/ 32.0f,
-        /*.rope_beta_slow              =*/ 1.0f,
+        /*.yarn_ext_factor             =*/ 0.0f,
+        /*.yarn_attn_factor            =*/ 1.0f,
+        /*.yarn_beta_fast              =*/ 32.0f,
+        /*.yarn_beta_slow              =*/ 1.0f,
+        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,

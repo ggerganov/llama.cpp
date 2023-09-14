@@ -108,6 +108,14 @@ extern "C" {
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
+    enum llama_rope_scaling_type: int8_t {
+        LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
+        LLAMA_ROPE_SCALING_NONE        = 0,
+        LLAMA_ROPE_SCALING_LINEAR      = 1,
+        LLAMA_ROPE_SCALING_YARN        = 2,
+        LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -134,10 +142,12 @@ extern "C" {
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency
         float    rope_freq_scale;  // RoPE frequency scaling factor
-        float    rope_ext_factor;  // RoPE extrapolation mix factor
-        float    rope_attn_factor; // RoPE magnitude scaling factor
-        float    rope_beta_fast;   // RoPE low correction dim
-        float    rope_beta_slow;   // RoPE high correction dim
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor
+        float    yarn_attn_factor; // YaRN magnitude scaling factor
+        float    yarn_beta_fast;   // YaRN low correction dim
+        float    yarn_beta_slow;   // YaRN high correction dim
+
+        llama_rope_scaling_type rope_scaling_type;
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
@@ -145,14 +155,14 @@ extern "C" {
         void * progress_callback_user_data;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
-        bool f16_kv;     // use fp16 for KV cache
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
-        bool vocab_only; // only load the vocabulary, no weights
-        bool use_mmap;   // use mmap if possible
-        bool use_mlock;  // force system to keep model in RAM
-        bool embedding;  // embedding mode only
+        bool low_vram;      // if true, reduce VRAM usage at the cost of performance
+        bool mul_mat_q;     // if true, use experimental mul_mat_q kernels
+        bool f16_kv;        // use fp16 for KV cache
+        bool logits_all;    // the llama_eval() call computes all logits, not just the last one
+        bool vocab_only;    // only load the vocabulary, no weights
+        bool use_mmap;      // use mmap if possible
+        bool use_mlock;     // force system to keep model in RAM
+        bool embedding;     // embedding mode only
     };
 
     // Signature for logging events
