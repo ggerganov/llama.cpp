@@ -107,7 +107,7 @@ static struct ggml_tensor * get_random_tensor_f32(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
 }
@@ -155,7 +155,7 @@ static struct ggml_tensor * get_random_tensor_f16(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
 }
@@ -203,7 +203,7 @@ static struct ggml_tensor * get_random_tensor_i32(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
 }

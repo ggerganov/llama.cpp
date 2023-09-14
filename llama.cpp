@@ -448,7 +448,7 @@ struct LLM_TN {
 //
 
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-{ \
+do { \
     const std::string skey(key); \
     const int kid = gguf_find_key(ctx, skey.c_str()); \
     if (kid >= 0) { \
@@ -460,7 +460,7 @@ struct LLM_TN {
     } else if (req) { \
         throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
     } \
-}
+} while (0)
 
 //
 // ggml helpers
@@ -1760,7 +1760,7 @@ static void llm_load_hparams(
                 }
             } break;
         default: (void)0;
-    };
+    }
 
     model.ftype = ml.ftype;
 
@@ -2298,7 +2298,7 @@ static void llm_load_tensors(
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
-        };
+        }
     }
 
     ml.done_getting_tensors();
@@ -3693,7 +3693,7 @@ static struct ggml_cgraph * llama_build_graph(
             } break;
         default:
             GGML_ASSERT(false);
-    };
+    }
 
     return result;
 }
@@ -4274,7 +4274,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 llm_tokenizer_bpe tokenizer(vocab);
                 tokenizer.tokenize(raw_text, output);
             } break;
-    };
+    }
 
     return output;
 }
@@ -7094,7 +7094,7 @@ int llama_token_to_piece_with_model(const struct llama_model * model, llama_toke
             buf[2] = '\x85';
             return 3;
         } else if (llama_is_control_token(model->vocab, token)) {
-            ;
+            // do nothing
         } else if (llama_is_byte_token(model->vocab, token)) {
             if (length < 1) {
                 return -1;

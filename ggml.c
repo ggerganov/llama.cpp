@@ -1863,7 +1863,7 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
     #define GGML_F16x8_ADD          vaddq_f16
     #define GGML_F16x8_MUL          vmulq_f16
     #define GGML_F16x8_REDUCE(res, x)                             \
-    {                                                             \
+    do {                                                          \
         int offset = GGML_F16_ARR >> 1;                           \
         for (int i = 0; i < offset; ++i) {                        \
             x[i] = vaddq_f16(x[i], x[offset+i]);                  \
@@ -1879,7 +1879,7 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
         const float32x4_t t0 = vcvt_f32_f16(vget_low_f16 (x[0])); \
         const float32x4_t t1 = vcvt_f32_f16(vget_high_f16(x[0])); \
         res = (ggml_float) vaddvq_f32(vaddq_f32(t0, t1));         \
-    }
+    } while (0)
 
     #define GGML_F16_VEC                GGML_F16x8
     #define GGML_F16_VEC_ZERO           GGML_F16x8_ZERO
@@ -1940,7 +1940,7 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 #define GGML_F32x8_ADD     _mm256_add_ps
 #define GGML_F32x8_MUL     _mm256_mul_ps
 #define GGML_F32x8_REDUCE(res, x)                                 \
-{                                                                 \
+do {                                                              \
     int offset = GGML_F32_ARR >> 1;                               \
     for (int i = 0; i < offset; ++i) {                            \
         x[i] = _mm256_add_ps(x[i], x[offset+i]);                  \
@@ -1957,7 +1957,7 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
                                  _mm256_extractf128_ps(x[0], 1)); \
     const __m128 t1 = _mm_hadd_ps(t0, t0);                        \
     res = _mm_cvtss_f32(_mm_hadd_ps(t1, t1));                     \
-}
+} while (0)
 // TODO: is this optimal ?
 
 #define GGML_F32_VEC        GGML_F32x8
@@ -13562,7 +13562,7 @@ static void ggml_compute_forward_conv_1d(
         ggml_compute_forward_conv_1d_s2_ph(params, src0, src1, dst);
     } else {
         GGML_ASSERT(false); // only stride 1 and 2 supported
-    };
+    }
 }
 
 // ggml_compute_forward_conv_2d
@@ -19876,10 +19876,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                 } break;
                             case GGUF_TYPE_ARRAY:
                             case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
-                        };
+                        }
                     } break;
                 case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
-            };
+            }
 
             if (!ok) {
                 break;
@@ -20591,10 +20591,10 @@ static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf *
                             } break;
                         case GGUF_TYPE_ARRAY:
                         case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type"); break;
-                    };
+                    }
                 } break;
             case GGUF_TYPE_COUNT: GGML_ASSERT(false && "invalid type");
-        };
+        }
     }
 
     // write tensor infos

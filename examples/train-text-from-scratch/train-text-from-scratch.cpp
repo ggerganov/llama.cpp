@@ -107,7 +107,7 @@ struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct
             break;
         default:
             assert(false);
-    };
+    }
     return tensor;
 }
 
@@ -151,7 +151,7 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
             break;
         default:
             assert(false);
-    };
+    }
     return tensor;
 }
 
@@ -1015,7 +1015,7 @@ void shuffle_ints(int * begin, int * end) {
 }
 
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-{ \
+do { \
     const std::string skey(key); \
     const int kid = gguf_find_key(ctx, skey.c_str()); \
     if (kid >= 0) { \
@@ -1027,7 +1027,7 @@ void shuffle_ints(int * begin, int * end) {
     } else if (req) { \
         die_fmt("key not found in model: %s", skey.c_str()); \
     } \
-}
+} while (0)
 
 
 bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {

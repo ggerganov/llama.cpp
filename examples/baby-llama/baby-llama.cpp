@@ -88,7 +88,7 @@ static struct ggml_tensor * randomize_tensor(
             break;
         default:
             assert(false);
-    };
+    }
 
     return tensor;
 }
@@ -136,7 +136,7 @@ static struct ggml_tensor * randomize_tensor_normal(
             break;
         default:
             assert(false);
-    };
+    }
 
     return tensor;
 }
