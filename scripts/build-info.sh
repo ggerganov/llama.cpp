@@ -1,4 +1,5 @@
 #!/bin/sh
+set -o pipefail
 
 CC=$1
 
