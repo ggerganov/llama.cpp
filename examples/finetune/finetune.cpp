@@ -33,39 +33,39 @@ struct random_uniform_distribution {
     std::uniform_real_distribution<float> rd;
 };
 
-void init_random_normal_distribution(struct random_normal_distribution * rnd, int seed, float mean, float std, float min, float max) {
+static void init_random_normal_distribution(struct random_normal_distribution * rnd, int seed, float mean, float std, float min, float max) {
     rnd->gen = std::mt19937(seed);
     rnd->rd = std::normal_distribution<float>{mean, std};
     rnd->min = min;
     rnd->max = max;
 }
 
-void init_random_uniform_distribution(struct random_uniform_distribution * rnd, int seed, float min, float max) {
+static void init_random_uniform_distribution(struct random_uniform_distribution * rnd, int seed, float min, float max) {
     rnd->gen = std::mt19937(seed);
     rnd->rd = std::uniform_real_distribution<float>{min, max};
 }
 
-int clamp(const int v, const int min, const int max) {
+static int clamp(const int v, const int min, const int max) {
     return ((v < min) ? (min) : (v > max) ? (max) : v);
 }
 
-float fclamp(const float v, const float min, const float max) {
+static float fclamp(const float v, const float min, const float max) {
     return ((v < min) ? (min) : (v > max) ? (max) : v);
 }
 
-float frand() {
+static float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
 
-float frand_normal(struct random_normal_distribution * rnd) {
+static float frand_normal(struct random_normal_distribution * rnd) {
     return fclamp(rnd->rd(rnd->gen), rnd->min, rnd->max);
 }
 
-float frand_uniform(struct random_uniform_distribution * rnd) {
+static float frand_uniform(struct random_uniform_distribution * rnd) {
     return rnd->rd(rnd->gen);
 }
 
-struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
+static struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
     switch (tensor->n_dims) {
         case 1:
@@ -114,7 +114,7 @@ struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct
     return tensor;
 }
 
-struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd) {
+static struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd) {
     switch (tensor->n_dims) {
         case 1:
             for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
@@ -299,96 +299,96 @@ struct my_llama_lora {
 };
 
 // gguf constants
-const char * LLM_KV_OPTIMIZER_TYPE = "optimizer.type";
-const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
-const char * LLM_KV_OPTIMIZER_TYPE_LBFGS = "lbfgs";
-const char * LLM_KV_OPTIMIZER_FILE_VERSION               = "optimizer.file_version";
-const char * LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT     = "optimizer.convergence_past_count";
-const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT            = "optimizer.parameter_count";
-const char * LLM_KV_OPTIMIZER_ITERATION_COUNT            = "optimizer.iteration_count";
-const char * LLM_KV_OPTIMIZER_JUST_INITIALIZED           = "optimizer.just_initialized";
-const char * LLM_KV_OPTIMIZER_ADAM_BEST_LOSS             = "optimizer.adam.best_loss";
-const char * LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS         = "optimizer.adam.previous_loss";
-const char * LLM_KV_OPTIMIZER_ADAM_NO_IMPROVEMENT_COUNT  = "optimizer.adam.no_improvement_count";
-const char * LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT = "optimizer.lbfgs.approx_hessian_count";
-const char * LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS            = "optimizer.lbfgs.best_loss";
-const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_STEP     = "optimizer.lbfgs.line_search_step";
-const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_J        = "optimizer.lbfgs.line_search_j";
-const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_K        = "optimizer.lbfgs.line_search_k";
-const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_END      = "optimizer.lbfgs.line_search_end";
-const char * LLM_KV_OPTIMIZER_LBFGS_NO_IMPROVEMENT_COUNT = "optimizer.lbfgs.no_improvement_count";
+static const char * LLM_KV_OPTIMIZER_TYPE = "optimizer.type";
+static const char * LLM_KV_OPTIMIZER_TYPE_ADAM  = "adam";
+static const char * LLM_KV_OPTIMIZER_TYPE_LBFGS = "lbfgs";
+static const char * LLM_KV_OPTIMIZER_FILE_VERSION               = "optimizer.file_version";
+static const char * LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT     = "optimizer.convergence_past_count";
+static const char * LLM_KV_OPTIMIZER_PARAMETER_COUNT            = "optimizer.parameter_count";
+static const char * LLM_KV_OPTIMIZER_ITERATION_COUNT            = "optimizer.iteration_count";
+static const char * LLM_KV_OPTIMIZER_JUST_INITIALIZED           = "optimizer.just_initialized";
+static const char * LLM_KV_OPTIMIZER_ADAM_BEST_LOSS             = "optimizer.adam.best_loss";
+static const char * LLM_KV_OPTIMIZER_ADAM_PREVIOUS_LOSS         = "optimizer.adam.previous_loss";
+static const char * LLM_KV_OPTIMIZER_ADAM_NO_IMPROVEMENT_COUNT  = "optimizer.adam.no_improvement_count";
+static const char * LLM_KV_OPTIMIZER_LBFGS_APPROX_HESSIAN_COUNT = "optimizer.lbfgs.approx_hessian_count";
+static const char * LLM_KV_OPTIMIZER_LBFGS_BEST_LOSS            = "optimizer.lbfgs.best_loss";
+static const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_STEP     = "optimizer.lbfgs.line_search_step";
+static const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_J        = "optimizer.lbfgs.line_search_j";
+static const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_K        = "optimizer.lbfgs.line_search_k";
+static const char * LLM_KV_OPTIMIZER_LBFGS_LINE_SEARCH_END      = "optimizer.lbfgs.line_search_end";
+static const char * LLM_KV_OPTIMIZER_LBFGS_NO_IMPROVEMENT_COUNT = "optimizer.lbfgs.no_improvement_count";
 
-const char * LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS    = "optimizer.adam.first_moments";
-const char * LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS   = "optimizer.adam.second_moments";
-const char * LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES = "optimizer.adam.past_loss_values";
+static const char * LLM_TENSOR_OPTIMIZER_ADAM_FIRST_MOMENTS    = "optimizer.adam.first_moments";
+static const char * LLM_TENSOR_OPTIMIZER_ADAM_SECOND_MOMENTS   = "optimizer.adam.second_moments";
+static const char * LLM_TENSOR_OPTIMIZER_ADAM_PAST_LOSS_VALUES = "optimizer.adam.past_loss_values";
 
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_PARAMETERS  = "optimizer.lbfgs.current_parameters";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_PARAMETERS = "optimizer.lbfgs.previous_parameters";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_GRADIENTS   = "optimizer.lbfgs.current_gradients";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS  = "optimizer.lbfgs.previous_gradients";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION    = "optimizer.lbfgs.search_direction";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES    = "optimizer.lbfgs.past_loss_values";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA        = "optimizer.lbfgs.memory_alpha";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.lbfgs.memory_ys";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
-const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_PARAMETERS  = "optimizer.lbfgs.current_parameters";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_PARAMETERS = "optimizer.lbfgs.previous_parameters";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_CURRENT_GRADIENTS   = "optimizer.lbfgs.current_gradients";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_PREVIOUS_GRADIENTS  = "optimizer.lbfgs.previous_gradients";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_SEARCH_DIRECTION    = "optimizer.lbfgs.search_direction";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_PAST_LOSS_VALUES    = "optimizer.lbfgs.past_loss_values";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_ALPHA        = "optimizer.lbfgs.memory_alpha";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.lbfgs.memory_ys";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
+static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
 
-const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL   = "train_model";
-const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA = "finetune_lora";
-const char * LLM_KV_TRAINING_TYPE               = "training.type";
-const char * LLM_KV_TRAINING_FILE_VERSION       = "training.file_version";
-const char * LLM_KV_TRAINING_ITERATION_COUNT    = "training.iteration_count";
-const char * LLM_KV_TRAINING_SAMPLE_COUNT       = "training.sample_count";
-const char * LLM_KV_TRAINING_TOKEN_COUNT        = "training.token_count";
-const char * LLM_KV_TRAINING_EPOCH_COUNT        = "training.epoch_count";
-const char * LLM_KV_TRAINING_SAMPLES_HASH       = "training.samples_hash";
-const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
-const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
-const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
-const char * LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE  = "training.shuffle.next_sample";
+static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL   = "train_model";
+static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA = "finetune_lora";
+static const char * LLM_KV_TRAINING_TYPE               = "training.type";
+static const char * LLM_KV_TRAINING_FILE_VERSION       = "training.file_version";
+static const char * LLM_KV_TRAINING_ITERATION_COUNT    = "training.iteration_count";
+static const char * LLM_KV_TRAINING_SAMPLE_COUNT       = "training.sample_count";
+static const char * LLM_KV_TRAINING_TOKEN_COUNT        = "training.token_count";
+static const char * LLM_KV_TRAINING_EPOCH_COUNT        = "training.epoch_count";
+static const char * LLM_KV_TRAINING_SAMPLES_HASH       = "training.samples_hash";
+static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
+static const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
+static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
+static const char * LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE  = "training.shuffle.next_sample";
 
-const char * LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD  = "training.lora.rank.token_embd";
-const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM = "training.lora.rank.output_norm";
-const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT      = "training.lora.rank.output";
-const char * LLM_KV_TRAINING_LORA_RANK_ATTN_NORM   = "training.lora.rank.attn_norm";
-const char * LLM_KV_TRAINING_LORA_RANK_ATTN_Q      = "training.lora.rank.attn_q";
-const char * LLM_KV_TRAINING_LORA_RANK_ATTN_K      = "training.lora.rank.attn_k";
-const char * LLM_KV_TRAINING_LORA_RANK_ATTN_V      = "training.lora.rank.attn_v";
-const char * LLM_KV_TRAINING_LORA_RANK_ATTN_OUT    = "training.lora.rank.attn_output";
-const char * LLM_KV_TRAINING_LORA_RANK_FFN_NORM    = "training.lora.rank.ffn_norm";
-const char * LLM_KV_TRAINING_LORA_RANK_FFN_GATE    = "training.lora.rank.ffn_gate";
-const char * LLM_KV_TRAINING_LORA_RANK_FFN_DOWN    = "training.lora.rank.ffn_down";
-const char * LLM_KV_TRAINING_LORA_RANK_FFN_UP      = "training.lora.rank.ffn_up";
+static const char * LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD  = "training.lora.rank.token_embd";
+static const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM = "training.lora.rank.output_norm";
+static const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT      = "training.lora.rank.output";
+static const char * LLM_KV_TRAINING_LORA_RANK_ATTN_NORM   = "training.lora.rank.attn_norm";
+static const char * LLM_KV_TRAINING_LORA_RANK_ATTN_Q      = "training.lora.rank.attn_q";
+static const char * LLM_KV_TRAINING_LORA_RANK_ATTN_K      = "training.lora.rank.attn_k";
+static const char * LLM_KV_TRAINING_LORA_RANK_ATTN_V      = "training.lora.rank.attn_v";
+static const char * LLM_KV_TRAINING_LORA_RANK_ATTN_OUT    = "training.lora.rank.attn_output";
+static const char * LLM_KV_TRAINING_LORA_RANK_FFN_NORM    = "training.lora.rank.ffn_norm";
+static const char * LLM_KV_TRAINING_LORA_RANK_FFN_GATE    = "training.lora.rank.ffn_gate";
+static const char * LLM_KV_TRAINING_LORA_RANK_FFN_DOWN    = "training.lora.rank.ffn_down";
+static const char * LLM_KV_TRAINING_LORA_RANK_FFN_UP      = "training.lora.rank.ffn_up";
 
 // gguf constants (sync with gguf.py)
 
-const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
-const char * LLM_KV_GENERAL_FILE_TYPE           = "general.file_type";
+static const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
+static const char * LLM_KV_GENERAL_FILE_TYPE           = "general.file_type";
 
-const char * LLM_KV_CONTEXT_LENGTH              = "%s.context_length";
-const char * LLM_KV_EMBEDDING_LENGTH            = "%s.embedding_length";
-const char * LLM_KV_BLOCK_COUNT                 = "%s.block_count";
-const char * LLM_KV_FEED_FORWARD_LENGTH         = "%s.feed_forward_length";
-const char * LLM_KV_ATTENTION_HEAD_COUNT        = "%s.attention.head_count";
-const char * LLM_KV_ATTENTION_LAYERNORM_RMS_EPS = "%s.attention.layer_norm_rms_epsilon";
-const char * LLM_KV_ROPE_DIMENSION_COUNT        = "%s.rope.dimension_count";
-const char * LLM_KV_ROPE_FREQ_BASE              = "%s.rope.freq_base"; // TODO load in llama.cpp
-const char * LLM_KV_ROPE_SCALE_LINEAR           = "%s.rope.scale_linear";
+static const char * LLM_KV_CONTEXT_LENGTH              = "%s.context_length";
+static const char * LLM_KV_EMBEDDING_LENGTH            = "%s.embedding_length";
+static const char * LLM_KV_BLOCK_COUNT                 = "%s.block_count";
+static const char * LLM_KV_FEED_FORWARD_LENGTH         = "%s.feed_forward_length";
+static const char * LLM_KV_ATTENTION_HEAD_COUNT        = "%s.attention.head_count";
+static const char * LLM_KV_ATTENTION_LAYERNORM_RMS_EPS = "%s.attention.layer_norm_rms_epsilon";
+static const char * LLM_KV_ROPE_DIMENSION_COUNT        = "%s.rope.dimension_count";
+static const char * LLM_KV_ROPE_FREQ_BASE              = "%s.rope.freq_base"; // TODO load in llama.cpp
+static const char * LLM_KV_ROPE_SCALE_LINEAR           = "%s.rope.scale_linear";
 
-const char * LLM_TENSOR_TOKEN_EMBD    = "token_embd";
-const char * LLM_TENSOR_OUTPUT_NORM   = "output_norm";
-const char * LLM_TENSOR_OUTPUT        = "output";
-const char * LLM_TENSOR_ATTN_NORM     = "blk.%d.attn_norm";
-const char * LLM_TENSOR_ATTN_Q        = "blk.%d.attn_q";
-const char * LLM_TENSOR_ATTN_K        = "blk.%d.attn_k";
-const char * LLM_TENSOR_ATTN_V        = "blk.%d.attn_v";
-const char * LLM_TENSOR_ATTN_OUT      = "blk.%d.attn_output";
-const char * LLM_TENSOR_FFN_NORM      = "blk.%d.ffn_norm";
-const char * LLM_TENSOR_FFN_GATE      = "blk.%d.ffn_gate";
-const char * LLM_TENSOR_FFN_DOWN      = "blk.%d.ffn_down";
-const char * LLM_TENSOR_FFN_UP        = "blk.%d.ffn_up";
+static const char * LLM_TENSOR_TOKEN_EMBD    = "token_embd";
+static const char * LLM_TENSOR_OUTPUT_NORM   = "output_norm";
+static const char * LLM_TENSOR_OUTPUT        = "output";
+static const char * LLM_TENSOR_ATTN_NORM     = "blk.%d.attn_norm";
+static const char * LLM_TENSOR_ATTN_Q        = "blk.%d.attn_q";
+static const char * LLM_TENSOR_ATTN_K        = "blk.%d.attn_k";
+static const char * LLM_TENSOR_ATTN_V        = "blk.%d.attn_v";
+static const char * LLM_TENSOR_ATTN_OUT      = "blk.%d.attn_output";
+static const char * LLM_TENSOR_FFN_NORM      = "blk.%d.ffn_norm";
+static const char * LLM_TENSOR_FFN_GATE      = "blk.%d.ffn_gate";
+static const char * LLM_TENSOR_FFN_DOWN      = "blk.%d.ffn_down";
+static const char * LLM_TENSOR_FFN_UP        = "blk.%d.ffn_up";
 
-void print_params(struct my_llama_hparams * params) {
+static void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
     printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
     printf("%s: n_embd:  %u\n", __func__, params->n_embd);
@@ -398,7 +398,7 @@ void print_params(struct my_llama_hparams * params) {
     printf("%s: n_rot:   %u\n", __func__, params->n_rot);
 }
 
-void print_lora_params(struct my_llama_lora_hparams * params) {
+static void print_lora_params(struct my_llama_lora_hparams * params) {
     printf("%s: n_rank_attention_norm : %u\n", __func__, params->n_rank_attention_norm);
     printf("%s: n_rank_wq             : %u\n", __func__, params->n_rank_wq);
     printf("%s: n_rank_wk             : %u\n", __func__, params->n_rank_wk);
@@ -416,7 +416,7 @@ void print_lora_params(struct my_llama_lora_hparams * params) {
     printf("%s: rope_freq_scale       : %f\n", __func__, params->rope_freq_scale);
 }
 
-void init_model(struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
+static void init_model(struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
     auto & hparams = model->hparams;
 
     std::vector<char> tn_buf;
@@ -462,7 +462,7 @@ void init_model(struct llama_model * input, struct my_llama_model * model, uint3
     }
 }
 
-void set_param_lora(struct my_llama_lora * lora) {
+static void set_param_lora(struct my_llama_lora * lora) {
     const uint32_t n_layer = lora->layers.size();
 
     struct ggml_context* ctx = lora->ctx;
@@ -498,7 +498,7 @@ void set_param_lora(struct my_llama_lora * lora) {
     }
 }
 
-void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora) {
+static void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora) {
     const auto & lparams = lora->hparams;
 
     const uint32_t n_embd     = model->hparams.n_embd;
@@ -716,7 +716,7 @@ void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora)
 
 
 
-void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std, float min, float max) {
+static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std, float min, float max) {
     const uint32_t n_layer = lora->layers.size();
 
     struct random_normal_distribution rnd;
@@ -755,25 +755,25 @@ void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std
     }
 }
 
-void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
+static void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
     GGML_ASSERT(tensor->n_dims == 1);
     GGML_ASSERT(tensor->ne[0] == ne0);
 }
 
-void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
+static void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
     GGML_ASSERT(tensor->n_dims == 2);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
 }
 
-void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
+static void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
     GGML_ASSERT(tensor->n_dims == 3);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
 }
 
-void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
+static void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
     GGML_ASSERT(tensor->n_dims == 4);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
@@ -781,7 +781,7 @@ void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
     GGML_ASSERT(tensor->ne[3] == ne3);
 }
 
-struct ggml_tensor * llama_build_lora_finetune_graphs(
+static struct ggml_tensor * llama_build_lora_finetune_graphs(
         struct my_llama_model * model,
         struct my_llama_lora  * lora,
         struct ggml_allocr    * alloc,
@@ -1019,7 +1019,7 @@ struct ggml_tensor * llama_build_lora_finetune_graphs(
     return t36;
 }
 
-int get_example_targets_batch(
+static int get_example_targets_batch(
         struct llama_context * lctx,
         const size_t         * samples_begin,
         const size_t         * samples_size,
@@ -1229,7 +1229,7 @@ static size_t mark_utf8_units(const char* bytes, int * utf8_units, int * utf8_nu
     return count_utf8;
 }
 
-size_t tokenize_file(
+static size_t tokenize_file(
         struct llama_context     * lctx,
         const char               * filename,
         const std::string        & sample_start,
@@ -1419,7 +1419,7 @@ size_t tokenize_file(
     return out_tokens.size();
 }
 
-void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
+static void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
     std::stringstream s_rng_state;
     s_rng_state.imbue(std::locale::classic());
     s_rng_state.exceptions(std::stringstream::failbit);
@@ -1427,19 +1427,19 @@ void mt19937_set_state(std::mt19937& rng, const std::string& rng_state) {
     s_rng_state >> rng;
 }
 
-std::string mt19937_get_state(const std::mt19937& rng) {
+static std::string mt19937_get_state(const std::mt19937& rng) {
     std::stringstream s_rng_state;
     s_rng_state.imbue(std::locale::classic());
     s_rng_state << rng;
     return s_rng_state.str();
 }
 
-std::string mt19937_seed_to_state(unsigned seed) {
+static std::string mt19937_seed_to_state(unsigned seed) {
     std::mt19937 rng(seed);
     return mt19937_get_state(rng);
 }
 
-std::string shuffle_samples(
+static std::string shuffle_samples(
         const std::string & rng_state,
         const size_t      * begins,
         const size_t      * sizes,
@@ -1480,7 +1480,7 @@ std::string shuffle_samples(
     return mt19937_get_state(rng);
 }
 
-std::string replace_str(const char * s, const char * needle, const char * replacement) {
+static std::string replace_str(const char * s, const char * needle, const char * replacement) {
     std::string str = s;
     size_t pos = str.find(needle);
     if (pos != std::string::npos) {
@@ -1504,7 +1504,7 @@ std::string replace_str(const char * s, const char * needle, const char * replac
     } \
 }
 
-bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {
+static bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {
     GGML_ASSERT(a != NULL);
     GGML_ASSERT(b != NULL);
     GGML_ASSERT(a->type == b->type);
@@ -1514,7 +1514,7 @@ bool are_same_layout(struct ggml_tensor * a, struct ggml_tensor * b) {
     return true;
 }
 
-void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, const char * name) {
+static void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, const char * name) {
     if (dst == NULL) {
         return;
     }
@@ -1527,7 +1527,7 @@ void read_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
     }
 }
 
-void load_default_lora_params_from_base_model(const char * fn_base_model, struct my_llama_lora_hparams * lora_params) {
+static void load_default_lora_params_from_base_model(const char * fn_base_model, struct my_llama_lora_hparams * lora_params) {
     if (strlen(fn_base_model) == 0) {
         return;
     }
@@ -1558,7 +1558,7 @@ void load_default_lora_params_from_base_model(const char * fn_base_model, struct
     gguf_free(fctx);
 }
 
-void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt) {
+static void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
 
     uint32_t file_version;
@@ -1617,7 +1617,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     }
 }
 
-void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt) {
+static void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt) {
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_FILE_VERSION, 0);
     gguf_set_val_u32(fctx, LLM_KV_OPTIMIZER_CONVERGENCE_PAST_COUNT, opt->params.past);
     gguf_set_val_u64(fctx, LLM_KV_OPTIMIZER_PARAMETER_COUNT, (uint64_t) opt->nx);
@@ -1684,7 +1684,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
     }
 }
 
-void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora) {
+static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
 
     std::string arch;
@@ -1767,7 +1767,7 @@ void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_gg
     }
 }
 
-void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora) {
+static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora) {
     const char * arch = "llama";
     enum llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
 
@@ -1834,7 +1834,7 @@ void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_model * mo
     }
 }
 
-void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+static void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
     load_llama_lora_gguf(fctx, f_ggml_ctx, model, lora);
 
     uint32_t file_version;
@@ -1867,7 +1867,7 @@ void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context *
     load_opt_context_gguf(fctx, f_ggml_ctx, opt);
 }
 
-void save_checkpoint_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+static void save_checkpoint_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
     save_llama_lora_gguf(fctx, model, lora);
 
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    1);
@@ -1885,7 +1885,7 @@ void save_checkpoint_lora_gguf(struct gguf_context * fctx, struct my_llama_model
     save_opt_context_gguf(fctx, opt);
 }
 
-bool load_checkpoint_lora_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
+static bool load_checkpoint_lora_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt) {
     struct ggml_context * f_ggml_ctx;
     struct gguf_init_params params;
     params.no_alloc = false;
@@ -1901,7 +1901,7 @@ bool load_checkpoint_lora_file(const char * filename, struct my_llama_model * mo
     return true;
 }
 
-void save_checkpoint_lora_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * pattern_it, int iteration, const char * latest) {
+static void save_checkpoint_lora_file(const char * filename, struct my_llama_model * model, struct my_llama_lora * lora, struct ggml_opt_context * opt, const char * pattern_it, int iteration, const char * latest) {
     std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
     std::string fn = replace_str(filename, pattern_it, sit.c_str());
     printf("%s: saving to %s\n", __func__, fn.c_str());
@@ -1915,7 +1915,7 @@ void save_checkpoint_lora_file(const char * filename, struct my_llama_model * mo
     gguf_free(fctx);
 }
 
-void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, const char * name) {
+static void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, const char * name) {
     if (tensor == NULL) {
         file->write_u32(0);
         file->write_u32(0);
@@ -1941,7 +1941,7 @@ void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, const c
     file->write_raw(tensor->data, ggml_nbytes(tensor));
 }
 
-void save_as_llama_lora(struct my_llama_lora * lora, const char * filename, const char * pattern_it, int iteration, const char * latest) {
+static void save_as_llama_lora(struct my_llama_lora * lora, const char * filename, const char * pattern_it, int iteration, const char * latest) {
     std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
     std::string fn = replace_str(filename, pattern_it, sit.c_str());
     printf("%s: saving to %s\n", __func__, fn.c_str());
@@ -2002,7 +2002,7 @@ void save_as_llama_lora(struct my_llama_lora * lora, const char * filename, cons
     }
 }
 
-float cosine_decay(const int decay_steps, const float minimum, int step) {
+static float cosine_decay(const int decay_steps, const float minimum, int step) {
     if (step > decay_steps) {
         step = decay_steps;
     }
@@ -2011,7 +2011,7 @@ float cosine_decay(const int decay_steps, const float minimum, int step) {
     return decay;
 }
 
-float cosine_decay_restart(int decay_steps, const float minimum, int step, float restart_step_mult, bool enable_restart) {
+static float cosine_decay_restart(int decay_steps, const float minimum, int step, float restart_step_mult, bool enable_restart) {
     if (enable_restart) {
         while (step > decay_steps) {
             step -= decay_steps;
@@ -2118,7 +2118,7 @@ struct train_params {
     float adam_eps_f;
 };
 
-struct train_params get_default_train_params() {
+static struct train_params get_default_train_params() {
     struct train_params params;
     params.fn_model_base     = "";
     params.fn_train_data     = "shakespeare.txt";
@@ -2216,7 +2216,7 @@ struct train_params get_default_train_params() {
     return params;
 }
 
-void train_print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
+static void train_print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
@@ -2289,7 +2289,7 @@ void train_print_usage(int /*argc*/, char ** argv, const struct train_params * p
     fprintf(stderr, "\n");
 }
 
-bool train_params_parse(int argc, char ** argv, struct train_params * params) {
+static bool train_params_parse(int argc, char ** argv, struct train_params * params) {
     bool invalid_param = false;
     std::string arg;
     struct train_params default_params = get_default_train_params();
@@ -2683,7 +2683,7 @@ struct opt_callback_data {
     double                    millis_per_iter;
 };
 
-void print_duration(double fmillis) {
+static void print_duration(double fmillis) {
     if (fmillis < 1000.0f) {
         printf("%.1fms", (float) fmillis);
         return;
@@ -2706,7 +2706,7 @@ void print_duration(double fmillis) {
     printf("%02lld:%02lld:%02lld", (long long int) hours, (long long int) minutes, (long long int) seconds);
 }
 
-void opt_callback(void * vdata, int accum_step, float * sched) {
+static void opt_callback(void * vdata, int accum_step, float * sched) {
     struct opt_callback_data * data = (struct opt_callback_data *) vdata;
     struct train_params * params    = data->params;
     struct ggml_opt_context * opt   = data->opt;
@@ -2826,7 +2826,7 @@ void opt_callback(void * vdata, int accum_step, float * sched) {
     }
 }
 
-int64_t get_parameter_count(struct my_llama_lora* lora) {
+static int64_t get_parameter_count(struct my_llama_lora* lora) {
     int64_t nx = 0;
     nx += ggml_nelements(lora->tok_embeddings_a);
     nx += ggml_nelements(lora->tok_embeddings_b);
@@ -2859,11 +2859,11 @@ int64_t get_parameter_count(struct my_llama_lora* lora) {
     return nx;
 }
 
-size_t hash_combine(size_t h1, size_t h2) {
+static size_t hash_combine(size_t h1, size_t h2) {
     return h1 ^ (h2 << 1);
 }
 
-size_t compute_samples_hash(const char* fn, const size_t* samples_begin, const size_t* samples_size, size_t sample_count) {
+static size_t compute_samples_hash(const char* fn, const size_t* samples_begin, const size_t* samples_size, size_t sample_count) {
     std::hash<std::string> h_string;
     std::hash<unsigned long long> h_ull;
     size_t h = h_string(std::string(fn));
