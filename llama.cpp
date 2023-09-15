@@ -3639,11 +3639,11 @@ static struct ggml_cgraph * llm_build_starcoder(
         inpL = ggml_add(ctx0, cur, inpFF);
     }
 
-	// Output Norm
-	{
-		cur = ggml_norm(ctx0, inpL, norm_eps);
-		cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.output_norm), model.output_norm_b);
-	}
+    // Output Norm
+    {
+        cur = ggml_norm(ctx0, inpL, norm_eps);
+        cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.output_norm), model.output_norm_b);
+    }
     ggml_set_name(cur, "result_norm");
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
