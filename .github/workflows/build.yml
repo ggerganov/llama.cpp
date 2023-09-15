@@ -281,6 +281,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Download OpenCL SDK
         id: get_opencl
@@ -397,6 +399,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
@@ -485,6 +489,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Determine tag name
         id: tag
