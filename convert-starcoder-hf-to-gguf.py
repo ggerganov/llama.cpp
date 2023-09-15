@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# HF falcon--> gguf conversion
+# HF starcoder --> gguf conversion
 
 from __future__ import annotations
 
