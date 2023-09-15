@@ -104,15 +104,11 @@ block_count = hparams["n_layer"]
 
 gguf_writer.add_name("StarCoder")
 gguf_writer.add_context_length(2048) # not in config.json
-gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
 gguf_writer.add_embedding_length(hparams["n_embd"])
 gguf_writer.add_feed_forward_length(4 * hparams["n_embd"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_head_count(hparams["n_head"])
-if "n_head_kv" in hparams:
-    gguf_writer.add_head_count_kv(hparams["n_head_kv"])
-else:
-    gguf_writer.add_head_count_kv(1)
+gguf_writer.add_head_count_kv(1)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 gguf_writer.add_file_type(ftype)
 
@@ -251,7 +247,7 @@ for part_name in part_names:
         if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print(name, "=>", new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+        print(name, "=>", new_name + ", shape = " + str(data.shape) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
         gguf_writer.add_tensor(new_name, data)
 
