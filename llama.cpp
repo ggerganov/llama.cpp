@@ -918,6 +918,7 @@ enum e_model {
     MODEL_3B,
     MODEL_7B,
     MODEL_13B,
+    MODEL_15B,
     MODEL_30B,
     MODEL_34B,
     MODEL_40B,
@@ -1624,9 +1625,11 @@ std::string llama_model_ftype_name(enum llama_ftype ftype) {
 
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
+        case MODEL_1B:  return "3B";
         case MODEL_3B:  return "3B";
         case MODEL_7B:  return "7B";
         case MODEL_13B: return "13B";
+        case MODEL_15B: return "15B";
         case MODEL_30B: return "30B";
         case MODEL_34B: return "34B";
         case MODEL_40B: return "40B";
@@ -1750,6 +1753,9 @@ static void llm_load_hparams(
                 GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1B; break;
+                    case 36: model.type = e_model::MODEL_3B; break;
+                    case 42: model.type = e_model::MODEL_7B; break;
+                    case 40: model.type = e_model::MODEL_15B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
