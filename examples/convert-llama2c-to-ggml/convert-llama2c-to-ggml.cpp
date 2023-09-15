@@ -115,9 +115,7 @@ struct TransformerWeights {
     }
 };
 
-namespace {
-
-void malloc_weights(TransformerWeights* w, Config* p, bool shared_weights) {
+static void malloc_weights(TransformerWeights* w, Config* p, bool shared_weights) {
     // we calloc instead of malloc to keep valgrind happy
     w->token_embedding_table = new float[p->vocab_size * p->dim]();
     printf("[%s:AK] Allocating [%d] x [%d] = [%d] float space for w->token_embedding_table\n",__func__,p->vocab_size , p->dim, p->vocab_size * p->dim);
@@ -160,7 +158,7 @@ void malloc_weights(TransformerWeights* w, Config* p, bool shared_weights) {
     }
 }
 
-int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f, bool shared_weights) {
+static int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f, bool shared_weights) {
     if (fread(w->token_embedding_table, sizeof(float), p->vocab_size * p->dim, f) != static_cast<size_t>(p->vocab_size * p->dim)) return 1;
     if (fread(w->rms_att_weight, sizeof(float), p->n_layers * p->dim, f) != static_cast<size_t>(p->n_layers * p->dim)) return 1;
     if (fread(w->wq, sizeof(float), p->n_layers * p->dim * p->dim, f) != static_cast<size_t>(p->n_layers * p->dim * p->dim)) return 1;
@@ -191,7 +189,7 @@ int checkpoint_init_weights(TransformerWeights *w, Config* p, FILE* f, bool shar
     return 0;
 }
 
-void print_sample_weights(TransformerWeights *w){
+static void print_sample_weights(TransformerWeights *w){
     printf("----- Quick print of first of the weight vales of all the variables\n");
     printf("%f\n", w->token_embedding_table[0]);
     printf("%f\n", w->rms_att_weight[0]);
@@ -326,7 +324,7 @@ struct train_params {
     int mem_compute1_gb;
 };
 
-void print_params(struct my_llama_hparams * params) {
+static void print_params(struct my_llama_hparams * params) {
     printf("%s: n_vocab: %d\n", __func__, params->n_vocab);
     printf("%s: n_ctx:   %d\n", __func__, params->n_ctx);
     printf("%s: n_embd:  %d\n", __func__, params->n_embd);
@@ -337,7 +335,7 @@ void print_params(struct my_llama_hparams * params) {
     printf("%s: n_rot:   %d\n", __func__, params->n_rot);
 }
 
-void init_model(struct my_llama_model * model) {
+static void init_model(struct my_llama_model * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -410,17 +408,17 @@ void init_model(struct my_llama_model * model) {
     }
 }
 
-float get_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
+static float get_f32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
     float * ptr = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
     return *ptr;
 }
 
-int32_t get_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
+static int32_t get_i32_2d(struct ggml_tensor * tensor, int64_t i0, int64_t i1) {
     int32_t * ptr = (int32_t *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
     return *ptr;
 }
 
-void print_row(struct ggml_tensor * probs, int i) {
+static void print_row(struct ggml_tensor * probs, int i) {
     for (int k = 0; k < probs->ne[0]; ++k) {
         float p = get_f32_2d(probs, k, i);
         printf(" %f", p);
@@ -428,7 +426,7 @@ void print_row(struct ggml_tensor * probs, int i) {
     printf("\n");
 }
 
-void print_matrix(struct ggml_tensor * probs) {
+static void print_matrix(struct ggml_tensor * probs) {
     assert(probs->n_dims == 2);
     for (int i = 0; i < probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
@@ -551,7 +549,7 @@ std::string llama_escape_whitespaces(const std::string& text) {
     return out.str();
 }
 
-void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
+static void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab) {
     if (is_ggml_file(filename)) {
         struct ggml_context * ctx_data = NULL;
 
@@ -639,7 +637,7 @@ void load_vocab(const char *filename, Config *config, struct llama_vocab *vocab)
     }
 }
 
-void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
+static void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
     int ct;
     switch (gg_weights->n_dims){
         case 1:
@@ -675,7 +673,9 @@ void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const float * kar
     }
 }
 
-void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename) {
+static void save_as_llama_model(
+    struct llama_vocab * vocab, struct my_llama_model * model, TransformerWeights* w, const char * filename
+) {
     // convert AK weights into GG weights one by one.
     // w->token_embedding_table -> model->tok_embeddings
     // float*                   -> struct ggml_tensor
@@ -787,7 +787,7 @@ void save_as_llama_model(struct llama_vocab * vocab, struct my_llama_model * mod
     gguf_free(ctx);
 }
 
-struct train_params get_default_train_params() {
+static struct train_params get_default_train_params() {
     struct train_params params;
     params.fn_vocab_model    = "models/7B/ggml-model-f16.gguf";
     params.fn_llama2c_output_model = "ak_llama_model.bin";
@@ -837,7 +837,7 @@ struct train_params get_default_train_params() {
     return params;
 }
 
-void print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
+static void print_usage(int /*argc*/, char ** argv, const struct train_params * params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
@@ -848,7 +848,7 @@ void print_usage(int /*argc*/, char ** argv, const struct train_params * params)
     fprintf(stderr, "\n");
 }
 
-bool params_parse(int argc, char ** argv, struct train_params * params) {
+static bool params_parse(int argc, char ** argv, struct train_params * params) {
     bool invalid_param = false;
     bool reqd_param_found = false;
     std::string arg;
@@ -903,15 +903,13 @@ bool params_parse(int argc, char ** argv, struct train_params * params) {
     return true;
 }
 
-std::string basename(const std::string &path) {
+static std::string basename(const std::string &path) {
     size_t pos = path.find_last_of("/\\");
     if (pos == std::string::npos) {
         return path;
     }
     return path.substr(pos + 1);
 }
-
-} // namespace
 
 int main(int argc, char ** argv) {
     struct train_params params = get_default_train_params();

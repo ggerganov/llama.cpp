@@ -19,20 +19,18 @@ constexpr float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
 constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
 constexpr float MAX_DOT_PRODUCT_ERROR = 0.02f;
 
+static const char* RESULT_STR[] = {"ok", "FAILED"};
 
-namespace {
-
-const char* RESULT_STR[] = {"ok", "FAILED"};
 
 // Generate synthetic data
-void generate_data(float offset, size_t n, float * dst) {
+static void generate_data(float offset, size_t n, float * dst) {
     for (size_t i = 0; i < n; i++) {
         dst[i] = 0.1 + 2*cosf(i + offset);
     }
 }
 
 // Calculate RMSE between two float arrays
-float array_rmse(const float * a1, const float * a2, size_t n) {
+static float array_rmse(const float * a1, const float * a2, size_t n) {
     double sum = 0;
     for (size_t i = 0; i < n; i++) {
         double diff = a1[i] - a2[i];
@@ -42,7 +40,7 @@ float array_rmse(const float * a1, const float * a2, size_t n) {
 }
 
 // Total quantization error on test data
-float total_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
+static float total_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
 
@@ -52,7 +50,7 @@ float total_quantization_error(ggml_type_traits_t & qfns, size_t test_size, cons
 }
 
 // Total quantization error on test data
-float reference_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
+static float reference_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
     std::vector<float> tmp_out_ref(test_size);
@@ -66,7 +64,7 @@ float reference_quantization_error(ggml_type_traits_t & qfns, size_t test_size, 
     return array_rmse(tmp_out.data(), tmp_out_ref.data(), test_size);
 }
 
-float dot_product(const float * a1, const float * a2, size_t test_size) {
+static float dot_product(const float * a1, const float * a2, size_t test_size) {
     double sum = 0;
     for (size_t i = 0; i < test_size; i++) {
         sum += a1[i] * a2[i];
@@ -75,7 +73,9 @@ float dot_product(const float * a1, const float * a2, size_t test_size) {
 }
 
 // Total dot product error
-float dot_product_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data1, const float *test_data2) {
+static float dot_product_error(
+    ggml_type_traits_t & qfns, size_t test_size, const float * test_data1, const float *test_data2
+) {
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
@@ -91,8 +91,6 @@ float dot_product_error(ggml_type_traits_t & qfns, size_t test_size, const float
 
     return fabsf(result - dot_ref) / test_size;
 }
-
-} // namespace
 
 int main(int argc, char * argv[]) {
     bool verbose = false;

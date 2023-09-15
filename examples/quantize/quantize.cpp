@@ -7,15 +7,13 @@
 #include <vector>
 #include <string>
 
-namespace {
-
 struct quant_option {
     std::string name;
     llama_ftype ftype;
     std::string desc;
 };
 
-const std::vector<struct quant_option> QUANT_OPTIONS = {
+static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q4_0",   LLAMA_FTYPE_MOSTLY_Q4_0,   " 3.56G, +0.2166 ppl @ LLaMA-v1-7B", },
     { "Q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1,   " 3.90G, +0.1585 ppl @ LLaMA-v1-7B", },
     { "Q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0,   " 4.33G, +0.0683 ppl @ LLaMA-v1-7B", },
@@ -42,7 +40,7 @@ const std::vector<struct quant_option> QUANT_OPTIONS = {
 };
 
 
-bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
+static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
 
     for (auto ch : ftype_str_in) {
@@ -74,7 +72,7 @@ bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std:
 // usage:
 //  ./quantize [--allow-requantize] [--leave-output-tensor] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
 //
-void usage(const char * executable) {
+static void usage(const char * executable) {
     printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
@@ -89,8 +87,6 @@ void usage(const char * executable) {
     }
     exit(1);
 }
-
-} // namespace
 
 int main(int argc, char ** argv) {
     if (argc < 3) {

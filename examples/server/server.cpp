@@ -26,8 +26,6 @@
 using namespace httplib;
 using json = nlohmann::json;
 
-namespace {
-
 struct server_params
 {
     std::string hostname = "127.0.0.1";
@@ -65,7 +63,7 @@ enum stop_type
     STOP_PARTIAL,
 };
 
-bool ends_with(const std::string & str, const std::string & suffix)
+static bool ends_with(const std::string & str, const std::string & suffix)
 {
     return str.size() >= suffix.size() &&
            0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
@@ -102,7 +100,7 @@ std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
     return ret;
 }
 
-void server_log(
+static void server_log(
     const char * level, const char * function, int line, const char * message, const nlohmann::ordered_json & extra
 ) {
     nlohmann::ordered_json log{
@@ -163,7 +161,7 @@ json probs_vector_to_json(const llama_context * ctx, const std::vector<completio
     return out;
 }
 
-bool server_verbose = false;
+static bool server_verbose = false;
 
 #if SERVER_VERBOSE != 1
 #define LOG_VERBOSE(MSG, ...)
@@ -692,7 +690,7 @@ struct llama_server_context
     }
 };
 
-void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams)
+static void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams)
 {
     printf("usage: %s [options]\n", argv0);
     printf("\n");
@@ -740,7 +738,7 @@ void server_print_usage(const char * argv0, const gpt_params & params, const ser
     printf("\n");
 }
 
-void server_params_parse(int argc, char ** argv, server_params & sparams, gpt_params & params)
+static void server_params_parse(int argc, char ** argv, server_params & sparams, gpt_params & params)
 {
     gpt_params default_params;
     server_params default_sparams;
@@ -1120,7 +1118,7 @@ T json_value(const json & body, const std::string & key, const T & default_value
         : default_value;
 }
 
-void parse_options_completion(const json & body, llama_server_context & llama)
+static void parse_options_completion(const json & body, llama_server_context & llama)
 {
     gpt_params default_params;
 
@@ -1199,7 +1197,7 @@ void parse_options_completion(const json & body, llama_server_context & llama)
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }
 
-void log_server_request(const Request & req, const Response & res)
+static void log_server_request(const Request & req, const Response & res)
 {
     LOG_INFO("request", {
                             {"remote_addr", req.remote_addr},
@@ -1216,7 +1214,7 @@ void log_server_request(const Request & req, const Response & res)
                            });
 }
 
-bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
+static bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1226,7 +1224,7 @@ bool is_at_eob(llama_server_context & server_context, const llama_token * tokens
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
+static void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
     auto & llama = *static_cast<llama_server_context*>(callback_data);
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
@@ -1259,7 +1257,7 @@ struct token_translator {
     std::string operator()(const completion_token_output & cto) const { return (*this)(cto.tok); }
 };
 
-void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
+static void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
     auto & gtps = llama.generated_token_probs;
     auto translator = token_translator{llama.ctx};
     auto add_strlen = [=](size_t sum, const completion_token_output & cto) { return sum + translator(cto).size(); };
@@ -1272,10 +1270,7 @@ void append_to_generated_text_from_generated_token_probs(llama_server_context & 
     }
 }
 
-} // namespace
-
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     // own arguments required by this example
     gpt_params params;
     server_params sparams;
