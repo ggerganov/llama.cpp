@@ -38,6 +38,7 @@ struct gpt_params {
     int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
     int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
+    int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
@@ -109,7 +110,6 @@ struct gpt_params {
     bool perplexity        = false; // compute perplexity over the prompt
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
-    bool mem_test          = false; // compute maximum memory usage
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
