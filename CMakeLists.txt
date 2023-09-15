@@ -434,8 +434,9 @@ if (LLAMA_ALL_WARNINGS)
             -Wno-unused-function
             -Wno-multichar
         )
-        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            # g++ only
+        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")  # clang++ only
+            set(cxx_flags ${cxx_flags} -Wmissing-prototypes)
+        elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")  # g++ only
             set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
         endif()
     else()
