@@ -7,8 +7,8 @@ build_commit="unknown"
 build_compiler="unknown"
 build_target="unknown"
 
-# git is broken on WSL so we need to strip extra newlines
 if out=$(git rev-list --count HEAD); then
+  # git is broken on WSL so we need to strip extra newlines
   build_number=$(printf '%s' "$out" | tr -d '\n')
 fi
 
