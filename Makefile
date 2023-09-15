@@ -183,11 +183,11 @@ TTFS_CXXFLAGS = $(CXXFLAGS) -Wno-missing-declarations
 
 ifneq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# clang++ only
-	MK_CXXFLAGS   += -Wmissing-prototypes
-	TTFS_CXXFLAGS += -Wno-missing-prototypes
+	MK_HOST_CXXFLAGS += -Wmissing-prototypes
+	TTFS_CXXFLAGS    += -Wno-missing-prototypes
 else
 	# g++ only
-	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
+	MK_HOST_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
 
 # OS specific
