@@ -3559,7 +3559,7 @@ static struct ggml_cgraph * llm_build_starcoder(
                 ggml_permute(ctx0,
                         ggml_cpy(ctx0,
                             Qcur,
-                            ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_embd/n_head, n_head, N)),
+                            ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_embd_head, n_head, N)),
                         0, 2, 1, 3);
             ggml_set_name(Q, "Q");
 
