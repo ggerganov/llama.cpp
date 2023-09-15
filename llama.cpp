@@ -6819,9 +6819,9 @@ void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
 }
 
 // For internal test use
-auto llama_internal_get_tensor_map(struct llama_context * ctx)
-    -> const std::vector<std::pair<std::string, struct ggml_tensor *>> &
-{
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+) {
     return ctx->model.tensors_by_name;
 }
 

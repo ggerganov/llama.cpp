@@ -9,7 +9,7 @@
 namespace grammar_parser {
     // NOTE: assumes valid utf8 (but checks for overrun)
     // copied from llama.cpp
-    static auto decode_utf8(const char * src) -> std::pair<uint32_t, const char *> {
+    static std::pair<uint32_t, const char *> decode_utf8(const char * src) {
         static const int lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
         uint8_t  first_byte = static_cast<uint8_t>(*src);
         uint8_t  highbits   = first_byte >> 4;
@@ -50,7 +50,7 @@ namespace grammar_parser {
         return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
     }
 
-    static auto parse_hex(const char * src, int size) -> std::pair<uint32_t, const char *> {
+    static std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
         const char * pos   = src;
         const char * end   = src + size;
         uint32_t     value = 0;
@@ -99,7 +99,7 @@ namespace grammar_parser {
         return pos;
     }
 
-    static auto parse_char(const char * src) -> std::pair<uint32_t, const char *> {
+    static std::pair<uint32_t, const char *> parse_char(const char * src) {
         if (*src == '\\') {
             switch (src[1]) {
                 case 'x': return parse_hex(src + 2, 2);
