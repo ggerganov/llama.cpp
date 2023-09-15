@@ -1,5 +1,4 @@
 #!/bin/sh
-set -o pipefail
 
 CC=$1
 
@@ -9,12 +8,12 @@ build_compiler="unknown"
 build_target="unknown"
 
 # git is broken on WSL so we need to strip extra newlines
-if out=$(git rev-list --count HEAD | tr -d '\n'); then
-  build_number=$out
+if out=$(git rev-list --count HEAD); then
+  build_number=$(printf '%s' "$out" | tr -d '\n')
 fi
 
-if out=$(git rev-parse --short HEAD | tr -d '\n'); then
-  build_commit=$out
+if out=$(git rev-parse --short HEAD); then
+  build_commit=$(printf '%s' "$out" | tr -d '\n')
 fi
 
 if out=$($CC --version | head -1); then
