@@ -77,13 +77,14 @@ KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA  : int = auto()
-    FALCON : int = auto()
-    BAICHUAN:int = auto()
-    GPT2   : int = auto()
-    GPTJ   : int = auto()
-    GPTNEOX: int = auto()
-    MPT    : int = auto()
+    LLAMA         : int = auto()
+    FALCON        : int = auto()
+    BAICHUAN      : int = auto()
+    GPT2          : int = auto()
+    GPTJ          : int = auto()
+    GPTNEOX       : int = auto()
+    MPT           : int = auto()
+    STARCODER     : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -107,13 +108,14 @@ class MODEL_TENSOR(IntEnum):
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
-    MODEL_ARCH.LLAMA:   "llama",
-    MODEL_ARCH.FALCON:  "falcon",
-    MODEL_ARCH.BAICHUAN:"baichuan",
-    MODEL_ARCH.GPT2:    "gpt2",
-    MODEL_ARCH.GPTJ:    "gptj",
-    MODEL_ARCH.GPTNEOX: "gptneox",
-    MODEL_ARCH.MPT:     "mpt",
+    MODEL_ARCH.LLAMA:          "llama",
+    MODEL_ARCH.FALCON:         "falcon",
+    MODEL_ARCH.BAICHUAN:       "baichuan",
+    MODEL_ARCH.GPT2:           "gpt2",
+    MODEL_ARCH.GPTJ:           "gptj",
+    MODEL_ARCH.GPTNEOX:        "gptneox",
+    MODEL_ARCH.MPT:            "mpt",
+    MODEL_ARCH.STARCODER:      "starcoder",
 }
 
 MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
@@ -170,6 +172,8 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+    },
+    MODEL_ARCH.STARCODER: {
     },
     MODEL_ARCH.GPT2: {
         # TODO

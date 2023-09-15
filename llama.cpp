@@ -160,17 +160,19 @@ enum llm_arch {
     LLM_ARCH_GPTJ,
     LLM_ARCH_GPTNEOX,
     LLM_ARCH_MPT,
+    LLM_ARCH_STARCODER,
     LLM_ARCH_UNKNOWN,
 };
 
 static std::map<llm_arch, std::string> LLM_ARCH_NAMES = {
-    { LLM_ARCH_LLAMA,   "llama"   },
-    { LLM_ARCH_FALCON,  "falcon"  },
-    { LLM_ARCH_GPT2,    "gpt2"    },
-    { LLM_ARCH_GPTJ,    "gptj"    },
-    { LLM_ARCH_GPTNEOX, "gptneox" },
-    { LLM_ARCH_MPT,     "mpt"     },
-    { LLM_ARCH_BAICHUAN,"baichuan" },
+    { LLM_ARCH_LLAMA,           "llama"   },
+    { LLM_ARCH_FALCON,          "falcon"  },
+    { LLM_ARCH_GPT2,            "gpt2"    },
+    { LLM_ARCH_GPTJ,            "gptj"    },
+    { LLM_ARCH_GPTNEOX,         "gptneox" },
+    { LLM_ARCH_MPT,             "mpt"     },
+    { LLM_ARCH_BAICHUAN,        "baichuan" },
+    { LLM_ARCH_STARCODER,       "starcoder" },
 };
 
 enum llm_kv {
