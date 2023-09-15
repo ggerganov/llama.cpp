@@ -34,7 +34,7 @@
             with pkgs; [ openblas ]
         );
         pkgs = import nixpkgs { inherit system; };
-        nativeBuildInputs = with pkgs; [ cmake ninja pkgconfig ];
+        nativeBuildInputs = with pkgs; [ cmake ninja pkg-config ];
         llama-python =
           pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
         postPatch = ''
@@ -45,6 +45,8 @@
         postInstall = ''
           mv $out/bin/main $out/bin/llama
           mv $out/bin/server $out/bin/llama-server
+          mkdir -p $out/include
+          cp ${src}/llama.h $out/include/
         '';
         cmakeFlags = [ "-DLLAMA_BUILD_SERVER=ON" "-DLLAMA_MPI=ON" "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=ON" ];
       in
@@ -92,6 +94,10 @@
         apps.quantize = {
           type = "app";
           program = "${self.packages.${system}.default}/bin/quantize";
+        };
+        apps.train-text-from-scratch = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/train-text-from-scratch";
         };
         apps.default = self.apps.${system}.llama;
         devShells.default = pkgs.mkShell {

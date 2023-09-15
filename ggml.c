@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // Defines CLOCK_MONOTONIC on Linux
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
 #include "ggml.h"
@@ -47,6 +46,10 @@
 // disable "possible loss of data" to avoid hundreds of casts
 // we should just be careful :)
 #pragma warning(disable: 4244 4267)
+
+// disable POSIX deprecation warnigns
+// these functions are never going away, anyway
+#pragma warning(disable: 4996)
 #endif
 
 #if defined(_WIN32)
@@ -103,6 +106,9 @@ typedef void * thread_ret_t;
 #include <sys/stat.h>
 #include <unistd.h>
 
+#endif
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
 #endif
 
 // __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
@@ -192,9 +198,15 @@ typedef void * thread_ret_t;
 #define GGML_ALIGNED_FREE(ptr)    _aligned_free(ptr)
 #else
 inline static void * ggml_aligned_malloc(size_t size) {
+    if (size == 0) {
+        GGML_PRINT("WARNING: Behavior may be unexpected when allocating 0 bytes for ggml_aligned_malloc!\n");
+        return NULL;
+    }
     void * aligned_memory = NULL;
-#ifdef GGML_USE_METAL
-    int result = posix_memalign(&aligned_memory, getpagesize(), size);
+#ifdef GGML_USE_CPU_HBM
+    int result = hbw_posix_memalign(&aligned_memory, 16, size);
+#elif GGML_USE_METAL
+    int result = posix_memalign(&aligned_memory, sysconf(_SC_PAGESIZE), size);
 #else
     int result = posix_memalign(&aligned_memory, GGML_MEM_ALIGN, size);
 #endif
@@ -215,7 +227,11 @@ inline static void * ggml_aligned_malloc(size_t size) {
     return aligned_memory;
 }
 #define GGML_ALIGNED_MALLOC(size) ggml_aligned_malloc(size)
+#ifdef GGML_USE_CPU_HBM
+#define GGML_ALIGNED_FREE(ptr)    if(NULL != ptr) hbw_free(ptr)
+#else
 #define GGML_ALIGNED_FREE(ptr)    free(ptr)
+#endif
 #endif
 
 #define UNUSED GGML_UNUSED
@@ -267,7 +283,7 @@ typedef double ggml_float;
 // 16-bit float
 // on Arm, we use __fp16
 // on x86, we use uint16_t
-#ifdef __ARM_NEON
+#if defined(__ARM_NEON) && !defined(_MSC_VER)
 
 // if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
 //
@@ -294,8 +310,10 @@ typedef double ggml_float;
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
+#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__) || defined(__SSE3__)
 #if !defined(__riscv)
 #include <immintrin.h>
+#endif
 #endif
 #endif
 #endif
@@ -4285,10 +4303,21 @@ int64_t ggml_nrows(const struct ggml_tensor * tensor) {
 }
 
 size_t ggml_nbytes(const struct ggml_tensor * tensor) {
-    size_t nbytes = tensor->ne[0]*tensor->nb[0]/ggml_blck_size(tensor->type);
-    for (int i = 1; i < GGML_MAX_DIMS; ++i) {
-        nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
+    size_t nbytes;
+    size_t blck_size = ggml_blck_size(tensor->type);
+    if (blck_size == 1) {
+        nbytes = ggml_type_size(tensor->type);
+        for (int i = 0; i < GGML_MAX_DIMS; ++i) {
+            nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
+        }
     }
+    else {
+        nbytes = tensor->ne[0]*tensor->nb[0]/blck_size;
+        for (int i = 1; i < GGML_MAX_DIMS; ++i) {
+            nbytes += (tensor->ne[i] - 1)*tensor->nb[i];
+        }
+    }
+
     return nbytes;
 }
 
@@ -4566,6 +4595,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         return NULL;
     }
 
+    // allow to call ggml_init with 0 size
+    if (params.mem_size == 0) {
+        params.mem_size = GGML_MEM_ALIGN;
+    }
+
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
     *ctx = (struct ggml_context) {
@@ -4768,7 +4802,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
 
     size_t obj_alloc_size = 0;
 
-    if (view_src == NULL && ctx->no_alloc == false) {
+    if (view_src == NULL && !ctx->no_alloc) {
         if (ctx->scratch.data != NULL) {
             // allocate tensor data in the scratch buffer
             if (ctx->scratch.offs + data_size > ctx->scratch.size) {
@@ -5469,7 +5503,7 @@ static struct ggml_tensor * ggml_mul_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -5512,7 +5546,7 @@ static struct ggml_tensor * ggml_div_impl(
     }
 
     if (inplace) {
-        GGML_ASSERT(is_node == false);
+        GGML_ASSERT(!is_node);
     }
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
@@ -17260,10 +17294,18 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         } else {
             // wait for other threads to finish
             const int last = node_n;
-            do {
-                //sched_yield();
+            while (true) {
+                // TODO: this sched_yield can have significant impact on the performance - either positive or negative
+                //       depending on the workload and the operating system.
+                //       since it is not clear what is the best approach, it should potentially become user-configurable
+                //       ref: https://github.com/ggerganov/ggml/issues/291
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+                sched_yield();
+#endif
+
                 node_n = atomic_load(&state->shared->node_n);
-            } while (node_n == last);
+                if (node_n != last) break;
+            };
         }
 
         // check if we should stop
@@ -18314,10 +18356,11 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
     for (int i = 0; i < cgraph->n_leafs; i++) {
         struct ggml_tensor * node = cgraph->leafs[i];
 
-        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s\n",
+        GGML_PRINT(" - %3d: [ %5" PRId64 ", %5" PRId64 "] %8s %16s\n",
                 i,
                 node->ne[0], node->ne[1],
-                ggml_op_name(node->op));
+                ggml_op_name(node->op),
+                ggml_get_name(node));
     }
 
     for (int i = 0; i < GGML_OP_COUNT; i++) {
@@ -18854,7 +18897,6 @@ static enum ggml_opt_result linesearch_backtracking(
                     // strong Wolfe condition (GGML_LINESEARCH_BACKTRACKING_STRONG_WOLFE)
                     return count;
                 }
-                return count;
             }
         }
 
@@ -19957,7 +19999,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         struct ggml_tensor * data = NULL;
 
-        if (params.no_alloc == false) {
+        if (!params.no_alloc) {
             data = ggml_new_tensor_1d(ctx_data, GGML_TYPE_I8, ctx->size);
 
             ok = ok && data != NULL;
@@ -19998,7 +20040,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             }
 
             // point the data member to the appropriate location in the binary blob using the tensor infos
-            if (params.no_alloc == false) {
+            if (!params.no_alloc) {
               //cur->data = (char *) data->data + ctx->infos[i].offset - ctx->offset; // offset from start of file
                 cur->data = (char *) data->data + ctx->infos[i].offset;               // offset from data
             }
@@ -20077,27 +20119,27 @@ const char * gguf_type_name(enum gguf_type type) {
     return GGUF_TYPE_NAME[type];
 }
 
-int gguf_get_version(struct gguf_context * ctx) {
+int gguf_get_version(const struct gguf_context * ctx) {
     return ctx->header.version;
 }
 
-size_t gguf_get_alignment(struct gguf_context * ctx) {
+size_t gguf_get_alignment(const struct gguf_context * ctx) {
     return ctx->alignment;
 }
 
-size_t gguf_get_data_offset(struct gguf_context * ctx) {
+size_t gguf_get_data_offset(const struct gguf_context * ctx) {
     return ctx->offset;
 }
 
-void * gguf_get_data(struct gguf_context * ctx) {
+void * gguf_get_data(const struct gguf_context * ctx) {
     return ctx->data;
 }
 
-int gguf_get_n_kv(struct gguf_context * ctx) {
+int gguf_get_n_kv(const struct gguf_context * ctx) {
     return ctx->header.n_kv;
 }
 
-int gguf_find_key(struct gguf_context * ctx, const char * key) {
+int gguf_find_key(const struct gguf_context * ctx, const char * key) {
     // return -1 if key not found
     int keyfound = -1;
 
@@ -20113,85 +20155,85 @@ int gguf_find_key(struct gguf_context * ctx, const char * key) {
     return keyfound;
 }
 
-const char * gguf_get_key(struct gguf_context * ctx, int i) {
+const char * gguf_get_key(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].key.data;
 }
 
-enum gguf_type gguf_get_kv_type(struct gguf_context * ctx, int i) {
+enum gguf_type gguf_get_kv_type(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].type;
 }
 
-enum gguf_type gguf_get_arr_type(struct gguf_context * ctx, int i) {
+enum gguf_type gguf_get_arr_type(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.arr.type;
 }
 
-const void * gguf_get_arr_data(struct gguf_context * ctx, int i) {
+const void * gguf_get_arr_data(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.arr.data;
 }
 
-const char * gguf_get_arr_str(struct gguf_context * ctx, int key_id, int i) {
+const char * gguf_get_arr_str(const struct gguf_context * ctx, int key_id, int i) {
     struct gguf_kv * kv = &ctx->kv[key_id];
     struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
     return str->data;
 }
 
-int gguf_get_arr_n(struct gguf_context * ctx, int i) {
+int gguf_get_arr_n(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.arr.n;
 }
 
-uint8_t gguf_get_val_u8(struct gguf_context * ctx, int i) {
+uint8_t gguf_get_val_u8(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.uint8;
 }
 
-int8_t gguf_get_val_i8(struct gguf_context * ctx, int i) {
+int8_t gguf_get_val_i8(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.int8;
 }
 
-uint16_t gguf_get_val_u16(struct gguf_context * ctx, int i) {
+uint16_t gguf_get_val_u16(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.uint16;
 }
 
-int16_t gguf_get_val_i16(struct gguf_context * ctx, int i) {
+int16_t gguf_get_val_i16(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.int16;
 }
 
-uint32_t gguf_get_val_u32(struct gguf_context * ctx, int i) {
+uint32_t gguf_get_val_u32(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.uint32;
 }
 
-int32_t gguf_get_val_i32(struct gguf_context * ctx, int i) {
+int32_t gguf_get_val_i32(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.int32;
 }
 
-float gguf_get_val_f32(struct gguf_context * ctx, int i) {
+float gguf_get_val_f32(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.float32;
 }
 
-uint64_t gguf_get_val_u64(struct gguf_context * ctx, int i) {
+uint64_t gguf_get_val_u64(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.uint64;
 }
 
-int64_t gguf_get_val_i64(struct gguf_context * ctx, int i) {
+int64_t gguf_get_val_i64(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.int64;
 }
 
-double gguf_get_val_f64(struct gguf_context * ctx, int i) {
+double gguf_get_val_f64(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.float64;
 }
 
-bool gguf_get_val_bool(struct gguf_context * ctx, int i) {
+bool gguf_get_val_bool(const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.bool_;
 }
 
-const char * gguf_get_val_str (struct gguf_context * ctx, int i) {
+const char * gguf_get_val_str (const struct gguf_context * ctx, int i) {
     return ctx->kv[i].value.str.data;
 }
 
-int gguf_get_n_tensors(struct gguf_context * ctx) {
+int gguf_get_n_tensors(const struct gguf_context * ctx) {
     return ctx->header.n_tensors;
 }
 
-int gguf_find_tensor(struct gguf_context * ctx, const char * name) {
+int gguf_find_tensor(const struct gguf_context * ctx, const char * name) {
     // return -1 if tensor not found
     int tensorfound = -1;
 
@@ -20207,11 +20249,11 @@ int gguf_find_tensor(struct gguf_context * ctx, const char * name) {
     return tensorfound;
 }
 
-size_t gguf_get_tensor_offset(struct gguf_context * ctx, int i) {
+size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i) {
     return ctx->infos[i].offset;
 }
 
-char * gguf_get_tensor_name(struct gguf_context * ctx, int i) {
+char * gguf_get_tensor_name(const struct gguf_context * ctx, int i) {
     return ctx->infos[i].name.data;
 }
 
@@ -20494,7 +20536,7 @@ static void gguf_bwrite_el(struct gguf_buf * buf, const void * val, size_t el_si
     buf->offset += el_size;
 }
 
-static void gguf_write_to_buf(struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta) {
+static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf * buf, bool only_meta) {
     // write header
     gguf_bwrite_el(buf, &ctx->header.magic,     sizeof(ctx->header.magic));
     gguf_bwrite_el(buf, &ctx->header.version,   sizeof(ctx->header.version));
@@ -20609,7 +20651,7 @@ static void gguf_write_to_buf(struct gguf_context * ctx, struct gguf_buf * buf, 
     }
 }
 
-void gguf_write_to_file(struct gguf_context * ctx, const char * fname, bool only_meta) {
+void gguf_write_to_file(const struct gguf_context * ctx, const char * fname, bool only_meta) {
     FILE * file = fopen(fname, "wb");
     if (!file) {
         GGML_ASSERT(false && "failed to open file for writing");
@@ -20626,7 +20668,7 @@ void gguf_write_to_file(struct gguf_context * ctx, const char * fname, bool only
     fclose(file);
 }
 
-size_t gguf_get_meta_size(struct gguf_context * ctx) {
+size_t gguf_get_meta_size(const struct gguf_context * ctx) {
     // no allocs - only compute size
     struct gguf_buf buf = gguf_buf_init(0);
 
@@ -20635,7 +20677,7 @@ size_t gguf_get_meta_size(struct gguf_context * ctx) {
     return buf.offset;
 }
 
-void gguf_get_meta_data(struct gguf_context * ctx, void * data) {
+void gguf_get_meta_data(const struct gguf_context * ctx, void * data) {
     struct gguf_buf buf = gguf_buf_init(16*1024);
 
     gguf_write_to_buf(ctx, &buf, true);
@@ -20705,6 +20747,14 @@ int ggml_cpu_has_neon(void) {
 
 int ggml_cpu_has_arm_fma(void) {
 #if defined(__ARM_FEATURE_FMA)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_metal(void) {
+#if defined(GGML_USE_METAL)
     return 1;
 #else
     return 0;

@@ -145,7 +145,6 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 class Params:
     n_vocab:    int
     n_embd:     int
-    n_mult:     int
     n_layer:    int
     n_ctx:      int
     n_ff:       int
@@ -160,15 +159,6 @@ class Params:
 
     # path to the directory containing the model files
     path_model: Path | None = None
-
-    @staticmethod
-    def find_n_mult(n_ff: int, n_embd: int) -> int:
-        # hardcoded magic range
-        for n_mult in range(8192, 1, -1):
-            calc_ff = (((8*n_embd) // 3 + n_mult - 1) // n_mult)*n_mult
-            if calc_ff == n_ff:
-                return n_mult
-        raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
 
     @staticmethod
     def guessed(model: LazyModel) -> Params:
@@ -197,7 +187,6 @@ class Params:
         return Params(
             n_vocab    = n_vocab,
             n_embd     = n_embd,
-            n_mult     = n_mult,
             n_layer    = n_layer,
             n_ctx      = -1,
             n_ff       = n_ff,
@@ -225,8 +214,6 @@ class Params:
         else:
             f_rope_scale = None
 
-        n_mult = Params.find_n_mult(n_ff, n_embd)
-
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
         elif "max_position_embeddings" in config:
@@ -238,7 +225,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,
@@ -250,7 +236,7 @@ class Params:
         )
 
     # LLaMA v2 70B params.json
-    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
@@ -258,7 +244,6 @@ class Params:
         n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
         n_embd           = config["dim"]
         n_layer          = config["n_layers"]
-        n_mult           = config["multiple_of"]
         n_ff             = -1
         n_head           = config["n_heads"]
         n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
@@ -266,7 +251,7 @@ class Params:
         f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
-        if f_rope_freq_base and f_rope_freq_base == 1000000:
+        if f_rope_freq_base == 1000000:
             # CodeLlama
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
@@ -285,7 +270,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,
@@ -673,7 +657,7 @@ class LazyUnpickler(pickle.Unpickler):
         assert isinstance(pid[1], LazyStorageKind)
         data_type = pid[1].data_type
         filename_stem = pid[2]
-        filename = self.data_base_path + '/' + filename_stem
+        filename = f'{self.data_base_path}/{filename_stem}'
         info = self.zip_file.getinfo(filename)
 
         def load(offset: int, elm_count: int) -> NDArray:
@@ -689,7 +673,6 @@ class LazyUnpickler(pickle.Unpickler):
 
     @staticmethod
     def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
-                               # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
@@ -842,9 +825,9 @@ class OutputFile:
         name = "LLaMA"
 
         # TODO: better logic to determine model name
-        if (params.n_ctx == 4096):
+        if params.n_ctx == 4096:
             name = "LLaMA v2"
-        elif params.path_model:
+        elif params.path_model is not None:
             name = str(params.path_model.parent).split('/')[-1]
 
         self.gguf.add_name                (name)
@@ -857,13 +840,13 @@ class OutputFile:
         self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
 
-        if params.f_rope_freq_base:
+        if params.f_rope_freq_base is not None:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
 
-        if params.f_rope_scale:
+        if params.f_rope_scale is not None:
             self.gguf.add_rope_scale_linear(params.f_rope_scale)
 
-        if params.ftype:
+        if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:

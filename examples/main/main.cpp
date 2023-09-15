@@ -1,8 +1,3 @@
-// Defines sigaction on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "common.h"
 
 #include "console.h"
@@ -48,8 +43,9 @@ static bool is_interacting = false;
 
 void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
-    const std::vector<llama_token> input_tokens, const std::string output, const std::vector<llama_token> output_tokens) {
-
+    const std::vector<llama_token> & input_tokens, const std::string & output,
+    const std::vector<llama_token> & output_tokens
+) {
     if (params.logdir.empty()) {
         return;
     }
@@ -109,7 +105,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
@@ -151,14 +147,6 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
     }
 
-    if (params.n_ctx > 2048) {
-        // TODO: determine the actual max context of the model (e.g. 4096 for LLaMA v2) and use that instead of 2048
-        LOG_TEE("%s: warning: base model only supports context sizes no greater than 2048 tokens (%d specified)\n", __func__, params.n_ctx);
-    } else if (params.n_ctx < 8) {
-        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
-        params.n_ctx = 8;
-    }
-
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
     LOG_TEE("%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);
 
@@ -195,28 +183,20 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    const int n_ctx_train = llama_n_ctx_train(ctx);
+    if (params.n_ctx > n_ctx_train) {
+        LOG_TEE("%s: warning: model was trained on only %d context tokens (%d specified)\n",
+                __func__, n_ctx_train, params.n_ctx);
+    } else if (params.n_ctx < 8) {
+        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        params.n_ctx = 8;
+    }
+
     // print system information
     {
         LOG_TEE("\n");
         LOG_TEE("system_info: n_threads = %d / %d | %s\n",
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
-    }
-
-    // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters
-    // uncomment the "used_mem" line in llama.cpp to see the results
-    if (params.mem_test) {
-        {
-            LOG_TEE("%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
-
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos(ctx));
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
-        }
-
-        llama_print_timings(ctx);
-        llama_free(ctx);
-        llama_free_model(model);
-
-        return 0;
     }
 
     // export the cgraph and exit
@@ -305,7 +285,7 @@ int main(int argc, char ** argv) {
 
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
-    if (session_tokens.size() > 0) {
+    if (!session_tokens.empty()) {
         for (llama_token id : session_tokens) {
             if (n_matching_session_tokens >= embd_inp.size() || id != embd_inp[n_matching_session_tokens]) {
                 break;
@@ -403,7 +383,7 @@ int main(int argc, char ** argv) {
 
         LOG_TEE("%s: interactive mode on.\n", __func__);
 
-        if (params.antiprompt.size()) {
+        if (!params.antiprompt.empty()) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
             }
@@ -501,7 +481,7 @@ int main(int argc, char ** argv) {
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
-        if (embd.size() > 0) {
+        if (!embd.empty()) {
             // Note: n_ctx - 4 here is to match the logic for commandline prompt handling via
             // --prompt or --file which uses the same value.
             int max_embd_size = n_ctx - 4;
@@ -626,7 +606,7 @@ int main(int argc, char ** argv) {
                 LOG("n_past = %d\n", n_past);
             }
 
-            if (embd.size() > 0 && !path_session.empty()) {
+            if (!embd.empty() && !path_session.empty()) {
                 session_tokens.insert(session_tokens.end(), embd.begin(), embd.end());
                 n_session_consumed = session_tokens.size();
             }
@@ -697,7 +677,7 @@ int main(int argc, char ** argv) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // check for reverse prompt
-            if (params.antiprompt.size()) {
+            if (!params.antiprompt.empty()) {
                 std::string last_output;
                 for (auto id : last_tokens) {
                     last_output += llama_token_to_piece(ctx, id);
@@ -734,7 +714,7 @@ int main(int argc, char ** argv) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
-                    if (params.antiprompt.size() != 0) {
+                    if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
                         const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());

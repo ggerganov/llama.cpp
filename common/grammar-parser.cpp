@@ -415,6 +415,7 @@ namespace grammar_parser {
 
     std::vector<const llama_grammar_element *> parse_state::c_rules() {
         std::vector<const llama_grammar_element *> ret;
+        ret.reserve(rules.size());
         for (const auto & rule : rules) {
             ret.push_back(rule.data());
         }
