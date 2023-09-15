@@ -3,6 +3,7 @@
 #pragma once
 
 #include "llama.h"
+#include "build-info.h"
 
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
@@ -22,6 +23,11 @@
 
 #define die(msg)          do { fputs("error: " msg "\n", stderr);                exit(1); } while (0)
 #define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
+
+#define print_build_info() do {                                                             \
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);         \
+    fprintf(stderr, "%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);  \
+} while(0)
 
 //
 // CLI argument parsing

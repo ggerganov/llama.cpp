@@ -1,6 +1,5 @@
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <cassert>
 #include <cinttypes>

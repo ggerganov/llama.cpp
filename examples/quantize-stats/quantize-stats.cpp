@@ -1,7 +1,6 @@
-#include "ggml.h"
-#include "build-info.h"
-
 #define LLAMA_API_INTERNAL
+#include "common.h"
+#include "ggml.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -299,7 +298,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     // load the model
     fprintf(stderr, "Loading model\n");

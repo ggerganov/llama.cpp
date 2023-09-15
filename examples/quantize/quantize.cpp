@@ -1,5 +1,4 @@
-#include "build-info.h"
-
+#include "common.h"
 #include "llama.h"
 
 #include <cstdio>
@@ -161,7 +160,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     fprintf(stderr, "%s: quantizing '%s' to '%s' as %s", __func__, fname_inp.c_str(), fname_out.c_str(), ftype_str.c_str());
     if (params.nthread > 0) {
