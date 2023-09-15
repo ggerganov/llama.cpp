@@ -9,7 +9,7 @@
 namespace grammar_parser {
     // NOTE: assumes valid utf8 (but checks for overrun)
     // copied from llama.cpp
-    std::pair<uint32_t, const char *> decode_utf8(const char * src) {
+    static std::pair<uint32_t, const char *> decode_utf8(const char * src) {
         static const int lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4 };
         uint8_t  first_byte = static_cast<uint8_t>(*src);
         uint8_t  highbits   = first_byte >> 4;
@@ -24,19 +24,19 @@ namespace grammar_parser {
         return std::make_pair(value, pos);
     }
 
-    uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
+    static uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
         uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
         auto result = state.symbol_ids.insert(std::make_pair(std::string(src, len), next_id));
         return result.first->second;
     }
 
-    uint32_t generate_symbol_id(parse_state & state, const std::string & base_name) {
+    static uint32_t generate_symbol_id(parse_state & state, const std::string & base_name) {
         uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
         state.symbol_ids[base_name + '_' + std::to_string(next_id)] = next_id;
         return next_id;
     }
 
-    void add_rule(
+    static void add_rule(
             parse_state & state,
             uint32_t      rule_id,
             const std::vector<llama_grammar_element> & rule) {
@@ -46,11 +46,11 @@ namespace grammar_parser {
         state.rules[rule_id] = rule;
     }
 
-    bool is_word_char(char c) {
+    static bool is_word_char(char c) {
         return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
     }
 
-    std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
+    static std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
         const char * pos   = src;
         const char * end   = src + size;
         uint32_t     value = 0;
@@ -73,7 +73,7 @@ namespace grammar_parser {
         return std::make_pair(value, pos);
     }
 
-    const char * parse_space(const char * src, bool newline_ok) {
+    static const char * parse_space(const char * src, bool newline_ok) {
         const char * pos = src;
         while (*pos == ' ' || *pos == '\t' || *pos == '#' ||
                 (newline_ok && (*pos == '\r' || *pos == '\n'))) {
@@ -88,7 +88,7 @@ namespace grammar_parser {
         return pos;
     }
 
-    const char * parse_name(const char * src) {
+    static const char * parse_name(const char * src) {
         const char * pos = src;
         while (is_word_char(*pos)) {
             pos++;
@@ -99,7 +99,7 @@ namespace grammar_parser {
         return pos;
     }
 
-    std::pair<uint32_t, const char *> parse_char(const char * src) {
+    static std::pair<uint32_t, const char *> parse_char(const char * src) {
         if (*src == '\\') {
             switch (src[1]) {
                 case 'x': return parse_hex(src + 2, 2);
@@ -129,7 +129,7 @@ namespace grammar_parser {
             uint32_t            rule_id,
             bool                is_nested);
 
-    const char * parse_sequence(
+    static const char * parse_sequence(
             parse_state                        & state,
             const char                         * src,
             const std::string                  & rule_name,
@@ -247,7 +247,7 @@ namespace grammar_parser {
         return pos;
     }
 
-    const char * parse_rule(parse_state & state, const char * src) {
+    static const char * parse_rule(parse_state & state, const char * src) {
         const char * name_end = parse_name(src);
         const char * pos      = parse_space(name_end, false);
         size_t       name_len = name_end - src;
@@ -285,7 +285,7 @@ namespace grammar_parser {
         }
     }
 
-    void print_grammar_char(FILE * file, uint32_t c) {
+    static void print_grammar_char(FILE * file, uint32_t c) {
         if (0x20 <= c && c <= 0x7f) {
             fprintf(file, "%c", static_cast<char>(c));
         } else {
@@ -294,7 +294,7 @@ namespace grammar_parser {
         }
     }
 
-    bool is_char_element(llama_grammar_element elem) {
+    static bool is_char_element(llama_grammar_element elem) {
         switch (elem.type) {
             case LLAMA_GRETYPE_CHAR:           return true;
             case LLAMA_GRETYPE_CHAR_NOT:       return true;
@@ -304,7 +304,7 @@ namespace grammar_parser {
         }
     }
 
-    void print_rule_binary(FILE * file, const std::vector<llama_grammar_element> & rule) {
+    static void print_rule_binary(FILE * file, const std::vector<llama_grammar_element> & rule) {
         for (auto elem : rule) {
             switch (elem.type) {
                 case LLAMA_GRETYPE_END:            fprintf(file, "END");            break;
@@ -334,7 +334,7 @@ namespace grammar_parser {
         fprintf(file, "\n");
     }
 
-    void print_rule(
+    static void print_rule(
             FILE     * file,
             uint32_t   rule_id,
             const std::vector<llama_grammar_element> & rule,

@@ -1,8 +1,3 @@
-// Defines sigaction on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
 #include "common.h"
 
 #include "console.h"
@@ -46,7 +41,8 @@ static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
 
-void write_logfile(
+
+static void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
     const std::vector<llama_token> & input_tokens, const std::string & output,
     const std::vector<llama_token> & output_tokens
@@ -91,7 +87,7 @@ void write_logfile(
 }
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-void sigint_handler(int signo) {
+static void sigint_handler(int signo) {
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting = true;
@@ -153,6 +149,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    LOG_TEE("%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
@@ -187,8 +184,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (params.n_ctx > llama_n_ctx(ctx)) {
-        LOG_TEE("%s: warning: base model only supports context sizes no greater than %d tokens (%d specified)\n", __func__, llama_n_ctx(ctx), params.n_ctx);
+    const int n_ctx_train = llama_n_ctx_train(ctx);
+    if (params.n_ctx > n_ctx_train) {
+        LOG_TEE("%s: warning: model was trained on only %d context tokens (%d specified)\n",
+                __func__, n_ctx_train, params.n_ctx);
     } else if (params.n_ctx < 8) {
         LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
@@ -199,23 +198,6 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
         LOG_TEE("system_info: n_threads = %d / %d | %s\n",
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
-    }
-
-    // determine the maximum memory usage needed to do inference for the given n_batch and n_ctx parameters
-    // uncomment the "used_mem" line in llama.cpp to see the results
-    if (params.mem_test) {
-        {
-            LOG_TEE("%s: testing memory usage for n_batch = %d, n_ctx = %d\n", __func__, params.n_batch, params.n_ctx);
-
-            const std::vector<llama_token> tmp(params.n_batch, llama_token_bos(ctx));
-            llama_eval(ctx, tmp.data(), tmp.size(), params.n_ctx, params.n_threads);
-        }
-
-        llama_print_timings(ctx);
-        llama_free(ctx);
-        llama_free_model(model);
-
-        return 0;
     }
 
     // export the cgraph and exit

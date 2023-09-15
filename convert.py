@@ -145,7 +145,6 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 class Params:
     n_vocab:    int
     n_embd:     int
-    n_mult:     int
     n_layer:    int
     n_ctx:      int
     n_ff:       int
@@ -160,15 +159,6 @@ class Params:
 
     # path to the directory containing the model files
     path_model: Path | None = None
-
-    @staticmethod
-    def find_n_mult(n_ff: int, n_embd: int) -> int:
-        # hardcoded magic range
-        for n_mult in range(8192, 1, -1):
-            calc_ff = (((8*n_embd) // 3 + n_mult - 1) // n_mult)*n_mult
-            if calc_ff == n_ff:
-                return n_mult
-        raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
 
     @staticmethod
     def guessed(model: LazyModel) -> Params:
@@ -197,7 +187,6 @@ class Params:
         return Params(
             n_vocab    = n_vocab,
             n_embd     = n_embd,
-            n_mult     = n_mult,
             n_layer    = n_layer,
             n_ctx      = -1,
             n_ff       = n_ff,
@@ -225,8 +214,6 @@ class Params:
         else:
             f_rope_scale = None
 
-        n_mult = Params.find_n_mult(n_ff, n_embd)
-
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
         elif "max_position_embeddings" in config:
@@ -238,7 +225,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,
@@ -250,7 +236,7 @@ class Params:
         )
 
     # LLaMA v2 70B params.json
-    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
@@ -258,7 +244,6 @@ class Params:
         n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
         n_embd           = config["dim"]
         n_layer          = config["n_layers"]
-        n_mult           = config["multiple_of"]
         n_ff             = -1
         n_head           = config["n_heads"]
         n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
@@ -285,7 +270,6 @@ class Params:
         return Params(
             n_vocab          = n_vocab,
             n_embd           = n_embd,
-            n_mult           = n_mult,
             n_layer          = n_layer,
             n_ctx            = n_ctx,
             n_ff             = n_ff,

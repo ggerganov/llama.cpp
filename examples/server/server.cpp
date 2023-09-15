@@ -1083,8 +1083,9 @@ static json format_final_response(llama_server_context &llama, const std::string
     return res;
 }
 
-static json format_partial_response(llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs)
-{
+static json format_partial_response(
+    llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs
+) {
     json res = json{
         {"content", content},
         {"stop", false},
@@ -1215,7 +1216,7 @@ static void log_server_request(const Request &req, const Response &res)
                            });
 }
 
-bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
+static bool is_at_eob(llama_server_context &server_context, const llama_token *tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1225,7 +1226,7 @@ bool is_at_eob(llama_server_context & server_context, const llama_token * tokens
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
+static void beam_search_callback(void *callback_data, llama_beams_state beams_state) {
     auto & llama = *static_cast<llama_server_context*>(callback_data);
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
@@ -1258,7 +1259,8 @@ struct token_translator {
     std::string operator()(const completion_token_output & cto) const { return (*this)(cto.tok); }
 };
 
-void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
+static void append_to_generated_text_from_generated_token_probs(llama_server_context &llama)
+{
     auto & gtps = llama.generated_token_probs;
     auto translator = token_translator{llama.ctx};
     auto add_strlen = [=](size_t sum, const completion_token_output & cto) { return sum + translator(cto).size(); };

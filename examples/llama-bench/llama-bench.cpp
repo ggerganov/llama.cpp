@@ -74,14 +74,6 @@ static T stdev(const std::vector<T> & v) {
     return stdev;
 }
 
-static bool ggml_cpu_has_metal() {
-#if defined(GGML_USE_METAL)
-    return true;
-#else
-    return false;
-#endif
-}
-
 static std::string get_cpu_info() {
     std::string id;
 #ifdef __linux__
