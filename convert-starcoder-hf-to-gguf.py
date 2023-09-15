@@ -109,7 +109,7 @@ gguf_writer.add_max_position_embeddings(hparams["n_positions"])
 gguf_writer.add_feed_forward_length(4 * hparams["n_embd"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_head_count(hparams["n_head"])
-gguf_writer.add_head_count_kv(1)
+gguf_writer.add_head_count_kv(hparams["n_head"])
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 gguf_writer.add_file_type(ftype)
 
@@ -208,6 +208,24 @@ for part_name in part_names:
             data = data.to(torch.float32)
 
         data = data.squeeze().numpy()
+
+        if name.endswith(".attn.c_attn.weight") or name.endswith(".attn.c_attn.bias"):
+            print("Duplicate K,V heads to use MHA instead of MQA for", name)
+
+            embed_dim = hparams["n_embd"]
+            head_dim = embed_dim // hparams["n_head"]
+
+            # ((n_heads + 2) * head_dim, hidden_dim) -> (3 * n_heads * head_dim, hidden_dim)
+            q, k ,v = np.split(data, (hparams["n_head"] * head_dim, (hparams["n_head"] + 1) * head_dim), axis=0)
+            # duplicate k, v along the first axis (head_dim, hidden_dim) -> (n_heads * head_dim, hidden_dim)
+            if len(k.shape) == 2:
+                k = np.tile(k, (hparams["n_head"], 1))
+                v = np.tile(v, (hparams["n_head"], 1))
+            elif len(k.shape) == 1:
+                k = np.tile(k, (hparams["n_head"]))
+                v = np.tile(v, (hparams["n_head"]))
+            # concat q, k, v along the first axis (n_heads * head_dim, hidden_dim) -> (3 * n_heads * head_dim, hidden_dim)
+            data = np.concatenate((q, k, v), axis=0)
 
         # map tensor names
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
