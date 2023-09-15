@@ -434,8 +434,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
-        } else if (arg == "--mtest") {
-            params.mem_test = true;
         } else if (arg == "--numa") {
             params.numa = true;
         } else if (arg == "--export") {
@@ -687,7 +685,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_CUBLAS
 #endif
-    printf("  --mtest               compute maximum memory usage\n");
     printf("  --export              export the computation graph to 'llama.ggml'\n");
     printf("  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
@@ -1225,7 +1222,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
     fprintf(stream, "model: %s # default: models/7B/ggml-model.bin\n", params.model.c_str());
     fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
-    fprintf(stream, "mtest: %s # default: false\n", params.mem_test ? "true" : "false");
     fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
     fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
