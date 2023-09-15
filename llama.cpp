@@ -3570,23 +3570,15 @@ static struct ggml_cgraph * llm_build_starcoder(
             offload_func(attn_norm->src[0]);
             offload_func(attn_norm);
 
-            if (model.layers[il].attn_norm_2) { // Falcon-40B
-                cur = ggml_norm(ctx0, inpL, norm_eps);
-                offload_func(cur);
-
-                cur = ggml_add(ctx0,
-                        ggml_mul(ctx0, cur, model.layers[il].attn_norm_2),
-                        model.layers[il].attn_norm_2_b);
-                offload_func(cur->src[0]);
-                offload_func(cur);
-            } else { // Falcon 7B
-                cur = attn_norm;
-            }
+            cur = attn_norm;
 
             // compute QKV
-
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
             offload_func_kq(cur);
+
+            // ===== TBD (QKV Split + FF) ====
+#define PRINT_SHAPE(x) fprintf(stderr, "%d %s: (%s)\n", __LINE__, #x, llama_format_tensor_shape(x).c_str())
+            GGML_ASSERT(false);
 
             // Note that the strides for Kcur, Vcur are set up so that the
             // resulting views are misaligned with the tensor's storage
