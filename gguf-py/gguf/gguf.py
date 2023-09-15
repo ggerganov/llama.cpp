@@ -36,12 +36,13 @@ KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 KEY_GENERAL_FILE_TYPE            = "general.file_type"
 
 # LLM
-KEY_CONTEXT_LENGTH        = "{arch}.context_length"
-KEY_EMBEDDING_LENGTH      = "{arch}.embedding_length"
-KEY_BLOCK_COUNT           = "{arch}.block_count"
-KEY_FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
-KEY_USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
-KEY_TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
+KEY_CONTEXT_LENGTH          = "{arch}.context_length"
+KEY_EMBEDDING_LENGTH        = "{arch}.embedding_length"
+KEY_BLOCK_COUNT             = "{arch}.block_count"
+KEY_FEED_FORWARD_LENGTH     = "{arch}.feed_forward_length"
+KEY_USE_PARALLEL_RESIDUAL   = "{arch}.use_parallel_residual"
+KEY_TENSOR_DATA_LAYOUT      = "{arch}.tensor_data_layout"
+KEY_MAX_POSITION_EMBEDDINGS = "{arch}.max_position_embeddings"
 
 # attention
 KEY_ATTENTION_HEAD_COUNT        = "{arch}.attention.head_count"
@@ -182,8 +183,8 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
         MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
         MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
     MODEL_ARCH.GPT2: {
         # TODO
@@ -716,6 +717,10 @@ class GGUFWriter:
     def add_embedding_length(self, length: int):
         self.add_uint32(
             KEY_EMBEDDING_LENGTH.format(arch=self.arch), length)
+
+    def add_max_position_embeddings(self, length: int):
+        self.add_uint32(
+            KEY_MAX_POSITION_EMBEDDINGS.format(arch=self.arch), length)
 
     def add_block_count(self, length: int):
         self.add_uint32(
