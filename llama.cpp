@@ -193,6 +193,7 @@ enum llm_kv {
     LLM_KV_FEED_FORWARD_LENGTH,
     LLM_KV_USE_PARALLEL_RESIDUAL,
     LLM_KV_TENSOR_DATA_LAYOUT,
+    LLM_KV_MAX_POSITION_EMBEDDINGS,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -237,6 +238,7 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
     { LLM_KV_FEED_FORWARD_LENGTH,           "%s.feed_forward_length"   },
     { LLM_KV_USE_PARALLEL_RESIDUAL,         "%s.use_parallel_residual" },
     { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"    },
+    { LLM_KV_MAX_POSITION_EMBEDDINGS,       "%s.max_position_embeddings"    },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
@@ -937,7 +939,7 @@ struct llama_hparams {
     uint32_t n_layer     = 32;
     uint32_t n_rot       = 64;
     uint32_t n_ff        = 11008;
-    uint32_t n_positions = -1;    // StarCoder
+    uint32_t n_positions = 0;    // StarCoder
 
     float f_norm_eps     = 1e-5;
     float f_norm_rms_eps = 1e-5;
@@ -985,13 +987,22 @@ struct llama_layer {
     struct ggml_tensor * wo;
     struct ggml_tensor * wqkv;
 
+    // attention bias
+    struct ggml_tensor * bo;
+    struct ggml_tensor * bqkv;
+
     // normalization
     struct ggml_tensor * ffn_norm;
+    struct ggml_tensor * ffn_norm_b;
 
     // ff
     struct ggml_tensor * w1; // ffn_gate
     struct ggml_tensor * w2; // ffn_down
     struct ggml_tensor * w3; // ffn_up
+
+    // ff bias
+    struct ggml_tensor * b2; // ffn_down
+    struct ggml_tensor * b3; // ffn_up
 };
 
 struct llama_kv_cache {
@@ -1654,6 +1665,7 @@ static void llm_load_hparams(
     GGUF_GET_KEY(ctx, hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_FEED_FORWARD_LENGTH));
     GGUF_GET_KEY(ctx, hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
     GGUF_GET_KEY(ctx, hparams.n_layer,        gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_BLOCK_COUNT));
+    GGUF_GET_KEY(ctx, hparams.n_positions,    gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_MAX_POSITION_EMBEDDINGS));
 
     // n_head_kv is optional, default to n_head
     hparams.n_head_kv = hparams.n_head;
@@ -2247,11 +2259,20 @@ static void llm_load_tensors(
                         layer.attn_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "weight", i), {n_embd}, backend);
                         layer.attn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "bias", i),   {n_embd}, backend);
 
-                        layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, 3*n_embd_gqa}, backend_split);
-                        layer.wo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},                backend_split);
+                        layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, 3*n_embd}, backend_split);
+                        layer.bqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {3*n_embd},         backend_split);
 
-                        layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+                        layer.wo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},   backend_split);
+                        layer.bo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd},           backend_split);
+
+                        layer.ffn_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
+                        layer.ffn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, backend);
+
+                        layer.w2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, backend_split);
+                        layer.b2 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd},       backend_split);
+
                         layer.w3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+                        layer.b3 = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff},           backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
