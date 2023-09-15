@@ -209,6 +209,7 @@ for part_name in part_names:
 
         data = data.squeeze().numpy()
 
+        # TODO: implement MQA directly, instead of duplicate into MHA.
         if name.endswith(".attn.c_attn.weight") or name.endswith(".attn.c_attn.bias"):
             print("Duplicate K,V heads to use MHA instead of MQA for", name)
 

@@ -3620,19 +3620,16 @@ static struct ggml_cgraph * llm_build_starcoder(
         // Projection
         cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wo, cur), model.layers[il].bo);
 
-        // add the input
+        // Add the input
         cur = ggml_add(ctx0, cur, inpL);
 
         struct ggml_tensor * inpFF = cur;
 
         // FF
         {
-            // norm
+            // Norm
             {
                 cur = ggml_norm(ctx0, inpFF, norm_eps);
-
-                // cur = ln_2_g*cur + ln_2_b
-                // [ 768, N]
                 cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.layers[il].ffn_norm), model.layers[il].ffn_norm_b);
             }
 
@@ -3641,14 +3638,14 @@ static struct ggml_cgraph * llm_build_starcoder(
             // GELU activation
             cur = ggml_gelu(ctx0, cur);
 
-            // projection
+            // Projection
             cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].w2, cur), model.layers[il].b2);
         }
 
         inpL = ggml_add(ctx0, cur, inpFF);
     }
 
-	// norm
+	// Output Norm
 	{
 		cur = ggml_norm(ctx0, inpL, norm_eps);
 		cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.output_norm), model.output_norm_b);
@@ -3661,7 +3658,6 @@ static struct ggml_cgraph * llm_build_starcoder(
     ggml_build_forward_expand(gf, cur);
     ggml_free(ctx0);
 
-    // norm
     return gf;
 }
 
