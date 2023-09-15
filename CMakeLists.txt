@@ -723,7 +723,7 @@ set(GGML_PUBLIC_HEADERS "ggml.h"
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)
 
-set_target_properties(llama PROPERTIES PUBLIC_HEADER llama.h)
+set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/llama.h)
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
