@@ -2277,8 +2277,11 @@ static void llm_load_tensors(
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
-                                ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.wo)          +
-                                ggml_nbytes(layer.w2)        + ggml_nbytes(layer.w3);
+                                ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.bqkv)        +
+                                ggml_nbytes(layer.wo)        + ggml_nbytes(layer.bo)          +
+                                ggml_nbytes(layer.ffn_norm)  + ggml_nbytes(layer.ffn_norm_b)  +
+                                ggml_nbytes(layer.w2)        + ggml_nbytes(layer.b2)          +
+                                ggml_nbytes(layer.w3)        + ggml_nbytes(layer.b3);
                         }
                     }
                 } break;
