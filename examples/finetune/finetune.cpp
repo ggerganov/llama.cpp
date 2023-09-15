@@ -2790,7 +2790,6 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
             printf("-");
         }
         printf(">");
-        // printf("improvement: %*d>", impr_plot, (int)0);
         printf("\n");
     }
 
