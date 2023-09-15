@@ -36,13 +36,12 @@ KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
 KEY_GENERAL_FILE_TYPE            = "general.file_type"
 
 # LLM
-KEY_CONTEXT_LENGTH          = "{arch}.context_length"
-KEY_EMBEDDING_LENGTH        = "{arch}.embedding_length"
-KEY_BLOCK_COUNT             = "{arch}.block_count"
-KEY_FEED_FORWARD_LENGTH     = "{arch}.feed_forward_length"
-KEY_USE_PARALLEL_RESIDUAL   = "{arch}.use_parallel_residual"
-KEY_TENSOR_DATA_LAYOUT      = "{arch}.tensor_data_layout"
-KEY_MAX_POSITION_EMBEDDINGS = "{arch}.max_position_embeddings"
+KEY_CONTEXT_LENGTH        = "{arch}.context_length"
+KEY_EMBEDDING_LENGTH      = "{arch}.embedding_length"
+KEY_BLOCK_COUNT           = "{arch}.block_count"
+KEY_FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
+KEY_USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
+KEY_TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
 
 # attention
 KEY_ATTENTION_HEAD_COUNT        = "{arch}.attention.head_count"
@@ -717,10 +716,6 @@ class GGUFWriter:
     def add_embedding_length(self, length: int):
         self.add_uint32(
             KEY_EMBEDDING_LENGTH.format(arch=self.arch), length)
-
-    def add_max_position_embeddings(self, length: int):
-        self.add_uint32(
-            KEY_MAX_POSITION_EMBEDDINGS.format(arch=self.arch), length)
 
     def add_block_count(self, length: int):
         self.add_uint32(
