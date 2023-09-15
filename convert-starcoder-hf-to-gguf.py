@@ -105,10 +105,10 @@ block_count = hparams["n_layer"]
 gguf_writer.add_name("StarCoder")
 gguf_writer.add_context_length(2048) # not in config.json
 gguf_writer.add_embedding_length(hparams["n_embd"])
+gguf_writer.add_max_position_embeddings(hparams["n_positions"])
 gguf_writer.add_feed_forward_length(4 * hparams["n_embd"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_head_count(hparams["n_head"])
-gguf_writer.add_head_count_kv(1)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 gguf_writer.add_file_type(ftype)
 
