@@ -69,7 +69,8 @@ static bool ends_with(const std::string &str, const std::string &suffix)
            0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-static size_t find_partial_stop_string(const std::string &stop, const std::string &text)
+static size_t find_partial_stop_string(const std::string &stop,
+                                       const std::string &text)
 {
     if (!text.empty() && !stop.empty())
     {
@@ -100,9 +101,9 @@ static std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
     return ret;
 }
 
-static void server_log(
-    const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra
-) {
+static void server_log(const char *level, const char *function, int line,
+                       const char *message, const nlohmann::ordered_json &extra)
+{
     nlohmann::ordered_json log{
         {"timestamp", time(nullptr)},
         {"level", level},
@@ -122,7 +123,7 @@ static void server_log(
 }
 
 // format incomplete utf-8 multibyte character for output
-static std::string tokens_to_output_formatted_string(const llama_context *ctx, llama_token token)
+static std::string tokens_to_output_formatted_string(const llama_context *ctx, const llama_token token)
 {
     std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
     // if the size is 1 and first bit is 1, meaning it's a partial character
@@ -138,7 +139,7 @@ static std::string tokens_to_output_formatted_string(const llama_context *ctx, l
 }
 
 // convert a vector of completion_token_output to json
-static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> &probs)
+static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> & probs)
 {
     json out = json::array();
     for (const auto &prob : probs)
@@ -690,7 +691,8 @@ struct llama_server_context
     }
 };
 
-static void server_print_usage(const char *argv0, const gpt_params &params, const server_params &sparams)
+static void server_print_usage(const char *argv0, const gpt_params &params,
+                               const server_params &sparams)
 {
     printf("usage: %s [options]\n", argv0);
     printf("\n");
@@ -738,7 +740,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params, cons
     printf("\n");
 }
 
-static void server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
+static void server_params_parse(int argc, char **argv, server_params &sparams,
+                                gpt_params &params)
 {
     gpt_params default_params;
     server_params default_sparams;
@@ -1052,9 +1055,8 @@ static json format_timings(llama_server_context &llama)
     };
 }
 
-static json format_final_response(
-    llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs
-) {
+static json format_final_response(llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs)
+{
 
     json res = json{
         {"content", content},
