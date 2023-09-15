@@ -616,6 +616,8 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 #define MM256_SET_M128I(a, b) _mm256_insertf128_si256(_mm256_castsi128_si256(b), (a), 1)
 
 #if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__)
+
+#if !__ARM_NEON && !__AVX2__ && (__AVX__ || __SSSE3__)
 // multiply int8_t, add results pairwise twice
 static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     // Get absolute values of x vectors
@@ -627,6 +629,7 @@ static inline __m128i mul_sum_i8_pairs(const __m128i x, const __m128i y) {
     const __m128i ones = _mm_set1_epi16(1);
     return _mm_madd_epi16(ones, dot);
 }
+#endif
 
 #if __AVX__ || __AVX2__ || __AVX512F__
 // horizontally add 8 floats
@@ -647,6 +650,7 @@ static inline int hsum_i32_8(const __m256i a) {
     return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
 }
 
+#if !__AVX2__ && __AVX__
 // horizontally add 4 int32_t
 static inline int hsum_i32_4(const __m128i a) {
     const __m128i hi64 = _mm_unpackhi_epi64(a, a);
@@ -654,6 +658,7 @@ static inline int hsum_i32_4(const __m128i a) {
     const __m128i hi32  = _mm_shuffle_epi32(sum64, _MM_SHUFFLE(2, 3, 0, 1));
     return _mm_cvtsi128_si32(_mm_add_epi32(sum64, hi32));
 }
+#endif
 
 #if defined(__AVX2__) || defined(__AVX512F__)
 // spread 32 bits to 32 bytes { 0x00, 0xFF }
@@ -713,6 +718,7 @@ static inline __m256 mul_sum_i8_pairs_float(const __m256i x, const __m256i y) {
 #endif
 }
 
+/*
 static inline __m128i packNibbles( __m256i bytes )
 {
     // Move bits within 16-bit lanes from 0000_abcd_0000_efgh into 0000_0000_abcd_efgh
@@ -733,6 +739,7 @@ static inline __m128i packNibbles( __m256i bytes )
     return _mm_packus_epi16( r0, r1 );
 #endif
 }
+*/
 #elif defined(__AVX__)
 // spread 32 bits to 32 bytes { 0x00, 0xFF }
 static inline __m256i bytes_from_bits_32(const uint8_t * x) {
@@ -801,6 +808,7 @@ static inline __m256 mul_sum_i8_pairs_float(const __m256i x, const __m256i y) {
     return sum_i16_pairs_float(doth, dotl);
 }
 
+/*
 static inline __m128i packNibbles( __m128i bytes1, __m128i bytes2 )
 {
     // Move bits within 16-bit lanes from 0000_abcd_0000_efgh into 0000_0000_abcd_efgh
@@ -816,6 +824,7 @@ static inline __m128i packNibbles( __m128i bytes1, __m128i bytes2 )
 
     return _mm_packus_epi16( bytes1, bytes2);
 }
+*/
 #endif
 #elif defined(__SSSE3__)
 // horizontally add 4x4 floats
@@ -1956,7 +1965,7 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
     const __m128 t0 = _mm_add_ps(_mm256_castps256_ps128(x[0]),    \
                                  _mm256_extractf128_ps(x[0], 1)); \
     const __m128 t1 = _mm_hadd_ps(t0, t0);                        \
-    res = _mm_cvtss_f32(_mm_hadd_ps(t1, t1));                     \
+    res = (ggml_float)_mm_cvtss_f32(_mm_hadd_ps(t1, t1));         \
 }
 // TODO: is this optimal ?
 
