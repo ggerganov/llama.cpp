@@ -5099,7 +5099,16 @@ void llama_beam_search(llama_context * ctx,
 // quantization
 //
 
-static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vector<float> & output, const size_t nelements, const int nthread) {
+template <typename T>
+struct no_init {
+    T value;
+    no_init() { /* do nothing */ }
+};
+
+static void llama_convert_tensor_internal(
+    struct ggml_tensor * tensor, std::vector<no_init<float>> & output, std::vector<std::thread> & workers,
+    const size_t nelements, const int nthread
+) {
     if (output.size() < nelements) {
         output.resize(nelements);
     }
@@ -5134,7 +5143,6 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
     auto blocks_per_thread = nblocks / nthread;
     auto spare_blocks = nblocks - (blocks_per_thread * nthread); // if blocks aren't divisible by thread count
 
-    std::vector<std::thread> workers;
     for (auto tnum = 0, in_buff_offs = 0, out_buff_offs = 0; tnum < nthread; tnum++) {
         auto thr_blocks = blocks_per_thread + (tnum == nthread - 1 ? spare_blocks : 0); // num blocks for this thread
         auto thr_elems = thr_blocks * block_size; // number of elements for this thread
@@ -5147,14 +5155,123 @@ static void llama_convert_tensor_internal(struct ggml_tensor * tensor, std::vect
                 qtype.to_float(inbuf, outbuf, nels);
             }
         };
-        workers.push_back(std::thread(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems));
+        workers.emplace_back(compute, tensor->type, (uint8_t *) tensor->data + in_buff_offs, f32_output + out_buff_offs, thr_elems);
         in_buff_offs += thr_block_bytes;
         out_buff_offs += thr_elems;
     }
-    for (auto & worker : workers) {
-        worker.join();
-    }
+    for (auto & w : workers) { w.join(); }
+    workers.clear();
 }
+
+#ifdef GGML_USE_K_QUANTS
+static ggml_type get_k_quant_type(
+    ggml_type new_type, const ggml_tensor * tensor, const llama_model & model, llama_ftype ftype, int * i_attention_wv,
+    int n_attention_wv, int * i_feed_forward_w2, int n_feed_forward_w2
+) {
+    const std::string name = ggml_get_name(tensor);
+    // TODO: avoid hardcoded tensor names - use the TN_* constants
+    const auto tn = LLM_TN(model.arch);
+
+    auto use_more_bits = [](int i_layer, int num_layers) -> bool {
+        return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
+    };
+
+    if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
+        int nx = tensor->ne[0];
+        if (model.arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
+            new_type = GGML_TYPE_Q8_0;
+        }
+        else if (new_type != GGML_TYPE_Q8_0) {
+            new_type = GGML_TYPE_Q6_K;
+        }
+    } else if (name.find("attn_v.weight") != std::string::npos) {
+        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
+            new_type = *i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
+                use_more_bits(*i_attention_wv, n_attention_wv)) new_type = GGML_TYPE_Q6_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && *i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
+        else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
+                (*i_attention_wv < n_attention_wv/8 || *i_attention_wv >= 7*n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
+        if (model.type == MODEL_70B) {
+            // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
+            // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
+            // nearly negligible increase in model size by quantizing this tensor with more bits:
+            if (new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K) new_type = GGML_TYPE_Q5_K;
+        }
+        ++*i_attention_wv;
+    } else if (name.find("ffn_down.weight") != std::string::npos) {
+        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
+            new_type = *i_feed_forward_w2 < 2 ? GGML_TYPE_Q5_K
+                     : model.arch != LLM_ARCH_FALCON || use_more_bits(*i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q4_K
+                     : GGML_TYPE_Q3_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) {
+            new_type = model.arch == LLM_ARCH_FALCON ? GGML_TYPE_Q4_K : GGML_TYPE_Q5_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) {
+            if (model.arch == LLM_ARCH_FALCON) {
+                new_type = *i_feed_forward_w2 < 2 ? GGML_TYPE_Q6_K :
+                           use_more_bits(*i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
+            } else {
+                if (use_more_bits(*i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
+            }
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M && use_more_bits(*i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && model.arch != LLM_ARCH_FALCON && *i_feed_forward_w2 < 4) {
+            new_type = GGML_TYPE_Q5_K;
+        }
+        ++*i_feed_forward_w2;
+    } else if (name.find("attn_output.weight") != std::string::npos) {
+        if (model.arch != LLM_ARCH_FALCON) {
+            if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K  ) new_type = GGML_TYPE_Q3_K;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
+        } else {
+            if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+        }
+    }
+    else if (name.find("attn_qkv.weight") != std::string::npos) {
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
+    }
+    else if (name.find("ffn_gate.weight") != std::string::npos || name.find("ffn_up.weight") != std::string::npos) {
+        if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
+    }
+    // This can be used to reduce the size of the Q5_K_S model.
+    // The associated PPL increase is fully in line with the size reduction
+    //else {
+    //    if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S) new_type = GGML_TYPE_Q4_K;
+    //}
+    bool convert_incompatible_tensor = false;
+    if (new_type == GGML_TYPE_Q2_K || new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K ||
+        new_type == GGML_TYPE_Q5_K || new_type == GGML_TYPE_Q6_K) {
+        int nx = tensor->ne[0];
+        int ny = tensor->ne[1];
+        if (nx % QK_K != 0) {
+            LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for k-quants\n", __func__, nx, ny, QK_K);
+            convert_incompatible_tensor = true;
+        }
+    }
+    if (convert_incompatible_tensor) {
+        if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
+            new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
+            LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
+        } else if (name == tn(LLM_TENSOR_TOKEN_EMBD, "weight")) {
+            new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
+            LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
+        } else {
+            throw std::runtime_error("Unsupported tensor size encountered\n");
+        }
+    }
+
+    return new_type;
+}
+#endif
 
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
@@ -5239,18 +5356,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<int64_t> hist_all(1 << 4, 0);
 
     std::vector<std::thread> workers;
+    workers.reserve(nthread);
     std::mutex mutex;
-
-#ifdef GGML_USE_K_QUANTS
-    auto use_more_bits = [] (int i_layer, int num_layers) -> bool {
-        return i_layer < num_layers/8 || i_layer >= 7*num_layers/8 || (i_layer - num_layers/8)%3 == 2;
-    };
-#endif
 
     int idx = 0;
 
-    std::vector<uint8_t> read_data;
-    std::vector<uint8_t> work;
+    std::vector<no_init<uint8_t>> read_data;
+    std::vector<no_init<uint8_t>> work;
+    std::vector<no_init<float>> f32_conv_buf;
 
     // populate the original tensors so we get an initial meta data
     for (int i = 0; i < ml->n_tensors; ++i) {
@@ -5272,7 +5385,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         const std::string name = ggml_get_name(tensor);
 
-        read_data.resize(ggml_nbytes(tensor));
+        if (read_data.size() < ggml_nbytes(tensor)) {
+            read_data.resize(ggml_nbytes(tensor));
+        }
         tensor->data = read_data.data();
         ml->load_data_for(tensor);
 
@@ -5297,101 +5412,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         if (quantize) {
             new_type = quantized_type;
 #ifdef GGML_USE_K_QUANTS
-            // TODO: avoid hardcoded tensor names - use the TN_* constants
-            const auto tn = LLM_TN(ml->get_arch());
-
-            if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
-                int nx = tensor->ne[0];
-                if (model.arch == LLM_ARCH_FALCON || nx % QK_K != 0) {
-                    new_type = GGML_TYPE_Q8_0;
-                }
-                else if (new_type != GGML_TYPE_Q8_0) {
-                    new_type = GGML_TYPE_Q6_K;
-                }
-            } else if (name.find("attn_v.weight") != std::string::npos) {
-                if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
-                    new_type = i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
-                }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
-                else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
-                        use_more_bits(i_attention_wv, n_attention_wv)) new_type = GGML_TYPE_Q6_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
-                else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
-                        (i_attention_wv < n_attention_wv/8 || i_attention_wv >= 7*n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
-                if (model.type == MODEL_70B) {
-                    // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
-                    // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
-                    // nearly negligible increase in model size by quantizing this tensor with more bits:
-                    if (new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K) new_type = GGML_TYPE_Q5_K;
-                }
-                ++i_attention_wv;
-            } else if (name.find("ffn_down.weight") != std::string::npos) {
-                if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
-                    new_type = i_feed_forward_w2 < 2 ? GGML_TYPE_Q5_K
-                             : model.arch != LLM_ARCH_FALCON || use_more_bits(i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q4_K
-                             : GGML_TYPE_Q3_K;
-                }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) {
-                    new_type = model.arch == LLM_ARCH_FALCON ? GGML_TYPE_Q4_K : GGML_TYPE_Q5_K;
-                }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) {
-                    if (model.arch == LLM_ARCH_FALCON) {
-                        new_type = i_feed_forward_w2 < 2 ? GGML_TYPE_Q6_K :
-                                   use_more_bits(i_feed_forward_w2, n_feed_forward_w2) ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
-                    } else {
-                        if (use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
-                    }
-                }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M && use_more_bits(i_feed_forward_w2, n_feed_forward_w2)) new_type = GGML_TYPE_Q6_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && model.arch != LLM_ARCH_FALCON && i_feed_forward_w2 < 4) {
-                    new_type = GGML_TYPE_Q5_K;
-                }
-                ++i_feed_forward_w2;
-            } else if (name.find("attn_output.weight") != std::string::npos) {
-                if (model.arch != LLM_ARCH_FALCON) {
-                    if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K  ) new_type = GGML_TYPE_Q3_K;
-                    else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) new_type = GGML_TYPE_Q4_K;
-                    else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
-                } else {
-                    if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
-                }
-            }
-            else if (name.find("attn_qkv.weight") != std::string::npos) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M) new_type = GGML_TYPE_Q5_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
-            }
-            else if (name.find("ffn_gate.weight") != std::string::npos || name.find("ffn_up.weight") != std::string::npos) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) new_type = GGML_TYPE_Q3_K;
-            }
-            // This can be used to reduce the size of the Q5_K_S model.
-            // The associated PPL increase is fully in line with the size reduction
-            //else {
-            //    if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S) new_type = GGML_TYPE_Q4_K;
-            //}
-            bool convert_incompatible_tensor = false;
-            if (new_type == GGML_TYPE_Q2_K || new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K ||
-                new_type == GGML_TYPE_Q5_K || new_type == GGML_TYPE_Q6_K) {
-                int nx = tensor->ne[0];
-                int ny = tensor->ne[1];
-                if (nx % QK_K != 0) {
-                    LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for k-quants\n", __func__, nx, ny, QK_K);
-                    convert_incompatible_tensor = true;
-                }
-            }
-            if (convert_incompatible_tensor) {
-                if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
-                    new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
-                    LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
-                } else if (name == tn(LLM_TENSOR_TOKEN_EMBD, "weight")) {
-                    new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
-                    LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
-                } else {
-                    throw std::runtime_error("Unsupported tensor size encountered\n");
-                }
-            }
+            new_type = get_k_quant_type(
+                new_type, tensor, model, ftype, &i_attention_wv, n_attention_wv, &i_feed_forward_w2, n_feed_forward_w2
+            );
 #endif
             // If we've decided to quantize to the same type the tensor is already
             // in then there's nothing to do.
@@ -5406,23 +5429,24 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             const size_t nelements = ggml_nelements(tensor);
 
             float * f32_data;
-            std::vector<float> f32_conv_buf;
 
             if (tensor->type == GGML_TYPE_F32) {
                 f32_data = (float *) tensor->data;
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
-                llama_convert_tensor_internal(tensor, f32_conv_buf, nelements, nthread);
+                llama_convert_tensor_internal(tensor, f32_conv_buf, workers, nelements, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
 
             LLAMA_LOG_INFO("quantizing to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
-            work.resize(nelements * 4); // upper bound on size
+            if (work.size() < nelements * 4) {
+                work.resize(nelements * 4); // upper bound on size
+            }
             new_data = work.data();
-            std::vector<int64_t> hist_cur(1 << 4, 0);
+            std::array<int64_t, 1 << 4> hist_cur = {};
 
             static const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
@@ -5433,13 +5457,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 size_t counter = 0;
                 new_size = 0;
                 auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
-                    std::vector<int64_t> local_hist;
+                    std::array<int64_t, 1 << 4> local_hist = {};
                     size_t local_size = 0;
                     while (true) {
                         std::unique_lock<std::mutex> lock(mutex);
                         size_t first = counter; counter += chunk_size;
                         if (first >= nelements) {
-                            if (!local_hist.empty()) {
+                            if (local_size > 0) {
                                 for (int j=0; j<int(local_hist.size()); ++j) {
                                     hist_cur[j] += local_hist[j];
                                 }
@@ -5449,22 +5473,15 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         }
                         lock.unlock();
                         size_t last = std::min(nelements, first + chunk_size);
-                        if (local_hist.empty()) {
-                            local_hist.resize(hist_cur.size(), 0);
-                        }
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
-                if ((int) workers.size() < nthread_use - 1) {
-                    workers.resize(nthread_use - 1);
-                }
                 for (int it = 0; it < nthread_use - 1; ++it) {
-                    workers[it] = std::thread(compute);
+                    workers.emplace_back(compute);
                 }
                 compute();
-                for (int it = 0; it < nthread_use - 1; ++it) {
-                    workers[it].join();
-                }
+                for (auto & w : workers) { w.join(); }
+                workers.clear();
             }
 
             LLAMA_LOG_INFO("size = %8.2f MB -> %8.2f MB | hist: ", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
