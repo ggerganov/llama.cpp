@@ -3429,10 +3429,6 @@ static bool llama_eval_internal(
     if (lctx.ctx_metal) {
         ggml_metal_set_n_cb     (lctx.ctx_metal, n_threads);
         ggml_metal_graph_compute(lctx.ctx_metal, gf);
-        ggml_metal_get_tensor   (lctx.ctx_metal, res);
-        if (!lctx.embedding.empty()) {
-            ggml_metal_get_tensor(lctx.ctx_metal, embeddings);
-        }
     } else {
         ggml_graph_compute_helper(lctx.work_buffer, gf, n_threads);
     }
