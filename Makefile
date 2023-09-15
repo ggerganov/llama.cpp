@@ -174,9 +174,13 @@ MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
 MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wmissing-declarations -Wno-unused-function -Wno-multichar
 
+# TODO(cebtenzzre): remove this once PR #2632 gets merged
+TTFS_CXXFLAGS = $(CXXFLAGS) -Wno-missing-declarations
+
 ifneq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# clang++ only
-	MK_CXXFLAGS += -Wmissing-prototypes
+	MK_CXXFLAGS   += -Wmissing-prototypes
+	TTFS_CXXFLAGS += -Wno-missing-prototypes
 else
 	# g++ only
 	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
@@ -527,7 +531,7 @@ gguf: examples/gguf/gguf.cpp ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o common.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+	$(CXX) $(TTFS_CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
