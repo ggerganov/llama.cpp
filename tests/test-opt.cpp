@@ -61,12 +61,9 @@ static void get_random_dims_minmax(int64_t * dims, int ndims, int min, int max) 
 }
 
 
-struct ggml_tensor * get_random_tensor(
-        struct ggml_context * ctx0,
-        int ndims,
-        int64_t ne[],
-        float fmin,
-        float fmax) {
+static struct ggml_tensor * get_random_tensor(
+    struct ggml_context * ctx0, int ndims, int64_t ne[], float fmin, float fmax
+) {
     struct ggml_tensor * result = ggml_new_tensor(ctx0, GGML_TYPE_F32, ndims, ne);
 
     switch (ndims) {

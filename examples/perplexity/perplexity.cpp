@@ -132,7 +132,7 @@ static void process_logits(
 
 }
 
-results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & params) {
+static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & params) {
     // Download: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
     // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
@@ -262,8 +262,7 @@ results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & params)
     return {tokens, std::exp(nll / count), logit_history, prob_history};
 }
 
-results_perplexity perplexity(llama_context * ctx, const gpt_params & params) {
-
+static results_perplexity perplexity(llama_context * ctx, const gpt_params & params) {
     if (params.ppl_stride > 0) {
         return perplexity_v2(ctx, params);
     }

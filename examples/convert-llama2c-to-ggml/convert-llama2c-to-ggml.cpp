@@ -444,7 +444,7 @@ __attribute__((format(gnu_printf, 1, 2)))
 __attribute__((format(printf, 1, 2)))
 #endif
 #endif
-std::string format(const char * fmt, ...) {
+static std::string format(const char * fmt, ...) {
     va_list ap, ap2;
     va_start(ap, fmt);
     va_copy(ap2, ap);
@@ -531,7 +531,7 @@ struct llama_file {
     }
 };
 
-bool is_ggml_file(const char *filename) {
+static bool is_ggml_file(const char * filename) {
     llama_file file(filename, "rb");
     if (file.size < 4) {
         return false;
@@ -540,7 +540,7 @@ bool is_ggml_file(const char *filename) {
     return magic == GGUF_MAGIC;
 }
 
-std::string llama_escape_whitespaces(const std::string& text) {
+static std::string llama_escape_whitespaces(const std::string & text) {
     std::ostringstream out;
     for (char c : text) {
         if (c == ' ') out << "\xe2\x96\x81";

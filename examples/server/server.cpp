@@ -48,7 +48,7 @@ struct completion_token_output
     llama_token tok;
 };
 
-size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b)
+static size_t common_part(const std::vector<llama_token> &a, const std::vector<llama_token> &b)
 {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++)
@@ -63,13 +63,13 @@ enum stop_type
     STOP_PARTIAL,
 };
 
-static bool ends_with(const std::string & str, const std::string & suffix)
+static bool ends_with(const std::string &str, const std::string &suffix)
 {
     return str.size() >= suffix.size() &&
            0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-size_t find_partial_stop_string(const std::string & stop, const std::string & text)
+static size_t find_partial_stop_string(const std::string &stop, const std::string &text)
 {
     if (!text.empty() && !stop.empty())
     {
@@ -90,7 +90,7 @@ size_t find_partial_stop_string(const std::string & stop, const std::string & te
 }
 
 template <class Iter>
-std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
+static std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
 {
     std::string ret;
     for (; begin != end; ++begin)
@@ -101,7 +101,7 @@ std::string tokens_to_str(llama_context *ctx, Iter begin, Iter end)
 }
 
 static void server_log(
-    const char * level, const char * function, int line, const char * message, const nlohmann::ordered_json & extra
+    const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra
 ) {
     nlohmann::ordered_json log{
         {"timestamp", time(nullptr)},
@@ -122,7 +122,7 @@ static void server_log(
 }
 
 // format incomplete utf-8 multibyte character for output
-std::string tokens_to_output_formatted_string(const llama_context * ctx, llama_token token)
+static std::string tokens_to_output_formatted_string(const llama_context *ctx, llama_token token)
 {
     std::string out = token == -1 ? "" : llama_token_to_piece(ctx, token);
     // if the size is 1 and first bit is 1, meaning it's a partial character
@@ -138,7 +138,7 @@ std::string tokens_to_output_formatted_string(const llama_context * ctx, llama_t
 }
 
 // convert a vector of completion_token_output to json
-json probs_vector_to_json(const llama_context * ctx, const std::vector<completion_token_output> & probs)
+static json probs_vector_to_json(const llama_context *ctx, const std::vector<completion_token_output> &probs)
 {
     json out = json::array();
     for (const auto &prob : probs)
@@ -690,7 +690,7 @@ struct llama_server_context
     }
 };
 
-static void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams)
+static void server_print_usage(const char *argv0, const gpt_params &params, const server_params &sparams)
 {
     printf("usage: %s [options]\n", argv0);
     printf("\n");
@@ -738,7 +738,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("\n");
 }
 
-static void server_params_parse(int argc, char ** argv, server_params & sparams, gpt_params & params)
+static void server_params_parse(int argc, char **argv, server_params &sparams, gpt_params &params)
 {
     gpt_params default_params;
     server_params default_sparams;
@@ -992,7 +992,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
     }
 }
 
-json format_generation_settings(llama_server_context & llama)
+static json format_generation_settings(llama_server_context &llama)
 {
     const auto eos_bias = llama.params.logit_bias.find(llama_token_eos(llama.ctx));
     const bool ignore_eos = eos_bias != llama.params.logit_bias.end() &&
@@ -1026,14 +1026,14 @@ json format_generation_settings(llama_server_context & llama)
     };
 }
 
-json format_embedding_response(llama_server_context & llama)
+static json format_embedding_response(llama_server_context &llama)
 {
     return json{
         {"embedding", llama.getEmbedding()},
     };
 }
 
-json format_timings(llama_server_context & llama)
+static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
 
@@ -1052,8 +1052,8 @@ json format_timings(llama_server_context & llama)
     };
 }
 
-json format_final_response(
-    llama_server_context & llama, const std::string & content, const std::vector<completion_token_output> & probs
+static json format_final_response(
+    llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs
 ) {
 
     json res = json{
@@ -1081,8 +1081,8 @@ json format_final_response(
     return res;
 }
 
-json format_partial_response(
-    llama_server_context & llama, const std::string & content, const std::vector<completion_token_output> & probs
+static json format_partial_response(
+    llama_server_context &llama, const std::string &content, const std::vector<completion_token_output> &probs
 ) {
     json res = json{
         {"content", content},
@@ -1097,20 +1097,20 @@ json format_partial_response(
     return res;
 }
 
-json format_tokenizer_response(const std::vector<llama_token> & tokens)
+static json format_tokenizer_response(const std::vector<llama_token> &tokens)
 {
     return json{
         {"tokens", tokens}};
 }
 
-json format_detokenized_response(std::string content)
+static json format_detokenized_response(std::string content)
 {
     return json{
         {"content", content}};
 }
 
 template <typename T>
-T json_value(const json & body, const std::string & key, const T & default_value)
+static T json_value(const json &body, const std::string &key, const T &default_value)
 {
     // Fallback null to default value
     return body.contains(key) && !body.at(key).is_null()
@@ -1118,7 +1118,7 @@ T json_value(const json & body, const std::string & key, const T & default_value
         : default_value;
 }
 
-static void parse_options_completion(const json & body, llama_server_context & llama)
+static void parse_options_completion(const json &body, llama_server_context &llama)
 {
     gpt_params default_params;
 
@@ -1197,7 +1197,7 @@ static void parse_options_completion(const json & body, llama_server_context & l
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }
 
-static void log_server_request(const Request & req, const Response & res)
+static void log_server_request(const Request &req, const Response &res)
 {
     LOG_INFO("request", {
                             {"remote_addr", req.remote_addr},
@@ -1214,7 +1214,7 @@ static void log_server_request(const Request & req, const Response & res)
                            });
 }
 
-static bool is_at_eob(llama_server_context & server_context, const llama_token * tokens, const size_t n_tokens) {
+static bool is_at_eob(llama_server_context &server_context, const llama_token *tokens, const size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(server_context.ctx);
 }
 
@@ -1224,7 +1224,7 @@ static bool is_at_eob(llama_server_context & server_context, const llama_token *
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-static void beam_search_callback(void * callback_data, llama_beams_state beams_state) {
+static void beam_search_callback(void *callback_data, llama_beams_state beams_state) {
     auto & llama = *static_cast<llama_server_context*>(callback_data);
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {
@@ -1257,7 +1257,8 @@ struct token_translator {
     std::string operator()(const completion_token_output & cto) const { return (*this)(cto.tok); }
 };
 
-static void append_to_generated_text_from_generated_token_probs(llama_server_context & llama) {
+static void append_to_generated_text_from_generated_token_probs(llama_server_context &llama)
+{
     auto & gtps = llama.generated_token_probs;
     auto translator = token_translator{llama.ctx};
     auto add_strlen = [=](size_t sum, const completion_token_output & cto) { return sum + translator(cto).size(); };
@@ -1270,7 +1271,8 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
     }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     // own arguments required by this example
     gpt_params params;
     server_params sparams;

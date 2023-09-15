@@ -102,7 +102,7 @@ static void combine_error_stats(error_stats & into, const error_stats & from) {
     for (size_t i=0; i<HISTOGRAM_BUCKETS; ++i) into.error_histogram[i] += from.error_histogram[i];
 }
 
-double find_quantile(const error_stats & stats, double quantile) {
+static double find_quantile(const error_stats & stats, double quantile) {
     double sum = std::accumulate(std::begin(stats.error_histogram), std::end(stats.error_histogram), 0.0);
 
     double accum = 0;
