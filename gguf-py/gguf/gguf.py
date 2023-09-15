@@ -183,7 +183,7 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
         MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_up",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
     },
     MODEL_ARCH.GPT2: {
         # TODO
