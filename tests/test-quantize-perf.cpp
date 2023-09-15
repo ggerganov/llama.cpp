@@ -61,22 +61,22 @@ inline int64_t cpu_cycles() {
 
 
 // Generate synthetic data
-void generate_data(float offset, size_t n, float * dst) {
+static void generate_data(float offset, size_t n, float * dst) {
     for (size_t i = 0; i < n; i++) {
         dst[i] = 0.1 + 2*cosf(i + offset);
     }
 }
 
-float gigabytes_per_second(size_t bytes, int64_t usecs) {
+static float gigabytes_per_second(size_t bytes, int64_t usecs) {
     return bytes / (float) usecs * 1000000 / (1024*1024*1024);
 }
 
-void * align_with_offset(void * ptr, int offset) {
+static void * align_with_offset(void * ptr, int offset) {
     size_t dummy_size = MAX_ALIGNMENT * 4;
     return (char *) std::align(MAX_ALIGNMENT, MAX_ALIGNMENT, ptr, dummy_size) + offset;
 }
 
-void benchmark_function(size_t size, size_t q_size, int64_t iterations, const std::function<size_t(void)> & function) {
+static void benchmark_function(size_t size, size_t q_size, int64_t iterations, const std::function<size_t(void)> & function) {
     int64_t min_time_us = INT64_MAX;
     int64_t total_time_us = 0;
     int64_t min_time_cycles = INT64_MAX;
@@ -108,7 +108,7 @@ void benchmark_function(size_t size, size_t q_size, int64_t iterations, const st
     printf("      quantized throughput : %9.2f GB/s\n",  gigabytes_per_second(q_size * iterations, total_time_us));
 }
 
-void usage(char * argv[]) {
+static void usage(char * argv[]) {
     printf("Benchmark quantization specific functions on synthetic data\n");
     printf("\n");
     printf("usage: %s [options]\n", argv[0]);

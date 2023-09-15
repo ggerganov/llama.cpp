@@ -1,3 +1,4 @@
+#define LLAMA_API_INTERNAL
 #include "llama.h"
 
 #include "ggml.h"
@@ -108,7 +109,7 @@ static size_t utf8_len(char src) {
     return lookup[highbits];
 }
 
-void replace_all(std::string & s, const std::string & search, const std::string & replace) {
+static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     std::string result;
     for (size_t pos = 0; ; pos += search.length()) {
         auto new_pos = s.find(search, pos);
@@ -1589,7 +1590,7 @@ struct llama_model_loader {
 // load LLaMA models
 //
 
-std::string llama_model_ftype_name(enum llama_ftype ftype) {
+static std::string llama_model_ftype_name(enum llama_ftype ftype) {
     if (ftype & LLAMA_FTYPE_GUESSED) {
         return llama_model_ftype_name((enum llama_ftype) (ftype & ~LLAMA_FTYPE_GUESSED)) + " (guessed)";
     }
@@ -4295,7 +4296,7 @@ struct llama_grammar_candidate {
 
 // Decodes a UTF-8 string which may end in an incomplete sequence. Adds a terminating 0 for use as
 // pointer. If an invalid sequence is encountered, returns `llama_partial_utf8.n_remain == -1`.
-std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
+static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const char         * src,
         llama_partial_utf8   partial_start) {
     static const int      lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 3, 4 };
@@ -5893,7 +5894,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 }
 
 // TODO: after the GGUF PR, this likely won't work and needs to be updated
-int llama_apply_lora_from_file_internal(const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads) {
+static int llama_apply_lora_from_file_internal(
+    const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads
+) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
     const int64_t t_start_lora_us = ggml_time_us();
@@ -6440,7 +6443,7 @@ struct llama_context * llama_new_context_with_model(
     return ctx;
 }
 
-struct llama_context * llama_init_from_file(
+static struct llama_context * llama_init_from_file(
                              const char * path_model,
             struct llama_context_params   params) {
     struct llama_model * model = llama_load_model_from_file(path_model, params);
@@ -6645,7 +6648,7 @@ struct llama_data_file_context : llama_data_context {
  * llama_copy_state_data(ctx, &data_ctx);
  *
 */
-void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
+static void llama_copy_state_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     // copy rng
     {
         std::stringstream rng_ss;
@@ -7183,7 +7186,9 @@ void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
 }
 
 // For internal test use
-const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx) {
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+) {
     return ctx->model.tensors_by_name;
 }
 
