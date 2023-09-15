@@ -2,7 +2,7 @@
 BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple save-load-state server embd-input-test gguf llama-bench baby-llama beam-search speculative tests/test-c.o
 
 # Binaries only useful for tests
-TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1
+TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1-llama
 
 # Code coverage output files
 COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
@@ -49,7 +49,7 @@ test: $(TEST_TARGETS)
 			./$$test_target $(CURDIR)/models/ggml-vocab-llama.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-falcon" ]; then \
 			continue; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1" ]; then \
+		elif [ "$$test_target" = "tests/test-tokenizer-1-llama" ]; then \
 			continue; \
 		else \
 			echo "Running test $$test_target..."; \
@@ -110,50 +110,42 @@ MK_LDFLAGS  =
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
 # posix_memalign came in POSIX.1-2001 / SUSv3
 # M_PI is an XSI extension since POSIX.1-2001 / SUSv3, came in XPG1 (1985)
-MK_CFLAGS   += -D_XOPEN_SOURCE=600
-MK_CXXFLAGS += -D_XOPEN_SOURCE=600
+MK_CPPFLAGS += -D_XOPEN_SOURCE=600
 
 # Somehow in OpenBSD whenever POSIX conformance is specified
 # some string functions rely on locale_t availability,
 # which was introduced in POSIX.1-2008, forcing us to go higher
 ifeq ($(UNAME_S),OpenBSD)
-	MK_CFLAGS   += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
-	MK_CXXFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
+	MK_CPPFLAGS += -U_XOPEN_SOURCE -D_XOPEN_SOURCE=700
 endif
 
 # Data types, macros and functions related to controlling CPU affinity and
 # some memory allocation are available on Linux through GNU extensions in libc
 ifeq ($(UNAME_S),Linux)
-	MK_CFLAGS   += -D_GNU_SOURCE
-	MK_CXXFLAGS += -D_GNU_SOURCE
+	MK_CPPFLAGS += -D_GNU_SOURCE
 endif
 
 # RLIMIT_MEMLOCK came in BSD, is not specified in POSIX.1,
 # and on macOS its availability depends on enabling Darwin extensions
 # similarly on DragonFly, enabling BSD extensions is necessary
 ifeq ($(UNAME_S),Darwin)
-	MK_CFLAGS   += -D_DARWIN_C_SOURCE
-	MK_CXXFLAGS += -D_DARWIN_C_SOURCE
+	MK_CPPFLAGS += -D_DARWIN_C_SOURCE
 endif
 ifeq ($(UNAME_S),DragonFly)
-	MK_CFLAGS   += -D__BSD_VISIBLE
-	MK_CXXFLAGS += -D__BSD_VISIBLE
+	MK_CPPFLAGS += -D__BSD_VISIBLE
 endif
 
 # alloca is a non-standard interface that is not visible on BSDs when
 # POSIX conformance is specified, but not all of them provide a clean way
 # to enable it in such cases
 ifeq ($(UNAME_S),FreeBSD)
-	MK_CFLAGS   += -D__BSD_VISIBLE
-	MK_CXXFLAGS += -D__BSD_VISIBLE
+	MK_CPPFLAGS += -D__BSD_VISIBLE
 endif
 ifeq ($(UNAME_S),NetBSD)
-	MK_CFLAGS   += -D_NETBSD_SOURCE
-	MK_CXXFLAGS += -D_NETBSD_SOURCE
+	MK_CPPFLAGS += -D_NETBSD_SOURCE
 endif
 ifeq ($(UNAME_S),OpenBSD)
-	MK_CFLAGS   += -D_BSD_SOURCE
-	MK_CXXFLAGS += -D_BSD_SOURCE
+	MK_CPPFLAGS += -D_BSD_SOURCE
 endif
 
 ifdef LLAMA_DEBUG
@@ -182,7 +174,7 @@ MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
 MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-multichar
 
-ifeq '' '$(findstring clang++,$(CXX))'
+ifeq '' '$(findstring clang,$(shell $(CXX) --version))'
 	# g++ only
 	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
 endif
@@ -408,7 +400,6 @@ ifdef LLAMA_HIPBLAS
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
 	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
-	HIPFLAGS    += -DCC_TURING=1000000000
 ifdef LLAMA_CUDA_FORCE_DMMV
 	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
@@ -606,7 +597,7 @@ tests/test-tokenizer-0-falcon: tests/test-tokenizer-0-falcon.cpp build-info.h gg
 tests/test-tokenizer-0-llama: tests/test-tokenizer-0-llama.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-tokenizer-1: tests/test-tokenizer-1.cpp build-info.h ggml.o llama.o common.o $(OBJS)
+tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 tests/test-c.o: tests/test-c.c llama.h

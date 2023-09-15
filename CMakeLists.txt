@@ -135,6 +135,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+include(CheckCXXCompilerFlag)
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
@@ -171,8 +172,8 @@ if (LLAMA_METAL)
     find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
 
     message(STATUS "Metal framework found")
-
-    set(GGML_SOURCES_METAL ggml-metal.m ggml-metal.h)
+    set(GGML_HEADERS_METAL ggml-metal.h)
+    set(GGML_SOURCES_METAL ggml-metal.m)
 
     add_compile_definitions(GGML_USE_METAL)
     if (LLAMA_METAL_NDEBUG)
@@ -191,7 +192,6 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         )
 endif()
-
 if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -268,7 +268,8 @@ if (LLAMA_BLAS)
 endif()
 
 if (LLAMA_K_QUANTS)
-    set(GGML_SOURCES_EXTRA ${GGML_SOURCES_EXTRA} k_quants.c k_quants.h)
+    set(GGML_HEADERS_EXTRA k_quants.h)
+    set(GGML_SOURCES_EXTRA k_quants.c)
     add_compile_definitions(GGML_USE_K_QUANTS)
     if (LLAMA_QKK_64)
         add_compile_definitions(GGML_QKK_64)
@@ -284,7 +285,8 @@ if (LLAMA_CUBLAS)
 
         enable_language(CUDA)
 
-        set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
+        set(GGML_HEADERS_CUDA ggml-cuda.h)
+        set(GGML_SOURCES_CUDA ggml-cuda.cu)
 
         add_compile_definitions(GGML_USE_CUBLAS)
 #        if (LLAMA_CUDA_CUBLAS)
@@ -332,6 +334,7 @@ if (LLAMA_MPI)
     find_package(MPI)
     if (MPI_C_FOUND)
         message(STATUS "MPI found")
+        set(GGML_HEADERS_MPI ggml-mpi.h)
         set(GGML_SOURCES_MPI ggml-mpi.c ggml-mpi.h)
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
@@ -354,7 +357,8 @@ if (LLAMA_CLBLAST)
     if (CLBlast_FOUND)
         message(STATUS "CLBlast found")
 
-        set(GGML_SOURCES_OPENCL ggml-opencl.cpp ggml-opencl.h)
+        set(GGML_HEADERS_OPENCL ggml-opencl.h)
+        set(GGML_SOURCES_OPENCL ggml-opencl.cpp)
 
         add_compile_definitions(GGML_USE_CLBLAST)
 
@@ -382,13 +386,15 @@ if (LLAMA_HIPBLAS)
         message(STATUS "HIP and hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
         add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
+        if (BUILD_SHARED_LIBS)
+            set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        endif()
         if (LLAMA_CUDA_FORCE_DMMV)
             target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
         endif()
         target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
         target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
-        target_compile_definitions(ggml-rocm PRIVATE CC_TURING=1000000000)
         set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
         target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
 
@@ -439,7 +445,7 @@ if (LLAMA_ALL_WARNINGS)
 
 endif()
 
-if (MSVC)
+if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
     if (BUILD_SHARED_LIBS)
@@ -461,6 +467,13 @@ endif()
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 message(STATUS "CMAKE_SYSTEM_PROCESSOR: ${CMAKE_SYSTEM_PROCESSOR}")
+if (MSVC)
+  string(TOLOWER "${CMAKE_GENERATOR_PLATFORM}" CMAKE_GENERATOR_PLATFORM_LWR)
+  message(STATUS "CMAKE_GENERATOR_PLATFORM: ${CMAKE_GENERATOR_PLATFORM}")
+else ()
+  set(CMAKE_GENERATOR_PLATFORM_LWR "")
+endif ()
+
 if (NOT MSVC)
     if (LLAMA_STATIC)
         add_link_options(-static)
@@ -476,25 +489,33 @@ if (NOT MSVC)
     endif()
 endif()
 
-if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64"))
+if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
     message(STATUS "ARM detected")
     if (MSVC)
-        # TODO: arm msvc?
+        add_compile_definitions(__ARM_NEON)
+        add_compile_definitions(__ARM_FEATURE_FMA)
+        add_compile_definitions(__ARM_FEATURE_DOTPROD)
+        # add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) # MSVC doesn't support vdupq_n_f16, vld1q_f16, vst1q_f16
+        add_compile_definitions(__aarch64__) # MSVC defines _M_ARM64 instead
     else()
+        check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
+        if (NOT "${COMPILER_SUPPORTS_FP16_FORMAT_I3E}" STREQUAL "")
+            add_compile_options(-mfp16-format=ieee)
+        endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv6")
             # Raspberry Pi 1, Zero
-            add_compile_options(-mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access)
+            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv7")
             # Raspberry Pi 2
-            add_compile_options(-mfpu=neon-fp-armv8 -mfp16-format=ieee -mno-unaligned-access -funsafe-math-optimizations)
+            add_compile_options(-mfpu=neon-fp-armv8 -mno-unaligned-access -funsafe-math-optimizations)
         endif()
         if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8")
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
-            add_compile_options(-mfp16-format=ieee -mno-unaligned-access)
+            add_compile_options(-mno-unaligned-access)
         endif()
     endif()
-elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$")
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
     message(STATUS "x86 detected")
     if (MSVC)
         if (LLAMA_AVX512)
@@ -616,11 +637,11 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
-            ${GGML_SOURCES_CUDA}
-            ${GGML_SOURCES_OPENCL}
-            ${GGML_SOURCES_METAL}
-            ${GGML_SOURCES_MPI}
-            ${GGML_SOURCES_EXTRA}
+            ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
@@ -658,14 +679,53 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-    install(TARGETS llama LIBRARY)
 endif()
+
 
 #
 # install
 #
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}
+    CACHE PATH "Location of header files")
+set(LLAMA_LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}
+    CACHE PATH "Location of library files")
+set(LLAMA_BIN_INSTALL_DIR ${CMAKE_INSTALL_BINDIR}
+    CACHE PATH "Location of binary files")
+set(LLAMA_BUILD_NUMBER ${BUILD_NUMBER})
+set(LLAMA_BUILD_COMMIT ${BUILD_COMMIT})
+set(LLAMA_INSTALL_VERSION 0.0.${BUILD_NUMBER})
+
+configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/LlamaConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama
+    PATH_VARS LLAMA_INCLUDE_INSTALL_DIR
+              LLAMA_LIB_INSTALL_DIR
+              LLAMA_BIN_INSTALL_DIR )
+
+write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+    VERSION ${LLAMA_INSTALL_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
+
+set(GGML_PUBLIC_HEADERS "ggml.h"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+
+set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+install(TARGETS ggml PUBLIC_HEADER)
+
+set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/llama.h)
+install(TARGETS llama LIBRARY PUBLIC_HEADER)
+
 install(
     FILES convert.py
     PERMISSIONS
