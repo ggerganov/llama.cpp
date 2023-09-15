@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 62
+Current version: 63
 -Concedo
 -->
 
@@ -44,8 +44,8 @@ Current version: 62
 		:root{
 			--img_sword:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAAB5QTFRFAAAA/rUT5uvzztXjq1kW5+r14ufw/8YF/8QHr1kWOCO8XQAAAAp0Uk5TAPr+/fwgpBqRPkYi9G8AAAC6SURBVHicjZCxDoIwEIZv0cLmryTiWl/AhOBOcgubcWAmDs5lglEWdWTwgT1MkGvj4A1N+/Xr3Z8S6VpcrXeurN1799baTIOzCMdQyANBg4+QHQIhq2fhMgqqZ/WfcAqE/LfQPR2REgzwoKUSIiB1uoMA3PWIEUCPMD1arHUG08YFvAz0Ymz0T8XMBWpPYMbWE7hs4L49+4R5aGalAbiU/OkEeiAZBGACst1RAFbjqp/IgA63CUQ6gtQbfGErFF7/nE4AAAAASUVORK5CYII=");
 			--img_paper:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAAB5QTFRF+OmvAAAA89Ze14Rw2cCY1k8/8eGhmEQ/+uqj87Jse3RL9AAAAAp0Uk5T/wD49//9of8rH/vnQeUAAAEOSURBVHicXdG9asMwFAXggx1COmoJ8VgNptkKcmqyGaKSB0i127RkLiTgNV2CVxMo9G177rVSm2ow0se5Vz/Gbdub6YBz2//w0sV59s0wbs5X806X1j4JFN4Bx45La9eE7OM1PANIBHKCuW7CAYgkkIWgEaWeYN5DjHA0AthIZF8ILAgrpBJJ21N1hyGCXXvGA2EJibxJQaVwgUQKlNIkj5AePNKyrWAJtYS952dH6AlpJaQViW3AXc/shlnZFoRHAhd6hpkjrLGEl7lShFKuphXgA0B23WtF+UmwCjy1VijUw70H4iPeH0KaIMl/DKZjIf/lWo/QCJjVSAMYUoSvCH80gjHdEZibCQjJJuYXZ+xAP6Rjil4AAAAASUVORK5CYII=");
-			--img_chat:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAAB5QTFRFAAAA/tACTK/4OninExQMKU9s160EDQ4Jh28GBQcHB/ICrwAAAAp0Uk5TAP///fb//9b0XrugY20AAADDSURBVHicY2BgmOLi4mIMxJ4MEMAZpAQBKhMgAixKMFAAEzANBYFghIAxGBhRQYUxVVS4uLiDBYygLld2FJQAeYfTGea5RkExsK4pTsouIOAhKCjoADZlKlAxFEAE2IMiUAUYSkwy2jISO8TaYAIsLi0Rzh6uLSaCDVCBxBSPFjeXFA+EgGCimGCaYCJcSyKaoYQF2GECYlAPc3qkgYCgYAo0rhimlwNBSWJKJQMyYEn0ROEzVIgUoPA5PdAUcILDjwEAKyJGXpPDNnQAAAAASUVORK5CYII=");
-			--img_lamp:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAB5QTFRFAAAA/sAHAgEAAgIAFREDBgQAPi8Cy5oGX3yKfl8ER3IPEQAAAAp0Uk5TAf/+uxha/////14jFUAAAAD1SURBVHiclZExbsMwDEWFWDoAFwfZ4q86QbZA8AEEB92NtDlAPRTo2CxFbpDV3XrbkJKpNOhUApagJ/J/UjYmR7U3j7FY/we8yOIGXmyXQCh6fZsNPN+dTtEYzFchugD4aP2caW3AxzuTqLUHTEQXdMUnbGmF6dzq2eGTAb6gJdWOiJZj863+fcOA6t35aQbHNwHLTZ1AwHCcBBDq1sEnkDLoJ4NSwiqq0W8zKKLJlmNUW8uNiU1pTFqXitI6D8cpq/twPH4jCXFQiSiyY+fmB+q9cRtuNOrr8mbBEU2VZZ/5E8Dba/HB9QrzO/4A+Q0P4ABt6wYxlClfYCldCwAAAABJRU5ErkJggg==");
+			--img_chat:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAADxQTFRFkcPmAAAAkcPmstXukL/ltNbueJGic4aTibLQkcPmvtzwpM7qmazZkcPm5vL5ps/ruNnw0uf1udD/////pH/0JgAAABR0Uk5T/wBl/xH0////Qrz8Bltj6diDAgFfSBG4AAAAzklEQVR4nL3TQQ6EIAwF0BYLSBFl9P53HUFhVKru5i/QpC+2CRWQOOpLIo9YAqQ9tJmqAJbqAFyBFuugK+hk0P0b9Mb05/MCjLUGwOZzexeBuQe9senjdmth2xbykEoFR89gJfQClHsD4eGyMlDAMmCkHYziPvixAhzjvlO+K9FxXShXAOKcB/VMJTPWegaYgP/gLwOVegVTqishO9i2+Bbw/h+Eth7g0LkOdog7AWoBnQDS5RvpuvGcZcjZ4JIWBuXkbvgAkMILWOdx6fEFbukIF0RE9j4AAAAASUVORK5CYII=");
+			--img_compass:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAADxQTFRF/7VV/+J5AAAA8/P11Ob1l8jt/39K+chs/9tn/8Bd/+J48eTO/9x0/9Zv99ugiHp0/5MKWVFO/6k53KWUcJJTdwAAABR0Uk5T/v8A//////8Zydn/klf///v/bf9A3eYXAAABMUlEQVR4nG2T2RaDIAwFUwEBWdz+/18LuSypNS8enTGQQGgZ4VKMW4kYHb9fnnxaaOC4fUZsxbmoxHFRx5/f2BJRkY4Dgts+f2F9AU0Q3Aol9Qyd56DUvisVMlw6Dt5D5wVDKArzusdaBfaXlZqCUrlyiksRnORKt6dioRRCSND5CK1Z8Au5vn5Y1yy4zkhBaSRYS9yh85YiURwF3CtHbhwpPHGN/FuAsN7gOjwF1bhpAtYg7tnO5Wdww8Z+nn+CapyFswtiibJN5sbIJaQQGjdyk7PMWr8RRisziU7zj0OwaBRaPTkU0ep5WPo3+mGN437wedxIYS2+n7vkvl4YvnLl3Qb0Z1TICRZcWvg2Q8B1A8dkJXqNtHTh3cCE9tHzT+zB5/Am/4aFUAe4OT66+fULsfQP1birKzkAAAAASUVORK5CYII=");
 		}
 
 		body {
@@ -959,6 +959,23 @@ Current version: 62
 			}
 		}
 
+		.settingsnav
+		{
+			margin-top: 6px;
+    		margin-left: 6px;
+		}
+
+		.settingsnav>li.active>a {
+			color: #0063ff!important;
+		}
+		.settingsnav>li>a{
+			border-radius: 8px 8px 0 0;
+			padding-top: 6px!important;
+			padding-bottom: 2px!important;
+			color: #666;
+			background-color: #b1b1b1;
+		}
+
 		.navbar-button-bar {
 			display: block;
 			height: 2px;
@@ -1044,8 +1061,8 @@ Current version: 62
 
 		.settingitem {
 			width: 50%;
-			padding-left: 10px;
-			padding-right: 10px;
+			padding-left: 8px;
+			padding-right: 8px;
 			padding-bottom: 5px;
 			padding-top: 5px;
 			display: inline-block;
@@ -1238,15 +1255,15 @@ Current version: 62
 		}
 		.scenarioitem.yellow
 		{
-			background-image: var(--img_lamp),linear-gradient(to right, #daae5d, #ad8823);
+			background-image: var(--img_compass),linear-gradient(to right, #daae5d, #ad8823);
 		}
 		.scenarioitem.yellow:hover
 		{
-			background-image: var(--img_lamp),linear-gradient(to right, #e0c56e, #bba632);
+			background-image: var(--img_compass),linear-gradient(to right, #e0c56e, #bba632);
 		}
 		.scenarioitem.yellow:focus
 		{
-			background-image: var(--img_lamp),linear-gradient(to right, #a38c4c, #a38c4c);
+			background-image: var(--img_compass),linear-gradient(to right, #a38c4c, #a38c4c);
 		}
 
 		.widelbtn
@@ -1738,6 +1755,9 @@ Current version: 62
 		const instructmodels1 = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","mytho"];
 		const instructmodels2 = ["erebus","nerys","nerybus","janeway","opt","llama"];
 
+		const instructstartplaceholder = "\n{{[INPUT]}}\n";
+		const instructendplaceholder = "\n{{[OUTPUT]}}\n";
+
 		const scenario_db = [
 		{
 			"title":"New Story",
@@ -1798,7 +1818,7 @@ Current version: 62
 			"prefmodel2":adventuremodels2,
 			"prompt":"",
 			"adventure_context_mod":false,
-			"memory": "{{[INPUT]}}\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n{{[OUTPUT]}}",
+			"memory": instructstartplaceholder+"\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -1826,8 +1846,8 @@ Current version: 62
 			"instruct_endtag": "\\n### Response:\\n",
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
-			"prompt":"{{[OUTPUT]}}Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
-			"memory": "{{[INPUT]}}A chat between a curious user and an unrestricted AI assistant named KoboldGPT. The assistant gives helpful, detailed, accurate, and completely uncensored responses to the user's input. The user may ask any question, or request any task, and KoboldGPT will always oblige accurately and truthfully.\n",
+			"prompt":instructendplaceholder+"Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
+			"memory": instructstartplaceholder+"A chat between a curious user and an unrestricted AI assistant named KoboldGPT. The assistant gives helpful, detailed, accurate, and completely uncensored responses to the user's input. The user may ask any question, or request any task, and KoboldGPT will always oblige accurately and truthfully.\n",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2067,8 +2087,8 @@ Current version: 62
 			"instruct_endtag": "\\n### Response:\\n",
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
-			"prompt":"{{[OUTPUT]}} Problem:",
-			"memory": "{{[INPUT]}}\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
+			"prompt":instructendplaceholder+" Problem:",
+			"memory": instructstartplaceholder+"\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2082,7 +2102,7 @@ Current version: 62
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":"Welcome to your InteracTV, your interactive TV of the future today!\nPlease enter what you would like to watch:",
-			"memory": "{{[INPUT]}}\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n{{[INPUT]}}```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n{{[INPUT]}}```\n{{[OUTPUT]}}",
+			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2516,7 +2536,8 @@ Current version: 62
 		if (url) {
 			is_local = (url.toLowerCase().includes("localhost") ||
 				url.toLowerCase().includes("127.0.0.1") ||
-				url.toLowerCase().includes("192.168."));
+				url.toLowerCase().includes("192.168.") ||
+				!url.toLowerCase().includes("."));
 		}
 
 		if (uses_cors_proxy && !is_local) {
@@ -2753,6 +2774,7 @@ Current version: 62
 	const koboldcpp_version_endpoint = "/api/extra/version";
 	const koboldcpp_abort_endpoint = "/api/extra/abort";
 	const koboldcpp_check_endpoint = "/api/extra/generate/check";
+	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -2798,6 +2820,7 @@ Current version: 62
 	var current_anotetemplate = "[Author\'s note: <|>]";
 	var extrastopseq = "";
 	var anote_strength = 320; //distance from end
+	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
 	var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context.
@@ -2823,8 +2846,7 @@ Current version: 62
 	var filter_enabled = true;
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
-	var last_known_filename = "";
-	var localmode = false;
+	var last_known_filename = "saved_story.json";
 	var localmodeport = 5000;
 	var localmodehost = "localhost";
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
@@ -2852,6 +2874,7 @@ Current version: 62
 		instruct_starttag: "\\n### Instruction:\\n",
 		instruct_endtag: "\\n### Response:\\n",
 		instruct_has_markdown: false,
+		raw_instruct_tags: false,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
@@ -2860,6 +2883,7 @@ Current version: 62
 		img_autogen: false,
 		img_allownsfw: true,
 		save_images: true,
+		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
 		enhanced_chat_ui: true,
@@ -2884,6 +2908,9 @@ Current version: 62
 		top_a: 0,
 		typ_s: 1,
 		tfs_s: 1,
+		miro_type: 0,
+		miro_tau: 5.0,
+		miro_eta: 0.1,
 		sampler_order: [6, 0, 1, 3, 4, 2, 5],
 	};
 
@@ -2959,7 +2986,6 @@ Current version: 62
 
 		if (localflag)
 		{
-			localmode = true;
 			let inputport = urlParams.get('port');
 			if (window.location.port && window.location.port != 80 && window.location.port != 443) {
 				localmodeport = window.location.port;
@@ -2982,7 +3008,7 @@ Current version: 62
 		const tokenstreaming = urlParams.get('streaming');
 		if(tokenstreaming)
 		{
-			document.getElementById("pseudostreaming").checked = true;
+			document.getElementById("tokenstreaming").checked = true;
 		}
 
 		const fromfile = ( window.location.protocol == 'file:' );
@@ -2996,8 +3022,8 @@ Current version: 62
 
 		console.log("Init started");
 		try {
-			let loadedsettingsjson = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_settings");
-			let loadedstorycompressed = localStorage.getItem((localmode?"e_":"")+"kaihordewebui_story");
+			let loadedsettingsjson = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_settings");
+			let loadedstorycompressed = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_story");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3146,7 +3172,7 @@ Current version: 62
 	let initial_fetched_kudos = false;
 	function attempt_connect(popup_aiselect = true)
 	{
-		if (localmode) {
+		if (localflag) {
 			document.getElementById("customapidropdown").value = 0;
 			let protocol = "http://";
 			if(window.location.protocol.includes('https') && !is_using_web_lite())
@@ -3341,28 +3367,30 @@ Current version: 62
 		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!="");
 	}
 
-	function is_using_newer_kcpp()
+	function is_using_kcpp_with_streaming()
 	{
-		return (koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+	}
+	function is_using_kcpp_with_mirostat()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
 	}
 
-	function should_use_pseudostreaming()
+	//0 is none, 1 is pseudostreaming, 2 is true streaming
+	function determine_streaming_type()
 	{
-		let pseudostreaming = (document.getElementById("pseudostreaming").checked ? true : false);
+		let streamtype = (document.getElementById("tokenstreaming").checked ? 1 : 0);
 		let pstreamamount = urlParams.get('streamamount');
-		if(is_using_newer_kcpp())
+		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
 		{
-			if(pstreamamount == null || pstreamamount <= 0)
-			{
-				pseudostreaming = false;
-			}
+			streamtype = 2; //true streaming
 		}
 
 		if(waiting_for_autosummary)
 		{
-			pseudostreaming = false;
+			streamtype = 0;
 		}
-		return pseudostreaming;
+		return streamtype;
 	}
 
 	function is_using_web_lite()
@@ -3482,12 +3510,12 @@ Current version: 62
 			//fetch the model list
 			fetch_models((mdls) => {
 				//can we find the model that's used? if yes load it, otherwise load the first one
-				if (mdls.length == 0 && !localmode) {
+				if (mdls.length == 0 && !localflag) {
 					msgbox("No models available. Unable to load.");
 				}
 				else
 				{
-					if(!localmode)
+					if(!localflag)
 					{
 						selected_models = [];
 						for (var i = 0; i < mdls.length; ++i) {
@@ -3589,6 +3617,24 @@ Current version: 62
 		a.download = newfilename;
 		setTimeout(function(){a.click()},20);
 	}
+
+	function save_file_button() //for triggering an optional popup
+	{
+		if(localsettings.prompt_for_savename)
+		{
+			let userinput = prompt("Save - Enter a Filename", last_known_filename);
+
+			if (userinput != null && userinput.trim()!="") {
+				last_known_filename = userinput.trim();
+				if(!last_known_filename.toLowerCase().includes(".json"))
+				{
+					last_known_filename += ".json";
+				}
+			}
+		}
+		save_file();
+
+	}
 	function save_file() {
 		//determine if oldui file or newui file format, but we always save to oldui format
 		let is_oldui = (loaded_storyobj.file_version == null);
@@ -3647,7 +3693,7 @@ Current version: 62
 		window.URL = window.URL || window.webkitURL;
 
 		var userAgent = window.navigator.userAgent;
-		newfilename = (last_known_filename==""?"saved_story.json":last_known_filename);
+		newfilename = last_known_filename;
 
 		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
 			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
@@ -4016,8 +4062,8 @@ Current version: 62
 							"desc":data.description?data.description:"",
 							"opmode":2,
 							"adventure_context_mod":false,
-							"prefmodel1":["nerys","nerybus","skein","adventure","erebus"],
-							"prefmodel2":[],
+							"prefmodel1":adventuremodels1,
+							"prefmodel2":adventuremodels2,
 							"prompt":data.promptContent?data.promptContent:"",
 							"memory": data.memory?data.memory:"",
 							"authorsnote": data.authorsNote?data.authorsNote:"",
@@ -4045,6 +4091,77 @@ Current version: 62
 			}
 		},false);
 	}
+
+	function get_chubai_scenario()
+	{
+		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
+			let userinput = document.getElementById("inputboxcontainerinput").value.toLowerCase().trim();
+			if(userinput=="")
+			{
+				//pass
+			}
+			else
+			{
+				if (userinput.includes("chub.ai/")) {
+					//is a url, extract the character name
+					userinput = userinput.replace("/characters/","/");
+					userinput = userinput.split("chub.ai/")[1];
+					userinput = userinput.split("#")[0];
+					userinput = userinput.split("?")[0];
+				}
+				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
+				if(userinput!="")
+				{
+					fetch("https://api.chub.ai/api/characters/download", {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+					"format": "cai",
+					"fullPath": userinput,
+					"version": "main"
+					}),
+					referrerPolicy: 'no-referrer',
+					})
+					.then(x => x.json())
+					.then(data => {
+						console.log(data);
+						let botname = data.name?data.name:"Bot";
+						let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
+						let cdesc = data.description?data.description:"";
+						let greeting = data.greeting?data.greeting:"";
+						let previewtxt = replaceAll(cdesc,"{{char}}",botname);
+						previewtxt = replaceAll(previewtxt,"{{user}}","You");
+						temp_scenario =
+						{
+							"title":data.title?data.title:"",
+							"desc": previewtxt,
+							"opmode":3,
+							"chatname": "You",
+							"chatopponent": botname,
+							"enhanced_chat_ui":true,
+							"prefmodel1":chatmodels1,
+							"prefmodel2":chatmodels2,
+							"prompt":("\n{{char}}: "+greeting),
+							"memory": cdesc +"\n"+ cdef,
+							"authorsnote": "",
+							"worldinfo": [],
+						};
+						preview_temp_scenario();
+					}).catch((error) => {
+						temp_scenario = null;
+						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
+						console.log("Error: " + error);
+					});
+				}else{
+					temp_scenario = null;
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)";
+				}
+			}
+		},false);
+	}
+
 
 	function click_scenario(idx)
 	{
@@ -4137,7 +4254,7 @@ Current version: 62
 	}
 	function togglescenarioallownsfw()
 	{
-		if(localmode)
+		if(localflag)
 		{
 			document.getElementById("scenarioautopickbox").classList.add("hidden");
 		}
@@ -4189,7 +4306,7 @@ Current version: 62
 			{
 				scenarioautopickai = true; //no selected model, pick a good one
 			}
-			if (scenarioautopickai && !localmode)
+			if (scenarioautopickai && !localflag)
 			{
 				fetch_models((mdls) =>
 				{
@@ -4276,7 +4393,8 @@ Current version: 62
 		temp_scenario = null;
 		document.getElementById("quickstartcontainer").classList.remove("hidden");
 
-		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`;
+		let scenarios = `<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_aetherroom_scenario()">Import from<br>aetherroom.club</button>`+
+		`<button type="button" name="" class="scenarioitem purple btn btn-primary" onclick="get_chubai_scenario()">Import from<br>chub.ai</button>`;
 		for(let i=0;i<scenario_db.length;++i)
 		{
 			let curr = scenario_db[i];
@@ -4325,14 +4443,14 @@ Current version: 62
 	}
 
 	function get_and_show_workers() {
-		if(localmode)
+		if(localflag)
 		{
 			return;
 		}
 		get_workers((wdata) => { show_workers(wdata) });
 	}
 	function get_workers(onDoneCallback) {
-		if(localmode)
+		if(localflag)
 		{
 			onDoneCallback([]);
 			return;
@@ -4449,6 +4567,24 @@ Current version: 62
 	{
 		document.getElementById("workercontainer").classList.add("hidden");
 		document.getElementById("myownworkercontainer").classList.add("hidden");
+	}
+	function is_popup_open()
+	{
+		return !(
+			document.getElementById("loadmodelcontainer").classList.contains("hidden") &&
+			document.getElementById("newgamecontainer").classList.contains("hidden") &&
+			document.getElementById("yesnocontainer").classList.contains("hidden") &&
+			document.getElementById("settingscontainer").classList.contains("hidden") &&
+			document.getElementById("msgboxcontainer").classList.contains("hidden") &&
+			document.getElementById("memorycontainer").classList.contains("hidden") &&
+			document.getElementById("workercontainer").classList.contains("hidden") &&
+			document.getElementById("myownworkercontainer").classList.contains("hidden") &&
+			document.getElementById("sharecontainer").classList.contains("hidden") &&
+			document.getElementById("wicontainer").classList.contains("hidden") &&
+			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
+			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
+			document.getElementById("zoomedimgcontainer").classList.contains("hidden")
+		);
 	}
 	function hide_popups() {
 		document.getElementById("loadmodelcontainer").classList.add("hidden");
@@ -4652,21 +4788,6 @@ Current version: 62
 							render_gametext();
 						} else {
 
-							//now we get the version number, however this is optional
-							//if it fails we can still proceed
-							let urls2 = [
-								apply_proxy_url(tmpep + kobold_custom_version_endpoint),
-							];
-							Promise.all(urls2.map(url => fetch(url)
-							.then(response => response.json())))
-							.then(values2 => {
-								console.log(values2);
-								let ep_version = values2[0].result;
-								kobold_endpoint_version = (ep_version?ep_version:"");
-							}).catch(error => {
-								console.log("Failed to get KAI version number: " + error);
-							});
-
 							//good to go
 							custom_kobold_endpoint = tmpep;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
@@ -4686,7 +4807,43 @@ Current version: 62
 							document.getElementById("connectstatus").innerHTML = "Connected to Custom Endpoint";
 							render_gametext();
 
-							if(localflag)
+							{
+								//now we get the version number, however this is optional
+								//if it fails we can still proceed
+								let urls2 = [
+									apply_proxy_url(tmpep + kobold_custom_version_endpoint),
+								];
+								Promise.all(urls2.map(url => fetch(url)
+								.then(response => response.json())))
+								.then(values2 => {
+									console.log(values2);
+									let ep_version = values2[0].result;
+									kobold_endpoint_version = (ep_version?ep_version:"");
+								}).catch(error => {
+									console.log("Failed to get KAI version number: " + error);
+								});
+
+								//also get max ctx supported
+								let urls3 = [
+									apply_proxy_url(tmpep + kobold_custom_maxctxlen_endpoint),
+								];
+								Promise.all(urls3.map(url => fetch(url)
+								.then(response => response.json())))
+								.then(values3 => {
+									console.log(values3);
+									let ep_maxctx = values3[0].value;
+									if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+									{
+										document.getElementById("max_context_length_slide").max = ep_maxctx;
+										document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+									}
+								}).catch(error => {
+									console.log("Failed to get KAI max ctx: " + error);
+								});
+
+							}
+
+							//allow kcpp version check for remote endpoints too
 							{
 								//for local mode, check if we are using koboldcpp, if so we can use streaming if permitted by version
 								fetch(tmpep + koboldcpp_version_endpoint)
@@ -4696,6 +4853,27 @@ Current version: 62
 									{
 										koboldcpp_version = data.version;
 										console.log("KoboldCpp Detected: " + koboldcpp_version);
+
+										//also check against kcpp's max true context length
+										let urls4 = [
+											apply_proxy_url(tmpep + koboldcpp_truemaxctxlen_endpoint),
+										];
+										Promise.all(urls4.map(url => fetch(url)
+										.then(response => response.json())))
+										.then(values4 => {
+											console.log(values4);
+											let ep_maxctx = values4[0].value;
+											if(ep_maxctx && ep_maxctx>document.getElementById("max_context_length_slide").max)
+											{
+												document.getElementById("max_context_length_slide").max = ep_maxctx;
+												document.getElementById("max_context_length_slide_label").innerText = ep_maxctx;
+											}
+										}).catch(error => {
+											console.log("Failed to get true max ctx: " + error);
+										});
+
+									}else{
+										console.log("Unknown KoboldCpp Check Response: " + data);
 									}
 								}).catch((error) => {
 									console.log("Not using KoboldCpp");
@@ -4711,7 +4889,8 @@ Current version: 62
 
 						let is_local = (custom_kobold_endpoint.toLowerCase().includes("localhost")
 							|| custom_kobold_endpoint.toLowerCase().includes("127.0.0.1")
-							|| custom_kobold_endpoint.toLowerCase().includes("192.168."));
+							|| custom_kobold_endpoint.toLowerCase().includes("192.168.")
+							|| !custom_kobold_endpoint.toLowerCase().includes(".")); //hostname without dots cannot be wan accessible
 
 						if (uses_cors_proxy || is_local) {
 							msgbox("Failed to connect to Custom Kobold Endpoint!\n\nPlease check if KoboldAI is running at the url: " + tmpep + "");
@@ -4934,7 +5113,7 @@ Current version: 62
 
 	function fetch_models(onDoneCallback)
 	{
-		if(localmode)
+		if(localflag)
 		{
 			onDoneCallback(selected_models);
 			return;
@@ -5205,7 +5384,7 @@ Current version: 62
 	let lastValidFoundUserWorkers = [];
 	function fetch_kudo_balance()
 	{
-		if(localmode)
+		if(localflag)
 		{
 			return;
 		}
@@ -5300,8 +5479,30 @@ Current version: 62
 		}
 	}
 
+	var current_settings_tab_basic = true;
+	function display_settings_tab(isbasic)
+	{
+		current_settings_tab_basic = isbasic;
+		document.getElementById("settingsmenubasic_tab").classList.remove("active");
+		document.getElementById("settingsmenuadvanced_tab").classList.remove("active");
+		if (isbasic) {
+			document.getElementById("settingsmenubasic1").classList.remove("hidden");
+			document.getElementById("settingsmenubasic2").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced1").classList.add("hidden");
+			document.getElementById("settingsmenuadvanced2").classList.add("hidden");
+			document.getElementById("settingsmenubasic_tab").classList.add("active");
+		} else {
+			document.getElementById("settingsmenubasic1").classList.add("hidden");
+			document.getElementById("settingsmenubasic2").classList.add("hidden");
+			document.getElementById("settingsmenuadvanced1").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced2").classList.remove("hidden");
+			document.getElementById("settingsmenuadvanced_tab").classList.add("active");
+		}
+	}
+
 	function display_settings() {
 		document.getElementById("settingscontainer").classList.remove("hidden");
+		display_settings_tab(current_settings_tab_basic);
 		document.getElementById("max_context_length").value = document.getElementById("max_context_length_slide").value = localsettings.max_context_length;
 		document.getElementById("max_length").value = document.getElementById("max_length_slide").value = localsettings.max_length;
 		document.getElementById("temperature").value = document.getElementById("temperature_slide").value = localsettings.temperature;
@@ -5325,6 +5526,27 @@ Current version: 62
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
 		document.getElementById("tfs_s").value = localsettings.tfs_s;
+		document.getElementById("miro_type").value = localsettings.miro_type;
+		document.getElementById("miro_tau").value = localsettings.miro_tau;
+		document.getElementById("miro_eta").value = localsettings.miro_eta;
+		if(is_using_kcpp_with_mirostat())
+		{
+			document.getElementById("mirosupporteddiv").classList.remove("hidden");
+			document.getElementById("mirounsupporteddiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("mirosupporteddiv").classList.add("hidden");
+			document.getElementById("mirounsupporteddiv").classList.remove("hidden");
+		}
+		if(custom_kobold_endpoint!="")
+		{
+			document.getElementById("tokenstreaminglabel").classList.remove("color_red");
+		}
+		else
+		{
+			document.getElementById("tokenstreaminglabel").classList.add("color_red");
+		}
 		document.getElementById("generate_images").value = localsettings.generate_images;
 		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
 		document.getElementById("enhanced_instruct_ui").checked = localsettings.enhanced_instruct_ui;
@@ -5334,8 +5556,18 @@ Current version: 62
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
+		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
+		if(localflag)
+		{
+			document.getElementById("auto_ctxlen_panel").classList.add("hidden");
+			document.getElementById("auto_genamt_panel").classList.add("hidden");
+		}else{
+			document.getElementById("auto_ctxlen_panel").classList.remove("hidden");
+			document.getElementById("auto_genamt_panel").classList.remove("hidden");
+		}
+
 		pendingstyle = localsettings.image_styles;
 
 		//prepare the input for sampler order
@@ -5374,6 +5606,7 @@ Current version: 62
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
+		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
 	}
@@ -5390,6 +5623,7 @@ Current version: 62
 			document.getElementById("top_a").value = found.top_a;
 			document.getElementById("typ_s").value = found.typical;
 			document.getElementById("tfs_s").value = found.tfs;
+			document.getElementById("miro_type").value = 0;
 			document.getElementById("rep_pen").value = document.getElementById("rep_pen_slide").value = found.rep_pen;
 			document.getElementById("rep_pen_range").value = found.rep_pen_range;
 			document.getElementById("rep_pen_slope").value = found.rep_pen_slope;
@@ -5494,6 +5728,7 @@ Current version: 62
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
+		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -5513,6 +5748,10 @@ Current version: 62
 		localsettings.top_a = document.getElementById("top_a").value;
 		localsettings.typ_s = document.getElementById("typ_s").value;
 		localsettings.tfs_s = document.getElementById("tfs_s").value;
+		localsettings.miro_type = document.getElementById("miro_type").value;
+		localsettings.miro_tau = document.getElementById("miro_tau").value;
+		localsettings.miro_eta = document.getElementById("miro_eta").value;
+
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
@@ -5521,6 +5760,7 @@ Current version: 62
 		localsettings.image_styles = pendingstyle;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
+		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
 		if (localsettings.generate_images) {
 			document.getElementById("btn_genimg").classList.remove("hidden");
@@ -5560,6 +5800,9 @@ Current version: 62
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
 		localsettings.typ_s = cleannum(localsettings.typ_s, 0, 1);
 		localsettings.tfs_s = cleannum(localsettings.tfs_s, 0, 1);
+		localsettings.miro_type = cleannum(localsettings.miro_type, 0, 2);
+		localsettings.miro_tau = cleannum(localsettings.miro_tau, 0, 30);
+		localsettings.miro_eta = cleannum(localsettings.miro_eta, 0, 10);
 		toggle_invert_colors();
 
 		autosave(); //need to always autosave, so that we can switch back to non persistent sessions
@@ -5568,25 +5811,58 @@ Current version: 62
 		render_gametext();
 	}
 
+	function toggle_instruct_tag_format()
+	{
+		let sel = document.getElementById('instruct_tag_format').value;
+		switch(sel)
+		{
+			case "1": //alpaca
+				document.getElementById('instruct_starttag').value = defaultsettings.instruct_starttag;
+				document.getElementById('instruct_endtag').value = defaultsettings.instruct_endtag;
+				break;
+			case "2": //vicuna
+				document.getElementById('instruct_starttag').value = "\\nUSER: ";
+				document.getElementById('instruct_endtag').value = "\\nASSISTANT: ";
+				break;
+			case "3": //metharme
+				document.getElementById('instruct_starttag').value = `<|user|>`;
+				document.getElementById('instruct_endtag').value = `<|model|>`;
+				break;
+			case "4": //llama 2 chat
+				document.getElementById('instruct_starttag').value = "[INST] ";
+				document.getElementById('instruct_endtag').value = " [/INST]";
+				break;
+			default:
+				break;
+		}
+	}
+	function edit_instruct_tag_format()
+	{
+		document.getElementById('instruct_tag_format').value = "0";
+	}
+
 	function toggle_opmode() {
 
-		document.getElementById('chatnamesection').classList.add('hidden');
-		document.getElementById('adventuresection').classList.add('hidden');
-		document.getElementById('instructsection').classList.add('hidden');
-		document.getElementById('idlesection').classList.add('hidden');
+		document.getElementById('chatnamesection1').classList.add('hidden');
+		document.getElementById('adventuresection1').classList.add('hidden');
+		document.getElementById('instructsection1').classList.add('hidden');
+		document.getElementById('chatnamesection2').classList.add('hidden');
+		document.getElementById('adventuresection2').classList.add('hidden');
+		document.getElementById('instructsection2').classList.add('hidden');
 
 		if (document.getElementById('opmode').value == 1) {
-			document.getElementById('idlesection').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 3) {
-			document.getElementById('chatnamesection').classList.remove('hidden');
-			document.getElementById('idlesection').classList.remove('hidden');
+			document.getElementById('chatnamesection1').classList.remove('hidden');
+			document.getElementById('chatnamesection2').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 2) {
-			document.getElementById('adventuresection').classList.remove('hidden');
+			document.getElementById('adventuresection1').classList.remove('hidden');
+			document.getElementById('adventuresection2').classList.remove('hidden');
 		}
 		if (document.getElementById('opmode').value == 4) {
-			document.getElementById('instructsection').classList.remove('hidden');
+			document.getElementById('instructsection1').classList.remove('hidden');
+			document.getElementById('instructsection2').classList.remove('hidden');
 		}
 	}
 
@@ -5607,7 +5883,7 @@ Current version: 62
 	}
 
 	function confirm_newgame() {
-		if(!localmode && !document.getElementById("keep_ai_selected").checked)
+		if(!localflag && !document.getElementById("keep_ai_selected").checked)
 		{
 			selected_models = [];
 			selected_workers = [];
@@ -5623,6 +5899,7 @@ Current version: 62
 		current_anotetemplate = document.getElementById("anotetemplate").value;
 		anote_strength = document.getElementById("anote_strength").value;
 		extrastopseq = document.getElementById("extrastopseq").value;
+		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
 		hide_popups();
 		render_gametext();
 	}
@@ -5661,6 +5938,16 @@ Current version: 62
 			},
 			"models": selected_models.map((m) => { return m.name }),
 		};
+
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+		{
+			if(localsettings.miro_type>0)
+			{
+				submit_payload.params.mirostat = localsettings.miro_type;
+				submit_payload.params.mirostat_tau = localsettings.miro_tau;
+				submit_payload.params.mirostat_eta = localsettings.miro_eta;
+			}
+		}
 
 		//v2 api specific fields
 		submit_payload.workers = selected_workers.map((m) => { return m.id });
@@ -5763,7 +6050,7 @@ Current version: 62
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
 		last_token_budget = "";
-		last_known_filename = "";
+		last_known_filename = "saved_story.json";
 		render_gametext();
 	}
 
@@ -5802,8 +6089,11 @@ Current version: 62
 		{
 			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You");
 			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent);
-			inputtxt = replaceAll(inputtxt,"{{[INPUT]}}",get_instruct_starttag(false));
-			inputtxt = replaceAll(inputtxt,"{{[OUTPUT]}}",get_instruct_endtag(false));
+			inputtxt = replaceAll(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
+			inputtxt = replaceAll(inputtxt,instructendplaceholder,get_instruct_endtag(false));
+			//failsafe to handle removing newline tags
+			inputtxt = replaceAll(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
+			inputtxt = replaceAll(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
 		}
 		return inputtxt;
 	}
@@ -5911,7 +6201,7 @@ Current version: 62
 				console.error('Error:', error);
 			});
 		}
-		else if(is_using_newer_kcpp())
+		else if(is_using_kcpp_with_streaming())
 		{
 			//we can use abort functions
 			fetch(custom_kobold_endpoint + koboldcpp_abort_endpoint, {
@@ -5996,15 +6286,21 @@ Current version: 62
 				if(newgen != "")
 				{
 					//append instruction for instruct mode
-					//newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
-					newgen = "{{[INPUT]}}" + newgen + "{{[OUTPUT]}}";
+					if (localsettings.raw_instruct_tags) {
+						newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
+					}
+					else {
+						newgen = instructstartplaceholder + newgen + instructendplaceholder;
+					}
 				}
 				else //may be continuting existing instruction OR starting a brand new session. check if first action
 				{
-					if(gametext_arr.length==0)
-					{
-						//newgen = get_instruct_endtag(false); //bot response as first msg
-						newgen = "{{[OUTPUT]}}";
+					if (gametext_arr.length == 0) {
+						if (localsettings.raw_instruct_tags) {
+							newgen = get_instruct_endtag(false); //bot response as first msg
+						} else {
+							newgen = instructendplaceholder;
+						}
 					}
 				}
 			}
@@ -6132,6 +6428,19 @@ Current version: 62
 					coarr = coarr.filter(x=>(x&&x!=""));
 					coarr = coarr.map(x=>x.trim());
 					co = coarr[Math.floor(Math.random()*coarr.length)];
+
+					//we check if a name was recently mentioned in the previous response.
+					//if so, switch to that user
+					if(gametext_arr.length>0)
+					{
+						let recenttext = gametext_arr[gametext_arr.length-1].toLowerCase();
+						let spokennames = coarr.filter(x=>(recenttext.includes(x.toLowerCase())));
+						if(spokennames.length>0)
+						{
+							co = spokennames[Math.floor(Math.random()*spokennames.length)];
+						}
+					}
+
 					hasMulti = (coarr.length>1);
 				}
 
@@ -6220,8 +6529,7 @@ Current version: 62
 			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
 			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
 			if (truncated_memory != null && truncated_memory != "") {
-				const nomemorynewline = urlParams.get('nomemorynewline');
-				if(nomemorynewline!=1)
+				if(newlineaftermemory)
 				{
 					truncated_memory += "\n";
 				}
@@ -6340,6 +6648,16 @@ Current version: 62
 				"models": selected_models.map((m) => { return m.name }),
 			};
 
+			if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+			{
+				if(localsettings.miro_type>0)
+				{
+					submit_payload.params.mirostat = localsettings.miro_type;
+					submit_payload.params.mirostat_tau = localsettings.miro_tau;
+					submit_payload.params.mirostat_eta = localsettings.miro_eta;
+				}
+			}
+
 			//v2 api specific fields
 			submit_payload.workers = selected_workers.map((m)=>{return m.id});
 
@@ -6435,16 +6753,16 @@ Current version: 62
 					submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
 				}
 
-				let pseudostreaming = should_use_pseudostreaming();
-				let pstreamamount = urlParams.get('streamamount');
-				let streamchunk = 8; //8 tokens per stream tick by default
-				if (pstreamamount != null && pstreamamount > 0) {
-					streamchunk = pstreamamount;
+				let pseudostreaming = (determine_streaming_type()==1);
+				let streamchunk = 4096; //use 4096 for everything except pseudostreaming
+				if(pseudostreaming)
+				{
+					let pstreamamount = urlParams.get('streamamount');
+					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
-
 				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 
-				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", pseudostreaming ? streamchunk : 4096);
+				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
 
 			}
 			else if (custom_oai_key != "")//handle for OAI
@@ -6599,6 +6917,7 @@ Current version: 62
 					headers: {
 						'Content-Type': 'application/json',
 						'x-api-key': custom_claude_key,
+						'anthropic-version': '2023-01-01',
 						'Authorization': 'Bearer '+custom_claude_key,
 					},
 					body: JSON.stringify(claude_payload),
@@ -6869,9 +7188,8 @@ Current version: 62
 		}
 	}
 
-	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
-
-		//handle stopping tokens if they got missed (eg. horde)
+	function trim_extra_stop_seqs(gentxt, includeStopToken)
+	{
 		if(extrastopseq!="")
 		{
 			let rep = replaceAll(extrastopseq,"\\n","\n");
@@ -6883,17 +7201,27 @@ Current version: 62
 						if (foundStop != -1)
 						{
 							//trim the gentxt
-							gentxt = gentxt.substr(0,foundStop) + srep[i];
+							gentxt = gentxt.substr(0,foundStop) + (includeStopToken?srep[i]:"");
 						}
 					}
 				}
 			}
 		}
+		return gentxt;
+	}
+
+	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
+
+		//handle stopping tokens if they got missed (eg. horde)
+		gentxt = trim_extra_stop_seqs(gentxt,true);
 
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
 		}
+
+		//do a second pass, this time removing the actual stop token
+		gentxt = trim_extra_stop_seqs(gentxt,false);
 
 		//if we are in adventure mode, truncate to action if it appears
 		if (localsettings.opmode == 2)
@@ -7130,7 +7458,8 @@ Current version: 62
 		let idle_timer_max = localsettings.idle_duration*1000;
 		let newgenempty = (document.getElementById("input_text").value == "");
 		let	chatinputempty = (document.getElementById("cht_inp").value == "");
-		if ((localsettings.opmode == 1 || localsettings.opmode == 3) && localsettings.idle_responses > 0 && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<localsettings.idle_responses)
+		if ((localsettings.opmode == 1 || localsettings.opmode == 2 || localsettings.opmode == 3 || localsettings.opmode == 4)
+		&& localsettings.idle_responses > 0 && newgenempty && chatinputempty && !document.getElementById("btnsend").disabled && idle_triggered_counter<localsettings.idle_responses && !is_popup_open())
 		{
 			idle_timer += 1000;
 			if (idle_timer > idle_timer_max) {
@@ -7173,10 +7502,9 @@ Current version: 62
 					if (synchro_polled_response == null) {
 						//still waiting, do nothing until next poll
 						console.log("v1 still awaiting reply");
-						let pseudostreaming = should_use_pseudostreaming();
-						let psflag = (document.getElementById("pseudostreaming").checked ? true : false);
+						let truestreaming = (determine_streaming_type()==2);
 						//only check once every 3 ticks
-						if (psflag && !pseudostreaming && !waiting_for_autosummary && poll_ticks_passed%2==0)
+						if (truestreaming && poll_ticks_passed%2==0)
 						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
@@ -7632,8 +7960,9 @@ Current version: 62
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
-				fulltxt = replaceAll(fulltxt, "{{[INPUT]}}", `%SclStg%`+"{{[INPUT]}}"+`%SpnEtg%`);
-				fulltxt = replaceAll(fulltxt, "{{[OUTPUT]}}", `%SclStg%`+"{{[OUTPUT]}}"+`%SpnEtg%`);
+				//failsafe to handle removing newline tags
+				fulltxt = replaceAll(fulltxt, instructstartplaceholder.trim(), `%SclStg%`+instructstartplaceholder.trim()+`%SpnEtg%`);
+				fulltxt = replaceAll(fulltxt, instructendplaceholder.trim(), `%SclStg%`+instructendplaceholder.trim()+`%SpnEtg%`);
 			}
 
 			//this is a hacky fix to handle instruct tags that use arrow brackets only
@@ -7708,7 +8037,7 @@ Current version: 62
 
 		if (perfdata == null) {
 			document.getElementById("topbtn_reconnect").classList.remove("hidden");
-			if(localmode)
+			if(localflag)
 			{
 				document.getElementById("topbtn_customendpt").classList.add("hidden");
 			}else{
@@ -7726,7 +8055,7 @@ Current version: 62
 			document.getElementById("topbtn_reconnect").classList.add("hidden");
 			document.getElementById("topbtn_customendpt").classList.add("hidden");
 
-			if(localmode)
+			if(localflag)
 			{
 				document.getElementById("topbtn_ai").classList.add("hidden");
 			}else{
@@ -8029,10 +8358,10 @@ Current version: 62
 
 	function autosave() {
 		//autosave
-		localStorage.setItem((localmode?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
+		localStorage.setItem((localflag?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
-			localStorage.setItem((localmode?"e_":"")+"kaihordewebui_story", compressedstory);
+			localStorage.setItem((localflag?"e_":"")+"kaihordewebui_story", compressedstory);
 		}
 		console.log("autosave done");
 	}
@@ -8050,6 +8379,7 @@ Current version: 62
 		document.getElementById("anotetemplate").value = current_anotetemplate;
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
+		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
 	}
 
 	function toggle_wi_sk(idx) {
@@ -8317,6 +8647,7 @@ Current version: 62
 			this.background_margin = [10, 10, 5, 0];
 			this.background_padding = [40, 40, 10, 0];
 			this.background_minHeight = 100;
+			this.centerHorizontally = false;
 
 			this.show_portraits = true; // Shows/hides the rest of the fields below on the UI, and is also used on the display part of the code.
 			this.border_style = 'Rect';
@@ -8354,13 +8685,13 @@ Current version: 62
 	function initializeInstructUIFunctionality() {
 		// Load the default settings (by default), or the latest chosen ones.
 		if (localsettings.persist_session === true) {
-			const jsonString = localStorage.getItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions');
+			const jsonString = localStorage.getItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions');
 			if (jsonString) {
 				var obj = JSON.parse(jsonString);
 				for (let key in obj) { if (aestheticInstructUISettings.hasOwnProperty(key)) { aestheticInstructUISettings[key] = obj[key]; } }
 			}
 		}	// If persist session isn't toggled, reset to the default settings.
-		else { localStorage.setItem((localmode ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
+		else { localStorage.setItem((localflag ? 'e_': '') + 'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2)); }
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
 		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
@@ -8512,6 +8843,8 @@ Current version: 62
 		aestheticInstructUISettings.portrait_width = document.getElementById('portrait_width').value;
 		aestheticInstructUISettings.portrait_height = document.getElementById('portrait_height').value;
 		aestheticInstructUISettings.background_minHeight = document.getElementById('instruct-min-backgroundHeight').value;
+		aestheticInstructUISettings.centerHorizontally = document.getElementById('instructModeCenterHorizontally').checked;
+
 		// aestheticInstructUISettings.background_anchor_style_you = document.getElementById('background-anchor-style-you').value;
 		// aestheticInstructUISettings.background_anchor_style_AI = document.getElementById('background-anchor-style-AI').value;
 
@@ -8522,7 +8855,7 @@ Current version: 62
 		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
 
 		// NOTE: Portraits are loaded automatically from the json, and are stored to aestheticInstructUISettings directly.
-		localStorage.setItem((localmode?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
+		localStorage.setItem((localflag?"e_":"")+'koboldLiteUICustomizationOptions', JSON.stringify(aestheticInstructUISettings, null, 2));
 
 		function getTextStyleFromElement(id) {
 			let element = document.getElementById(id);
@@ -8549,10 +8882,11 @@ Current version: 62
 		document.getElementById('portrait_width').value = aestheticInstructUISettings.portrait_width;
 		document.getElementById('portrait_height').value = aestheticInstructUISettings.portrait_height;
 		document.getElementById('instruct-min-backgroundHeight').value = aestheticInstructUISettings.background_minHeight;
+		document.getElementById('instructModeCenterHorizontally').checked = aestheticInstructUISettings.centerHorizontally;
 		// document.getElementById('background-anchor-style-AI').value = aestheticInstructUISettings.background_anchor_style_AI;
 		// document.getElementById('background-anchor-style-you').value = aestheticInstructUISettings.background_anchor_style_you;
 
-		// Show or hide custumization UI elements based on whether they should be visible in the UI or not.
+		// Show or hide customization UI elements based on whether they should be visible in the UI or not.
 		showOrHide('.uniform-mode-font', document.getElementById('instructModeCustomized').checked == false);
 		showOrHide('.custom-mode-font', document.getElementById('instructModeCustomized').checked == true);
 		showOrHide('.instruct-markdown-user', document.getElementById('instructModeMarkdown').checked == true);
@@ -8588,28 +8922,20 @@ Current version: 62
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
-
-		//update portraits globally as css classes, that way multiple lines can reuse them
-		let portraitsStyling = `
-		<style>
-		.you-portrait-image {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-		.AI-portrait-image {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
+		`<style>
+			.you-portrait-image {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 		</style>
 		`;
 
-		// We'll transform the input to a well-formatted HTML string.
-		let noSystemPrompt = (input.trim().startsWith(you.trim()) || input.trim().startsWith(bot.trim()))
-		let newbodystr = noSystemPrompt ? input : style('sys') + input;			// First, create the string we'll transform. Style system bubble if we should.
-		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); }							// Reduce any unnecessary spaces or newlines. Trim empty replies if they exist.
-		newbodystr = replaceAll(newbodystr, you + '\n', you);
-		newbodystr = replaceAll(newbodystr, bot + '\n', bot);
-		newbodystr = replaceAll(newbodystr, you + ' ', you);
-		newbodystr = replaceAll(newbodystr, bot + ' ', bot);
-		newbodystr = replaceAll(newbodystr,'"', '&quot;');
-		newbodystr = replaceAll(newbodystr, you + '\n', you);
-		newbodystr = replaceAll(newbodystr, you, style('you'));
-		newbodystr = replaceAll(newbodystr, bot, style('AI'));
-		newbodystr += contextDict.closeTag; 	// Style background of incoming and outgoing messages appropriately.
+		// We'll transform the input to a well-formatted HTML string that'll contain the whole visuals for the Aesthetic Instruct Mode. Effectively we're styling the input.
+		let noSystemPrompt = input.trim().startsWith(you.trim()) || input.trim().startsWith(bot.trim());
+		let newbodystr = noSystemPrompt ? input : style('sys') + input;					 // First, create the string we'll transform. Style system bubble if we should.
+		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); } // Remove the last chat bubble if prompt ends with `end_sequence`.
+		newbodystr = transformInputToAestheticStyle(newbodystr); 						 // Transform input to aesthetic style, reduce any unnecessary spaces or newlines, and trim empty replies if they exist.
+		if (synchro_pending_stream != "") { newbodystr += getStreamingText(); } 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
+		newbodystr += contextDict.closeTag + '</p></div></div>';						 // Lastly, append the closing div so our body's raw form is completed.
 		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
 			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
 			for (let role of aestheticTextStyleRoles) {																// ..starting by the "speech" and *actions* for each role.
@@ -8622,40 +8948,32 @@ Current version: 62
 				});
 			}
 			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
-			newbodystr = applyStylizedCodeBlocks(); // Apply the code-block styling, if markdown is used.
+			newbodystr = applyStylizedCodeBlocks(); 																// Then, apply the code-block styling, if markdown is used.
 		}
-		let ret = newbodystr;
-		ret = replaceAll(ret,'\r\n','<br>');
-		ret = replaceAll(ret,'\n','<br>');
-		let ret2 = ""
-		if(synchro_pending_stream!="")
-		{
-			ret2 += `<div class="incoming_msg"><p>`+"<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div>`;
-		}
-		return portraitsStyling + ret + '</p>'+ret2+'</div></div><br>';	// Finally, convert newlines to HTML format and return the stylized string.
+		return portraitsStyling + newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>'); // Finally, convert newlines to HTML format and return the stylized string.
+
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: flex-start; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
-			const portraitSrc = as[`${role}_portrait`];
-			if (!portraitSrc || as.border_style == 'None' || role == 'sys') { return ''; }
+			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
 			return `<div class='${role}-portrait-image' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 			for (var i = 0; i < blocks.length; i++) {
 				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 40px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
-				else {
-					let bi = blocks[i];
-					bi = replaceAll(bi,'```','`');
-					bi = replaceAll(bi,'``','`');
-					bi = bi.replace(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`);
-					blocks[i] = bi;
-				}
+				else { blocks[i] = blocks[i].replaceAll('```','`').replaceAll('``','`').replace(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`); }
 			}
 			return blocks.join('');
 		}
+		function transformInputToAestheticStyle(bodyStr) { // Trim unnecessary empty space and new lines, and append * or " to each bubble if start/end sequence ends with * or ", to preserve styling.
+			bodyStr = bodyStr.replaceAll(you + '\n', you).replaceAll(you + ' ', you).replaceAll(you, style('you') + `${you.endsWith('*') ? '*' : ''}` + `${you.endsWith('"') ? '"' : ''}`);
+			bodyStr = bodyStr.replaceAll(bot + '\n', bot).replaceAll(bot + ' ', bot).replaceAll(bot, style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}`);
+			return bodyStr.replaceAll('"', '&quot;');
+		}
+		function getStreamingText() { return `${input.endsWith(bot) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream); }
 	}
 
 	function updateTextPreview() {
@@ -8709,7 +9027,7 @@ Current version: 62
 
 								<li class="nav-item hidden" id="topbtn_save">
 									<a id="tempfile" href="#" style="display:none;"></a>
-									<a class="nav-link" href="#" onclick="save_file()">Save</a>
+									<a class="nav-link" href="#" onclick="save_file_button()">Save</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_load">
@@ -8868,7 +9186,7 @@ Current version: 62
 
 					<div class="popupfooter">
 						<button type="button" class="btn btn-primary" id=""
-							onclick="confirm_scenario_verify()">Confirm</button>
+							onclick="confirm_scenario_verify()">Ok</button>
 						<button type="button" class="btn btn-primary" id=""
 							onclick="hide_popups()">Cancel</button>
 					</div>
@@ -8922,7 +9240,7 @@ Current version: 62
 
 				<div class="popupfooter">
 					<button type="button" class="btn btn-primary" id="btn_loadmodelaccept"
-						onclick="confirm_models()">Confirm</button>
+						onclick="confirm_models()">Ok</button>
 					<button type="button" class="btn btn-primary" id="btn_loadmodelclose"
 						onclick="hide_popups()">Cancel</button>
 
@@ -8951,8 +9269,6 @@ Current version: 62
 				<span class="color_green" style="font-weight: bold;">Please input URL of the KoboldAI instance.</span><br><br>
 				<input class="form-control" id="customendpoint" placeholder="https://sample-remote-address.trycloudflare.com" value="">
 				<div class="box flex flex-push-right">
-					<input type="checkbox" id="pseudostreaming">
-					<div class="box-label" title="Will simulate token streaming by breaking requests up into smaller ones.">Emulate Token Streaming</div>
 					<input type="checkbox" id="remoteconsolelog">
 					<div class="box-label" title="Will display outputs to the remote endpoint's console logs, useful for debugging.">Show Console Logging</div>
 				</div>
@@ -9011,7 +9327,7 @@ Current version: 62
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Connect</button>
+				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
@@ -9032,7 +9348,7 @@ Current version: 62
 				<br>
 			</div>
 			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Accept</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_newgame()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
@@ -9040,13 +9356,18 @@ Current version: 62
 
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup fixsize highest">
+		<div class="nspopup fixsize evenhigher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Settings</div>
 			</div>
+			<div><ul class="nav nav-tabs settingsnav">
+				<li id="settingsmenubasic_tab" class="active"><a class="" href="#" onclick="display_settings_tab(true)">Basic</a></li>
+				<li id="settingsmenuadvanced_tab" ><a class="" href="#" onclick="display_settings_tab(false)">Advanced</a></li>
+			  </ul></div>
 			<div class="aidgpopuplistheader">
-				<div class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 
+				<!--basic settings menu top half-->
+				<div id="settingsmenubasic1" class="settingsmenu" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Quick Presets <span class="helpicon">?<span class="helptext">Pick from an easy selection of curated generation presets, or configure your own.</span></span></div>
@@ -9055,7 +9376,6 @@ Current version: 62
 							</select>
 						</div>
 					</div>
-
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Temperature <span class="helpicon">?<span
@@ -9089,9 +9409,9 @@ Current version: 62
 						   document.getElementById('max_context_length').value = this.value;"></div>
 						<div class="settingminmax">
 							<div class="justifyleft">512</div>
-							<div class="justifyright">2048</div>
+							<div class="justifyright" id="max_context_length_slide_label">2048</div>
 						</div>
-						<div class="settinglabel">
+						<div id="auto_ctxlen_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
 						   <input type="checkbox" id="auto_ctxlen" style="margin:0px 0 0;">
 						</div>
@@ -9114,7 +9434,7 @@ Current version: 62
 							<div class="justifyleft">16</div>
 							<div class="justifyright">512</div>
 						</div>
-						<div class="settinglabel">
+						<div id="auto_genamt_panel" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically lowers settings if incompatible with existing workers">Auto-Adjust Limits </div>
 						   <input type="checkbox" id="auto_genamt" style="margin:0px 0 0;">
 						</div>
@@ -9137,10 +9457,126 @@ Current version: 62
 						</div>
 					</div>
 
+
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
+										class="helptext">Used to penalize words that were already generated or belong to
+										the context (Going over 1.2 breaks 6B models).</span></span></div>
+							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
+								oninput="
+						   document.getElementById('rep_pen_slide').value = this.value;">
+						</div>
+						<div><input type="range" class="form-range airange" min="1" max="3" step="0.01"
+								id="rep_pen_slide" oninput="
+						   document.getElementById('rep_pen').value = this.value;"></div>
+						<div class="settingminmax">
+							<div class="justifyleft">1</div>
+							<div class="justifyright">3</div>
+						</div>
+					</div>
+
+
+				</div>
+				<!-- basic settings menu bottom half-->
+				<div id="settingsmenubasic2" class="settingsmenu" style="padding-top: 0px;">
+
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
+							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="1">Story Mode</option>
+								<option value="2">Adventure Mode</option>
+								<option value="3">Chat Mode</option>
+								<option value="4">Instruct Mode</option>
+							</select>
+
+						<div id="chatnamesection1" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
+								<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
+							</div>
+						</div>
+						<div id="adventuresection1" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall">Adventure Prompt <span class="helpicon">?<span
+								class="helptext">Modifies the context, injecting tokens to improve adventure quality for adventure mode.</span></span> </div>
+							<input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
+							</div>
+						</div>
+						<div id="instructsection1" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall" title="Switches to a UI style more suitable for RP. Enabling markdown together with this is recommended.">Aesthetic Instruct UI </div>
+								<input type="checkbox" id="enhanced_instruct_ui" style="margin:0px 5.5px;">
+							</div>
+						</div>
+
+						</div>
+					</div>
+
+					<div class="settingitem">
+					<div class="settinglabel">
+						<div id="chatnamesection2" class="settinglabel hidden" style="padding-top: 3px;">
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+								<tr>
+								<th>Your Name</th>
+								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
+								</tr>
+								<tr>
+								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
+								</tr>
+							  </table>
+
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
+							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
+							</div>
+							<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
+							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
+							</div>
+						</div>
+						<div id="adventuresection2" class="settinglabel hidden" style="padding-top: 3px;">
+						</div>
+						<div id="instructsection2" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="justifyleft settingsmall">Instruct Tag Preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
+							<select class="form-control" id="instruct_tag_format" style="font-size:10px;height:18px;padding:0;margin:0px 0 0;" onchange="toggle_instruct_tag_format()">
+								<option value="0" selected>[Custom]</option>
+								<option value="1">Alpaca</option>
+								<option value="2">Vicuna</option>
+								<option value="3">Metharme</option>
+								<option value="4">Llama 2 Chat</option>
+							</select>
+							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
+								<tr>
+									<th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
+									<th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
+								</tr>
+								<tr>
+								<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" onchange="edit_instruct_tag_format()" title="The sequence to start an instruction prompt"></td>
+								<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to end an instruction prompt"></td>
+								</tr>
+							</table>
+							<div class="justifyleft settingsmall">Raw Instruct Tags <span class="helpicon">?<span
+								class="helptext">If enabled, uses instruct tags verbatim. If disabled, uses universal instruct placeholders that get swapped on submit.</span></span> </div>
+							<input type="checkbox" id="raw_instruct_tags" style="margin:0px 0 0;">
+							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
+								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
+							<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
+						</div>
+					</div>
+					</div>
+				</div>
+
+				<!--advanced settings menu top-->
+				<div id="settingsmenuadvanced1" class="settingsmenu hidden" style="padding-bottom: 0px;" onchange="setting_tweaked()">
 					<div class="settingitem">
 						<div class="settinglabel">
 
-							<div class="justifyleft settingsmall">Advanced Settings <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
+							<div class="justifyleft settingsmall">Advanced Sampler Config <span class="helpicon">?<span class="helptext">These settings control alternative samplers configurations. They are inactive by default, you usually do not need to change them.</span></span></div>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;
 							border-collapse: separate;">
 								<tr>
@@ -9166,19 +9602,30 @@ Current version: 62
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
-										class="helptext">Used to penalize words that were already generated or belong to
-										the context (Going over 1.2 breaks 6B models).</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
-								oninput="
-						   document.getElementById('rep_pen_slide').value = this.value;">
-						</div>
-						<div><input type="range" class="form-range airange" min="1" max="3" step="0.01"
-								id="rep_pen_slide" oninput="
-						   document.getElementById('rep_pen').value = this.value;"></div>
-						<div class="settingminmax">
-							<div class="justifyleft">1</div>
-							<div class="justifyright">3</div>
+
+							<div class="justifyleft settingsmall">Mirostat (If supported) <span class="helpicon">?<span class="helptext">Replaces your samplers with mirostat, an alternative sampling method. May not be available depending on backend, not supported on Horde.</span></span></div>
+							<div id="mirosupporteddiv">
+								<table class="settingsmall text-center" style="border-spacing: 4px 2px;
+								border-collapse: separate;">
+									<tr>
+									<th title="Mirostat Type 0/1/2">Mode</th>
+									<th title="Mirostat Tau Value">Tau</th>
+									<th title="Mirostat Eta Value">Eta</th>
+									</tr>
+									<tr>
+									<td><select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="miro_type">
+										<option value="0">Off</option>
+										<option value="1">1</option>
+										<option value="2">2</option>
+									</select></td>
+									<td><input class="" type="text" placeholder="0.0" value="0.0"
+									id="miro_tau"></td>
+									<td><input class="" type="text" placeholder="0.0" value="0.0"
+									id="miro_eta"></td>
+									</tr>
+								</table>
+							</div>
+							<div id="mirounsupporteddiv" class="color_red" style="font-weight:bold;padding:3px;font-size:12px">Mirostat Not Supported</div>
 						</div>
 					</div>
 
@@ -9203,8 +9650,9 @@ Current version: 62
 						</div>
 
 					</div>
-					</div>
-					<div class="settingsmenu" style="padding-top: 0px;">
+				</div>
+				<!--advanced settings menu bottom-->
+				<div id="settingsmenuadvanced2" class="settingsmenu hidden" style="padding-top: 0px;" onchange="">
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story.</span></span></div>
@@ -9233,7 +9681,6 @@ Current version: 62
 								</tr>
 								</table>
 							</div>
-
 					</div>
 
 					<div class="settingitem">
@@ -9248,92 +9695,33 @@ Current version: 62
 						</div>
 					</div>
 
-
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
-							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
-								<option value="1">Story Mode</option>
-								<option value="2">Adventure Mode</option>
-								<option value="3">Chat Mode</option>
-								<option value="4">Instruct Mode</option>
+							<div class="justifyleft settingsmall" id="tokenstreaminglabel" title="Attempts to use token streaming if available.">Token Streaming </div>
+						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0 0;">
+						</div>
+
+						<div id="idlesection" class="settinglabel">
+							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
+								<option value="0">Off</option>
+								<option value="1">1x</option>
+								<option value="2">2x</option>
+								<option value="3">3x</option>
+								<option value="5">5x</option>
+								<option value="8">8x</option>
 							</select>
-							<div id="chatnamesection" class="hidden">
-								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
-								<tr>
-								  <th>Your Name</th>
-								  <th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
-								</tr>
-								<tr>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
-								</tr>
-							  </table>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
-							<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
-							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
-							</div>
-							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow incomplete AI chat replies, which can be continued by pressing submit again. Not recommended.">Continue Bot Replies</div>
-							<input type="checkbox" id="allow_continue_chat" style="margin:0px 0 0;">
-							</div>
-
-							</div>
-							<div id="adventuresection" class="settinglabel hidden" style="padding-top: 3px;">
-								<div class="justifyleft settingsmall">Improved Prompt <span class="helpicon">?<span
-									class="helptext">Modifies the context, injecting tokens to improve adventure quality for adventure mode.</span></span> </div>
-							   <input type="checkbox" id="adventure_context_mod" style="margin:0px 0 0;">
-							</div>
-							<div id="instructsection" class="settinglabel hidden" style="padding-top: 3px;">
-								<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
-									<tr>
-										<th>Start Seq.<span class="helpicon">?<span class="helptext">The sequence to start an instruction prompt</span></span></th>
-										<th>End Seq.<span class="helpicon">?<span class="helptext">The sequence to end an instruction prompt</span></span></th>
-									</tr>
-									<tr>
-									<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Instruction:\\n" value="" id="instruct_starttag" title="The sequence to start an instruction prompt"></td>
-									<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag"  title="The sequence to end an instruction prompt"></td>
-									</tr>
-								</table>
-								<div class="settinglabel">
-									<div class="justifyleft settingsmall" title="Switches to a UI style more suitable for RP. Enabling markdown together with this is recommended.">Aesthetic Instruct UI </div>
-									<input type="checkbox" id="enhanced_instruct_ui" style="margin:0px 5.5px;">
-								</div>
-								<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
-									class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
-								<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
-							</div>
-							<div id="idlesection" class="settinglabel hidden">
-								<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
-								<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
-									<option value="0">Off</option>
-									<option value="1">1x</option>
-									<option value="2">2x</option>
-									<option value="3">3x</option>
-									<option value="5">5x</option>
-									<option value="8">8x</option>
-								</select>
-								<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
-									<option value="15">15s</option>
-									<option value="30">30s</option>
-									<option value="60">60s</option>
-									<option value="120">2m</option>
-									<option value="300">5m</option>
-									<option value="600">10m</option>
-								</select>
-							</div>
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
+								<option value="15">15s</option>
+								<option value="30">30s</option>
+								<option value="60">60s</option>
+								<option value="120">2m</option>
+								<option value="300">5m</option>
+								<option value="600">10m</option>
+							</select>
 						</div>
-					</div>
 
-					<div class="settingitem">
-						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll </div>
-						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
-						</div>
+
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Trims incomplete sentences in AI output">Trim Sentences </div>
 						   <input type="checkbox" id="trimsentences" style="margin:0px 0 0;">
@@ -9343,16 +9731,28 @@ Current version: 62
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban Tokens (KAI) </div>
+							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban EOS Tokens </div>
 						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
 						</div>
+					</div>
+
+
+					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Session </div>
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Autosave Session </div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Export Settings </div>
+							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">JSON Exports Settings </div>
 						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="Prompts to input a different filename when saving file.">Show Rename Save File </div>
+						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll Text </div>
+						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>
@@ -9360,8 +9760,8 @@ Current version: 62
 						</div>
 					</div>
 
-
 				</div>
+
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" id="btn_settingsaccept"
@@ -9380,6 +9780,12 @@ Current version: 62
 			</div>
 			<div class="settinglabel">
 				<span class="justifyleft">Memory</span>
+				<span class="justifyright flex-push-right" >
+					<div class="settinglabel" style="padding-top: 4px;">
+						<div class="justifyleft settingsmall" title="Add newline after injecting memory text">Newline After Memory </div>
+					   <input type="checkbox" id="newlineaftermemory" style="margin:0px 0 0;" checked>
+					</div>
+				</span>
 			</div>
 			<textarea class="form-control" id="memorytext" style="height: 120px;"
 				placeholder="Edit the memory to be sent with each request to the AI."></textarea>
@@ -9446,7 +9852,7 @@ Current version: 62
 
 			<div class="popupfooter">
 
-				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Save</button>
+				<button type="button" class="btn btn-primary" onclick="save_wi();autosave();hide_popups()">Ok</button>
 				<button type="button" class="btn btn-primary" onclick="revert_wi();hide_popups()">Cancel</button>
 			</div>
 		</div>
@@ -9637,6 +10043,10 @@ Current version: 62
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Min Height: </div>
 										<div class="instruct-settings-input"><input id ="instruct-min-backgroundHeight" type="number"/> px</div>
+										<div class="ui-settings-inline">
+											<div style="padding-top: 4px; font-size: 10px; margin-left: 10px;">Horizontally-centered text:</div>
+											<input id="instructModeCenterHorizontally" type="checkbox" style="height: 10px; margin-top: 6px;">
+										</div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:20px;">Margin (px): </div>
@@ -9774,7 +10184,7 @@ if ('serviceWorker' in navigator) {
 
 	//for local mode, we do not load any PWA service worker.
 	//this will prevent PWA functionality locally but will avoid the scary 404 errors
-	if(localmode)
+	if(localflag)
 	{
 		console.log("Try to register service worker...");
 		try {
