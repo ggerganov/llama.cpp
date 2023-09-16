@@ -36,6 +36,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "   Hello"              , {    1678,  15043, }, },
         { "    Hello"             , {     268,  15043, }, },
         { "    Hello\n    Hello"  , {     268,  15043,     13,   1678,  15043, }, },
+        { " ("                    , {   29871,  313, }, },
     };
 
     return _k_tests;
