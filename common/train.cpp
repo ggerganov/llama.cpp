@@ -653,7 +653,7 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
 }
 
 bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct train_state * train) {
-    if (gguf_find_key(fctx, LLM_KV_TRAINING_FILE_VERSION) >= 0) {
+    if (gguf_find_key(fctx, LLM_KV_TRAINING_FILE_VERSION) < 0) {
         return false;
     }
 
