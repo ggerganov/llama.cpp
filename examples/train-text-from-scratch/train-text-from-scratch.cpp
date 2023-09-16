@@ -972,7 +972,7 @@ int main(int argc, char ** argv) {
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.common.n_batch;
 
-    struct train_state      * train = init_train_state(params.common.seed);
+    struct train_state      * train = init_train_state();
     struct ggml_opt_context * opt   = train->opt;
 
     struct ggml_opt_params opt_params_adam = ggml_opt_default_params(GGML_OPT_ADAM);

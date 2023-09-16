@@ -1582,7 +1582,7 @@ int main(int argc, char ** argv) {
 
     struct my_llama_lora lora;
 
-    struct train_state      * train = init_train_state(params.common.seed);
+    struct train_state      * train = init_train_state();
     struct ggml_opt_context * opt   = train->opt;
 
     load_default_lora_params_from_base_model(params.fn_model_base, &lora.hparams);

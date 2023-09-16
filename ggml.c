@@ -15134,7 +15134,6 @@ static void ggml_compute_forward_flash_attn_back_f32(
 
     const int64_t elem_q = ggml_nelements(q);
     const int64_t elem_k = ggml_nelements(k);
-    const int64_t elem_v = ggml_nelements(v);
 
     enum ggml_type result_type = dst->type;
     GGML_ASSERT(ggml_blck_size(result_type) == 1);

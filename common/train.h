@@ -103,7 +103,7 @@ struct train_opt_callback_data {
     double                       millis_per_iter;
 };
 
-struct train_state * init_train_state(int seed);
+struct train_state * init_train_state();
 void free_train_state(struct train_state  * state);
 
 struct train_params_common get_default_train_params_common();

@@ -17,11 +17,17 @@ struct random_uniform_distribution {
     std::uniform_real_distribution<float> rd;
 };
 
-struct train_state  * init_train_state(int seed) {
+struct train_state  * init_train_state() {
     struct train_state * state = (struct train_state *) malloc(sizeof(struct train_state));
-    memset(state, 0, sizeof(struct train_state));
+    state->train_its     = 0;
+    state->train_samples = 0;
+    state->train_tokens  = 0;
+    state->train_epochs  = 0;
+    state->shuffle_samples_hash  = 0;
+    state->shuffle_sample_count  = 0;
+    state->shuffle_next_sample   = 0;
     state->shuffle_rng_state_current = "";
-    state->shuffle_rng_state_next = "";
+    state->shuffle_rng_state_next    = "";
 
     state->opt = (struct ggml_opt_context *) malloc(sizeof(struct ggml_opt_context));
     memset(state->opt, 0, sizeof(struct ggml_opt_context));
@@ -33,10 +39,6 @@ struct train_state  * init_train_state(int seed) {
 void free_train_state(struct train_state  * state) {
     free(state->opt);
     free(state);
-}
-
-struct ggml_opt_context * get_train_state_opt(struct train_state  * state) {
-    return state->opt;
 }
 
 struct random_normal_distribution * init_random_normal_distribution(
@@ -741,7 +743,7 @@ struct llama_file {
             die_fmt("read error: %s", strerror(errno));
         }
         if (ret != 1) {
-            die_fmt("unexpectedly reached end of file");
+            die("unexpectedly reached end of file");
         }
     }
 
@@ -840,7 +842,7 @@ size_t tokenize_file(
     std::vector<int> utf8_nunits;
     utf8_units.resize(buf.size());
     utf8_nunits.resize(buf.size());
-    size_t n_utf8_chars = mark_utf8_units(buf.data(), utf8_units.data(), utf8_nunits.data(), buf.size());
+    mark_utf8_units(buf.data(), utf8_units.data(), utf8_nunits.data(), buf.size());
 
     if (sample_start.size() == 0) {
         // tokenize all data at once
@@ -1070,7 +1072,7 @@ struct train_params_common get_default_train_params_common() {
     return params;
 }
 
-void print_common_train_usage(int /*argc*/, char ** argv, const struct train_params_common * params) {
+void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train_params_common * params) {
     // fprintf(stderr, "usage: %s [options]\n", argv[0]);
     // fprintf(stderr, "\n");
     // fprintf(stderr, "options:\n");
