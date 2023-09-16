@@ -77,15 +77,15 @@ class LogStateWrapper
         ~LogStateWrapper()
         {
             log_flush_all_targets();
-            for(auto t: _targets){delete t;}
+            for(auto t : _targets){ delete t; }
         }
 
     private:
-        LogStateWrapper( LogStateWrapper& other ) = delete;
-		void operator=( const LogStateWrapper& )  = delete;
+        LogStateWrapper(LogStateWrapper & other) = delete;
+        void operator=(const LogStateWrapper &)  = delete;
 
     private:
-        static LogStateWrapper& instance()
+        static LogStateWrapper & instance()
         {
             static LogStateWrapper inst;
             return inst;
@@ -94,21 +94,21 @@ class LogStateWrapper
         class LogTargetWrapper
         {
             private:
-                LogTargetWrapper( LogTargetWrapper& other ) = delete;
-                void operator=( const LogTargetWrapper& )   = delete;
+                LogTargetWrapper(LogTargetWrapper & other) = delete;
+                void operator=(const LogTargetWrapper &)   = delete;
 
             public:
-                LogTargetWrapper( FILE* handle )
+                LogTargetWrapper(FILE* handle)
                 :   _type(Type::Stream),
                     _opened(true),
                     _handle(handle)
                 {}
 
-                LogTargetWrapper( const std::string && filename )
+                LogTargetWrapper(const std::string && filename)
                 : LogTargetWrapper(filename)
                 {}
 
-                LogTargetWrapper( const std::string & filename )
+                LogTargetWrapper(const std::string & filename)
                 :   _filename(filename)
                 {
                     if(_filename.empty())
@@ -125,7 +125,7 @@ class LogStateWrapper
 
                 ~LogTargetWrapper()
                 {
-                    if(_type == Type::File && _handle != nullptr) {std::fclose(_handle);}
+                    if(_type == Type::File && _handle != nullptr) { std::fclose(_handle); }
                 }
 
                 enum class Type{
@@ -139,17 +139,21 @@ class LogStateWrapper
                 {
                     if(!_opened)
                     {
-                        while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
+                        while(_lock.test_and_set(std::memory_order_acquire)){ std::this_thread::yield(); }
                         if(!_opened && _type == Type::File) // check for opened again after acquiring a lock
                         {
                             auto result = std::fopen(_filename.c_str(), "w");
-                            if( result )
+                            if(result)
                             {
                                 _handle = result;
                             }
                             else
                             {
-                                std::fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", _filename.c_str(), std::strerror(errno));
+                                std::fprintf(
+                                    stderr,
+                                    "Failed to open logfile '%s' with error '%s'\n",
+                                    _filename.c_str(), std::strerror(errno)
+                                );
                                 std::fflush(stderr);
                                 _handle = stderr;
                             }
@@ -162,7 +166,7 @@ class LogStateWrapper
 
                 void flush()
                 {
-                    while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
+                    while(_lock.test_and_set(std::memory_order_acquire)){ std::this_thread::yield(); }
                     if(_opened && _type != Type::Invalid && _handle)
                     {
                         std::fflush(_handle);
@@ -192,17 +196,17 @@ class LogStateWrapper
         std::atomic<LogTargetWrapper*> _current_target          {&_null_target};
         std::atomic<LogTargetWrapper*> _stored_target           {&_null_target};
 
-        LogTargetWrapper* log_set_target_impl( const std::string && filename ) {return log_set_target_impl(filename);}
-        LogTargetWrapper* log_set_target_impl( const std::string & filename )  {return log_add_select_target(new LogTargetWrapper(filename), true);}
-        LogTargetWrapper* log_set_target_impl( FILE* handle )                  {return log_add_select_target(new LogTargetWrapper(handle), true);}
-        LogTargetWrapper* log_set_target_impl( LogTargetWrapper * target )     {return log_add_select_target(target);}
+        LogTargetWrapper* log_set_target_impl(const std::string && filename) { return log_set_target_impl(filename); }
+        LogTargetWrapper* log_set_target_impl(const std::string & filename)  { return log_add_select_target(new LogTargetWrapper(filename), true); }
+        LogTargetWrapper* log_set_target_impl(FILE* handle)                  { return log_add_select_target(new LogTargetWrapper(handle), true); }
+        LogTargetWrapper* log_set_target_impl(LogTargetWrapper * target)     { return log_add_select_target(target); }
 
         LogTargetWrapper* log_add_select_target(LogTargetWrapper* t, bool insert = false)
         {
             log_flush_all_targets();
             std::lock_guard<std::mutex> lock(_mutex);
 
-            if( _global_override_target == LogTriState::True)
+            if(_global_override_target == LogTriState::True)
             {
                 if(_enabled || _global_override_enabled == LogTriState::True) return _current_target;
                 return _stored_target;
@@ -219,15 +223,15 @@ class LogStateWrapper
         void log_flush_all_targets()
         {
             std::lock_guard<std::mutex> lock(_mutex);
-            for(auto t: _targets){ t->flush(); }
+            for(auto t : _targets){ t->flush(); }
         }
 
         FILE* log_handler_impl()     { return *_current_target; }
         FILE* log_tee_handler_impl() { return _stderr_target; }
 
-        void log_disable_impl( bool threadsafe = true )
+        void log_disable_impl(bool threadsafe = true)
         {
-            if( threadsafe )
+            if(threadsafe)
             {
                 std::lock_guard<std::mutex> lock(_mutex);
                 log_disable_impl_unsafe();
@@ -248,9 +252,9 @@ class LogStateWrapper
             }
         }
 
-        void log_enable_impl( bool threadsafe = true )
+        void log_enable_impl(bool threadsafe = true)
         {
-            if( threadsafe )
+            if(threadsafe)
             {
                 std::lock_guard<std::mutex> lock(_mutex);
                 log_enable_impl_unsafe();
@@ -273,13 +277,13 @@ class LogStateWrapper
         bool log_param_single_parse_impl(const std::string & param)
         {
 #ifdef LOG_WITH_TEST
-            if ( param == "--log-test")
+            if (param == "--log-test")
             {
                 log_test();
                 return true;
             }
 #endif
-            if ( param == "--log-disable")
+            if (param == "--log-disable")
             {
                 {
                     std::lock_guard<std::mutex> lock(_mutex);
@@ -289,7 +293,7 @@ class LogStateWrapper
                 return true;
             }
 
-            if ( param == "--log-enable")
+            if (param == "--log-enable")
             {
                 {
                     std::lock_guard<std::mutex> lock(_mutex);
@@ -304,7 +308,7 @@ class LogStateWrapper
 
         bool log_param_pair_parse_impl(bool check_but_dont_parse, const std::string & param, const std::string & next = std::string())
         {
-            if ( param == "--log-file")
+            if (param == "--log-file")
             {
                 if (!check_but_dont_parse)
                 {
@@ -360,20 +364,20 @@ class LogStateWrapper
         }
 
     public:
-        static LogTargetWrapper* log_set_target( const std::string && filename )     {return log_set_target(filename);}
-        static LogTargetWrapper* log_set_target( const std::string & filename )      {return instance().log_set_target_impl(filename);}
-        static LogTargetWrapper* log_set_target( FILE* handle )                      {return instance().log_set_target_impl(handle);}
-        static LogTargetWrapper* log_set_target( LogTargetWrapper * target )         {return instance().log_set_target_impl(target);}
-        static FILE*             log_handler()                                       {return instance().log_handler_impl();}
-        static FILE*             log_tee_handler()                                   {return instance().log_tee_handler_impl();}
-        static void              log_disable()                                       {instance().log_disable_impl();}
-        static void              log_enable()                                        {instance().log_enable_impl();}
-        static bool              log_param_single_parse(const std::string & param)   {return instance().log_param_single_parse_impl(param);}
+        static LogTargetWrapper* log_set_target(const std::string && filename)       { return log_set_target(filename); }
+        static LogTargetWrapper* log_set_target(const std::string & filename)        { return instance().log_set_target_impl(filename); }
+        static LogTargetWrapper* log_set_target(FILE* handle)                        { return instance().log_set_target_impl(handle); }
+        static LogTargetWrapper* log_set_target(LogTargetWrapper * target)           { return instance().log_set_target_impl(target); }
+        static FILE*             log_handler()                                       { return instance().log_handler_impl(); }
+        static FILE*             log_tee_handler()                                   { return instance().log_tee_handler_impl(); }
+        static void              log_disable()                                       { instance().log_disable_impl(); }
+        static void              log_enable()                                        { instance().log_enable_impl(); }
+        static bool              log_param_single_parse(const std::string & param)   { return instance().log_param_single_parse_impl(param); }
         static bool              log_param_pair_parse(bool check_but_dont_parse, const std::string & param, const std::string & next = std::string())
-                                                                                     {return instance().log_param_pair_parse_impl(check_but_dont_parse,param,next);}
+                                                                                     { return instance().log_param_pair_parse_impl(check_but_dont_parse,param,next); }
         static std::string       log_filename_generator(const std::string & basename, const std::string & extension)
-                                                                                     {return instance().log_filename_generator_impl(basename,extension);}
-        static std::string       log_get_pid()                                       {return instance().log_get_pid_impl();}
+                                                                                     { return instance().log_filename_generator_impl(basename,extension); }
+        static std::string       log_get_pid()                                       { return instance().log_get_pid_impl(); }
 };
 
 // Specifies a log target.
