@@ -1006,3 +1006,326 @@ std::string get_train_filename(const char * filename, const char * pattern_it, c
     std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
     return replace_str(filename, pattern_it, sit.c_str());
 }
+
+struct train_params_common get_default_train_params_common() {
+    struct train_params_common params;
+    params.fn_train_data     = "shakespeare.txt";
+    params.fn_checkpoint_in  = "checkpoint.gguf";
+    params.fn_checkpoint_out = "checkpoint-ITERATION.gguf";
+    params.pattern_fn_it     = "ITERATION";
+    params.fn_latest         = "LATEST";
+
+    params.print_usage = false;
+    
+    params.save_every = 10;
+
+    params.seed       =   -1;
+
+    params.n_ctx      =  128;
+    params.n_threads  =    6;
+    params.n_batch    =    8;
+    params.n_gradient_accumulation = 1;
+
+    params.custom_n_ctx = false;
+
+    params.use_flash              = true;
+    params.use_checkpointing      = true;
+
+    params.sample_start           = "";
+    params.include_sample_start   = false;
+    params.escape                 = false;
+    params.overlapping_samples    = false;
+    params.fill_with_next_samples = false;
+    params.separate_with_eos      = false;
+    params.separate_with_bos      = true;
+    params.force_reshuffle        = false;
+
+    params.opt_past               = 0;
+    params.opt_delta              = 1e-5f;
+    params.opt_max_no_improvement = 0;
+
+    params.warmup            =  100;
+    params.cos_decay_steps   = 1000;
+    params.cos_decay_restart = 1.1f;
+    params.cos_decay_min     = 0.1f;
+    params.enable_restart    = false;
+
+    params.adam_n_iter         = 256;
+    params.adam_alpha          = 1e-3f;
+    params.adam_min_alpha      = 0;
+    params.adam_decay          = 1e-1f;
+    params.adam_decay_min_ndim = 2;
+    params.adam_beta1          = 0.9f;
+    params.adam_beta2          = 0.999f;
+    params.adam_gclip          = 1.0f;
+    params.adam_eps_f          = 0.0f;
+    return params;
+}
+
+void print_common_train_usage(int /*argc*/, char ** argv, const struct train_params_common * params) {
+    // fprintf(stderr, "usage: %s [options]\n", argv[0]);
+    // fprintf(stderr, "\n");
+    // fprintf(stderr, "options:\n");
+    // fprintf(stderr, "  -h, --help                 show this help message and exit\n");
+    fprintf(stderr, "  --train-data FNAME         path from which to load training data (default '%s')\n", params->fn_train_data);
+    fprintf(stderr, "  --checkpoint-in FNAME      path from which to load training checkpoint (default '%s')\n", params->fn_checkpoint_in);
+    fprintf(stderr, "  --checkpoint-out FNAME     path to save training checkpoint (default '%s')\n", params->fn_checkpoint_out);
+    fprintf(stderr, "  --pattern-fn-it STR        pattern in output filenames to be replaced by iteration number (default '%s')\n", params->pattern_fn_it);
+    fprintf(stderr, "  --fn-latest STR            string to use instead of iteration number for saving latest output (default '%s')\n", params->fn_latest);
+    fprintf(stderr, "  --save-every N             save checkpoint and lora every N iterations. Disabled when N <= 0. (default '%d')\n", params->save_every);
+    fprintf(stderr, "  -s SEED, --seed SEED       RNG seed (default: -1, use random seed for -1)\n");
+    fprintf(stderr, "  -c N, --ctx N              Context size used during training (default %d)\n", params->n_ctx);
+    fprintf(stderr, "  -t N, --threads N          Number of threads (default %d)\n", params->n_threads);
+    fprintf(stderr, "  -b N, --batch N            Parallel batch size (default %d)\n", params->n_batch);
+    fprintf(stderr, "  --grad-acc N               Number of gradient accumulation steps (simulates larger batch size of batch*gradacc) (default %d)\n", params->n_gradient_accumulation);
+    fprintf(stderr, "  --sample-start STR         Sets the starting point for samples after the specified pattern. If empty use every token position as sample start. (default '%s')\n", params->sample_start.c_str());
+    fprintf(stderr, "  --include-sample-start     Include the sample start in the samples. (default off)\n");
+    fprintf(stderr, "  --escape                   process sample start escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
+    fprintf(stderr, "  --overlapping-samples      Samples my overlap, will include sample-start of second and following samples. When off, samples will end at begin of next sample. (default off)\n");
+    fprintf(stderr, "  --fill-with-next-samples   Samples shorter than context length will be followed by the next (shuffled) samples. (default off)\n");
+    fprintf(stderr, "  --separate-with-eos        When fill-with-next-samples, insert end-of-sequence token between samples.%s\n", params->separate_with_eos ? " (default)" : "");
+    fprintf(stderr, "  --separate-with-bos        When fill-with-next-samples, insert begin-of-sequence token between samples.%s\n", params->separate_with_bos ? " (default)" : "");
+    fprintf(stderr, "  --no-separate-with-eos     When fill-with-next-samples, don't insert end-of-sequence token between samples.%s\n", !params->separate_with_eos ? " (default)" : "");
+    fprintf(stderr, "  --no-separate-with-bos     When fill-with-next-samples, don't insert begin-of-sequence token between samples.%s\n", !params->separate_with_bos ? " (default)" : "");
+    fprintf(stderr, "  --force-reshuffle          Force a reshuffling of data at program start, otherwise the shuffling of loaded checkpoint is resumed.\n");
+    fprintf(stderr, "  --no-flash                 Don't use flash attention \n");
+    fprintf(stderr, "  --use-flash                Use flash attention (default)\n");
+    fprintf(stderr, "  --no-checkpointing         Don't use gradient checkpointing\n");
+    fprintf(stderr, "  --use-checkpointing        Use gradient checkpointing (default)\n");
+    fprintf(stderr, "  --warmup N                 Only for Adam optimizer. Number of warmup steps (default %d)\n", params->warmup);
+    fprintf(stderr, "  --cos-decay-steps N        Only for Adam optimizer. Number of cosine decay steps (default %d)\n", params->cos_decay_steps);
+    fprintf(stderr, "  --cos-decay-restart N      Only for Adam optimizer. Increase of cosine decay steps after restart (default %f)\n", params->cos_decay_restart);
+    fprintf(stderr, "  --cos-decay-min N          Only for Adam optimizer. Cosine decay minimum (default %f)\n", params->cos_decay_min);
+    fprintf(stderr, "  --enable-restart N         Only for Adam optimizer. Enable restarts of cos-decay %s\n", params->enable_restart ? "(default)" : "");
+    fprintf(stderr, "  --disable-restart N        Only for Adam optimizer. Disable restarts of cos-decay %s\n", !params->enable_restart ? "(default)" : "");
+    fprintf(stderr, "  --opt-past N               Number of optimization iterations to track for delta convergence test. Disabled when zero. (default %d)\n", params->opt_past);
+    fprintf(stderr, "  --opt-delta N              Maximum delta for delta convergence test. Disabled when <= zero. (default %f)\n", params->opt_delta);
+    fprintf(stderr, "  --opt-max-no-improvement N Maximum number of optimization iterations with no improvement. Disabled when <= zero. (default %d)\n", params->opt_max_no_improvement);
+    fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
+    fprintf(stderr, "  --adam-iter N              Maximum number of Adam optimization iterations for each batch (default %d)\n", params->adam_n_iter);
+    fprintf(stderr, "  --adam-alpha N             Adam learning rate alpha (default %f)\n", params->adam_alpha);
+    fprintf(stderr, "  --adam-min-alpha N         Adam minimum learning rate alpha - including warmup phase (default %f)\n", params->adam_min_alpha);
+    fprintf(stderr, "  --adam-decay N             AdamW weight decay. Values greater zero enable AdamW instead of regular Adam. (default %f)\n", params->adam_decay);
+    fprintf(stderr, "  --adam-decay-min-ndim N    Minimum number of tensor dimensions to apply AdamW weight decay. Weight decay is not applied to tensors with less n_dims. (default %d)\n", params->adam_decay_min_ndim);
+    fprintf(stderr, "  --adam-beta1 N             AdamW beta1 in interval [0,1). How much to smooth the first moment of gradients. (default %f)\n", params->adam_beta1);
+    fprintf(stderr, "  --adam-beta2 N             AdamW beta2 in interval [0,1). How much to smooth the second moment of gradients. (default %f)\n", params->adam_beta2);
+    fprintf(stderr, "  --adam-gclip N             AdamW gradient clipping. Disabled when zero. (default %f)\n", params->adam_gclip);
+    fprintf(stderr, "\n");
+}
+
+bool consume_common_train_arg(int argc, char ** argv, int * idx, struct train_params_common * params, bool * invalid_param) {
+    int& i = *idx;
+    char * arg = argv[i];
+    if (arg == "--train-data") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->fn_train_data = argv[i];
+    } else if (arg == "--checkpoint-in") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->fn_checkpoint_in = argv[i];
+    } else if (arg == "--checkpoint-out") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->fn_checkpoint_out = argv[i];
+    } else if (arg == "--pattern-fn-it") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->pattern_fn_it = argv[i];
+    } else if (arg == "--fn-latest") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->fn_latest = argv[i];
+    } else if (arg == "--save-every") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->save_every = std::stoi(argv[i]);
+    } else if (arg == "-s" || arg == "--seed") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->seed = std::stoi(argv[i]);
+    } else if (arg == "-c" || arg == "--ctx") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->n_ctx = std::stoi(argv[i]);
+        params->custom_n_ctx = true;
+    } else if (arg == "-t" || arg == "--threads") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->n_threads = std::stoi(argv[i]);
+    } else if (arg == "-b" || arg == "--batch") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->n_batch = std::stoi(argv[i]);
+    } else if (arg == "--grad-acc") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->n_gradient_accumulation = std::max(1, std::stoi(argv[i]));
+    } else if (arg == "--sample-start") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->sample_start = std::string(argv[i]);
+    } else if (arg == "--escape") {
+        params->escape = true;
+    } else if (arg == "--include-sample-start") {
+        params->include_sample_start = true;
+    } else if (arg == "--overlapping-samples") {
+        params->overlapping_samples = true;
+    } else if (arg == "--fill-with-next-samples") {
+        params->fill_with_next_samples = true;
+    } else if (arg == "--separate-with-eos") {
+        params->separate_with_eos = true;
+    } else if (arg == "--separate-with-bos") {
+        params->separate_with_bos = true;
+    } else if (arg == "--no-separate-with-eos") {
+        params->separate_with_eos = false;
+    } else if (arg == "--no-separate-with-bos") {
+        params->separate_with_bos = false;
+    } else if (arg == "--force-reshuffle") {
+        params->force_reshuffle = true;
+    } else if (arg == "--no-flash") {
+        params->use_flash = false;
+    } else if (arg == "--use-flash") {
+        params->use_flash = true;
+    } else if (arg == "--no-checkpointing") {
+        params->use_checkpointing = false;
+    } else if (arg == "--use-checkpointing") {
+        params->use_checkpointing = true;
+    } else if (arg == "--warmup") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->warmup = std::stoi(argv[i]);
+    } else if (arg == "--cos-decay-steps") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->cos_decay_steps = std::stoi(argv[i]);
+    } else if (arg == "--cos-decay-restart") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->cos_decay_restart = std::stof(argv[i]);
+    } else if (arg == "--cos-decay-min") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->cos_decay_min = std::stof(argv[i]);
+    } else if (arg == "--enable-restart") {
+        params->enable_restart = true;
+    } else if (arg == "--disable-restart") {
+        params->enable_restart = false;
+    } else if (arg == "--opt-past") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->opt_past = std::stoi(argv[i]);
+    } else if (arg == "--opt-delta") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->opt_delta = std::stof(argv[i]);
+    } else if (arg == "--opt-max-no-improvement") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->opt_max_no_improvement = std::stoi(argv[i]);
+    } else if (arg == "--adam-epsf") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_eps_f = std::stof(argv[i]);
+    } else if (arg == "--adam-iter") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_n_iter = std::stoi(argv[i]);
+    } else if (arg == "--adam-alpha") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_alpha = std::stof(argv[i]);
+    } else if (arg == "--adam-min-alpha") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_min_alpha = std::stof(argv[i]);
+    } else if (arg == "--adam-decay") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_decay = std::stof(argv[i]);
+    } else if (arg == "--adam-decay-min-ndim") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_decay_min_ndim = std::stoi(argv[i]);
+    } else if (arg == "--adam-beta1") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_beta1 = std::stof(argv[i]);
+    } else if (arg == "--adam-beta2") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_beta2 = std::stof(argv[i]);
+    } else if (arg == "--adam-gclip") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->adam_gclip = std::stof(argv[i]);
+    } else if (arg == "-h" || arg == "--help") {
+        params->print_usage = true;
+        return true;
+    } else {
+        return false;
+    }
+    return true;
+}
+
+void finish_processing_train_args(struct train_params_common * params) {
+    if (params->escape) {
+        process_escapes(params->sample_start);
+    }
+}

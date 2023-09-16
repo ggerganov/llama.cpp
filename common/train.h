@@ -26,8 +26,68 @@ struct train_state {
     size_t        shuffle_next_sample;
 };
 
+struct train_params_common {
+    const char * fn_train_data;
+    const char * fn_checkpoint_in;
+    const char * fn_checkpoint_out;
+    const char * pattern_fn_it;
+    const char * fn_latest;
+
+    bool print_usage;
+
+    int save_every;
+
+    uint32_t seed;
+
+    int n_ctx;
+    int n_threads;
+    int n_batch;
+    int n_gradient_accumulation;
+
+    bool custom_n_ctx;
+
+    bool use_flash;
+    bool use_checkpointing;
+
+    std::string sample_start;
+    bool include_sample_start;
+    bool escape;
+    bool overlapping_samples;
+    bool fill_with_next_samples;
+    bool separate_with_eos;
+    bool separate_with_bos;
+
+    bool force_reshuffle;
+
+    int   warmup;
+    int   cos_decay_steps;
+    float cos_decay_restart;
+    float cos_decay_min;
+    bool  enable_restart;
+
+    int   opt_past;
+    float opt_delta;
+    int   opt_max_no_improvement;
+
+    int   adam_n_iter;
+    float adam_alpha;
+    float adam_min_alpha;
+    float adam_decay;
+    int   adam_decay_min_ndim;
+    float adam_beta1;
+    float adam_beta2;
+    float adam_gclip;
+    float adam_eps_f;
+};
+
 struct train_state * init_train_state(int seed);
 void free_train_state(struct train_state  * state);
+
+struct train_params_common get_default_train_params_common();
+void print_common_train_usage(int /*argc*/, char ** argv, const struct train_params_common * params);
+
+bool consume_common_train_arg(int argc, char ** argv, int * idx, struct train_params_common * params, bool * invalid_param);
+void finish_processing_train_args(struct train_params_common * params);
 
 struct random_normal_distribution;
 struct random_uniform_distribution;
