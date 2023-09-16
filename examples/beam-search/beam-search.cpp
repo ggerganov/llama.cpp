@@ -1,6 +1,5 @@
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -30,7 +29,8 @@ struct ostream_beam_view {
     llama_context * ctx;
     llama_beam_view beam_view;
 };
-std::ostream& operator<<(std::ostream& os, const ostream_beam_view & obv) {
+
+static std::ostream & operator<<(std::ostream & os, const ostream_beam_view & obv) {
     os << "p(" << obv.beam_view.p << ") eob(" << std::boolalpha << obv.beam_view.eob << ") tokens(";
     for (size_t i = 0 ; i < obv.beam_view.n_tokens ; ++i) {
         os << llama_token_to_piece(obv.ctx, obv.beam_view.tokens[i]);
@@ -46,7 +46,7 @@ struct beam_search_callback_data {
 
 // In this case, end-of-beam (eob) is equivalent to end-of-sentence (eos) but this need not always be the same.
 // For example, eob can be flagged due to maximum token length, stop words, etc.
-bool is_at_eob(const beam_search_callback_data & callback_data, const llama_token * tokens, const size_t n_tokens) {
+static bool is_at_eob(const beam_search_callback_data & callback_data, const llama_token * tokens, size_t n_tokens) {
     return n_tokens && tokens[n_tokens-1] == llama_token_eos(callback_data.ctx);
 }
 
@@ -56,7 +56,7 @@ bool is_at_eob(const beam_search_callback_data & callback_data, const llama_toke
 //  * When all beams converge to a common prefix, they are made available in beams_state.beams[0].
 //    This is also called when the stop condition is met.
 //    Collect tokens into std::vector<llama_token> response which is pointed to by callback_data.
-void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_state) {
+static void beam_search_callback(void * callback_data_ptr, llama_beams_state beams_state) {
     auto& callback_data = *static_cast<beam_search_callback_data*>(callback_data_ptr);
     // Mark beams as EOS as needed.
     for (size_t i = 0 ; i < beams_state.n_beams ; ++i) {

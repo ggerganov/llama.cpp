@@ -3,7 +3,6 @@
 
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 extern "C" {
 

@@ -77,12 +77,14 @@ KEY_TOKENIZER_RWKV       = "tokenizer.rwkv.world"
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA  : int = auto()
-    FALCON : int = auto()
-    GPT2   : int = auto()
-    GPTJ   : int = auto()
-    GPTNEOX: int = auto()
-    MPT    : int = auto()
+    LLAMA         : int = auto()
+    FALCON        : int = auto()
+    BAICHUAN      : int = auto()
+    GPT2          : int = auto()
+    GPTJ          : int = auto()
+    GPTNEOX       : int = auto()
+    MPT           : int = auto()
+    STARCODER     : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -106,12 +108,14 @@ class MODEL_TENSOR(IntEnum):
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
-    MODEL_ARCH.LLAMA:   "llama",
-    MODEL_ARCH.FALCON:  "falcon",
-    MODEL_ARCH.GPT2:    "gpt2",
-    MODEL_ARCH.GPTJ:    "gptj",
-    MODEL_ARCH.GPTNEOX: "gptneox",
-    MODEL_ARCH.MPT:     "mpt",
+    MODEL_ARCH.LLAMA:          "llama",
+    MODEL_ARCH.FALCON:         "falcon",
+    MODEL_ARCH.BAICHUAN:       "baichuan",
+    MODEL_ARCH.GPT2:           "gpt2",
+    MODEL_ARCH.GPTJ:           "gptj",
+    MODEL_ARCH.GPTNEOX:        "gptneox",
+    MODEL_ARCH.MPT:            "mpt",
+    MODEL_ARCH.STARCODER:      "starcoder",
 }
 
 MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
@@ -153,6 +157,34 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_DOWN:    "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:      "blk.{bid}.ffn_up",
     },
+    MODEL_ARCH.BAICHUAN: {
+        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+        MODEL_TENSOR.OUTPUT:        "output",
+        MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
+        MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
+        MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+    },
+    MODEL_ARCH.STARCODER: {
+        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+        MODEL_TENSOR.POS_EMBD:      "position_embd",
+        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+        MODEL_TENSOR.OUTPUT:        "output",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+    },
     MODEL_ARCH.GPT2: {
         # TODO
     },
@@ -162,6 +194,10 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
 # tensors that will not be serialized
 MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.LLAMA: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.BAICHUAN: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
@@ -187,7 +223,7 @@ class TensorNameMap:
         # Output
         MODEL_TENSOR.OUTPUT: (
             "embed_out", # gptneox
-            "lm_head",   # gpt2 mpt falcon llama-hf
+            "lm_head",   # gpt2 mpt falcon llama-hf baichuan
             "output",    # llama-pth
         ),
 
@@ -195,7 +231,7 @@ class TensorNameMap:
         MODEL_TENSOR.OUTPUT_NORM: (
             "gpt_neox.final_layer_norm", # gptneox
             "transformer.ln_f",          # gpt2 falcon
-            "model.norm",                # llama-hf
+            "model.norm",                # llama-hf baichuan
             "norm",                      # llama-pth
         ),
 
@@ -311,6 +347,7 @@ class TensorNameMap:
             tensor_name = tensor_names.get(tensor)
             if tensor_name is None:
                 continue
+            mapping[tensor_name] = (tensor, tensor_name)
             for key in keys:
                 mapping[key] = (tensor, tensor_name)
         for bid in range(n_blocks):
@@ -319,11 +356,12 @@ class TensorNameMap:
                 if tensor_name is None:
                     continue
                 tensor_name = tensor_name.format(bid = bid)
+                mapping[tensor_name] = (tensor, tensor_name)
                 for key in keys:
                     key = key.format(bid = bid)
                     mapping[key] = (tensor, tensor_name)
 
-    def get_type_and_name(self, key: str, try_suffixes: Sequence[str]) -> tuple[MODEL_TENSOR, str] | None:
+    def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
         result = self.mapping.get(key)
         if result is not None:
             return result
@@ -334,13 +372,13 @@ class TensorNameMap:
                     return (result[0], result[1] + suffix)
         return None
 
-    def get_name(self, key: str, try_suffixes: Sequence[str]) -> str | None:
+    def get_name(self, key: str, try_suffixes: Sequence[str] = ()) -> str | None:
         result = self.get_type_and_name(key, try_suffixes = try_suffixes)
         if result is None:
             return None
         return result[1]
 
-    def get_type(self, key: str, try_suffixes: Sequence[str]) -> MODEL_TENSOR | None:
+    def get_type(self, key: str, try_suffixes: Sequence[str] = ()) -> MODEL_TENSOR | None:
         result = self.get_type_and_name(key, try_suffixes = try_suffixes)
         if result is None:
             return None
