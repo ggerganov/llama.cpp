@@ -39,7 +39,9 @@ struct ggml_opt_context * get_train_state_opt(struct train_state  * state) {
     return state->opt;
 }
 
-struct random_normal_distribution * init_random_normal_distribution(int seed, float mean, float std, float min, float max) {
+struct random_normal_distribution * init_random_normal_distribution(
+    int seed, float mean, float std, float min, float max
+) {
     struct random_normal_distribution * rnd = (struct random_normal_distribution *) malloc(sizeof(struct random_normal_distribution));
     rnd->gen = std::mt19937(seed);
     rnd->rd = std::normal_distribution<float>{mean, std};
@@ -203,18 +205,19 @@ void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
 }
 
 int64_t get_example_targets_batch(
-        struct llama_context * lctx,
-        struct ggml_tensor   * tokens_input,
-        struct ggml_tensor   * target_probs,
-        int64_t                example_id,
-        const size_t         * samples_begin,
-        const size_t         * samples_size,
-              size_t           samples_count,
-        const llama_token    * train_data,
-        size_t                 n_train_data,
-        bool                   separate_with_eos,
-        bool                   separate_with_bos,
-        bool                   fill_with_next_samples) {
+    struct llama_context * lctx,
+    struct ggml_tensor   * tokens_input,
+    struct ggml_tensor   * target_probs,
+    int64_t                example_id,
+    const size_t         * samples_begin,
+    const size_t         * samples_size,
+          size_t           samples_count,
+    const llama_token    * train_data,
+    size_t                 n_train_data,
+    bool                   separate_with_eos,
+    bool                   separate_with_bos,
+    bool                   fill_with_next_samples
+) {
 
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_probs->n_dims  == 3);
@@ -1129,7 +1132,9 @@ void print_common_train_usage(int /*argc*/, char ** argv, const struct train_par
     fprintf(stderr, "\n");
 }
 
-bool consume_common_train_arg(int argc, char ** argv, int * idx, struct train_params_common * params, bool * invalid_param) {
+bool consume_common_train_arg(
+    int argc, char ** argv, int * idx, struct train_params_common * params, bool * invalid_param
+) {
     int& i = *idx;
     std::string arg = argv[i];
     const std::string arg_prefix = "--";
