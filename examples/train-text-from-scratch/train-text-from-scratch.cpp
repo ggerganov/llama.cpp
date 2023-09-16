@@ -1183,7 +1183,6 @@ int main(int argc, char ** argv) {
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
     if (new_iters > 0) {
         train->train_its     += new_iters;
-        train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
         train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
 
         save_train_files(&save_data, train);

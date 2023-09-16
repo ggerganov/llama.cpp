@@ -1367,9 +1367,8 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
         const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
         if (save_now) {
             int new_iters = opt->iter - data->last_save_iter;
-            train->train_its += new_iters;
-            train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
-            train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
+            train->train_its    += new_iters;
+            train->train_tokens += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
 
             if (data->save_cb) {
                 data->save_cb(data->save_data, train);
@@ -1431,6 +1430,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
         params->separate_with_bos,
         params->fill_with_next_samples);
 
+    train->train_samples += used_samples;
     train->shuffle_next_sample += used_samples;
 
     if (train->shuffle_next_sample >= train->shuffle_sample_count) {
