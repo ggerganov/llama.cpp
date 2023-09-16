@@ -13,7 +13,7 @@
 
 typedef int codepoint;
 
-std::string codepoint_to_utf8(codepoint cp) {
+static std::string codepoint_to_utf8(codepoint cp) {
     std::string result;
     if (0x00 <= cp && cp <= 0x7f) {
         result.push_back(cp);

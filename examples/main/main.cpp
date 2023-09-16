@@ -41,7 +41,8 @@ static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
 
-void write_logfile(
+
+static void write_logfile(
     const llama_context * ctx, const gpt_params & params, const llama_model * model,
     const std::vector<llama_token> & input_tokens, const std::string & output,
     const std::vector<llama_token> & output_tokens
@@ -86,7 +87,7 @@ void write_logfile(
 }
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
-void sigint_handler(int signo) {
+static void sigint_handler(int signo) {
     if (signo == SIGINT) {
         if (!is_interacting) {
             is_interacting = true;
@@ -148,6 +149,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    LOG_TEE("%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);

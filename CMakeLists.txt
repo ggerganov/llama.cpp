@@ -212,6 +212,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wextra
             -Wpedantic
             -Wcast-qual
+            -Wmissing-declarations
             -Wno-unused-function
             -Wno-multichar
         )
@@ -230,7 +231,7 @@ if (LLAMA_ALL_WARNINGS)
 
 endif()
 
-if (MSVC)
+if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
     if (BUILD_SHARED_LIBS)
