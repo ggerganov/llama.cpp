@@ -965,10 +965,10 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
 
     buf[size] = '\0';
 
-    int n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
+    int n_tokens = llama_tokenize(lctx, buf.data(), buf.size(), out.data(), out.size(), false);
     if (n_tokens < 0) {
         out.resize(-n_tokens);
-        n_tokens = llama_tokenize(lctx, buf.data(), out.data(), out.size(), false);
+        n_tokens = llama_tokenize(lctx, buf.data(), buf.size(), out.data(), out.size(), false);
     }
     GGML_ASSERT(n_tokens >= 0);
     out.resize(n_tokens);

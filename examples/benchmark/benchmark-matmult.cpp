@@ -1,5 +1,5 @@
+#include "common.h"
 #include "ggml.h"
-#include "build-info.h"
 
 #include <locale.h>
 #include <assert.h>
@@ -99,7 +99,7 @@ int main(int argc, char ** argv)  {
         exit(1);
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
     printf("Starting Test\n");
 
     // create the ggml context

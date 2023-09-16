@@ -1,3 +1,4 @@
+#include "common.h"
 #include "embd-input.h"
 
 #include <cassert>
@@ -22,7 +23,7 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
         return nullptr;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = uint32_t(time(NULL));
