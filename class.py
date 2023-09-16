@@ -41,7 +41,7 @@ class model_backend(InferenceModel):
         foundfile = False
         try:
             files = os.listdir(model_path)
-            foundfile = len([filename for filename in files if (("ggml" in filename.lower() and ".bin" in filename.lower()) or ".gguf" in filename.lower())])>1
+            foundfile = len([filename for filename in files if (("ggml" in filename.lower() and ".bin" in filename.lower()) or ".gguf" in filename.lower())])>0
         except:
             pass
         return foundfile
