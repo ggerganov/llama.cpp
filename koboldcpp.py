@@ -350,6 +350,7 @@ maxctx = 2048
 maxhordectx = 1024
 maxhordelen = 256
 modelbusy = threading.Lock()
+requestsinqueue = 0
 defaultport = 5001
 KcppVersion = "1.44"
 showdebug = True
@@ -565,7 +566,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         return
 
     def do_POST(self):
-        global modelbusy
+        global modelbusy, requestsinqueue
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         basic_api_flag = False
@@ -590,22 +591,31 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if self.path.endswith('/api/extra/abort'):
-            ag = handle.abort_generate()
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
-            print("\nGeneration Aborted")
+            if requestsinqueue==0:
+                ag = handle.abort_generate()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
+                print("\nGeneration Aborted")
+            else:
+                 self.wfile.write(json.dumps({"success": "false"}).encode())
             return
 
         if self.path.endswith('/api/extra/generate/check'):
-            pendtxt = handle.get_pending_output()
-            pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
+            pendtxtStr = ""
+            if requestsinqueue==0:
+                pendtxt = handle.get_pending_output()
+                pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             self.send_response(200)
             self.end_headers()
             self.wfile.write(json.dumps({"results": [{"text": pendtxtStr}]}).encode())
             return
 
-        if not modelbusy.acquire(blocking=False):
+        reqblocking = False
+        if args.multiuser and requestsinqueue < 4: #up to 5 concurrent requests
+            reqblocking = True
+            requestsinqueue += 1
+        if not modelbusy.acquire(blocking=reqblocking):
             self.send_response(503)
             self.end_headers()
             self.wfile.write(json.dumps({"detail": {
@@ -613,6 +623,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "type": "service_unavailable",
                 }}).encode())
             return
+        if reqblocking:
+            requestsinqueue = (requestsinqueue - 1) if requestsinqueue>0 else 0
 
         try:
             if self.path.endswith('/request'):
@@ -717,7 +729,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             exitcounter = 999
             self.httpd.server_close()
 
-    numThreads = 8
+    numThreads = 10
     threadArr = []
     for i in range(numThreads):
         threadArr.append(Thread(i))
@@ -919,6 +931,7 @@ def show_new_gui():
 
     port_var = ctk.StringVar(value=defaultport)
     host_var = ctk.StringVar(value="")
+    multiuser_var = ctk.IntVar()
     horde_name_var = ctk.StringVar(value="koboldcpp")
     horde_gen_var = ctk.StringVar(value=maxhordelen)
     horde_context_var = ctk.StringVar(value=maxhordectx)
@@ -1098,14 +1111,16 @@ def show_new_gui():
     makelabelentry(network_tab, "Port: ", port_var, 1, 150)
     makelabelentry(network_tab, "Host: ", host_var, 2, 150)
 
-    # horde
-    makelabel(network_tab, "Horde:", 3).grid(pady=10)
+    makecheckbox(network_tab, "Multiuser Mode", multiuser_var, 3)
 
-    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 5, 180)
-    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 6, 50)
-    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 7, 50)
-    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 8, 180)
-    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 9, 180)
+    # horde
+    makelabel(network_tab, "Horde:", 5).grid(pady=10)
+
+    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 7, 180)
+    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 8, 50)
+    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 9, 50)
+    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 10, 180)
+    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 11, 180)
 
     def togglehorde(a,b,c):
         labels = [horde_name_label, horde_gen_label, horde_context_label, horde_apikey_label, horde_workername_label]
@@ -1120,7 +1135,7 @@ def show_new_gui():
             basefile = os.path.basename(model_var.get())
             horde_name_var.set(os.path.splitext(basefile)[0])
 
-    makecheckbox(network_tab, "Configure for Horde", usehorde_var, 4, command=togglehorde)
+    makecheckbox(network_tab, "Configure for Horde", usehorde_var, 6, command=togglehorde)
     togglehorde(1,1,1)
 
     # launch
@@ -1191,6 +1206,7 @@ def show_new_gui():
 
         args.port_param = defaultport if port_var.get()=="" else int(port_var.get())
         args.host = host_var.get()
+        args.multiuser = multiuser_var.get() == 1
 
         if horde_apikey_var.get()=="" or horde_workername_var.get()=="":
             args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get()]
@@ -1279,6 +1295,8 @@ def show_new_gui():
 
         if "host" in dict and dict["host"]:
             host_var.set(dict["host"])
+
+        multiuser_var.set(1 if "multiuser" in dict and dict["multiuser"] else 0)
 
         if "hordeconfig" in dict and dict["hordeconfig"] and len(dict["hordeconfig"]) > 1:
             horde_name_var.set(dict["hordeconfig"][0])
@@ -1841,5 +1859,6 @@ if __name__ == '__main__':
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
     parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
+    parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them. Polled-streaming is disabled while multiple requests are in queue.", action='store_true')
 
     main(parser.parse_args(),start_server=True)

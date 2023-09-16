@@ -37,7 +37,7 @@ class model_backend(InferenceModel):
         super().__init__()
 
     def is_valid(self, model_name, model_path, menu_path):
-        return "ggml" in model_name.lower()
+        return ("ggml" in model_name.lower() or "gguf" in model_name.lower())
 
     def get_requested_parameters(self, model_name, model_path, menu_path, parameters = {}):
         self.filename = model_name #model_path is null, name is path for some reason
