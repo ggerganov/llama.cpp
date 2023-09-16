@@ -691,7 +691,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
             const struct rwkv_file_header & header = rwkv_ctx_v3->instance->model.header;
             const size_t n_vocab = header.n_vocab;
-            printf("\nDetected Vocab: %d",n_vocab);
+            printf("\nDetected Vocab: %zu",n_vocab);
             if(n_vocab>60000)
             {
                 printf("\nUsing WORLD TOKENIZER");
@@ -729,7 +729,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             auto statebufsiz = rwkv_v2_get_state_buffer_element_count(rwkv_ctx_v2) * sizeof(float) + padding;
             auto logitbufsiz = rwkv_v2_get_logits_buffer_element_count(rwkv_ctx_v2) * sizeof(float) + padding;
 
-            printf("\nRWKV old Init: State Buffer:%u, Logit Buffer:%u\n", statebufsiz, logitbufsiz);
+            printf("\nRWKV old Init: State Buffer:%lu, Logit Buffer:%lu\n", statebufsiz, logitbufsiz);
             rwkv_ctx_v2->state_out = (float *)malloc(statebufsiz);
             rwkv_ctx_v2->logits_out = (float *)malloc(logitbufsiz);
             rwkv_ctx_v2->state_in = nullptr;
@@ -757,7 +757,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             auto statebufsiz = rwkv_get_state_buffer_element_count(rwkv_ctx_v3) * sizeof(float) + padding;
             auto logitbufsiz = rwkv_get_logits_buffer_element_count(rwkv_ctx_v3) * sizeof(float) + padding;
 
-            printf("\nRWKV Init: State Buffer:%u, Logit Buffer:%u\n", statebufsiz, logitbufsiz);
+            printf("\nRWKV Init: State Buffer:%lu, Logit Buffer:%lu\n", statebufsiz, logitbufsiz);
             rwkv_ctx_v3->state_out = (float *)malloc(statebufsiz);
             rwkv_ctx_v3->logits_out = (float *)malloc(logitbufsiz);
             rwkv_ctx_v3->state_in = nullptr;
@@ -1284,7 +1284,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     //prepare banned tokens
     if(banned_token_ids.size()==0 && banned_tokens.size()>0)
     {
-        printf("\n[First Run] Banning %d token sequences...",banned_tokens.size());
+        printf("\n[First Run] Banning %zu token sequences...",banned_tokens.size());
         for(int v=0;v<n_vocab;++v)
         {
             std::string word = FileFormatTokenizeID(v,file_format);
@@ -1297,7 +1297,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 }
             }
         }
-        printf("\nBanned a total of %d tokens.\n",banned_token_ids.size());
+        printf("\nBanned a total of %zu tokens.\n",banned_token_ids.size());
     }
 
     if(debugmode!=-1)
@@ -1337,7 +1337,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         //print progress
         if (!startedsampling && debugmode!=-1)
         {
-            printf("\rProcessing Prompt%s (%d / %d tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp.size());
+            printf("\rProcessing Prompt%s (%d / %zu tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp.size());
         }
         fflush(stdout);
 

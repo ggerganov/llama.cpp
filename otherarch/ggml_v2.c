@@ -1,6 +1,3 @@
-// Defines CLOCK_MONOTONIC on Linux
-#define _GNU_SOURCE
-
 #include "ggml_v2.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)

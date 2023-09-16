@@ -243,10 +243,9 @@ extern "C" {
     // Various functions for loading a ggml llama model.
     // Allocate (almost) all memory needed for the model.
     // Return NULL on failure
-    LLAMA_V3_API DEPRECATED(struct llama_v3_context * llama_v3_init_from_file(
+    LLAMA_V3_API struct llama_v3_context * llama_v3_init_from_file(
                              const char * path_model,
-            struct llama_v3_context_params   params),
-            "please use llama_v3_load_model_from_file combined with llama_v3_new_context_with_model instead");
+            struct llama_v3_context_params   params);
 
     // Frees all allocated memory
     LLAMA_V3_API void llama_v3_free(struct llama_v3_context * ctx);
@@ -263,12 +262,11 @@ extern "C" {
     // The model needs to be reloaded before applying a new adapter, otherwise the adapter
     // will be applied on top of the previous one
     // Returns 0 on success
-    LLAMA_V3_API DEPRECATED(int llama_v3_apply_lora_from_file(
+    LLAMA_V3_API int llama_v3_apply_lora_from_file(
             struct llama_v3_context * ctx,
                       const char * path_lora,
                       const char * path_base_model,
-                             int   n_threads),
-            "please use llama_v3_model_apply_lora_from_file instead");
+                             int   n_threads);
 
     LLAMA_V3_API int llama_v3_model_apply_lora_from_file(
             const struct llama_v3_model * model,

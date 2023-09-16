@@ -150,7 +150,7 @@ ModelLoadResult gpt2_v2_model_load(const std::string & fname, gpt2_v2_model & mo
         params.mem_size   = ctx_size;
         params.mem_buffer = NULL;
         params.no_alloc   = false;
-       
+
 
         model.ctx = ggml_v2_init(params);
         if (!model.ctx) {
@@ -237,7 +237,7 @@ ModelLoadResult gpt2_v2_model_load(const std::string & fname, gpt2_v2_model & mo
 
         const int n_mem      = n_layer*n_ctx;
         const int n_elements = n_embd*n_mem;
-       
+
         model.memory_k = ggml_v2_new_tensor_1d(ctx, memory_type, n_elements*1.5);
         model.memory_v = ggml_v2_new_tensor_1d(ctx, memory_type, n_elements*1.5);
 
@@ -287,7 +287,7 @@ ModelLoadResult gpt2_v2_model_load(const std::string & fname, gpt2_v2_model & mo
             }
 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
-                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%lld, %lld], expected [%lld, %lld]\n",
+                fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%ld, %ld], expected [%d, %d]\n",
                         __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
                 return ModelLoadResult::FAIL;
             }
@@ -379,7 +379,7 @@ bool gpt2_v2_eval(
     params.mem_size   = buf_size;
     params.mem_buffer = buf;
     params.no_alloc   = false;
-    
+
 
     struct ggml_v2_context * ctx0 = ggml_v2_init(params);
     struct ggml_v2_cgraph gf = {};

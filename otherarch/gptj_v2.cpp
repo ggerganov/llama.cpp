@@ -150,7 +150,7 @@ ModelLoadResult gptj_v2_model_load(const std::string & fname, gptj_v2_model & mo
         params.mem_size   = ctx_size;
         params.mem_buffer = NULL;
         params.no_alloc   = false;
-        
+
 
         model.ctx = ggml_v2_init(params);
         if (!model.ctx) {
@@ -281,7 +281,7 @@ ModelLoadResult gptj_v2_model_load(const std::string & fname, gptj_v2_model & mo
                 fprintf(stderr, "%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
                 return ModelLoadResult::FAIL;
             }
-          
+
 
             if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1]) {
 
@@ -294,11 +294,11 @@ ModelLoadResult gptj_v2_model_load(const std::string & fname, gptj_v2_model & mo
                 }
                 else
                 {
-                    fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%d, %d], expected [%d, %d]\n",
+                    fprintf(stderr, "%s: tensor '%s' has wrong shape in model file: got [%ld, %ld], expected [%d, %d]\n",
                             __func__, name.data(), tensor->ne[0], tensor->ne[1], ne[0], ne[1]);
                     return ModelLoadResult::FAIL;
                 }
-               
+
             }
 
             // for debugging
@@ -387,7 +387,7 @@ bool gptj_v2_eval(
     params.mem_size   = buf_size;
     params.mem_buffer = buf;
     params.no_alloc   = false;
-    
+
 
     struct ggml_v2_context * ctx0 = ggml_v2_init(params);
     struct ggml_v2_cgraph gf = {};
