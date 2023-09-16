@@ -151,7 +151,6 @@ struct my_llama_lora {
 };
 
 // gguf constants
-static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
 static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
 static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
 
@@ -1085,7 +1084,7 @@ struct llama_file {
             die_fmt("read error: %s", strerror(errno));
         }
         if (ret != 1) {
-            die_fmt("unexpectedly reached end of file");
+            die("unexpectedly reached end of file");
         }
     }
 
@@ -1599,18 +1598,18 @@ int main(int argc, char ** argv) {
     }
     lora.hparams.lora_r                = params.lora_r;
     lora.hparams.lora_alpha            = params.custom_lora_alpha            ? params.lora_alpha            : params.lora_r;
-    int n_rank_attention_norm          = params.custom_n_rank_attention_norm ? params.n_rank_attention_norm : 1;
-    int n_rank_wq                      = params.custom_n_rank_wq             ? params.n_rank_wq             : params.lora_r;
-    int n_rank_wk                      = params.custom_n_rank_wk             ? params.n_rank_wk             : params.lora_r;
-    int n_rank_wv                      = params.custom_n_rank_wv             ? params.n_rank_wv             : params.lora_r;
-    int n_rank_wo                      = params.custom_n_rank_wo             ? params.n_rank_wo             : params.lora_r;
-    int n_rank_ffn_norm                = params.custom_n_rank_ffn_norm       ? params.n_rank_ffn_norm       : 1;
-    int n_rank_w1                      = params.custom_n_rank_w1             ? params.n_rank_w1             : params.lora_r;
-    int n_rank_w2                      = params.custom_n_rank_w2             ? params.n_rank_w2             : params.lora_r;
-    int n_rank_w3                      = params.custom_n_rank_w3             ? params.n_rank_w3             : params.lora_r;
-    int n_rank_tok_embeddings          = params.custom_n_rank_tok_embeddings ? params.n_rank_tok_embeddings : params.lora_r;
-    int n_rank_norm                    = params.custom_n_rank_norm           ? params.n_rank_norm           : 1;
-    int n_rank_output                  = params.custom_n_rank_output         ? params.n_rank_output         : params.lora_r;
+    uint32_t n_rank_attention_norm          = params.custom_n_rank_attention_norm ? params.n_rank_attention_norm : 1;
+    uint32_t n_rank_wq                      = params.custom_n_rank_wq             ? params.n_rank_wq             : params.lora_r;
+    uint32_t n_rank_wk                      = params.custom_n_rank_wk             ? params.n_rank_wk             : params.lora_r;
+    uint32_t n_rank_wv                      = params.custom_n_rank_wv             ? params.n_rank_wv             : params.lora_r;
+    uint32_t n_rank_wo                      = params.custom_n_rank_wo             ? params.n_rank_wo             : params.lora_r;
+    uint32_t n_rank_ffn_norm                = params.custom_n_rank_ffn_norm       ? params.n_rank_ffn_norm       : 1;
+    uint32_t n_rank_w1                      = params.custom_n_rank_w1             ? params.n_rank_w1             : params.lora_r;
+    uint32_t n_rank_w2                      = params.custom_n_rank_w2             ? params.n_rank_w2             : params.lora_r;
+    uint32_t n_rank_w3                      = params.custom_n_rank_w3             ? params.n_rank_w3             : params.lora_r;
+    uint32_t n_rank_tok_embeddings          = params.custom_n_rank_tok_embeddings ? params.n_rank_tok_embeddings : params.lora_r;
+    uint32_t n_rank_norm                    = params.custom_n_rank_norm           ? params.n_rank_norm           : 1;
+    uint32_t n_rank_output                  = params.custom_n_rank_output         ? params.n_rank_output         : params.lora_r;
     lora.hparams.n_rank_attention_norm = n_rank_attention_norm;
     lora.hparams.n_rank_wq             = n_rank_wq;
     lora.hparams.n_rank_wk             = n_rank_wk;

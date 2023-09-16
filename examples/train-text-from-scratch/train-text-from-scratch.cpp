@@ -69,7 +69,6 @@ struct my_llama_model {
 
 // gguf constants (sync with gguf.py)
 static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
-static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
 static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
 
 static const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
