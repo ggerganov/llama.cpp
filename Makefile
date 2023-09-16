@@ -95,16 +95,19 @@ CXXV := $(shell $(CXX) --version | head -n 1)
 #
 
 # keep standard at C11 and C++11
+MK_CPPFLAGS = -I. -Icommon
+MK_CFLAGS   = -std=c11   -fPIC
+MK_CXXFLAGS = -std=c++11 -fPIC
+
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
-OPT = -Ofast
+MK_CFLAGS        += -Ofast
+MK_HOST_CXXFLAGS += -Ofast
+MK_CUDA_CXXFLAGS += -O3
 else
-OPT = -O3
+MK_CFLAGS        += -O3
+MK_CXXFLAGS      += -O3
 endif
-MK_CPPFLAGS = -I. -Icommon
-MK_CFLAGS   = $(OPT) -std=c11   -fPIC
-MK_CXXFLAGS = $(OPT) -std=c++11 -fPIC
-MK_LDFLAGS  =
 
 # clock_gettime came in POSIX.1b (1993)
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
@@ -232,7 +235,7 @@ ifndef RISCV
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
 	MK_CFLAGS   += -march=native -mtune=native
-	MK_CXXFLAGS += -march=native -mtune=native
+	MK_HOST_CXXFLAGS += -march=native -mtune=native
 
 	# Usage AVX-only
 	#MK_CFLAGS   += -mfma -mf16c -mavx
@@ -372,7 +375,7 @@ ifdef LLAMA_CUDA_CCBIN
 	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) $(subst -Ofast,-O3,$(CXXFLAGS)) -Wno-pedantic -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) -Wno-pedantic -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -440,23 +443,30 @@ k_quants.o: k_quants.c k_quants.h
 endif # LLAMA_NO_K_QUANTS
 
 # combine build flags with cmdline overrides
-override CFLAGS   := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
-override CXXFLAGS := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
-override LDFLAGS  := $(MK_LDFLAGS) $(LDFLAGS)
+override CFLAGS        := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
+override CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
+override CUDA_CXXFLAGS := $(MK_CUDA_CXXFLAGS) $(CUDA_CXXFLAGS)
+override HOST_CXXFLAGS := $(MK_HOST_CXXFLAGS) $(HOST_CXXFLAGS)
+override LDFLAGS       := $(MK_LDFLAGS) $(LDFLAGS)
+
+# save CXXFLAGS before we add host-only options
+NVCCFLAGS := $(NVCCFLAGS) $(CXXFLAGS) $(CUDA_CXXFLAGS) -Wno-pedantic -Xcompiler "$(HOST_CXXFLAGS)"
+override CXXFLAGS += $(HOST_CXXFLAGS)
 
 #
 # Print build information
 #
 
 $(info I llama.cpp build info: )
-$(info I UNAME_S:  $(UNAME_S))
-$(info I UNAME_P:  $(UNAME_P))
-$(info I UNAME_M:  $(UNAME_M))
-$(info I CFLAGS:   $(CFLAGS))
-$(info I CXXFLAGS: $(CXXFLAGS))
-$(info I LDFLAGS:  $(LDFLAGS))
-$(info I CC:       $(CCV))
-$(info I CXX:      $(CXXV))
+$(info I UNAME_S:   $(UNAME_S))
+$(info I UNAME_P:   $(UNAME_P))
+$(info I UNAME_M:   $(UNAME_M))
+$(info I CFLAGS:    $(CFLAGS))
+$(info I CXXFLAGS:  $(CXXFLAGS))
+$(info I NVCCFLAGS: $(NVCCFLAGS))
+$(info I LDFLAGS:   $(LDFLAGS))
+$(info I CC:        $(CCV))
+$(info I CXX:       $(CXXV))
 $(info )
 
 #
