@@ -1115,7 +1115,11 @@ void print_common_train_usage(int /*argc*/, char ** argv, const struct train_par
 
 bool consume_common_train_arg(int argc, char ** argv, int * idx, struct train_params_common * params, bool * invalid_param) {
     int& i = *idx;
-    char * arg = argv[i];
+    std::string arg = argv[i];
+    const std::string arg_prefix = "--";
+    if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        std::replace(arg.begin(), arg.end(), '_', '-');
+    }
     if (arg == "--train-data") {
         if (++i >= argc) {
             *invalid_param = true;

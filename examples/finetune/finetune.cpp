@@ -514,8 +514,6 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
     ggml_allocr_free(alloc);
 }
 
-
-
 static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, float std, float min, float max) {
     const uint32_t n_layer = lora->layers.size();
 
