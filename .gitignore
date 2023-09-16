@@ -84,3 +84,7 @@ tests/test-tokenizer-0
 /koboldcpp_cublas.dll
 /cublas64_11.dll
 /cublasLt64_11.dll
+/rocblas/
+rocblas.dll
+hipblas.dll
+koboldcpp_hipblas.so

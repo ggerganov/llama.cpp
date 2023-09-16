@@ -103,6 +103,7 @@ lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.s
 lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
 lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
 lib_cublas = pick_existant_file("koboldcpp_cublas.dll","koboldcpp_cublas.so")
+lib_hipblas = pick_existant_file("koboldcpp_hipblas.dll","koboldcpp_hipblas.so")
 
 
 def init_library():
@@ -113,6 +114,7 @@ def init_library():
     use_openblas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
     use_clblast = False #uses CLBlast instead
     use_cublas = False #uses cublas instead
+    use_hipblas = False #uses hipblas instead
     use_noavx2 = False #uses no avx2 instructions
     use_failsafe = False #uses no intrinsics, failsafe mode
     if args.noavx2:
@@ -131,11 +133,16 @@ def init_library():
             print("Attempting to use CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
             use_clblast = True
     elif (args.usecublas is not None):
-        if not file_exists(lib_cublas):
+        if not file_exists(lib_cublas) and not file_exists(lib_hipblas):
             print("Warning: CuBLAS library file not found. Non-BLAS library will be used.")
         else:
-            print("Attempting to use CuBLAS library for faster prompt ingestion. A compatible CuBLAS will be required.")
-            use_cublas = True
+            if file_exists(lib_cublas):
+                print("Attempting to use CuBLAS library for faster prompt ingestion. A compatible CuBLAS will be required.")
+                use_cublas = True
+            elif file_exists(lib_hipblas):
+                print("Attempting to use hipBLAS library for faster prompt ingestion. A compatible AMD GPU will be required.")
+                use_hipblas = True
+
     else:
         if not file_exists(lib_openblas) or (os.name=='nt' and not file_exists("libopenblas.dll")):
             print("Warning: OpenBLAS library file not found. Non-BLAS library will be used.")
@@ -157,6 +164,8 @@ def init_library():
             libname = lib_clblast
         elif use_cublas:
             libname = lib_cublas
+        elif use_hipblas:
+            libname = lib_hipblas
         elif use_openblas:
             libname = lib_openblas
         else:
@@ -766,10 +775,11 @@ def show_new_gui():
         (lib_openblas, "Use OpenBLAS"),
         (lib_clblast, "Use CLBlast"),
         (lib_cublas, "Use CuBLAS"),
+        (lib_hipblas, "Use hipBLAS (ROCm)"),
         (lib_default, "Use No BLAS"),
         (lib_noavx2, "NoAVX2 Mode (Old CPU)"),
         (lib_failsafe, "Failsafe Mode (Old CPU)")]
-    openblas_option, clblast_option, cublas_option, default_option, noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
+    openblas_option, clblast_option, cublas_option, hipblas_option, default_option, noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
     # slider data
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024", "2048"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024","2048"]
@@ -922,7 +932,7 @@ def show_new_gui():
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
-        if index == "Use CLBlast" or index == "Use CuBLAS":
+        if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             if index == "Use CLBlast":
@@ -930,7 +940,7 @@ def show_new_gui():
                 quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 if gpu_choice_var.get()=="All":
                     gpu_choice_var.set("1")
-            elif index == "Use CuBLAS":
+            elif index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
                 CUDA_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 CUDA_quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
         else:
@@ -941,7 +951,7 @@ def show_new_gui():
             quick_gpu_selector_box.grid_forget()
             CUDA_quick_gpu_selector_box.grid_forget()
 
-        if index == "Use CuBLAS":
+        if index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             quick_lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
@@ -952,7 +962,7 @@ def show_new_gui():
             mmq_box.grid_forget()
             quick_mmq_box.grid_forget()
 
-        if index == "Use CLBlast" or index == "Use CuBLAS":
+        if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
@@ -1147,7 +1157,7 @@ def show_new_gui():
             gpuchoiceidx = int(gpu_choice_var.get())-1
         if runopts_var.get() == "Use CLBlast":
             args.useclblast = [[0,0], [1,0], [0,1], [1,1]][gpuchoiceidx]
-        if runopts_var.get() == "Use CuBLAS":
+        if runopts_var.get() == "Use CuBLAS" or runopts_var.get() == "Use hipBLAS (ROCm)":
             if gpu_choice_var.get()=="All":
                 args.usecublas = ["lowvram"] if lowvram_var.get() == 1 else ["normal"]
             else:
@@ -1204,8 +1214,11 @@ def show_new_gui():
                 runopts_var.set(clblast_option)
                 gpu_choice_var.set(str(["0 0", "1 0", "0 1", "1 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
         elif "usecublas" in dict and dict["usecublas"]:
-            if cublas_option is not None:
-                runopts_var.set(cublas_option)
+            if cublas_option is not None or hipblas_option is not None:
+                if cublas_option:
+                    runopts_var.set(cublas_option)
+                elif hipblas_option:
+                    runopts_var.set(cublas_option)
                 lowvram_var.set(1 if "lowvram" in dict["usecublas"] else 0)
                 mmq_var.set(1 if "mmq" in dict["usecublas"] else 0)
                 gpu_choice_var.set("All")

@@ -124,7 +124,12 @@ if (LLAMA_CUBLAS)
 endif()
 
 if (LLAMA_HIPBLAS)
-    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+    if (MSVC)
+        list(APPEND CMAKE_PREFIX_PATH "C:/Program Files/AMD/ROCm/5.5")
+    else()
+        list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+    endif()
+
 
     if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
         message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
@@ -387,16 +392,29 @@ target_compile_features(gpttype_adapter PUBLIC cxx_std_11) # don't bump
 target_link_libraries(gpttype_adapter PRIVATE common2 ggml ${LLAMA_EXTRA_LIBS})
 set_target_properties(gpttype_adapter PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+if (LLAMA_CUBLAS)
+    set(TARGET koboldcpp_cublas)
+    add_library(${TARGET} SHARED expose.cpp expose.h)
+    target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
+    target_compile_features(${TARGET} PUBLIC cxx_std_11) # don't bump
+    set_target_properties(${TARGET} PROPERTIES PREFIX "")
+    set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_cublas")
+    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_link_libraries(${TARGET} PUBLIC Threads::Threads ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${LLAMA_EXTRA_LIBS})
+    target_compile_features(${TARGET} PRIVATE cxx_std_11)
+endif()
 
-set(TARGET koboldcpp_cublas)
-add_library(${TARGET} SHARED expose.cpp expose.h)
-target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
-target_compile_features(${TARGET} PUBLIC cxx_std_11) # don't bump
-set_target_properties(${TARGET} PROPERTIES PREFIX "")
-set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_cublas")
-set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(${TARGET} PUBLIC Threads::Threads ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${LLAMA_EXTRA_LIBS})
-target_compile_features(${TARGET} PRIVATE cxx_std_11)
+if (LLAMA_HIPBLAS)
+    set(TARGET koboldcpp_hipblas)
+    add_library(${TARGET} SHARED expose.cpp expose.h)
+    target_include_directories(${TARGET} PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
+    target_compile_features(${TARGET} PUBLIC cxx_std_11) # don't bump
+    set_target_properties(${TARGET} PROPERTIES PREFIX "")
+    set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "koboldcpp_hipblas")
+    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_link_libraries(${TARGET} PUBLIC Threads::Threads ggml ggml_v1 ggml_v2 common2 gpttype_adapter ${LLAMA_EXTRA_LIBS})
+    target_compile_features(${TARGET} PRIVATE cxx_std_11)
+endif()
 
 
 if (MAKE_MISC_FILES)
