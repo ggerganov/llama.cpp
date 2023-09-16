@@ -497,15 +497,11 @@ static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.
 static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
 static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
 
-static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
-static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
-static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
 static const char * LLM_KV_TRAINING_FILE_VERSION         = "training.file_version";
 static const char * LLM_KV_TRAINING_ITERATION_COUNT      = "training.iteration_count";
 static const char * LLM_KV_TRAINING_SAMPLE_COUNT         = "training.sample_count";
 static const char * LLM_KV_TRAINING_TOKEN_COUNT          = "training.token_count";
 static const char * LLM_KV_TRAINING_EPOCH_COUNT          = "training.epoch_count";
-static const char * LLM_KV_TRAINING_SAMPLES_HASH         = "training.samples_hash";
 static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
 static const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
 static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
@@ -661,10 +657,6 @@ bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_g
     GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
     GGML_ASSERT(file_version <= 1);
 
-    std::string train_type = LLM_KV_TRAINING_TYPE_FINETUNE_LORA;
-    GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
-    GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
-
     if (file_version == 0) {
 
         GGUF_GET_KEY(fctx, train->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
@@ -690,7 +682,6 @@ bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_g
 
 void save_train_state_gguf(struct gguf_context * fctx, struct train_state * train) {
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    1);
-    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
     gguf_set_val_u64(fctx, LLM_KV_TRAINING_ITERATION_COUNT, train->train_its);
     gguf_set_val_u64(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    train->train_samples);
     gguf_set_val_u64(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     train->train_tokens);

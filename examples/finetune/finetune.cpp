@@ -151,6 +151,10 @@ struct my_llama_lora {
 };
 
 // gguf constants
+static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
+static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
+static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
+
 static const char * LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD  = "training.lora.rank.token_embd";
 static const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM = "training.lora.rank.output_norm";
 static const char * LLM_KV_TRAINING_LORA_RANK_OUTPUT      = "training.lora.rank.output";
@@ -994,11 +998,16 @@ static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_mod
 }
 
 static void load_checkpoint_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora, struct train_state * train) {
-    load_llama_lora_gguf(fctx, f_ggml_ctx, model, lora);
+    std::string train_type = LLM_KV_TRAINING_TYPE_FINETUNE_LORA;
+    GGUF_GET_KEY(fctx, train_type, gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
+    GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
+
     load_train_state_gguf(fctx, f_ggml_ctx, train);
+    load_llama_lora_gguf(fctx, f_ggml_ctx, model, lora);
 }
 
 static void save_checkpoint_lora_gguf(struct gguf_context * fctx, struct my_llama_model * model, struct my_llama_lora * lora, struct train_state * train) {
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE, LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
     save_llama_lora_gguf(fctx, model, lora);
     save_train_state_gguf(fctx, train);
 }

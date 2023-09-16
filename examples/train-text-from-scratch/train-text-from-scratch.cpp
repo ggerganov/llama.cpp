@@ -68,6 +68,9 @@ struct my_llama_model {
 };
 
 // gguf constants (sync with gguf.py)
+static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
+static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
+static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
 
 static const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
 static const char * LLM_KV_GENERAL_FILE_TYPE           = "general.file_type";
@@ -654,12 +657,17 @@ static void save_llama_model_file(const char * filename, const char * fn_vocab_m
 
 static void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct train_state * train) {
     load_llama_model_gguf(fctx, f_ggml_ctx, model);
-    if (!load_train_state_gguf(fctx, f_ggml_ctx, train)) {
+    if (load_train_state_gguf(fctx, f_ggml_ctx, train)) {
+        std::string train_type = LLM_KV_TRAINING_TYPE_TRAIN_MODEL;
+        GGUF_GET_KEY(fctx, train_type, gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
+        GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
+    } else {
         printf("%s: loaded llama model as checkpoint\n", __func__);
     }
 }
 
 static void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_vocab_model, struct my_llama_model * model, struct train_state * train) {
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE, LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
     save_llama_model_gguf(fctx, fn_vocab_model, model);
     save_train_state_gguf(fctx, train);
 }
