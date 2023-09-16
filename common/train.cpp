@@ -1001,3 +1001,8 @@ size_t tokenize_file(
 
     return out_tokens.size();
 }
+
+std::string get_train_filename(const char * filename, const char * pattern_it, const char * latest, int64_t iteration) {
+    std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
+    return replace_str(filename, pattern_it, sit.c_str());
+}

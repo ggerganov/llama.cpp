@@ -133,3 +133,6 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
 bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct train_state * train);
 void save_train_state_gguf(struct gguf_context * fctx, struct train_state * train);
 
+std::string get_train_filename(const char * filename, const char * pattern_it, const char * latest, int64_t iteration);
+
+typedef void (*save_train_files_callback)(void * data, struct train_state * train);

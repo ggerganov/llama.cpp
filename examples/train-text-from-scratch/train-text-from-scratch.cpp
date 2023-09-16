@@ -640,17 +640,15 @@ static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vo
     }
 }
 
-static void save_llama_model_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model, const char * pattern_it, int iteration, const char * latest) {
-    std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
-    std::string fn = replace_str(filename, pattern_it, sit.c_str());
-    printf("%s: saving to %s\n", __func__, fn.c_str());
+static void save_llama_model_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model) {
+    printf("%s: saving to %s\n", __func__, filename);
     struct gguf_context * fctx = gguf_init_empty();
 
     save_llama_model_gguf(fctx, fn_vocab_model, model);
 
     // write file
     const bool only_meta = false;
-    gguf_write_to_file(fctx, fn.c_str(), only_meta);
+    gguf_write_to_file(fctx, filename, only_meta);
     gguf_free(fctx);
 }
 
@@ -681,17 +679,15 @@ static bool load_checkpoint_file(const char * filename, struct my_llama_model * 
     return true;
 }
 
-static void save_checkpoint_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model, struct train_state * train, const char * pattern_it, int iteration, const char * latest) {
-    std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
-    std::string fn = replace_str(filename, pattern_it, sit.c_str());
-    printf("%s: saving to %s\n", __func__, fn.c_str());
+static void save_checkpoint_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model, struct train_state * train) {
+    printf("%s: saving to %s\n", __func__, filename);
     struct gguf_context * fctx = gguf_init_empty();
 
     save_checkpoint_gguf(fctx, fn_vocab_model, model, train);
 
     // write file
     const bool only_meta = false;
-    gguf_write_to_file(fctx, fn.c_str(), only_meta);
+    gguf_write_to_file(fctx, filename, only_meta);
     gguf_free(fctx);
 }
 
@@ -1220,25 +1216,50 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
     return true;
 }
 
-struct opt_callback_data {
-    struct train_params   * params;
-    struct train_state    * train;
+struct save_train_files_data {
+    const char            * fn_checkpoint_out;
+    const char            * fn_model_out;
+    const char            * fn_vocab_model;
+    const char            * pattern_fn_it;
+    const char            * fn_latest;
     struct my_llama_model * model;
-    struct llama_context  * lctx;
-    int                     last_save_iter;
-    llama_token           * tokens_data;
-    size_t                  tokens_size;
-    size_t                * samples_begin;
-    size_t                * samples_size;
-    size_t                * shuffled_samples_begin;
-    size_t                * shuffled_samples_size;
-    size_t                  samples_count;
-    struct ggml_tensor    * tokens_input;
-    struct ggml_tensor    * target_logits;
-    struct ggml_tensor    * target_probs;
-    int                     first_iter;
-    int64_t                 last_time;
-    double                  millis_per_iter;
+};
+
+static void save_train_files(void * vdata, struct train_state * train) {
+    struct save_train_files_data * data   = (struct save_train_files_data *) vdata;
+    int64_t iter = train->opt->iter;
+
+    if (strlen(data->fn_checkpoint_out) > 0) {
+        save_checkpoint_file(get_train_filename(data->fn_checkpoint_out, data->pattern_fn_it, data->fn_latest, iter).c_str(), data->fn_vocab_model, data->model, train);
+        save_checkpoint_file(get_train_filename(data->fn_checkpoint_out, data->pattern_fn_it, data->fn_latest, -1  ).c_str(), data->fn_vocab_model, data->model, train);
+
+    }
+    if (strlen(data->fn_model_out) > 0) {
+        save_llama_model_file(get_train_filename(data->fn_model_out, data->pattern_fn_it, data->fn_latest, iter).c_str(), data->fn_vocab_model, data->model);
+        save_llama_model_file(get_train_filename(data->fn_model_out, data->pattern_fn_it, data->fn_latest, -1  ).c_str(), data->fn_vocab_model, data->model);
+    }
+}
+
+struct opt_callback_data {
+    struct train_params       * params;
+    struct train_state        * train;
+    save_train_files_callback   save_cb;
+    void                      * save_data;
+    struct llama_context      * lctx;
+    int                         last_save_iter;
+    llama_token               * tokens_data;
+    size_t                      tokens_size;
+    size_t                    * samples_begin;
+    size_t                    * samples_size;
+    size_t                    * shuffled_samples_begin;
+    size_t                    * shuffled_samples_size;
+    size_t                      samples_count;
+    struct ggml_tensor        * tokens_input;
+    struct ggml_tensor        * target_logits;
+    struct ggml_tensor        * target_probs;
+    int                         first_iter;
+    int64_t                     last_time;
+    double                      millis_per_iter;
 };
 
 static void opt_callback(void * vdata, int accum_step, float * sched) {
@@ -1278,15 +1299,10 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
             train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
             train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
 
-            if (strlen(params->fn_checkpoint_out) > 0) {
-                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, train, params->pattern_fn_it, opt->iter, params->fn_latest);
-                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, train, params->pattern_fn_it, -1, params->fn_latest);
+            if (data->save_cb) {
+                data->save_cb(data->save_data, train);
+            }
 
-            }
-            if (strlen(params->fn_model_out) > 0) {
-                save_llama_model_file(params->fn_model_out, params->fn_vocab_model, data->model, params->pattern_fn_it, opt->iter, params->fn_latest);
-                save_llama_model_file(params->fn_model_out, params->fn_vocab_model, data->model, params->pattern_fn_it, -1, params->fn_latest);
-            }
             data->last_save_iter = opt->iter;
         }
 
@@ -1508,14 +1524,23 @@ int main(int argc, char ** argv) {
         train_samples_size.size());
     printf("%s: begin training\n", __func__);
 
+    save_train_files_data save_data;
+    save_data.fn_checkpoint_out = params.fn_checkpoint_out;
+    save_data.fn_model_out      = params.fn_model_out;
+    save_data.fn_vocab_model    = params.fn_vocab_model;
+    save_data.pattern_fn_it     = params.pattern_fn_it;
+    save_data.fn_latest         = params.fn_latest;
+    save_data.model             = &model;
+
     struct opt_callback_data opt_cb_data;
-    opt_cb_data.params = &params;
-    opt_cb_data.train = train;
-    opt_cb_data.model = &model;
-    opt_cb_data.lctx = lctx;
-    opt_cb_data.last_save_iter = opt->iter;
-    opt_cb_data.tokens_data = train_tokens.data();
-    opt_cb_data.tokens_size = train_tokens.size();
+    opt_cb_data.params                 = &params;
+    opt_cb_data.train                  = train;
+    opt_cb_data.save_cb                = &save_train_files;
+    opt_cb_data.save_data              = &save_data;
+    opt_cb_data.lctx                   = lctx;
+    opt_cb_data.last_save_iter         = opt->iter;
+    opt_cb_data.tokens_data            = train_tokens.data();
+    opt_cb_data.tokens_size            = train_tokens.size();
     opt_cb_data.samples_begin          = train_samples_begin.data();
     opt_cb_data.samples_size           = train_samples_size.data();
     opt_cb_data.shuffled_samples_begin = train_shuffled_samples_begin.data();
@@ -1620,21 +1645,14 @@ int main(int argc, char ** argv) {
     printf("%s: total training time=%f seconds\n", __func__, dd);
 
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
-    train->train_its += new_iters;
-    train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
-    train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
+    if (new_iters > 0) {
+        train->train_its     += new_iters;
+        train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+        train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
 
-    if (params.n_examples > 0) {
-        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, train, params.pattern_fn_it, opt->iter, params.fn_latest);
-        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, train, params.pattern_fn_it, -1, params.fn_latest);
+        save_train_files(&save_data, train);
+        opt_cb_data.last_save_iter = opt->iter;
     }
-
-    if (strlen(params.fn_model_out) > 0) {
-        save_llama_model_file(params.fn_model_out, params.fn_vocab_model, &model, params.pattern_fn_it, opt->iter, params.fn_latest);
-        save_llama_model_file(params.fn_model_out, params.fn_vocab_model, &model, params.pattern_fn_it, -1, params.fn_latest);
-    }
-
-    opt_cb_data.last_save_iter = opt->iter;
 
     if (alloc) {
         ggml_allocr_free(alloc);
