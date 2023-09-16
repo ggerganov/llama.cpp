@@ -1664,12 +1664,12 @@ int main(int argc, char ** argv) {
 
         if (opt_param_count_changed) {
             print_lora_params(&lora.hparams);
-            GGML_ASSERT(!"Provided rank differs from checkpoint file. To use different rank start finetune from scratch with empty input checkpoint, e.g --checkpoint-in ''. Aborting.");
+            die("Provided rank differs from checkpoint file. To use different rank start finetune from scratch with empty input checkpoint, e.g --checkpoint-in ''. Aborting.");
             // need to discard previous optimizer gradient statistics and opt_init with new shapes
             // TODO
         }
         if (opt_past_changed) {
-            GGML_ASSERT(!"Optimizer parameter '--opt-past N' differs from checkpoint file. To use different value finetune from scratch with empty input checkpoint, e.g --checkpoint-in ''. Aborting");
+            die("Optimizer parameter '--opt-past N' differs from checkpoint file. To use different value finetune from scratch with empty input checkpoint, e.g --checkpoint-in ''. Aborting");
             // need to discard previous optimizer past function value statistics and opt_init with new shapes
             // TODO
         }

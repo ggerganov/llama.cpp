@@ -109,7 +109,7 @@ struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct
             }
             break;
         default:
-            GGML_ASSERT(!"Unsupported tensor->n_dims");
+            die("Unsupported tensor->n_dims");
     };
     return tensor;
 }
@@ -153,7 +153,7 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
             }
             break;
         default:
-            GGML_ASSERT(!"Unsupported tensor->n_dims");
+            die("Unsupported tensor->n_dims");
     };
     return tensor;
 }
@@ -581,7 +581,7 @@ void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_g
         copy_tensor_by_name(opt->lbfgs.lms,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S);
         copy_tensor_by_name(opt->lbfgs.lmy,  f_ggml_ctx, LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y);
     } else {
-        throw std::runtime_error("unknown optimizer type\n");
+        die("unknown optimizer type\n");
     }
 }
 
