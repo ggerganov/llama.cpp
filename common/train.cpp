@@ -832,10 +832,9 @@ size_t tokenize_file(
     const int n_max_tokens_overhead = 1;
 
     std::vector<char> buf;
-    buf.resize(f.size+1);
+    buf.resize(f.size);
 
     f.read_raw(buf.data(), f.size);
-    buf[f.size] = '\0';
 
     std::vector<int> utf8_units;
     std::vector<int> utf8_nunits;
@@ -879,7 +878,7 @@ size_t tokenize_file(
         }
     } else {
         // split data into samples and tokenize each sample
-        std::string data_str(buf.data(), buf.size()-1);
+        std::string data_str(buf.data(), buf.size());
         out_samples_begin.clear();
         out_samples_size.clear();
         out_tokens.clear();
@@ -944,9 +943,8 @@ size_t tokenize_file(
             if (sample_size > 0) {
                 // llama_tokenize expects zero terminated string,
                 // copy sample into buffer and zero terminate it.
-                buf_sample.resize(sample_size+1);
+                buf_sample.resize(sample_size);
                 memcpy(buf_sample.data(), data_str.data() + sample_begin, sample_size);
-                buf_sample[sample_size] = '\0';
 
                 // printf("sample: '%s'\n", buf_sample.data());
 
