@@ -131,7 +131,7 @@ static std::string ggml_vk_getVendorName(uint32_t vendorID) {
 
 std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired) {
     std::vector<ggml_vk_device> results;
-    if (!komputeManager()->hasVulkan())
+    if (!komputeManager()->hasVulkan() || !komputeManager()->hasInstance())
         return results;
 
     std::vector<vk::PhysicalDevice> physicalDevices = komputeManager()->listDevices();

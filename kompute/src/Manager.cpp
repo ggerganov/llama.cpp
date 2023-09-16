@@ -245,8 +245,15 @@ Manager::createInstance()
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
     this->mInstance = std::make_shared<vk::Instance>();
-    vk::createInstance(
+    vk::Result r = vk::createInstance(
       &computeInstanceCreateInfo, nullptr, this->mInstance.get());
+    if (r != vk::Result::eSuccess) {
+        KP_LOG_ERROR(
+          "Kompute Manager Error allocating vulkan instance", vk::to_string(r));
+        this->mInstance = nullptr;
+        this->mFreeInstance = false;
+        return;
+    }
 
     VULKAN_HPP_DEFAULT_DISPATCHER.init(*this->mInstance);
 
