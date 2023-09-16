@@ -1016,7 +1016,7 @@ struct train_params_common get_default_train_params_common() {
     params.fn_latest         = "LATEST";
 
     params.print_usage = false;
-    
+
     params.save_every = 10;
 
     params.seed       =   -1;
@@ -1327,5 +1327,120 @@ bool consume_common_train_arg(int argc, char ** argv, int * idx, struct train_pa
 void finish_processing_train_args(struct train_params_common * params) {
     if (params->escape) {
         process_escapes(params->sample_start);
+    }
+}
+
+void train_opt_callback(void * vdata, int accum_step, float * sched) {
+    struct train_opt_callback_data * data   = (struct train_opt_callback_data *) vdata;
+    struct train_params_common     * params = data->params;
+    struct train_state             * train  = data->train;
+    struct ggml_opt_context        * opt    = train->opt;
+    int n_batch = params->n_batch;
+    int n_ctx = params->n_ctx;
+
+    if (accum_step == 0) {
+        // time measurement
+        int64_t now = ggml_time_ms();
+        if (now > data->last_time && opt->iter > data->first_iter) {
+            double dt = (double) (now - data->last_time);
+            if (data->millis_per_iter == 0.0) {
+                data->millis_per_iter = dt;
+            } else {
+                const double gain = 0.7;
+                data->millis_per_iter = data->millis_per_iter*(1.0-gain) + dt*gain;
+            }
+        }
+
+        double remaining_millis = 0.0;
+        if (data->millis_per_iter > 0.0) {
+            const int n_iter = params->adam_n_iter;
+            const int done_iter = opt->iter - data->first_iter;
+            const int remaining_iter = n_iter - done_iter;
+            remaining_millis = remaining_iter * data->millis_per_iter;
+        }
+
+        // file saving
+        const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
+        if (save_now) {
+            int new_iters = opt->iter - data->last_save_iter;
+            train->train_its += new_iters;
+            train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+            train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
+
+            if (data->save_cb) {
+                data->save_cb(data->save_data, train);
+            }
+
+            data->last_save_iter = opt->iter;
+        }
+
+        // exclude file saving from time measurement, by measuring last_time after saving
+        data->last_time = ggml_time_ms();
+
+        *sched = learning_schedule(
+            opt->iter,
+            params->warmup,
+            params->cos_decay_steps,
+            params->adam_alpha,
+            params->adam_min_alpha,
+            params->cos_decay_min,
+            params->cos_decay_restart,
+            params->enable_restart);
+
+        int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
+        if (impr_plot > 0) impr_plot = 0;
+        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
+        printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
+            __func__, opt->iter, std::min(1+train->shuffle_next_sample, train->shuffle_sample_count), train->shuffle_sample_count,
+            *sched, opt->loss_after);
+
+
+        if (data->millis_per_iter > 0) {
+            printf(" dt=");
+            print_duration(data->millis_per_iter);
+            printf(" eta=");
+            print_duration(remaining_millis);
+        }
+
+        float improvement = opt->loss_before - opt->loss_after;
+        const float plot_scale = 10.0f;
+        int bar_len = (int)(1 + improvement*plot_scale + 0.5);
+        printf(" |");
+        for (int i=0; i<bar_len; ++i) {
+            printf("-");
+        }
+        printf(">");
+        printf("\n");
+    }
+
+    int64_t used_samples = get_example_targets_batch(
+        data->lctx,
+        data->tokens_input,
+        data->target_probs,
+        train->shuffle_next_sample,
+        data->shuffled_samples_begin,
+        data->shuffled_samples_size,
+        data->samples_count,
+        data->tokens_data,
+        data->tokens_size,
+        params->separate_with_eos,
+        params->separate_with_bos,
+        params->fill_with_next_samples);
+
+    train->shuffle_next_sample += used_samples;
+
+    if (train->shuffle_next_sample >= train->shuffle_sample_count) {
+        ++train->train_epochs;
+        printf("%s: reshuffle samples. completed epochs: %llu\n", __func__, (long long unsigned) train->train_epochs);
+        // note: we may have used some samples from the current shuffling more than once
+        train->shuffle_rng_state_current = train->shuffle_rng_state_next;
+        train->shuffle_rng_state_next = shuffle_samples(
+            train->shuffle_rng_state_current,
+            data->shuffled_samples_begin,
+            data->shuffled_samples_size,
+            data->samples_begin,
+            data->samples_size,
+            data->samples_count);
+        train->shuffle_next_sample = 0;
     }
 }

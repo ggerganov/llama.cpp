@@ -80,6 +80,29 @@ struct train_params_common {
     float adam_eps_f;
 };
 
+typedef void (*save_train_files_callback)(void * data, struct train_state * train);
+
+struct train_opt_callback_data {
+    struct train_params_common * params;
+    struct train_state         * train;
+    save_train_files_callback    save_cb;
+    void                       * save_data;
+    struct llama_context       * lctx;
+    int                          last_save_iter;
+    llama_token                * tokens_data;
+    size_t                       tokens_size;
+    size_t                     * samples_begin;
+    size_t                     * samples_size;
+    size_t                     * shuffled_samples_begin;
+    size_t                     * shuffled_samples_size;
+    size_t                       samples_count;
+    struct ggml_tensor         * tokens_input;
+    struct ggml_tensor         * target_probs;
+    int                          first_iter;
+    int64_t                      last_time;
+    double                       millis_per_iter;
+};
+
 struct train_state * init_train_state(int seed);
 void free_train_state(struct train_state  * state);
 
@@ -195,4 +218,4 @@ void save_train_state_gguf(struct gguf_context * fctx, struct train_state * trai
 
 std::string get_train_filename(const char * filename, const char * pattern_it, const char * latest, int64_t iteration);
 
-typedef void (*save_train_files_callback)(void * data, struct train_state * train);
+void train_opt_callback(void * vdata, int accum_step, float * sched);
