@@ -65,33 +65,7 @@ struct my_llama_model {
     struct ggml_tensor * output;
 
     std::vector<my_llama_layer> layers;
-
-    uint64_t train_its = 0;
-    uint64_t train_samples = 0;
-    uint64_t train_tokens = 0;
-    uint64_t train_epochs = 0;
-
-    size_t      shuffle_samples_hash; // fn, sample_count, *zip(sample_begins, sample_sizes)
-    std::string shuffle_rng_state_current;
-    std::string shuffle_rng_state_next;
-    size_t      shuffle_sample_count;
-    size_t      shuffle_next_sample;
 };
-
-// gguf constants
-static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
-static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
-static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
-static const char * LLM_KV_TRAINING_FILE_VERSION         = "training.file_version";
-static const char * LLM_KV_TRAINING_ITERATION_COUNT      = "training.iteration_count";
-static const char * LLM_KV_TRAINING_SAMPLE_COUNT         = "training.sample_count";
-static const char * LLM_KV_TRAINING_TOKEN_COUNT          = "training.token_count";
-static const char * LLM_KV_TRAINING_EPOCH_COUNT          = "training.epoch_count";
-static const char * LLM_KV_TRAINING_SAMPLES_HASH         = "training.samples_hash";
-static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
-static const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
-static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
-static const char * LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE  = "training.shuffle.next_sample";
 
 // gguf constants (sync with gguf.py)
 
@@ -151,11 +125,6 @@ static void init_model(struct my_llama_model * model) {
     const uint32_t n_ff    = hparams.n_ff;
 
     struct ggml_context * ctx = model->ctx;
-
-    model->train_its = 0;
-    model->train_samples = 0;
-    model->train_tokens = 0;
-    model->train_epochs = 0;
 
     std::vector<char> tn_buf;
     tn_buf.resize(GGML_MAX_NAME);
@@ -685,62 +654,19 @@ static void save_llama_model_file(const char * filename, const char * fn_vocab_m
     gguf_free(fctx);
 }
 
-static void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct ggml_opt_context * opt) {
+static void load_checkpoint_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct train_state * train) {
     load_llama_model_gguf(fctx, f_ggml_ctx, model);
-
-    if (gguf_find_key(fctx, LLM_KV_TRAINING_FILE_VERSION) >= 0) {
-        uint32_t file_version = 0xFFFFFFFFu;
-        GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
-        GGML_ASSERT(file_version <= 1);
-
-        std::string train_type = LLM_KV_TRAINING_TYPE_TRAIN_MODEL;
-        GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
-        GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
-
-        if (file_version == 0) {
-
-            GGUF_GET_KEY(fctx, model->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
-            GGUF_GET_KEY(fctx, model->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
-            GGUF_GET_KEY(fctx, model->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
-
-        } else if (file_version == 1) {
-
-            GGUF_GET_KEY(fctx, model->train_its,     gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_ITERATION_COUNT);
-            GGUF_GET_KEY(fctx, model->train_samples, gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_SAMPLE_COUNT);
-            GGUF_GET_KEY(fctx, model->train_tokens,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_TOKEN_COUNT);
-            GGUF_GET_KEY(fctx, model->train_epochs,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_EPOCH_COUNT);
-
-            GGUF_GET_KEY(fctx, model->shuffle_samples_hash,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH);
-            GGUF_GET_KEY(fctx, model->shuffle_rng_state_current, gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_SHUFFLE_RNG_STATE);
-            GGUF_GET_KEY(fctx, model->shuffle_sample_count,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT);
-            GGUF_GET_KEY(fctx, model->shuffle_next_sample,       gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE);
-        }
-
-        load_opt_context_gguf(fctx, f_ggml_ctx, opt);
-    } else {
+    if (!load_train_state_gguf(fctx, f_ggml_ctx, train)) {
         printf("%s: loaded llama model as checkpoint\n", __func__);
     }
 }
 
-static void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_vocab_model, struct my_llama_model * model, struct ggml_opt_context * opt) {
+static void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_vocab_model, struct my_llama_model * model, struct train_state * train) {
     save_llama_model_gguf(fctx, fn_vocab_model, model);
-
-    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    1);
-    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_TRAIN_MODEL);
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_ITERATION_COUNT, model->train_its);
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    model->train_samples);
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     model->train_tokens);
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_EPOCH_COUNT,     model->train_epochs);
-
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH, (uint64_t) model->shuffle_samples_hash);
-    gguf_set_val_str(fctx, LLM_KV_TRAINING_SHUFFLE_RNG_STATE,    model->shuffle_rng_state_current.c_str());
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT, (uint64_t) model->shuffle_sample_count);
-    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE,  (uint64_t) model->shuffle_next_sample);
-
-    save_opt_context_gguf(fctx, opt);
+    save_train_state_gguf(fctx, train);
 }
 
-static bool load_checkpoint_file(const char * filename, struct my_llama_model * model, struct ggml_opt_context * opt) {
+static bool load_checkpoint_file(const char * filename, struct my_llama_model * model, struct train_state * train) {
     struct ggml_context * f_ggml_ctx;
     struct gguf_init_params params;
     params.no_alloc = false;
@@ -750,18 +676,18 @@ static bool load_checkpoint_file(const char * filename, struct my_llama_model * 
         return false;
     }
 
-    load_checkpoint_gguf(fctx, f_ggml_ctx, model, opt);
+    load_checkpoint_gguf(fctx, f_ggml_ctx, model, train);
 
     return true;
 }
 
-static void save_checkpoint_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model, struct ggml_opt_context * opt, const char * pattern_it, int iteration, const char * latest) {
+static void save_checkpoint_file(const char * filename, const char * fn_vocab_model, struct my_llama_model * model, struct train_state * train, const char * pattern_it, int iteration, const char * latest) {
     std::string sit = (iteration >= 0) ? std::to_string(iteration) : std::string(latest);
     std::string fn = replace_str(filename, pattern_it, sit.c_str());
     printf("%s: saving to %s\n", __func__, fn.c_str());
     struct gguf_context * fctx = gguf_init_empty();
 
-    save_checkpoint_gguf(fctx, fn_vocab_model, model, opt);
+    save_checkpoint_gguf(fctx, fn_vocab_model, model, train);
 
     // write file
     const bool only_meta = false;
@@ -1295,30 +1221,31 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
 }
 
 struct opt_callback_data {
-    struct train_params *     params;
-    struct ggml_opt_context * opt;
-    struct my_llama_model *   model;
-    struct llama_context *    lctx;
-    int                       last_save_iter;
-    llama_token *             tokens_data;
-    size_t                    tokens_size;
-    size_t *                  samples_begin;
-    size_t *                  samples_size;
-    size_t *                  shuffled_samples_begin;
-    size_t *                  shuffled_samples_size;
-    size_t                    samples_count;
-    struct ggml_tensor *      tokens_input;
-    struct ggml_tensor *      target_logits;
-    struct ggml_tensor *      target_probs;
-    int                       first_iter;
-    int64_t                   last_time;
-    double                    millis_per_iter;
+    struct train_params   * params;
+    struct train_state    * train;
+    struct my_llama_model * model;
+    struct llama_context  * lctx;
+    int                     last_save_iter;
+    llama_token           * tokens_data;
+    size_t                  tokens_size;
+    size_t                * samples_begin;
+    size_t                * samples_size;
+    size_t                * shuffled_samples_begin;
+    size_t                * shuffled_samples_size;
+    size_t                  samples_count;
+    struct ggml_tensor    * tokens_input;
+    struct ggml_tensor    * target_logits;
+    struct ggml_tensor    * target_probs;
+    int                     first_iter;
+    int64_t                 last_time;
+    double                  millis_per_iter;
 };
 
 static void opt_callback(void * vdata, int accum_step, float * sched) {
-    struct opt_callback_data * data = (struct opt_callback_data *) vdata;
-    struct train_params * params    = data->params;
-    struct ggml_opt_context * opt   = data->opt;
+    struct opt_callback_data * data   = (struct opt_callback_data *) vdata;
+    struct train_params      * params = data->params;
+    struct train_state       * train  = data->train;
+    struct ggml_opt_context  * opt    = train->opt;
     int n_batch = params->n_batch;
     int n_ctx = params->n_ctx;
 
@@ -1347,13 +1274,13 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
         const bool save_now = (params->save_every > 0) && (opt->iter - data->last_save_iter >= params->save_every);
         if (save_now) {
             int new_iters = opt->iter - data->last_save_iter;
-            data->model->train_its += new_iters;
-            data->model->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
-            data->model->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
+            train->train_its += new_iters;
+            train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+            train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_ctx;
 
             if (strlen(params->fn_checkpoint_out) > 0) {
-                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, opt, params->pattern_fn_it, opt->iter, params->fn_latest);
-                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, opt, params->pattern_fn_it, -1, params->fn_latest);
+                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, train, params->pattern_fn_it, opt->iter, params->fn_latest);
+                save_checkpoint_file(params->fn_checkpoint_out, params->fn_vocab_model, data->model, train, params->pattern_fn_it, -1, params->fn_latest);
 
             }
             if (strlen(params->fn_model_out) > 0) {
@@ -1380,7 +1307,7 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
         if (impr_plot > 0) impr_plot = 0;
         if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
         printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
-            __func__, opt->iter, std::min(1+data->model->shuffle_next_sample, data->model->shuffle_sample_count), data->model->shuffle_sample_count,
+            __func__, opt->iter, std::min(1+train->shuffle_next_sample, train->shuffle_sample_count), train->shuffle_sample_count,
             *sched, opt->loss_after);
 
 
@@ -1406,7 +1333,7 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
         data->lctx,
         data->tokens_input,
         data->target_probs,
-        data->model->shuffle_next_sample,
+        train->shuffle_next_sample,
         data->shuffled_samples_begin,
         data->shuffled_samples_size,
         data->samples_count,
@@ -1416,21 +1343,21 @@ static void opt_callback(void * vdata, int accum_step, float * sched) {
         params->separate_with_bos,
         params->fill_with_next_samples);
 
-    data->model->shuffle_next_sample += used_samples;
+    train->shuffle_next_sample += used_samples;
 
-    if (data->model->shuffle_next_sample >= data->model->shuffle_sample_count) {
-        ++data->model->train_epochs;
-        printf("%s: reshuffle samples. completed epochs: %llu\n", __func__, (long long unsigned) data->model->train_epochs);
+    if (train->shuffle_next_sample >= train->shuffle_sample_count) {
+        ++train->train_epochs;
+        printf("%s: reshuffle samples. completed epochs: %llu\n", __func__, (long long unsigned) train->train_epochs);
         // note: we may have used some samples from the current shuffling more than once
-        data->model->shuffle_rng_state_current = data->model->shuffle_rng_state_next;
-        data->model->shuffle_rng_state_next = shuffle_samples(
-            data->model->shuffle_rng_state_current,
+        train->shuffle_rng_state_current = train->shuffle_rng_state_next;
+        train->shuffle_rng_state_next = shuffle_samples(
+            train->shuffle_rng_state_current,
             data->shuffled_samples_begin,
             data->shuffled_samples_size,
             data->samples_begin,
             data->samples_size,
             data->samples_count);
-        data->model->shuffle_next_sample = 0;
+        train->shuffle_next_sample = 0;
     }
 
 }
@@ -1480,8 +1407,8 @@ int main(int argc, char ** argv) {
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.n_batch;
 
-    struct ggml_opt_context * opt = (struct ggml_opt_context *) alloca(sizeof(struct ggml_opt_context));
-    memset(opt, 0, sizeof(struct ggml_opt_context));
+    struct train_state      * train = init_train_state(params.seed);
+    struct ggml_opt_context * opt   = train->opt;
 
     struct ggml_opt_params opt_params_adam = ggml_opt_default_params(GGML_OPT_ADAM);
     opt_params_adam.print_forward_graph     = false;
@@ -1505,7 +1432,7 @@ int main(int argc, char ** argv) {
     opt->params = opt_params_adam;
 
     printf("%s: init model\n", __func__);
-    bool existed = load_checkpoint_file(params.fn_checkpoint_in, &model, opt);
+    bool existed = load_checkpoint_file(params.fn_checkpoint_in, &model, train);
     if (!existed) {
         init_model(&model);
     }
@@ -1513,7 +1440,7 @@ int main(int argc, char ** argv) {
 
     opt->params = opt_params_adam;
 
-    opt->iter = model.train_its;
+    opt->iter = train->train_its;
     printf("%s: opt iter %d\n", __func__, opt->iter);
 
     bool from_scratch = !existed;
@@ -1555,25 +1482,25 @@ int main(int argc, char ** argv) {
     printf("%s: number of training tokens: %zu\n", __func__, train_tokens.size());
 
     size_t shuffle_samples_hash = compute_samples_hash(params.fn_train_data, train_samples_begin.data(), train_samples_size.data(), train_samples_size.size());
-    const bool changed_train_data = (shuffle_samples_hash != model.shuffle_samples_hash) || (model.shuffle_sample_count != train_samples_size.size());
+    const bool changed_train_data = (shuffle_samples_hash != train->shuffle_samples_hash) || (train->shuffle_sample_count != train_samples_size.size());
     if (changed_train_data) {
         printf("%s: train data seems to have changed. restarting shuffled epoch.\n", __func__);
     }
     if (params.force_reshuffle) {
         printf("%s: forced reshuffling of data. restarting with newly shuffled epoch.\n", __func__);
     }
-    if ((model.shuffle_rng_state_current == "") || changed_train_data || params.force_reshuffle) {
-        model.shuffle_rng_state_current = mt19937_seed_to_state(params.seed);
-        model.shuffle_sample_count = train_samples_size.size();
-        model.shuffle_next_sample = 0;
-        model.shuffle_samples_hash = shuffle_samples_hash;
+    if ((train->shuffle_rng_state_current == "") || changed_train_data || params.force_reshuffle) {
+        train->shuffle_rng_state_current = mt19937_seed_to_state(params.seed);
+        train->shuffle_sample_count = train_samples_size.size();
+        train->shuffle_next_sample = 0;
+        train->shuffle_samples_hash = shuffle_samples_hash;
     }
     std::vector<size_t> train_shuffled_samples_begin;
     std::vector<size_t> train_shuffled_samples_size;
     train_shuffled_samples_begin.resize(train_samples_begin.size());
     train_shuffled_samples_size.resize(train_samples_size.size());
-    model.shuffle_rng_state_next = shuffle_samples(
-        model.shuffle_rng_state_current,
+    train->shuffle_rng_state_next = shuffle_samples(
+        train->shuffle_rng_state_current,
         train_shuffled_samples_begin.data(),
         train_shuffled_samples_size.data(),
         train_samples_begin.data(),
@@ -1583,7 +1510,7 @@ int main(int argc, char ** argv) {
 
     struct opt_callback_data opt_cb_data;
     opt_cb_data.params = &params;
-    opt_cb_data.opt = opt;
+    opt_cb_data.train = train;
     opt_cb_data.model = &model;
     opt_cb_data.lctx = lctx;
     opt_cb_data.last_save_iter = opt->iter;
@@ -1594,9 +1521,9 @@ int main(int argc, char ** argv) {
     opt_cb_data.shuffled_samples_begin = train_shuffled_samples_begin.data();
     opt_cb_data.shuffled_samples_size  = train_shuffled_samples_size.data();
     opt_cb_data.samples_count          = train_samples_size.size();
-    opt_cb_data.tokens_input  = NULL;
-    opt_cb_data.target_logits = NULL;
-    opt_cb_data.target_probs  = NULL;
+    opt_cb_data.tokens_input           = NULL;
+    opt_cb_data.target_logits          = NULL;
+    opt_cb_data.target_probs           = NULL;
     opt_cb_data.first_iter             = opt->iter;
     opt_cb_data.last_time              = ggml_time_ms();
     opt_cb_data.millis_per_iter        = 0.0;
@@ -1672,9 +1599,9 @@ int main(int argc, char ** argv) {
         size_t used_mem_after_opt = ggml_used_mem(ctx0);
 
         int n_iter = params.adam_n_iter;
-        model.train_its = opt->iter;
-        model.train_samples += n_batch * n_iter;
-        model.train_tokens  += n_batch * n_tokens * n_iter;
+        train->train_its = opt->iter;
+        train->train_samples += n_batch * n_iter;
+        train->train_tokens  += n_batch * n_tokens * n_iter;
 
         if (params.print_info_interval > 0 && ex % params.print_info_interval == 0) {
             printf("Example %d, opt iter %d\n", ex, opt->iter);
@@ -1693,13 +1620,13 @@ int main(int argc, char ** argv) {
     printf("%s: total training time=%f seconds\n", __func__, dd);
 
     int new_iters = opt->iter - opt_cb_data.last_save_iter;
-    model.train_its += new_iters;
-    model.train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
-    model.train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
+    train->train_its += new_iters;
+    train->train_samples += new_iters * opt->params.n_gradient_accumulation * n_batch;
+    train->train_tokens  += new_iters * opt->params.n_gradient_accumulation * n_batch * n_tokens;
 
     if (params.n_examples > 0) {
-        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, opt, params.pattern_fn_it, opt->iter, params.fn_latest);
-        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, opt, params.pattern_fn_it, -1, params.fn_latest);
+        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, train, params.pattern_fn_it, opt->iter, params.fn_latest);
+        save_checkpoint_file(params.fn_checkpoint_out, params.fn_vocab_model, &model, train, params.pattern_fn_it, -1, params.fn_latest);
     }
 
     if (strlen(params.fn_model_out) > 0) {
@@ -1715,6 +1642,7 @@ int main(int argc, char ** argv) {
 
     delete[] compute_addr;
     delete[] compute_buf_0;
+    free_train_state(train);
     ggml_free(model.ctx);
     llama_free(lctx);
     llama_free_model(lmodel);

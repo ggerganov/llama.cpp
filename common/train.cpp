@@ -17,6 +17,28 @@ struct random_uniform_distribution {
     std::uniform_real_distribution<float> rd;
 };
 
+struct train_state  * init_train_state(int seed) {
+    struct train_state * state = (struct train_state *) malloc(sizeof(struct train_state));
+    memset(state, 0, sizeof(struct train_state));
+    state->shuffle_rng_state_current = "";
+    state->shuffle_rng_state_next = "";
+
+    state->opt = (struct ggml_opt_context *) malloc(sizeof(struct ggml_opt_context));
+    memset(state->opt, 0, sizeof(struct ggml_opt_context));
+    state->opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+
+    return state;
+}
+
+void free_train_state(struct train_state  * state) {
+    free(state->opt);
+    free(state);
+}
+
+struct ggml_opt_context * get_train_state_opt(struct train_state  * state) {
+    return state->opt;
+}
+
 struct random_normal_distribution * init_random_normal_distribution(int seed, float mean, float std, float min, float max) {
     struct random_normal_distribution * rnd = (struct random_normal_distribution *) malloc(sizeof(struct random_normal_distribution));
     rnd->gen = std::mt19937(seed);
@@ -472,6 +494,20 @@ static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_YS           = "optimizer.
 static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_S            = "optimizer.lbfgs.memory_s";
 static const char * LLM_TENSOR_OPTIMIZER_LBFGS_MEMORY_Y            = "optimizer.lbfgs.memory_y";
 
+static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
+static const char * LLM_KV_TRAINING_TYPE_FINETUNE_LORA   = "finetune_lora";
+static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
+static const char * LLM_KV_TRAINING_FILE_VERSION         = "training.file_version";
+static const char * LLM_KV_TRAINING_ITERATION_COUNT      = "training.iteration_count";
+static const char * LLM_KV_TRAINING_SAMPLE_COUNT         = "training.sample_count";
+static const char * LLM_KV_TRAINING_TOKEN_COUNT          = "training.token_count";
+static const char * LLM_KV_TRAINING_EPOCH_COUNT          = "training.epoch_count";
+static const char * LLM_KV_TRAINING_SAMPLES_HASH         = "training.samples_hash";
+static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH = "training.shuffle.samples_hash";
+static const char * LLM_KV_TRAINING_SHUFFLE_RNG_STATE    = "training.shuffle.rng_state";
+static const char * LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT = "training.shuffle.sample_count";
+static const char * LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE  = "training.shuffle.next_sample";
+
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
 { \
     const std::string skey(key); \
@@ -612,6 +648,59 @@ void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context *
             } break;
     }
 }
+
+bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct train_state * train) {
+    if (gguf_find_key(fctx, LLM_KV_TRAINING_FILE_VERSION) >= 0) {
+        return false;
+    }
+
+    uint32_t file_version;
+    GGUF_GET_KEY(fctx, file_version,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_FILE_VERSION);
+    GGML_ASSERT(file_version <= 1);
+
+    std::string train_type = LLM_KV_TRAINING_TYPE_FINETUNE_LORA;
+    GGUF_GET_KEY(fctx, train_type,           gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_TYPE);
+    GGML_ASSERT(train_type == LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
+
+    if (file_version == 0) {
+
+        GGUF_GET_KEY(fctx, train->train_its,     gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_ITERATION_COUNT);
+        GGUF_GET_KEY(fctx, train->train_samples, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, train->train_tokens,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_TOKEN_COUNT);
+
+    } else if (file_version == 1) {
+
+        GGUF_GET_KEY(fctx, train->train_its,     gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_ITERATION_COUNT);
+        GGUF_GET_KEY(fctx, train->train_samples, gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, train->train_tokens,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_TOKEN_COUNT);
+        GGUF_GET_KEY(fctx, train->train_epochs,  gguf_get_val_u64, GGUF_TYPE_UINT64, true, LLM_KV_TRAINING_EPOCH_COUNT);
+
+        GGUF_GET_KEY(fctx, train->shuffle_samples_hash,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH);
+        GGUF_GET_KEY(fctx, train->shuffle_rng_state_current, gguf_get_val_str, GGUF_TYPE_STRING, false, LLM_KV_TRAINING_SHUFFLE_RNG_STATE);
+        GGUF_GET_KEY(fctx, train->shuffle_sample_count,      gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT);
+        GGUF_GET_KEY(fctx, train->shuffle_next_sample,       gguf_get_val_u64, GGUF_TYPE_UINT64, false, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE);
+    }
+
+    load_opt_context_gguf(fctx, f_ggml_ctx, train->opt);
+    return true;
+}
+
+void save_train_state_gguf(struct gguf_context * fctx, struct train_state * train) {
+    gguf_set_val_u32(fctx, LLM_KV_TRAINING_FILE_VERSION,    1);
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_TYPE,            LLM_KV_TRAINING_TYPE_FINETUNE_LORA);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_ITERATION_COUNT, train->train_its);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SAMPLE_COUNT,    train->train_samples);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_TOKEN_COUNT,     train->train_tokens);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_EPOCH_COUNT,     train->train_epochs);
+
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLES_HASH, (uint64_t) train->shuffle_samples_hash);
+    gguf_set_val_str(fctx, LLM_KV_TRAINING_SHUFFLE_RNG_STATE,    train->shuffle_rng_state_current.c_str());
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_SAMPLE_COUNT, (uint64_t) train->shuffle_sample_count);
+    gguf_set_val_u64(fctx, LLM_KV_TRAINING_SHUFFLE_NEXT_SAMPLE,  (uint64_t) train->shuffle_next_sample);
+
+    save_opt_context_gguf(fctx, train->opt);
+}
+
 
 struct llama_file {
     // use FILE * so we don't have to re-open the file to mmap

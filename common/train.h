@@ -9,6 +9,26 @@
 #include "ggml.h"
 #include "llama.h"
 
+typedef std::string mt19937_state;
+
+struct train_state {
+    struct ggml_opt_context * opt;
+
+    uint64_t train_its;
+    uint64_t train_samples;
+    uint64_t train_tokens;
+    uint64_t train_epochs;
+
+    size_t        shuffle_samples_hash; // fn, sample_count, *zip(sample_begins, sample_sizes)
+    mt19937_state shuffle_rng_state_current;
+    mt19937_state shuffle_rng_state_next;
+    size_t        shuffle_sample_count;
+    size_t        shuffle_next_sample;
+};
+
+struct train_state * init_train_state(int seed);
+void free_train_state(struct train_state  * state);
+
 struct random_normal_distribution;
 struct random_uniform_distribution;
 
@@ -58,7 +78,6 @@ int64_t get_example_targets_batch(
         bool                   separate_with_bos,
         bool                   fill_with_next_samples);
 
-typedef std::string mt19937_state;
 
 void          mt19937_set_state(std::mt19937& rng, const mt19937_state& rng_state);
 mt19937_state mt19937_get_state(const std::mt19937& rng);
@@ -110,4 +129,7 @@ void copy_tensor_by_name(struct ggml_tensor * dst, struct ggml_context * ctx, co
 
 void load_opt_context_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct ggml_opt_context * opt);
 void save_opt_context_gguf(struct gguf_context * fctx, struct ggml_opt_context * opt);
+
+bool load_train_state_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct train_state * train);
+void save_train_state_gguf(struct gguf_context * fctx, struct train_state * train);
 
