@@ -54,93 +54,6 @@
 inline void log_test();
 #endif
 
-class LogTargetWrapper
-{
-    private:
-        LogTargetWrapper( LogTargetWrapper& other ) = delete;
-        void operator=( const LogTargetWrapper& )   = delete;
-
-    public:
-        LogTargetWrapper( FILE* handle )
-        :   _type(Type::Stream),
-            _opened(true),
-            _handle(handle)
-        {}
-
-        LogTargetWrapper( const std::string && filename )
-        : LogTargetWrapper(filename)
-        {}
-
-        LogTargetWrapper( const std::string & filename )
-        :   _filename(filename)
-        {
-            if(_filename.empty())
-            {
-                _type = Type::Stream;
-                _handle = stderr;
-                _opened = true;
-            }
-            else
-            {
-                _type = Type::File;
-            }
-        }
-
-        ~LogTargetWrapper()
-        {
-            if(_type == Type::File && _handle != nullptr) {std::fclose(_handle);}
-        }
-
-        enum class Type{
-            Invalid,
-            File,
-            Stream
-        };
-
-    public:
-        operator FILE*()
-        {
-            if(!_opened)
-            {
-                while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
-                if(!_opened && _type == Type::File) // check for opened again after acquiring a lock
-                {
-                    auto result = std::fopen(_filename.c_str(), "w");
-                    if( result )
-                    {
-                        _handle = result;
-                    }
-                    else
-                    {
-                        std::fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", _filename.c_str(), std::strerror(errno));
-                        std::fflush(stderr);
-                        _handle = stderr;
-                    }
-                    _opened = true;
-                }
-                _lock.clear(std::memory_order_release);
-            }
-            return _handle;
-        }
-
-        void flush()
-        {
-            while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
-            if(_opened && _type != Type::Invalid && _handle)
-            {
-                std::fflush(_handle);
-            }
-            _lock.clear(std::memory_order_release);
-        }
-
-    private:
-        std::atomic_flag   _lock      = ATOMIC_FLAG_INIT;
-        Type               _type      {Type::Invalid};
-        std::string        _filename;
-        std::atomic<bool>  _opened    {false};
-        std::atomic<FILE*> _handle    {nullptr};
-};
-
 // Utility for synchronizing log configuration state
 //  since std::optional was introduced only in c++17
 enum class LogTriState
@@ -161,7 +74,7 @@ class LogStateWrapper
     protected:
         LogStateWrapper(){};
 
-        virtual ~LogStateWrapper()
+        ~LogStateWrapper()
         {
             log_flush_all_targets();
             for(auto t: _targets){delete t;}
@@ -178,6 +91,95 @@ class LogStateWrapper
             return inst;
         }
 
+        class LogTargetWrapper
+        {
+            private:
+                LogTargetWrapper( LogTargetWrapper& other ) = delete;
+                void operator=( const LogTargetWrapper& )   = delete;
+
+            public:
+                LogTargetWrapper( FILE* handle )
+                :   _type(Type::Stream),
+                    _opened(true),
+                    _handle(handle)
+                {}
+
+                LogTargetWrapper( const std::string && filename )
+                : LogTargetWrapper(filename)
+                {}
+
+                LogTargetWrapper( const std::string & filename )
+                :   _filename(filename)
+                {
+                    if(_filename.empty())
+                    {
+                        _type = Type::Stream;
+                        _handle = stderr;
+                        _opened = true;
+                    }
+                    else
+                    {
+                        _type = Type::File;
+                    }
+                }
+
+                ~LogTargetWrapper()
+                {
+                    if(_type == Type::File && _handle != nullptr) {std::fclose(_handle);}
+                }
+
+                enum class Type{
+                    Invalid,
+                    File,
+                    Stream
+                };
+
+            public:
+                operator FILE*()
+                {
+                    if(!_opened)
+                    {
+                        while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
+                        if(!_opened && _type == Type::File) // check for opened again after acquiring a lock
+                        {
+                            auto result = std::fopen(_filename.c_str(), "w");
+                            if( result )
+                            {
+                                _handle = result;
+                            }
+                            else
+                            {
+                                std::fprintf(stderr, "Failed to open logfile '%s' with error '%s'\n", _filename.c_str(), std::strerror(errno));
+                                std::fflush(stderr);
+                                _handle = stderr;
+                            }
+                            _opened = true;
+                        }
+                        _lock.clear(std::memory_order_release);
+                    }
+                    return _handle;
+                }
+
+                void flush()
+                {
+                    while( _lock.test_and_set(std::memory_order_acquire) ){ std::this_thread::yield(); }
+                    if(_opened && _type != Type::Invalid && _handle)
+                    {
+                        std::fflush(_handle);
+                    }
+                    _lock.clear(std::memory_order_release);
+                }
+
+            private:
+                std::atomic_flag   _lock      = ATOMIC_FLAG_INIT;
+                Type               _type      {Type::Invalid};
+                std::string        _filename;
+                std::atomic<bool>  _opened    {false};
+                std::atomic<FILE*> _handle    {nullptr};
+
+            //friend class LogStateWrapper;
+        };
+
     private:
         std::mutex                     _mutex;
         std::atomic_flag               _lock                    = ATOMIC_FLAG_INIT;
@@ -191,53 +193,25 @@ class LogStateWrapper
         std::atomic<LogTargetWrapper*> _stored_target           {&_null_target};
 
         LogTargetWrapper* log_set_target_impl( const std::string && filename ) {return log_set_target_impl(filename);}
-        LogTargetWrapper* log_set_target_impl( const std::string & filename )  {return log_add_select_target(new LogTargetWrapper(filename));}
-        LogTargetWrapper* log_set_target_impl( FILE* handle )                  {return log_add_select_target(new LogTargetWrapper(handle));}
-        LogTargetWrapper* log_set_target_impl( LogTargetWrapper * target )
-        {
-            log_flush_all_targets();
-            std::lock_guard<std::mutex> lock(_mutex);
+        LogTargetWrapper* log_set_target_impl( const std::string & filename )  {return log_add_select_target(new LogTargetWrapper(filename), true);}
+        LogTargetWrapper* log_set_target_impl( FILE* handle )                  {return log_add_select_target(new LogTargetWrapper(handle), true);}
+        LogTargetWrapper* log_set_target_impl( LogTargetWrapper * target )     {return log_add_select_target(target);}
 
-            if( _global_override_target == LogTriState::True )
-            {
-                if(_enabled || _global_override_enabled == LogTriState::True)
-                    return _current_target;
-                return _stored_target;
-            }
-
-            if(_enabled || _global_override_enabled == LogTriState::True)
-            {
-                _current_target.store(target);
-            }
-            else
-            {
-                _stored_target.store(target);
-            }
-
-            return target;
-        }
-
-        LogTargetWrapper* log_add_select_target(LogTargetWrapper* t)
+        LogTargetWrapper* log_add_select_target(LogTargetWrapper* t, bool insert = false)
         {
             log_flush_all_targets();
             std::lock_guard<std::mutex> lock(_mutex);
 
             if( _global_override_target == LogTriState::True)
             {
-                if(_enabled || _global_override_enabled == LogTriState::True)
-                    return _current_target;
+                if(_enabled || _global_override_enabled == LogTriState::True) return _current_target;
                 return _stored_target;
             }
 
-            if(_enabled || _global_override_enabled == LogTriState::True)
-            {
-                _current_target.store(t);
-            }
-            else
-            {
-                _stored_target.store(t);
-            }
-            _targets.insert(t);
+            if(_enabled || _global_override_enabled == LogTriState::True) _current_target.store(t);
+            else                                                          _stored_target.store(t);
+
+            if(insert) _targets.insert(t);
 
             return t;
         }
@@ -248,15 +222,8 @@ class LogStateWrapper
             for(auto t: _targets){ t->flush(); }
         }
 
-        FILE* log_handler_impl()
-        {
-            return *_current_target;
-        }
-
-        FILE* log_tee_handler_impl()
-        {
-            return _stderr_target;
-        }
+        FILE* log_handler_impl()     { return *_current_target; }
+        FILE* log_tee_handler_impl() { return _stderr_target; }
 
         void log_disable_impl( bool threadsafe = true )
         {
