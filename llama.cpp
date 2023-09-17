@@ -2428,13 +2428,22 @@ static struct ggml_cgraph * llm_build_llama(
         }
     }
 
-    // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
-    ggml_allocr_alloc(lctx.alloc, KQ_pos);
+    // Q_pos - contains the positions
+    struct ggml_tensor * Q_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    ggml_allocr_alloc(lctx.alloc, Q_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos->data;
+        int * data = (int *) Q_pos->data;
         for (int i = 0; i < N; ++i) {
             data[i] = n_past + i;
+        }
+    }
+
+    struct ggml_tensor * K_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_past + N);
+    ggml_allocr_alloc(lctx.alloc, K_pos);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        int * data = (int *) K_pos->data;
+        for (int i = 0; i < n_past + N; ++i) {
+            data[i] = i;
         }
     }
 
@@ -2474,13 +2483,17 @@ static struct ggml_cgraph * llm_build_llama(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            // Note: we are not RoPE-ing K here
+            struct ggml_tensor * Kcur = tmpk;
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    Q_pos, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
+
+            struct ggml_tensor * ck;
+            struct ggml_tensor * cv;
 
             // store key and value to memory
             {
@@ -2504,9 +2517,11 @@ static struct ggml_cgraph * llm_build_llama(
                 offload_func_v(v);
                 ggml_set_name(v, "v");
 
-                // important: storing RoPE-ed version of K in the KV cache!
-                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
-                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
+                ck = ggml_cpy(ctx0, Kcur, k);
+                cv = ggml_cpy(ctx0, Vcur, v);
+
+                ggml_build_forward_expand(gf, ck);
+                ggml_build_forward_expand(gf, cv);
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
@@ -2515,12 +2530,17 @@ static struct ggml_cgraph * llm_build_llama(
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
-                        n_embd_head, n_past + N, n_head_kv,
-                        ggml_element_size(kv_self.k)*n_embd_gqa,
+                        n_embd_head, n_head_kv, n_past + N,
                         ggml_element_size(kv_self.k)*n_embd_head,
+                        ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             offload_func_kq(K);
             ggml_set_name(K, "K");
+
+            // RoPE the K cache
+            K->src[1] = ck; // TODO: HACK!!
+            K = ggml_rope_custom(ctx0, K, K_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            K = ggml_permute(ctx0, K, 0, 2, 1, 3);
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
