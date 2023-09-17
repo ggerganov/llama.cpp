@@ -161,7 +161,7 @@ struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struc
 }
 
 float frand() {
-    return (float)rand()/(float)RAND_MAX;
+    return (float)rand()/((float)(RAND_MAX) + 1.0f);
 }
 
 float frand_normal(struct random_normal_distribution * rnd) {

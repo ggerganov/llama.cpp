@@ -124,6 +124,7 @@ void free_random_uniform_distribution(struct random_uniform_distribution * rnd);
 struct ggml_tensor * randomize_tensor_normal (struct ggml_tensor * tensor, struct random_normal_distribution * rnd);
 struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd);
 
+// generate random float in interval [0,1)
 float frand();
 float frand_normal (struct random_normal_distribution * rnd);
 float frand_uniform(struct random_uniform_distribution * rnd);
