@@ -5,6 +5,8 @@ set(TARGET common)
 add_library(${TARGET} OBJECT
     common.h
     common.cpp
+    log.h
+    log.cpp
     console.h
     console.cpp
     grammar-parser.h
