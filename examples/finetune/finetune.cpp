@@ -1658,8 +1658,8 @@ int main(int argc, char ** argv) {
     printf("%s: seen train_samples     %llu\n", __func__, (long long unsigned) train->train_samples);
     printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) train->train_tokens);
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
-    printf("%s: max_lora_size = %zu bytes (%.1f MB)\n", __func__, lora.data.size(), (float) lora.data.size() / (1024.0f*1024.0f));
-    printf("%s: max_opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
+    printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + lora.data.size()), (float) (ggml_used_mem(lora.ctx) + lora.data.size()) / (1024.0f*1024.0f));
+    printf("%s: opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
     opt->iter = train->train_its;
 
     if (params.only_write_lora) {
@@ -1686,7 +1686,7 @@ int main(int argc, char ** argv) {
 
     printf("%s: opt iter %d\n", __func__, opt->iter);
 
-    printf("used_mem model: %zu bytes\n", ggml_used_mem(lora.ctx));
+    printf("used_mem model: %zu bytes\n", ggml_used_mem(lora.ctx) + lora.data.size());
 
     std::vector<uint8_t> mem_input_data;
     std::vector<uint8_t> mem_compute_data;
@@ -1709,7 +1709,7 @@ int main(int argc, char ** argv) {
     ggml_allocr_alloc(alloc, target_probs);
     size_t max_input_size = ggml_allocr_max_size(alloc) + tensor_alignment;
     ggml_allocr_free(alloc);
-    printf("%s: max_input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
+    printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
     // allocate input tensors
     mem_input_data.resize(max_input_size);
@@ -1769,7 +1769,7 @@ int main(int argc, char ** argv) {
         ggml_free(ctx_compute);
     }
     size_t max_compute_size = best_compute_size;
-    printf("%s: max_compute_size = %zu bytes (%.1f MB)\n", __func__, max_compute_size, (float) max_compute_size / (1024.0f*1024.0f));
+    printf("%s: compute_size = %zu bytes (%.1f MB)\n", __func__, max_compute_size, (float) max_compute_size / (1024.0f*1024.0f));
     printf("%s: evaluation order = %s\n", __func__,
         (best_order == GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT) ? "LEFT_TO_RIGHT" :
         (best_order == GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT) ? "RIGHT_TO_LEFT" :
@@ -1887,7 +1887,7 @@ int main(int argc, char ** argv) {
 
     // measure required memory for work buffer
     size_t max_work_size = ggml_graph_plan(gb, params.common.n_threads).work_size + GGML_OBJECT_SIZE;
-    printf("%s: max_work_size = %zu bytes (%.1f MB)\n", __func__, max_work_size, (float) max_work_size / (1024.0f*1024.0f));
+    printf("%s: work_size = %zu bytes (%.1f MB)\n", __func__, max_work_size, (float) max_work_size / (1024.0f*1024.0f));
 
     // context for work buffer
     struct ggml_init_params ctx_work_params = {

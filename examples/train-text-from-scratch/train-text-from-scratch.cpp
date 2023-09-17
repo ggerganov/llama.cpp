@@ -19,6 +19,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+static const size_t tensor_alignment = 32;
+
 struct my_llama_hparams {
     uint32_t n_vocab = 32000;
     uint32_t n_ctx   = 512;
@@ -56,6 +58,7 @@ struct my_llama_layer {
 
 struct my_llama_model {
     struct ggml_context * ctx = NULL;
+    std::vector<uint8_t> data;
 
     my_llama_hparams hparams;
 
@@ -118,6 +121,65 @@ static void print_params(struct my_llama_hparams * params) {
     printf("%s: n_rot:   %d\n", __func__, params->n_rot);
 }
 
+static void set_param_model(struct my_llama_model * model) {
+    const auto& hparams = model->hparams;
+
+    const uint32_t n_layer = hparams.n_layer;
+
+    struct ggml_context* ctx = model->ctx;
+
+    ggml_set_param(ctx, model->tok_embeddings);
+    ggml_set_param(ctx, model->norm);
+    ggml_set_param(ctx, model->output);
+
+    for (uint32_t i = 0; i < n_layer; ++i) {
+        auto & layer = model->layers[i];
+
+        ggml_set_param(ctx, layer.attention_norm);
+        ggml_set_param(ctx, layer.wq);
+        ggml_set_param(ctx, layer.wk);
+        ggml_set_param(ctx, layer.wv);
+        ggml_set_param(ctx, layer.wo);
+        ggml_set_param(ctx, layer.ffn_norm);
+        ggml_set_param(ctx, layer.w1);
+        ggml_set_param(ctx, layer.w2);
+        ggml_set_param(ctx, layer.w3);
+    }
+}
+
+static void alloc_model(struct ggml_allocr * alloc, struct my_llama_model * model) {
+    ggml_allocr_alloc(alloc, model->tok_embeddings);
+    ggml_allocr_alloc(alloc, model->norm);
+    ggml_allocr_alloc(alloc, model->output);
+    for (uint32_t i = 0; i < model->layers.size(); ++i) {
+        auto & layer = model->layers[i];
+        ggml_allocr_alloc(alloc, layer.attention_norm);
+        ggml_allocr_alloc(alloc, layer.wq);
+        ggml_allocr_alloc(alloc, layer.wk);
+        ggml_allocr_alloc(alloc, layer.wv);
+        ggml_allocr_alloc(alloc, layer.wo);
+        ggml_allocr_alloc(alloc, layer.ffn_norm);
+        ggml_allocr_alloc(alloc, layer.w1);
+        ggml_allocr_alloc(alloc, layer.w2);
+        ggml_allocr_alloc(alloc, layer.w3);
+    }
+    ggml_allocr_alloc(alloc, model->tok_embeddings->grad);
+    ggml_allocr_alloc(alloc, model->norm->grad);
+    ggml_allocr_alloc(alloc, model->output->grad);
+    for (uint32_t i = 0; i < model->layers.size(); ++i) {
+        auto & layer = model->layers[i];
+        ggml_allocr_alloc(alloc, layer.attention_norm->grad);
+        ggml_allocr_alloc(alloc, layer.wq->grad);
+        ggml_allocr_alloc(alloc, layer.wk->grad);
+        ggml_allocr_alloc(alloc, layer.wv->grad);
+        ggml_allocr_alloc(alloc, layer.wo->grad);
+        ggml_allocr_alloc(alloc, layer.ffn_norm->grad);
+        ggml_allocr_alloc(alloc, layer.w1->grad);
+        ggml_allocr_alloc(alloc, layer.w2->grad);
+        ggml_allocr_alloc(alloc, layer.w3->grad);
+    }
+}
+
 static void init_model(struct my_llama_model * model) {
     const auto & hparams = model->hparams;
 
@@ -126,7 +188,6 @@ static void init_model(struct my_llama_model * model) {
     const uint32_t n_vocab = hparams.n_vocab;
     const uint32_t n_ff    = hparams.n_ff;
 
-    struct ggml_context * ctx = model->ctx;
 
     std::vector<char> tn_buf;
     tn_buf.resize(GGML_MAX_NAME);
@@ -140,6 +201,15 @@ static void init_model(struct my_llama_model * model) {
         snprintf(tn_buf.data(), tn_buf.size(), "%s.weight", s.c_str());
         return tn_buf.data();
     };
+
+    // context for model tensors without their data
+    struct ggml_init_params ctx_model_params;
+    ctx_model_params.mem_size   = ggml_tensor_overhead()*2*(6 + n_layer*18);
+    ctx_model_params.mem_buffer = NULL;
+    ctx_model_params.no_alloc   = true;
+
+    struct ggml_context * ctx = ggml_init(ctx_model_params);
+    model->ctx = ctx;
 
     model->tok_embeddings = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_vocab);
     model->norm           = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
@@ -179,32 +249,20 @@ static void init_model(struct my_llama_model * model) {
         ggml_set_name(layer.w2,             tni(LLM_TENSOR_FFN_DOWN, i));
         ggml_set_name(layer.w3,             tni(LLM_TENSOR_FFN_UP, i));
     }
-}
 
-static void set_param_model(struct my_llama_model * model) {
-    const auto& hparams = model->hparams;
+    set_param_model(model);
 
-    const uint32_t n_layer = hparams.n_layer;
+    // measure data size
+    struct ggml_allocr * alloc = NULL;
+    alloc = ggml_allocr_new_measure(tensor_alignment);
+    alloc_model(alloc, model);
 
-    struct ggml_context* ctx = model->ctx;
-
-    ggml_set_param(ctx, model->tok_embeddings);
-    ggml_set_param(ctx, model->norm);
-    ggml_set_param(ctx, model->output);
-
-    for (uint32_t i = 0; i < n_layer; ++i) {
-        auto & layer = model->layers[i];
-
-        ggml_set_param(ctx, layer.attention_norm);
-        ggml_set_param(ctx, layer.wq);
-        ggml_set_param(ctx, layer.wk);
-        ggml_set_param(ctx, layer.wv);
-        ggml_set_param(ctx, layer.wo);
-        ggml_set_param(ctx, layer.ffn_norm);
-        ggml_set_param(ctx, layer.w1);
-        ggml_set_param(ctx, layer.w2);
-        ggml_set_param(ctx, layer.w3);
-    }
+    // allocate data
+    model->data.resize(ggml_allocr_max_size(alloc) + tensor_alignment);
+    ggml_allocr_free(alloc);
+    alloc = ggml_allocr_new(model->data.data(), model->data.size(), tensor_alignment);
+    alloc_model(alloc, model);
+    ggml_allocr_free(alloc);
 }
 
 static void randomize_model(struct my_llama_model * model, int seed, float mean, float std, float min, float max) {
@@ -720,7 +778,6 @@ struct train_params {
 
     bool use_alloc;
 
-    int mem_model_gb;
     int mem_compute_gb;
     int mem_compute0_gb;
 };
@@ -747,7 +804,6 @@ struct train_params get_default_train_params() {
 
     params.use_alloc              = true;
 
-    params.mem_model_gb   =  2;
     params.mem_compute_gb = 24;
     params.mem_compute0_gb = 8;
     return params;
@@ -772,7 +828,6 @@ static void train_print_usage(int argc, char ** argv, const struct train_params 
     fprintf(stderr, "  --print-info-interval N    Print infos during training each N examples (default %d)\n", params->print_info_interval);
     fprintf(stderr, "  --no-alloc                 Don't use allocator\n");
     fprintf(stderr, "  --use-alloc                Use allocator (default)\n");
-    fprintf(stderr, "  --mem-model N              Memory to allocate for model and cache in gigabytes. (default %d)\n", params->mem_model_gb);
     fprintf(stderr, "  --mem-compute N            Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute_gb);
     fprintf(stderr, "  --mem-compute0 N           Memory to allocate for automatic memory allocator in gigabytes. (default %d)\n", params->mem_compute0_gb);
 
@@ -868,12 +923,6 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
             params->use_alloc = false;
         } else if (arg == "--use-alloc") {
             params->use_alloc = true;
-        } else if (arg == "--mem-model") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->mem_model_gb = std::stoi(argv[i]);
         } else if (arg == "--mem-compute") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -960,13 +1009,6 @@ int main(int argc, char ** argv) {
 
     print_params(&model.hparams);
 
-    struct ggml_init_params lcparams;
-    lcparams.mem_size   = 1024ll*1024ll*1024ll*((size_t) params.mem_model_gb);
-    lcparams.mem_buffer = NULL;
-    lcparams.no_alloc   = false;
-
-    model.ctx = ggml_init(lcparams);
-
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.common.n_batch;
@@ -992,7 +1034,6 @@ int main(int argc, char ** argv) {
     opt_params_adam.adam.gclip              = params.common.adam_gclip;
     opt_params_adam.adam.eps_f              = params.common.adam_eps_f;
 
-    opt->ctx = model.ctx;
     opt->params = opt_params_adam;
 
     printf("%s: init model\n", __func__);
@@ -1000,7 +1041,6 @@ int main(int argc, char ** argv) {
     if (!existed) {
         init_model(&model);
     }
-    set_param_model(&model);
 
     opt->params = opt_params_adam;
 
@@ -1012,8 +1052,7 @@ int main(int argc, char ** argv) {
         randomize_model(&model, params.common.seed, 0.0f, 1.0f, -1.0f, +1.0f);
     }
 
-    printf("used_mem model: %zu bytes\n", ggml_used_mem(model.ctx));
-    // ggml_print_tensor_objects(model.ctx);
+    printf("%s: model_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(model.ctx) + model.data.size()), (float) (ggml_used_mem(model.ctx) + model.data.size()) / (1024.0f*1024.0f));
 
     // TODO: use std::vector<uint8_t> intead of "new"
     size_t    compute_size = 1024ll*1024ll*1024ll*((size_t) params.mem_compute_gb);
@@ -1024,7 +1063,6 @@ int main(int argc, char ** argv) {
 
     ggml_allocr * alloc = NULL;
     if (params.use_alloc) {
-        static const size_t tensor_alignment = 32;
         alloc = ggml_allocr_new(compute_buf_0, size_buf_0, tensor_alignment);
     }
 
@@ -1206,6 +1244,7 @@ int main(int argc, char ** argv) {
 
     delete[] compute_addr;
     delete[] compute_buf_0;
+    ggml_free(opt->ctx);
     free_train_state(train);
     ggml_free(model.ctx);
     llama_free(lctx);
