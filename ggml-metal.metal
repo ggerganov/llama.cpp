@@ -853,6 +853,36 @@ kernel void kernel_alibi_f32(
     }
 }
 
+typedef void (rope_t)(
+        device const    void * src0,
+        device const int32_t * src1,
+        device         float * dst,
+        constant     int64_t & ne00,
+        constant     int64_t & ne01,
+        constant     int64_t & ne02,
+        constant     int64_t & ne03,
+        constant    uint64_t & nb00,
+        constant    uint64_t & nb01,
+        constant    uint64_t & nb02,
+        constant    uint64_t & nb03,
+        constant     int64_t & ne0,
+        constant     int64_t & ne1,
+        constant     int64_t & ne2,
+        constant     int64_t & ne3,
+        constant    uint64_t & nb0,
+        constant    uint64_t & nb1,
+        constant    uint64_t & nb2,
+        constant    uint64_t & nb3,
+        constant         int & n_past,
+        constant         int & n_dims,
+        constant         int & mode,
+        constant       float & freq_base,
+        constant       float & freq_scale,
+        uint  tiitg[[thread_index_in_threadgroup]],
+        uint3 tptg[[threads_per_threadgroup]],
+        uint3 tgpig[[threadgroup_position_in_grid]]);
+
+template<typename T>
 kernel void kernel_rope(
         device const    void * src0,
         device const int32_t * src1,
@@ -901,11 +931,11 @@ kernel void kernel_rope(
             const float cos_theta = cos(theta);
             const float sin_theta = sin(theta);
 
-            device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-            device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
 
-            const float x0 = src[0];
-            const float x1 = src[1];
+            const T x0 = src[0];
+            const T x1 = src[1];
 
             dst_data[0] = x0*cos_theta - x1*sin_theta;
             dst_data[1] = x0*sin_theta + x1*cos_theta;
@@ -920,8 +950,8 @@ kernel void kernel_rope(
 
                 const int64_t i0 = ib*n_dims + ic/2;
 
-                device const float * const src = (device float *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                device       float * dst_data  = (device float *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+                device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
 
                 const float x0 = src[0];
                 const float x1 = src[n_dims/2];
@@ -932,6 +962,9 @@ kernel void kernel_rope(
         }
     }
 }
+
+template [[host_name("kernel_rope_f32")]] kernel rope_t kernel_rope<float>;
+template [[host_name("kernel_rope_f16")]] kernel rope_t kernel_rope<half>;
 
 kernel void kernel_cpy_f16_f16(
         device const half * src0,
