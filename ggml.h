@@ -437,6 +437,12 @@ extern "C" {
         GGML_OBJECT_WORK_BUFFER
     };
 
+    enum ggml_log_level {
+        GGML_LOG_LEVEL_ERROR = 2,
+        GGML_LOG_LEVEL_WARN = 3,
+        GGML_LOG_LEVEL_INFO = 4
+    };
+
     // ggml object
     struct ggml_object {
         size_t offs;

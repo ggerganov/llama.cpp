@@ -16,9 +16,9 @@
 #define GGML_METAL_LOG_WARN(...)
 #define GGML_METAL_LOG_ERROR(...)
 #else
-#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(LLAMA_LOG_LEVEL_INFO, __VA_ARGS__)
-#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(LLAMA_LOG_LEVEL_WARN, __VA_ARGS__)
-#define GGML_METAL_LOG_ERROR(...) ggml_metal_log(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO, __VA_ARGS__)
+#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN, __VA_ARGS__)
+#define GGML_METAL_LOG_ERROR(...) ggml_metal_log(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
 #endif
 
 #define UNUSED(x) (void)(x)
@@ -120,15 +120,15 @@ static NSString * const msl_library_source = @"see metal.metal";
 @implementation GGMLMetalClass
 @end
 
-void (*ggml_metal_log_callback)(enum llama_log_level level, const char * text, void * user_data) = NULL;
+void (*ggml_metal_log_callback)(enum ggml_log_level level, const char * text, void * user_data) = NULL;
 void *ggml_metal_log_user_data = NULL;
 
-void ggml_metal_log_set_callback(void (*log_callback)(enum llama_log_level level, const char * text, void * user_data), void * user_data) {
+void ggml_metal_log_set_callback(void (*log_callback)(enum ggml_log_level level, const char * text, void * user_data), void * user_data) {
   ggml_metal_log_callback = log_callback;
   ggml_metal_log_user_data = user_data;
 }
 
-static void ggml_metal_log(enum llama_log_level level, const char* format, ...){
+static void ggml_metal_log(enum ggml_log_level level, const char* format, ...){
   if ( ggml_metal_log_callback != NULL ) {
     va_list args;
     va_start(args, format);

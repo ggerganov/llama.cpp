@@ -62,12 +62,6 @@ extern "C" {
 
     typedef int llama_token;
 
-    enum llama_log_level {
-        LLAMA_LOG_LEVEL_ERROR = 2,
-        LLAMA_LOG_LEVEL_WARN  = 3,
-        LLAMA_LOG_LEVEL_INFO  = 4
-    };
-
     enum llama_vocab_type {
         LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
         LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
@@ -156,7 +150,7 @@ extern "C" {
     // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
     // if it exists.
     // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
+    typedef void (*llama_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
