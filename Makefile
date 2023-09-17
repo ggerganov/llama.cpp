@@ -418,7 +418,7 @@ endif
 endif # LLAMA_METAL
 
 ifdef LLAMA_METAL
-ggml-metal.o: ggml-metal.m ggml-metal.h llama.h
+ggml-metal.o: ggml-metal.m ggml-metal.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_METAL
 
