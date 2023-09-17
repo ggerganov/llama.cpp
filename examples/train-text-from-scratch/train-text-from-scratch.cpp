@@ -1059,12 +1059,15 @@ int main(int argc, char ** argv) {
         train->shuffle_next_sample = 0;
         train->shuffle_samples_hash = shuffle_samples_hash;
     }
+    std::vector<size_t> train_shuffled_samples_offs;
     std::vector<size_t> train_shuffled_samples_begin;
     std::vector<size_t> train_shuffled_samples_size;
+    train_shuffled_samples_offs.resize(train_samples_begin.size());
     train_shuffled_samples_begin.resize(train_samples_begin.size());
     train_shuffled_samples_size.resize(train_samples_size.size());
     train->shuffle_rng_state_next = shuffle_samples(
         train->shuffle_rng_state_current,
+        train_shuffled_samples_offs.data(),
         train_shuffled_samples_begin.data(),
         train_shuffled_samples_size.data(),
         train_samples_begin.data(),
@@ -1091,6 +1094,7 @@ int main(int argc, char ** argv) {
     opt_cb_data.tokens_size            = train_tokens.size();
     opt_cb_data.samples_begin          = train_samples_begin.data();
     opt_cb_data.samples_size           = train_samples_size.data();
+    opt_cb_data.shuffled_samples_offs  = train_shuffled_samples_offs.data();
     opt_cb_data.shuffled_samples_begin = train_shuffled_samples_begin.data();
     opt_cb_data.shuffled_samples_size  = train_shuffled_samples_size.data();
     opt_cb_data.samples_count          = train_samples_size.size();

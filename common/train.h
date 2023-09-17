@@ -56,6 +56,7 @@ struct train_params_common {
     bool fill_with_next_samples;
     bool separate_with_eos;
     bool separate_with_bos;
+    bool sample_random_offsets;
 
     bool force_reshuffle;
 
@@ -93,6 +94,7 @@ struct train_opt_callback_data {
     size_t                       tokens_size;
     size_t                     * samples_begin;
     size_t                     * samples_size;
+    size_t                     * shuffled_samples_offs;
     size_t                     * shuffled_samples_begin;
     size_t                     * shuffled_samples_size;
     size_t                       samples_count;
@@ -153,6 +155,7 @@ int64_t get_example_targets_batch(
         struct ggml_tensor   * tokens_input,
         struct ggml_tensor   * target_probs,
         int64_t                example_id,
+        const size_t         * samples_offs,
         const size_t         * samples_begin,
         const size_t         * samples_size,
               size_t           samples_count,
@@ -160,7 +163,8 @@ int64_t get_example_targets_batch(
         size_t                 n_train_data,
         bool                   separate_with_eos,
         bool                   separate_with_bos,
-        bool                   fill_with_next_samples);
+        bool                   fill_with_next_samples,
+        bool                   sample_random_offsets);
 
 
 void          mt19937_set_state(std::mt19937& rng, const mt19937_state& rng_state);
@@ -169,6 +173,7 @@ mt19937_state mt19937_seed_to_state(unsigned seed);
 
 mt19937_state shuffle_samples(
         const mt19937_state & rng_state,
+        size_t              * shuffled_offs,
         size_t              * shuffled_begins,
         size_t              * shuffled_sizes,
         const size_t        * begins,

@@ -211,6 +211,7 @@ int64_t get_example_targets_batch(
     struct ggml_tensor   * tokens_input,
     struct ggml_tensor   * target_probs,
     int64_t                example_id,
+    const size_t         * samples_offs,
     const size_t         * samples_begin,
     const size_t         * samples_size,
           size_t           samples_count,
@@ -218,7 +219,8 @@ int64_t get_example_targets_batch(
     size_t                 n_train_data,
     bool                   separate_with_eos,
     bool                   separate_with_bos,
-    bool                   fill_with_next_samples
+    bool                   fill_with_next_samples,
+    bool                   sample_random_offsets
 ) {
     GGML_ASSERT(samples_count > 0);
     GGML_ASSERT(tokens_input->n_dims  == 2);
@@ -238,8 +240,8 @@ int64_t get_example_targets_batch(
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
-        size_t sample_offs  = 0;
         size_t sample_idx   = (example_id + used_samples) % samples_count;
+        size_t sample_offs  = sample_random_offsets ? samples_offs[sample_idx] : 0;
         size_t sample_begin = samples_begin[sample_idx];
         size_t sample_size  = samples_size[sample_idx];
         ++used_samples;
@@ -308,6 +310,7 @@ std::string mt19937_seed_to_state(unsigned seed) {
 
 std::string shuffle_samples(
         const std::string & rng_state,
+        size_t            * shuffled_offs,
         size_t            * shuffled_begins,
         size_t            * shuffled_sizes,
         const size_t      * begins,
@@ -333,6 +336,11 @@ std::string shuffle_samples(
             // stable sort for reproducibility
             return (rnd[a] == rnd[b]) ? (a < b) : (rnd[a] < rnd[b]);
         });
+    }
+
+    // create random offsets
+    for (unsigned i=0; i<count; ++i) {
+        shuffled_offs[i] = (size_t) ((sizes[idcs[i]] - 1) * ((double) rng() / (double) (rng.max()-1)));
     }
 
     // reorder begins and sizes by sorted indices
@@ -1048,6 +1056,7 @@ struct train_params_common get_default_train_params_common() {
     params.fill_with_next_samples = false;
     params.separate_with_eos      = false;
     params.separate_with_bos      = true;
+    params.sample_random_offsets  = false;
     params.force_reshuffle        = false;
 
     params.opt_past               = 0;
@@ -1097,6 +1106,7 @@ void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train
     fprintf(stderr, "  --separate-with-bos        When fill-with-next-samples, insert begin-of-sequence token between samples.%s\n", params->separate_with_bos ? " (default)" : "");
     fprintf(stderr, "  --no-separate-with-eos     When fill-with-next-samples, don't insert end-of-sequence token between samples.%s\n", !params->separate_with_eos ? " (default)" : "");
     fprintf(stderr, "  --no-separate-with-bos     When fill-with-next-samples, don't insert begin-of-sequence token between samples.%s\n", !params->separate_with_bos ? " (default)" : "");
+    fprintf(stderr, "  --sample-random-offsets    Use samples beginning at random offsets. Together with fill-with-next-samples this may help for training endless text generation.%s\n", params->sample_random_offsets ? " (default)" : "");
     fprintf(stderr, "  --force-reshuffle          Force a reshuffling of data at program start, otherwise the shuffling of loaded checkpoint is resumed.\n");
     fprintf(stderr, "  --no-flash                 Don't use flash attention \n");
     fprintf(stderr, "  --use-flash                Use flash attention (default)\n");
@@ -1221,6 +1231,8 @@ bool consume_common_train_arg(
         params->separate_with_eos = false;
     } else if (arg == "--no-separate-with-bos") {
         params->separate_with_bos = false;
+    } else if (arg == "--sample-random-offsets") {
+        params->sample_random_offsets = true;
     } else if (arg == "--force-reshuffle") {
         params->force_reshuffle = true;
     } else if (arg == "--no-flash") {
@@ -1433,6 +1445,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
         data->tokens_input,
         data->target_probs,
         train->shuffle_next_sample,
+        data->shuffled_samples_offs,
         data->shuffled_samples_begin,
         data->shuffled_samples_size,
         data->samples_count,
@@ -1440,7 +1453,8 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
         data->tokens_size,
         params->separate_with_eos,
         params->separate_with_bos,
-        params->fill_with_next_samples);
+        params->fill_with_next_samples,
+        params->sample_random_offsets);
 
     train->train_samples += used_samples;
     train->shuffle_next_sample += used_samples;
@@ -1452,6 +1466,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
         train->shuffle_rng_state_current = train->shuffle_rng_state_next;
         train->shuffle_rng_state_next = shuffle_samples(
             train->shuffle_rng_state_current,
+            data->shuffled_samples_offs,
             data->shuffled_samples_begin,
             data->shuffled_samples_size,
             data->samples_begin,
