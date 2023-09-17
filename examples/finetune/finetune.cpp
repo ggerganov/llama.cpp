@@ -1276,7 +1276,7 @@ static void train_print_usage(int argc, char ** argv, const struct train_params 
 
     fprintf(stderr, "  --model-base FNAME         model path from which to load base model (default '%s')\n", params->fn_model_base);
     fprintf(stderr, "  --lora-out FNAME           path to save llama lora (default '%s')\n", params->fn_lora_out);
-    fprintf(stderr, "  --only-write-lora          only save llama lora, don't do any training\n");
+    fprintf(stderr, "  --only-write-lora          only save llama lora, don't do any training.  use this if you only want to convert a checkpoint to a lora adapter.\n");
     fprintf(stderr, "  --norm-rms-eps F           RMS-Norm epsilon value (default %f)\n", params->f_norm_rms_eps);
     fprintf(stderr, "  --rope-freq-base F         Frequency base for ROPE (default %f)\n", params->rope_freq_base);
     fprintf(stderr, "  --rope-freq-scale F        Frequency scale for ROPE (default %f)\n", params->rope_freq_scale);
@@ -1660,8 +1660,6 @@ int main(int argc, char ** argv) {
     printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) train->train_tokens);
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
     printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + lora.data.size()), (float) (ggml_used_mem(lora.ctx) + lora.data.size()) / (1024.0f*1024.0f));
-    printf("%s: opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
-    printf("%s: opt iter %d\n", __func__, opt->iter);
 
     if (params.only_write_lora) {
         save_train_files_data save_data;
@@ -1680,6 +1678,9 @@ int main(int argc, char ** argv) {
         llama_free_model(lmodel);
         return 0;
     }
+
+    printf("%s: opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
+    printf("%s: opt iter %d\n", __func__, opt->iter);
 
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;

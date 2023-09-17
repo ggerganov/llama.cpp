@@ -762,24 +762,17 @@ struct train_params {
     const char * fn_vocab_model;
     const char * fn_model_out;
 
+    bool only_write_model;
+
     int n_ctx;
     int n_embd;
     int n_head;
     int n_layer;
     int n_ff;
 
-    int n_examples;
-
     float f_norm_rms_eps;
     float rope_freq_base;
     float rope_freq_scale;
-
-    int print_info_interval;
-
-    bool use_alloc;
-
-    int mem_compute_gb;
-    int mem_compute0_gb;
 };
 
 struct train_params get_default_train_params() {
@@ -788,24 +781,18 @@ struct train_params get_default_train_params() {
     params.fn_vocab_model    = "ggml-vic7b-uncensored-q4_0.bin";
     params.fn_model_out      = "ggml-checkpoint-f32.bin";
 
+    params.only_write_model = false;
+
     params.n_ctx      =  128;
     params.n_embd     =  256;
     params.n_head     =    8;
     params.n_layer    =   16;
     params.n_ff       =  768;
 
-    params.n_examples =    1;
-
     params.f_norm_rms_eps  = 1e-5f;
     params.rope_freq_base  = 10000.0f;
     params.rope_freq_scale = 1.0f;
 
-    params.print_info_interval    = 1;
-
-    params.use_alloc              = true;
-
-    params.mem_compute_gb = 24;
-    params.mem_compute0_gb = 8;
     return params;
 }
 
@@ -817,6 +804,7 @@ static void train_print_usage(int argc, char ** argv, const struct train_params 
 
     fprintf(stderr, "  --vocab-model FNAME        model path from which to load vocab (default '%s')\n", params->fn_vocab_model);
     fprintf(stderr, "  --model-out FNAME          path to save ggml model (default '%s')\n", params->fn_model_out);
+    fprintf(stderr, "  --only-write-model         only save llama model, don't do any training. use this if you only want to convert a checkpoint to a model.\n");
     fprintf(stderr, "  --embd N                   Embedding size used for new models (default %d)\n", params->n_embd);
     fprintf(stderr, "  --ff N                     Feedforward size used for new models. (default %d)\n", params->n_ff);
     fprintf(stderr, "  --head N                   Number of heads for new models (default %d)\n", params->n_head);
@@ -824,12 +812,6 @@ static void train_print_usage(int argc, char ** argv, const struct train_params 
     fprintf(stderr, "  --norm-rms-eps F           RMS-Norm epsilon value (default %f)\n", params->f_norm_rms_eps);
     fprintf(stderr, "  --rope-freq-base F         Frequency base for ROPE (default %f)\n", params->rope_freq_base);
     fprintf(stderr, "  --rope-freq-scale F        Frequency scale for ROPE (default %f)\n", params->rope_freq_scale);
-    fprintf(stderr, "  -n N, --examples N         Number of examples to train (default %d)\n", params->n_examples);
-    fprintf(stderr, "  --print-info-interval N    Print infos during training each N examples (default %d)\n", params->print_info_interval);
-    fprintf(stderr, "  --no-alloc                 Don't use allocator\n");
-    fprintf(stderr, "  --use-alloc                Use allocator (default)\n");
-    fprintf(stderr, "  --mem-compute N            Memory to allocate for compute in gigabytes. (default %d)\n", params->mem_compute_gb);
-    fprintf(stderr, "  --mem-compute0 N           Memory to allocate for automatic memory allocator in gigabytes. (default %d)\n", params->mem_compute0_gb);
 
     print_common_train_usage(argc, argv, &params->common);
 }
@@ -865,6 +847,8 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
                 break;
             }
             params->fn_model_out = argv[i];
+        } else if (arg == "--only-write-model") {
+            params->only_write_model = true;
         } else if (arg == "--embd") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -907,34 +891,6 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
                 break;
             }
             params->rope_freq_scale = std::stof(argv[i]);
-        } else if (arg == "-n" || arg == "--examples") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->n_examples = std::stoi(argv[i]);
-        } else if (arg == "--print-info-interval") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->print_info_interval = std::stoi(argv[i]);
-        } else if (arg == "--no-alloc") {
-            params->use_alloc = false;
-        } else if (arg == "--use-alloc") {
-            params->use_alloc = true;
-        } else if (arg == "--mem-compute") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->mem_compute_gb = std::stoi(argv[i]);
-        } else if (arg == "--mem-compute0") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params->mem_compute0_gb = std::stoi(argv[i]);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             train_print_usage(argc, argv, &default_params);
@@ -1068,7 +1024,9 @@ int main(int argc, char ** argv) {
     } else {
         init_model(&model);
         randomize_model(&model, params.common.seed, 0.0f, 1.0f, -1.0f, +1.0f);
-        ggml_opt_init(opt->ctx, opt, opt->params, get_parameter_count(&model));
+        if (!params.only_write_model) {
+            ggml_opt_init(opt->ctx, opt, opt->params, get_parameter_count(&model));
+        }
     }
     opt->iter = train->train_its;
 
@@ -1078,6 +1036,25 @@ int main(int argc, char ** argv) {
     printf("%s: seen train_tokens      %llu\n", __func__, (long long unsigned) train->train_tokens);
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
     printf("%s: model_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(model.ctx) + model.data.size()), (float) (ggml_used_mem(model.ctx) + model.data.size()) / (1024.0f*1024.0f));
+
+    if (params.only_write_model) {
+        save_train_files_data save_data;
+        save_data.fn_checkpoint_out = "";
+        save_data.fn_model_out      = params.fn_model_out;
+        save_data.fn_vocab_model    = params.fn_vocab_model;
+        save_data.pattern_fn_it     = params.common.pattern_fn_it;
+        save_data.fn_latest         = params.common.fn_latest;
+        save_data.model             = &model;
+
+        save_train_files(&save_data, train);
+
+        free_train_state(train);
+        ggml_free(model.ctx);
+        llama_free(lctx);
+        llama_free_model(lmodel);
+        return 0;
+    }
+
     printf("%s: opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
     printf("%s: opt iter %d\n", __func__, opt->iter);
 
