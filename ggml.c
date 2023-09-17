@@ -8797,8 +8797,6 @@ static void ggml_compute_forward_add_f32(
 #else
             ggml_vec_add_f32(ne00, dst_ptr, src0_ptr, src1_ptr);
 #endif
-                // }
-            // }
         }
     } else {
         // src1 is not contiguous
