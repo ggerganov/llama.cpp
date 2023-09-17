@@ -6478,26 +6478,6 @@ int llama_n_embd(const struct llama_context * ctx) {
     return llama_model_n_embd(&ctx->model);
 }
 
-int llama_n_ff(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_ff;
-}
-
-int llama_n_head(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_head;
-}
-
-int llama_n_head_kv(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_head_kv;
-}
-
-int llama_n_rot(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_rot;
-}
-
-int llama_n_layer(const struct llama_context * ctx) {
-    return ctx->model.hparams.n_layer;
-}
-
 enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx) {
     return ctx->model.vocab.type;
 }
@@ -6516,26 +6496,6 @@ int llama_model_n_ctx_train(const struct llama_model * model) {
 
 int llama_model_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
-}
-
-int llama_model_n_ff(const struct llama_model * model) {
-    return model->hparams.n_ff;
-}
-
-int llama_model_n_head(const struct llama_model * model) {
-    return model->hparams.n_head;
-}
-
-int llama_model_n_head_kv(const struct llama_model * model) {
-    return model->hparams.n_head_kv;
-}
-
-int llama_model_n_rot(const struct llama_model * model) {
-    return model->hparams.n_rot;
-}
-
-int llama_model_n_layer(const struct llama_model * model) {
-    return model->hparams.n_layer;
 }
 
 int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
