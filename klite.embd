@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 63
+Current version: 64
 -Concedo
 -->
 
@@ -4747,6 +4747,7 @@ Current version: 63
 		custom_kobold_endpoint = "";
 		custom_oai_key = "";
 		custom_scale_key = "";
+		custom_claude_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
@@ -5260,6 +5261,7 @@ Current version: 63
 			custom_kobold_endpoint = "";
 			custom_oai_key = "";
 			custom_scale_key = "";
+			custom_claude_key = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
 			const findex = selected_idx_arr.indexOf("9999");
 			if (findex > -1) {
@@ -8589,7 +8591,8 @@ Current version: 63
 	}
 
 	function btn_retry() {
-		if (pending_response_id == "" && gametext_arr.length > 0) {
+		if (pending_response_id == "" && (gametext_arr.length > 1 ||
+		(gametext_arr.length > 0 && (current_memory != "" || current_anote != "")))) {
 			let boxtextstash = document.getElementById("input_text").value;
 			document.getElementById("input_text").value = "";
 			let temp = gametext_arr[gametext_arr.length-1];
