@@ -306,6 +306,63 @@ static void set_param_lora(struct my_llama_lora * lora) {
     }
 }
 
+static void alloc_lora(struct ggml_allocr * alloc, struct my_llama_lora * lora) {
+    ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
+    ggml_allocr_alloc(alloc, lora->tok_embeddings_b);
+    ggml_allocr_alloc(alloc, lora->norm_a);
+    ggml_allocr_alloc(alloc, lora->norm_b);
+    ggml_allocr_alloc(alloc, lora->output_a);
+    ggml_allocr_alloc(alloc, lora->output_b);
+    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
+        auto & layer = lora->layers[i];
+        ggml_allocr_alloc(alloc, layer.attention_norm_a);
+        ggml_allocr_alloc(alloc, layer.attention_norm_b);
+        ggml_allocr_alloc(alloc, layer.wq_a);
+        ggml_allocr_alloc(alloc, layer.wq_b);
+        ggml_allocr_alloc(alloc, layer.wk_a);
+        ggml_allocr_alloc(alloc, layer.wk_b);
+        ggml_allocr_alloc(alloc, layer.wv_a);
+        ggml_allocr_alloc(alloc, layer.wv_b);
+        ggml_allocr_alloc(alloc, layer.wo_a);
+        ggml_allocr_alloc(alloc, layer.wo_b);
+        ggml_allocr_alloc(alloc, layer.ffn_norm_a);
+        ggml_allocr_alloc(alloc, layer.ffn_norm_b);
+        ggml_allocr_alloc(alloc, layer.w1_a);
+        ggml_allocr_alloc(alloc, layer.w1_b);
+        ggml_allocr_alloc(alloc, layer.w2_a);
+        ggml_allocr_alloc(alloc, layer.w2_b);
+        ggml_allocr_alloc(alloc, layer.w3_a);
+        ggml_allocr_alloc(alloc, layer.w3_b);
+    }
+    ggml_allocr_alloc(alloc, lora->tok_embeddings_a->grad);
+    ggml_allocr_alloc(alloc, lora->tok_embeddings_b->grad);
+    ggml_allocr_alloc(alloc, lora->norm_a->grad);
+    ggml_allocr_alloc(alloc, lora->norm_b->grad);
+    ggml_allocr_alloc(alloc, lora->output_a->grad);
+    ggml_allocr_alloc(alloc, lora->output_b->grad);
+    for (uint32_t i = 0; i < lora->layers.size(); ++i) {
+        auto & layer = lora->layers[i];
+        ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
+        ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
+        ggml_allocr_alloc(alloc, layer.wq_a->grad);
+        ggml_allocr_alloc(alloc, layer.wq_b->grad);
+        ggml_allocr_alloc(alloc, layer.wk_a->grad);
+        ggml_allocr_alloc(alloc, layer.wk_b->grad);
+        ggml_allocr_alloc(alloc, layer.wv_a->grad);
+        ggml_allocr_alloc(alloc, layer.wv_b->grad);
+        ggml_allocr_alloc(alloc, layer.wo_a->grad);
+        ggml_allocr_alloc(alloc, layer.wo_b->grad);
+        ggml_allocr_alloc(alloc, layer.ffn_norm_a->grad);
+        ggml_allocr_alloc(alloc, layer.ffn_norm_b->grad);
+        ggml_allocr_alloc(alloc, layer.w1_a->grad);
+        ggml_allocr_alloc(alloc, layer.w1_b->grad);
+        ggml_allocr_alloc(alloc, layer.w2_a->grad);
+        ggml_allocr_alloc(alloc, layer.w2_b->grad);
+        ggml_allocr_alloc(alloc, layer.w3_a->grad);
+        ggml_allocr_alloc(alloc, layer.w3_b->grad);
+    }
+}
+
 static void init_lora(const struct my_llama_model * model, struct my_llama_lora * lora) {
     const auto & lparams = lora->hparams;
 
@@ -400,121 +457,15 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
     set_param_lora(lora);
 
     // measure data size
-    ggml_allocr * alloc = NULL;
+    struct ggml_allocr * alloc = NULL;
     alloc = ggml_allocr_new_measure(tensor_alignment);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b);
-    ggml_allocr_alloc(alloc, lora->norm_a);
-    ggml_allocr_alloc(alloc, lora->norm_b);
-    ggml_allocr_alloc(alloc, lora->output_a);
-    ggml_allocr_alloc(alloc, lora->output_b);
-    for (uint32_t i = 0; i < n_layer; ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b);
-        ggml_allocr_alloc(alloc, layer.wq_a);
-        ggml_allocr_alloc(alloc, layer.wq_b);
-        ggml_allocr_alloc(alloc, layer.wk_a);
-        ggml_allocr_alloc(alloc, layer.wk_b);
-        ggml_allocr_alloc(alloc, layer.wv_a);
-        ggml_allocr_alloc(alloc, layer.wv_b);
-        ggml_allocr_alloc(alloc, layer.wo_a);
-        ggml_allocr_alloc(alloc, layer.wo_b);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b);
-        ggml_allocr_alloc(alloc, layer.w1_a);
-        ggml_allocr_alloc(alloc, layer.w1_b);
-        ggml_allocr_alloc(alloc, layer.w2_a);
-        ggml_allocr_alloc(alloc, layer.w2_b);
-        ggml_allocr_alloc(alloc, layer.w3_a);
-        ggml_allocr_alloc(alloc, layer.w3_b);
-    }
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a->grad);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b->grad);
-    ggml_allocr_alloc(alloc, lora->norm_a->grad);
-    ggml_allocr_alloc(alloc, lora->norm_b->grad);
-    ggml_allocr_alloc(alloc, lora->output_a->grad);
-    ggml_allocr_alloc(alloc, lora->output_b->grad);
-    for (uint32_t i = 0; i < n_layer; ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.wq_a->grad);
-        ggml_allocr_alloc(alloc, layer.wq_b->grad);
-        ggml_allocr_alloc(alloc, layer.wk_a->grad);
-        ggml_allocr_alloc(alloc, layer.wk_b->grad);
-        ggml_allocr_alloc(alloc, layer.wv_a->grad);
-        ggml_allocr_alloc(alloc, layer.wv_b->grad);
-        ggml_allocr_alloc(alloc, layer.wo_a->grad);
-        ggml_allocr_alloc(alloc, layer.wo_b->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.w1_a->grad);
-        ggml_allocr_alloc(alloc, layer.w1_b->grad);
-        ggml_allocr_alloc(alloc, layer.w2_a->grad);
-        ggml_allocr_alloc(alloc, layer.w2_b->grad);
-        ggml_allocr_alloc(alloc, layer.w3_a->grad);
-        ggml_allocr_alloc(alloc, layer.w3_b->grad);
-    }
+    alloc_lora(alloc, lora);
 
     // allocate data
     lora->data.resize(ggml_allocr_max_size(alloc) + tensor_alignment);
     ggml_allocr_free(alloc);
     alloc = ggml_allocr_new(lora->data.data(), lora->data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b);
-    ggml_allocr_alloc(alloc, lora->norm_a);
-    ggml_allocr_alloc(alloc, lora->norm_b);
-    ggml_allocr_alloc(alloc, lora->output_a);
-    ggml_allocr_alloc(alloc, lora->output_b);
-    for (uint32_t i = 0; i < n_layer; ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b);
-        ggml_allocr_alloc(alloc, layer.wq_a);
-        ggml_allocr_alloc(alloc, layer.wq_b);
-        ggml_allocr_alloc(alloc, layer.wk_a);
-        ggml_allocr_alloc(alloc, layer.wk_b);
-        ggml_allocr_alloc(alloc, layer.wv_a);
-        ggml_allocr_alloc(alloc, layer.wv_b);
-        ggml_allocr_alloc(alloc, layer.wo_a);
-        ggml_allocr_alloc(alloc, layer.wo_b);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b);
-        ggml_allocr_alloc(alloc, layer.w1_a);
-        ggml_allocr_alloc(alloc, layer.w1_b);
-        ggml_allocr_alloc(alloc, layer.w2_a);
-        ggml_allocr_alloc(alloc, layer.w2_b);
-        ggml_allocr_alloc(alloc, layer.w3_a);
-        ggml_allocr_alloc(alloc, layer.w3_b);
-    }
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_a->grad);
-    ggml_allocr_alloc(alloc, lora->tok_embeddings_b->grad);
-    ggml_allocr_alloc(alloc, lora->norm_a->grad);
-    ggml_allocr_alloc(alloc, lora->norm_b->grad);
-    ggml_allocr_alloc(alloc, lora->output_a->grad);
-    ggml_allocr_alloc(alloc, lora->output_b->grad);
-    for (uint32_t i = 0; i < n_layer; ++i) {
-        auto & layer = lora->layers[i];
-        ggml_allocr_alloc(alloc, layer.attention_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.attention_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.wq_a->grad);
-        ggml_allocr_alloc(alloc, layer.wq_b->grad);
-        ggml_allocr_alloc(alloc, layer.wk_a->grad);
-        ggml_allocr_alloc(alloc, layer.wk_b->grad);
-        ggml_allocr_alloc(alloc, layer.wv_a->grad);
-        ggml_allocr_alloc(alloc, layer.wv_b->grad);
-        ggml_allocr_alloc(alloc, layer.wo_a->grad);
-        ggml_allocr_alloc(alloc, layer.wo_b->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_a->grad);
-        ggml_allocr_alloc(alloc, layer.ffn_norm_b->grad);
-        ggml_allocr_alloc(alloc, layer.w1_a->grad);
-        ggml_allocr_alloc(alloc, layer.w1_b->grad);
-        ggml_allocr_alloc(alloc, layer.w2_a->grad);
-        ggml_allocr_alloc(alloc, layer.w2_b->grad);
-        ggml_allocr_alloc(alloc, layer.w3_a->grad);
-        ggml_allocr_alloc(alloc, layer.w3_b->grad);
-    }
+    alloc_lora(alloc, lora);
     ggml_allocr_free(alloc);
 }
 
