@@ -30,6 +30,12 @@ struct my_llama_hparams {
     uint32_t n_head_kv  = 32;
     uint32_t n_layer    = 32;
 
+    // float f_norm_eps     = 1e-5f; // falcon
+    float f_norm_rms_eps = 1e-5f; // llama
+
+    float rope_freq_base  = 10000.0f;
+    float rope_freq_scale = 1.0f;
+
     uint32_t n_gqa() const {
         return n_head/n_head_kv;
     }
@@ -67,7 +73,7 @@ struct my_llama_layer {
 };
 
 struct my_llama_model {
-    my_llama_hparams hparams;
+    struct my_llama_hparams hparams;
 
     struct ggml_tensor * tok_embeddings;
 
@@ -92,12 +98,6 @@ struct my_llama_lora_hparams {
     uint32_t n_rank_tok_embeddings = 4;
     uint32_t n_rank_norm = 1;
     uint32_t n_rank_output = 4;
-
-    // float f_norm_eps     = 1e-5f; // falcon
-    float f_norm_rms_eps = 1e-5f; // llama
-
-    float rope_freq_base  = 10000.0f;
-    float rope_freq_scale = 1.0f;
 
     bool operator!=(const my_llama_lora_hparams& other) const {
         return memcmp(this, &other, sizeof(other));
@@ -196,12 +196,16 @@ static const char * LLM_TENSOR_FFN_DOWN      = "blk.%d.ffn_down";
 static const char * LLM_TENSOR_FFN_UP        = "blk.%d.ffn_up";
 
 static void print_params(struct my_llama_hparams * params) {
-    printf("%s: n_vocab: %u\n", __func__, params->n_vocab);
-    printf("%s: n_ctx:   %u\n", __func__, params->n_ctx);
-    printf("%s: n_embd:  %u\n", __func__, params->n_embd);
-    printf("%s: n_ff:    %u\n", __func__, params->n_ff);
-    printf("%s: n_head:  %u\n", __func__, params->n_head);
-    printf("%s: n_layer: %u\n", __func__, params->n_layer);
+    printf("%s: n_vocab:   %u\n", __func__, params->n_vocab);
+    printf("%s: n_ctx:     %u\n", __func__, params->n_ctx);
+    printf("%s: n_embd:    %u\n", __func__, params->n_embd);
+    printf("%s: n_ff:      %u\n", __func__, params->n_ff);
+    printf("%s: n_head:    %u\n", __func__, params->n_head);
+    printf("%s: n_head_kv: %u\n", __func__, params->n_head_kv);
+    printf("%s: n_layer:   %u\n", __func__, params->n_layer);
+    printf("%s: norm_rms_eps          : %f\n", __func__, params->f_norm_rms_eps);
+    printf("%s: rope_freq_base        : %f\n", __func__, params->rope_freq_base);
+    printf("%s: rope_freq_scale       : %f\n", __func__, params->rope_freq_scale);
 }
 
 static void print_lora_params(struct my_llama_lora_hparams * params) {
@@ -217,12 +221,61 @@ static void print_lora_params(struct my_llama_lora_hparams * params) {
     printf("%s: n_rank_tok_embeddings : %u\n", __func__, params->n_rank_tok_embeddings);
     printf("%s: n_rank_norm           : %u\n", __func__, params->n_rank_norm);
     printf("%s: n_rank_output         : %u\n", __func__, params->n_rank_output);
-    printf("%s: norm_rms_eps          : %f\n", __func__, params->f_norm_rms_eps);
-    printf("%s: rope_freq_base        : %f\n", __func__, params->rope_freq_base);
-    printf("%s: rope_freq_scale       : %f\n", __func__, params->rope_freq_scale);
 }
 
-static void init_model(struct llama_model * input, struct my_llama_model * model, uint32_t n_ctx) {
+#define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
+{ \
+    const std::string skey(key); \
+    const int kid = gguf_find_key(ctx, skey.c_str()); \
+    if (kid >= 0) { \
+        enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
+        if (ktype != (type)) { \
+            die_fmt("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype)); \
+        } \
+        (dst) = func(ctx, kid); \
+    } else if (req) { \
+        die_fmt("key not found in model: %s", skey.c_str()); \
+    } \
+}
+
+static void load_model_hparams_gguf(struct gguf_context * ctx, struct my_llama_hparams * hparams, const char * expected_arch) {
+    std::string arch;
+
+    GGUF_GET_KEY(ctx, arch, gguf_get_val_str, GGUF_TYPE_STRING, true, LLM_KV_GENERAL_ARCHITECTURE);
+    if (expected_arch != NULL) {
+        if (arch != expected_arch) {
+            printf("%s: arch=%s expected_arch=%s\n", __func__, arch.c_str(), expected_arch);
+        }
+        GGML_ASSERT(arch == expected_arch);
+    }
+
+    std::vector<char> keybuf;
+    keybuf.resize(512);
+    auto kv = [&arch, &keybuf](const char * key) -> const char * {
+        snprintf(keybuf.data(), keybuf.size(), key, arch.c_str());
+        return keybuf.data();
+    };
+
+    GGUF_GET_KEY(ctx, hparams->n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_EMBEDDING_LENGTH));
+    GGUF_GET_KEY(ctx, hparams->n_ctx,          gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_CONTEXT_LENGTH));
+    GGUF_GET_KEY(ctx, hparams->n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_FEED_FORWARD_LENGTH));
+    GGUF_GET_KEY(ctx, hparams->n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
+    GGUF_GET_KEY(ctx, hparams->n_layer,        gguf_get_val_u32, GGUF_TYPE_UINT32,  true, kv(LLM_KV_BLOCK_COUNT));
+
+    // n_head_kv is optional, default to n_head
+    hparams->n_head_kv = hparams->n_head;
+    GGUF_GET_KEY(ctx, hparams->n_head_kv,      gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
+
+    float rope_freq_scale = 1.0f;
+    GGUF_GET_KEY(ctx, hparams->f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+    GGUF_GET_KEY(ctx, hparams->rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
+    GGUF_GET_KEY(ctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+    if (rope_freq_scale != 1.0f) {
+        hparams->rope_freq_scale = 1.0f / rope_freq_scale;
+    }
+}
+
+static void init_model(struct llama_model * input, struct my_llama_model * model, const char * fn_model, uint32_t n_ctx) {
     auto & hparams = model->hparams;
 
     std::vector<char> tn_buf;
@@ -238,14 +291,23 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
         return tn_buf.data();
     };
 
-    hparams.n_vocab    = llama_model_n_vocab(input);
-    hparams.n_ctx      = n_ctx;
-    hparams.n_embd     = llama_model_n_embd(input);
-    hparams.n_ff       = llama_model_n_ff(input);
-    hparams.n_head     = llama_model_n_head(input);
-    hparams.n_head_kv  = llama_model_n_head_kv(input);
-    hparams.n_layer    = llama_model_n_layer(input);
 
+    // get parameters directly from gguf file
+    {
+        struct gguf_init_params params = {
+            /*.no_alloc = */ false,
+            /*.ctx      = */ NULL,
+        };
+        struct gguf_context * mctx = gguf_init_from_file(fn_model, params);
+
+        load_model_hparams_gguf(mctx, &hparams, "llama");
+
+        gguf_free(mctx);
+    }
+    hparams.n_vocab = llama_model_n_vocab(input);
+    hparams.n_ctx = n_ctx;
+
+    // get tensors from llama_model (possibly mmapped)
     model->tok_embeddings = llama_get_model_tensor(input, tn(LLM_TENSOR_TOKEN_EMBD));
     model->norm           = llama_get_model_tensor(input, tn(LLM_TENSOR_OUTPUT_NORM));
     model->output         = llama_get_model_tensor(input, tn(LLM_TENSOR_OUTPUT));
@@ -549,9 +611,9 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     const int n_rot       = hparams.n_embd_head();
     const int n_embd_head = hparams.n_embd_head();
     const int n_embd_gqa  = hparams.n_embd_gqa();
-    const float rms_norm_eps    = lora->hparams.f_norm_rms_eps;
-    const float rope_freq_base  = lora->hparams.rope_freq_base;
-    const float rope_freq_scale = lora->hparams.rope_freq_scale;
+    const float rms_norm_eps    = hparams.f_norm_rms_eps;
+    const float rope_freq_base  = hparams.rope_freq_base;
+    const float rope_freq_scale = hparams.rope_freq_scale;
 
     GGML_ASSERT((size_t) n_layer == lora->layers.size());
 
@@ -756,52 +818,6 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     return t36;
 }
 
-#define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-{ \
-    const std::string skey(key); \
-    const int kid = gguf_find_key(ctx, skey.c_str()); \
-    if (kid >= 0) { \
-        enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
-        if (ktype != (type)) { \
-            die_fmt("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype)); \
-        } \
-        (dst) = func(ctx, kid); \
-    } else if (req) { \
-        die_fmt("key not found in model: %s", skey.c_str()); \
-    } \
-}
-
-static void load_default_lora_params_from_base_model(const char * fn_base_model, struct my_llama_lora_hparams * lora_params) {
-    if (strlen(fn_base_model) == 0) {
-        return;
-    }
-    struct gguf_init_params params;
-    params.no_alloc = false;
-    params.ctx = NULL;
-    struct gguf_context * fctx = gguf_init_from_file(fn_base_model, params);
-    if (fctx == NULL) {
-        return;
-    }
-
-    const char * arch = "llama";
-    std::vector<char> keybuf;
-    keybuf.resize(512);
-    auto kv = [arch, &keybuf](const char * key) -> const char * {
-        snprintf(keybuf.data(), keybuf.size(), key, arch);
-        return keybuf.data();
-    };
-
-    float rope_freq_scale = 1.0f;
-    GGUF_GET_KEY(fctx, lora_params->f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
-    GGUF_GET_KEY(fctx, lora_params->rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
-    GGUF_GET_KEY(fctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-    if (rope_freq_scale != 1.0f) {
-        lora_params->rope_freq_scale = 1.0f / rope_freq_scale;
-    }
-
-    gguf_free(fctx);
-}
-
 static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model, struct my_llama_lora * lora) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
 
@@ -821,24 +837,15 @@ static void load_llama_lora_gguf(struct gguf_context * fctx, struct ggml_context
     GGUF_GET_KEY(fctx, ftype_u, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_GENERAL_FILE_TYPE);
     GGML_ASSERT((enum llama_ftype) ftype_u == LLAMA_FTYPE_ALL_F32);
 
-    // n_ctx was not saved in earlier checkpoint file version, so we make it optional here
-    GGUF_GET_KEY(fctx, model->hparams.n_ctx,   gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_CONTEXT_LENGTH));
+    struct my_llama_hparams hparams;
+    load_model_hparams_gguf(fctx, &hparams, arch.c_str());
 
-    GGUF_GET_KEY(fctx, model->hparams.n_embd,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_EMBEDDING_LENGTH));
-    GGUF_GET_KEY(fctx, model->hparams.n_ff,    gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_FEED_FORWARD_LENGTH));
-    GGUF_GET_KEY(fctx, model->hparams.n_head,  gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
-    GGUF_GET_KEY(fctx, model->hparams.n_layer, gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_BLOCK_COUNT));
-
-    model->hparams.n_head_kv = model->hparams.n_head;
-    GGUF_GET_KEY(fctx, model->hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
-
-    float rope_freq_scale = 1.0f;
-    GGUF_GET_KEY(fctx, lora->hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
-    GGUF_GET_KEY(fctx, lora->hparams.rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
-    GGUF_GET_KEY(fctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-    if (rope_freq_scale != 1.0f) {
-        lora->hparams.rope_freq_scale = 1.0f / rope_freq_scale;
-    }
+    // parameters that define tensor shapes must match
+    GGML_ASSERT(hparams.n_embd    == model->hparams.n_embd);
+    GGML_ASSERT(hparams.n_ff      == model->hparams.n_ff);
+    GGML_ASSERT(hparams.n_head    == model->hparams.n_head);
+    GGML_ASSERT(hparams.n_head_kv == model->hparams.n_head_kv);
+    GGML_ASSERT(hparams.n_layer   == model->hparams.n_layer);
 
     GGUF_GET_KEY(fctx, lora->hparams.n_rank_tok_embeddings, gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD);
     GGUF_GET_KEY(fctx, lora->hparams.n_rank_norm,           gguf_get_val_u32, GGUF_TYPE_UINT32, true, LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM);
@@ -906,9 +913,10 @@ static void save_llama_lora_gguf(struct gguf_context * fctx, struct my_llama_mod
     gguf_set_val_u32(fctx, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV),     model->hparams.n_head_kv);
     gguf_set_val_u32(fctx, kv(LLM_KV_BLOCK_COUNT),                 model->hparams.n_layer);
     gguf_set_val_u32(fctx, kv(LLM_KV_ROPE_DIMENSION_COUNT),        model->hparams.n_embd_head());
-    gguf_set_val_f32(fctx, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS), lora->hparams.f_norm_rms_eps);
-    gguf_set_val_f32(fctx, kv(LLM_KV_ROPE_FREQ_BASE),              lora->hparams.rope_freq_base);
-    gguf_set_val_f32(fctx, kv(LLM_KV_ROPE_SCALE_LINEAR),           lora->hparams.rope_freq_scale);
+    gguf_set_val_f32(fctx, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS), model->hparams.f_norm_rms_eps);
+    gguf_set_val_f32(fctx, kv(LLM_KV_ROPE_FREQ_BASE),              model->hparams.rope_freq_base);
+    gguf_set_val_f32(fctx, kv(LLM_KV_ROPE_SCALE_LINEAR),           model->hparams.rope_freq_scale);
+
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_TOKEN_EMBD,   lora->hparams.n_rank_tok_embeddings);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_OUTPUT_NORM,  lora->hparams.n_rank_norm);
     gguf_set_val_u32(fctx, LLM_KV_TRAINING_LORA_RANK_OUTPUT,       lora->hparams.n_rank_output);
@@ -1534,24 +1542,22 @@ int main(int argc, char ** argv) {
     struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
 
     struct my_llama_model model;
-    init_model(lmodel, &model, params.common.n_ctx);
+    init_model(lmodel, &model, params.fn_model_base, params.common.n_ctx);
 
     struct my_llama_lora lora;
 
     struct train_state      * train = init_train_state();
     struct ggml_opt_context * opt   = train->opt;
 
-    load_default_lora_params_from_base_model(params.fn_model_base, &lora.hparams);
-
-    // set lora params from command line
+    // set params from command line
     if (params.custom_f_norm_rms_eps) {
-        lora.hparams.f_norm_rms_eps  = params.f_norm_rms_eps;
+        model.hparams.f_norm_rms_eps  = params.f_norm_rms_eps;
     }
     if (params.custom_rope_freq_base) {
-        lora.hparams.rope_freq_base  = params.rope_freq_base;
+        model.hparams.rope_freq_base  = params.rope_freq_base;
     }
     if (params.custom_rope_freq_scale) {
-        lora.hparams.rope_freq_scale = params.rope_freq_scale;
+        model.hparams.rope_freq_scale = params.rope_freq_scale;
     }
     lora.hparams.lora_r                = params.lora_r;
     lora.hparams.lora_alpha            = params.custom_lora_alpha            ? params.lora_alpha            : params.lora_r;
