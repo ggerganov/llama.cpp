@@ -55,19 +55,23 @@ class model_backend(InferenceModel):
         self.kcpp_gpulayers = 0
         self.kcpp_smartcontext = False
         self.kcpp_ropescale = 0.0
-        self.kcpp_ropebase = 10000
+        self.kcpp_ropebase = 10000.0
         self.kcpp_useclblast = None
         self.kcpp_useclublas = None
         self.kcpp_noblas = False
         self.kcpp_noavx2 = False
         self.kcpp_nommap = False
+        self.kcpp_debugmode = 0
 
         files = os.listdir(model_path)
         foundfiles = [filename for filename in files if (("ggml" in filename.lower() and ".bin" in filename.lower()) or ".gguf" in filename.lower())]
 
         requested_parameters = []
+        foldermdls = []
+        for ff in foundfiles:
+            foldermdls.append({'text': ff, 'value': os.path.join(model_path, ff)})
         requested_parameters.append({
-                                    "uitype": "text",
+                                    "uitype": "dropdown",
                                     "unit": "string",
                                     "label": "GGML DataFile Name",
                                     "id": "kcpp_filename",
@@ -75,8 +79,9 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "Actual GGML DataFile Name",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
-                                    "extra_classes": ""
+                                    "refresh_model_inputs": False,
+                                    "extra_classes": "",
+                                    'children': foldermdls
                                     })
         requested_parameters.append({
                                     "uitype": "dropdown",
@@ -103,7 +108,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "Thread Count",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
 
@@ -116,7 +121,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "Max Context Size",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
         requested_parameters.append({
@@ -128,7 +133,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "BLAS Batch Size",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
         requested_parameters.append({
@@ -140,7 +145,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "GPU Layers",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
         requested_parameters.append({
@@ -152,7 +157,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "Rope Scale",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
         requested_parameters.append({
@@ -164,7 +169,7 @@ class model_backend(InferenceModel):
                                     "check": {"value": "", 'check': "!="},
                                     "tooltip": "Rope Base",
                                     "menu_path": "",
-                                    "refresh_model_inputs": True,
+                                    "refresh_model_inputs": False,
                                     "extra_classes": ""
                                     })
         requested_parameters.append({
@@ -181,6 +186,20 @@ class model_backend(InferenceModel):
                                     "extra_classes": "",
                                     'children': [{'text': 'False', 'value': False}, {'text': 'True', 'value': True}],
                                     })
+        requested_parameters.append({
+                                    "uitype": "dropdown",
+                                    "unit": "int",
+                                    "label": "Debug Mode",
+                                    "id": "kcpp_debugmode",
+                                    "default": self.kcpp_debugmode,
+                                    "check": {"value": "", 'check': "!="},
+                                    'multiple': False,
+                                    "tooltip": "Debug Mode",
+                                    "menu_path": "",
+                                    "refresh_model_inputs": False,
+                                    "extra_classes": "",
+                                    'children': [{'text': 'False', 'value': 0}, {'text': 'True', 'value': 1}],
+                                    })
         return requested_parameters
 
     def set_input_parameters(self, parameters):
@@ -192,6 +211,7 @@ class model_backend(InferenceModel):
         self.kcpp_smartcontext = parameters["kcpp_smartcontext"]
         self.kcpp_ropescale = parameters["kcpp_ropescale"]
         self.kcpp_ropebase = parameters["kcpp_ropebase"]
+        self.kcpp_debugmode = parameters["kcpp_debugmode"]
         accel = parameters["kcpp_accelerator"]
         if accel==0:
             self.kcpp_noblas = True
@@ -220,10 +240,10 @@ class model_backend(InferenceModel):
             kcppargs = KcppArgsObject(model=self.kcpp_filename, model_param=self.kcpp_filename,
             port=5001, port_param=5001, host='', launch=False, lora=None, threads=self.kcpp_threads, blasthreads=self.kcpp_threads,
             psutil_set_threads=False, highpriority=False, contextsize=self.kcpp_ctxsize,
-            blasbatchsize=self.kcpp_blasbatchsize, ropeconfig=[self.kcpp_ropebase, self.kcpp_ropescale], stream=False, smartcontext=self.kcpp_smartcontext,
+            blasbatchsize=self.kcpp_blasbatchsize, ropeconfig=[self.kcpp_ropescale, self.kcpp_ropebase], stream=False, smartcontext=self.kcpp_smartcontext,
             unbantokens=False, bantokens=None, usemirostat=None, forceversion=0, nommap=self.kcpp_nommap,
-            usemlock=False, noavx2=self.kcpp_noavx2, debugmode=0, skiplauncher=True, hordeconfig=None, noblas=self.kcpp_noblas,
-            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_useclublas, gpulayers=self.kcpp_gpulayers, tensor_split=None, config=None, onready=None, multiuser=False)
+            usemlock=False, noavx2=self.kcpp_noavx2, debugmode=self.kcpp_debugmode, skiplauncher=True, hordeconfig=None, noblas=self.kcpp_noblas,
+            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_useclublas, gpulayers=self.kcpp_gpulayers, tensor_split=None, config=None, onready='', multiuser=False)
 
             koboldcpp.main(kcppargs,False) #initialize library without enabling Lite http server
             kcpp_backend_loaded = True
@@ -250,7 +270,8 @@ class model_backend(InferenceModel):
 
         genresult = koboldcpp.generate(decoded_prompt,max_new,utils.koboldai_vars.max_length,
         gen_settings.temp,int(gen_settings.top_k),gen_settings.top_a,gen_settings.top_p,
-        gen_settings.typical,gen_settings.tfs,gen_settings.rep_pen,gen_settings.rep_pen_range)
+        gen_settings.typical,gen_settings.tfs,gen_settings.rep_pen,gen_settings.rep_pen_range,
+        sampler_order=gen_settings.sampler_order)
 
         outputs = [genresult]
         return GenerationResult(
