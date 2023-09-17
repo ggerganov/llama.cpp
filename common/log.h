@@ -80,7 +80,11 @@ class LogStateWrapper
         void operator=(const LogStateWrapper &)  = delete;
 
     private:
-        static LogStateWrapper & instance();
+        static LogStateWrapper & instance()
+        {
+            static LogStateWrapper inst;
+            return inst;
+        }
 
         class LogTargetWrapper
         {
@@ -130,8 +134,6 @@ class LogStateWrapper
         LogTargetWrapper * log_set_target_internal(LogTargetWrapper * target);
         LogTargetWrapper * log_add_select_target_internal(LogTargetWrapper * t, bool insert = false);
         void log_flush_all_targets_internal();
-        FILE * log_handler_internal();
-        FILE * log_tee_handler_internal();
         void log_disable_internal(bool threadsafe = true);
         void log_disable_internal_unsafe();
         void log_enable_internal(bool threadsafe = true);
@@ -141,19 +143,37 @@ class LogStateWrapper
         std::string log_filename_generator_internal(const std::string & basename, const std::string & extension);
         std::string log_get_pid_internal();
 
+        FILE * log_handler_internal()
+        {
+            return *_current_target;
+        }
+
+        FILE * log_tee_handler_internal()
+        {
+            return _stderr_target;
+        }
+
     public:
         static LogTargetWrapper * log_set_target_impl(const std::string && filename);
         static LogTargetWrapper * log_set_target_impl(const std::string & filename);
         static LogTargetWrapper * log_set_target_impl(FILE * handle);
         static LogTargetWrapper * log_set_target_impl(LogTargetWrapper * target);
-        static FILE * log_handler_impl();
-        static FILE * log_tee_handler_impl();
         static void log_disable_impl();
         static void log_enable_impl();
         static bool log_param_single_parse_impl(const std::string & param);
         static bool log_param_pair_parse_impl(bool parse, const std::string & param, const std::string & next = "");
         static std::string log_filename_generator_impl(const std::string & basename, const std::string & extension);
         static std::string log_get_pid_impl();
+
+        static FILE * log_handler_impl()
+        {
+            return instance().log_handler_internal();
+        }
+
+        static FILE * log_tee_handler_impl()
+        {
+            return instance().log_tee_handler_internal();
+        }
 }; // class LogStateWrapper
 
 // Specifies a log target.

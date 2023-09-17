@@ -6,12 +6,6 @@ LogStateWrapper::~LogStateWrapper()
     for(auto t : _targets){ delete t; }
 }
 
-LogStateWrapper & LogStateWrapper::instance()
-{
-    static LogStateWrapper inst;
-    return inst;
-}
-
 LogStateWrapper::LogTargetWrapper::LogTargetWrapper(FILE * handle)
 :   _type(Type::Stream),
     _opened(true),
@@ -124,16 +118,6 @@ void LogStateWrapper::log_flush_all_targets_internal()
 {
     std::lock_guard<std::mutex> lock(_mutex);
     for(auto t : _targets){ t->flush(); }
-}
-
-FILE * LogStateWrapper::log_handler_internal()
-{
-    return *_current_target;
-}
-
-FILE * LogStateWrapper::log_tee_handler_internal()
-{
-    return _stderr_target;
 }
 
 void LogStateWrapper::log_disable_internal(bool threadsafe)
@@ -288,16 +272,6 @@ LogStateWrapper::LogTargetWrapper * LogStateWrapper::log_set_target_impl(FILE * 
 LogStateWrapper::LogTargetWrapper * LogStateWrapper::log_set_target_impl(LogTargetWrapper * target)
 {
     return instance().log_set_target_internal(target);
-}
-
-FILE * LogStateWrapper::log_handler_impl()
-{
-    return instance().log_handler_internal();
-}
-
-FILE * LogStateWrapper::log_tee_handler_impl()
-{
-    return instance().log_tee_handler_internal();
 }
 
 void LogStateWrapper::log_disable_impl()
