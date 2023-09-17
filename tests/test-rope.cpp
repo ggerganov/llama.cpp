@@ -144,7 +144,17 @@ int main(int /*argc*/, const char ** /*argv*/) {
         const int64_t ne[4] = { 2*n_rot, 32, 73, 1 };
 
         const int n_past_0 = 100;
-        const int n_past_1 = 33;
+        const int n_past_2 = 33;
+
+        struct ggml_tensor * p0 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
+        struct ggml_tensor * p1 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
+        struct ggml_tensor * p2 = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne[2]);
+
+        for (int i = 0; i < ne[2]; ++i) {
+            ((int32_t *) p0->data)[i] = n_past_0 + i;
+            ((int32_t *) p1->data)[i] = n_past_2 - n_past_0;
+            ((int32_t *) p2->data)[i] = n_past_2 + i;
+        }
 
         // test mode 0, 2, 4 (standard, GPT-NeoX, GLM)
         const int mode = m == 0 ? 0 : m == 1 ? 2 : 4;
@@ -152,12 +162,12 @@ int main(int /*argc*/, const char ** /*argv*/) {
         x = get_random_tensor_f32(ctx0, ndims, ne, -1.0f, 1.0f);
 
         // 100, 101, 102, ..., 172
-        struct ggml_tensor * r0 = ggml_rope(ctx0, x,  n_past_0,            n_rot, mode,     1024);
+        struct ggml_tensor * r0 = ggml_rope(ctx0, x,  p0, n_rot, mode, 1024);
         // -67, -67, -67, ..., -67
-        struct ggml_tensor * r1 = ggml_rope(ctx0, r0, n_past_1 - n_past_0, n_rot, mode + 8, 1024); // diff mode
+        struct ggml_tensor * r1 = ggml_rope(ctx0, r0, p1, n_rot, mode, 1024); // "context swap", i.e. forget n_past_0 - n_past_2 tokens
 
         //  33,  34,  35, ..., 105
-        struct ggml_tensor * r2 = ggml_rope(ctx0, x,  n_past_1,            n_rot, mode,     1024);
+        struct ggml_tensor * r2 = ggml_rope(ctx0, x,  p2, n_rot, mode, 1024);
 
         ggml_cgraph * gf = ggml_new_graph(ctx0);
 
