@@ -220,7 +220,7 @@ int64_t get_example_targets_batch(
     bool                   separate_with_bos,
     bool                   fill_with_next_samples
 ) {
-
+    GGML_ASSERT(samples_count > 0);
     GGML_ASSERT(tokens_input->n_dims  == 2);
     GGML_ASSERT(target_probs->n_dims  == 3);
     int64_t n_vocab  = target_probs->ne[0];
