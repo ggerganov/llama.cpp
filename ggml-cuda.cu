@@ -6286,12 +6286,14 @@ void ggml_cuda_set_peer_access(const int n_tokens) {
                 continue;
             }
 
-            int canAccessPeer;
-            CUDA_CHECK(cudaDeviceCanAccessPeer(&canAccessPeer, id, id_other));
-            if (enable_peer_access) {
-                CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
-            } else {
-                CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+            int can_access_peer;
+            CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
+            if (can_access_peer) {
+                if (enable_peer_access) {
+                    CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
+                } else {
+                    CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+                }
             }
         }
     }
