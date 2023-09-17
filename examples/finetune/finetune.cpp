@@ -1651,6 +1651,7 @@ int main(int argc, char ** argv) {
             ggml_opt_init(opt->ctx, opt, opt->params, get_parameter_count(&lora));
         }
     }
+    opt->iter = train->train_its;
 
     print_params(&model.hparams);
     print_lora_params(&lora.hparams);
@@ -1660,7 +1661,7 @@ int main(int argc, char ** argv) {
     printf("%s: completed train_epochs %llu\n", __func__, (long long unsigned) train->train_epochs);
     printf("%s: lora_size = %zu bytes (%.1f MB)\n", __func__, (ggml_used_mem(lora.ctx) + lora.data.size()), (float) (ggml_used_mem(lora.ctx) + lora.data.size()) / (1024.0f*1024.0f));
     printf("%s: opt_size  = %zu bytes (%.1f MB)\n", __func__, ggml_get_mem_size(opt->ctx), (float) ggml_get_mem_size(opt->ctx) / (1024.0f*1024.0f));
-    opt->iter = train->train_its;
+    printf("%s: opt iter %d\n", __func__, opt->iter);
 
     if (params.only_write_lora) {
         save_train_files_data save_data;
@@ -1684,9 +1685,6 @@ int main(int argc, char ** argv) {
     int n_vocab  = model.hparams.n_vocab;
     int n_batch  = params.common.n_batch;
 
-    printf("%s: opt iter %d\n", __func__, opt->iter);
-
-    printf("used_mem model: %zu bytes\n", ggml_used_mem(lora.ctx) + lora.data.size());
 
     std::vector<uint8_t> mem_input_data;
     std::vector<uint8_t> mem_compute_data;
