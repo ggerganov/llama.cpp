@@ -886,7 +886,7 @@ static std::string llama_token_to_str(const struct llama_context * ctx, llama_to
 
 struct llama_state {
     // We save the log callback globally
-    llama_log_callback log_callback = llama_log_callback_default;
+    ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
@@ -6834,7 +6834,7 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_
     return ctx->model.tensors_by_name;
 }
 
-void llama_log_set(llama_log_callback log_callback, void * user_data) {
+void llama_log_set(ggml_log_callback log_callback, void * user_data) {
     g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
     g_state.log_callback_user_data = user_data;
 }

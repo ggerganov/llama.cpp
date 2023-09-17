@@ -1688,6 +1688,12 @@ extern "C" {
     };
 
     typedef void (*ggml_opt_callback)(void * data, float * sched);
+    // Signature for logging events
+    // Note that text includes the new line character at the end for most events.
+    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
+    // if it exists.
+    // It might not exist for progress report where '.' is output repeatedly.
+    typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
 
     // optimization parameters
     //

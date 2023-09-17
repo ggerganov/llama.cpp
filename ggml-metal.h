@@ -35,7 +35,7 @@ struct ggml_cgraph;
 extern "C" {
 #endif
 
-void ggml_metal_log_set_callback(void (*log_callback)(enum ggml_log_level level, const char * text, void * user_data), void * user_data);
+void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data);
 
 struct ggml_metal_context;
 

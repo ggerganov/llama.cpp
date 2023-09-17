@@ -145,13 +145,6 @@ extern "C" {
         bool embedding;  // embedding mode only
     };
 
-    // Signature for logging events
-    // Note that text includes the new line character at the end for most events.
-    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
-    // if it exists.
-    // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
-
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
@@ -518,7 +511,7 @@ extern "C" {
 
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
-    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+    LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 

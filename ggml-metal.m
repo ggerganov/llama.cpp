@@ -121,31 +121,31 @@ static NSString * const msl_library_source = @"see metal.metal";
 @implementation GGMLMetalClass
 @end
 
-void (*ggml_metal_log_callback)(enum ggml_log_level level, const char * text, void * user_data) = NULL;
+ggml_log_callback ggml_metal_log_callback = NULL;
 void *ggml_metal_log_user_data = NULL;
 
-void ggml_metal_log_set_callback(void (*log_callback)(enum ggml_log_level level, const char * text, void * user_data), void * user_data) {
-  ggml_metal_log_callback = log_callback;
-  ggml_metal_log_user_data = user_data;
+void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
+    ggml_metal_log_callback = log_callback;
+    ggml_metal_log_user_data = user_data;
 }
 
 static void ggml_metal_log(enum ggml_log_level level, const char* format, ...){
-  if ( ggml_metal_log_callback != NULL ) {
-    va_list args;
-    va_start(args, format);
-    char buffer[128];
-    int len = vsnprintf(buffer, 128, format, args);
-    if (len < 128) {
-      ggml_metal_log_callback(level, buffer, ggml_metal_log_user_data);
-    } else {
-        char* buffer2 = malloc(len+1);
-        vsnprintf(buffer2, len+1, format, args);
-        buffer2[len] = 0;
-        ggml_metal_log_callback(level, buffer2, ggml_metal_log_user_data);
-        free(buffer2);
+    if ( ggml_metal_log_callback != NULL ) {
+        va_list args;
+        va_start(args, format);
+        char buffer[128];
+        int len = vsnprintf(buffer, 128, format, args);
+        if (len < 128) {
+            ggml_metal_log_callback(level, buffer, ggml_metal_log_user_data);
+        } else {
+            char* buffer2 = malloc(len+1);
+            vsnprintf(buffer2, len+1, format, args);
+            buffer2[len] = 0;
+            ggml_metal_log_callback(level, buffer2, ggml_metal_log_user_data);
+            free(buffer2);
+        }
+        va_end(args);
     }
-    va_end(args);
-  }
 }
 
 
