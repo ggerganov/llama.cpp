@@ -70,9 +70,9 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt with both models
-    llama_eval(ctx_tgt,  inp.data(), int(inp.size() - 1), 0, params.n_threads);
-    llama_eval(ctx_tgt, &inp.back(),      1, inp.size() - 1, params.n_threads);
-    llama_eval(ctx_dft,  inp.data(),     int(inp.size()), 0, params.n_threads);
+    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0), params.n_threads);
+    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0), params.n_threads);
+    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0), params.n_threads);
 
     const auto t_enc_end = ggml_time_us();
 
@@ -172,7 +172,7 @@ int main(int argc, char ** argv) {
                 LOG("out of drafted tokens\n");
             }
 
-            llama_eval(ctx_dft, &id, 1, n_past_dft, params.n_threads);
+            llama_decode(ctx_dft, llama_batch_get_one(&id, 1, n_past_dft, 0), params.n_threads);
             ++n_past_dft;
 
             // heuristic for n_draft
@@ -256,7 +256,7 @@ int main(int argc, char ** argv) {
             }
 
             // evaluate the drafted token on the draft model
-            llama_eval(ctx_dft, &drafted.back(), 1, n_past_cur, params.n_threads);
+            llama_decode(ctx_dft, llama_batch_get_one(&drafted.back(), 1, n_past_cur, 0), params.n_threads);
             ++n_past_cur;
 
             if (grammar_dft != NULL) {
@@ -265,7 +265,7 @@ int main(int argc, char ** argv) {
         }
 
         // evaluate the target model on the drafted tokens
-        llama_eval(ctx_tgt, drafted.data(), drafted.size(), n_past_tgt, params.n_threads);
+        llama_decode(ctx_tgt, llama_batch_get_one(drafted.data(), drafted.size(), n_past_tgt, 0), params.n_threads);
         ++n_past_tgt;
 
         // the first token is always proposed by the traget model before the speculation loop

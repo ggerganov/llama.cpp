@@ -76,7 +76,7 @@ int main(int argc, char ** argv) {
     while (n_cur < n_gen) {
         // evaluate the transformer
 
-        if (llama_eval(ctx, tokens_list.data(), int(tokens_list.size()), n_cur, params.n_threads)) {
+        if (llama_decode(ctx, llama_batch_get_one(tokens_list.data(), int(tokens_list.size()), n_cur, 0), params.n_threads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return 1;
         }

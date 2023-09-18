@@ -571,7 +571,7 @@ int main(int argc, char ** argv) {
 
                 for (int i = 0; i < input_size; i += params.n_batch) {
                     int n_eval = std::min(input_size - i, params.n_batch);
-                    if (llama_eval(ctx_guidance, input_buf + i, n_eval, n_past_guidance, params.n_threads)) {
+                    if (llama_decode(ctx_guidance, llama_batch_get_one(input_buf + i, n_eval, n_past_guidance, 0), params.n_threads)) {
                         LOG_TEE("%s : failed to eval\n", __func__);
                         return 1;
                     }
@@ -588,7 +588,7 @@ int main(int argc, char ** argv) {
 
                 LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
 
-                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads)) {
+                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0), params.n_threads)) {
                     LOG_TEE("%s : failed to eval\n", __func__);
                     return 1;
                 }

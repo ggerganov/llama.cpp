@@ -434,7 +434,7 @@ struct llama_server_context
             {
                 n_eval = params.n_batch;
             }
-            if (llama_eval(ctx, &embd[n_past], n_eval, n_past, params.n_threads))
+            if (llama_decode(ctx, llama_batch_get_one(&embd[n_past], n_eval, n_past, 0), params.n_threads))
             {
                 LOG_ERROR("failed to eval", {
                                                 {"n_eval", n_eval},
