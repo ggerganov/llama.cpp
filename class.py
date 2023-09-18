@@ -233,6 +233,13 @@ class model_backend(InferenceModel):
             self.kcpp_nommap = True
         pass
 
+    def unload(self):
+        print("Attemping to unload library")
+        koboldcpp.unload_libs()
+        global kcpp_backend_loaded
+        kcpp_backend_loaded = False
+        pass
+
     def _load(self, save_model: bool, initial_load: bool) -> None:
         global kcpp_backend_loaded
         self.tokenizer = self._get_tokenizer("gpt2")
