@@ -250,7 +250,6 @@ static std::string codepoint_to_utf8(uint32_t cp) {
 
 static std::string codepoints_to_utf8(const std::vector<uint32_t>& cps) {
     std::string result;
-    size_t offset = 0;
     for (auto i = 0; i < cps.size(); ++i) {
         result.append(codepoint_to_utf8(cps[i]));
     }
@@ -316,7 +315,6 @@ static std::vector<uint16_t> codepoint_to_utf16(uint32_t cp) {
 
 static std::vector<uint16_t> codepoints_to_utf16(const std::vector<uint32_t>& cps) {
     std::vector<uint16_t> result;
-    size_t offset = 0;
     for (auto i = 0; i < cps.size(); ++i) {
         auto temp = codepoint_to_utf16(cps[i]);
         result.insert(result.end(), temp.begin(), temp.end());
@@ -349,6 +347,7 @@ static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t>& 
     return result;
 }
 
+#define CODEPOINT_TYPE_UNIDENTIFIED 0
 #define CODEPOINT_TYPE_DIGIT 1
 #define CODEPOINT_TYPE_LETTER 2
 #define CODEPOINT_TYPE_WHITESPACE 3
@@ -393,6 +392,8 @@ static int codepoint_type(uint32_t cp) {
 }
 
 static int codepoint_type(std::string utf8) {
+    if (utf8.length() == 0)
+        return CODEPOINT_TYPE_UNIDENTIFIED;
     size_t offset = 0;
     return codepoint_type(codepoint_from_utf8(utf8, offset));
 }
