@@ -63,7 +63,8 @@ class generation_inputs(ctypes.Structure):
                 ("sampler_len", ctypes.c_int),
                 ("unban_tokens_rt", ctypes.c_bool),
                 ("stop_sequence", ctypes.c_char_p * stop_token_max),
-                ("stream_sse", ctypes.c_bool)]
+                ("stream_sse", ctypes.c_bool),
+                ("grammar", ctypes.c_char_p)]
 
 class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
@@ -277,7 +278,7 @@ def load_model(model_filename):
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], use_default_badwordsids=True, stream_sse=False):
+def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], use_default_badwordsids=True, stream_sse=False, grammar=''):
     global maxctx, args
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
@@ -299,6 +300,7 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
     inputs.rep_pen = rep_pen
     inputs.rep_pen_range = rep_pen_range
     inputs.stream_sse = stream_sse
+    inputs.grammar = grammar.encode("UTF-8")
     inputs.unban_tokens_rt = not use_default_badwordsids
     if args.usemirostat and args.usemirostat[0]>0:
         inputs.mirostat = int(args.usemirostat[0])
@@ -399,7 +401,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     seed=genparams.get('sampler_seed', -1),
                     stop_sequence=genparams.get('stop_sequence', []),
                     use_default_badwordsids=genparams.get('use_default_badwordsids', True),
-                    stream_sse=stream_flag)
+                    stream_sse=stream_flag,
+                    grammar=genparams.get('grammar', ''))
 
             else:
                 return generate(prompt=newprompt,
@@ -420,7 +423,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     seed=genparams.get('sampler_seed', -1),
                     stop_sequence=genparams.get('stop_sequence', []),
                     use_default_badwordsids=genparams.get('use_default_badwordsids', True),
-                    stream_sse=stream_flag)
+                    stream_sse=stream_flag,
+                    grammar=genparams.get('grammar', ''))
 
         recvtxt = ""
         if stream_flag:

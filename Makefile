@@ -1,4 +1,4 @@
-default: koboldcpp_default koboldcpp_failsafe koboldcpp_openblas koboldcpp_noavx2 koboldcpp_clblast koboldcpp_cublas koboldcpp_hipblas 
+default: koboldcpp_default koboldcpp_failsafe koboldcpp_openblas koboldcpp_noavx2 koboldcpp_clblast koboldcpp_cublas koboldcpp_hipblas
 tools: quantize_gpt2 quantize_gptj quantize_llama quantize_neox quantize_mpt
 dev: koboldcpp_openblas
 dev2: koboldcpp_clblast
@@ -211,15 +211,15 @@ endif # LLAMA_CUDA_FORCE_DMMV
 ggml-cuda.o: HIPFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS)) \
 						-DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X) \
                         -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y) \
-                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER) 
+                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 ggml_v2-cuda.o: HIPFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS)) \
 						-DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X) \
                         -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y) \
-                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER) 
+                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 ggml_v2-cuda-legacy.o: HIPFLAGS += $(addprefix --offload-arch=,$(GPU_TARGETS)) \
 						-DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X) \
                         -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y) \
-                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER) 
+                        -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(CXX) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 ggml_v2-cuda.o: otherarch/ggml_v2-cuda.cu otherarch/ggml_v2-cuda.h
@@ -426,19 +426,19 @@ gguf: examples/gguf/gguf.cpp build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 #generated libraries
-koboldcpp_default: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o $(OBJS)
+koboldcpp_default: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(DEFAULT_BUILD)
-koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o $(OBJS)
+koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(OPENBLAS_BUILD)
-koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o ggml-alloc.o $(OBJS)
+koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(FAILSAFE_BUILD)
-koboldcpp_noavx2: ggml_noavx2.o ggml_v2_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_noavx2.o ggml-alloc.o $(OBJS)
+koboldcpp_noavx2: ggml_noavx2.o ggml_v2_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_noavx2.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(NOAVX2_BUILD)
-koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o ggml-alloc.o $(OBJS)
+koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(CLBLAST_BUILD)
-koboldcpp_cublas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o $(CUBLAS_OBJS) $(OBJS)
+koboldcpp_cublas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o grammar-parser.o $(CUBLAS_OBJS) $(OBJS)
 	$(CUBLAS_BUILD)
-koboldcpp_hipblas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o $(HIP_OBJS) $(OBJS)
+koboldcpp_hipblas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o grammar-parser.o $(HIP_OBJS) $(OBJS)
 	$(HIPBLAS_BUILD)
 
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o k_quants.o ggml-alloc.o

@@ -3,5 +3,7 @@
 
 #define BUILD_NUMBER 999
 #define BUILD_COMMIT "KOBOLDCPP"
+#define BUILD_COMPILER "KCPP"
+#define BUILD_TARGET "KCPP"
 
 #endif // BUILD_INFO_H

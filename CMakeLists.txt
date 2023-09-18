@@ -380,7 +380,9 @@ set_target_properties(ggml_v2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(common2
             common/common.cpp
-            common/common.h)
+            common/common.h
+            common/grammar-parser.h
+            common/grammar-parser.cpp)
 target_include_directories(common2 PUBLIC . ./otherarch ./otherarch/tools ./examples ./common)
 target_compile_features(common2 PUBLIC cxx_std_11) # don't bump
 target_link_libraries(common2 PRIVATE ggml ${LLAMA_EXTRA_LIBS})

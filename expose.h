@@ -72,6 +72,7 @@ struct generation_inputs
     const bool unban_tokens_rt;
     const char * stop_sequence[stop_token_max];
     const bool stream_sse;
+    const char * grammar;
 };
 struct generation_outputs
 {
