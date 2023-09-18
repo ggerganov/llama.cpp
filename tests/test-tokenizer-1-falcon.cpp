@@ -12,30 +12,6 @@
 #include <vector>
 #include <locale>
 
-typedef int codepoint;
-
-std::string codepoint_to_utf8(codepoint cp) {
-    std::string result;
-    if (0x00 <= cp && cp <= 0x7f) {
-        result.push_back(cp);
-    } else if (0x80 <= cp && cp <= 0x7ff) {
-        result.push_back(0xc0 | ((cp >> 6) & 0x1f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else if (0x800 <= cp && cp <= 0xffff) {
-        result.push_back(0xe0 | ((cp >> 12) & 0x0f));
-        result.push_back(0x80 | ((cp >> 6) & 0x3f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else if (0x10000 <= cp && cp <= 0x10ffff) {
-        result.push_back(0xf0 | ((cp >> 18) & 0x07));
-        result.push_back(0x80 | ((cp >> 12) & 0x3f));
-        result.push_back(0x80 | ((cp >> 6) & 0x3f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else {
-        throw std::invalid_argument("invalid codepoint");
-    }
-    return result;
-}
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <vocab-file>\n", argv[0]);
@@ -95,12 +71,12 @@ int main(int argc, char **argv) {
                 return 2;
             }
         }
-        catch (const std::invalid_argument& ex) {
+        catch (const std::invalid_argument&) {
             fprintf(stderr, "%s : info: utf8 conversion %d '%s'\n", __func__, i, str.c_str());
         }
     }
 
-    for (codepoint cp = 0x0000; cp < 0xffff; ++cp) {
+    for (uint32_t cp = 0x0000; cp < 0xffff; ++cp) {
         if ((cp < 0x03 || cp > 0x05) && cp != 0x0b && cp != 0x11 && (cp < 0x13 || cp > 0x17) && cp != 0x19 && (cp < 0x1c || cp > 0x1e) && (cp < 0xd800 || cp > 0xdfff)) {
             std::string str = " " + codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
@@ -112,7 +88,8 @@ int main(int argc, char **argv) {
             }
         }
     }
-    for (codepoint cp = 0x10000; cp < 0x0080000; ++cp) {
+    for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
+    // for (uint32_t cp = 0x10000; cp < 0x0080000; ++cp) {
         try {
             std::string str = codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
