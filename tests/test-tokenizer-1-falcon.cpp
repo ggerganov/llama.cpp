@@ -89,7 +89,6 @@ int main(int argc, char **argv) {
         }
     }
     for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
-    // for (uint32_t cp = 0x10000; cp < 0x0080000; ++cp) {
         try {
             std::string str = codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
