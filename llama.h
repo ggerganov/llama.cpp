@@ -70,11 +70,11 @@ extern "C" {
     typedef struct llama_batch {
         uint32_t n_tokens;
 
-        // TODO: not sure about these consts - might just get in the way all the time with no benefit
         const llama_token  * token;
         const float        * embd;
         const llama_pos    * pos;
         const llama_seq_id * seq_id;
+        const int8_t       * logits; // if 0, do not extract logits for that token
 
         // NOTE: helpers for smooth API transition - can be deprecated in the future
         //       for future-proof code, use the above fields instead and ignore everything below

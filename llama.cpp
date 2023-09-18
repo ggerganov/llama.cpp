@@ -4140,7 +4140,16 @@ static bool llama_eval_internal(
 
         if (lctx.logits_all) {
             logits_out.resize(n_vocab * n_tokens);
-            memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*n_tokens);
+            if (batch.logits) {
+                for (uint32_t i = 0; i < n_tokens; i++) {
+                    if (batch.logits[i] == 0) {
+                        continue;
+                    }
+                    memcpy(logits_out.data() + (n_vocab*i), (float *) ggml_get_data(res) + (n_vocab*i), sizeof(float)*n_vocab);
+                }
+            } else {
+                memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*n_tokens);
+            }
         } else {
             // return result for just the last token
             logits_out.resize(n_vocab);
@@ -7318,7 +7327,7 @@ int llama_eval_embd(
                              int   n_threads) {
     llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
 
-    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, n_past, 1, 0, };
+    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, n_past, 1, 0, };
 
     if (!llama_eval_internal(*ctx, batch, n_threads)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
@@ -7346,6 +7355,7 @@ struct llama_batch llama_batch_get_one(
         /*embd        =*/ nullptr,
         /*pos         =*/ nullptr,
         /*seq_id      =*/ nullptr,
+        /*logits      =*/ nullptr,
         /*all_pos_0   =*/ pos_0,
         /*all_pos_1   =*/ 1,
         /*all_seq_id  =*/ seq_id,
