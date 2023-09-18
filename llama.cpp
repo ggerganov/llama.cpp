@@ -932,6 +932,7 @@ enum e_model {
 
 static const size_t kB = 1024;
 static const size_t MB = kB*kB;
+static const size_t GB = kB*kB*kB;
 
 // default hparams (LLaMA 7B)
 struct llama_hparams {
@@ -1285,6 +1286,7 @@ struct llama_model_loader {
     int n_created = 0;
 
     int64_t n_elements = 0;
+    size_t  n_bytes    = 0;
 
     bool use_mmap = false;
 
@@ -1317,6 +1319,7 @@ struct llama_model_loader {
             const char * name = gguf_get_tensor_name(ctx_gguf, i);
             struct ggml_tensor * t = ggml_get_tensor(ctx_meta, name);
             n_elements += ggml_nelements(t);
+            n_bytes    += ggml_nbytes(t);
         }
 
         LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
@@ -1915,7 +1918,12 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: freq_scale     = %g\n",     __func__, hparams.rope_freq_scale);
     LLAMA_LOG_INFO("%s: model type     = %s\n",     __func__, llama_model_type_name(model.type));
     LLAMA_LOG_INFO("%s: model ftype    = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
-    LLAMA_LOG_INFO("%s: model size     = %.2f B\n", __func__, ml.n_elements*1e-9);
+    LLAMA_LOG_INFO("%s: model params   = %.2f B\n", __func__, ml.n_elements*1e-9);
+    if (ml.n_bytes < GB) {
+        LLAMA_LOG_INFO("%s: model size     = %.2f MiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0, ml.n_bytes*8.0/ml.n_elements);
+    } else {
+        LLAMA_LOG_INFO("%s: model size     = %.2f GiB (%.2f BPW) \n", __func__, ml.n_bytes/1024.0/1024.0/1024.0, ml.n_bytes*8.0/ml.n_elements);
+    }
 
     // general kv
     LLAMA_LOG_INFO("%s: general.name   = %s\n",    __func__, model.name.c_str());
@@ -3505,7 +3513,7 @@ static struct ggml_cgraph * llm_build_starcoder(
 
         ggml_allocr_alloc(lctx.alloc, token);
         if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(token->data, embd, N * n_embd * ggml_element_size(inpL));
+            memcpy(token->data, embd, N * n_embd * ggml_element_size(token));
         }
     }
 
@@ -7045,19 +7053,21 @@ llama_token llama_token_nl(const struct llama_context * ctx) {
 int llama_tokenize(
         struct llama_context * ctx,
                   const char * text,
+                         int   text_len,
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    return llama_tokenize_with_model(&ctx->model, text, tokens, n_max_tokens, add_bos);
+    return llama_tokenize_with_model(&ctx->model, text, text_len, tokens, n_max_tokens, add_bos);
 }
 
 int llama_tokenize_with_model(
     const struct llama_model * model,
                   const char * text,
+                         int   text_len,
                  llama_token * tokens,
                          int   n_max_tokens,
                         bool   add_bos) {
-    auto res = llama_tokenize_internal(model->vocab, text, add_bos);
+    auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_bos);
 
     if (n_max_tokens < (int) res.size()) {
         // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
