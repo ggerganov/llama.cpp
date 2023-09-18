@@ -316,14 +316,18 @@ extern "C" {
                                  int   n_threads);
 
     //
-    // KV cache API
+    // KV cache
     //
 
     // Returns the number of tokens in the KV cache
     LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
-            "avoid using this, it will be removed in the future");
+            "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
     LLAMA_API void llama_kv_clear(struct llama_context * ctx, int32_t p0, int32_t p1);
+
+    //
+    // State / sessions
+    //
 
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
@@ -341,6 +345,10 @@ extern "C" {
     // Save/load session file
     LLAMA_API bool llama_load_session_file(struct llama_context * ctx, const char * path_session, llama_token * tokens_out, size_t n_token_capacity, size_t * n_token_count_out);
     LLAMA_API bool llama_save_session_file(struct llama_context * ctx, const char * path_session, const llama_token * tokens, size_t n_token_count);
+
+    //
+    // Decoding
+    //
 
     // Run the llama inference to obtain the logits and probabilities for the next token.
     // tokens + n_tokens is the provided batch of new tokens to process
