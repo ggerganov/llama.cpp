@@ -499,17 +499,22 @@ int main(int argc, char ** argv) {
                     break;
                 }
 
-                const int n_left = n_past - params.n_keep;
-                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d\n", n_past, n_left, n_ctx, params.n_keep);
+                const int n_left    = n_past - params.n_keep - 1;
+                const int n_discard = n_left/2;
 
-                // always keep the first token - BOS
-                n_past          = std::max(1, params.n_keep);
-                n_past_guidance = std::max(1, params.n_keep + guidance_offset);
+                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
+                    n_past, n_left, n_ctx, params.n_keep, n_discard);
+
+                llama_kv_cache_rm_seq   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
+                llama_kv_cache_shift_seq(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
+
+                n_past -= n_discard;
+
+                if (ctx_guidance) {
+                    n_past_guidance -= n_discard;
+                }
 
                 LOG("after swap: n_past = %d, n_past_guidance = %d\n", n_past, n_past_guidance);
-
-                // insert n_left/2 tokens at the start of embd from last_tokens
-                embd.insert(embd.begin(), last_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_tokens.end() - embd.size());
 
                 LOG("embd: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
 

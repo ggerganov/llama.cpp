@@ -1007,7 +1007,8 @@ struct llama_layer {
 };
 
 struct llama_kv_cell {
-    llama_pos pos = -1;
+    llama_pos pos   = -1;
+    llama_pos delta = 0;
 
     std::set<llama_seq_id> seq_id;
 
@@ -1018,7 +1019,7 @@ struct llama_kv_cell {
 
 // ring-buffer of cached KV data
 struct llama_kv_cache {
-    bool is_roped = false;
+    bool has_shift = false;
 
     uint32_t head = 0;
     uint32_t size = 0;
@@ -1223,6 +1224,8 @@ static bool llama_kv_cache_init(
     const int64_t n_mem      = n_layer*n_ctx;
     const int64_t n_elements = n_embd*n_mem;
 
+    cache.has_shift = false;
+
     cache.head = 0;
     cache.size = n_ctx;
 
@@ -1333,9 +1336,13 @@ void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t
     }
 }
 
-void llama_kv_cache_rm_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+void llama_kv_cache_rm_seq(
+             struct llama_kv_cache & cache,
+                      llama_seq_id   seq_id,
+                         llama_pos   p0,
+                         llama_pos   p1) {
     for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.cells[i].has_seq_id(seq_id)) {
+        if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].seq_id.erase(seq_id);
             if (cache.cells[i].seq_id.empty()) {
                 cache.cells[i].pos = -1;
@@ -1353,18 +1360,22 @@ void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id seq_id)
     }
 }
 
-void llama_kv_cache_shift(
-              struct llama_context & ctx,
+void llama_kv_cache_shift_seq(
+             struct llama_kv_cache & cache,
                       llama_seq_id   seq_id,
                          llama_pos   p0,
                          llama_pos   p1,
                          llama_pos   delta) {
-    auto & hparams = ctx.model.hparams;
-    auto & cache   = ctx.kv_self;
-
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].pos += delta;
+            if (cache.cells[i].pos < 0) {
+                cache.cells[i].pos = -1;
+                cache.cells[i].seq_id.clear();
+            } else {
+                cache.has_shift = true;
+                cache.cells[i].delta = delta;
+            }
         }
     }
 }
@@ -2595,6 +2606,8 @@ static struct ggml_cgraph * llm_build_llama(
     const int32_t n_tokens = batch.n_tokens;
     const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
+    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
+
     auto & buf_compute = lctx.buf_compute;
 
     struct ggml_init_params params = {
@@ -2698,6 +2711,16 @@ static struct ggml_cgraph * llm_build_llama(
         }
     }
 
+    // K_shift
+    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    ggml_allocr_alloc(lctx.alloc, K_shift);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        int * data = (int *) K_shift->data;
+        for (int i = 0; i < n_ctx; ++i) {
+            data[i] = kv_self.cells[i].delta;
+        }
+    }
+
     for (int il = 0; il < n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
 
@@ -2721,6 +2744,17 @@ static struct ggml_cgraph * llm_build_llama(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
+        }
+
+        if (do_rope_shift) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
 
         // self-attention
@@ -4033,7 +4067,8 @@ static bool llama_eval_internal(
 #endif
 
     // update the kv ring buffer
-    lctx.kv_self.head += n_tokens;
+    lctx.kv_self.head      += n_tokens;
+    lctx.kv_self.has_shift  = false;
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -6562,10 +6597,6 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
 
-        if (model->arch == LLM_ARCH_LLAMA) {
-            ctx->kv_self.is_roped = true;
-        }
-
         {
             const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
             LLAMA_LOG_INFO("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
@@ -6803,16 +6834,16 @@ void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1
     llama_kv_cache_rm_tokens(ctx->kv_self, c0, c1);
 }
 
-void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_kv_cache_rm_seq(ctx->kv_self, seq_id);
+void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+    llama_kv_cache_rm_seq(ctx->kv_self, seq_id, p0, p1);
 }
 
 void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id) {
     llama_kv_cache_keep_seq(ctx->kv_self, seq_id);
 }
 
-void llama_kv_cache_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
-    llama_kv_cache_shift(*ctx, seq_id, p0, p1, delta);
+void llama_kv_cache_shift_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+    llama_kv_cache_shift_seq(ctx->kv_self, seq_id, p0, p1, delta);
 }
 
 // Returns the *maximum* size of the state
