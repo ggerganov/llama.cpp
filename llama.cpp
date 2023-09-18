@@ -2705,6 +2705,7 @@ static struct ggml_cgraph * llm_build_llama(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    offload_func_kq(KQ_pos);
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -2715,6 +2716,7 @@ static struct ggml_cgraph * llm_build_llama(
 
     // K_shift
     struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    offload_func_kq(K_shift);
     ggml_allocr_alloc(lctx.alloc, K_shift);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) K_shift->data;
@@ -3087,6 +3089,7 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    offload_func_kq(KQ_pos);
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -3097,6 +3100,7 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     // K_shift
     struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    offload_func_kq(K_shift);
     ggml_allocr_alloc(lctx.alloc, K_shift);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) K_shift->data;
@@ -3486,6 +3490,7 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    offload_func_kq(KQ_pos);
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -3496,6 +3501,7 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // K_shift
     struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    offload_func_kq(K_shift);
     ggml_allocr_alloc(lctx.alloc, K_shift);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) K_shift->data;
