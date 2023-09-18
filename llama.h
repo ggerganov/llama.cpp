@@ -388,6 +388,7 @@ extern "C" {
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
@@ -395,6 +396,7 @@ extern "C" {
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
@@ -554,7 +556,9 @@ extern "C" {
 
 struct ggml_tensor;
 
-const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+);
 
 #endif // LLAMA_API_INTERNAL
 
