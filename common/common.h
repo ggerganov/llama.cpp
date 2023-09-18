@@ -3,7 +3,6 @@
 #pragma once
 
 #include "llama.h"
-#include "build-info.h"
 
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
