@@ -550,7 +550,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         } else if ( log_param_single_parse( argv[i] ) ) {
             // Do nothing, log_param_single_parse automatically does it's thing
             //  and returns if a match was found and parsed.
-        } else if ( log_param_pair_parse( /*check_but_dont_parse*/ true, argv[i] ) ) {
+        } else if ( log_param_pair_parse( /*parse*/ false, argv[i] ) ) {
             // We have a matching known parameter requiring an argument,
             //  now we need to check if there is anything after this argv
             //  and flag invalid_param or parse it.
@@ -558,7 +558,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
-            if( !log_param_pair_parse( /*check_but_dont_parse*/ false, argv[i-1], argv[i]) ) {
+            if( !log_param_pair_parse( /*parse*/ true, argv[i-1], argv[i]) ) {
                 invalid_param = true;
                 break;
             }

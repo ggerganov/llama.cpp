@@ -298,8 +298,11 @@ int main(int argc, char ** argv) {
         } else if (n_matching_session_tokens >= embd_inp.size()) {
             LOG_TEE("%s: session file has exact match for prompt!\n", __func__);
         } else if (n_matching_session_tokens < (embd_inp.size() / 2)) {
-            LOG_TEE("%s: warning: session file has low similarity to prompt (%zu / %zu tokens); will mostly be reevaluated\n",
-                __func__, n_matching_session_tokens, embd_inp.size());
+            LOG_TEE(
+                "%s: warning: session file has low similarity to prompt (%zu / %zu tokens);"
+                " will mostly be reevaluated\n",
+                __func__, n_matching_session_tokens, embd_inp.size()
+            );
         } else {
             LOG_TEE("%s: session file matches %zu / %zu tokens of prompt\n",
                 __func__, n_matching_session_tokens, embd_inp.size());
@@ -307,8 +310,10 @@ int main(int argc, char ** argv) {
     }
 
     LOGLN(
-            "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu, embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
-            log_tostr(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size());
+        "recalculate the cached logits (check): embd_inp.empty() %s, n_matching_session_tokens %zu,"
+        " embd_inp.size() %zu, session_tokens.size() %zu, embd_inp.size() %zu",
+        log_tostr(embd_inp.empty()), n_matching_session_tokens, embd_inp.size(), session_tokens.size(), embd_inp.size()
+    );
 
     // if we will use the cache for the full prompt without reaching the end of the cache, force
     // reevaluation of the last token token to recalculate the cached logits
@@ -402,9 +407,17 @@ int main(int argc, char ** argv) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
-    LOG_TEE("sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
-            params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
-    LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+    LOG_TEE(
+        "sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f,"
+        " frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f,"
+        " temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
+        params.repeat_last_n, params.repeat_penalty, params.presence_penalty,
+        params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p,
+        params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau
+    );
+    LOG_TEE(
+        "generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n",
+        n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
     struct llama_grammar * grammar = NULL;
@@ -509,7 +522,10 @@ int main(int argc, char ** argv) {
                 }
 
                 const int n_left = n_past - params.n_keep;
-                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d\n", n_past, n_left, n_ctx, params.n_keep);
+                LOG(
+                    "context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d\n",
+                    n_past, n_left, n_ctx, params.n_keep
+                );
 
                 // always keep the first token - BOS
                 n_past          = std::max(1, params.n_keep);

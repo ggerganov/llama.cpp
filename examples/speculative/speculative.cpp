@@ -154,7 +154,10 @@ int main(int argc, char ** argv) {
 
             // check if the draft matches the target
             if (i_dft < (int) drafted.size() && id == drafted[i_dft]) {
-                LOG("the sampled target token matches the %dth drafted token (%d, '%s') - accepted\n", i_dft, id, token_str.c_str());
+                LOG(
+                    "the sampled target token matches the %dth drafted token (%d, '%s') - accepted\n",
+                    i_dft, id, token_str.c_str()
+                );
                 ++n_accept;
                 ++n_past_tgt;
                 ++n_past_dft;
@@ -166,8 +169,10 @@ int main(int argc, char ** argv) {
             // the drafted token was rejected or we are out of drafted tokens
 
             if (i_dft < (int) drafted.size()) {
-                LOG("the %dth drafted token (%d, '%s') does not match the sampled target token (%d, '%s') - rejected\n",
-                        i_dft, drafted[i_dft], llama_token_to_piece(ctx_dft, drafted[i_dft]).c_str(), id, token_str.c_str());
+                LOG(
+                    "the %dth drafted token (%d, '%s') does not match the sampled target token (%d, '%s') - rejected\n",
+                    i_dft, drafted[i_dft], llama_token_to_piece(ctx_dft, drafted[i_dft]).c_str(), id, token_str.c_str()
+                );
             } else {
                 LOG("out of drafted tokens\n");
             }
@@ -235,7 +240,10 @@ int main(int argc, char ** argv) {
             llama_sample_softmax(ctx_dft, &cur_p);
 
             for (int i = 0; i < 3; ++i) {
-                LOG(" - draft candidate %3d: %6d (%8.3f) '%s'\n", i, cur_p.data[i].id, cur_p.data[i].p, llama_token_to_piece(ctx_dft, cur_p.data[i].id).c_str());
+                LOG(
+                    " - draft candidate %3d: %6d (%8.3f) '%s'\n",
+                    i, cur_p.data[i].id, cur_p.data[i].p, llama_token_to_piece(ctx_dft, cur_p.data[i].id).c_str()
+                );
             }
 
             // TODO: better logic?
@@ -276,8 +284,14 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("\n\n");
 
-    LOG_TEE("encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f));
-    LOG_TEE("decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n", n_predict, (t_dec_end - t_dec_start) / 1e6f, n_predict / ((t_dec_end - t_dec_start) / 1e6f));
+    LOG_TEE(
+        "encoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n",
+        n_input,   (t_enc_end - t_enc_start) / 1e6f, inp.size() / ((t_enc_end - t_enc_start) / 1e6f)
+    );
+    LOG_TEE(
+        "decoded %4d tokens in %8.3f seconds, speed: %8.3f t/s\n",
+        n_predict, (t_dec_end - t_dec_start) / 1e6f, n_predict / ((t_dec_end - t_dec_start) / 1e6f)
+    );
 
     // TODO: make sure these numbers are computed correctly
     LOG_TEE("\n");
