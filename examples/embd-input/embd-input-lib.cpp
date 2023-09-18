@@ -79,7 +79,7 @@ bool eval_float(void * model, float * input, int N){
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        llama_batch batch = { uint32_t(n_eval), nullptr, (input+i*n_emb), nullptr, nullptr, n_past, 1, 0, false };
+        llama_batch batch = { uint32_t(n_eval), nullptr, (input+i*n_emb), nullptr, nullptr, n_past, 1, 0, };
         if (llama_decode(ctx, batch, params.n_threads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return false;

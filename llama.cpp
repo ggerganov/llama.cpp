@@ -1316,7 +1316,8 @@ static bool llama_kv_cache_find_slot(
     return true;
 }
 
-void llama_kv_cache_update_cell_max(struct llama_kv_cache & cache) {
+void llama_kv_cache_update(struct llama_kv_cache & cache) {
+    // compute new cell_max
     cache.cell_max = 0;
 
     for (uint32_t i = 0; i < cache.size; i++) {
@@ -1326,18 +1327,40 @@ void llama_kv_cache_update_cell_max(struct llama_kv_cache & cache) {
     }
 }
 
-void llama_kv_cache_clear(struct llama_kv_cache & cache, int32_t p0, int32_t p1) {
-    cache.head = p0;
+void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t c1) {
+    if (c0 < 0) c0 = 0;
+    if (c1 < 0) c1 = cache.size;
 
-    if (p0 < 0) p0 = 0;
-    if (p1 < 0) p1 = cache.size;
-
-    for (int32_t i = p0; i < p1; ++i) {
+    for (int32_t i = c0; i < c1; ++i) {
         cache.cells[i].pos = -1;
         cache.cells[i].seq_id.clear();
     }
 
-    llama_kv_cache_update_cell_max(cache);
+    llama_kv_cache_update(cache);
+}
+
+void llama_kv_cache_rm_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+    for (uint32_t i = 0; i < cache.size; ++i) {
+        if (cache.cells[i].has_seq_id(seq_id)) {
+            cache.cells[i].seq_id.erase(seq_id);
+            if (cache.cells[i].seq_id.empty()) {
+                cache.cells[i].pos = -1;
+            }
+        }
+    }
+
+    llama_kv_cache_update(cache);
+}
+
+void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+    for (uint32_t i = 0; i < cache.size; ++i) {
+        if (!cache.cells[i].has_seq_id(seq_id)) {
+            cache.cells[i].pos = -1;
+            cache.cells[i].seq_id.clear();
+        }
+    }
+
+    llama_kv_cache_update(cache);
 }
 
 //
@@ -3966,10 +3989,6 @@ static bool llama_eval_internal(
         }
 
         batch.seq_id = seq_id.data();
-    }
-
-    if (batch.clear_kv) {
-        llama_kv_cache_clear(kv_self, 0, -1);
     }
 
     if (!llama_kv_cache_find_slot(kv_self, batch)) {
@@ -6803,8 +6822,16 @@ int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return ctx->kv_self.head;
 }
 
-void llama_kv_clear(struct llama_context * ctx, int32_t p0, int32_t p1) {
-    llama_kv_cache_clear(ctx->kv_self, p0, p1);
+void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1) {
+    llama_kv_cache_rm_tokens(ctx->kv_self, c0, c1);
+}
+
+void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id) {
+    llama_kv_cache_rm_seq(ctx->kv_self, seq_id);
+}
+
+void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id) {
+    llama_kv_cache_keep_seq(ctx->kv_self, seq_id);
 }
 
 // Returns the *maximum* size of the state
@@ -7203,7 +7230,7 @@ int llama_eval(
                     uint32_t   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    llama_kv_cache_clear(ctx->kv_self, n_past, -1);
+    llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
 
     if (!llama_eval_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0), n_threads)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
@@ -7226,9 +7253,9 @@ int llama_eval_embd(
                         uint32_t   n_tokens,
                              int   n_past,
                              int   n_threads) {
-    llama_kv_cache_clear(ctx->kv_self, n_past, -1);
+    llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
 
-    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, n_past, 1, 0, n_past == 0, };
+    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, n_past, 1, 0, };
 
     if (!llama_eval_internal(*ctx, batch, n_threads)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
@@ -7259,7 +7286,6 @@ struct llama_batch llama_batch_get_one(
         /*all_pos_0   =*/ pos_0,
         /*all_pos_1   =*/ 1,
         /*all_seq_id  =*/ seq_id,
-        /*clear_kv    =*/ pos_0 == 0,
     };
 }
 

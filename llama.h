@@ -84,8 +84,6 @@ extern "C" {
         llama_pos    all_pos_0;  // used if pos == NULL
         llama_pos    all_pos_1;  // used if pos == NULL
         llama_seq_id all_seq_id; // used if seq_id == NULL
-
-        bool clear_kv; // if true, clear the entire KV cache. common usage for perplexity calculations
     } llama_seq;
 
     enum llama_log_level {
@@ -323,7 +321,14 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
-    LLAMA_API void llama_kv_clear(struct llama_context * ctx, int32_t p0, int32_t p1);
+    // Remove all tokens between cells [c0, c1)
+    LLAMA_API void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1);
+
+    // Removes all tokens that belong to the specified sequence
+    LLAMA_API void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id);
+
+    // Removes all tokens that do not belong to the specified sequence
+    LLAMA_API void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id);
 
     //
     // State / sessions
