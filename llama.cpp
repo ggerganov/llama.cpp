@@ -1673,8 +1673,6 @@ static void llm_load_hparams(
     hparams.n_head_kv = hparams.n_head;
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
-    llama_context_params defaults = llama_context_default_params();
-
     // rope_freq_base (optional)
     if (rope_freq_base == 0.0f) {
         rope_freq_base = 10000.0f;
