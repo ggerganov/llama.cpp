@@ -161,24 +161,16 @@ byte_encoder = bytes_to_unicode()
 byte_decoder = {v: k for k, v in byte_encoder.items()}
 
 for i in range(vocab_size):
-    if i in reverse_vocab:
-        try:
-            text = bytearray([byte_decoder[c] for c in reverse_vocab[i]])
-        except KeyError:
-            text = bytearray()
-            for c in reverse_vocab[i]:
-                if ord(c) < 256:  # single byte character
-                    text.append(byte_decoder[ord(c)])
-                else:  # multibyte special token character
-                    text.extend(c.encode('utf-8'))
+    if reverse_vocab[i] in byte_decoder:
+        text = reverse_vocab[i]
+        tokens.append(text)
+        scores.append(0.0) # dummy
+        toktypes.append(gguf.TokenType.BYTE)
     else:
-        print(f"Key {i} not in tokenizer vocabulary. Padding with an arbitrary token.")
-        pad_token = f"[PAD{i}]".encode("utf8")
-        text = bytearray(pad_token)
-
-    tokens.append(text)
-    scores.append(0.0)                      # dymmy
-    toktypes.append(gguf.TokenType.NORMAL)  # dummy
+        text = reverse_vocab[i]
+        tokens.append(text)
+        scores.append(0.0) # dummy
+        toktypes.append(gguf.TokenType.NORMAL)
 
 gguf_writer.add_token_list(tokens)
 gguf_writer.add_token_scores(scores)
