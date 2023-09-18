@@ -977,6 +977,8 @@ int main(int argc, char ** argv) {
 
         test t(inst, lmodel, ctx);
 
+        llama_kv_cache_keep_seq(ctx, -1);
+
         // warmup run
         if (t.n_prompt > 0) {
             test_prompt(ctx, std::min(2, t.n_batch), 0, t.n_batch, t.n_threads);
@@ -986,6 +988,8 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = 0; i < params.reps; i++) {
+            llama_kv_cache_keep_seq(ctx, -1);
+
             uint64_t t_start = get_time_ns();
             if (t.n_prompt > 0) {
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);

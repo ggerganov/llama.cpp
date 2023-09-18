@@ -321,7 +321,7 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
-    // Remove all tokens between cells [c0, c1)
+    // Remove all tokens data of cells in [c0, c1)
     LLAMA_API void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1);
 
     // Removes all tokens that belong to the specified sequence
@@ -329,6 +329,10 @@ extern "C" {
 
     // Removes all tokens that do not belong to the specified sequence
     LLAMA_API void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id);
+
+    // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
+    // If the KV cache is RoPEd, the KV data is updated accordingly
+    LLAMA_API void llama_kv_cache_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta);
 
     //
     // State / sessions

@@ -1023,9 +1023,6 @@ struct llama_kv_cache {
     uint32_t head = 0;
     uint32_t size = 0;
 
-    // largest index of an occupied cell (used for a basic optimization heuristic)
-    uint32_t cell_max = 0;
-
     std::vector<llama_kv_cell> cells;
 
     struct ggml_tensor * k = NULL;
@@ -1229,8 +1226,6 @@ static bool llama_kv_cache_init(
     cache.head = 0;
     cache.size = n_ctx;
 
-    cache.cell_max = 0;
-
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
@@ -1316,15 +1311,16 @@ static bool llama_kv_cache_find_slot(
     return true;
 }
 
-void llama_kv_cache_update(struct llama_kv_cache & cache) {
-    // compute new cell_max
-    cache.cell_max = 0;
+int32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
+    int32_t res = 0;
 
     for (uint32_t i = 0; i < cache.size; i++) {
-        if (cache.cells[i].pos >= 0) {
-            cache.cell_max = i + 1;
+        if (cache.cells[i].pos >= 0 && !cache.cells[i].seq_id.empty()) {
+            res = i + 1;
         }
     }
+
+    return res;
 }
 
 void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t c1) {
@@ -1335,8 +1331,6 @@ void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t
         cache.cells[i].pos = -1;
         cache.cells[i].seq_id.clear();
     }
-
-    llama_kv_cache_update(cache);
 }
 
 void llama_kv_cache_rm_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
@@ -1348,8 +1342,6 @@ void llama_kv_cache_rm_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
             }
         }
     }
-
-    llama_kv_cache_update(cache);
 }
 
 void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
@@ -1359,8 +1351,22 @@ void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id seq_id)
             cache.cells[i].seq_id.clear();
         }
     }
+}
 
-    llama_kv_cache_update(cache);
+void llama_kv_cache_shift(
+              struct llama_context & ctx,
+                      llama_seq_id   seq_id,
+                         llama_pos   p0,
+                         llama_pos   p1,
+                         llama_pos   delta) {
+    auto & hparams = ctx.model.hparams;
+    auto & cache   = ctx.kv_self;
+
+    for (uint32_t i = 0; i < cache.size; ++i) {
+        if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
+            cache.cells[i].pos += delta;
+        }
+    }
 }
 
 //
@@ -2587,7 +2593,7 @@ static struct ggml_cgraph * llm_build_llama(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = kv_self.cell_max + n_tokens;
+    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -2676,13 +2682,6 @@ static struct ggml_cgraph * llm_build_llama(
                 for (int i = 0; i < n_kv; ++i) {
                     if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-
-                // TODO: temporary heuristic verification - if this fails then there is a bug with cell_max computation
-                for (int i = n_kv; i < n_ctx; ++i) {
-                    if (kv_self.cells[i].has_seq_id(seq_id) && kv_self.cells[i].pos >= 0) {
-                        GGML_ASSERT(false && "cell_max is too small - this might indicate a bug");
                     }
                 }
             }
@@ -2952,7 +2951,7 @@ static struct ggml_cgraph * llm_build_baichaun(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = kv_self.cell_max + n_tokens;
+    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3041,13 +3040,6 @@ static struct ggml_cgraph * llm_build_baichaun(
                 for (int i = 0; i < n_kv; ++i) {
                     if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-
-                // TODO: temporary heuristic verification - if this fails then there is a bug with cell_max computation
-                for (int i = n_kv; i < n_ctx; ++i) {
-                    if (kv_self.cells[i].has_seq_id(seq_id) && kv_self.cells[i].pos >= 0) {
-                        GGML_ASSERT(false && "cell_max is too small - this might indicate a bug");
                     }
                 }
             }
@@ -3334,7 +3326,7 @@ static struct ggml_cgraph * llm_build_falcon(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = kv_self.cell_max + n_tokens;
+    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3423,13 +3415,6 @@ static struct ggml_cgraph * llm_build_falcon(
                 for (int i = 0; i < n_kv; ++i) {
                     if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-
-                // TODO: temporary heuristic verification - if this fails then there is a bug with cell_max computation
-                for (int i = n_kv; i < n_ctx; ++i) {
-                    if (kv_self.cells[i].has_seq_id(seq_id) && kv_self.cells[i].pos >= 0) {
-                        GGML_ASSERT(false && "cell_max is too small - this might indicate a bug");
                     }
                 }
             }
@@ -3671,7 +3656,7 @@ static struct ggml_cgraph * llm_build_starcoder(
     const float norm_eps = hparams.f_norm_eps;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = kv_self.cell_max + n_tokens;
+    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3752,13 +3737,6 @@ static struct ggml_cgraph * llm_build_starcoder(
                 for (int i = 0; i < n_kv; ++i) {
                     if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-
-                // TODO: temporary heuristic verification - if this fails then there is a bug with cell_max computation
-                for (int i = n_kv; i < n_ctx; ++i) {
-                    if (kv_self.cells[i].has_seq_id(seq_id) && kv_self.cells[i].pos >= 0) {
-                        GGML_ASSERT(false && "cell_max is too small - this might indicate a bug");
                     }
                 }
             }
@@ -4055,8 +4033,7 @@ static bool llama_eval_internal(
 #endif
 
     // update the kv ring buffer
-    lctx.kv_self.head     += n_tokens;
-    lctx.kv_self.cell_max  = std::max(lctx.kv_self.cell_max, lctx.kv_self.head);
+    lctx.kv_self.head += n_tokens;
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -6834,6 +6811,10 @@ void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id) {
     llama_kv_cache_keep_seq(ctx->kv_self, seq_id);
 }
 
+void llama_kv_cache_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+    llama_kv_cache_shift(*ctx, seq_id, p0, p1, delta);
+}
+
 // Returns the *maximum* size of the state
 size_t llama_get_state_size(const struct llama_context * ctx) {
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
@@ -7130,8 +7111,6 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
         ctx->kv_self.head = kv_ntok;
         ctx->kv_self.size = kv_size;
-
-        ctx->kv_self.cell_max = kv_ntok;
     }
 
     const size_t nread    = inp - src;
