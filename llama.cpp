@@ -2606,6 +2606,8 @@ static struct ggml_cgraph * llm_build_llama(
     const int32_t n_tokens = batch.n_tokens;
     const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
+    //printf("n_kv = %d\n", n_kv);
+
     const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
 
     auto & buf_compute = lctx.buf_compute;
@@ -4051,6 +4053,8 @@ static bool llama_eval_internal(
 
         batch.seq_id = seq_id.data();
     }
+
+    kv_self.head = 0;
 
     if (!llama_kv_cache_find_slot(kv_self, batch)) {
         return false;
