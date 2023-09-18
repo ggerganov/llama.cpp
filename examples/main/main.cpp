@@ -198,15 +198,6 @@ int main(int argc, char ** argv) {
                 params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
     }
 
-    // export the cgraph and exit
-    if (params.export_cgraph) {
-        llama_eval_export(ctx, "llama.ggml");
-        llama_free(ctx);
-        llama_free_model(model);
-
-        return 0;
-    }
-
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
 

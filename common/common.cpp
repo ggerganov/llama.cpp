@@ -436,8 +436,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.use_mmap = false;
         } else if (arg == "--numa") {
             params.numa = true;
-        } else if (arg == "--export") {
-            params.export_cgraph = true;
         } else if (arg == "--verbose-prompt") {
             params.verbose_prompt = true;
         } else if (arg == "-r" || arg == "--reverse-prompt") {
@@ -685,7 +683,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
 #endif // GGML_USE_CUBLAS
 #endif
-    printf("  --export              export the computation graph to 'llama.ggml'\n");
     printf("  --verbose-prompt      print prompt before generation\n");
     fprintf(stderr, "  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
@@ -782,7 +779,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     {
         LOG("warming up the model with an empty run\n");
 
-        const std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
+        std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
         llama_eval(lctx, tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, params.n_threads);
         llama_reset_timings(lctx);
     }
@@ -1182,7 +1179,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
     fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
     fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
-    fprintf(stream, "export: %s # default: false\n", params.export_cgraph ? "true" : "false");
     fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
     fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", params.frequency_penalty);
     dump_string_yaml_multiline(stream, "grammar", params.grammar.c_str());

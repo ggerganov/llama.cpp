@@ -12462,12 +12462,10 @@ static void ggml_compute_forward_alibi_f16(
         return;
     }
 
-    const int n_past = ((int32_t *) dst->op_params)[0];
+    //const int n_past = ((int32_t *) dst->op_params)[0];
     const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
-
-    assert(n_past >= 0);
 
     const int ne0 = src0->ne[0]; // all_seq_len = n_past + ne1
     const int ne1 = src0->ne[1]; // seq_len_without_past
@@ -12483,7 +12481,7 @@ static void ggml_compute_forward_alibi_f16(
     //const int nb3 = src0->nb[3];
 
     GGML_ASSERT(nb0 == sizeof(ggml_fp16_t));
-    GGML_ASSERT(ne1 + n_past == ne0); (void) n_past;
+    //GGML_ASSERT(ne1 + n_past == ne0); (void) n_past;
     GGML_ASSERT(n_head == ne2);
 
     // add alibi to src0 (KQ_scaled)

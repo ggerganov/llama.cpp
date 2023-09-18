@@ -158,7 +158,8 @@ int main(int argc, char ** argv)
     }
     std::cout << std::flush;
 
-    int n_past = llama_get_kv_cache_token_count(ctx);
+    int n_past = 0;
+
     if (llama_eval(ctx, tokens_list.data(), tokens_list.size(), n_past, params.n_threads))
     {
         fprintf(stderr, "%s : failed to eval prompt.\n" , __func__ );
