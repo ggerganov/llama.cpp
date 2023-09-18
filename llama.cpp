@@ -2746,6 +2746,7 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(cur, "attention_norm_0");
         }
 
+        // shift the entire K-cache if needed
         if (do_rope_shift) {
             ggml_build_forward_expand(gf,
                     ggml_rope_custom_inplace(ctx0,
@@ -2987,6 +2988,8 @@ static struct ggml_cgraph * llm_build_baichaun(
     const int32_t n_tokens = batch.n_tokens;
     const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
+    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
+
     auto & buf_compute = lctx.buf_compute;
 
     struct ggml_init_params params = {
@@ -3090,6 +3093,16 @@ static struct ggml_cgraph * llm_build_baichaun(
         }
     }
 
+    // K_shift
+    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    ggml_allocr_alloc(lctx.alloc, K_shift);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        int * data = (int *) K_shift->data;
+        for (int i = 0; i < n_ctx; ++i) {
+            data[i] = kv_self.cells[i].delta;
+        }
+    }
+
     for (int il = 0; il < n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
 
@@ -3113,6 +3126,18 @@ static struct ggml_cgraph * llm_build_baichaun(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
+        }
+
+        // shift the entire K-cache if needed
+        if (do_rope_shift) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
 
         // self-attention
@@ -3362,6 +3387,8 @@ static struct ggml_cgraph * llm_build_falcon(
     const int32_t n_tokens = batch.n_tokens;
     const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
 
+    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
+
     auto & buf_compute = lctx.buf_compute;
 
     struct ggml_init_params params = {
@@ -3465,6 +3492,16 @@ static struct ggml_cgraph * llm_build_falcon(
         }
     }
 
+    // K_shift
+    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+    ggml_allocr_alloc(lctx.alloc, K_shift);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        int * data = (int *) K_shift->data;
+        for (int i = 0; i < n_ctx; ++i) {
+            data[i] = kv_self.cells[i].delta;
+        }
+    }
+
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * attn_norm;
 
@@ -3475,6 +3512,18 @@ static struct ggml_cgraph * llm_build_falcon(
             offload_func = ggml_cuda_assign_buffers_no_alloc;
         }
 #endif // GGML_USE_CUBLAS
+
+        // shift the entire K-cache if needed
+        if (do_rope_shift) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale));
+        }
 
         // self-attention
         // TODO: refactor into common function (shared with LLaMA)
