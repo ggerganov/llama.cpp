@@ -2879,6 +2879,7 @@ Current version: 64
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
 		image_styles: "",
+		grammar:"",
 		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -3374,6 +3375,10 @@ Current version: 64
 	function is_using_kcpp_with_mirostat()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
+	}
+	function is_using_kcpp_with_grammar()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
 	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true streaming
@@ -4034,7 +4039,7 @@ Current version: 64
 	function get_aetherroom_scenario()
 	{
 		inputBox("Enter aetherroom.club prompt URL, or 4-digit prompt number","Import from aetherroom.club","","https://aetherroom.club/1234", ()=>{
-			let userinput = document.getElementById("inputboxcontainerinput").value.toLowerCase().trim();
+			let userinput = getInputBoxValue().toLowerCase().trim();
 			if(userinput=="")
 			{
 				//pass
@@ -4095,7 +4100,7 @@ Current version: 64
 	function get_chubai_scenario()
 	{
 		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
-			let userinput = document.getElementById("inputboxcontainerinput").value.toLowerCase().trim();
+			let userinput = getInputBoxValue().toLowerCase().trim();
 			if(userinput=="")
 			{
 				//pass
@@ -4283,7 +4288,7 @@ Current version: 64
 			<p><b>If you are experiencing feelings of distress, anxiety, suicidal thoughts, or other forms of mental discomfort, it's best to avoid using AI for non fiction or personal matters as it may exacerbate or encourage these feelings.</b></p>
 			`;
 			inputBox(warntxt,"AI Safety Warning","","Acknowledgement Required",()=>{
-				let userinput = document.getElementById("inputboxcontainerinput").value.toLowerCase().trim();
+				let userinput = getInputBoxValue().toLowerCase().trim();
 				if(userinput=="i understand")
 				{
 					confirm_scenario();
@@ -4611,10 +4616,20 @@ Current version: 64
 	function selectStyle()
 	{
 		inputBox("Style tags to use for generating images:\n(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)\n\n","Extra Image Styles",pendingstyle,"Default Style",()=>{
-			let userinput = document.getElementById("inputboxcontainerinput").value;
+			let userinput = getInputBoxValue();
 			pendingstyle = userinput;
 			console.log("Saved styles: " + pendingstyle);
 		},false);
+	}
+
+	var pendinggrammar = "";
+	function selectGrammar()
+	{
+		inputBox("Enter GBNF Grammar Format to use.\nLeave blank to disable.\n","Set GBNF Grammar Format",pendinggrammar,"",()=>{
+			let userinput = getInputBoxValue().trim();
+			pendinggrammar = userinput;
+			console.log("Saved grammar: " + pendinggrammar);
+		},false,true);
 	}
 
 	var msgboxOnDone = hide_popups;
@@ -4661,7 +4676,7 @@ Current version: 64
 	}
 
 	var onInputboxOk = null;
-	function inputBox(text,title,inputVal,inputPlaceholder,onDone, isHtml=false)
+	function inputBox(text,title,inputVal,inputPlaceholder,onDone,isHtml=false,isTextArea=false)
 	{
 		if (!text) { text = ""; }
 		if (!title) { title = "User Input"; }
@@ -4673,9 +4688,34 @@ Current version: 64
 		}else{
 			document.getElementById("inputboxcontainertext").innerText = text;
 		}
-		document.getElementById("inputboxcontainerinput").value = escapeHtml(inputVal);
-		document.getElementById("inputboxcontainerinput").placeholder = escapeHtml(inputPlaceholder);
+		if(isTextArea)
+		{
+			document.getElementById("inputboxcontainerinput").classList.add("hidden");
+			document.getElementById("inputboxcontainerinputarea").classList.remove("hidden");
+			document.getElementById("inputboxcontainerinputarea").value = inputVal;
+			document.getElementById("inputboxcontainerinputarea").placeholder = escapeHtml(inputPlaceholder);
+		}
+		else
+		{
+			document.getElementById("inputboxcontainerinput").classList.remove("hidden");
+			document.getElementById("inputboxcontainerinputarea").classList.add("hidden");
+			document.getElementById("inputboxcontainerinput").value = inputVal;
+			document.getElementById("inputboxcontainerinput").placeholder = escapeHtml(inputPlaceholder);
+		}
+
 		onInputboxOk = function(){document.getElementById("inputboxcontainer").classList.add("hidden");onDone();};
+	}
+	function getInputBoxValue()
+	{
+		if(document.getElementById("inputboxcontainerinputarea").classList.contains("hidden"))
+		{
+			return document.getElementById("inputboxcontainerinput").value;
+		}
+		else
+		{
+			return document.getElementById("inputboxcontainerinputarea").value;
+		}
+
 	}
 
 	function togglejailbreak()
@@ -5541,6 +5581,9 @@ Current version: 64
 			document.getElementById("mirosupporteddiv").classList.add("hidden");
 			document.getElementById("mirounsupporteddiv").classList.remove("hidden");
 		}
+
+		document.getElementById("setgrammar").disabled = !is_using_kcpp_with_grammar();
+
 		if(custom_kobold_endpoint!="")
 		{
 			document.getElementById("tokenstreaminglabel").classList.remove("color_red");
@@ -5571,6 +5614,7 @@ Current version: 64
 		}
 
 		pendingstyle = localsettings.image_styles;
+		pendinggrammar = localsettings.grammar;
 
 		//prepare the input for sampler order
 		let samplerstr = localsettings.sampler_order.toString();
@@ -5760,6 +5804,7 @@ Current version: 64
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
 		localsettings.image_styles = pendingstyle;
+		localsettings.grammar = pendinggrammar;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -6226,7 +6271,7 @@ Current version: 64
 	{
 		addimgLongPressTimer = setTimeout(()=>{
 			inputBox("Enter a prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
-				let userinput = document.getElementById("inputboxcontainerinput").value;
+				let userinput = getInputBoxValue();
 				if(userinput.trim()!="")
 				{
 					var sentence = userinput.trim().substring(0, 300);
@@ -6657,6 +6702,14 @@ Current version: 64
 					submit_payload.params.mirostat = localsettings.miro_type;
 					submit_payload.params.mirostat_tau = localsettings.miro_tau;
 					submit_payload.params.mirostat_eta = localsettings.miro_eta;
+				}
+			}
+
+			if((custom_kobold_endpoint != "" && is_using_kcpp_with_grammar()))
+			{
+				if(localsettings.grammar && localsettings.grammar!="")
+				{
+					submit_payload.params.grammar = localsettings.grammar;
 				}
 			}
 
@@ -8382,6 +8435,14 @@ Current version: 64
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
+		if(custom_kobold_endpoint!="")
+		{
+			document.getElementById("noextrastopseq").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("noextrastopseq").classList.remove("hidden");
+		}
 	}
 
 	function toggle_wi_sk(idx) {
@@ -9653,6 +9714,13 @@ Current version: 64
 						</div>
 
 					</div>
+
+					<div class="settingitem">
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Additional Configs <span class="helpicon">?<span class="helptext">Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures.</span></span></div>
+							<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">Set Grammar</button>
+						</div>
+					</div>
 				</div>
 				<!--advanced settings menu bottom-->
 				<div id="settingsmenuadvanced2" class="settingsmenu hidden" style="padding-top: 0px;" onchange="">
@@ -9823,7 +9891,9 @@ Current version: 64
 			<br><br>
 			<div class="justifyleft settinglabel">Extra Stopping Sequence (Kobold API Only) <span class="helpicon">?<span
 				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
-			<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
+				<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
+				<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
+
 
 
 			<br>
@@ -9968,6 +10038,7 @@ Current version: 64
 			</div>
 			<input class="form-control" type="text" placeholder="" value=""
 			id="inputboxcontainerinput">
+			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
 
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>

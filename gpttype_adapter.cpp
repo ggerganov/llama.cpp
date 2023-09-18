@@ -535,7 +535,10 @@ static void load_grammar(const std::string & gammarstr)
             printf("\nIgnored invalid grammar sampler.");
             return;
         }
-        grammar_parser::print_grammar(stderr, parsed_grammar);
+        if(debugmode==1)
+        {
+            grammar_parser::print_grammar(stderr, parsed_grammar);
+        }
         std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
         grammar = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
     }
