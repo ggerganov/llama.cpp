@@ -332,7 +332,7 @@ static uint32_t codepoint_from_utf16(const std::vector<uint16_t>& utf16, size_t&
     else {
         if (offset + 1 >= utf16.size() || !((utf16[1] & 0xdc00) == 0xdc00))
             throw std::invalid_argument("invalid character");
-        auto result = 0x10000 + ((utf16[0] & 0x03ff) << 10) | (utf16[1] & 0x03ff);
+        auto result = 0x10000 + (((utf16[0] & 0x03ff) << 10) | (utf16[1] & 0x03ff));
         offset += 2;
         return result;
     }
