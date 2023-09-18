@@ -6605,8 +6605,8 @@ struct llama_context * llama_new_context_with_model(
                     llama_free(ctx);
                     return NULL;
                 }
-                ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
-                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+                //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
+                //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
 #endif
             // measure memory requirements for the graph
@@ -6621,7 +6621,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc = ggml_allocr_new(ctx->buf_alloc.data, ctx->buf_alloc.size, tensor_alignment);
 #ifdef GGML_USE_METAL
             if (ctx->ctx_metal) {
-                ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
+                //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
 #endif
 #ifdef GGML_USE_CUBLAS
