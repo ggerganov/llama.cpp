@@ -6673,7 +6673,7 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc = ggml_allocr_new_measure(tensor_alignment);
 
             // build worst-case graph
-            uint32_t n_tokens = std::min((int)hparams.n_ctx, params.n_batch);
+            uint32_t n_tokens = std::max((int)hparams.n_ctx, params.n_batch);
             llama_token token = llama_token_bos(ctx); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, llama_batch_get_one(&token, n_tokens, 0, 0));
 

@@ -37,7 +37,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx_dft = NULL;
 
     // load the target model
-    params.perplexity = true; // HACK: enable logits_all = true
+    params.logits_all = true;
     std::tie(model_tgt, ctx_tgt) = llama_init_from_gpt_params(params);
 
     // load the draft model
@@ -172,7 +172,6 @@ int main(int argc, char ** argv) {
                 LOG("out of drafted tokens\n");
             }
 
-            llama_kv_cache_rm_seq(ctx_dft, 0, n_past_dft, n_ctx);
             llama_decode(ctx_dft, llama_batch_get_one(&id, 1, n_past_dft, 0), params.n_threads);
             ++n_past_dft;
 
@@ -218,7 +217,6 @@ int main(int argc, char ** argv) {
 
         // sample n_draft tokens from the draft model using greedy decoding
         int n_past_cur = n_past_dft;
-
         for (int i = 0; i < n_draft; ++i) {
             float * logits = llama_get_logits(ctx_dft);
 
@@ -258,7 +256,6 @@ int main(int argc, char ** argv) {
             }
 
             // evaluate the drafted token on the draft model
-            llama_kv_cache_rm_seq(ctx_dft, 0, n_past_cur, n_ctx);
             llama_decode(ctx_dft, llama_batch_get_one(&drafted.back(), 1, n_past_cur, 0), params.n_threads);
             ++n_past_cur;
 
@@ -268,7 +265,6 @@ int main(int argc, char ** argv) {
         }
 
         // evaluate the target model on the drafted tokens
-        llama_kv_cache_rm_seq(ctx_tgt, 0, n_past_tgt, n_ctx);
         llama_decode(ctx_tgt, llama_batch_get_one(drafted.data(), drafted.size(), n_past_tgt, 0), params.n_threads);
         ++n_past_tgt;
 

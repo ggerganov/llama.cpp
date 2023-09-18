@@ -681,7 +681,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    params.perplexity = true;
+    params.logits_all = true;
     params.n_batch = std::min(params.n_batch, params.n_ctx);
 
     if (params.ppl_stride > 0) {

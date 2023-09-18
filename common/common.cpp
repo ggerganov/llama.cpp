@@ -454,8 +454,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             if (params.logdir.back() != DIRECTORY_SEPARATOR) {
                 params.logdir += DIRECTORY_SEPARATOR;
             }
-        } else if (arg == "--perplexity") {
-            params.perplexity = true;
+        } else if (arg == "--perplexity" || arg == "--all-logits") {
+            params.logits_all = true;
         } else if (arg == "--ppl-stride") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -653,7 +653,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
     printf("  --temp N              temperature (default: %.1f)\n", (double)params.temp);
-    printf("  --perplexity          compute perplexity over each ctx window of the prompt\n");
+    printf("  --logits-all          return logits for all tokens in the batch (default: disabled)\n");
     printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
     printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
@@ -735,7 +735,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     lparams.f16_kv          = params.memory_f16;
     lparams.use_mmap        = params.use_mmap;
     lparams.use_mlock       = params.use_mlock;
-    lparams.logits_all      = params.perplexity;
+    lparams.logits_all      = params.logits_all;
     lparams.embedding       = params.embedding;
     lparams.rope_freq_base  = params.rope_freq_base;
     lparams.rope_freq_scale = params.rope_freq_scale;

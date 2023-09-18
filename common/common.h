@@ -113,7 +113,7 @@ struct gpt_params {
     bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
-    bool perplexity        = false; // compute perplexity over the prompt
+    bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool numa              = false; // attempt optimizations that help on some NUMA systems
