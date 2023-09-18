@@ -80,7 +80,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_clients = 16;
+    const int n_clients = 4;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("parallel", "log"));
@@ -115,10 +115,6 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
-
-    auto t_main_start = ggml_time_us();
-
-    int64_t n_tokens_total = 0;
 
     llama_seq_id g_seq_id = 0;
 
@@ -203,6 +199,9 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
+                //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
+                //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
+
                 const llama_token id = llama_sample_token(ctx, NULL, NULL, params, client.last_tokens, candidates, client.i_batch - i);
 
                 if (client.t_start_gen == 0) {
@@ -233,9 +232,7 @@ int main(int argc, char ** argv) {
 
                     const auto t_main_end = ggml_time_us();
 
-                    n_tokens_total += client.n_decoded - client.n_prompt;
-
-                    printf("\033[1mClient %2d, seq %4d, prompt %4d t, response %4d t, speed: PP %5.2f t/s, TG %5.2f, AVG %5.2f \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
+                    printf("\033[1mClient %2d, seq %4d, prompt %4d t, response %4d t, speed: PP %5.2f t/s, TG %5.2f t/s, AVG %5.2f t/s \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
                             client.id, client.seq_id, client.n_prompt, client.n_decoded - client.n_prompt,
                             (double) (client.n_prompt                   ) / (client.t_start_gen - client.t_start_prompt) * 1e6,
                             (double) (client.n_decoded - client.n_prompt) / (t_main_end         - client.t_start_gen)    * 1e6,
@@ -248,13 +245,6 @@ int main(int argc, char ** argv) {
 
                 client.i_batch = -1;
             }
-        }
-
-        static bool is_first = true;
-        if (is_first) {
-            t_main_start = ggml_time_us();
-            n_tokens_total = 0;
-            is_first = false;
         }
     }
 

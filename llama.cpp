@@ -2604,7 +2604,7 @@ static struct ggml_cgraph * llm_build_llama(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : llama_kv_cache_cell_max(kv_self);
 
     //printf("n_kv = %d\n", n_kv);
 
@@ -2775,7 +2775,7 @@ static struct ggml_cgraph * llm_build_llama(
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, n_tokens),    KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -6677,9 +6677,9 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc = ggml_allocr_new_measure(tensor_alignment);
 
             // build worst-case graph
-            uint32_t n_tokens = std::max((int)hparams.n_ctx, params.n_batch);
+            const uint32_t n_tokens = std::min((int) hparams.n_ctx, params.n_batch);
             llama_token token = llama_token_bos(ctx); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
-            ggml_cgraph * gf = llama_build_graph(*ctx, llama_batch_get_one(&token, n_tokens, 0, 0));
+            ggml_cgraph * gf = llama_build_graph(*ctx, llama_batch_get_one(&token, n_tokens, hparams.n_ctx - n_tokens, 0));
 
 #ifdef GGML_USE_METAL
             if (params.n_gpu_layers > 0) {
