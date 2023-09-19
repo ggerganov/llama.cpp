@@ -1792,7 +1792,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .to_float                 = NULL,
         .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
         .from_float_reference     = NULL,
-        .vec_dot                  = ggml_vec_dot_q4_sq_fp16,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_q4_sq_fp16,
         .vec_dot_type             = GGML_TYPE_F16,
     }
 #endif
@@ -12640,6 +12640,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q8_K:
+        case GGML_TYPE_Q4_SQ:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
