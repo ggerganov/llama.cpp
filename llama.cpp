@@ -1831,6 +1831,7 @@ static void llm_load_vocab(
 
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
+                GGML_ASSERT(codepoints_from_utf8(word).size() >= 0);
 
                 std::string first;
                 std::string second;
