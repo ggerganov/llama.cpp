@@ -6343,7 +6343,7 @@ static struct ggml_tensor * ggml_cpy_impl(
     }
 
     // make a view of the destination
-    struct ggml_tensor * result = ggml_view_tensor(ctx, b);
+    struct ggml_tensor * result = b->op == GGML_OP_NONE ? b : ggml_view_tensor(ctx, b);
     if (strlen(b->name) > 0) {
         ggml_format_name(result, "%s (copy of %s)", b->name, a->name);
     } else {

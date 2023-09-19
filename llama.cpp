@@ -1256,10 +1256,10 @@ static bool llama_kv_cache_init(
 
     (void) n_gpu_layers;
 #ifdef GGML_USE_CUBLAS
-    if (n_gpu_layers > n_layer + 1) {
+    if (n_gpu_layers > (int)n_layer + 1) {
         ggml_cuda_assign_buffers_no_scratch(cache.v);
     }
-    if (n_gpu_layers > n_layer + 2) {
+    if (n_gpu_layers > (int)n_layer + 2) {
         ggml_cuda_assign_buffers_no_scratch(cache.k);
     }
 #endif // GGML_USE_CUBLAS
@@ -2619,7 +2619,7 @@ static struct ggml_cgraph * llm_build_llama(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.cell_max;
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : std::max(1, (int)kv_self.cell_max);
     const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
 
     const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
@@ -2700,6 +2700,7 @@ static struct ggml_cgraph * llm_build_llama(
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    offload_func_kq(KQ_mask);
     ggml_allocr_alloc(lctx.alloc, KQ_mask);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         float * data = (float *) KQ_mask->data;
@@ -2722,6 +2723,7 @@ static struct ggml_cgraph * llm_build_llama(
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
+    ggml_set_name(KQ_pos, "KQ_pos");
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -2734,6 +2736,7 @@ static struct ggml_cgraph * llm_build_llama(
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
+        ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
         if (!ggml_allocr_is_measure(lctx.alloc)) {
             int * data = (int *) K_shift->data;
@@ -4116,6 +4119,7 @@ static int llama_decode_internal(
         ggml_tensor * node = gf->leafs[i];
         if (node->backend == GGML_BACKEND_GPU && node->extra == NULL) {
             ggml_cuda_assign_scratch_offset(node, (char*)node->data - (char *) lctx.buf_alloc.data);
+            ggml_cuda_copy_to_device(node);
         }
     }
 
