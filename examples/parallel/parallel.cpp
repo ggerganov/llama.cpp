@@ -232,7 +232,7 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
-            LOG_TEE("%s : decoded batch of %d tokens\n", __func__, n_tokens);
+            LOG("%s : decoded batch of %d tokens\n", __func__, n_tokens);
 
             for (auto & client : clients) {
                 if (client.i_batch < (int) i || client.i_batch >= (int) (i + n_tokens)) {
@@ -262,7 +262,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (id == llama_token_eos(ctx) || client.n_decoded > params.n_predict ||
+                        (id == llama_token_eos(ctx) || client.n_decoded + client.n_prompt >= params.n_predict ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {
                     // basic reverse prompt
@@ -275,7 +275,7 @@ int main(int argc, char ** argv) {
 
                     const auto t_main_end = ggml_time_us();
 
-                    printf("\033[1mClient %2d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed: PP %5.2f t/s, TG %5.2f t/s, AVG %5.2f t/s \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
+                    LOG_TEE("\033[1mClient %2d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed: PP %5.2f t/s, TG %5.2f t/s, AVG %5.2f t/s \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
                             client.id, client.seq_id, client.n_prompt, client.n_decoded,
                             (t_main_end - client.t_start_prompt) / 1e6,
                             (double) (client.n_prompt                   ) / (client.t_start_gen - client.t_start_prompt) * 1e6,
