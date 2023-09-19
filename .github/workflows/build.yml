@@ -21,8 +21,8 @@ env:
   GGML_N_THREADS: 1
 
 jobs:
-  ubuntu-focal-make:
-    runs-on: ubuntu-20.04
+  ubuntu-latest-make:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Clone
@@ -33,17 +33,17 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8
+          sudo apt-get install build-essential
 
       - name: Build
         id: make_build
         run: |
-          CC=gcc-8 make
+          make
 
       - name: Test
         id: make_test
         run: |
-          CC=gcc-8 make tests
+          make tests
           make test
 
   ubuntu-latest-cmake:
@@ -468,6 +468,7 @@ jobs:
       with:
         operating_system: freebsd
         version: '13.2'
+        hypervisor: 'qemu'
         run: |
             sudo pkg update
             sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
@@ -479,7 +480,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-focal-make
+      - ubuntu-latest-make
       - ubuntu-latest-cmake
       - macOS-latest-make
       - macOS-latest-cmake
