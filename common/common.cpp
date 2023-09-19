@@ -317,6 +317,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_chunks = std::stoi(argv[i]);
+        } else if (arg == "-np" || arg == "--parallel") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_parallel = std::stoi(argv[i]);
+        } else if (arg == "-ns" || arg == "--sequences") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_sequences = std::stoi(argv[i]);
         } else if (arg == "-m" || arg == "--model") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -360,6 +372,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.multiline_input = true;
         } else if (arg == "--simple-io") {
             params.simple_io = true;
+        } else if (arg == "--hot-plug") {
+            params.hot_plug = true;
         } else if (arg == "--color") {
             params.use_color = true;
         } else if (arg == "--mlock") {
@@ -659,6 +673,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --keep N              number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
     printf("  --draft N             number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
+    printf("  -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
+    printf("  -ns N, --sequences N  number of sequences to decode (default: %d)\n", params.n_sequences);
+    printf("  --hot-plug            enable hot-plugging of new sequences for decoding (default: disabled)\n");
     if (llama_mlock_supported()) {
         printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
     }
@@ -781,7 +798,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 
         std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0), params.n_threads);
-        llama_kv_cache_rm_tokens(lctx, -1, -1);
+        llama_kv_cache_tokens_rm(lctx, -1, -1);
         llama_reset_timings(lctx);
     }
 
@@ -1253,6 +1270,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "rope_freq_scale: %f # default: 1.0\n", params.rope_freq_scale);
     fprintf(stream, "seed: %d # default: -1 (random seed)\n", params.seed);
     fprintf(stream, "simple_io: %s # default: false\n", params.simple_io ? "true" : "false");
+    fprintf(stream, "hot_plug: %s # default: false\n", params.hot_plug ? "true" : "false");
     fprintf(stream, "temp: %f # default: 0.8\n", params.temp);
 
     const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + LLAMA_MAX_DEVICES);

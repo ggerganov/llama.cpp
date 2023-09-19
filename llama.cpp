@@ -1328,7 +1328,7 @@ static int32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
     return 0;
 }
 
-static void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t c1) {
+static void llama_kv_cache_tokens_rm(struct llama_kv_cache & cache, int32_t c0, int32_t c1) {
     if (c0 < 0) c0 = 0;
     if (c1 < 0) c1 = cache.size;
 
@@ -1338,7 +1338,7 @@ static void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, 
     }
 }
 
-static void llama_kv_cache_rm_seq(
+static void llama_kv_cache_seq_rm(
              struct llama_kv_cache & cache,
                       llama_seq_id   seq_id,
                          llama_pos   p0,
@@ -1353,7 +1353,20 @@ static void llama_kv_cache_rm_seq(
     }
 }
 
-static void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+static void llama_kv_cache_seq_cp(
+             struct llama_kv_cache & cache,
+                      llama_seq_id   seq_id_src,
+                      llama_seq_id   seq_id_dst,
+                         llama_pos   p0,
+                         llama_pos   p1) {
+    for (uint32_t i = 0; i < cache.size; ++i) {
+        if (cache.cells[i].has_seq_id(seq_id_src) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
+            cache.cells[i].seq_id.insert(seq_id_dst);
+        }
+    }
+}
+
+static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id seq_id) {
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (!cache.cells[i].has_seq_id(seq_id)) {
             cache.cells[i].pos = -1;
@@ -1362,7 +1375,7 @@ static void llama_kv_cache_keep_seq(struct llama_kv_cache & cache, llama_seq_id 
     }
 }
 
-static void llama_kv_cache_shift_seq(
+static void llama_kv_cache_seq_shift(
              struct llama_kv_cache & cache,
                       llama_seq_id   seq_id,
                          llama_pos   p0,
@@ -4019,7 +4032,11 @@ static struct ggml_cgraph * llama_build_graph(
 //   - batch:     batch to evaluate
 //   - n_threads: number of threads to use
 //
-static bool llama_decode_internal(
+// return 0 on success
+// return positive int on warning
+// return negative int on error
+//
+static int llama_decode_internal(
          llama_context & lctx,
            llama_batch   batch,
                    int   n_threads) {
@@ -4027,7 +4044,7 @@ static bool llama_decode_internal(
 
     if (n_tokens == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0", __func__);
-        return false;
+        return -1;
     }
 
     GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
@@ -4079,7 +4096,7 @@ static bool llama_decode_internal(
     kv_self.head = 0;
 
     if (!llama_kv_cache_find_slot(kv_self, batch)) {
-        return false;
+        return 1;
     }
 
     // a heuristic, to avoid attending the full cache if it is not yet utilized
@@ -4203,7 +4220,14 @@ static bool llama_decode_internal(
         lctx.n_p_eval += n_tokens;
     }
 
-    return true;
+    // get a more accurate load time, upon first eval
+    // TODO: fix this
+    if (!lctx.has_evaluated_once) {
+        lctx.t_load_us = ggml_time_us() - lctx.t_start_us;
+        lctx.has_evaluated_once = true;
+    }
+
+    return 0;
 }
 
 //
@@ -6920,20 +6944,24 @@ int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return ctx->kv_self.head;
 }
 
-void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1) {
-    llama_kv_cache_rm_tokens(ctx->kv_self, c0, c1);
+void llama_kv_cache_tokens_rm(struct llama_context * ctx, int32_t c0, int32_t c1) {
+    llama_kv_cache_tokens_rm(ctx->kv_self, c0, c1);
 }
 
-void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    llama_kv_cache_rm_seq(ctx->kv_self, seq_id, p0, p1);
+void llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+    llama_kv_cache_seq_rm(ctx->kv_self, seq_id, p0, p1);
 }
 
-void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_kv_cache_keep_seq(ctx->kv_self, seq_id);
+void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
+    llama_kv_cache_seq_cp(ctx->kv_self, seq_id_src, seq_id_dst, p0, p1);
 }
 
-void llama_kv_cache_shift_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
-    llama_kv_cache_shift_seq(ctx->kv_self, seq_id, p0, p1, delta);
+void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
+    llama_kv_cache_seq_keep(ctx->kv_self, seq_id);
+}
+
+void llama_kv_cache_seq_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+    llama_kv_cache_seq_shift(ctx->kv_self, seq_id, p0, p1, delta);
 }
 
 // Returns the *maximum* size of the state
@@ -7330,21 +7358,18 @@ int llama_eval(
                     uint32_t   n_tokens,
                          int   n_past,
                          int   n_threads) {
-    llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
+    llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
 
-    if (!llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0), n_threads)) {
-        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
-        return 1;
+    const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0), n_threads);
+    if (ret != 0) {
+        if (ret < 0) {
+            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+        }
+
+        return ret;
     }
 
-    // get a more accurate load time, upon first eval
-    // TODO: fix this
-    if (!ctx->has_evaluated_once) {
-        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
-        ctx->has_evaluated_once = true;
-    }
-
-    return 0;
+    return ret;
 }
 
 int llama_eval_embd(
@@ -7353,23 +7378,20 @@ int llama_eval_embd(
                         uint32_t   n_tokens,
                              int   n_past,
                              int   n_threads) {
-    llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
+    llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
 
     llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, n_past, 1, 0, };
 
-    if (!llama_decode_internal(*ctx, batch, n_threads)) {
-        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
-        return 1;
+    const int ret = llama_decode_internal(*ctx, batch, n_threads);
+    if (ret != 0) {
+        if (ret < 0) {
+            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+        }
+
+        return ret;
     }
 
-    // get a more accurate load time, upon first eval
-    // TODO: fix this
-    if (!ctx->has_evaluated_once) {
-        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
-        ctx->has_evaluated_once = true;
-    }
-
-    return 0;
+    return ret;
 }
 
 struct llama_batch llama_batch_get_one(
@@ -7394,19 +7416,16 @@ int llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch,
                          int   n_threads) {
-    if (!llama_decode_internal(*ctx, batch, n_threads)) {
-        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
-        return 1;
+    const int ret = llama_decode_internal(*ctx, batch, n_threads);
+    if (ret != 0) {
+        if (ret < 0) {
+            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+        }
+
+        return ret;
     }
 
-    // get a more accurate load time, upon first eval
-    // TODO: fix this
-    if (!ctx->has_evaluated_once) {
-        ctx->t_load_us = ggml_time_us() - ctx->t_start_us;
-        ctx->has_evaluated_once = true;
-    }
-
-    return 0;
+    return ret;
 }
 
 float * llama_get_logits(struct llama_context * ctx) {

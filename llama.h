@@ -322,17 +322,20 @@ extern "C" {
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
     // Remove all tokens data of cells in [c0, c1)
-    LLAMA_API void llama_kv_cache_rm_tokens(struct llama_context * ctx, int32_t c0, int32_t c1);
+    LLAMA_API void llama_kv_cache_tokens_rm(struct llama_context * ctx, int32_t c0, int32_t c1);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-    LLAMA_API void llama_kv_cache_rm_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1);
+    LLAMA_API void llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1);
+
+    // Copy all tokens that belong to the specified sequence to another sequence
+    LLAMA_API void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1);
 
     // Removes all tokens that do not belong to the specified sequence
-    LLAMA_API void llama_kv_cache_keep_seq(struct llama_context * ctx, llama_seq_id seq_id);
+    LLAMA_API void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id);
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly
-    LLAMA_API void llama_kv_cache_shift_seq(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta);
+    LLAMA_API void llama_kv_cache_seq_shift(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta);
 
     //
     // State / sessions
@@ -391,6 +394,10 @@ extern "C" {
                     llama_pos   pos_0,
                  llama_seq_id   seq_id);
 
+    // Positive return values does not mean a fatal error, but rather a warning.
+    //   0 - success
+    //   1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
+    // < 0 - error
     LLAMA_API int llama_decode(
             struct llama_context * ctx,
               struct llama_batch   batch,

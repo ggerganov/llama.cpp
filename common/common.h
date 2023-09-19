@@ -43,6 +43,8 @@ struct gpt_params {
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel                      = 1;    // number of parallel sequences to decode
+    int32_t n_sequences                     = 1;    // number of sequences to decode
     int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
@@ -108,6 +110,7 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
+    bool hot_plug          = false; // hot-plug new sequences for decoding
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
