@@ -77,6 +77,7 @@ int main(int argc, char **argv) {
     }
 
     for (uint32_t cp = 0x0000; cp < 0xffff; ++cp) {
+        // NOTE: these exceptions seem to be necessary, because the GPT2 tokenizer doesn't want to interfere with some ASCII control characters
         if ((cp < 0x03 || cp > 0x05) && cp != 0x0b && cp != 0x11 && (cp < 0x13 || cp > 0x17) && cp != 0x19 && (cp < 0x1c || cp > 0x1e) && (cp < 0xd800 || cp > 0xdfff)) {
             std::string str = " " + codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
