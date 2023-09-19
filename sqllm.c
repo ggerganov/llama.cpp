@@ -12,7 +12,8 @@ void ggml_vec_dot_q4_sq_fp16(const int n, float * restrict s, void * restrict v,
 
     const int nb = n / 8;
 
-#ifdef __ARM_NEON
+// #ifdef __ARM_NEON
+#if defined(__ARM_NEON) && defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
 
     // pointer initialization
     int32_t * baselut = v;
