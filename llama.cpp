@@ -1024,6 +1024,9 @@ struct llama_kv_cache {
     uint32_t head = 0;
     uint32_t size = 0;
 
+    // computed before each graph build
+    uint32_t cell_max = 0;
+
     std::vector<llama_kv_cell> cells;
 
     struct ggml_tensor * k = NULL;
@@ -1314,16 +1317,15 @@ static bool llama_kv_cache_find_slot(
     return true;
 }
 
+// find how many cells are currently in use
 int32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
-    int32_t res = 0;
-
-    for (uint32_t i = 0; i < cache.size; i++) {
+    for (uint32_t i = cache.size - 2; i > 0; --i) {
         if (cache.cells[i].pos >= 0 && !cache.cells[i].seq_id.empty()) {
-            res = i + 1;
+            return i + 1;
         }
     }
 
-    return res;
+    return 0;
 }
 
 void llama_kv_cache_rm_tokens(struct llama_kv_cache & cache, int32_t c0, int32_t c1) {
@@ -2604,11 +2606,12 @@ static struct ggml_cgraph * llm_build_llama(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : llama_kv_cache_cell_max(kv_self);
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.cell_max + n_tokens;
+    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+
+    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
 
     //printf("n_kv = %d\n", n_kv);
-
-    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -2714,14 +2717,27 @@ static struct ggml_cgraph * llm_build_llama(
         }
     }
 
-    // K_shift
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    offload_func_kq(K_shift);
-    ggml_allocr_alloc(lctx.alloc, K_shift);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) K_shift->data;
-        for (int i = 0; i < n_ctx; ++i) {
-            data[i] = kv_self.cells[i].delta;
+    // shift the entire K-cache if needed
+    if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        offload_func_kq(K_shift);
+        ggml_allocr_alloc(lctx.alloc, K_shift);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            int * data = (int *) K_shift->data;
+            for (int i = 0; i < n_ctx; ++i) {
+                data[i] = kv_self.cells[i].delta;
+            }
+        }
+
+        for (int il = 0; il < n_layer; ++il) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
     }
 
@@ -2748,18 +2764,6 @@ static struct ggml_cgraph * llm_build_llama(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
-        }
-
-        // shift the entire K-cache if needed
-        if (do_rope_shift) {
-            ggml_build_forward_expand(gf,
-                    ggml_rope_custom_inplace(ctx0,
-                        ggml_view_3d(ctx0, kv_self.k,
-                            n_embd_head, n_head_kv, n_ctx,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
 
         // self-attention
@@ -2793,13 +2797,13 @@ static struct ggml_cgraph * llm_build_llama(
                 offload_func_v(Vcur);
                 ggml_set_name(Vcur, "Vcur");
 
-                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_self.head));
+                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
                 offload_func_kq(k);
                 ggml_set_name(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_self.head*ggml_element_size(kv_self.v));
+                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
                 offload_func_v(v);
                 ggml_set_name(v, "v");
 
@@ -2990,9 +2994,10 @@ static struct ggml_cgraph * llm_build_baichaun(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.cell_max + n_tokens;
+    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
+    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3098,14 +3103,27 @@ static struct ggml_cgraph * llm_build_baichaun(
         }
     }
 
-    // K_shift
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    offload_func_kq(K_shift);
-    ggml_allocr_alloc(lctx.alloc, K_shift);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) K_shift->data;
-        for (int i = 0; i < n_ctx; ++i) {
-            data[i] = kv_self.cells[i].delta;
+    // shift the entire K-cache if needed
+    if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        offload_func_kq(K_shift);
+        ggml_allocr_alloc(lctx.alloc, K_shift);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            int * data = (int *) K_shift->data;
+            for (int i = 0; i < n_ctx; ++i) {
+                data[i] = kv_self.cells[i].delta;
+            }
+        }
+
+        for (int il = 0; il < n_layer; ++il) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
     }
 
@@ -3132,18 +3150,6 @@ static struct ggml_cgraph * llm_build_baichaun(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
-        }
-
-        // shift the entire K-cache if needed
-        if (do_rope_shift) {
-            ggml_build_forward_expand(gf,
-                    ggml_rope_custom_inplace(ctx0,
-                        ggml_view_3d(ctx0, kv_self.k,
-                            n_embd_head, n_head_kv, n_ctx,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
         }
 
         // self-attention
@@ -3190,13 +3196,13 @@ static struct ggml_cgraph * llm_build_baichaun(
                 offload_func_v(Vcur);
                 ggml_set_name(Vcur, "Vcur");
 
-                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_self.head));
+                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
                 offload_func_kq(k);
                 ggml_set_name(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_self.head*ggml_element_size(kv_self.v));
+                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
                 offload_func_v(v);
                 ggml_set_name(v, "v");
 
@@ -3391,9 +3397,13 @@ static struct ggml_cgraph * llm_build_falcon(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.cell_max + n_tokens;
+    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = kv_self.has_shift || ggml_allocr_is_measure(lctx.alloc);
+    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
+
+    //printf("kv_head = %d, n_kv = %d, n_tokens = %d, n_ctx = %d, is_measure = %d, has_shift = %d\n",
+    //        kv_head, n_kv, n_tokens, n_ctx, ggml_allocr_is_measure(lctx.alloc), kv_self.has_shift);
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3499,14 +3509,27 @@ static struct ggml_cgraph * llm_build_falcon(
         }
     }
 
-    // K_shift
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    offload_func_kq(K_shift);
-    ggml_allocr_alloc(lctx.alloc, K_shift);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) K_shift->data;
-        for (int i = 0; i < n_ctx; ++i) {
-            data[i] = kv_self.cells[i].delta;
+    // shift the entire K-cache if needed
+    if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        offload_func_kq(K_shift);
+        ggml_allocr_alloc(lctx.alloc, K_shift);
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            int * data = (int *) K_shift->data;
+            for (int i = 0; i < n_ctx; ++i) {
+                data[i] = kv_self.cells[i].delta;
+            }
+        }
+
+        for (int il = 0; il < n_layer; ++il) {
+            ggml_build_forward_expand(gf,
+                    ggml_rope_custom_inplace(ctx0,
+                        ggml_view_3d(ctx0, kv_self.k,
+                            n_embd_head, n_head_kv, n_ctx,
+                            ggml_element_size(kv_self.k)*n_embd_head,
+                            ggml_element_size(kv_self.k)*n_embd_gqa,
+                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale));
         }
     }
 
@@ -3520,18 +3543,6 @@ static struct ggml_cgraph * llm_build_falcon(
             offload_func = ggml_cuda_assign_buffers_no_alloc;
         }
 #endif // GGML_USE_CUBLAS
-
-        // shift the entire K-cache if needed
-        if (do_rope_shift) {
-            ggml_build_forward_expand(gf,
-                    ggml_rope_custom_inplace(ctx0,
-                        ggml_view_3d(ctx0, kv_self.k,
-                            n_embd_head, n_head_kv, n_ctx,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale));
-        }
 
         // self-attention
         // TODO: refactor into common function (shared with LLaMA)
@@ -3609,13 +3620,13 @@ static struct ggml_cgraph * llm_build_falcon(
                 offload_func_v(Vcur->src[0]->src[0]);
                 ggml_set_name(Vcur, "Vcur");
 
-                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_self.head));
+                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
                 offload_func_kq(k);
                 ggml_set_name(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_self.head*ggml_element_size(kv_self.v));
+                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
                 offload_func_v(v);
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -3747,7 +3758,8 @@ static struct ggml_cgraph * llm_build_starcoder(
     const float norm_eps = hparams.f_norm_eps;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = llama_kv_cache_cell_max(kv_self);
+    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.cell_max + n_tokens;
+    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3859,12 +3871,12 @@ static struct ggml_cgraph * llm_build_starcoder(
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_cont(ctx0, tmpv), n_embd_gqa, n_tokens));
                 ggml_set_name(Vcur, "Vcur");
 
-                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_self.head));
+                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
                 ggml_set_name(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_self.head*ggml_element_size(kv_self.v));
+                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
@@ -4060,7 +4072,14 @@ static bool llama_eval_internal(
         batch.seq_id = seq_id.data();
     }
 
+    // we always start to search for a free slot from the start of the cache
+    // TODO: better strategies can be implemented
     kv_self.head = 0;
+
+    // a heuristic, to avoid attending the full cache if it is not yet utilized
+    // after enough generations, the benefit from this heuristic disappears
+    // if we start defragmenting the cache, the benefit from this will be more important
+    kv_self.cell_max = llama_kv_cache_cell_max(kv_self);
 
     if (!llama_kv_cache_find_slot(kv_self, batch)) {
         return false;

@@ -781,7 +781,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 
         std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0), params.n_threads);
-        llama_kv_cache_keep_seq(lctx, -1);
+        llama_kv_cache_rm_tokens(lctx, -1, -1);
         llama_reset_timings(lctx);
     }
 
