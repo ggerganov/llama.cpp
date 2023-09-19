@@ -1,5 +1,4 @@
 #include "common.h"
-#include "unicode.h"
 #include "build-info.h"
 #include "llama.h"
 

@@ -3896,6 +3896,8 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         GGML_ASSERT(false);
         return unicode_to_bytes_bpe(token_data.text);
     }
+    default:
+        GGML_ASSERT(false);
     }
 }
 
@@ -3910,6 +3912,8 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
     case LLAMA_VOCAB_TYPE_BPE: {
         return vocab.token_to_id.at(bytes_to_unicode_bpe(ch));
     }
+    default:
+        GGML_ASSERT(false);
     }
 }
 
@@ -7226,6 +7230,8 @@ int llama_token_to_piece_with_model(const struct llama_model * model, llama_toke
                 llama_unescape_whitespace(result);
             } else if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_BPE) {
                 result = llama_decode_text(result);
+            } else {
+                GGML_ASSERT(false);
             }
             if (length < (int) result.length()) {
                 return -result.length();
@@ -7249,14 +7255,15 @@ int llama_token_to_piece_with_model(const struct llama_model * model, llama_toke
                 }
                 buf[0] = llama_token_to_byte(model->vocab, token);
                 return 1;
-            }
-            else {
+            } else if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_BPE) {
                 std::string result = llama_decode_text(model->vocab.id_to_token[token].text);
                 if (length < (int)result.length()) {
                     return -result.length();
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
+            } else {
+                GGML_ASSERT(false);
             }
         }
     }
