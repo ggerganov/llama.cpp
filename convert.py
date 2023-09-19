@@ -343,19 +343,13 @@ class BpeVocab:
         byte_encoder = tokenization_gpt2.bytes_to_unicode()
         byte_decoder = {v: k for k, v in byte_encoder.items()}
 
-        score = 0.0
         for i, _ in enumerate(tokenizer):
-            text = reverse_vocab[i]
-            if text in byte_decoder:
-                toktype = gguf.TokenType.BYTE
-            else:
-                toktype = gguf.TokenType.NORMAL
-            yield text, score, toktype
+            yield reverse_vocab[i], 0.0, gguf.TokenType.NORMAL
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
+            yield text.encode("utf-8"), score, gguf.TokenType.CONTROL
 
     def all_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         yield from self.bpe_tokens()

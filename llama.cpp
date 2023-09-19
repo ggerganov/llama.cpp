@@ -3884,6 +3884,10 @@ static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
 }
 
+static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id) {
+    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
+}
+
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
     GGML_ASSERT(llama_is_byte_token(vocab, id));
     const auto& token_data = vocab.id_to_token.at(id);
@@ -7224,47 +7228,53 @@ static std::string llama_decode_text(const std::string& text) {
 // does not write null-terminator to buf
 int llama_token_to_piece_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_model_n_vocab(model)) {
-        if (llama_is_normal_token(model->vocab, token)) {
-            std::string result = model->vocab.id_to_token[token].text;
-            if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
+        switch (llama_vocab_get_type(model->vocab)) {
+        case LLAMA_VOCAB_TYPE_SPM: {
+            if (llama_is_normal_token(model->vocab, token)) {
+                std::string result = model->vocab.id_to_token[token].text;
                 llama_unescape_whitespace(result);
-            } else if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_BPE) {
-                result = llama_decode_text(result);
-            } else {
-                GGML_ASSERT(false);
-            }
-            if (length < (int) result.length()) {
-                return -result.length();
-            }
-            memcpy(buf, result.c_str(), result.length());
-            return result.length();
-        } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
-            if (length < 3) {
-                return -3;
-            }
-            buf[0] = '\xe2';
-            buf[1] = '\x96';
-            buf[2] = '\x85';
-            return 3;
-        } else if (llama_is_control_token(model->vocab, token)) {
-            ;
-        } else if (llama_is_byte_token(model->vocab, token)) {
-            if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
+                if (length < (int) result.length()) {
+                    return -result.length();
+                }
+                memcpy(buf, result.c_str(), result.length());
+                return result.length();
+            } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
+                if (length < 3) {
+                    return -3;
+                }
+                memcpy(buf, "\xe2\x96\x85", 3);
+                return 3;
+            } else if (llama_is_control_token(model->vocab, token)) {
+                ;
+            } else if (llama_is_byte_token(model->vocab, token)) {
                 if (length < 1) {
                     return -1;
                 }
                 buf[0] = llama_token_to_byte(model->vocab, token);
                 return 1;
-            } else if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_BPE) {
-                std::string result = llama_decode_text(model->vocab.id_to_token[token].text);
-                if (length < (int)result.length()) {
+            } else {
+                GGML_ASSERT(false);
+            }
+            break;
+        }
+        case LLAMA_VOCAB_TYPE_BPE: {
+            if (llama_is_normal_token(model->vocab, token)) {
+                std::string result = model->vocab.id_to_token[token].text;
+                result = llama_decode_text(result);
+                if (length < (int) result.length()) {
                     return -result.length();
                 }
                 memcpy(buf, result.c_str(), result.length());
                 return result.length();
+            } else if (llama_is_control_token(model->vocab, token)) {
+                ;
             } else {
                 GGML_ASSERT(false);
             }
+            break;
+        }
+        default:
+            GGML_ASSERT(false);
         }
     }
     return 0;
