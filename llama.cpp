@@ -1304,7 +1304,7 @@ static bool llama_kv_cache_find_slot(
         }
 
         if (n_tested >= n_ctx) {
-            LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
+            //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
             return false;
         }
     }
@@ -7333,7 +7333,7 @@ int llama_eval(
     llama_kv_cache_rm_tokens(ctx->kv_self, n_past, -1);
 
     if (!llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0), n_threads)) {
-        LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
+        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
         return 1;
     }
 
@@ -7358,7 +7358,7 @@ int llama_eval_embd(
     llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, n_past, 1, 0, };
 
     if (!llama_decode_internal(*ctx, batch, n_threads)) {
-        LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
+        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
         return 1;
     }
 
@@ -7395,7 +7395,7 @@ int llama_decode(
           struct llama_batch   batch,
                          int   n_threads) {
     if (!llama_decode_internal(*ctx, batch, n_threads)) {
-        LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
+        //LLAMA_LOG_ERROR("%s: failed to decode\n", __func__);
         return 1;
     }
 
