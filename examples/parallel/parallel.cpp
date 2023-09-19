@@ -135,6 +135,7 @@ int main(int argc, char ** argv) {
 
     int32_t n_total_prompt = 0;
     int32_t n_total_gen    = 0;
+    int32_t n_cache_miss   = 0;
 
     const auto t_main_start = ggml_time_us();
 
@@ -272,6 +273,8 @@ int main(int argc, char ** argv) {
 
                 LOG("%s : failed to decode batch, retrying with n_batch = %d\n", __func__, n_batch / 2);
 
+                n_cache_miss += 1;
+
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
                 i -= n_batch;
@@ -349,6 +352,7 @@ int main(int argc, char ** argv) {
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total speed (AVG):   %6s  speed: %5.2f t/s\n", "",             (double) (n_total_prompt + n_total_gen) / (t_main_end - t_main_start) * 1e6);
+    LOG_TEE("Cache misses:        %6d\n", n_cache_miss);
 
     LOG_TEE("\n\n");
 
