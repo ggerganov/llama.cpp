@@ -21,8 +21,8 @@ env:
   GGML_N_THREADS: 1
 
 jobs:
-  ubuntu-latest-make:
-    runs-on: ubuntu-latest
+  ubuntu-focal-make:
+    runs-on: ubuntu-20.04
 
     steps:
       - name: Clone
@@ -33,17 +33,17 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential gcc-8
 
       - name: Build
         id: make_build
         run: |
-          make
+          CC=gcc-8 make
 
       - name: Test
         id: make_test
         run: |
-          make tests
+          CC=gcc-8 make tests
           make test
 
   ubuntu-latest-cmake:
@@ -480,7 +480,7 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - ubuntu-latest-make
+      - ubuntu-focal-make
       - ubuntu-latest-cmake
       - macOS-latest-make
       - macOS-latest-cmake
