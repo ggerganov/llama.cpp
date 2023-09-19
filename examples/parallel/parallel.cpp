@@ -326,12 +326,10 @@ int main(int argc, char ** argv) {
 
                     const auto t_main_end = ggml_time_us();
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed: PP %5.2f t/s, TG %5.2f t/s, AVG %5.2f t/s \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
+                    LOG_TEE("\033[1mClient %3d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, cache miss %d \033[0m: \n\nInput:    %s\nResponse: %s\n\n",
                             client.id, client.seq_id, client.n_prompt, client.n_decoded,
                             (t_main_end - client.t_start_prompt) / 1e6,
-                            (double) (client.n_prompt                   ) / (client.t_start_gen - client.t_start_prompt) * 1e6,
-                            (double) (client.n_decoded                  ) / (t_main_end         - client.t_start_gen)    * 1e6,
-                            (double) (client.n_decoded + client.n_prompt) / (t_main_end         - client.t_start_prompt) * 1e6,
+                            n_cache_miss,
                             ::trim(client.input).c_str(),
                             ::trim(client.response).c_str());
 
