@@ -81,6 +81,7 @@ int main(int argc, char ** argv) {
             return 1;
         }
 
+        n_cur += tokens_list.size();
         tokens_list.clear();
 
         // sample the next token
