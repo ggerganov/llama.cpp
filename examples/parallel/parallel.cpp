@@ -27,8 +27,8 @@ static std::string trim(const std::string & str) {
     return str.substr(start, end - start);
 }
 
-static std::string k_system = R"(
-Transcript of a never ending dialog, where the User interacts with an Assistant.
+static std::string k_system =
+R"(Transcript of a never ending dialog, where the User interacts with an Assistant.
 The Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
 
 User: Hello, what is the temperature outside?
