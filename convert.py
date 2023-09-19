@@ -339,21 +339,15 @@ class BpeVocab:
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
         from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
+        reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.items()}
         byte_encoder = tokenization_gpt2.bytes_to_unicode()
         byte_decoder = {v: k for k, v in byte_encoder.items()}
+
         score = 0.0
-        for i, item in enumerate(tokenizer):
-            text: bytes = item.encode("utf-8")
-            # FIXME: These shouldn't be hardcoded, but it's probably better than the current behavior?
-            if i <= 258 and text.startswith(b'<') and text.endswith(b'>'):
-                if i == 0 and text == b'<unk>':
-                    toktype = gguf.TokenType.UNKNOWN
-                elif i == 1 or i == 2:
-                    toktype = gguf.TokenType.CONTROL
-                elif i >= 3 and text.startswith(b'<0x'):
-                    toktype = gguf.TokenType.BYTE
-                else:
-                    toktype = gguf.TokenType.NORMAL
+        for i, _ in enumerate(tokenizer):
+            text = reverse_vocab[i]
+            if text in byte_decoder:
+                toktype = gguf.TokenType.BYTE
             else:
                 toktype = gguf.TokenType.NORMAL
             yield text, score, toktype

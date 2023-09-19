@@ -161,15 +161,12 @@ byte_encoder = bytes_to_unicode()
 byte_decoder = {v: k for k, v in byte_encoder.items()}
 
 for i in range(vocab_size):
-    if reverse_vocab[i] in byte_decoder:
-        text = reverse_vocab[i]
-        tokens.append(text)
-        scores.append(0.0) # dummy
+    text = reverse_vocab[i]
+    tokens.append(text)
+    scores.append(0.0) # dummy
+    if text in byte_decoder:
         toktypes.append(gguf.TokenType.BYTE)
     else:
-        text = reverse_vocab[i]
-        tokens.append(text)
-        scores.append(0.0) # dummy
         toktypes.append(gguf.TokenType.NORMAL)
 
 gguf_writer.add_token_list(tokens)
