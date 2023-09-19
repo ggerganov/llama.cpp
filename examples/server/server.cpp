@@ -737,6 +737,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
     printf("  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
+    printf("  --n-probs             number of token probabilities to output (default: %d)\n", params.n_probs);
     printf("\n");
 }
 
@@ -860,6 +861,16 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_batch = std::stoi(argv[i]);
             params.n_batch = std::min(512, params.n_batch);
+        }
+        else if (arg == "--n-probs")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_probs = std::stoi(argv[i]);
+            params.n_probs = std::min(0, params.n_probs);
         }
         else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers")
         {
