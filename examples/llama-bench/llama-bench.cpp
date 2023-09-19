@@ -977,7 +977,7 @@ int main(int argc, char ** argv) {
 
         test t(inst, lmodel, ctx);
 
-        llama_kv_cache_keep_seq(ctx, -1);
+        llama_kv_cache_rm_tokens(ctx, -1, -1);
 
         // warmup run
         if (t.n_prompt > 0) {
@@ -988,7 +988,7 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = 0; i < params.reps; i++) {
-            llama_kv_cache_keep_seq(ctx, -1);
+            llama_kv_cache_rm_tokens(ctx, -1, -1);
 
             uint64_t t_start = get_time_ns();
             if (t.n_prompt > 0) {
