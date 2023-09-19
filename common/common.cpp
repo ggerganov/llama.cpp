@@ -847,16 +847,6 @@ std::string llama_detokenize_spm(llama_context * ctx, const std::vector<llama_to
     return result;
 }
 
-std::string llama_decode_text(const std::string& text) {
-    std::string decoded_text;
-    auto unicode_sequences = codepoints_from_utf8(text);
-    for (auto& unicode_sequence : unicode_sequences) {
-        decoded_text += unicode_to_bytes_bpe(codepoint_to_utf8(unicode_sequence));
-    }
-
-    return decoded_text;
-}
-
 std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_token> & tokens) {
     std::string piece;
     std::string result;
@@ -867,7 +857,8 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
         result += piece;
     }
 
-    return llama_decode_text(result);
+    // NOTE: the original tokenizer decodes bytes after collecting the pieces.
+    return result;
 }
 
 //

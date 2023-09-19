@@ -7207,6 +7207,16 @@ int llama_token_to_piece(const struct llama_context * ctx, llama_token token, ch
     return llama_token_to_piece_with_model(&ctx->model, token, buf, length);
 }
 
+static std::string llama_decode_text(const std::string& text) {
+    std::string decoded_text;
+    auto unicode_sequences = codepoints_from_utf8(text);
+    for (auto& unicode_sequence : unicode_sequences) {
+        decoded_text += unicode_to_bytes_bpe(codepoint_to_utf8(unicode_sequence));
+    }
+
+    return decoded_text;
+}
+
 // does not write null-terminator to buf
 int llama_token_to_piece_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_model_n_vocab(model)) {
@@ -7214,6 +7224,8 @@ int llama_token_to_piece_with_model(const struct llama_model * model, llama_toke
             std::string result = model->vocab.id_to_token[token].text;
             if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
                 llama_unescape_whitespace(result);
+            } else if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_BPE) {
+                result = llama_decode_text(result);
             }
             if (length < (int) result.length()) {
                 return -result.length();
@@ -7239,7 +7251,7 @@ int llama_token_to_piece_with_model(const struct llama_model * model, llama_toke
                 return 1;
             }
             else {
-                std::string result = model->vocab.id_to_token[token].text;
+                std::string result = llama_decode_text(model->vocab.id_to_token[token].text);
                 if (length < (int)result.length()) {
                     return -result.length();
                 }
