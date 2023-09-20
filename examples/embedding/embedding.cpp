@@ -1,6 +1,6 @@
+#include "build-info.h"
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <ctime>
 
@@ -17,7 +17,7 @@ int main(int argc, char ** argv) {
 
     params.embedding = true;
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);

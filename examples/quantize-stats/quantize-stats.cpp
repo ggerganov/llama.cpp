@@ -1,7 +1,7 @@
-#include "ggml.h"
-#include "build-info.h"
-
 #define LLAMA_API_INTERNAL
+#include "build-info.h"
+#include "common.h"
+#include "ggml.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -34,8 +34,8 @@ struct quantize_stats_params {
     std::vector<enum ggml_type> include_types;
 };
 
-const size_t HISTOGRAM_BUCKETS = 150;
-const double HISTOGRAM_RANGE = 0.03;
+constexpr size_t HISTOGRAM_BUCKETS = 150;
+constexpr double HISTOGRAM_RANGE = 0.03;
 
 struct error_stats {
     size_t num_samples;
@@ -44,8 +44,7 @@ struct error_stats {
     uint64_t error_histogram[HISTOGRAM_BUCKETS];
 };
 
-
-void quantize_stats_print_usage(int /*argc*/, char ** argv) {
+static void quantize_stats_print_usage(int /*argc*/, char ** argv) {
     quantize_stats_params params;
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
@@ -71,7 +70,7 @@ void quantize_stats_print_usage(int /*argc*/, char ** argv) {
 }
 
 // Check if a layer is included/excluded by command line
-bool layer_included(const quantize_stats_params & params, const std::string & layer) {
+static bool layer_included(const quantize_stats_params & params, const std::string & layer) {
     for (const auto& excluded : params.exclude_layers) {
         if (std::regex_search(layer, std::regex(excluded))) {
             return false;
@@ -86,7 +85,7 @@ bool layer_included(const quantize_stats_params & params, const std::string & la
 }
 
 // Update error statistics given vectors with the before/after result of quantization
-void update_error_stats(int64_t nelements, const float * input, const float * output, error_stats & stats) {
+static void update_error_stats(int64_t nelements, const float * input, const float * output, error_stats & stats) {
     for (int64_t i = 0; i < nelements; i++) {
         double diff = input[i] - output[i];
         stats.total_error += diff * diff;
@@ -96,14 +95,14 @@ void update_error_stats(int64_t nelements, const float * input, const float * ou
     stats.num_samples += nelements;
 }
 
-void combine_error_stats(error_stats & into, const error_stats & from) {
+static void combine_error_stats(error_stats & into, const error_stats & from) {
     into.num_samples += from.num_samples;
     into.total_error += from.total_error;
     if (from.max_error > into.max_error) into.max_error = from.max_error;
     for (size_t i=0; i<HISTOGRAM_BUCKETS; ++i) into.error_histogram[i] += from.error_histogram[i];
 }
 
-double find_quantile(const error_stats & stats, double quantile) {
+static double find_quantile(const error_stats & stats, double quantile) {
     double sum = std::accumulate(std::begin(stats.error_histogram), std::end(stats.error_histogram), 0.0);
 
     double accum = 0;
@@ -116,7 +115,7 @@ double find_quantile(const error_stats & stats, double quantile) {
     return INFINITY;
 }
 
-void print_error_stats(const std::string & name, const error_stats & stats, bool print_histogram) {
+static void print_error_stats(const std::string & name, const error_stats & stats, bool print_histogram) {
     double rmse = sqrt(stats.total_error / (double) stats.num_samples);
     double median = find_quantile(stats, .5);
     double pct95 = find_quantile(stats, .95);
@@ -143,17 +142,10 @@ static bool tensor_is_contiguous(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
-void test_roundtrip_on_chunk(
-        const ggml_tensor * layer,
-        int64_t offset,
-        int64_t chunk_size,
-        const ggml_type_traits_t & qfns,
-        bool use_reference,
-        float * input_scratch,
-        char * quantized_scratch,
-        float * output_scratch,
-        error_stats & stats) {
-
+static void test_roundtrip_on_chunk(
+    const ggml_tensor * layer, int64_t offset, int64_t chunk_size, const ggml_type_traits_t & qfns, bool use_reference,
+    float * input_scratch, char * quantized_scratch, float * output_scratch, error_stats & stats
+) {
     if (layer->type == GGML_TYPE_F16) {
         for (int i = 0; i < chunk_size; i++) {
             input_scratch[i] = ggml_get_f32_1d(layer, i + offset);
@@ -174,18 +166,11 @@ void test_roundtrip_on_chunk(
 
 
 // Run quantization function for a single layer and update error stats
-void test_roundtrip_on_layer(
-        std::string & name,
-        bool print_layer_stats,
-        const ggml_type_traits_t & qfns,
-        bool use_reference,
-        const ggml_tensor * layer,
-        std::vector<float> & input_scratch,
-        std::vector<char> & quantized_scratch,
-        std::vector<float> & output_scratch,
-        error_stats & total_error,
-        int max_thread = 0) {
-
+static void test_roundtrip_on_layer(
+    std::string & name, bool print_layer_stats, const ggml_type_traits_t & qfns, bool use_reference,
+    const ggml_tensor * layer, std::vector<float> & input_scratch, std::vector<char> & quantized_scratch,
+    std::vector<float> & output_scratch, error_stats & total_error, int max_thread = 0
+) {
     assert(tensor_is_contiguous(layer));
     error_stats layer_error {};
     uint64_t nelements = ggml_nelements(layer);
@@ -314,7 +299,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     // load the model
     fprintf(stderr, "Loading model\n");

@@ -1,6 +1,6 @@
+#include "build-info.h"
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <vector>
 #include <cstdio>
@@ -17,7 +17,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.n_predict < 0) {
         params.n_predict = 16;
