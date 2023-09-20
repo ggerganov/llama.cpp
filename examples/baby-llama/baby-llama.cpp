@@ -9,12 +9,12 @@
 #endif
 
 #ifdef LLAMA_DEFAULT_RMS_EPS
-static const float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
+constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 #else
-static const float rms_norm_eps = 5e-6f;
+constexpr float rms_norm_eps = 5e-6f;
 #endif
 
-float frand() {
+static float frand() {
     return (float)rand()/(float)RAND_MAX;
 }
 
@@ -25,19 +25,21 @@ struct random_normal_distribution {
     float max;
 };
 
-void init_random_normal_distribution(struct random_normal_distribution * rnd, int seed, float mean, float std, float min, float max) {
+static void init_random_normal_distribution(
+    struct random_normal_distribution * rnd, int seed, float mean, float std, float min, float max
+) {
     rnd->gen = std::mt19937(seed);
     rnd->nd = std::normal_distribution<float>{mean, std};
     rnd->min = min;
     rnd->max = max;
 }
 
-float frand_normal(struct random_normal_distribution * rnd) {
+static float frand_normal(struct random_normal_distribution * rnd) {
     const float r = rnd->nd(rnd->gen);
     return ((r < rnd->min) ? (rnd->min) : (r > rnd->max) ? (rnd->max) : r);
 }
 
-void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
     struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
 
     if (plan.work_size > 0) {
@@ -48,13 +50,9 @@ void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, 
     ggml_graph_compute(graph, &plan);
 }
 
-struct ggml_tensor * randomize_tensor(
-        struct ggml_tensor * tensor,
-        int ndims,
-        const int64_t ne[],
-        float fmin,
-        float fmax) {
-
+static struct ggml_tensor * randomize_tensor(
+    struct ggml_tensor * tensor, int ndims, const int64_t ne[], float fmin, float fmax
+) {
     switch (ndims) {
         case 1:
             for (int i0 = 0; i0 < ne[0]; i0++) {
@@ -95,11 +93,9 @@ struct ggml_tensor * randomize_tensor(
     return tensor;
 }
 
-struct ggml_tensor * randomize_tensor_normal(
-        struct ggml_tensor * tensor,
-        int ndims,
-        const int64_t ne[],
-        struct random_normal_distribution * rnd) {
+static struct ggml_tensor * randomize_tensor_normal(
+    struct ggml_tensor * tensor, int ndims, const int64_t ne[], struct random_normal_distribution * rnd
+) {
     float scale = 1.0; // xavier
     switch (ndims) {
         case 1:
@@ -159,7 +155,7 @@ struct llama_hparams {
     }
 };
 
-uint32_t get_n_ff(const struct llama_hparams* hparams) {
+static uint32_t get_n_ff(const struct llama_hparams* hparams) {
     const uint32_t n_ff = ((2*(4*hparams->n_embd)/3 + hparams->n_mult - 1)/hparams->n_mult)*hparams->n_mult;
     return n_ff;
 }
@@ -260,7 +256,7 @@ struct llama_model_lora {
     std::vector<llama_layer_lora> layers;
 };
 
-void init_model(struct llama_model * model) {
+static void init_model(struct llama_model * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -297,7 +293,7 @@ void init_model(struct llama_model * model) {
 }
 
 
-void init_model_lora(struct llama_model_lora * model) {
+static void init_model_lora(struct llama_model_lora * model) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_embd  = hparams.n_embd;
@@ -340,7 +336,7 @@ void init_model_lora(struct llama_model_lora * model) {
     }
 }
 
-void set_param_model(struct llama_model * model) {
+static void set_param_model(struct llama_model * model) {
     const auto& hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -366,7 +362,7 @@ void set_param_model(struct llama_model * model) {
     }
 }
 
-void set_param_model_lora(struct llama_model_lora * model) {
+static void set_param_model_lora(struct llama_model_lora * model) {
     const auto& hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -397,7 +393,7 @@ void set_param_model_lora(struct llama_model_lora * model) {
     }
 }
 
-void randomize_model(struct llama_model * model, int seed, float mean, float std, float min, float max) {
+static void randomize_model(struct llama_model * model, int seed, float mean, float std, float min, float max) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -426,7 +422,9 @@ void randomize_model(struct llama_model * model, int seed, float mean, float std
 }
 
 
-void randomize_model_lora(struct llama_model_lora * model, int seed, float mean, float std, float min, float max) {
+static void randomize_model_lora(
+    struct llama_model_lora * model, int seed, float mean, float std, float min, float max
+) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_layer = hparams.n_layer;
@@ -459,7 +457,7 @@ void randomize_model_lora(struct llama_model_lora * model, int seed, float mean,
     }
 }
 
-bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
+static bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -495,7 +493,7 @@ bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int
     return true;
 }
 
-bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * model, int n_batch) {
+static bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -531,15 +529,15 @@ bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * 
     return true;
 }
 
-struct ggml_tensor * forward(
-        struct llama_model    * model,
-        struct llama_kv_cache * cache,
-        struct ggml_context   * ctx0,
-        struct ggml_cgraph    * gf,
-        struct ggml_tensor    * tokens_input,
-        const  int              n_tokens,
-        const  int              n_past) {
-
+static struct ggml_tensor * forward(
+    struct llama_model    * model,
+    struct llama_kv_cache * cache,
+    struct ggml_context   * ctx0,
+    struct ggml_cgraph    * gf,
+    struct ggml_tensor    * tokens_input,
+    const  int              n_tokens,
+    const  int              n_past
+) {
     const int N = n_tokens;
 
     struct llama_kv_cache& kv_self = *cache;
@@ -756,25 +754,25 @@ struct ggml_tensor * forward(
     return inpL;
 }
 
-void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
+static void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
     GGML_ASSERT(tensor->n_dims == 1);
     GGML_ASSERT(tensor->ne[0] == ne0);
 }
 
-void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
+static void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
     GGML_ASSERT(tensor->n_dims == 2);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
 }
 
-void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
+static void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
     GGML_ASSERT(tensor->n_dims == 3);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
 }
 
-void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
+static void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
     GGML_ASSERT(tensor->n_dims == 4);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
@@ -782,16 +780,16 @@ void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int6
     GGML_ASSERT(tensor->ne[3] == ne3);
 }
 
-struct ggml_tensor * forward_batch(
-        struct llama_model    * model,
-        struct llama_kv_cache * cache,
-        struct ggml_context   * ctx0,
-        struct ggml_cgraph    * gf,
-        struct ggml_tensor    * tokens_input,
-        const  int              n_tokens,
-        const  int              n_past,
-        const  int              n_batch) {
-
+static struct ggml_tensor * forward_batch(
+    struct llama_model    * model,
+    struct llama_kv_cache * cache,
+    struct ggml_context   * ctx0,
+    struct ggml_cgraph    * gf,
+    struct ggml_tensor    * tokens_input,
+    const  int              n_tokens,
+    const  int              n_past,
+    const  int              n_batch
+) {
     const int N = n_tokens;
 
     struct llama_kv_cache& kv_self = *cache;
@@ -1073,16 +1071,15 @@ struct ggml_tensor * forward_batch(
     return inpL;
 }
 
-
-struct ggml_tensor * forward_lora(
-        struct llama_model_lora * model,
-        struct llama_kv_cache   * cache,
-        struct ggml_context     * ctx0,
-        struct ggml_cgraph      * gf,
-        struct ggml_tensor      * tokens_input,
-        const  int                n_tokens,
-        const  int                n_past) {
-
+static struct ggml_tensor * forward_lora(
+    struct llama_model_lora * model,
+    struct llama_kv_cache   * cache,
+    struct ggml_context     * ctx0,
+    struct ggml_cgraph      * gf,
+    struct ggml_tensor      * tokens_input,
+    const  int                n_tokens,
+    const  int                n_past
+) {
     const int N = n_tokens;
 
     struct llama_kv_cache& kv_self = *cache;
@@ -1328,7 +1325,7 @@ struct ggml_tensor * forward_lora(
     return inpL;
 }
 
-void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
+static void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
     assert(logits->n_dims == 2);
     assert(probs->n_dims == 2);
     assert(best_samples->n_dims == 1);
@@ -1359,7 +1356,10 @@ void sample_softmax(struct ggml_tensor * logits, struct ggml_tensor * probs, str
     }
 }
 
-void sample_softmax_batch(struct ggml_context * ctx, struct ggml_tensor * logits, struct ggml_tensor * probs, struct ggml_tensor * best_samples) {
+static void sample_softmax_batch(
+    struct ggml_context * ctx, struct ggml_tensor * logits, struct ggml_tensor * probs,
+    struct ggml_tensor * best_samples
+) {
     GGML_ASSERT(best_samples->n_dims == 2);
     GGML_ASSERT(logits->n_dims == 3);
     GGML_ASSERT(probs->n_dims == 3);
@@ -1393,7 +1393,7 @@ void sample_softmax_batch(struct ggml_context * ctx, struct ggml_tensor * logits
     }
 }
 
-void print_row(struct ggml_tensor * probs, int i) {
+static void print_row(struct ggml_tensor * probs, int i) {
     for (int k = 0; k < probs->ne[0]; ++k) {
         float p = ggml_get_f32_1d(probs, i*probs->ne[0] + k);
         printf(" %.2f", p);
@@ -1401,7 +1401,7 @@ void print_row(struct ggml_tensor * probs, int i) {
     printf("\n");
 }
 
-void print_matrix(struct ggml_tensor * probs) {
+static void print_matrix(struct ggml_tensor * probs) {
     assert(probs->n_dims == 2);
     for (int i = 0; i < probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
@@ -1412,7 +1412,7 @@ void print_matrix(struct ggml_tensor * probs) {
     }
 }
 
-void print_token(int token, int n_vocab) {
+static void print_token(int token, int n_vocab) {
     for (int k = 0; k < token; ++k) {
         printf(" ");
     }
@@ -1423,14 +1423,14 @@ void print_token(int token, int n_vocab) {
     printf("\n");
 }
 
-void print_tokens(struct ggml_tensor * tokens, int n_vocab) {
+static void print_tokens(struct ggml_tensor * tokens, int n_vocab) {
     for (int i=0; i<tokens->ne[0]; ++i) {
         int token = ggml_get_i32_1d(tokens, i);
         print_token(token, n_vocab);
     }
 }
 
-void get_example_targets(int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets) {
+static void get_example_targets(int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab = targets->ne[0];
     float randomness = 0.0f;
@@ -1451,7 +1451,9 @@ void get_example_targets(int example_id, struct ggml_tensor * tokens_input, stru
     }
 }
 
-void get_example_targets_batch(struct ggml_context * ctx, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets) {
+static void get_example_targets_batch(
+    struct ggml_context * ctx, int example_id, struct ggml_tensor * tokens_input, struct ggml_tensor * targets
+) {
     GGML_ASSERT(tokens_input->n_dims == 2);
     GGML_ASSERT(     targets->n_dims == 3);
     int n_tokens = tokens_input->ne[0];
@@ -1474,7 +1476,7 @@ void get_example_targets_batch(struct ggml_context * ctx, int example_id, struct
     }
 }
 
-void lshift_examples(struct ggml_tensor * tokens_input, struct ggml_tensor * targets, int n_shift) {
+static void lshift_examples(struct ggml_tensor * tokens_input, struct ggml_tensor * targets, int n_shift) {
     int n_tokens = tokens_input->ne[0];
     int n_vocab = targets->ne[0];
     for (int i=0; i<n_tokens-n_shift; ++i) {
@@ -1485,12 +1487,16 @@ void lshift_examples(struct ggml_tensor * tokens_input, struct ggml_tensor * tar
     }
 }
 
-struct ggml_tensor * square_error_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
+static struct ggml_tensor * square_error_loss(
+    struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b
+) {
     // todo: instead of a-b: a[1:]-b[:-1]
     return ggml_sum(ctx, ggml_sqr(ctx, ggml_sub(ctx, a, b)));
 }
 
-struct ggml_tensor * cross_entropy_loss(struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
+static struct ggml_tensor * cross_entropy_loss(
+    struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b
+) {
     const float eps = 1e-3f;
     return
         ggml_sum(ctx,
@@ -1617,15 +1623,10 @@ int main(int argc, char ** argv) {
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
-        struct ggml_opt_params opt_params_adam = ggml_opt_default_params(GGML_OPT_ADAM);
         struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_LBFGS);
-        opt_params_adam.print_forward_graph = false;
-        opt_params_adam.print_backward_graph = false;
         opt_params_lbfgs.print_forward_graph = false;
         opt_params_lbfgs.print_backward_graph = false;
-        opt_params_adam.adam.n_iter = 16;
         opt_params_lbfgs.lbfgs.n_iter = 16;
-        // ggml_opt(ctx0, opt_params_adam, e);
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(&gf, e);

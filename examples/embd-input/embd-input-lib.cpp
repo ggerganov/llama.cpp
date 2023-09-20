@@ -1,8 +1,5 @@
-// Defines sigaction on msys:
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
+#include "build-info.h"
+#include "common.h"
 #include "embd-input.h"
 
 #include <cassert>
@@ -23,14 +20,14 @@ extern "C" {
 struct MyModel* create_mymodel(int argc, char ** argv) {
     gpt_params params;
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return nullptr;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
+        params.seed = uint32_t(time(NULL));
     }
     fprintf(stderr, "%s: seed  = %d\n", __func__, params.seed);
 
@@ -167,7 +164,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
         // TODO: Apply penalties
-        // float nl_logit = logits[llama_token_nl()];
+        // float nl_logit = logits[llama_token_nl(ctx)];
         // auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
         // llama_sample_repetition_penalty(ctx, &candidates_p,
         //      last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
@@ -176,7 +173,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
         // last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
         // last_n_repeat, alpha_frequency, alpha_presence);
         // if (!penalize_nl) {
-        //     logits[llama_token_nl()] = nl_logit;
+        //     logits[llama_token_nl(ctx)] = nl_logit;
         // }
 
         if (temp <= 0) {
@@ -211,10 +208,10 @@ const char * sampling(struct MyModel * mymodel) {
     llama_context * ctx = mymodel->ctx;
     int id = sampling_id(mymodel);
     static std::string ret;
-    if (id == llama_token_eos()) {
+    if (id == llama_token_eos(ctx)) {
         ret = "</s>";
     } else {
-        ret = llama_token_to_str(ctx, id);
+        ret = llama_token_to_piece(ctx, id);
     }
     eval_id(mymodel, id);
     return ret.c_str();

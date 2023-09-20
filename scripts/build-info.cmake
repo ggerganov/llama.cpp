@@ -2,6 +2,8 @@ set(TEMPLATE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.h.in")
 set(HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 set(BUILD_NUMBER 0)
 set(BUILD_COMMIT "unknown")
+set(BUILD_COMPILER "unknown")
+set(BUILD_TARGET "unknown")
 
 # Look for git
 find_package(Git)
@@ -41,11 +43,45 @@ if(Git_FOUND)
     endif()
 endif()
 
+if(GIT_HEAD_RESULT EQUAL 0 AND GIT_COUNT_RESULT EQUAL 0)
+    set(BUILD_COMMIT ${HEAD})
+    set(BUILD_NUMBER ${COUNT})
+endif()
+
+execute_process(
+    COMMAND sh -c "$@ --version | head -1" _ ${CMAKE_C_COMPILER}
+    OUTPUT_VARIABLE OUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE RES
+)
+if (RES EQUAL 0)
+    set(BUILD_COMPILER ${OUT})
+endif()
+
+execute_process(
+    COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+    OUTPUT_VARIABLE OUT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE RES
+)
+if (RES EQUAL 0)
+    set(BUILD_TARGET ${OUT})
+endif()
+
 # Only write the header if it's changed to prevent unnecessary recompilation
 if(EXISTS ${HEADER_FILE})
-    file(STRINGS ${HEADER_FILE} CONTENTS REGEX "BUILD_COMMIT \"([^\"]*)\"")
-    list(GET CONTENTS 0 EXISTING)
-    if(NOT EXISTING STREQUAL "#define BUILD_COMMIT \"${BUILD_COMMIT}\"")
+    file(READ ${HEADER_FILE} CONTENTS)
+    string(REGEX MATCH "BUILD_COMMIT \"([^\"]*)\"" _ ${CONTENTS})
+    set(OLD_COMMIT ${CMAKE_MATCH_1})
+    string(REGEX MATCH "BUILD_COMPILER \"([^\"]*)\"" _ ${CONTENTS})
+    set(OLD_COMPILER ${CMAKE_MATCH_1})
+    string(REGEX MATCH "BUILD_TARGET \"([^\"]*)\"" _ ${CONTENTS})
+    set(OLD_TARGET ${CMAKE_MATCH_1})
+    if (
+        NOT OLD_COMMIT   STREQUAL BUILD_COMMIT   OR
+        NOT OLD_COMPILER STREQUAL BUILD_COMPILER OR
+        NOT OLD_TARGET   STREQUAL BUILD_TARGET
+    )
         configure_file(${TEMPLATE_FILE} ${HEADER_FILE})
     endif()
 else()
