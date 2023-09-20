@@ -2747,14 +2747,16 @@ static struct ggml_cgraph * llm_build_llama(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 
@@ -3137,14 +3139,16 @@ static struct ggml_cgraph * llm_build_baichaun(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 
@@ -3547,14 +3551,16 @@ static struct ggml_cgraph * llm_build_falcon(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 

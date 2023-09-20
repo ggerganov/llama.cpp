@@ -4370,7 +4370,7 @@ static __global__ void rope(const T * x, T * dst, const int ncols, const int32_t
     const int i2 = row/p_delta_rows;
 
     const int p = has_pos ? pos[i2] : 0;
-    const float p0 = p * freq_scale;
+    const float p0 = p*freq_scale;
     const float theta = p0*powf(theta_scale, col/2);
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
@@ -4396,7 +4396,7 @@ static __global__ void rope_neox(const T * x, T * dst, const int ncols, const in
     const int i2 = row/p_delta_rows;
 
     const int p = has_pos ? pos[i2] : 0;
-    const float p0 = p * freq_scale;
+    const float p0 = p*freq_scale;
     const float theta = p0*powf(theta_scale, col/2);
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
@@ -6106,15 +6106,11 @@ inline void ggml_cuda_op_rope(
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
-    int32_t * pos = nullptr;
+    const int32_t * pos = nullptr;
     if ((mode & 1) == 0) {
         GGML_ASSERT(src1->type == GGML_TYPE_I32);
         GGML_ASSERT(src1->ne[0] == ne2);
-        GGML_ASSERT(src1->backend == GGML_BACKEND_GPU);
-        struct ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
-        int id;
-        CUDA_CHECK(cudaGetDevice(&id));
-        pos = (int32_t *) src1_extra->data_device[id];
+        pos = (const int32_t *) src1_dd;
     }
 
     const bool is_neox = mode & 2;
@@ -7092,8 +7088,7 @@ void ggml_cuda_copy_to_device(struct ggml_tensor * tensor) {
 
     struct ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
     CUDA_CHECK(ggml_cuda_set_device(g_main_device));
-    cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
-    CUDA_CHECK(cudaMemcpyAsync(extra->data_device[g_main_device], tensor->data, ggml_nbytes(tensor), cudaMemcpyHostToDevice, main_stream));
+    CUDA_CHECK(cudaMemcpy(extra->data_device[g_main_device], tensor->data, ggml_nbytes(tensor), cudaMemcpyHostToDevice));
 }
 
 void ggml_cuda_assign_buffers(struct ggml_tensor * tensor) {
