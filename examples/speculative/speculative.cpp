@@ -134,7 +134,7 @@ int main(int argc, char ** argv) {
 
         while (true) {
             // sample from the target model
-            const llama_token id = llama_sample_token(ctx_tgt, NULL, grammar_tgt, params, last_tokens, candidates, i_dft);
+            llama_token id = llama_sample_token(ctx_tgt, NULL, grammar_tgt, params, last_tokens, candidates, i_dft);
 
             // remember which tokens were sampled - used for repetition penalties during sampling
             last_tokens.erase(last_tokens.begin());

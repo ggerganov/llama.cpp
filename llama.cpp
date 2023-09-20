@@ -7356,7 +7356,7 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 
 int llama_eval(
         struct llama_context * ctx,
-           const llama_token * tokens,
+                 llama_token * tokens,
                     uint32_t   n_tokens,
                          int   n_past,
                          int   n_threads) {
@@ -7376,7 +7376,7 @@ int llama_eval(
 
 int llama_eval_embd(
             struct llama_context * ctx,
-                     const float * embd,
+                           float * embd,
                         uint32_t   n_tokens,
                              int   n_past,
                              int   n_threads) {
@@ -7397,7 +7397,7 @@ int llama_eval_embd(
 }
 
 struct llama_batch llama_batch_get_one(
-       const llama_token * tokens,
+             llama_token * tokens,
                 uint32_t   n_tokens,
                llama_pos   pos_0,
             llama_seq_id   seq_id) {
@@ -7412,6 +7412,30 @@ struct llama_batch llama_batch_get_one(
         /*all_pos_1   =*/ 1,
         /*all_seq_id  =*/ seq_id,
     };
+}
+
+struct llama_batch llama_batch_init(uint32_t n_tokens, int32_t embd) {
+    llama_batch batch = { n_tokens, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
+
+    if (embd) {
+        batch.embd = (float *) malloc(sizeof(float) * n_tokens * embd);
+    } else {
+        batch.token = (llama_token *) malloc(sizeof(llama_token) * n_tokens);
+    }
+
+    batch.pos    = (llama_pos *)    malloc(sizeof(llama_pos)    * n_tokens);
+    batch.seq_id = (llama_seq_id *) malloc(sizeof(llama_seq_id) * n_tokens);
+    batch.logits = (int8_t *)       malloc(sizeof(int8_t)       * n_tokens);
+
+    return batch;
+}
+
+void llama_batch_free(struct llama_batch batch) {
+    if (batch.token)  free(batch.token);
+    if (batch.embd)   free(batch.embd);
+    if (batch.pos)    free(batch.pos);
+    if (batch.seq_id) free(batch.seq_id);
+    if (batch.logits) free(batch.logits);
 }
 
 int llama_decode(

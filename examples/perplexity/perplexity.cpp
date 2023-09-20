@@ -419,7 +419,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 }
 
 static std::vector<float> hellaswag_evaluate_tokens(
-    llama_context * ctx, const std::vector<int>& tokens, int n_past, int n_batch, int n_vocab, int n_thread
+    llama_context * ctx, std::vector<int> & tokens, int n_past, int n_batch, int n_vocab, int n_thread
 ) {
     std::vector<float> result;
     result.reserve(tokens.size() * n_vocab);

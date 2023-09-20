@@ -10,9 +10,11 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL]\n" , argv[0]);
         return 1 ;
     }
+
+    int n_parallel = 1;
 
     if (argc >= 2) {
         params.model = argv[1];
@@ -20,6 +22,10 @@ int main(int argc, char ** argv) {
 
     if (argc >= 3) {
         params.prompt = argv[2];
+    }
+
+    if (argc >= 4) {
+        n_parallel = std::atoi(argv[3]);
     }
 
     if (params.prompt.empty()) {
