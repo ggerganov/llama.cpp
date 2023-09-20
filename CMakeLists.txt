@@ -430,6 +430,7 @@ if (LLAMA_ALL_WARNINGS)
             -Wpointer-arith
             -Wmissing-prototypes
             -Werror=implicit-int
+            -Werror=implicit-function-declaration
         )
         set(cxx_flags
             ${warning_flags}
