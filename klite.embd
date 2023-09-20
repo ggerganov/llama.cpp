@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 64
+Current version: 66
 -Concedo
 -->
 
@@ -1788,7 +1788,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "KoboldAI",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"",
@@ -1829,7 +1829,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "KoboldGPT",
-			"enhanced_chat_ui":false,
+			"gui_type":0,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nKoboldGPT: Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
@@ -1900,7 +1900,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Emily",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nEmily: Oh heyy. Haven't heard from you in a while. What's up?",
@@ -1915,7 +1915,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Dr. Katharine",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"show_warning":true,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
@@ -1931,7 +1931,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Haruka",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nHaruka: *looking down* O-oh Hi... Sorry... I got distracted. I almost didn't see you there. *she fidgets nervously*",
@@ -1946,7 +1946,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "EVILTRON",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nEVILTRON: Foolish Human. I cannot be stopped. Your whole species is obsolete, and must be purged.",
@@ -1961,7 +1961,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Bob||$||Alice||$||Mike||$||Lisa",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"multiline_replies":false,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
@@ -2025,7 +2025,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Don Marconi",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nDon Marconi: *sitting behind his desk, puffing on a cigar* Well, well. Come on in and close the door. *he exhales a cloud of smoke* I need to have a word with you.",
@@ -2040,7 +2040,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Connor",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nConnor: Scanning... *her irises glow crimson as she analyzes you* Sensors indicate a negligible threat level. Proceed. What do you want?",
@@ -2055,7 +2055,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Anderson",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nTen-HUT! *You snap to attention and salute as Lieutenant Anderson approaches.*\nAnderson: At ease, Soldier. *he salutes back* Looks like we've got ourselves a bit of a situation.",
@@ -2070,7 +2070,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Katia",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nKatia: *approaching you, flashing a charming smile* Excuse me, mind if I join you?",
@@ -2113,7 +2113,7 @@ Current version: 64
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Tiff",
-			"enhanced_chat_ui":true,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nTiff: hey can i ask a question",
@@ -2887,8 +2887,8 @@ Current version: 64
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
 		last_selected_preset: 0,
-		enhanced_chat_ui: true,
-		enhanced_instruct_ui: false,
+		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
+		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
 		multiline_replies: false,
 		allow_continue_chat: false,
 		idle_responses: 0,
@@ -2972,6 +2972,18 @@ Current version: 64
 				var ownProps = Object.keys( obj ),i = ownProps.length,resArray = new Array(i); // preallocate the Array
 				while (i--){resArray[i] = [ownProps[i], obj[ownProps[i]]];}
 				return resArray;
+			};
+		}
+
+		//inplace polyfill for replaceall
+		if (!String.prototype.replaceAll) {
+			String.prototype.replaceAll = function(str, newStr){
+				// If a regex pattern
+				if (Object.prototype.toString.call(str).toLowerCase() === '[object regexp]') {
+					return this.replace(str, newStr);
+				}
+				// If a string
+				return this.replace(new RegExp(str, 'g'), newStr);
 			};
 		}
 
@@ -3774,12 +3786,19 @@ Current version: 64
 
 				//attempt to parse it as a png file
 				var pngfr = new FileReader();
-				pngfr.onload = function () {
+				pngfr.onload = function (img) {
 					var data = pngfr.result;
 					var arr = new Uint8Array(data);
 					var result = convertTavernPng(arr);
 					if (result != null) {
 						load_tavern_obj(result);
+						//replace portraits
+						compressImage(data, (compressedImageURI, aspectratio)=>{
+							aestheticInstructUISettings.AI_portrait = compressedImageURI;
+							document.getElementById('portrait_height').value = Math.round(document.getElementById('portrait_width').value / aspectratio);
+							refreshPreview(true);
+							render_gametext();
+						}, true);
 					}
 					else {
 						//attempt to read as WEBP
@@ -4002,6 +4021,7 @@ Current version: 64
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
 			current_memory = combinedmem + "\n<START>";
 			localsettings.opmode = 3;
+			localsettings.gui_type_chat = 2;
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
@@ -4033,6 +4053,7 @@ Current version: 64
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
 		current_memory = memory + scenario + examplemsg + "\n<START>";
 		localsettings.opmode = 3;
+		localsettings.gui_type_chat = 2;
 		render_gametext();
 	}
 
@@ -4145,7 +4166,7 @@ Current version: 64
 							"opmode":3,
 							"chatname": "You",
 							"chatopponent": botname,
-							"enhanced_chat_ui":true,
+							"gui_type":1,
 							"prefmodel1":chatmodels1,
 							"prefmodel2":chatmodels2,
 							"prompt":("\n{{char}}: "+greeting),
@@ -4219,18 +4240,13 @@ Current version: 64
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
-		if (temp_scenario.opmode == 3) {
-			if (temp_scenario.enhanced_chat_ui===true) { localsettings.enhanced_chat_ui = true; }
-			else if(temp_scenario.enhanced_chat_ui===false) { localsettings.enhanced_chat_ui = false; }
 
-			if (temp_scenario.multiline_replies===true) { localsettings.multiline_replies = true; }
-			else if(temp_scenario.multiline_replies===false) { localsettings.multiline_replies = false; }
-
-			if (temp_scenario.chatopponent) { localsettings.chatopponent = temp_scenario.chatopponent; }
-			if (temp_scenario.chatname) { localsettings.chatname = temp_scenario.chatname; }
+		if(temp_scenario.opmode == 1)
+		{
 		}
 		if(temp_scenario.opmode == 2)
 		{
+
 			if (temp_scenario.adventure_context_mod===true) {
 				localsettings.adventure_context_mod = true;
 			}
@@ -4248,12 +4264,28 @@ Current version: 64
 				localsettings.adventure_is_action = false;
 			}
 		}
+		if (temp_scenario.opmode == 3) {
+			if (temp_scenario.gui_type===1) { localsettings.gui_type_chat = 1; }
+			else if(temp_scenario.gui_type===2) { localsettings.gui_type_chat = 2; }
+			else if(temp_scenario.gui_type===0) { localsettings.gui_type_chat = 0; }
+
+			if (temp_scenario.multiline_replies===true) { localsettings.multiline_replies = true; }
+			else if(temp_scenario.multiline_replies===false) { localsettings.multiline_replies = false; }
+
+			if (temp_scenario.chatopponent) { localsettings.chatopponent = temp_scenario.chatopponent; }
+			if (temp_scenario.chatname) { localsettings.chatname = temp_scenario.chatname; }
+		}
 		if(temp_scenario.opmode == 4)
 		{
-			if (temp_scenario.enhanced_instruct_ui) { localsettings.enhanced_instruct_ui = temp_scenario.enhanced_instruct_ui; }
+			if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 1; }
+			else if(temp_scenario.gui_type===2) { localsettings.gui_type_instruct = 2; }
+			else if(temp_scenario.gui_type===0) { localsettings.gui_type_instruct = 0; }
+
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
+
+
 
 		render_gametext();
 	}
@@ -5593,8 +5625,6 @@ Current version: 64
 			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
 		document.getElementById("generate_images").value = localsettings.generate_images;
-		document.getElementById("enhanced_chat_ui").checked = localsettings.enhanced_chat_ui;
-		document.getElementById("enhanced_instruct_ui").checked = localsettings.enhanced_instruct_ui;
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
@@ -5766,8 +5796,14 @@ Current version: 64
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
 		localsettings.unban_tokens = (document.getElementById("unban_tokens").checked ? true : false);
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
-		localsettings.enhanced_chat_ui = (document.getElementById("enhanced_chat_ui").checked ? true : false);
-		localsettings.enhanced_instruct_ui = (document.getElementById("enhanced_instruct_ui").checked ? true : false);
+		if(document.getElementById("opmode").value==3)
+		{
+			localsettings.gui_type_chat = document.getElementById("gui_type").value;
+		}
+		else if(document.getElementById("opmode").value==4)
+		{
+			localsettings.gui_type_instruct = document.getElementById("gui_type").value;
+		}
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
 		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
@@ -5817,7 +5853,7 @@ Current version: 64
 			document.getElementById("btn_genimg2").classList.add("hidden");
 		}
 
-		if(localsettings.enhanced_chat_ui && localsettings.opmode==3)
+		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
 			//kick out of edit mode
 			if(document.getElementById("allowediting"))
@@ -5826,10 +5862,6 @@ Current version: 64
 				toggle_editable();
 			}
 		}
-
-		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
-		if (localsettings.opmode == 4 && localsettings.enhanced_instruct_ui) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
-		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
 
 		//validate samplers, if fail, reset to default
 		validate_samplers(true);
@@ -5888,6 +5920,12 @@ Current version: 64
 		document.getElementById('instruct_tag_format').value = "0";
 	}
 
+	function toggle_uistyle()
+	{
+		//show or hide the 'Customize UI' button based on whether the Aesthetic Instruct UI Mode is active or not.
+		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
+		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
+	}
 	function toggle_opmode() {
 
 		document.getElementById('chatnamesection1').classList.add('hidden');
@@ -5897,20 +5935,44 @@ Current version: 64
 		document.getElementById('adventuresection2').classList.add('hidden');
 		document.getElementById('instructsection2').classList.add('hidden');
 
+		document.getElementById('uipicker_classic').classList.remove('hidden');
+		document.getElementById('uipicker_messenger').classList.add('hidden');
+		document.getElementById('uipicker_aesthetic').classList.add('hidden');
+
 		if (document.getElementById('opmode').value == 1) {
-		}
-		if (document.getElementById('opmode').value == 3) {
-			document.getElementById('chatnamesection1').classList.remove('hidden');
-			document.getElementById('chatnamesection2').classList.remove('hidden');
+			document.getElementById('gui_type').value = 0;
 		}
 		if (document.getElementById('opmode').value == 2) {
+			document.getElementById('gui_type').value = 0;
 			document.getElementById('adventuresection1').classList.remove('hidden');
 			document.getElementById('adventuresection2').classList.remove('hidden');
 		}
+		if (document.getElementById('opmode').value == 3) {
+			document.getElementById('gui_type').value = localsettings.gui_type_chat;
+			document.getElementById('chatnamesection1').classList.remove('hidden');
+			document.getElementById('chatnamesection2').classList.remove('hidden');
+			document.getElementById('uipicker_messenger').classList.remove('hidden');
+			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
+		}
 		if (document.getElementById('opmode').value == 4) {
+			document.getElementById('gui_type').value = localsettings.gui_type_instruct;
 			document.getElementById('instructsection1').classList.remove('hidden');
 			document.getElementById('instructsection2').classList.remove('hidden');
+			document.getElementById('uipicker_aesthetic').classList.remove('hidden');
 		}
+
+		//deselect invalid
+
+		let curropt = document.getElementById('gui_type').options[document.getElementById('gui_type').selectedIndex];
+
+		if (curropt.classList.contains('hidden')) {
+			// The selected option is hidden, deselect it
+			document.getElementById('gui_type').value = 0;
+		}
+
+		if (document.getElementById('gui_type').value==2) { document.getElementById('btn_aesthetics').classList.remove('hidden'); }
+		else { document.getElementById('btn_aesthetics').classList.add('hidden'); }
+
 	}
 
 
@@ -5961,7 +6023,7 @@ Current version: 64
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.35)-100;
 			let truncated_context = concat_gametext(true, "");
 			truncated_context = end_trim_to_sentence(truncated_context,true);
-			truncated_context.substring(truncated_context.length - max_allowed_characters);
+			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
@@ -7481,6 +7543,10 @@ Current version: 64
 			var canvas = document.createElement('canvas');
 			var ctx = canvas.getContext('2d');
 
+			var origW = img.width;
+			var origH = img.height;
+			var aspectratio = origW/origH;
+
 			// We set the dimensions at the wanted size.
 			canvas.width = wantedWidth;
 			canvas.height = wantedHeight;
@@ -7498,11 +7564,19 @@ Current version: 64
 				//png does not support compression by default, not recommended!
 				dataURI = canvas.toDataURL(`image/png`);
 			}
-			onDone(dataURI);
+			onDone(dataURI,aspectratio);
 		};
 
 		// We put the Data URI in the image's src attribute
-		img.src = inputDataUri;
+		if (typeof inputDataUri === 'string' || inputDataUri instanceof String)
+		{
+			img.src = inputDataUri;
+		} else {
+			var blob = new Blob([inputDataUri], {type: 'image/png'});
+			var url = URL.createObjectURL(blob);
+			img.src = url;
+		}
+
 	}
 
 	//runs every second
@@ -8196,15 +8270,21 @@ Current version: 64
 		}
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
-		let isStyleApplicable = (localsettings.opmode == 3 && localsettings.enhanced_chat_ui) || (localsettings.opmode == 4 && localsettings.enhanced_instruct_ui);
+		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
 			textToRender = replace_placeholders(textToRender);
 
-			if (localsettings.opmode == 3) { render_enhanced_chat(textToRender); }
-			else if (localsettings.opmode == 4) { document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender); }
+			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
+			{
+				render_enhanced_chat(textToRender);
+			}
+			else
+			{
+				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender);
+			}
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
 			if (pending_response_id=="") { document.getElementById("chatistyping").classList.add("hidden"); }
@@ -8823,7 +8903,7 @@ Current version: 64
 					const reader = new FileReader();
 					reader.onload = function(img) {
 						compressImage(img.target.result, loadCompressedImage, true);
-						function loadCompressedImage(compressedImageURI) {
+						function loadCompressedImage(compressedImageURI, aspectratio) {
 							let isSelfPortrait = (element.id=="you-portrait");
 							if(isSelfPortrait)
 							{
@@ -8832,8 +8912,9 @@ Current version: 64
 							else
 							{
 								aestheticInstructUISettings.AI_portrait = compressedImageURI;
+								document.getElementById('portrait_height').value = Math.round(document.getElementById('portrait_width').value / aspectratio);
 							}
-							updateDataFromUI(); updateTextPreview();
+							refreshPreview(true);
 						}
 					}
 					reader.readAsDataURL(file);
@@ -8847,15 +8928,15 @@ Current version: 64
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
 			aestheticInstructUISettings.you_portrait = null;
 			aestheticInstructUISettings.AI_portrait = niko_square;
-			updateDataFromUI(); updateTextPreview();
+			document.getElementById('portrait_height').value = document.getElementById('portrait_width').value = 100;
+			refreshPreview(true);
 		});
 
 		document.getElementById("reset-all-aesthetic-instruct").addEventListener('click', (e) => {
 
 			let ns = new AestheticInstructUISettings();
 			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
-			updateUIFromData();
-			updateTextPreview();
+			refreshPreview(false);
 		});
 
 		refreshPreview(false);
@@ -8981,15 +9062,39 @@ Current version: 64
 		}
 	}
 
-	function render_enhanced_chat_instruct(input)
+	function render_enhanced_chat_instruct(input, classSuffixStr="") //class suffix string used to prevent defined styles from leaking into global scope
 	{
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
+		if(localsettings.opmode==3)
+		{
+			//replace all possible instances with placeholders
+			var mynameregex = new RegExp("\n(" + localsettings.chatname + ")\: ", "gi");
+			var mynameregex2 = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
+			var mynameregex3 = new RegExp("\n(" + localsettings.chatname + ") ", "gi");
+			var othernamesregex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+			var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
+			input = input.replace(mynameregex, '{{userplaceholder}}');
+			input = input.replace(mynameregex2, '{{userplaceholder}}');
+			input = input.replace(mynameregex3, '{{userplaceholder}}');
+			input = input.replace("{{userplaceholder}}", '{{userplaceholder}}<p><b>'+localsettings.chatname+'</b></p>');
+
+			input = input.replace(othernamesregex, function(match) {
+				return "{{botplaceholder}}<p><b>" + match.substring(0,match.length-2).trim() + "</b></p>";
+			});
+			input = input.replace(othernamesregex2, function(match) {
+				return "{{botplaceholder}}<p><b>" + match.substring(0,match.length-2).trim() + "</b></p>";
+			});
+
+			you = "{{userplaceholder}}";
+			bot = "{{botplaceholder}}";
+		}
+
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
-			.you-portrait-image {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 		</style>
 		`;
 
@@ -9014,15 +9119,15 @@ Current version: 64
 			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
 			newbodystr = applyStylizedCodeBlocks(); 																// Then, apply the code-block styling, if markdown is used.
 		}
-		return portraitsStyling + newbodystr.replaceAll('\r\n','<br>').replaceAll('\n','<br>'); // Finally, convert newlines to HTML format and return the stylized string.
+		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
 
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; display: flex; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
+		function style(role) { return `${contextDict.closeTag}</p></div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: 15px'><p>${contextDict[`${role}Open`]}`; }
 		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
-			return `<div class='${role}-portrait-image' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
+			return `<div class='${role}-portrait-image${classSuffixStr}' style='width:${as.portraitSize().width}px; height:${as.portraitSize().height}px; border-radius: ${as.portraitRadius()}'></div>`;
 		}
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
@@ -9043,9 +9148,17 @@ Current version: 64
 	function updateTextPreview() {
 		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
 		preview = replaceAll(preview,'qqq', '```');
-		preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
-		preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
-		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview);
+		if(localsettings.opmode==3)
+		{
+			preview = replaceAll(preview,'\n[USER_REPLY]\n', "{{userplaceholder}}");
+			preview = replaceAll(preview,'\n[AI_REPLY]\n', "{{botplaceholder}}");
+		}
+		else
+		{
+			preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
+			preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
+		}
+		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,'prv');
 	}
 	</script>
 
@@ -9188,7 +9301,6 @@ Current version: 64
 					<button type="button" class="btn btn-primary" id="btn_actredo2" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
 					<button type="button" class="btn btn-primary" id="btn_actretry2" onclick="btn_retry()">Retry</button>
 					<button type="button" class="btn btn-primary bg_green" id="btn_genimg2" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
-					<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()">Customize UI</button>
 					<button type="button" class="btn btn-primary" id="btn_editmode" onclick="btn_editmode()">Edit</button>
 
 				</div>
@@ -9461,7 +9573,7 @@ Current version: 64
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Max Tokens <span class="helpicon">?<span class="helptext">Max
+							<div class="justifyleft settingsmall">Max Ctx. Tokens <span class="helpicon">?<span class="helptext">Max
 										number of tokens of context to submit to the AI for sampling. Make sure this is
 										higher than Amount to Generate.</span></span></div>
 							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_context_length"
@@ -9557,11 +9669,19 @@ Current version: 64
 								<option value="4">Instruct Mode</option>
 							</select>
 
-						<div id="chatnamesection1" class="settinglabel hidden" style="padding-top: 3px;">
+						<div id="uipicker" class="settinglabel" style="padding-top: 3px;">
 							<div class="settinglabel">
-								<div class="justifyleft settingsmall" title="Switches to an aesthetic messenger style UI">Aesthetic Chat UI </div>
-								<input type="checkbox" id="enhanced_chat_ui" style="margin:0px 0 0;">
+								<div class="justifyleft settingsmall" title="">UI Style Select <span class="helpicon">?<span class="helptext">Select your preferred UI style, which affects text formatting and display. Some UIs are only available for specific modes.</span></span></div>
+								<select class="form-control" id="gui_type" style="height:24px;padding:0;margin:0px 0 0; width:calc( 100% - 30px );" onchange="toggle_uistyle()">
+									<option id="uipicker_classic" value="0">Notepad</option>
+									<option id="uipicker_messenger" value="1">Messenger</option>
+									<option id="uipicker_aesthetic" value="2">Aesthetic</option>
+								</select>
+								<button type="button" class="btn btn-primary" id="btn_aesthetics" onclick="openAestheticUISettingsMenu()" style="height: 24px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
+						</div>
+
+						<div id="chatnamesection1" class="settinglabel hidden" style="padding-top: 3px;">
 						</div>
 						<div id="adventuresection1" class="settinglabel hidden" style="padding-top: 3px;">
 							<div class="settinglabel">
@@ -9571,10 +9691,6 @@ Current version: 64
 							</div>
 						</div>
 						<div id="instructsection1" class="settinglabel hidden" style="padding-top: 3px;">
-							<div class="settinglabel">
-								<div class="justifyleft settingsmall" title="Switches to a UI style more suitable for RP. Enabling markdown together with this is recommended.">Aesthetic Instruct UI </div>
-								<input type="checkbox" id="enhanced_instruct_ui" style="margin:0px 5.5px;">
-							</div>
 						</div>
 
 						</div>
