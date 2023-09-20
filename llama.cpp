@@ -2893,9 +2893,7 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens));
+            cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             offload_func_v(cur);
             ggml_set_name(cur, "KQV_merged_contiguous");
 
@@ -3302,9 +3300,7 @@ static struct ggml_cgraph * llm_build_baichaun(
             ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens));
+            cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             offload_func_v(cur);
             ggml_set_name(cur, "KQV_merged_contiguous");
 
@@ -3710,7 +3706,7 @@ static struct ggml_cgraph * llm_build_falcon(
             offload_func_v(KQV_merged);
             ggml_set_name(KQV_merged, "KQV_merged");
 
-            cur = ggml_cpy(ctx0, KQV_merged, ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens));
+            cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             offload_func_v(cur);
             ggml_set_name(cur, "KQV_merged_contiguous");
 
@@ -3964,9 +3960,7 @@ static struct ggml_cgraph * llm_build_starcoder(
             ggml_set_name(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
-            cur = ggml_cpy(ctx0,
-                    KQV_merged,
-                    ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens));
+            cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             ggml_set_name(cur, "KQV_merged_contiguous");
         }
 
