@@ -57,7 +57,7 @@ class model_backend(InferenceModel):
         self.kcpp_ropescale = 0.0
         self.kcpp_ropebase = 10000.0
         self.kcpp_useclblast = None
-        self.kcpp_useclublas = None
+        self.kcpp_usecublas = None
         self.kcpp_noblas = False
         self.kcpp_noavx2 = False
         self.kcpp_nommap = False
@@ -85,7 +85,7 @@ class model_backend(InferenceModel):
                                     })
         requested_parameters.append({
                                     "uitype": "dropdown",
-                                    "unit": "text",
+                                    "unit": "int",
                                     "label": "KoboldCpp Accelerator",
                                     "id": "kcpp_accelerator",
                                     "default": 0,
@@ -174,7 +174,7 @@ class model_backend(InferenceModel):
                                     })
         requested_parameters.append({
                                     "uitype": "dropdown",
-                                    "unit": "text",
+                                    "unit": "int",
                                     "label": "Smart Context",
                                     "id": "kcpp_smartcontext",
                                     "default": self.kcpp_smartcontext,
@@ -218,7 +218,7 @@ class model_backend(InferenceModel):
         elif accel==1:
            pass
         elif accel==2:
-            self.kcpp_useclublas = ["normal"]
+            self.kcpp_usecublas = ["normal"]
         elif accel==3:
             self.kcpp_useclblast = [0,0]
         elif accel==4:
@@ -250,7 +250,7 @@ class model_backend(InferenceModel):
             blasbatchsize=self.kcpp_blasbatchsize, ropeconfig=[self.kcpp_ropescale, self.kcpp_ropebase], stream=False, smartcontext=self.kcpp_smartcontext,
             unbantokens=False, bantokens=None, usemirostat=None, forceversion=0, nommap=self.kcpp_nommap,
             usemlock=False, noavx2=self.kcpp_noavx2, debugmode=self.kcpp_debugmode, skiplauncher=True, hordeconfig=None, noblas=self.kcpp_noblas,
-            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_useclublas, gpulayers=self.kcpp_gpulayers, tensor_split=None, config=None, onready='', multiuser=False)
+            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_usecublas, gpulayers=self.kcpp_gpulayers, tensor_split=None, config=None, onready='', multiuser=False)
 
             koboldcpp.main(kcppargs,False) #initialize library without enabling Lite http server
             kcpp_backend_loaded = True
