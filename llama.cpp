@@ -4072,7 +4072,8 @@ static int llama_decode_internal(
 
 #ifdef GGML_USE_MPI
     // TODO: needs fix after #3228
-    ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
+    GGML_ASSERT(false && "not implemented");
+    //ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
 #endif
 
     GGML_ASSERT(n_threads > 0);
@@ -6846,8 +6847,10 @@ struct llama_context * llama_new_context_with_model(
 
     if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
         // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos(ctx));
-        while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
+        // TODO: needs fix after #3228
+        GGML_ASSERT(false && "not implemented");
+        //const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos(ctx));
+        //while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
         llama_backend_free();
         exit(1);
     }
