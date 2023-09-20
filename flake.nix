@@ -52,7 +52,8 @@
       in
       {
         packages.default = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs buildInputs postInstall;
+          inherit name src meta postPatch nativeBuildInputs postInstall;
+          buildInputs = osSpecific;
           cmakeFlags = cmakeFlags
             ++ (if isAarch64 && isDarwin then [
             "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
