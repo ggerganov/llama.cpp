@@ -253,6 +253,13 @@ int main(int argc, char ** argv) {
         int32_t n_batch = params.n_batch;
 
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
+            // experiment: process in powers of 2
+            //if (i + n_batch > (int32_t) batch.n_tokens && n_batch > 32) {
+            //    n_batch /= 2;
+            //    i -= n_batch;
+            //    continue;
+            //}
+
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
 
             llama_batch batch_view = {
