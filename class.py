@@ -62,6 +62,8 @@ class model_backend(InferenceModel):
         self.kcpp_noavx2 = False
         self.kcpp_nommap = False
         self.kcpp_debugmode = 0
+        self.kcpp_tensor_split_str = ""
+        self.kcpp_tensor_split = None
 
         files = os.listdir(model_path)
         foundfiles = [filename for filename in files if (("ggml" in filename.lower() and ".bin" in filename.lower()) or ".gguf" in filename.lower())]
@@ -200,6 +202,18 @@ class model_backend(InferenceModel):
                                     "extra_classes": "",
                                     'children': [{'text': 'False', 'value': 0}, {'text': 'True', 'value': 1}],
                                     })
+        requested_parameters.append({
+                                    "uitype": "text",
+                                    "unit": "text",
+                                    "label": "Tensor Split",
+                                    "id": "kcpp_tensor_split_str",
+                                    "default": self.kcpp_tensor_split_str,
+                                    "check": {"value": "", 'check': "!="},
+                                    "tooltip": "Tensor Split, values are space separated",
+                                    "menu_path": "",
+                                    "refresh_model_inputs": False,
+                                    "extra_classes": ""
+                                    })
         return requested_parameters
 
     def set_input_parameters(self, parameters):
@@ -212,6 +226,13 @@ class model_backend(InferenceModel):
         self.kcpp_ropescale = parameters["kcpp_ropescale"]
         self.kcpp_ropebase = parameters["kcpp_ropebase"]
         self.kcpp_debugmode = parameters["kcpp_debugmode"]
+        self.kcpp_tensor_split_str = parameters["kcpp_tensor_split_str"]
+        if self.kcpp_tensor_split_str and self.kcpp_tensor_split_str!="":
+            splits = self.kcpp_tensor_split_str.split()
+            self.kcpp_tensor_split = []
+            for s in splits:
+                self.kcpp_tensor_split.append(int(s))
+
         accel = parameters["kcpp_accelerator"]
         if accel==0:
             self.kcpp_noblas = True
@@ -250,7 +271,7 @@ class model_backend(InferenceModel):
             blasbatchsize=self.kcpp_blasbatchsize, ropeconfig=[self.kcpp_ropescale, self.kcpp_ropebase], stream=False, smartcontext=self.kcpp_smartcontext,
             unbantokens=False, bantokens=None, usemirostat=None, forceversion=0, nommap=self.kcpp_nommap,
             usemlock=False, noavx2=self.kcpp_noavx2, debugmode=self.kcpp_debugmode, skiplauncher=True, hordeconfig=None, noblas=self.kcpp_noblas,
-            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_usecublas, gpulayers=self.kcpp_gpulayers, tensor_split=None, config=None, onready='', multiuser=False)
+            useclblast=self.kcpp_useclblast, usecublas=self.kcpp_usecublas, gpulayers=self.kcpp_gpulayers, tensor_split=self.kcpp_tensor_split, config=None, onready='', multiuser=False)
 
             koboldcpp.main(kcppargs,False) #initialize library without enabling Lite http server
             kcpp_backend_loaded = True
@@ -278,7 +299,7 @@ class model_backend(InferenceModel):
         genresult = koboldcpp.generate(decoded_prompt,max_new,utils.koboldai_vars.max_length,
         gen_settings.temp,int(gen_settings.top_k),gen_settings.top_a,gen_settings.top_p,
         gen_settings.typical,gen_settings.tfs,gen_settings.rep_pen,gen_settings.rep_pen_range,
-        sampler_order=gen_settings.sampler_order)
+        sampler_order=gen_settings.sampler_order,use_default_badwordsids=utils.koboldai_vars.use_default_badwordsids)
 
         outputs = [genresult]
         return GenerationResult(
