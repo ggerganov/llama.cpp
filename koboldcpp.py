@@ -555,7 +555,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             laste = handle.get_last_eval_time()
             lastc = handle.get_last_token_count()
             stopreason = handle.get_last_stop_reason()
-            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "stop_reason":stopreason, "idle":(0 if modelbusy.locked() else 1)}).encode())
+            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1)}).encode())
 
         if response_body is None:
             self.send_response(404)
