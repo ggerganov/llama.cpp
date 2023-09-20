@@ -523,13 +523,13 @@ struct llama_server_context
                 {
                     static float mirostat_mu = 2.0f * mirostat_tau;
                     const int mirostat_m = 100;
-                    llama_sample_temperature(ctx, &candidates_p, temp);
+                    llama_sample_temp(ctx, &candidates_p, temp);
                     result.tok = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
                 }
                 else if (mirostat == 2)
                 {
                     static float mirostat_mu = 2.0f * mirostat_tau;
-                    llama_sample_temperature(ctx, &candidates_p, temp);
+                    llama_sample_temp(ctx, &candidates_p, temp);
                     result.tok = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
                 }
                 else
@@ -540,7 +540,7 @@ struct llama_server_context
                     llama_sample_tail_free(ctx, &candidates_p, tfs_z, min_keep);
                     llama_sample_typical(ctx, &candidates_p, typical_p, min_keep);
                     llama_sample_top_p(ctx, &candidates_p, top_p, min_keep);
-                    llama_sample_temperature(ctx, &candidates_p, temp);
+                    llama_sample_temp(ctx, &candidates_p, temp);
                     result.tok = llama_sample_token(ctx, &candidates_p);
                 }
             }

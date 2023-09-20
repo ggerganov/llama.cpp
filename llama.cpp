@@ -4185,20 +4185,18 @@ static int llama_decode_internal(
     {
         auto & logits_out = lctx.logits;
 
-        if (lctx.logits_all) {
+        if (batch.logits) {
             logits_out.resize(n_vocab * n_tokens);
-            if (batch.logits) {
-                for (uint32_t i = 0; i < n_tokens; i++) {
-                    if (batch.logits[i] == 0) {
-                        continue;
-                    }
-                    memcpy(logits_out.data() + (n_vocab*i), (float *) ggml_get_data(res) + (n_vocab*i), sizeof(float)*n_vocab);
+            for (uint32_t i = 0; i < n_tokens; i++) {
+                if (batch.logits[i] == 0) {
+                    continue;
                 }
-            } else {
-                memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*n_tokens);
+                memcpy(logits_out.data() + (n_vocab*i), (float *) ggml_get_data(res) + (n_vocab*i), sizeof(float)*n_vocab);
             }
+        } else if (lctx.logits_all) {
+            logits_out.resize(n_vocab * n_tokens);
+            memcpy(logits_out.data(), (float *) ggml_get_data(res), sizeof(float)*n_vocab*n_tokens);
         } else {
-            // return result for just the last token
             logits_out.resize(n_vocab);
             memcpy(logits_out.data(), (float *) ggml_get_data(res) + (n_vocab*(n_tokens - 1)), sizeof(float)*n_vocab);
         }
@@ -5269,7 +5267,7 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
-void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
+void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     for (size_t i = 0; i < candidates_p->size; ++i) {
@@ -5279,6 +5277,10 @@ void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
+}
+
+void llama_sample_temperature(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
+    llama_sample_temp(ctx, candidates_p, temp);
 }
 
 void llama_sample_repetition_penalty(struct llama_context * ctx, llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float penalty) {
@@ -7357,7 +7359,7 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
 int llama_eval(
         struct llama_context * ctx,
                  llama_token * tokens,
-                    uint32_t   n_tokens,
+                     int32_t   n_tokens,
                          int   n_past,
                          int   n_threads) {
     llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
@@ -7377,7 +7379,7 @@ int llama_eval(
 int llama_eval_embd(
             struct llama_context * ctx,
                            float * embd,
-                        uint32_t   n_tokens,
+                         int32_t   n_tokens,
                              int   n_past,
                              int   n_threads) {
     llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
@@ -7398,7 +7400,7 @@ int llama_eval_embd(
 
 struct llama_batch llama_batch_get_one(
              llama_token * tokens,
-                uint32_t   n_tokens,
+                 int32_t   n_tokens,
                llama_pos   pos_0,
             llama_seq_id   seq_id) {
     return {
@@ -7414,8 +7416,8 @@ struct llama_batch llama_batch_get_one(
     };
 }
 
-struct llama_batch llama_batch_init(uint32_t n_tokens, int32_t embd) {
-    llama_batch batch = { n_tokens, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
+struct llama_batch llama_batch_init(int32_t n_tokens, int32_t embd) {
+    llama_batch batch = { -1, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
 
     if (embd) {
         batch.embd = (float *) malloc(sizeof(float) * n_tokens * embd);

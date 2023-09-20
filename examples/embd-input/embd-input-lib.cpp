@@ -79,7 +79,7 @@ bool eval_float(void * model, float * input, int N){
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        llama_batch batch = { uint32_t(n_eval), nullptr, (input+i*n_emb), nullptr, nullptr, nullptr, n_past, 1, 0, };
+        llama_batch batch = {  int32_t(n_eval), nullptr, (input+i*n_emb), nullptr, nullptr, nullptr, n_past, 1, 0, };
         if (llama_decode(ctx, batch, params.n_threads)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return false;
@@ -183,11 +183,11 @@ llama_token sampling_id(struct MyModel* mymodel) {
             if (mirostat == 1) {
                 static float mirostat_mu = 2.0f * mirostat_tau;
                 const int mirostat_m = 100;
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
             } else if (mirostat == 2) {
                 static float mirostat_mu = 2.0f * mirostat_tau;
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
             } else {
                 // Temperature sampling
@@ -195,7 +195,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
                 llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
                 llama_sample_typical(ctx, &candidates_p, typical_p, 1);
                 llama_sample_top_p(ctx, &candidates_p, top_p, 1);
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token(ctx, &candidates_p);
             }
         }

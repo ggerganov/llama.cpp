@@ -956,11 +956,11 @@ llama_token llama_sample_token(
         if (mirostat == 1) {
             static float mirostat_mu = 2.0f * mirostat_tau;
             const int mirostat_m = 100;
-            llama_sample_temperature(ctx, &cur_p, temp);
+            llama_sample_temp(ctx, &cur_p, temp);
             id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
         } else if (mirostat == 2) {
             static float mirostat_mu = 2.0f * mirostat_tau;
-            llama_sample_temperature(ctx, &cur_p, temp);
+            llama_sample_temp(ctx, &cur_p, temp);
             id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
         } else {
             // Temperature sampling
@@ -968,7 +968,7 @@ llama_token llama_sample_token(
             llama_sample_tail_free  (ctx, &cur_p, tfs_z, 1);
             llama_sample_typical    (ctx, &cur_p, typical_p, 1);
             llama_sample_top_p      (ctx, &cur_p, top_p, 1);
-            llama_sample_temperature(ctx, &cur_p, temp);
+            llama_sample_temp(ctx, &cur_p, temp);
 
             {
                 const int n_top = 10;
