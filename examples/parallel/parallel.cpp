@@ -86,7 +86,7 @@ int main(int argc, char ** argv) {
     const int32_t n_seq = params.n_sequences;
 
     // insert new requests as soon as the previous one is done
-    const bool hot_plug = params.hot_plug;
+    const bool cont_batching = params.cont_batching;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("parallel", "log"));
@@ -140,7 +140,7 @@ int main(int argc, char ** argv) {
     const auto t_main_start = ggml_time_us();
 
     LOG_TEE("%s: Simulating parallel requests from clients:\n", __func__);
-    LOG_TEE("%s: n_parallel = %d, n_sequences = %d, hot_plug = %d, system tokens = %d\n", __func__, n_clients, n_seq, hot_plug, n_tokens_system);
+    LOG_TEE("%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
     LOG_TEE("\n");
 
     {
@@ -208,7 +208,7 @@ int main(int argc, char ** argv) {
             }
         }
 
-        if (hot_plug || batch_token.empty()) {
+        if (cont_batching || batch_token.empty()) {
             for (auto & client : clients) {
                 if (client.seq_id == -1 && g_seq_id < n_seq) {
                     client.seq_id = g_seq_id;
@@ -237,9 +237,9 @@ int main(int argc, char ** argv) {
                     client.i_batch   = batch_token.size() - 1;
 
                     g_seq_id += 1;
-                    if (hot_plug) {
-                        //break;
-                    }
+                    //if (cont_batching) {
+                    //    break;
+                    //}
                 }
             }
         }
