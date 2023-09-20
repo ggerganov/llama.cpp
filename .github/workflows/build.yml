@@ -468,6 +468,7 @@ jobs:
       with:
         operating_system: freebsd
         version: '13.2'
+        hypervisor: 'qemu'
         run: |
             sudo pkg update
             sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
