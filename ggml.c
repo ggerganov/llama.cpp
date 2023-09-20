@@ -6343,7 +6343,7 @@ static struct ggml_tensor * ggml_cpy_impl(
     }
 
     // make a view of the destination
-    struct ggml_tensor * result = b->op == GGML_OP_NONE ? b : ggml_view_tensor(ctx, b);
+    struct ggml_tensor * result = ggml_view_tensor(ctx, b);
     if (strlen(b->name) > 0) {
         ggml_format_name(result, "%s (copy of %s)", b->name, a->name);
     } else {
@@ -6405,6 +6405,54 @@ struct ggml_tensor * ggml_cont_inplace(
         struct ggml_tensor * a) {
     return ggml_cont_impl(ctx, a, true);
 }
+
+
+// make contiguous, with new shape
+GGML_API struct ggml_tensor * ggml_cont_1d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0) {
+    return ggml_cont_4d(ctx, a, ne0, 1, 1, 1);
+}
+
+GGML_API struct ggml_tensor * ggml_cont_2d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        int64_t               ne1) {
+    return ggml_cont_4d(ctx, a, ne0, ne1, 1, 1);
+}
+
+GGML_API struct ggml_tensor * ggml_cont_3d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        int64_t               ne1,
+        int64_t               ne2) {
+    return ggml_cont_4d(ctx, a, ne0, ne1, ne2, 1);
+}
+
+struct ggml_tensor * ggml_cont_4d(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        int64_t               ne0,
+        int64_t               ne1,
+        int64_t               ne2,
+        int64_t               ne3) {
+    GGML_ASSERT(ggml_nelements(a) == (ne0*ne1*ne2*ne3));
+
+    bool is_node = false;
+
+    struct ggml_tensor * result = ggml_new_tensor_4d(ctx, a->type, ne0, ne1, ne2, ne3);
+    ggml_format_name(result, "%s (cont)", a->name);
+
+    result->op   = GGML_OP_CONT;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
+
+    return result;
+}
+
 
 // ggml_reshape
 
