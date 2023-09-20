@@ -67,7 +67,7 @@ if (NOT LLAMA_NATIVE)
     option(LLAMA_FMA                         "llama: enable FMA"                                ON)
     # in MSVC F16C is implied with AVX2/AVX512
     if (NOT MSVC)
-    	option(LLAMA_F16C                    "llama: enable F16C"                               ON)
+        option(LLAMA_F16C                    "llama: enable F16C"                               ON)
     endif()
 endif()
 
