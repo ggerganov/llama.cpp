@@ -172,6 +172,10 @@ ifdef LLAMA_DISABLE_LOGS
 	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
+ifndef LLAMA_NO_SKIP_UNUSED_LOGITS
+	MK_CPPFLAGS += -DLLAMA_SKIP_UNUSED_LOGITS
+endif # LLAMA_NO_SKIP_UNUSED_LOGITS
+
 # warnings
 MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
 				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
@@ -447,15 +451,6 @@ k_quants.o: k_quants.c k_quants.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_NO_K_QUANTS
 
-ifndef LLAMA_NO_SKIP_UNUSED_LOGITS
-	CFLAGS   += -DLLAMA_SKIP_UNUSED_LOGITS
-	CXXFLAGS += -DLLAMA_SKIP_UNUSED_LOGITS
-endif # LLAMA_NO_SKIP_UNUSED_LOGITS
-
-ifdef LLAMA_DISABLE_LOGS
-	CFLAGS   += -DLOG_DISABLE_LOGS
-	CXXFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 # combine build flags with cmdline overrides
 override CFLAGS        := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
 override CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
