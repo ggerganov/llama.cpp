@@ -701,8 +701,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
     printf("  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    printf("  --rope-freq-base N    RoPE base frequency (default: %.1f)\n", params.rope_freq_base);
-    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: %g)\n", params.rope_freq_scale);
+    printf("  --rope-freq-base N    RoPE base frequency (default: loaded from model)\n");
+    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: loaded from model)\n");
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
