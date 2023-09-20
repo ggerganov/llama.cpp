@@ -795,6 +795,8 @@ struct ggml_tensor * llama_build_train_graphs(
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
         // input gradient
         ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
+        // KQ_pos
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
         GGML_ASSERT(t36->grad->data == NULL && !ggml_is_view(t36->grad));
         ggml_allocr_alloc(alloc, t36->grad);
         // gradient tensors (will be set to zero by ggml_graph_reset)
