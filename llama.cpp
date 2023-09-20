@@ -1256,10 +1256,10 @@ static bool llama_kv_cache_init(
 
     (void) n_gpu_layers;
 #ifdef GGML_USE_CUBLAS
-    if (n_gpu_layers > n_layer + 1) {
+    if (n_gpu_layers > (int)n_layer + 1) {
         ggml_cuda_assign_buffers_no_scratch(cache.v);
     }
-    if (n_gpu_layers > n_layer + 2) {
+    if (n_gpu_layers > (int)n_layer + 2) {
         ggml_cuda_assign_buffers_no_scratch(cache.k);
     }
 #endif // GGML_USE_CUBLAS
@@ -2692,14 +2692,16 @@ static struct ggml_cgraph * llm_build_llama(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
     ggml_allocr_alloc(lctx.alloc, KQ_scale);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd_head)));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    offload_func_kq(KQ_mask);
+    ggml_set_name(KQ_mask, "KQ_mask");
     ggml_allocr_alloc(lctx.alloc, KQ_mask);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         float * data = (float *) KQ_mask->data;
@@ -2722,6 +2724,7 @@ static struct ggml_cgraph * llm_build_llama(
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
+    ggml_set_name(KQ_pos, "KQ_pos");
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -2734,6 +2737,7 @@ static struct ggml_cgraph * llm_build_llama(
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
+        ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
         if (!ggml_allocr_is_measure(lctx.alloc)) {
             int * data = (int *) K_shift->data;
@@ -2743,14 +2747,16 @@ static struct ggml_cgraph * llm_build_llama(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 
@@ -3078,14 +3084,16 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
     ggml_allocr_alloc(lctx.alloc, KQ_scale);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    offload_func_kq(KQ_mask);
+    ggml_set_name(KQ_mask, "KQ_mask");
     ggml_allocr_alloc(lctx.alloc, KQ_mask);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         float * data = (float *) KQ_mask->data;
@@ -3108,6 +3116,7 @@ static struct ggml_cgraph * llm_build_baichaun(
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
+    ggml_set_name(KQ_pos, "KQ_pos");
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -3120,6 +3129,7 @@ static struct ggml_cgraph * llm_build_baichaun(
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
+        ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
         if (!ggml_allocr_is_measure(lctx.alloc)) {
             int * data = (int *) K_shift->data;
@@ -3129,14 +3139,16 @@ static struct ggml_cgraph * llm_build_baichaun(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 
@@ -3484,14 +3496,16 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
     ggml_allocr_alloc(lctx.alloc, KQ_scale);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    offload_func_kq(KQ_mask);
+    ggml_set_name(KQ_mask, "KQ_mask");
     ggml_allocr_alloc(lctx.alloc, KQ_mask);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         float * data = (float *) KQ_mask->data;
@@ -3514,6 +3528,7 @@ static struct ggml_cgraph * llm_build_falcon(
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
+    ggml_set_name(KQ_pos, "KQ_pos");
     ggml_allocr_alloc(lctx.alloc, KQ_pos);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         int * data = (int *) KQ_pos->data;
@@ -3526,6 +3541,7 @@ static struct ggml_cgraph * llm_build_falcon(
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
+        ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
         if (!ggml_allocr_is_measure(lctx.alloc)) {
             int * data = (int *) K_shift->data;
@@ -3535,14 +3551,16 @@ static struct ggml_cgraph * llm_build_falcon(
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            ggml_build_forward_expand(gf,
+            struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale));
+                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale);
+            offload_func_kq(tmp);
+            ggml_build_forward_expand(gf, tmp);
         }
     }
 
@@ -3832,14 +3850,15 @@ static struct ggml_cgraph * llm_build_starcoder(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
     ggml_allocr_alloc(lctx.alloc, KQ_scale);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    ggml_set_name(KQ_mask, "KQ_mask");
     ggml_allocr_alloc(lctx.alloc, KQ_mask);
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         float * data = (float *) KQ_mask->data;
@@ -4118,6 +4137,7 @@ static int llama_decode_internal(
         ggml_tensor * node = gf->leafs[i];
         if (node->backend == GGML_BACKEND_GPU && node->extra == NULL) {
             ggml_cuda_assign_scratch_offset(node, (char*)node->data - (char *) lctx.buf_alloc.data);
+            ggml_cuda_copy_to_device(node);
         }
     }
 
