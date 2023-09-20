@@ -68,12 +68,14 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_parallel = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_parallel, n_kv_req);
 
-    // make sure wi
+    // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
         LOG_TEE("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
         LOG_TEE("%s:        either reduce n_parallel or increase n_ctx\n", __func__);
         return 1;
     }
+
+    // print the prompt token-by-token
 
     fprintf(stderr, "\n");
 
@@ -107,6 +109,7 @@ int main(int argc, char ** argv) {
     }
 
     // assign the system KV cache to all parallel sequences
+    // this way, the parallel sequences will "reuse" the prompt tokens without having to copy them
     for (int32_t i = 1; i < n_parallel; ++i) {
         llama_kv_cache_seq_cp(ctx, 0, i, 0, batch.n_tokens);
     }
@@ -120,8 +123,8 @@ int main(int argc, char ** argv) {
     // we will store the parallel decoded sequences in this vector
     std::vector<std::string> streams(n_parallel);
 
-    // remember the batch index of the last tokenn for each parallel sequence
-    // we will use this to know which logits to sample from
+    // remember the batch index of the last token for each parallel sequence
+    // we need this to determine which logits to sample from
     std::vector<int32_t> i_batch(n_parallel, batch.n_tokens - 1);
 
     int n_cur    = batch.n_tokens;
@@ -170,8 +173,7 @@ int main(int argc, char ** argv) {
 
             //const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
-            // is it an end of stream ?
-            // mark this stream as finished
+            // is it an end of stream? -> mark the stream as finished
             if (new_token_id == llama_token_eos(ctx) || n_cur == n_len) {
                 i_batch[i] = -1;
                 LOG_TEE("\n");
@@ -182,8 +184,8 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
+            // if there is only one stream, we print immediately to stdout
             if (n_parallel == 1) {
-                // print the new token :
                 LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
                 fflush(stdout);
             }
@@ -203,8 +205,8 @@ int main(int argc, char ** argv) {
             n_decode += 1;
         }
 
+        // all streams are finished
         if (batch.n_tokens == 0) {
-            // all streams are finished
             break;
         }
 
@@ -229,6 +231,8 @@ int main(int argc, char ** argv) {
     llama_print_timings(ctx);
 
     fprintf(stderr, "\n");
+
+    llama_batch_free(batch);
 
     llama_free(ctx);
     llama_free_model(model);
