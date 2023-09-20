@@ -21,7 +21,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
     struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
 
     if (plan.work_size > 0) {
@@ -32,7 +32,7 @@ void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, 
     ggml_graph_compute(graph, &plan);
 }
 
-float tensor_sum_elements(const ggml_tensor * tensor) {
+static float tensor_sum_elements(const ggml_tensor * tensor) {
     double sum = 0;
     if (tensor->type == GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
@@ -44,7 +44,7 @@ float tensor_sum_elements(const ggml_tensor * tensor) {
     return sum;
 }
 
-void tensor_dump(const ggml_tensor * tensor, const char * name) {
+static void tensor_dump(const ggml_tensor * tensor, const char * name) {
     printf("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi) - ", name,
         tensor->type, ggml_type_name(tensor->type),
         tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
@@ -59,7 +59,7 @@ struct benchmark_params_struct {
     int32_t n_iterations  = 10;
 };
 
-void print_usage(int /*argc*/, char ** argv, struct benchmark_params_struct params) {
+static void print_usage(int /*argc*/, char ** argv, struct benchmark_params_struct params) {
     fprintf(stderr, "usage: %s [options]\n", argv[0]);
     fprintf(stderr, "\n");
     fprintf(stderr, "options:\n");
