@@ -9673,7 +9673,7 @@ Current version: 66
 							<div class="settinglabel">
 								<div class="justifyleft settingsmall" title="">UI Style Select <span class="helpicon">?<span class="helptext">Select your preferred UI style, which affects text formatting and display. Some UIs are only available for specific modes.</span></span></div>
 								<select class="form-control" id="gui_type" style="height:24px;padding:0;margin:0px 0 0; width:calc( 100% - 30px );" onchange="toggle_uistyle()">
-									<option id="uipicker_classic" value="0">Notepad</option>
+									<option id="uipicker_classic" value="0">Classic</option>
 									<option id="uipicker_messenger" value="1">Messenger</option>
 									<option id="uipicker_aesthetic" value="2">Aesthetic</option>
 								</select>
