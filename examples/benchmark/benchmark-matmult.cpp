@@ -253,7 +253,7 @@ int main(int argc, char ** argv)  {
         // Check that the matrix multiplication result is in the right ballpark
         // We cannot use the exact value from the F32 multiplication because the quantizuation will be slightly different
         float sum_of_Q4_result = tensor_sum_elements(gf31.nodes[0]);
-        float delta = abs(sum_of_Q4_result - sum_of_F32_reference);
+        float delta = std::abs(sum_of_Q4_result - sum_of_F32_reference);
         float allowed_delta = (sum_of_F32_reference) / 1000 / 1000; //  Let's accept an epsilon of 10^-6
 
         if (delta > allowed_delta)  {
