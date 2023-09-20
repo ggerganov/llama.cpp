@@ -1,3 +1,4 @@
+#include "build-info.h"
 #include "common.h"
 #include "embd-input.h"
 
