@@ -74,14 +74,6 @@ static T stdev(const std::vector<T> & v) {
     return stdev;
 }
 
-static bool ggml_cpu_has_metal() {
-#if defined(GGML_USE_METAL)
-    return true;
-#else
-    return false;
-#endif
-}
-
 static std::string get_cpu_info() {
     std::string id;
 #ifdef __linux__
@@ -165,26 +157,26 @@ static const cmd_params cmd_params_defaults = {
 };
 
 static void print_usage(int /* argc */, char ** argv) {
-    fprintf(stdout, "usage: %s [options]\n", argv[0]);
-    fprintf(stdout, "\n");
-    fprintf(stdout, "options:\n");
-    fprintf(stdout, "  -h, --help\n");
-    fprintf(stdout, "  -m, --model <filename>            (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
-    fprintf(stdout, "  -p, --n-prompt <n>                (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
-    fprintf(stdout, "  -n, --n-gen <n>                   (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
-    fprintf(stdout, "  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
-    fprintf(stdout, "  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
-    fprintf(stdout, "  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
-    fprintf(stdout, "  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-    fprintf(stdout, "  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
-    fprintf(stdout, "  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
-    fprintf(stdout, "  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
-    fprintf(stdout, "  -ts, --tensor_split <ts0/ts1/..>               \n");
-    fprintf(stdout, "  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
-    fprintf(stdout, "  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : cmd_params_defaults.output_format == MARKDOWN ? "md" : "sql");
-    fprintf(stdout, "  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
-    fprintf(stdout, "\n");
-    fprintf(stdout, "Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
+    printf("usage: %s [options]\n", argv[0]);
+    printf("\n");
+    printf("options:\n");
+    printf("  -h, --help\n");
+    printf("  -m, --model <filename>            (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
+    printf("  -p, --n-prompt <n>                (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
+    printf("  -n, --n-gen <n>                   (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
+    printf("  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
+    printf("  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
+    printf("  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
+    printf("  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+    printf("  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
+    printf("  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
+    printf("  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
+    printf("  -ts, --tensor_split <ts0/ts1/..>               \n");
+    printf("  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
+    printf("  -o, --output <csv|json|md|sql>    (default: %s)\n", cmd_params_defaults.output_format == CSV ? "csv" : cmd_params_defaults.output_format == JSON ? "json" : cmd_params_defaults.output_format == MARKDOWN ? "md" : "sql");
+    printf("  -v, --verbose                     (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
+    printf("\n");
+    printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 
 }
 
@@ -986,7 +978,12 @@ int main(int argc, char ** argv) {
         test t(inst, lmodel, ctx);
 
         // warmup run
-        test_gen(ctx, 1, 0, t.n_threads);
+        if (t.n_prompt > 0) {
+            test_prompt(ctx, std::min(2, t.n_batch), 0, t.n_batch, t.n_threads);
+        }
+        if (t.n_gen > 0) {
+            test_gen(ctx, 1, 0, t.n_threads);
+        }
 
         for (int i = 0; i < params.reps; i++) {
             uint64_t t_start = get_time_ns();

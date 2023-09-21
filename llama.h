@@ -249,15 +249,17 @@ extern "C" {
     LLAMA_API bool llama_mmap_supported (void);
     LLAMA_API bool llama_mlock_supported(void);
 
-    LLAMA_API int llama_n_vocab(const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx  (const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd (const struct llama_context * ctx);
+    LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
+    LLAMA_API int llama_n_embd     (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
 
-    LLAMA_API int llama_model_n_vocab(const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx  (const struct llama_model * model);
-    LLAMA_API int llama_model_n_embd (const struct llama_model * model);
+    LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx      (const struct llama_model * model);
+    LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
+    LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
@@ -376,6 +378,7 @@ extern "C" {
     LLAMA_API int llama_tokenize(
             struct llama_context * ctx,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
@@ -383,6 +386,7 @@ extern "C" {
     LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
+                             int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos);
@@ -413,6 +417,8 @@ extern "C" {
                                  size_t    start_rule_index);
 
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
+
+    LLAMA_API struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar);
 
     //
     // Sampling functions
@@ -540,7 +546,9 @@ extern "C" {
 
 struct ggml_tensor;
 
-const std::vector<std::pair<std::string, struct ggml_tensor *>>& llama_internal_get_tensor_map(struct llama_context * ctx);
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+);
 
 #endif // LLAMA_API_INTERNAL
 

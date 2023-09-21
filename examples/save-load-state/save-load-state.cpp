@@ -1,6 +1,6 @@
+#include "build-info.h"
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <vector>
 #include <cstdio>
@@ -13,11 +13,11 @@ int main(int argc, char ** argv) {
     params.repeat_last_n = 64;
     params.prompt = "The quick brown fox";
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.n_predict < 0) {
         params.n_predict = 16;
@@ -44,7 +44,7 @@ int main(int argc, char ** argv) {
         llama_free_model(model);
         return 1;
     }
-    auto tokens = llama_tokenize(ctx, params.prompt.c_str(), true);
+    auto tokens = llama_tokenize(ctx, params.prompt, true);
     auto n_prompt_tokens = tokens.size();
     if (n_prompt_tokens < 1) {
         fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);

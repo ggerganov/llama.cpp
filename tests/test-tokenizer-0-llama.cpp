@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "common.h"
+#include "console.h"
 
 #include <cstdio>
 #include <string>
@@ -35,6 +36,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "   Hello"              , {    1678,  15043, }, },
         { "    Hello"             , {     268,  15043, }, },
         { "    Hello\n    Hello"  , {     268,  15043,     13,   1678,  15043, }, },
+        { " ("                    , {   29871,  313, }, },
     };
 
     return _k_tests;
@@ -88,6 +90,12 @@ int main(int argc, char **argv) {
         llama_free(ctx);
         return 2;
     }
+
+#ifdef _WIN32
+    // We need this for unicode console support
+    console::init(false, false);
+    atexit([]() { console::cleanup(); });
+#endif
 
     bool success = true;
 

@@ -11,21 +11,11 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- #### IMPORTANT: Tokenizer fixes and API change (developers and projects using `llama.cpp` built-in tokenization must read): https://github.com/ggerganov/llama.cpp/pull/2810
+- Parallel decoding + continuous batching support incoming: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
+  **Devs should become familiar with the new API**
+- Local Falcon 180B inference on Mac Studio
 
-- GGUFv2 adds support for 64-bit sizes + backwards compatible: https://github.com/ggerganov/llama.cpp/pull/2821
-
-- Added support for Falcon models: https://github.com/ggerganov/llama.cpp/pull/2717
-
-- A new file format has been introduced: [GGUF](https://github.com/ggerganov/llama.cpp/pull/2398)
-
-  Last revision compatible with the old format: [dadbed9](https://github.com/ggerganov/llama.cpp/commit/dadbed99e65252d79f81101a392d0d6497b86caa)
-
-  ### Current `master` should be considered in Beta - expect some issues for a few days!
-
-  ### Be prepared to re-convert and / or re-quantize your GGUF models while this notice is up!
-
-  ### Issues with non-GGUF models will be considered with low priority!
+  https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
 
 ----
 
@@ -403,17 +393,18 @@ Building the program with BLAS support may lead to some performance improvements
 <!---
   | LLAMA_CUDA_CUBLAS       | Boolean                |   false | Use cuBLAS instead of custom CUDA kernels for prompt processing. Faster for all quantization formats except for q4_0 and q8_0, especially for k-quants. Increases VRAM usage (700 MiB for 7b, 970 MiB for 13b, 1430 MiB for 33b). |
 --->
-  | Option                  | Legal values           | Default | Description |
-  |-------------------------|------------------------|---------|-------------|
-  | LLAMA_CUDA_FORCE_DMMV   | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
-  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_MMV_Y        | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. |
-  | LLAMA_CUDA_F16          | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs. |
-  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
+  | Option                         | Legal values           | Default | Description |
+  |--------------------------------|------------------------|---------|-------------|
+  | LLAMA_CUDA_FORCE_DMMV          | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
+  | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_MMV_Y               | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. |
+  | LLAMA_CUDA_F16                 | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs. |
+  | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
+  | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       |     128 | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial. |
 
 - #### hipBLAS
 
-  This provide BLAS acceleation on HIP supported GPU like AMD GPU.
+  This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
   You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
   Windows support is coming soon...
@@ -737,12 +728,12 @@ python3 convert.py pygmalion-7b/ --outtype q4_1
 
 - Refer to [Facebook's LLaMA download page](https://ai.meta.com/resources/models-and-libraries/llama-downloads/) if you want to access the model data.
 - Alternatively, if you want to save time and space, you can download already converted and quantized models from [TheBloke](https://huggingface.co/TheBloke), including:
-  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGML)
-  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGML)
-  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGML)
-  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGML)
-  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGML)
-  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGML)
+  - [LLaMA 2 7B base](https://huggingface.co/TheBloke/Llama-2-7B-GGUF)
+  - [LLaMA 2 13B base](https://huggingface.co/TheBloke/Llama-2-13B-GGUF)
+  - [LLaMA 2 70B base](https://huggingface.co/TheBloke/Llama-2-70B-GGUF)
+  - [LLaMA 2 7B chat](https://huggingface.co/TheBloke/Llama-2-7B-chat-GGUF)
+  - [LLaMA 2 13B chat](https://huggingface.co/TheBloke/Llama-2-13B-chat-GGUF)
+  - [LLaMA 2 70B chat](https://huggingface.co/TheBloke/Llama-2-70B-chat-GGUF)
 
 ### Verifying the model files
 
@@ -856,8 +847,17 @@ Place your desired model into the `~/llama.cpp/models/` directory and execute th
 #### Images
 We have two Docker images available for this project:
 
-1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization.
-2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file.
+1. `ghcr.io/ggerganov/llama.cpp:full`: This image includes both the main executable file and the tools to convert LLaMA models into ggml and convert into 4-bit quantization. (platforms: `linux/amd64`, `linux/arm64`)
+2. `ghcr.io/ggerganov/llama.cpp:light`: This image only includes the main executable file. (platforms: `linux/amd64`, `linux/arm64`)
+
+Additionally, there the following images, similar to the above:
+
+- `ghcr.io/ggerganov/llama.cpp:full-cuda`: Same as `full` but compiled with CUDA support. (platforms: `linux/amd64`)
+- `ghcr.io/ggerganov/llama.cpp:light-cuda`: Same as `light` but compiled with CUDA support. (platforms: `linux/amd64`)
+- `ghcr.io/ggerganov/llama.cpp:full-rocm`: Same as `full` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
+- `ghcr.io/ggerganov/llama.cpp:light-rocm`: Same as `light` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
+
+The GPU enabled images are not currently tested by CI beyond being built. They are not built with any variation from the ones in the Dockerfiles defined in [.devops/](.devops/) and the Gitlab Action defined in [.github/workflows/docker.yml](.github/workflows/docker.yml). If you need different settings (for example, a different CUDA or ROCm library, you'll need to build the images locally for now).
 
 #### Usage
 

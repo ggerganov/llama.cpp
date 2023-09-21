@@ -55,10 +55,22 @@ def count_model_parts(dir_model: Path) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a Falcon model to a GGML compatible file")
-    parser.add_argument("--vocab-only", action="store_true", help="extract only the vocab")
-    parser.add_argument("--outfile",    type=Path,           help="path to write to; default: based on input")
-    parser.add_argument("model",        type=Path,           help="directory containing model file, or model file itself (*.bin)")
-    parser.add_argument("ftype",        type=int,            help="output format - use 0 for float32, 1 for float16", choices=[0, 1], default = 1)
+    parser.add_argument(
+        "--vocab-only", action="store_true",
+        help="extract only the vocab",
+    )
+    parser.add_argument(
+        "--outfile", type=Path,
+        help="path to write to; default: based on input",
+    )
+    parser.add_argument(
+        "model", type=Path,
+        help="directory containing model file, or model file itself (*.bin)",
+    )
+    parser.add_argument(
+        "ftype", type=int, choices=[0, 1], default=1, nargs='?',
+        help="output format - use 0 for float32, 1 for float16",
+    )
     return parser.parse_args()
 
 args = parse_args()
@@ -137,7 +149,9 @@ with open(tokenizer_json_file, "r", encoding="utf-8") as f:
 
 print("gguf: get gpt2 tokenizer vocab")
 
-vocab_size = len(tokenizer_json["model"]["vocab"])
+# The number of tokens in tokenizer.json can differ from the expected vocab size.
+# This causes downstream issues with mismatched tensor sizes when running the inference
+vocab_size = hparams["vocab_size"] if "vocab_size" in hparams else len(tokenizer_json["model"]["vocab"])
 
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
