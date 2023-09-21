@@ -7477,6 +7477,10 @@ float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits.data();
 }
 
+float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
+    return ctx->logits.data() + i*ctx->model.hparams.n_vocab;
+}
+
 float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embedding.data();
 }
