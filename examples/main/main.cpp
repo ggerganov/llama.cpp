@@ -239,8 +239,15 @@ int main(int argc, char ** argv) {
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;
-
-    if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
+    if(params.infill) {
+        std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
+        std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+        inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+        inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
+        embd_inp = inp_pfx;
+        embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+        embd_inp.push_back(llama_token_middle(ctx));
+    } else if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
         embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
     } else {
@@ -709,9 +716,58 @@ int main(int argc, char ** argv) {
                     LOG("found antiprompt: %s\n", last_output.c_str());
                 }
             }
-
+            // deal with eot token in infill mode
+            if ((last_tokens.back() == llama_token_eot(ctx) || is_interacting) && params.infill && params.interactive){
+                if(is_interacting && !params.interactive_first) {
+                    // print an eot token
+                    printf("%s", llama_token_to_piece(ctx, llama_token_eot(ctx)).c_str());
+                }
+                fflush(stdout);
+                printf("\n");
+                console::set_display(console::user_input);
+                std::string buffer;
+                std::string line;
+                bool another_line=true;
+                // set a new prefix via stdin
+                do {
+                    another_line = console::readline(line, params.multiline_input);
+                    buffer += line;
+                } while (another_line);
+                // check if we got an empty line, if so we use the old input
+                if(!buffer.empty() && !(buffer.length() == 1 && buffer[0] == '\n')) {
+                    params.input_prefix = buffer;
+                }
+                buffer.clear();
+                // set a new suffix via stdin
+                do {
+                    another_line = console::readline(line, params.multiline_input);
+                    buffer += line;
+                } while (another_line);
+                // check if we got an empty line
+                if(!buffer.empty() && !(buffer.length() == 1 && buffer[0] == '\n')) {
+                    params.input_suffix = buffer;
+                }
+                buffer.clear();
+                // done taking input, reset color
+                console::set_display(console::reset);
+                // tokenize new prefix and suffix
+                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
+                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+                inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+                inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
+                embd_inp = inp_pfx;
+                embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
+                embd_inp.push_back(llama_token_middle(ctx));
+                embd.clear();
+                embd_guidance.clear();
+                n_remain = params.n_predict;
+                n_past = 0;
+                n_consumed = 0;
+                // LOG_TEE("took new input\n");
+                is_interacting = false;
+            }
             // deal with end of text token in interactive mode
-            if (last_tokens.back() == llama_token_eos(ctx)) {
+            else if (last_tokens.back() == llama_token_eos(ctx)) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -731,7 +787,7 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            if (n_past > 0 && is_interacting) {
+            if (n_past > 0 && is_interacting && !(params.infill && params.interactive)) {
                 LOG("waiting for user input\n");
 
                 if (params.instruct) {
@@ -825,16 +881,22 @@ int main(int argc, char ** argv) {
 
         // end of text token
         if (!embd.empty() && embd.back() == llama_token_eos(ctx) && !(params.instruct || params.interactive)) {
-            LOG_TEE(" [end of text]\n");
+            if (!params.infill){
+                LOG_TEE(" [end of text]\n");
+            }
             break;
         }
 
         // In interactive mode, respect the maximum number of tokens and drop back to user input when reached.
         // We skip this logic when n_predict == -1 (infinite) or -2 (stop at context size).
-        if (params.interactive && n_remain <= 0 && params.n_predict >= 0) {
+        if (params.interactive && n_remain <= 0 && params.n_predict >= 0 ) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
+    }
+    if (params.infill && !params.interactive && n_remain <= 0) {
+        printf("%s", llama_token_to_piece(ctx, llama_token_eot(ctx)).c_str());
+        fflush(stdout);
     }
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {

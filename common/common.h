@@ -118,6 +118,7 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool infill            = false; // use infill mode
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

@@ -362,6 +362,11 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
     LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    // codellama FIM tokens
+    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of FIM prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of FIM middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of FIM suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of FIM middle
 
     //
     // Tokenization
