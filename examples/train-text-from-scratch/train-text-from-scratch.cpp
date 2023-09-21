@@ -2001,11 +2001,13 @@ int main(int argc, char ** argv) {
     printf("%s: seed: %u\n", __func__, params.seed);
     srand(params.seed);
 
-    struct llama_context_params llama_params = llama_context_default_params();
-    llama_params.vocab_only = true;
+    struct llama_model_params mparams = llama_model_default_params();
+    mparams.vocab_only = true;
 
-    struct llama_model * lmodel = llama_load_model_from_file(params.fn_vocab_model, llama_params);
-    struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
+    struct llama_context_params cparams = llama_context_default_params();
+
+    struct llama_model * lmodel = llama_load_model_from_file(params.fn_vocab_model, mparams);
+    struct llama_context * lctx = llama_new_context_with_model(lmodel, cparams);
 
     printf("%s: tokenize training data\n", __func__);
     std::vector<llama_token> train_tokens;

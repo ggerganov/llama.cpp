@@ -145,9 +145,11 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
-    if (int(tokens.size()) < 2*params.n_ctx) {
-        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*params.n_ctx,
-                params.n_ctx);
+    const int n_ctx = llama_n_ctx(ctx);
+
+    if (int(tokens.size()) < 2*n_ctx) {
+        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*n_ctx,
+                n_ctx);
         fprintf(stderr, "%s: the data file you provided tokenizes to only %zu tokens\n",__func__,tokens.size());
         return {std::move(tokens), 0., {}, {}};
     }
@@ -163,13 +165,13 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
         return {tokens, -1, logit_history, prob_history};
     }
 
-    const int calc_chunk = params.n_ctx;
+    const int calc_chunk = n_ctx;
 
     fprintf(stderr, "%s: have %zu tokens. Calculation chunk = %d\n", __func__, tokens.size(), calc_chunk);
 
     if (int(tokens.size()) <= calc_chunk) {
         fprintf(stderr, "%s: there are only %zu tokens, this is not enough for a context size of %d and stride %d\n",__func__,
-                tokens.size(), params.n_ctx, params.ppl_stride);
+                tokens.size(), n_ctx, params.ppl_stride);
         return {tokens, -1, logit_history, prob_history};
     }
 
@@ -235,7 +237,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
         }
 
         //fprintf(stderr, "%s: using tokens %d...%d\n",__func__,params.n_ctx - params.ppl_stride + start, params.n_ctx + start);
-        for (int j = params.n_ctx - params.ppl_stride - 1; j < params.n_ctx - 1; ++j) {
+        for (int j = n_ctx - params.ppl_stride - 1; j < n_ctx - 1; ++j) {
 
             // Calculate probability of next token, given the previous ones.
             const std::vector<float> tok_logits(
@@ -274,6 +276,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
     const bool is_spm = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
     const bool add_bos = is_spm;
+    const int n_ctx = llama_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
@@ -283,9 +286,9 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     auto tim2 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
 
-    if (int(tokens.size()) < 2*params.n_ctx) {
-        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*params.n_ctx,
-                params.n_ctx);
+    if (int(tokens.size()) < 2*n_ctx) {
+        fprintf(stderr, "%s: you need at least %d tokens to evaluate perplexity with a context of %d\n",__func__,2*n_ctx,
+                n_ctx);
         fprintf(stderr, "%s: the data file you provided tokenizes to only %zu tokens\n",__func__,tokens.size());
         return {std::move(tokens), 0., {}, {}};
     }
@@ -296,7 +299,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     std::vector<float> prob_history;
     prob_history.resize(tokens.size());
 
-    const int n_chunk_max = tokens.size() / params.n_ctx;
+    const int n_chunk_max = tokens.size() / n_ctx;
 
     const int n_chunk = params.n_chunks < 0 ? n_chunk_max : std::min(params.n_chunks, n_chunk_max);
     const int n_vocab = llama_n_vocab(ctx);
@@ -311,10 +314,10 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
 
     for (int i = 0; i < n_chunk; ++i) {
-        const int start =     i * params.n_ctx;
-        const int end   = start + params.n_ctx;
+        const int start =     i * n_ctx;
+        const int end   = start + n_ctx;
 
-        const int num_batches = (params.n_ctx + n_batch - 1) / n_batch;
+        const int num_batches = (n_ctx + n_batch - 1) / n_batch;
 
         std::vector<float> logits;
 
@@ -369,10 +372,10 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
         // Example, we have a context window of 512, we will compute perplexity for each of the
         // last 256 tokens.  Then, we split the input up into context window size chunks to
         // process the entire prompt.
-        const int first = params.n_ctx/2;
-        process_logits(n_vocab, logits.data() + first*n_vocab, tokens.data() + start + first, params.n_ctx - 1 - first,
+        const int first = n_ctx/2;
+        process_logits(n_vocab, logits.data() + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
                        workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
-        count += params.n_ctx - first - 1;
+        count += n_ctx - first - 1;
 
         // perplexity is e^(average negative log-likelihood)
         if (params.ppl_output_type == 0) {
@@ -381,7 +384,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
             double av = nll/count;
             double av2 = nll2/count - av*av;
             if (av2 > 0) av2 = sqrt(av2/(count-1));
-            printf("%8d  %.4lf  %4lf  %4lf\n", i*params.n_ctx, std::exp(nll / count), av, av2);
+            printf("%8d  %.4lf  %4lf  %4lf\n", i*n_ctx, std::exp(nll / count), av, av2);
         }
         fflush(stdout);
     }
@@ -513,6 +516,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
 
     double acc = 0.0f;
     const int n_vocab = llama_n_vocab(ctx);
+    const int n_ctx = llama_n_ctx(ctx);
 
     std::vector<std::vector<int>> ending_tokens(4);
 
@@ -540,7 +544,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         auto query_size = query_embd.size();
 
         // Stop if query wont fit the ctx window
-        if (query_size > (size_t)params.n_ctx) {
+        if (query_size > (size_t)n_ctx) {
             fprintf(stderr, "%s : number of tokens in query %zu > n_ctxl\n", __func__, query_size);
             return;
         }
@@ -587,7 +591,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             query_size = query_embd.size();
 
             // Stop if query wont fit the ctx window
-            if (context_size + query_size > (size_t)params.n_ctx) {
+            if (context_size + query_size > (size_t)n_ctx) {
                 fprintf(stderr, "%s : number of tokens in query %zu > n_ctxl\n", __func__, query_size);
                 return;
             }

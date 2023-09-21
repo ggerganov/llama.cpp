@@ -30,16 +30,14 @@ int main(int argc, char ** argv) {
 
     llama_backend_init(params.numa);
 
-    llama_context_params ctx_params = llama_context_default_params();
-
-    llama_model * model = llama_load_model_from_file(params.model.c_str(), ctx_params);
+    llama_model * model = llama_load_model_from_file(params.model.c_str(), llama_model_default_params());
 
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
         return 1;
     }
 
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx = llama_new_context_with_model(model, llama_context_default_params());
 
     // tokenize the prompt
 

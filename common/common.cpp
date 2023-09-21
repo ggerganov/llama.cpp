@@ -722,40 +722,49 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 // Model utils
 //
 
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
-    auto lparams = llama_context_default_params();
+struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
+    auto mparams = llama_model_default_params();
 
-    lparams.n_ctx           = params.n_ctx;
-    lparams.n_batch         = params.n_batch;
     if (params.n_gpu_layers != -1) {
-        lparams.n_gpu_layers = params.n_gpu_layers;
+        mparams.n_gpu_layers = params.n_gpu_layers;
     }
-    lparams.main_gpu        = params.main_gpu;
-    lparams.tensor_split    = params.tensor_split;
-    lparams.low_vram        = params.low_vram;
-    lparams.mul_mat_q       = params.mul_mat_q;
-    lparams.seed            = params.seed;
-    lparams.f16_kv          = params.memory_f16;
-    lparams.use_mmap        = params.use_mmap;
-    lparams.use_mlock       = params.use_mlock;
-    lparams.logits_all      = params.perplexity;
-    lparams.embedding       = params.embedding;
-    lparams.rope_freq_base  = params.rope_freq_base;
-    lparams.rope_freq_scale = params.rope_freq_scale;
+    mparams.main_gpu        = params.main_gpu;
+    mparams.tensor_split    = params.tensor_split;
+    mparams.low_vram        = params.low_vram;
+    mparams.use_mmap        = params.use_mmap;
+    mparams.use_mlock       = params.use_mlock;
 
-    return lparams;
+    return mparams;
+}
+
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
+    auto cparams = llama_context_default_params();
+
+    cparams.n_ctx           = params.n_ctx;
+    cparams.n_batch         = params.n_batch;
+    cparams.low_vram        = params.low_vram;
+    cparams.mul_mat_q       = params.mul_mat_q;
+    cparams.seed            = params.seed;
+    cparams.f16_kv          = params.memory_f16;
+    cparams.logits_all      = params.perplexity;
+    cparams.embedding       = params.embedding;
+    cparams.rope_freq_base  = params.rope_freq_base;
+    cparams.rope_freq_scale = params.rope_freq_scale;
+
+    return cparams;
 }
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
-    auto lparams = llama_context_params_from_gpt_params(params);
+    auto mparams = llama_model_params_from_gpt_params(params);
+    auto cparams = llama_context_params_from_gpt_params(params);
 
-    llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
+    llama_model * model  = llama_load_model_from_file(params.model.c_str(), mparams);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
         return std::make_tuple(nullptr, nullptr);
     }
 
-    llama_context * lctx = llama_new_context_with_model(model, lparams);
+    llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);

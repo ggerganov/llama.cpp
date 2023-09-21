@@ -43,9 +43,11 @@ int main(int argc, char ** argv) {
     }
 
     const int n_ctx_train = llama_n_ctx_train(ctx);
-    if (params.n_ctx > n_ctx_train) {
+    const int n_ctx = llama_n_ctx(ctx);
+
+    if (n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
-                __func__, n_ctx_train, params.n_ctx);
+                __func__, n_ctx_train, n_ctx);
     }
 
     // print system information
@@ -70,9 +72,9 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "\n");
     }
 
-    if (embd_inp.size() > (size_t)params.n_ctx) {
+    if (embd_inp.size() > (size_t)n_ctx) {
         fprintf(stderr, "%s: error: prompt is longer than the context window (%zu tokens, n_ctx = %d)\n",
-                __func__, embd_inp.size(), params.n_ctx);
+                __func__, embd_inp.size(), n_ctx);
         return 1;
     }
 

@@ -122,18 +122,10 @@ extern "C" {
 
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
-    struct llama_context_params {
-        uint32_t seed;         // RNG seed, -1 for random
-        int32_t  n_ctx;        // text context
-        int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gpu_layers; // number of layers to store in VRAM
-        int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
-
+    struct llama_model_params {
+        int32_t n_gpu_layers; // number of layers to store in VRAM
+        int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
-
-        // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float    rope_freq_base;  // RoPE base frequency
-        float    rope_freq_scale; // RoPE frequency scaling factor
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
@@ -142,12 +134,25 @@ extern "C" {
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool low_vram;   // if true, reduce VRAM usage at the cost of performance
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
-        bool f16_kv;     // use fp16 for KV cache
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
+    };
+
+    struct llama_context_params {
+        uint32_t seed;         // RNG seed, -1 for random
+        uint32_t n_ctx;        // text context
+        uint32_t n_batch;      // prompt processing batch size
+
+        // ref: https://github.com/ggerganov/llama.cpp/pull/2054
+        float rope_freq_base;  // RoPE base frequency
+        float rope_freq_scale; // RoPE frequency scaling factor
+
+        // Keep the booleans together to avoid misalignment during copy-by-value.
+        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
+        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
+        bool f16_kv;     // use fp16 for KV cache
+        bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool embedding;  // embedding mode only
     };
 
@@ -215,6 +220,7 @@ extern "C" {
         int32_t n_eval;
     };
 
+    LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
@@ -228,7 +234,7 @@ extern "C" {
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_model_params     params);
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 
@@ -253,7 +259,6 @@ extern "C" {
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
 
     LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx      (const struct llama_model * model);
     LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
     LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
 

@@ -200,6 +200,7 @@ struct llama_server_context
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
     gpt_params params;
+    int n_ctx;
 
     grammar_parser::parse_state parsed_grammar;
     llama_grammar *grammar = nullptr;
@@ -239,7 +240,7 @@ struct llama_server_context
         num_prompt_tokens = 0;
         num_tokens_predicted = 0;
         generated_text = "";
-        generated_text.reserve(params.n_ctx);
+        generated_text.reserve(n_ctx);
         generated_token_probs.clear();
         truncated = false;
         stopped_eos = false;
@@ -265,8 +266,8 @@ struct llama_server_context
             LOG_ERROR("unable to load model", {{"model", params_.model}});
             return false;
         }
-
-        last_n_tokens.resize(params.n_ctx);
+        n_ctx = llama_n_ctx(ctx);
+        last_n_tokens.resize(n_ctx);
         std::fill(last_n_tokens.begin(), last_n_tokens.end(), 0);
         return true;
     }
@@ -351,19 +352,19 @@ struct llama_server_context
         {
             params.n_keep = (int)num_prompt_tokens;
         }
-        params.n_keep = std::min(params.n_ctx - 4, params.n_keep);
+        params.n_keep = std::min(n_ctx - 4, params.n_keep);
 
         // if input prompt is too big, truncate like normal
-        if (num_prompt_tokens >= (size_t)params.n_ctx)
+        if (num_prompt_tokens >= (size_t)n_ctx)
         {
-            const int n_left = (params.n_ctx - params.n_keep) / 2;
+            const int n_left = (n_ctx - params.n_keep) / 2;
             std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + params.n_keep);
             const int erased_blocks = (num_prompt_tokens - params.n_keep - n_left - 1) / n_left;
             new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + params.n_keep + erased_blocks * n_left, prompt_tokens.end());
-            std::copy(prompt_tokens.end() - params.n_ctx, prompt_tokens.end(), last_n_tokens.begin());
+            std::copy(prompt_tokens.end() - n_ctx, prompt_tokens.end(), last_n_tokens.begin());
 
             LOG_VERBOSE("input truncated", {
-                                               {"n_ctx", params.n_ctx},
+                                               {"n_ctx", n_ctx},
                                                {"n_keep", params.n_keep},
                                                {"n_left", n_left},
                                                {"new_tokens", tokens_to_str(ctx, new_tokens.cbegin(), new_tokens.cend())},
@@ -409,10 +410,10 @@ struct llama_server_context
         completion_token_output result;
         result.tok = -1;
 
-        if (embd.size() >= (size_t)params.n_ctx)
+        if (embd.size() >= (size_t)n_ctx)
         {
             // Reset context
-            const int n_left = (params.n_ctx - params.n_keep) / 2;
+            const int n_left = (n_ctx - params.n_keep) / 2;
 
             std::vector<llama_token> new_tokens(embd.begin(), embd.begin() + params.n_keep);
             new_tokens.insert(new_tokens.end(), embd.end() - n_left, embd.end());
@@ -420,7 +421,7 @@ struct llama_server_context
             n_past = params.n_keep;
             truncated = true;
             LOG_VERBOSE("input truncated", {
-                                               {"n_ctx", params.n_ctx},
+                                               {"n_ctx", n_ctx},
                                                {"n_keep", params.n_keep},
                                                {"n_left", n_left},
                                                {"new_tokens", tokens_to_str(ctx, new_tokens.cbegin(), new_tokens.cend())},
@@ -461,7 +462,7 @@ struct llama_server_context
         const float top_p = params.top_p;
         const float tfs_z = params.tfs_z;
         const float typical_p = params.typical_p;
-        const int32_t repeat_last_n = params.repeat_last_n < 0 ? params.n_ctx : params.repeat_last_n;
+        const int32_t repeat_last_n = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
         const float repeat_penalty = params.repeat_penalty;
         const float alpha_presence = params.presence_penalty;
         const float alpha_frequency = params.frequency_penalty;
@@ -492,7 +493,7 @@ struct llama_server_context
 
             // Apply penalties
             float nl_logit = logits[llama_token_nl(ctx)];
-            auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), params.n_ctx);
+            auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
             llama_sample_repetition_penalty(ctx, &candidates_p,
                                             last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
                                             last_n_repeat, repeat_penalty);
@@ -1002,7 +1003,7 @@ static json format_generation_settings(llama_server_context &llama)
                             eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
     return json{
-        {"n_ctx", llama.params.n_ctx},
+        {"n_ctx", llama.n_ctx},
         {"model", llama.params.model_alias},
         {"seed", llama.params.seed},
         {"temp", llama.params.temp},

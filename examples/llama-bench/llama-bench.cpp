@@ -356,18 +356,27 @@ struct cmd_params_instance {
     bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
 
-    llama_context_params to_llama_params() const {
-        llama_context_params lparams = llama_context_default_params();
-        lparams.n_ctx = n_prompt + n_gen;
-        lparams.n_batch = n_batch;
-        lparams.f16_kv = !f32_kv;
-        lparams.n_gpu_layers = n_gpu_layers;
-        lparams.main_gpu = main_gpu;
-        lparams.mul_mat_q = mul_mat_q;
-        lparams.low_vram = low_vram;
-        lparams.tensor_split = tensor_split.data();
+    llama_model_params to_llama_mparams() const {
+        llama_model_params mparams = llama_model_default_params();
 
-        return lparams;
+        mparams.n_gpu_layers = n_gpu_layers;
+        mparams.main_gpu = main_gpu;
+        mparams.low_vram = low_vram;
+        mparams.tensor_split = tensor_split.data();
+
+        return mparams;
+    }
+
+    llama_context_params to_llama_cparams() const {
+        llama_context_params cparams = llama_context_default_params();
+
+        cparams.n_ctx = n_prompt + n_gen;
+        cparams.n_batch = n_batch;
+        cparams.f16_kv = !f32_kv;
+        cparams.mul_mat_q = mul_mat_q;
+        cparams.low_vram = low_vram;
+
+        return cparams;
     }
 };
 
@@ -960,15 +969,13 @@ int main(int argc, char ** argv) {
 
     for (const auto & inst : params_instances) {
         // TODO: keep the model between tests when possible
-        llama_context_params lparams = inst.to_llama_params();
-
-        llama_model * lmodel  = llama_load_model_from_file(inst.model.c_str(), lparams);
+        llama_model * lmodel  = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
         if (lmodel == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
             return 1;
         }
 
-        llama_context * ctx = llama_new_context_with_model(lmodel, lparams);
+        llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, inst.model.c_str());
             llama_free_model(lmodel);

@@ -23,23 +23,17 @@ int main(int argc, char ** argv) {
         params.n_predict = 16;
     }
 
-    auto lparams = llama_context_default_params();
-
-    lparams.n_ctx     = params.n_ctx;
-    lparams.seed      = params.seed;
-    lparams.f16_kv    = params.memory_f16;
-    lparams.use_mmap  = params.use_mmap;
-    lparams.use_mlock = params.use_mlock;
-
     auto n_past = 0;
     auto last_n_tokens_data = std::vector<llama_token>(params.repeat_last_n, 0);
 
     // init
-    auto model = llama_load_model_from_file(params.model.c_str(), lparams);
+    llama_model * model;
+    llama_context * ctx;
+
+    std::tie(model, ctx) = llama_init_from_gpt_params( params );
     if (model == nullptr) {
         return 1;
     }
-    auto ctx = llama_new_context_with_model(model, lparams);
     if (ctx == nullptr) {
         llama_free_model(model);
         return 1;
@@ -106,7 +100,7 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
 
     // make new context
-    auto ctx2 = llama_new_context_with_model(model, lparams);
+    auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
     // Load state (rng, logits, embedding and kv_cache) from file
     {
