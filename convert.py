@@ -205,13 +205,13 @@ class Params:
         rope_scaling_type = f_rope_scale = n_orig_ctx = rope_finetuned = None
         rope_scaling = config.get("rope_scaling")
 
-        if rope_scaling is not None and typ := rope_scaling.get("type"):
+        if rope_scaling is not None and (typ := rope_scaling.get("type")):
             rope_factor = rope_scaling.get("factor")
             f_rope_scale = rope_factor
             if typ == "linear":
-                rope_scaling_type = RopeScalingType.LINEAR
+                rope_scaling_type = gguf.RopeScalingType.LINEAR
             elif typ == "yarn":
-                rope_scaling_type = RopeScalingType.YARN
+                rope_scaling_type = gguf.RopeScalingType.YARN
                 n_orig_ctx = rope_scaling['original_max_position_embeddings']
                 rope_finetuned = rope_scaling['finetuned']
             else:
@@ -231,10 +231,10 @@ class Params:
             n_layer           = config["num_hidden_layers"],
             n_ctx             = n_ctx,
             n_ff              = config["intermediate_size"],
-            n_head            = config["num_attention_heads"],
-            n_head_kv         = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head,
+            n_head            = (n_head := config["num_attention_heads"]),
+            n_head_kv         = config.get("num_key_value_heads", n_head),
             f_norm_eps        = config["rms_norm_eps"],
-            f_rope_freq_base  = config["rope_theta"] if "rope_theta" in config else None,
+            f_rope_freq_base  = config.get("rope_theta"),
             f_rope_scale      = f_rope_scale,
             n_orig_ctx        = n_orig_ctx,
             rope_finetuned    = rope_finetuned,
@@ -247,7 +247,7 @@ class Params:
         config = json.load(open(config_path))
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
-        if f_rope_freq_base == 1000000:
+        if config.get("rope_theta") == 1000000:
             # CodeLlama
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
@@ -263,10 +263,10 @@ class Params:
             n_layer          = config["n_layers"],
             n_ctx            = n_ctx,
             n_ff             = model["layers.0.feed_forward.w1.weight"].shape[0],
-            n_head           = config["n_heads"],
-            n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head,
+            n_head           = (n_head := config["n_heads"]),
+            n_head_kv        = config.get("n_kv_heads", n_head),
             f_norm_eps       = config["norm_eps"],
-            f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None,
+            f_rope_freq_base = config.get("rope_theta"),
         )
 
     @staticmethod
@@ -834,14 +834,15 @@ class OutputFile:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
 
         if params.rope_scaling_type:
+            assert params.f_rope_scale is not None
             self.gguf.add_rope_scaling_type(params.rope_scaling_type)
             self.gguf.add_rope_scaling_factor(params.f_rope_scale)
 
         if params.n_orig_ctx is not None:
-            self.gguf.add_rope_original_context_length(params.n_orig_ctx)
+            self.gguf.add_rope_scaling_orig_ctx_len(params.n_orig_ctx)
 
         if params.rope_finetuned is not None:
-            self.gguf.add_rope_finetuned(params.rope_finetuned)
+            self.gguf.add_rope_scaling_finetuned(params.rope_finetuned)
 
         if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
