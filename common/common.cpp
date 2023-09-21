@@ -683,9 +683,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
     printf("  --rope-scaling {none,linear,yarn}\n");
     printf("                        RoPE frequency scaling method, defaults to linear unless specified by the model\n");
-    printf("  --rope-scale N        RoPE context scaling factor, inverse of --rope-freq-scale\n");
+    printf("  --rope-scale N        RoPE context scaling factor, expands context by a factor of N\n");
     printf("  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: loaded from model)\n");
-    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: loaded from model)\n");
+    printf("  --rope-freq-scale N   RoPE frequency scaling factor, expands context by a factor of 1/N\n");
     printf("  --yarn-ext-factor N   YaRN extrapolation mix factor (default: %.1f)\n", params.yarn_ext_factor);
     printf("  --yarn-attn-factor N  YaRN magnitude scaling factor (default: %.1f)\n", params.yarn_attn_factor);
     printf("  --yarn-beta-fast N    YaRN low correction dim (default: %.1f)\n", params.yarn_beta_fast);

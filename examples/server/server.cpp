@@ -704,7 +704,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --rope-scaling {none,linear,yarn}\n");
     printf("                        RoPE frequency scaling method, defaults to linear unless specified by the model\n");
     printf("  --rope-freq-base N    RoPE base frequency (default: loaded from model)\n");
-    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: loaded from model)\n");
+    printf("  --rope-freq-scale N   RoPE frequency scaling factor, expands context by a factor of 1/N\n");
     printf("  --yarn-ext-factor N   YaRN extrapolation mix factor (default: %.1f)\n", params.yarn_ext_factor);
     printf("  --yarn-attn-factor N  YaRN magnitude scaling factor (default: %.1f)\n", params.yarn_attn_factor);
     printf("  --yarn-beta-fast N    YaRN low correction dim (default: %.1f)\n", params.yarn_beta_fast);

@@ -12650,7 +12650,7 @@ static void ggml_compute_forward_clamp(
 
 // ggml_compute_forward_rope
 
-static inline float rope_yarn_ramp(const float low, const float high, const int i0) {
+static float rope_yarn_ramp(const float low, const float high, const int i0) {
     const float y = (i0 / 2 - low) / MIN(0.001f, high - low);
     return 1 - MIN(1, MAX(0, y));
 }
