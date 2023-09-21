@@ -72,7 +72,7 @@ int main(int argc, char ** argv) {
     while (llama_get_kv_cache_token_count(ctx) < n_gen) {
         // evaluate the transformer
 
-        if (llama_eval(ctx, tokens_list.data(), int(tokens_list.size()), llama_get_kv_cache_token_count(ctx), params.n_threads)) {
+        if (llama_eval(ctx, tokens_list.data(), int(tokens_list.size()), llama_get_kv_cache_token_count(ctx))) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return 1;
         }

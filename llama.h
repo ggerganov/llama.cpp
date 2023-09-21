@@ -140,9 +140,11 @@ extern "C" {
     };
 
     struct llama_context_params {
-        uint32_t seed;         // RNG seed, -1 for random
-        uint32_t n_ctx;        // text context
-        uint32_t n_batch;      // prompt processing batch size
+        uint32_t seed;            // RNG seed, -1 for random
+        uint32_t n_ctx;           // text context
+        uint32_t n_batch;         // prompt processing batch size
+        uint32_t n_threads;       // number of threads to use for generation
+        uint32_t n_threads_batch; // number of threads to use for batch processing
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float rope_freq_base;  // RoPE base frequency
@@ -264,8 +266,10 @@ extern "C" {
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
+
     // Returns the total size of all the tensors in the model in bytes
     LLAMA_API uint64_t llama_model_size(const struct llama_model * model);
+
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
@@ -325,16 +329,17 @@ extern "C" {
             struct llama_context * ctx,
                const llama_token * tokens,
                              int   n_tokens,
-                             int   n_past,
-                             int   n_threads);
+                             int   n_past);
 
     // Same as llama_eval, but use float matrix input directly.
     LLAMA_API int llama_eval_embd(
             struct llama_context * ctx,
                      const float * embd,
                              int   n_tokens,
-                             int   n_past,
-                             int   n_threads);
+                             int   n_past);
+
+    // Set the number of threads
+    LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
     // Export a static computation graph for context of 511 and batch size of 1
     // NOTE: since this functionality is mostly for debugging and demonstration purposes, we hardcode these
@@ -518,8 +523,7 @@ extern "C" {
     /// @param n_beams Number of beams to use.
     /// @param n_past Number of tokens already evaluated.
     /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-    /// @param n_threads Number of threads as passed to llama_eval().
-    LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict, int n_threads);
+    LLAMA_API void llama_beam_search(struct llama_context * ctx, llama_beam_search_callback_fn_t callback, void * callback_data, size_t n_beams, int n_past, int n_predict);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);

@@ -80,7 +80,7 @@ int main(int argc, char ** argv) {
 
     while (!embd_inp.empty()) {
         int n_tokens = std::min(params.n_batch, (int) embd_inp.size());
-        if (llama_eval(ctx, embd_inp.data(), n_tokens, n_past, params.n_threads)) {
+        if (llama_eval(ctx, embd_inp.data(), n_tokens, n_past)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return 1;
         }

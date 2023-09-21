@@ -966,6 +966,8 @@ struct llama_hparams {
 struct llama_cparams {
     uint32_t n_ctx;       // context size used during inference
     uint32_t n_batch;
+    uint32_t n_threads;       // number of threads to use for generation
+    uint32_t n_threads_batch; // number of threads to use for batch processing
 
     float rope_freq_base;
     float rope_freq_scale;
@@ -3673,7 +3675,6 @@ static bool llama_eval_internal(
            const float * embd,
                    int   n_tokens,
                    int   n_past,
-                   int   n_threads,
             const char * cgraph_fname) {
 
     GGML_ASSERT((!tokens && embd) || (tokens && !embd)); // NOLINT
@@ -3687,13 +3688,13 @@ static bool llama_eval_internal(
     GGML_ASSERT(n_tokens <= n_batch);
     GGML_ASSERT(n_past + n_tokens <= n_ctx);
 
+    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+
     const int64_t t_start_us = ggml_time_us();
 
 #ifdef GGML_USE_MPI
     ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
 #endif
-
-    GGML_ASSERT(n_threads > 0);
 
     const int N = n_tokens;
 
@@ -5249,7 +5250,6 @@ struct llama_beam_search_data {
     size_t n_beams;
     int n_past;
     int n_predict;
-    int n_threads;
     std::vector<llama_beam> beams;
     std::vector<llama_beam> next_beams;
 
@@ -5259,12 +5259,11 @@ struct llama_beam_search_data {
     // Used to communicate to/from callback on beams state.
     std::vector<llama_beam_view> beam_views;
 
-    llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict, int n_threads)
+    llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict)
       : ctx(ctx)
       , n_beams(n_beams)
       , n_past(n_past)
       , n_predict(n_predict)
-      , n_threads(n_threads)
       , beam_views(n_beams) {
         beams.reserve(n_beams);
         next_beams.reserve(n_beams);
@@ -5301,7 +5300,7 @@ struct llama_beam_search_data {
         } else {
             // beam is not at end-of-sentence, so branch with next top_k tokens.
             if (!beam.tokens.empty()) {
-                llama_eval(ctx, beam.tokens.data(), beam.tokens.size(), n_past, n_threads);
+                llama_eval(ctx, beam.tokens.data(), beam.tokens.size(), n_past);
             }
             llama_logit_info logit_info(ctx);
             std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
@@ -5375,7 +5374,7 @@ struct llama_beam_search_data {
             callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
             update_beams_from_beam_views();   // Update values (p,eob) that callback may have changed.
             if (common_prefix_length) {
-                llama_eval(ctx, beams[0].tokens.data(), common_prefix_length, n_past, n_threads);
+                llama_eval(ctx, beams[0].tokens.data(), common_prefix_length, n_past);
                 n_past += common_prefix_length;
             }
             // Zero-out next_beam probabilities to place them last in following min-heap.
@@ -5416,11 +5415,11 @@ struct llama_beam_search_data {
 
 void llama_beam_search(llama_context * ctx,
                        llama_beam_search_callback_fn_t callback, void * callback_data,
-                       size_t n_beams, int n_past, int n_predict, int n_threads) {
+                       size_t n_beams, int n_past, int n_predict) {
     assert(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
 
-    llama_beam_search_data beam_search_data(ctx, n_beams, n_past, n_predict, n_threads);
+    llama_beam_search_data beam_search_data(ctx, n_beams, n_past, n_predict);
 
     beam_search_data.loop(callback, callback_data);
 
@@ -5875,7 +5874,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 }
 
-// TODO: after the GGUF PR, this likely won't work and needs to be updated
 static int llama_apply_lora_from_file_internal(
     const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads
 ) {
@@ -6178,6 +6176,8 @@ struct llama_context_params llama_context_default_params() {
         /*.seed                        =*/ LLAMA_DEFAULT_SEED,
         /*.n_ctx                       =*/ 512,
         /*.n_batch                     =*/ 512,
+        /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
+        /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.low_vram                    =*/ false,
@@ -6296,10 +6296,12 @@ struct llama_context * llama_new_context_with_model(
     auto       & cparams = ctx->cparams;
 
     cparams.n_batch         = params.n_batch;
-    cparams.mul_mat_q       = params.mul_mat_q;
     cparams.n_ctx           = params.n_ctx == 0           ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base  = params.rope_freq_base == 0  ? hparams.rope_freq_base_train  : params.rope_freq_base;
     cparams.rope_freq_scale = params.rope_freq_scale == 0 ? hparams.rope_freq_scale_train : params.rope_freq_scale;
+    cparams.n_threads       = params.n_threads;
+    cparams.n_threads_batch = params.n_threads_batch;
+    cparams.mul_mat_q       = params.mul_mat_q;
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
@@ -6951,9 +6953,8 @@ int llama_eval(
         struct llama_context * ctx,
            const llama_token * tokens,
                          int   n_tokens,
-                         int   n_past,
-                         int   n_threads) {
-    if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, n_threads, nullptr)) {
+                         int   n_past) {
+    if (!llama_eval_internal(*ctx, tokens, nullptr, n_tokens, n_past, nullptr)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
         return 1;
     }
@@ -6972,9 +6973,8 @@ int llama_eval_embd(
             struct llama_context * ctx,
                      const float * embd,
                              int   n_tokens,
-                             int   n_past,
-                             int   n_threads) {
-    if (!llama_eval_internal(*ctx, nullptr, embd, n_tokens, n_past, n_threads, nullptr)) {
+                             int   n_past) {
+    if (!llama_eval_internal(*ctx, nullptr, embd, n_tokens, n_past, nullptr)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
         return 1;
     }
@@ -6989,13 +6989,18 @@ int llama_eval_embd(
     return 0;
 }
 
+void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
+    ctx->cparams.n_threads       = n_threads;
+    ctx->cparams.n_threads_batch = n_threads_batch;
+}
+
 int llama_eval_export(struct llama_context * ctx, const char * fname) {
     const int n_batch = 1;
     const int n_ctx   = 512 - n_batch;
 
     const std::vector<llama_token> tmp(n_batch, llama_token_bos(ctx));
 
-    if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, 1, fname)) {
+    if (!llama_eval_internal(*ctx, tmp.data(), nullptr, tmp.size(), n_ctx, fname)) {
         LLAMA_LOG_ERROR("%s: failed to eval\n", __func__);
         return 1;
     }

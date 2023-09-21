@@ -435,12 +435,11 @@ struct llama_server_context
             {
                 n_eval = params.n_batch;
             }
-            if (llama_eval(ctx, &embd[n_past], n_eval, n_past, params.n_threads))
+            if (llama_eval(ctx, &embd[n_past], n_eval, n_past))
             {
                 LOG_ERROR("failed to eval", {
                                                 {"n_eval", n_eval},
                                                 {"n_past", n_past},
-                                                {"n_threads", params.n_threads},
                                                 {"embd", tokens_to_str(ctx, embd.cbegin() + n_past, embd.cend())},
                                             });
                 has_next_token = false;
@@ -1359,7 +1358,7 @@ int main(int argc, char **argv)
             if (llama.params.n_beams) {
                 // Fill llama.generated_token_probs vector with final beam.
                 llama_beam_search(llama.ctx, beam_search_callback, &llama, llama.params.n_beams,
-                                  llama.n_past, llama.n_remain, llama.params.n_threads);
+                                  llama.n_past, llama.n_remain);
                 // Translate llama.generated_token_probs to llama.generated_text.
                 append_to_generated_text_from_generated_token_probs(llama);
             } else {

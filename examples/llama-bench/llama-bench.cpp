@@ -432,6 +432,9 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & mmq : params.mul_mat_q)
     for (const auto & nt : params.n_threads) {
         for (const auto & n_prompt : params.n_prompt) {
+            if (n_prompt == 0) {
+                continue;
+            }
             cmd_params_instance instance = {
                 /* .model        = */ m,
                 /* .n_prompt     = */ n_prompt,
@@ -449,6 +452,9 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
         }
 
         for (const auto & n_gen : params.n_gen) {
+            if (n_gen == 0) {
+                continue;
+            }
             cmd_params_instance instance = {
                 /* .model        = */ m,
                 /* .n_prompt     = */ 0,
@@ -953,17 +959,23 @@ struct sql_printer : public printer {
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
     std::vector<llama_token> tokens(n_batch, llama_token_bos(ctx));
     int n_processed = 0;
+
+    llama_set_n_threads(ctx, n_threads, n_threads);
+
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        llama_eval(ctx, tokens.data(), n_tokens, n_past + n_processed, n_threads);
+        llama_eval(ctx, tokens.data(), n_tokens, n_past + n_processed);
         n_processed += n_tokens;
     }
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
     llama_token token = llama_token_bos(ctx);
+
+    llama_set_n_threads(ctx, n_threads, n_threads);
+
     for (int i = 0; i < n_gen; i++) {
-        llama_eval(ctx, &token, 1, n_past + i, n_threads);
+        llama_eval(ctx, &token, 1, n_past + i);
     }
 }
 
