@@ -85,6 +85,7 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX       : int = auto()
     MPT           : int = auto()
     STARCODER     : int = auto()
+    ADEPT         : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -105,6 +106,8 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN     : int = auto()
     FFN_UP       : int = auto()
     FFN_NORM     : int = auto()
+    ATTN_Q_NORM  : int = auto()
+    ATTN_K_NORM  : int = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -116,6 +119,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
+    MODEL_ARCH.ADEPT:          "adept",
 }
 
 MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
@@ -185,6 +189,20 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
+    MODEL_ARCH.ADEPT: {
+        MODEL_TENSOR.TOKEN_EMBD:   "token_embd",
+        MODEL_TENSOR.OUTPUT:        "output",
+        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+        MODEL_TENSOR.ATTN_Q_NORM:   "blk.{bid}.attn_q_norm",
+        MODEL_TENSOR.ATTN_K_NORM:   "blk.{bid}.attn_k_norm",
+        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
+    },
     MODEL_ARCH.GPT2: {
         # TODO
     },
@@ -201,6 +219,9 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
+    MODEL_ARCH.ADEPT: [
+        MODEL_TENSOR.ROPE_FREQS,
+    ]
 }
 
 
@@ -213,6 +234,7 @@ class TensorNameMap:
             "transformer.word_embeddings", # falcon
             "model.embed_tokens",          # llama-hf
             "tok_embeddings",              # llama-pth
+            "language_model.embedding.word_embeddings", # adept
         ),
 
         # Position embeddings
@@ -225,6 +247,7 @@ class TensorNameMap:
             "embed_out", # gptneox
             "lm_head",   # gpt2 mpt falcon llama-hf baichuan
             "output",    # llama-pth
+            "word_embeddings_for_head", # adept
         ),
 
         # Output norm
@@ -233,6 +256,7 @@ class TensorNameMap:
             "transformer.ln_f",          # gpt2 falcon
             "model.norm",                # llama-hf baichuan
             "norm",                      # llama-pth
+            "language_model.encoder.final_layernorm", # adept
         ),
 
         # Rope frequencies
@@ -251,6 +275,7 @@ class TensorNameMap:
             "transformer.h.{bid}.ln_mlp",            # falcon40b
             "model.layers.{bid}.input_layernorm",    # llama-hf
             "layers.{bid}.attention_norm",           # llama-pth
+            "language_model.encoder.layers.{bid}.input_layernorm", # adept
         ),
 
         # Attention norm 2
@@ -264,6 +289,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.c_attn",                    # gpt2
             "transformer.blocks.{bid}.attn.Wqkv",                 # mpt
             "transformer.h.{bid}.self_attention.query_key_value", # falcon
+            "language_model.encoder.layers.{bid}.self_attention.query_key_value", # adept
         ),
 
         # Attention query
@@ -292,6 +318,7 @@ class TensorNameMap:
             "transformer.h.{bid}.self_attention.dense", # falcon
             "model.layers.{bid}.self_attn.o_proj",      # llama-hf
             "layers.{bid}.attention.wo",                # llama-pth
+            "language_model.encoder.layers.{bid}.self_attention.dense" # adept
         ),
 
         # Rotary embeddings
@@ -307,6 +334,7 @@ class TensorNameMap:
             "transformer.blocks.{bid}.norm_2",                # mpt
             "model.layers.{bid}.post_attention_layernorm",    # llama-hf
             "layers.{bid}.ffn_norm",                          # llama-pth
+            "language_model.encoder.layers.{bid}.post_attention_layernorm", # adept
         ),
 
         # Feed-forward up
@@ -317,6 +345,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.dense_h_to_4h",   # falcon
             "model.layers.{bid}.mlp.up_proj",          # llama-hf
             "layers.{bid}.feed_forward.w3",            # llama-pth
+            "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h", # adept
         ),
 
         # Feed-forward gate
@@ -333,7 +362,20 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.dense_4h_to_h",   # falcon
             "model.layers.{bid}.mlp.down_proj",        # llama-hf
             "layers.{bid}.feed_forward.w2",            # llama-pth
+            "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h", # adept
         ),
+
+        MODEL_TENSOR.ATTN_Q_NORM: (
+            "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
+        ),
+
+        MODEL_TENSOR.ATTN_K_NORM: (
+            "language_model.encoder.layers.{bid}.self_attention.k_layernorm",
+        ),
+
+        MODEL_TENSOR.ROPE_FREQS: (
+            "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq", # adept
+        )
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]

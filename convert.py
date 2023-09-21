@@ -701,13 +701,18 @@ class LazyUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str) -> Any:
         if not module.startswith('torch'):
             return super().find_class(module, name)
-        return self.CLASSES[(module, name)]
+        if (module, name) in self.CLASSES:
+            return self.CLASSES[(module, name)]
+        else:
+            print(f'Missing mapping for {module}.{name}')
+            raise KeyError
 
 
 def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
     zf = zipfile.ZipFile(outer_fp)
     pickle_paths = [name for name in zf.namelist() if name.endswith('.pkl')]
     assert len(pickle_paths) == 1, pickle_paths
+    print(pickle_paths)
     pickle_fp = zf.open(pickle_paths[0], 'r')
     unpickler = LazyUnpickler(pickle_fp,
                               data_base_path=pickle_paths[0][:-4],
