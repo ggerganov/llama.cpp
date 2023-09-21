@@ -429,7 +429,7 @@ if (LLAMA_KOMPUTE)
         set(spv_file ${source}.spv)
         add_custom_command(
             OUTPUT ${spv_file}
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source} ${CMAKE_CURRENT_SOURCE_DIR}/kompute/common.comp
             COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
             COMMENT "Compiling ${source} to ${source}.spv"
         )
