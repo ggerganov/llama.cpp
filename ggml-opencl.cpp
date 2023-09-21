@@ -847,7 +847,7 @@ std::array<std::string, 2> mul_str_values = {
     "mul_f32", "float"
 };
 
-static std::string & replace(std::string & s, const std::string & from, const std::string & to) {
+static std::string& replace(std::string& s, const std::string& from, const std::string& to) {
     size_t pos = 0;
     while ((pos = s.find(from, pos)) != std::string::npos) {
          s.replace(pos, from.length(), to);
@@ -1788,9 +1788,7 @@ bool ggml_cl_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tens
     return false;
 }
 
-static bool ggml_cl_mul_mat_use_f16(
-    const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * /* dst */
-) {
+static bool ggml_cl_mul_mat_use_f16(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * /* dst */) {
     // If device doesn't support FP16
     if (!fp16_support) {
         return false;

@@ -11,6 +11,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
+- Parallel decoding + continuous batching support incoming: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
+  **Devs should become familiar with the new API**
 - Local Falcon 180B inference on Mac Studio
 
   https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
@@ -554,6 +556,10 @@ python3 convert.py models/7B/
 
 # quantize the model to 4-bits (using q4_0 method)
 ./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0
+
+# update the gguf filetype to current if older version is unsupported by another application
+./quantize ./models/7B/ggml-model-q4_0.gguf ./models/7B/ggml-model-q4_0-v2.gguf COPY
+
 
 # run the inference
 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
