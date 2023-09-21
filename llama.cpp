@@ -3765,6 +3765,15 @@ static bool llama_eval_internal(
         n_threads = std::min(4, n_threads);
     }
 
+    // If all tensors can be run on the GPU then using more than 1 thread is detrimental.
+    const bool full_offload_supported = model.arch == LLM_ARCH_LLAMA ||
+        model.arch == LLM_ARCH_BAICHUAN ||
+        model.arch == LLM_ARCH_FALCON;
+    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 3;
+    if (ggml_cpu_has_cublas() && full_offload_supported && fully_offloaded) {
+        n_threads = 1;
+    }
+
     struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
 
