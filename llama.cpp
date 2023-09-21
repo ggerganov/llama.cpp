@@ -514,6 +514,9 @@ static std::string llama_format_win_err(DWORD err) {
 struct llama_buffer {
     void * data = NULL;
     size_t size = 0;
+#if defined(GGML_USE_KOMPUTE)
+    ggml_vk_memory memory;
+#endif
 
     // fallback to malloc / free
     // useful in cases where CUDA can try to allocate PINNED memory
@@ -522,6 +525,14 @@ struct llama_buffer {
     void resize(size_t n) {
         llama_host_free(data);
 
+#if defined(GGML_USE_KOMPUTE)
+        if (ggml_vk_has_device()) {
+            this->memory = ggml_vk_allocate(n);
+            this->data = (uint8_t*)memory.data;
+            this->size = n;
+            return;
+        }
+#endif
         data = llama_host_malloc(n);
         if (!data) {
             fallback = true;
@@ -536,6 +547,13 @@ struct llama_buffer {
 
     ~llama_buffer() {
         if (data) {
+#if defined(GGML_USE_KOMPUTE)
+            if (ggml_vk_has_device()) {
+                ggml_vk_free_memory(memory);
+                data = NULL;
+                return;
+            }
+#endif
             if (fallback) { // NOLINT
                 free(data);
             } else {
@@ -1398,6 +1416,9 @@ struct llama_model_loader {
             use_mmap = false;
         }
 
+#if defined(GGML_USE_KOMPUTE)
+        use_mmap = false;
+#endif
         this->use_mmap = use_mmap;
     }
 
@@ -6470,6 +6491,23 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_METAL_CHECK_BUF(ggml_metal_add_buffer(ctx->ctx_metal, "alloc", ctx->buf_alloc.data, ctx->buf_alloc.size, 0));
 #undef LLAMA_METAL_CHECK_BUF
         }
+#elif defined(GGML_USE_KOMPUTE)
+    if (ggml_vk_has_device() && params.n_gpu_layers > 0
+        && (model->ftype == LLAMA_FTYPE_ALL_F32
+            || model->ftype == LLAMA_FTYPE_MOSTLY_F16
+            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_0)) {
+        // this allocates all Vulkan resources and memory buffers
+        ctx->ctx_kompute = ggml_vk_init();
+
+        const size_t max_size = ggml_get_max_tensor_size(ctx->model.ctx);
+
+        printf("%s: max tensor size = %8.2f MB\n", __func__, max_size/1024.0/1024.0);
+
+        ggml_vk_add_buffer(ctx->ctx_kompute, "data", ctx->model.buf.memory);
+        ggml_vk_add_buffer(ctx->ctx_kompute, "eval", ctx->buf_compute.memory);
+        ggml_vk_add_buffer(ctx->ctx_kompute, "kv", ctx->kv_self.buf.memory);
+        ggml_vk_add_buffer(ctx->ctx_kompute, "alloc", ctx->buf_alloc.memory);
+    }
 #endif
     }
 
@@ -6503,7 +6541,13 @@ static struct llama_context * llama_init_from_file(
 }
 
 void llama_free(struct llama_context * ctx) {
+#ifdef GGML_USE_KOMPUTE
+    ggml_vk_free(ctx->ctx_kompute);
+#endif
     delete ctx;
+#ifdef GGML_USE_KOMPUTE
+    ggml_vk_free_device();
+#endif
 }
 
 int llama_n_vocab(const struct llama_context * ctx) {
