@@ -1650,21 +1650,20 @@ static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
     }
 }
 
-static void llm_load_hparams(
-        llama_model_loader & ml,
-        llama_model & model,
-        int n_ctx,
-        float rope_freq_base,
-        float rope_freq_scale,
-        float rope_ext_factor,
-        float rope_attn_factor,
-        float rope_beta_fast,
-        float rope_beta_slow) {
+static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const llama_context_params & params) {
     struct gguf_context * ctx = ml.ctx_gguf;
 
     const auto kv = LLM_KV(model.arch);
 
     auto & hparams = model.hparams;
+
+    hparams.n_ctx            = params.n_ctx;
+    hparams.rope_freq_base   = params.rope_freq_base;
+    hparams.rope_freq_scale  = params.rope_freq_scale;
+    hparams.rope_ext_factor  = params.rope_ext_factor;
+    hparams.rope_attn_factor = params.rope_attn_factor;
+    hparams.rope_beta_fast   = params.rope_beta_fast;
+    hparams.rope_beta_slow   = params.rope_beta_slow;
 
     // get general kv
     GGUF_GET_KEY(ctx, model.name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_NAME));
@@ -1682,16 +1681,17 @@ static void llm_load_hparams(
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
     // rope_freq_base (optional)
-    if (rope_freq_base == 0.0f) {
-        rope_freq_base = 10000.0f;
+    if (hparams.rope_freq_base == 0.0f) {
+        float rope_freq_base = 10000.0f;
         GGUF_GET_KEY(ctx, rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
+        hparams.rope_freq_base = rope_freq_base;
     }
 
     // rope_freq_scale (inverse of the kv) is optional
-    if (rope_freq_scale == 0.0f) {
+    if (hparams.rope_freq_scale == 0.0f) {
         float ropescale = 1.0f;
         GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-        rope_freq_scale = 1.0f/ropescale;
+        hparams.rope_freq_scale = 1.0f/ropescale;
     }
 
     // sanity check for n_rot (optional)
@@ -1759,14 +1759,6 @@ static void llm_load_hparams(
     };
 
     model.ftype = ml.ftype;
-
-    hparams.n_ctx            = n_ctx;
-    hparams.rope_freq_base   = rope_freq_base;
-    hparams.rope_freq_scale  = rope_freq_scale;
-    hparams.rope_ext_factor  = rope_ext_factor;
-    hparams.rope_attn_factor = rope_attn_factor;
-    hparams.rope_beta_fast   = rope_beta_fast;
-    hparams.rope_beta_slow   = rope_beta_slow;
 }
 
 // TODO: This should probably be in llama.h
@@ -2388,37 +2380,13 @@ static void llm_load_tensors(
     model.t_load_us = ggml_time_us() - model.t_start_us;
 }
 
-static bool llama_model_load(
-        const std::string & fname,
-        llama_model & model,
-        int n_ctx,
-        int n_batch,
-        int n_gpu_layers,
-        int main_gpu,
-        const float * tensor_split,
-        const bool mul_mat_q,
-        float rope_freq_base,
-        float rope_freq_scale,
-        float rope_ext_factor,
-        float rope_attn_factor,
-        float rope_beta_fast,
-        float rope_beta_slow,
-        bool low_vram,
-        ggml_type memory_type,
-        bool use_mmap,
-        bool use_mlock,
-        bool vocab_only,
-        llama_progress_callback progress_callback,
-        void *progress_callback_user_data) {
+static bool llama_model_load(const std::string & fname, llama_model & model, const llama_context_params & params) {
     try {
-        std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, use_mmap));
+        std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname, params.use_mmap));
 
-        llm_load_arch(*ml, model);
-        llm_load_hparams(
-            *ml, model, n_ctx, rope_freq_base, rope_freq_scale, rope_ext_factor, rope_attn_factor, rope_beta_fast,
-            rope_beta_slow
-        );
-        llm_load_vocab(*ml, model);
+        llm_load_arch   (*ml, model);
+        llm_load_hparams(*ml, model, params);
+        llm_load_vocab  (*ml, model);
 
         llm_load_print_meta(*ml, model);
 
@@ -2426,15 +2394,18 @@ static bool llama_model_load(
             throw std::runtime_error("vocab size mismatch");
         }
 
-        if (vocab_only) {
+        if (params.vocab_only) {
             LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
             return true;
         }
 
+        ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
+
         llm_load_tensors(
-                *ml, model, n_batch, n_gpu_layers,
-                main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
-                use_mlock, progress_callback, progress_callback_user_data);
+            *ml, model, params.n_batch, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.mul_mat_q,
+            params.low_vram, memory_type, params.use_mlock, params.progress_callback,
+            params.progress_callback_user_data
+        );
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
         return false;
@@ -5694,8 +5665,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::unique_ptr<llama_model_loader> ml(new llama_model_loader(fname_inp, /*use_mmap*/ false));
 
     llama_model model;
-    llm_load_arch(*ml, model);
-    llm_load_hparams(*ml, model, 0, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+    llm_load_arch   (*ml, model);
+    llm_load_hparams(*ml, model, llama_context_default_params());
 
     if (params->only_copy) {
         ftype = model.ftype;
@@ -6298,8 +6269,6 @@ struct llama_model * llama_load_model_from_file(
 
     llama_model * model = new llama_model;
 
-    ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
-
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
         params.progress_callback_user_data = &cur_percentage;
@@ -6316,13 +6285,7 @@ struct llama_model * llama_load_model_from_file(
         };
     }
 
-    if (!llama_model_load(
-        path_model, *model, params.n_ctx, params.n_batch, params.n_gpu_layers, params.main_gpu, params.tensor_split,
-        params.mul_mat_q, params.rope_freq_base, params.rope_freq_scale, params.rope_ext_factor,
-        params.rope_attn_factor, params.rope_beta_fast, params.rope_beta_slow, params.low_vram, memory_type,
-        params.use_mmap, params.use_mlock, params.vocab_only, params.progress_callback,
-        params.progress_callback_user_data
-    )) {
+    if (!llama_model_load(path_model, *model, params)) {
         LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
         delete model;
         return nullptr;
