@@ -6376,7 +6376,7 @@ struct llama_context * llama_new_context_with_model(
             llama_token token = llama_token_bos(ctx); // not actually used by llama_build_graph, but required to choose between token and embedding inputs graph
             ggml_cgraph * gf = llama_build_graph(*ctx, &token, NULL, n_tokens, n_past);
 #ifdef GGML_USE_METAL
-            if (params.n_gpu_layers > 0) {
+            if (model->n_gpu_layers > 0) {
                 ctx->ctx_metal = ggml_metal_init(1);
                 if (!ctx->ctx_metal) {
                     LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
@@ -6415,13 +6415,13 @@ struct llama_context * llama_new_context_with_model(
         }
 
 #ifdef GGML_USE_METAL
-        if (params.n_gpu_layers > 0) {
+        if (model->n_gpu_layers > 0) {
             // this allocates all Metal resources and memory buffers
 
             void * data_ptr  = NULL;
             size_t data_size = 0;
 
-            if (params.use_mmap) {
+            if (ctx->model.mapping) {
                 data_ptr  = ctx->model.mapping->addr;
                 data_size = ctx->model.mapping->size;
             } else {
