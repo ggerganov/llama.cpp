@@ -204,6 +204,7 @@ enum llm_kv {
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
+    LLM_KV_ROPE_SCALE_LINEAR,
     LLM_KV_ROPE_SCALING_TYPE,
     LLM_KV_ROPE_SCALING_FACTOR,
     LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,
@@ -251,6 +252,7 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
+    { LLM_KV_ROPE_SCALE_LINEAR,             "%s.rope.scale_linear"                    },
     { LLM_KV_ROPE_SCALING_TYPE,             "%s.rope.scaling.type"                    },
     { LLM_KV_ROPE_SCALING_FACTOR,           "%s.rope.scaling.factor"                  },
     { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
@@ -1719,9 +1721,12 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
     if (rope_scaling_type == LLAMA_ROPE_SCALING_NONE) {
         hparams.rope_freq_scale = 1.0f;
     } else if (hparams.rope_freq_scale == 0.0f) {
-        float ropescale = 1.0f;
+        float ropescale = 0.0f;
         GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALING_FACTOR));
-        hparams.rope_freq_scale = 1.0f/ropescale;
+        if (ropescale == 0.0f) { // try the old key name
+            GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+        }
+        hparams.rope_freq_scale = ropescale == 0.0f ? 1.0f : 1.0f/ropescale;
     }
 
     if (rope_scaling_type == LLAMA_ROPE_SCALING_YARN) {
