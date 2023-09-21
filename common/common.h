@@ -48,8 +48,8 @@ struct gpt_params {
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
     int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
-    float   rope_freq_base                  = 10000.0f; // RoPE base frequency
-    float   rope_freq_scale                 = 1.0f;     // RoPE frequency scaling factor
+    float   rope_freq_base                  = 0.0f; // RoPE base frequency
+    float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
 
     // sampling parameters
     int32_t top_k             = 40;    // <= 0 to use vocab size
