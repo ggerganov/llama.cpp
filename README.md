@@ -558,7 +558,7 @@ python3 convert.py models/7B/
 ./quantize ./models/7B/ggml-model-f16.gguf ./models/7B/ggml-model-q4_0.gguf q4_0
 
 # update the gguf filetype to current if older version is unsupported by another application
-./quantize ./models/7B/ggml-model-q4_0.gguf ./models/7B/ggml-model-q4_0.gguf COPY
+./quantize ./models/7B/ggml-model-q4_0.gguf ./models/7B/ggml-model-q4_0-v2.gguf COPY
 
 
 # run the inference
