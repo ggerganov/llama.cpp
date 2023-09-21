@@ -219,7 +219,7 @@
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_SRC           6
 #define GGML_MAX_NAME          64
-#define GGML_MAX_OP_PARAMS     48
+#define GGML_MAX_OP_PARAMS     64
 #define GGML_DEFAULT_N_THREADS 4
 
 #if UINTPTR_MAX == 0xFFFFFFFF
@@ -1248,6 +1248,7 @@ extern "C" {
             int                   n_dims,
             int                   mode,
             int                   n_ctx,
+            int                   n_orig_ctx,
             float                 freq_base,
             float                 freq_scale,
             float                 ext_factor,
@@ -1263,6 +1264,7 @@ extern "C" {
             int                   n_dims,
             int                   mode,
             int                   n_ctx,
+            int                   n_orig_ctx,
             float                 freq_base,
             float                 freq_scale,
             float                 ext_factor,
@@ -1271,7 +1273,8 @@ extern "C" {
             float                 beta_slow);
 
     // compute correction dims for YaRN RoPE scaling
-    void ggml_rope_yarn_corr_dims(int n_dims, const float freq_base, float beta_fast, float beta_slow, float dims[2]);
+    void ggml_rope_yarn_corr_dims(
+        int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]);
 
     // xPos RoPE, in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_rope_xpos_inplace(

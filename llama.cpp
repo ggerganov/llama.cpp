@@ -2471,13 +2471,14 @@ static struct ggml_cgraph * llm_build_llama(
 
     GGML_ASSERT(!!kv_self.ctx);
 
-    const int64_t n_embd      = hparams.n_embd;
-    const int64_t n_layer     = hparams.n_layer;
-    const int64_t n_ctx       = hparams.n_ctx;
-    const int64_t n_head      = hparams.n_head;
-    const int64_t n_head_kv   = hparams.n_head_kv;
-    const int64_t n_embd_head = hparams.n_embd_head();
-    const int64_t n_embd_gqa  = hparams.n_embd_gqa();
+    const int32_t n_embd      = hparams.n_embd;
+    const int32_t n_layer     = hparams.n_layer;
+    const int32_t n_ctx       = hparams.n_ctx;
+    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_head      = hparams.n_head;
+    const int32_t n_head_kv   = hparams.n_head_kv;
+    const int32_t n_embd_head = hparams.n_embd_head();
+    const int32_t n_embd_gqa  = hparams.n_embd_gqa();
 
     GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -2599,14 +2600,18 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(tmpq, "tmpq");
 
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
-                ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), n_past, n_embd_head, 0, 0, freq_base,
-                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+                ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N),
+                n_past, n_embd_head, 0, 0, n_orig_ctx, freq_base, freq_scale,
+                ext_factor, attn_factor, beta_fast, beta_slow
+            );
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
-                ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    n_past, n_embd_head, 0, 0, freq_base,
-                freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+                ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),
+                n_past, n_embd_head, 0, 0, n_orig_ctx, freq_base, freq_scale,
+                ext_factor, attn_factor, beta_fast, beta_slow
+            );
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -2811,13 +2816,14 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     GGML_ASSERT(!!kv_self.ctx);
 
-    const int64_t n_embd      = hparams.n_embd;
-    const int64_t n_layer     = hparams.n_layer;
-    const int64_t n_ctx       = hparams.n_ctx;
-    const int64_t n_head      = hparams.n_head;
-    const int64_t n_head_kv   = hparams.n_head_kv;
-    const int64_t n_embd_head = hparams.n_embd_head();
-    const int64_t n_embd_gqa  = hparams.n_embd_gqa();
+    const int32_t n_embd      = hparams.n_embd;
+    const int32_t n_layer     = hparams.n_layer;
+    const int32_t n_ctx       = hparams.n_ctx;
+    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_head      = hparams.n_head;
+    const int32_t n_head_kv   = hparams.n_head_kv;
+    const int32_t n_embd_head = hparams.n_embd_head();
+    const int32_t n_embd_gqa  = hparams.n_embd_gqa();
 
     GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -2945,12 +2951,14 @@ static struct ggml_cgraph * llm_build_baichaun(
                     Kcur = ggml_rope_custom_inplace(
                         ctx0,
                         ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N),
-                        n_past, n_embd_head, 0, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                        n_past, n_embd_head, 0, 0, n_orig_ctx, freq_base, freq_scale,
+                        ext_factor, attn_factor, beta_fast, beta_slow
                     );
                     Qcur = ggml_rope_custom_inplace(
                         ctx0,
                         ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),
-                        n_past, n_embd_head, 0, 0, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                        n_past, n_embd_head, 0, 0, n_orig_ctx, freq_base, freq_scale,
+                        ext_factor, attn_factor, beta_fast, beta_slow
                     );
                     break;
                 case MODEL_13B:
@@ -3183,13 +3191,14 @@ static struct ggml_cgraph * llm_build_falcon(
 
     GGML_ASSERT(!!kv_self.ctx);
 
-    const int64_t n_embd      = hparams.n_embd;
-    const int64_t n_layer     = hparams.n_layer;
-    const int64_t n_ctx       = hparams.n_ctx;
-    const int64_t n_head      = hparams.n_head;
-    const int64_t n_head_kv   = hparams.n_head_kv;
-    const int64_t n_embd_head = hparams.n_embd_head();
-    const int64_t n_embd_gqa  = hparams.n_embd_gqa();
+    const int32_t n_embd      = hparams.n_embd;
+    const int32_t n_layer     = hparams.n_layer;
+    const int32_t n_ctx       = hparams.n_ctx;
+    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_head      = hparams.n_head;
+    const int32_t n_head_kv   = hparams.n_head_kv;
+    const int32_t n_embd_head = hparams.n_embd_head();
+    const int32_t n_embd_gqa  = hparams.n_embd_gqa();
 
     GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -3351,12 +3360,12 @@ static struct ggml_cgraph * llm_build_falcon(
 
             // using mode = 2 for neox mode
             struct ggml_tensor * Qcur = ggml_rope_custom_inplace(
-                ctx0, tmpq, n_past, n_embd_head, 2, 0,
+                ctx0, tmpq, n_past, n_embd_head, 2, 0, n_orig_ctx,
                 freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
             );
             offload_func_kq(Qcur);
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(
-                ctx0, tmpk, n_past, n_embd_head, 2, 0,
+                ctx0, tmpk, n_past, n_embd_head, 2, 0, n_orig_ctx,
                 freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
             );
             offload_func_kq(Kcur);

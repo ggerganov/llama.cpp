@@ -4386,7 +4386,7 @@ static __device__ void rope_yarn(
 
 // rope == RoPE == rotary positional embedding
 static __global__ void rope_f32(
-    float * x, float * dst, int ncols, float freq_scale, float ext_factor, float attn_factor, float theta_scale,
+    const float * x, float * dst, int ncols, float freq_scale, float ext_factor, float attn_factor, float theta_scale,
     float p0, int p_delta_rows, rope_corr_dims corr_dims
 ) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
@@ -5396,7 +5396,7 @@ static void scale_f32_cuda(const float * x, float * dst, const float scale, cons
 }
 
 static void rope_f32_cuda(
-    float * x, float * dst, int ncols, int nrows, float freq_scale, float ext_factor, float attn_factor,
+    const float * x, float * dst, int ncols, int nrows, float freq_scale, float ext_factor, float attn_factor,
     float theta_scale, float p0, int p_delta_rows, rope_corr_dims corr_dims, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
@@ -6109,19 +6109,20 @@ inline void ggml_cuda_op_rope(
     const int64_t ne01 = src0->ne[1];
     const int64_t nrows = ggml_nrows(src0);
 
-    const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_dims = ((int32_t *) dst->op_params)[1];
-    const int mode   = ((int32_t *) dst->op_params)[2];
-    const int n_ctx  = ((int32_t *) dst->op_params)[3];
+    const int n_past      = ((int32_t *) dst->op_params)[0];
+    const int n_dims      = ((int32_t *) dst->op_params)[1];
+    const int mode        = ((int32_t *) dst->op_params)[2];
+    const int n_ctx       = ((int32_t *) dst->op_params)[3];
+    const int n_orig_ctx  = ((int32_t *) dst->op_params)[4];
 
     // RoPE alteration for extended context
     float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
-    memcpy(&freq_base,   (int32_t *) dst->op_params + 4, sizeof(float));
-    memcpy(&freq_scale,  (int32_t *) dst->op_params + 5, sizeof(float));
-    memcpy(&ext_factor,  (int32_t *) dst->op_params + 6, sizeof(float));
-    memcpy(&attn_factor, (int32_t *) dst->op_params + 7, sizeof(float));
-    memcpy(&beta_fast,   (int32_t *) dst->op_params + 8, sizeof(float));
-    memcpy(&beta_slow,   (int32_t *) dst->op_params + 9, sizeof(float));
+    memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
+    memcpy(&freq_scale,  (int32_t *) dst->op_params +  6, sizeof(float));
+    memcpy(&ext_factor,  (int32_t *) dst->op_params +  7, sizeof(float));
+    memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
+    memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
+    memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
     const float p0 = (mode & 1) == 0 ? n_past : 0;
@@ -6137,7 +6138,7 @@ inline void ggml_cuda_op_rope(
         rope_neox_f32_cuda(src0_dd, dst_dd, ne00, nrows, p0, freq_scale, ne01, theta_scale, main_stream);
     } else {
         rope_corr_dims corr_dims;
-        ggml_rope_yarn_corr_dims(n_dims, freq_base, beta_fast, beta_slow, corr_dims.v);
+        ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims.v);
 
         rope_f32_cuda(
             src0_dd, dst_dd, ne00, nrows, freq_scale, ext_factor, attn_factor, theta_scale, p0, ne01, corr_dims,
