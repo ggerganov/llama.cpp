@@ -89,9 +89,9 @@ static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(vo
 
 static int pthread_join(pthread_t thread, void * unused) {
     (void) unused;
-    int csq =(int) WaitForSingleObject(thread, INFINITE);
+    int ret = (int) WaitForSingleObject(thread, INFINITE);
     CloseHandle(thread);
-    return csq;
+    return ret;
 }
 
 static int sched_yield (void) {
