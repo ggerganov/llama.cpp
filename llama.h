@@ -108,7 +108,7 @@ extern "C" {
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
-    enum llama_rope_scaling_type: int8_t {
+    enum llama_rope_scaling_type {
         LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
         LLAMA_ROPE_SCALING_NONE        = 0,
         LLAMA_ROPE_SCALING_LINEAR      = 1,
@@ -131,23 +131,22 @@ extern "C" {
     typedef void (*llama_progress_callback)(float progress, void *ctx);
 
     struct llama_context_params {
-        uint32_t seed;         // RNG seed, -1 for random
-        int32_t  n_ctx;        // text context
-        int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gpu_layers; // number of layers to store in VRAM
-        int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
+        uint32_t seed;              // RNG seed, -1 for random
+        int32_t  n_ctx;             // text context
+        int32_t  n_batch;           // prompt processing batch size
+        int32_t  n_gpu_layers;      // number of layers to store in VRAM
+        int32_t  main_gpu;          // the GPU that is used for scratch and small tensors
+        int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float    rope_freq_base;   // RoPE base frequency
-        float    rope_freq_scale;  // RoPE frequency scaling factor
-        float    yarn_ext_factor;  // YaRN extrapolation mix factor
-        float    yarn_attn_factor; // YaRN magnitude scaling factor
-        float    yarn_beta_fast;   // YaRN low correction dim
-        float    yarn_beta_slow;   // YaRN high correction dim
-
-        llama_rope_scaling_type rope_scaling_type;
+        float rope_freq_base;   // RoPE base frequency
+        float rope_freq_scale;  // RoPE frequency scaling factor
+        float yarn_ext_factor;  // YaRN extrapolation mix factor
+        float yarn_attn_factor; // YaRN magnitude scaling factor
+        float yarn_beta_fast;   // YaRN low correction dim
+        float yarn_beta_slow;   // YaRN high correction dim
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;

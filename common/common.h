@@ -54,8 +54,7 @@ struct gpt_params {
     float   yarn_attn_factor                = 1.0f;     // YaRN magnitude scaling factor
     float   yarn_beta_fast                  = 32.0f;    // YaRN low correction dim
     float   yarn_beta_slow                  = 1.0f;     // YaRN high correction dim
-
-    llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_UNSPECIFIED;
+    int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED;
 
     // sampling parameters
     int32_t top_k             = 40;    // <= 0 to use vocab size

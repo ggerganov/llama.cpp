@@ -1706,12 +1706,12 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
         hparams.rope_freq_base = rope_freq_base;
     }
 
-    llama_rope_scaling_type rope_scaling_type = params.rope_scaling_type;
+    int8_t rope_scaling_type = params.rope_scaling_type;
 
     if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
         uint8_t type = LLAMA_ROPE_SCALING_LINEAR;
         GGUF_GET_KEY(ctx, type, gguf_get_val_u8, GGUF_TYPE_UINT8, false, kv(LLM_KV_ROPE_SCALING_TYPE));
-        rope_scaling_type = llama_rope_scaling_type(type);
+        rope_scaling_type = int8_t(type);
     }
     GGML_ASSERT(rope_scaling_type >= 0 && rope_scaling_type <= LLAMA_ROPE_SCALING_MAX_VALUE);
 
@@ -6234,6 +6234,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_batch                     =*/ 512,
         /*.n_gpu_layers                =*/ 0,
         /*.main_gpu                    =*/ 0,
+        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
         /*.tensor_split                =*/ nullptr,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
@@ -6241,7 +6242,6 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_attn_factor            =*/ 1.0f,
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
-        /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
