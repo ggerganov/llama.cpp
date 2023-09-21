@@ -705,10 +705,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("                        RoPE frequency scaling method, defaults to linear unless specified by the model\n");
     printf("  --rope-freq-base N    RoPE base frequency (default: loaded from model)\n");
     printf("  --rope-freq-scale N   RoPE frequency scaling factor, expands context by a factor of 1/N\n");
-    printf("  --yarn-ext-factor N   YaRN extrapolation mix factor (default: %.1f)\n", params.yarn_ext_factor);
-    printf("  --yarn-attn-factor N  YaRN magnitude scaling factor (default: %.1f)\n", params.yarn_attn_factor);
-    printf("  --yarn-beta-fast N    YaRN low correction dim (default: %.1f)\n", params.yarn_beta_fast);
-    printf("  --yarn-beta-slow N    YaRN high correction dim (default: %.1f)\n", params.yarn_beta_slow);
+    printf("  --yarn-ext-factor N   YaRN: extrapolation mix factor (default: 1.0, 0.0 = full interpolation)\n");
+    printf("  --yarn-attn-factor N  YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
+    printf("  --yarn-beta-slow N    YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
+    printf("  --yarn-beta-fast N    YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
