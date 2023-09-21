@@ -7075,6 +7075,9 @@ void ggml_cuda_set_mul_mat_q(const bool mul_mat_q) {
 }
 
 void ggml_cuda_set_scratch_size(const size_t scratch_size) {
+    if (scratch_size > g_scratch_size) {
+        ggml_cuda_free_scratch();
+    }
     g_scratch_size = scratch_size;
 }
 

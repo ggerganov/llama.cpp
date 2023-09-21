@@ -367,6 +367,13 @@ struct cmd_params_instance {
         return mparams;
     }
 
+    bool equal_mparams(const cmd_params_instance & other) const {
+        return n_gpu_layers == other.n_gpu_layers &&
+               main_gpu == other.main_gpu &&
+               low_vram == other.low_vram &&
+               tensor_split == other.tensor_split;
+    }
+
     llama_context_params to_llama_cparams() const {
         llama_context_params cparams = llama_context_default_params();
 
@@ -384,13 +391,13 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
     std::vector<cmd_params_instance> instances;
 
     for (const auto & m : params.model)
-    for (const auto & nb : params.n_batch)
-    for (const auto & fk : params.f32_kv)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & mg : params.main_gpu)
-    for (const auto & mmq : params.mul_mat_q)
     for (const auto & lv : params.low_vram)
     for (const auto & ts : params.tensor_split)
+    for (const auto & nb : params.n_batch)
+    for (const auto & fk : params.f32_kv)
+    for (const auto & mmq : params.mul_mat_q)
     for (const auto & nt : params.n_threads) {
         cmd_params_instance instance = {
             /* .model        = */ m,
@@ -413,6 +420,53 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
 static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_params & params) {
     std::vector<cmd_params_instance> instances;
 
+#if 1
+    // this ordering minimizes the number of times that each model needs to be reloaded
+    for (const auto & m : params.model)
+    for (const auto & nl : params.n_gpu_layers)
+    for (const auto & mg : params.main_gpu)
+    for (const auto & lv : params.low_vram)
+    for (const auto & ts : params.tensor_split)
+    for (const auto & nb : params.n_batch)
+    for (const auto & fk : params.f32_kv)
+    for (const auto & mmq : params.mul_mat_q)
+    for (const auto & nt : params.n_threads) {
+        for (const auto & n_prompt : params.n_prompt) {
+            cmd_params_instance instance = {
+                /* .model        = */ m,
+                /* .n_prompt     = */ n_prompt,
+                /* .n_gen        = */ 0,
+                /* .n_batch      = */ nb,
+                /* .f32_kv       = */ fk,
+                /* .n_threads    = */ nt,
+                /* .n_gpu_layers = */ nl,
+                /* .main_gpu     = */ mg,
+                /* .mul_mat_q    = */ mmq,
+                /* .low_vram     = */ lv,
+                /* .tensor_split = */ ts,
+            };
+            instances.push_back(instance);
+        }
+
+        for (const auto & n_gen : params.n_gen) {
+            cmd_params_instance instance = {
+                /* .model        = */ m,
+                /* .n_prompt     = */ 0,
+                /* .n_gen        = */ n_gen,
+                /* .n_batch      = */ nb,
+                /* .f32_kv       = */ fk,
+                /* .n_threads    = */ nt,
+                /* .n_gpu_layers = */ nl,
+                /* .main_gpu     = */ mg,
+                /* .mul_mat_q    = */ mmq,
+                /* .low_vram     = */ lv,
+                /* .tensor_split = */ ts,
+            };
+            instances.push_back(instance);
+        }
+    }
+#else
+    // this ordering separates the prompt and generation tests
     for (const auto & n_prompt : params.n_prompt) {
         if (n_prompt == 0) {
             continue;
@@ -428,6 +482,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
         auto instances_gen = get_cmd_params_instances_int(params, n_gen, 0);
         instances.insert(instances.end(), instances_gen.begin(), instances_gen.end());
     }
+#endif
 
     return instances;
 }
@@ -967,12 +1022,22 @@ int main(int argc, char ** argv) {
 
     std::vector<cmd_params_instance> params_instances = get_cmd_params_instances(params);
 
+    llama_model * lmodel = nullptr;
+    const cmd_params_instance * prev_inst = nullptr;
+
     for (const auto & inst : params_instances) {
-        // TODO: keep the model between tests when possible
-        llama_model * lmodel  = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
-        if (lmodel == NULL) {
-            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
-            return 1;
+        // keep the same model between tests when possible
+        if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
+            if (lmodel) {
+                llama_free_model(lmodel);
+            }
+
+            lmodel = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
+            if (lmodel == NULL) {
+                fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
+                return 1;
+            }
+            prev_inst = &inst;
         }
 
         llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());
@@ -1009,8 +1074,9 @@ int main(int argc, char ** argv) {
         llama_print_timings(ctx);
 
         llama_free(ctx);
-        llama_free_model(lmodel);
     }
+
+    llama_free_model(lmodel);
 
     p->print_footer();
 
