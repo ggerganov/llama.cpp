@@ -327,7 +327,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release -j${env:WINHOST_THR}
+          cmake --build . --config Release -j$env:WINHOST_THR
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -418,7 +418,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
-          cmake --build . --config Release -j${env:WINHOST_THR}
+          cmake --build . --config Release -j$env:WINHOST_THR
 
       - name: Determine tag name
         id: tag
