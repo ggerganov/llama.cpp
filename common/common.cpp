@@ -435,12 +435,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n");
 #endif // GGML_USE_CUBLAS
-        } else if (arg == "--low-vram" || arg == "-lv") {
-#ifdef GGML_USE_CUBLAS
-            params.low_vram = true;
-#else
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
-#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--numa") {
@@ -689,7 +683,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ts SPLIT --tensor-split SPLIT\n");
     printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    printf("  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
 #ifdef GGML_USE_CUBLAS
     printf("  -nommq, --no-mul-mat-q\n");
     printf("                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
@@ -741,7 +734,6 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
     }
     mparams.main_gpu        = params.main_gpu;
     mparams.tensor_split    = params.tensor_split;
-    mparams.low_vram        = params.low_vram;
     mparams.use_mmap        = params.use_mmap;
     mparams.use_mlock       = params.use_mlock;
 
@@ -755,7 +747,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_batch         = params.n_batch;
     cparams.n_threads       = params.n_threads;
     cparams.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-    cparams.low_vram        = params.low_vram;
     cparams.mul_mat_q       = params.mul_mat_q;
     cparams.seed            = params.seed;
     cparams.f16_kv          = params.memory_f16;
@@ -1236,7 +1227,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
 
     fprintf(stream, "lora: %s\n", params.lora_adapter.c_str());
     fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
-    fprintf(stream, "low_vram: %s # default: false\n", params.low_vram ? "true" : "false");
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "memory_f32: %s # default: false\n", !params.memory_f16 ? "true" : "false");
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", params.mirostat);

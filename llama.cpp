@@ -1239,7 +1239,7 @@ static bool llama_kv_cache_init(
         vram_kv_cache += ggml_nbytes(cache.k);
     }
     if (vram_kv_cache > 0) {
-        LLAMA_LOG_INFO("%s: VRAM kv cache = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
+        LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
     }
 #endif // GGML_USE_CUBLAS
 
@@ -1929,7 +1929,6 @@ static void llm_load_tensors(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
-        bool low_vram,
         bool use_mlock,
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
@@ -2005,9 +2004,9 @@ static void llm_load_tensors(
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
-                            backend_norm = low_vram ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = LLAMA_BACKEND_OFFLOAD;
 #else
-                            backend_norm = low_vram || n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
 #endif // _WIN32
 
                             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
@@ -2071,9 +2070,9 @@ static void llm_load_tensors(
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
-                            backend_norm = low_vram ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = LLAMA_BACKEND_OFFLOAD;
 #else
-                            backend_norm = low_vram || n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
 #endif // _WIN32
 
                             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
@@ -2141,9 +2140,9 @@ static void llm_load_tensors(
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
-                            backend_norm = low_vram ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = LLAMA_BACKEND_OFFLOAD;
 #else
-                            backend_norm = low_vram || n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
 #endif // _WIN32
 
                             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
@@ -2218,9 +2217,9 @@ static void llm_load_tensors(
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
-                            backend_norm = low_vram ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = LLAMA_BACKEND_OFFLOAD;
 #else
-                            backend_norm = low_vram || n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
 #endif // _WIN32
 
                             backend_output = LLAMA_BACKEND_OFFLOAD_SPLIT;
@@ -2309,7 +2308,7 @@ static void llm_load_tensors(
 
 #ifdef GGML_USE_CUBLAS
         const int max_backend_supported_layers = hparams.n_layer + 3;
-        const int max_offloadable_layers = low_vram ? hparams.n_layer + 1 : hparams.n_layer + 3;
+        const int max_offloadable_layers = hparams.n_layer + 3;
 #elif defined(GGML_USE_CLBLAST)
         const int max_backend_supported_layers = hparams.n_layer + 1;
         const int max_offloadable_layers = hparams.n_layer + 1;
@@ -2354,7 +2353,6 @@ static bool llama_model_load(
         int n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
-        bool low_vram,
         bool use_mmap,
         bool use_mlock,
         bool vocab_only,
@@ -2382,7 +2380,7 @@ static bool llama_model_load(
 
         llm_load_tensors(
                 ml, model, n_gpu_layers,
-                main_gpu, tensor_split, low_vram,
+                main_gpu, tensor_split,
                 use_mlock, progress_callback, progress_callback_user_data);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
@@ -2472,9 +2470,6 @@ static struct ggml_cgraph * llm_build_llama(
 
     // offload functions set the tensor output backend to GPU
     // tensors are GPU-accelerated if any input or the output has been offloaded
-    //
-    // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
-    // in that case ggml_cuda_assign_buffers has no effect
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
@@ -2805,9 +2800,6 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     // offload functions set the tensor output backend to GPU
     // tensors are GPU-accelerated if any input or the output has been offloaded
-    //
-    // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
-    // in that case ggml_cuda_assign_buffers has no effect
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
@@ -3166,9 +3158,6 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // offload functions set the tensor output backend to GPU
     // tensors are GPU-accelerated if any input or the output has been offloaded
-    //
-    // with the low VRAM option VRAM scratch is disabled in llama_load_model_internal
-    // in that case ggml_cuda_assign_buffers has no effect
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
@@ -6159,7 +6148,6 @@ struct llama_model_params llama_model_default_params() {
         /*.tensor_split                =*/ nullptr,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
-        /*.low_vram                    =*/ false,
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
@@ -6181,7 +6169,6 @@ struct llama_context_params llama_context_default_params() {
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
-        /*.low_vram                    =*/ false,
         /*.mul_mat_q                   =*/ true,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
@@ -6268,7 +6255,7 @@ struct llama_model * llama_load_model_from_file(
     }
 
     if (!llama_model_load(path_model, *model, params.n_gpu_layers,
-                params.main_gpu, params.tensor_split, params.low_vram,
+                params.main_gpu, params.tensor_split,
                 params.use_mmap, params.use_mlock, params.vocab_only,
                 params.progress_callback, params.progress_callback_user_data)) {
         LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
@@ -6382,14 +6369,8 @@ struct llama_context * llama_new_context_with_model(
             }
 #endif
 #ifdef GGML_USE_CUBLAS
-            // TODO: different scratch buffers per context
-            if (params.low_vram) {
-                LLAMA_LOG_INFO("%s: not allocating a VRAM scratch buffer due to low VRAM option\n", __func__);
-                ggml_cuda_set_scratch_size(0); // disable scratch
-            } else {
-                ggml_cuda_set_scratch_size(alloc_size);
-                LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MB\n", __func__, alloc_size / 1024.0 / 1024.0);
-            }
+            ggml_cuda_set_scratch_size(alloc_size);
+            LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MB\n", __func__, alloc_size / 1024.0 / 1024.0);
 #endif
         }
 

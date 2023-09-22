@@ -721,7 +721,6 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -ts SPLIT --tensor-split SPLIT\n");
     printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    printf("  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
     printf("  -nommq, --no-mul-mat-q\n");
     printf("                        use cuBLAS instead of custom mul_mat_q CUDA kernels.\n");
     printf("                        Not recommended since this is both slower and uses more VRAM.\n");
@@ -905,14 +904,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
 #else
             LOG_WARNING("llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n", {});
-#endif // GGML_USE_CUBLAS
-        }
-        else if (arg == "--low-vram" || arg == "-lv")
-        {
-#ifdef GGML_USE_CUBLAS
-            params.low_vram = true;
-#else
-            LOG_WARNING("warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n", {});
 #endif // GGML_USE_CUBLAS
         }
         else if (arg == "--no-mul-mat-q" || arg == "-nommq")

@@ -132,7 +132,6 @@ struct cmd_params {
     std::vector<int> n_gpu_layers;
     std::vector<int> main_gpu;
     std::vector<bool> mul_mat_q;
-    std::vector<bool> low_vram;
     std::vector<std::array<float, LLAMA_MAX_DEVICES>> tensor_split;
     int reps;
     bool verbose;
@@ -149,7 +148,6 @@ static const cmd_params cmd_params_defaults = {
     /* n_gpu_layers  */ {99},
     /* main_gpu      */ {0},
     /* mul_mat_q     */ {true},
-    /* low_vram      */ {false},
     /* tensor_split  */ {{}},
     /* reps          */ 5,
     /* verbose       */ false,
@@ -169,7 +167,6 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
     printf("  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
     printf("  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
-    printf("  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
     printf("  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>               \n");
     printf("  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
@@ -255,13 +252,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             params.main_gpu = split<int>(argv[i], split_delim);
-        } else if (arg == "-lv" || arg == "--low-vram") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            auto p = split<bool>(argv[i], split_delim);
-            params.low_vram.insert(params.low_vram.end(), p.begin(), p.end());
         } else if (arg == "-mmq" || arg == "--mul-mat-q") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -336,7 +326,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.n_gpu_layers.empty()) { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
-    if (params.low_vram.empty())     { params.low_vram = cmd_params_defaults.low_vram; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
 
@@ -353,7 +342,6 @@ struct cmd_params_instance {
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
-    bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
 
     llama_model_params to_llama_mparams() const {
@@ -361,7 +349,6 @@ struct cmd_params_instance {
 
         mparams.n_gpu_layers = n_gpu_layers;
         mparams.main_gpu = main_gpu;
-        mparams.low_vram = low_vram;
         mparams.tensor_split = tensor_split.data();
 
         return mparams;
@@ -370,7 +357,6 @@ struct cmd_params_instance {
     bool equal_mparams(const cmd_params_instance & other) const {
         return n_gpu_layers == other.n_gpu_layers &&
                main_gpu == other.main_gpu &&
-               low_vram == other.low_vram &&
                tensor_split == other.tensor_split;
     }
 
@@ -381,7 +367,6 @@ struct cmd_params_instance {
         cparams.n_batch = n_batch;
         cparams.f16_kv = !f32_kv;
         cparams.mul_mat_q = mul_mat_q;
-        cparams.low_vram = low_vram;
 
         return cparams;
     }
@@ -393,7 +378,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
     for (const auto & m : params.model)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & mg : params.main_gpu)
-    for (const auto & lv : params.low_vram)
     for (const auto & ts : params.tensor_split)
     for (const auto & nb : params.n_batch)
     for (const auto & fk : params.f32_kv)
@@ -409,7 +393,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
             /* .n_gpu_layers = */ nl,
             /* .main_gpu     = */ mg,
             /* .mul_mat_q    = */ mmq,
-            /* .low_vram     = */ lv,
             /* .tensor_split = */ ts,
         };
         instances.push_back(instance);
@@ -425,7 +408,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & m : params.model)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & mg : params.main_gpu)
-    for (const auto & lv : params.low_vram)
     for (const auto & ts : params.tensor_split)
     for (const auto & nb : params.n_batch)
     for (const auto & fk : params.f32_kv)
@@ -445,7 +427,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .n_gpu_layers = */ nl,
                 /* .main_gpu     = */ mg,
                 /* .mul_mat_q    = */ mmq,
-                /* .low_vram     = */ lv,
                 /* .tensor_split = */ ts,
             };
             instances.push_back(instance);
@@ -465,7 +446,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .n_gpu_layers = */ nl,
                 /* .main_gpu     = */ mg,
                 /* .mul_mat_q    = */ mmq,
-                /* .low_vram     = */ lv,
                 /* .tensor_split = */ ts,
             };
             instances.push_back(instance);
@@ -513,7 +493,6 @@ struct test {
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
-    bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
     int n_prompt;
     int n_gen;
@@ -533,7 +512,6 @@ struct test {
         n_gpu_layers = inst.n_gpu_layers;
         main_gpu = inst.main_gpu;
         mul_mat_q = inst.mul_mat_q;
-        low_vram = inst.low_vram;
         tensor_split = inst.tensor_split;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
@@ -594,7 +572,7 @@ struct test {
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "f16_kv",
-            "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
+            "n_gpu_layers", "main_gpu", "mul_mat_q", "tensor_split",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -613,7 +591,7 @@ struct test {
             return INT;
         }
         if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas" ||
-            field == "f16_kv" || field == "mul_mat_q" || field == "low_vram") {
+            field == "f16_kv" || field == "mul_mat_q") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -644,7 +622,7 @@ struct test {
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
-            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
+            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), tensor_split_str,
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -835,9 +813,6 @@ struct markdown_printer : public printer {
         }
         if (params.mul_mat_q.size() > 1 || params.mul_mat_q != cmd_params_defaults.mul_mat_q) {
             fields.push_back("mul_mat_q");
-        }
-        if (params.low_vram.size() > 1 || params.low_vram != cmd_params_defaults.low_vram) {
-            fields.push_back("low_vram");
         }
         if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
             fields.push_back("tensor_split");
