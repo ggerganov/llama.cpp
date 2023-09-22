@@ -1233,6 +1233,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 {
     concat_output_mtx.lock();
     concat_output = "";
+    concat_output_reader_copy = "";
     concat_output_mtx.unlock();
     last_stop_reason = stop_reason::OUT_OF_TOKENS;
     stop_sequence.clear();
