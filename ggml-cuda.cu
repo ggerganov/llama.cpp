@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -461,7 +462,7 @@ static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
 static bool g_mul_mat_q = true;
 
 static void * g_scratch_buffer = nullptr;
-static size_t g_scratch_size = 1024*1024*1024; // 1 GB by default
+static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
@@ -7075,10 +7076,12 @@ void ggml_cuda_set_mul_mat_q(const bool mul_mat_q) {
 }
 
 void ggml_cuda_set_scratch_size(const size_t scratch_size) {
+    // this is a hack to not completely break llama.cpp when using multiple models or contexts simultaneously
+    // it still won't always work as expected, but it's better than nothing
     if (scratch_size > g_scratch_size) {
         ggml_cuda_free_scratch();
     }
-    g_scratch_size = scratch_size;
+    g_scratch_size = std::max(g_scratch_size, scratch_size);
 }
 
 void ggml_cuda_free_scratch() {

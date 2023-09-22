@@ -1149,15 +1149,6 @@ struct llama_context {
     // key + value cache for the self attention
     struct llama_kv_cache kv_self;
 
-    size_t kv_size() const {
-        size_t result = 2ull;
-        result *= (size_t) model.hparams.n_embd_gqa();
-        result *= (size_t) cparams.n_ctx;
-        result *= (size_t) model.hparams.n_layer;
-        result *= sizeof(ggml_fp16_t);
-        return result;
-    }
-
     std::mt19937 rng;
 
     bool has_evaluated_once = false;
@@ -1235,11 +1226,20 @@ static bool llama_kv_cache_init(
 
     (void) n_gpu_layers;
 #ifdef GGML_USE_CUBLAS
+    size_t vram_kv_cache = 0;
+
     if (n_gpu_layers > n_layer + 1) {
         ggml_cuda_assign_buffers_no_scratch(cache.v);
+        LLAMA_LOG_INFO("%s: offloading v cache to GPU\n", __func__);
+        vram_kv_cache += ggml_nbytes(cache.v);
     }
     if (n_gpu_layers > n_layer + 2) {
         ggml_cuda_assign_buffers_no_scratch(cache.k);
+        LLAMA_LOG_INFO("%s: offloading k cache to GPU\n", __func__);
+        vram_kv_cache += ggml_nbytes(cache.k);
+    }
+    if (vram_kv_cache > 0) {
+        LLAMA_LOG_INFO("%s: VRAM kv cache = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
     }
 #endif // GGML_USE_CUBLAS
 
@@ -1567,7 +1567,7 @@ struct llama_model_loader {
                         lmlock->grow_to(size_lock);
                     }
                     break;
-#if defined(GGML_USE_CUBLAS)
+#ifdef GGML_USE_CUBLAS
                 case GGML_BACKEND_GPU:
                 case GGML_BACKEND_GPU_SPLIT:
                     // old code:
@@ -1968,7 +1968,7 @@ static void llm_load_tensors(
     }
 
     (void) main_gpu;
-#if defined(GGML_USE_CUBLAS)
+#ifdef GGML_USE_CUBLAS
     LLAMA_LOG_INFO("%s: using " GGML_CUDA_NAME " for GPU acceleration\n", __func__);
     ggml_cuda_set_main_device(main_gpu);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
@@ -2329,7 +2329,7 @@ static void llm_load_tensors(
     }
 
     (void) tensor_split;
-#if defined(GGML_USE_CUBLAS)
+#ifdef GGML_USE_CUBLAS
     {
         ggml_cuda_set_tensor_split(tensor_split);
     }
@@ -6329,30 +6329,6 @@ struct llama_context * llama_new_context_with_model(
             const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
             LLAMA_LOG_INFO("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
-
-#ifdef GGML_USE_CUBLAS
-        {
-            size_t vram_kv_cache = 0;
-            if (model->n_gpu_layers > (int) hparams.n_layer + 1) {
-
-                if (params.low_vram) {
-                    LLAMA_LOG_INFO("%s: cannot offload v cache to GPU due to low VRAM option\n", __func__);
-                } else {
-                    LLAMA_LOG_INFO("%s: offloading v cache to GPU\n", __func__);
-                    vram_kv_cache += ctx->kv_size() / 2;
-                }
-            }
-            if (model->n_gpu_layers > (int) hparams.n_layer + 2) {
-                if (params.low_vram) {
-                    LLAMA_LOG_WARN("%s: cannot offload k cache to GPU due to low VRAM option\n", __func__);
-                } else {
-                    LLAMA_LOG_INFO("%s: offloading k cache to GPU\n", __func__);
-                    vram_kv_cache += ctx->kv_size() / 2;
-                }
-            }
-            LLAMA_LOG_INFO("%s: VRAM kv cache = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
-        }
-#endif
 
         // resized during inference
         if (params.logits_all) {
