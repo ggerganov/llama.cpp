@@ -221,7 +221,7 @@ static struct lora_data * load_lora(struct lora_info * info) {
     result->ctx = NULL;
     result->lora_r     = 1;
     result->lora_alpha = 1;
-    
+
     struct llama_file file(info->filename.c_str(), "rb");
     if (file.fp == NULL) {
         return result;
@@ -403,7 +403,7 @@ static void export_lora(struct export_lora_params * params) {
     for (int i=0; i < n_tensors; ++i) {
         const char * name = gguf_get_tensor_name(gguf_in, i);
         struct ggml_tensor * tensor = ggml_get_tensor(ctx_in, name);
-        
+
         // read tensor data
         data.resize(ggml_nbytes(tensor));
         tensor->data = data.data();
