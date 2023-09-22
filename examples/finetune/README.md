@@ -66,9 +66,11 @@ The scale numbers don't need to add up to one, and you can also use numbers crea
 Gradient checkpointing reduces the memory requirements by ~50% but increases the runtime.
 If you have enough RAM, you can make finetuning a bit faster by disabling checkpointing with `--no-checkpointing`.
 
-The LORA rank is configured for each model tensor type separately with these command line options:
+The default LORA rank can be specified with `--lora-r N`.
+The LORA rank can be configured for each model tensor type separately with these command line options:
 
 ```bash
+  --lora-r N                 LORA r: default rank. Also specifies resulting scaling together with lora-alpha. (default 4)
   --rank-att-norm N          LORA rank for attention norm tensor (default 1)
   --rank-ffn-norm N          LORA rank for feed-forward norm tensor (default 1)
   --rank-out-norm N          LORA rank for output norm tensor (default 1)
