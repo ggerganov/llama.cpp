@@ -21,15 +21,6 @@ struct export_lora_params {
     int n_threads;
 };
 
-struct tensor_info {
-    uint32_t    n_dims;
-    uint32_t    type;
-    uint32_t    ne[4];
-    size_t      offset;
-    size_t      nbytes;
-    std::string name;
-};
-
 struct lora_data {
     struct lora_info     info;
     std::vector<uint8_t> data;
@@ -421,7 +412,7 @@ static void export_lora(struct export_lora_params * params) {
         padding.resize(GGML_PAD(data.size(), gguf_get_alignment(gguf_out)) - data.size(), 0);
 
         GGML_ASSERT(fout.tell() == offset + meta.size());
-        // fout.seek(offset, SEEK_SET);
+        // fout.seek(offset + meta.size(), SEEK_SET);
         fout.write_raw(data.data(), data.size());
         fout.write_raw(padding.data(), padding.size());
 
