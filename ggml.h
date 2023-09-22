@@ -1726,7 +1726,7 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
-    typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched);
+    typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched, bool * cancel);
 
     // optimization parameters
     //

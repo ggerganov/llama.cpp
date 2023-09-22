@@ -19268,20 +19268,26 @@ static enum ggml_opt_result ggml_opt_adam(
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
     cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
 
+    bool cancel = false;
 
     // compute the function value
-
     float fx = 0;
     ggml_set_zero(opt->adam.g);
     for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
         if (callback) {
-            callback(callback_data, accum_step, &sched);
+            callback(callback_data, accum_step, &sched, &cancel);
+            if (cancel) {
+                break;
+            }
         }
         // ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
         ggml_graph_compute(gb, &cplan);
         ggml_opt_acc_grad(np, ps, g, accum_norm);
         fx += ggml_get_f32_1d(f, 0);
+    }
+    if (cancel) {
+        return GGML_OPT_DID_NOT_CONVERGE;
     }
     fx *= accum_norm;
 
@@ -19308,6 +19314,9 @@ static enum ggml_opt_result ggml_opt_adam(
 
     // run the optimizer
     for (int t = 0; t < params.adam.n_iter; ++t) {
+        if (cancel) {
+            break;
+        }
         opt->iter = iter0 + t + 1;
         GGML_PRINT_DEBUG  ("=== iter %d ===\n", t);
 
@@ -19363,13 +19372,19 @@ static enum ggml_opt_result ggml_opt_adam(
         ggml_set_zero(opt->adam.g);
         for (int accum_step = 0; accum_step < n_accum; ++accum_step) {
             if (callback) {
-                callback(callback_data, accum_step, &sched);
+                callback(callback_data, accum_step, &sched, &cancel);
+                if (cancel) {
+                    break;
+                }
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
             ggml_graph_compute(gb, &cplan);
             ggml_opt_acc_grad(np, ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
+        }
+        if (cancel) {
+            break;
         }
         fx *= accum_norm;
 
@@ -19456,6 +19471,7 @@ static enum ggml_opt_result linesearch_backtracking(
         struct ggml_cplan  * cplan,
         const int np,
         struct ggml_tensor * ps[],
+        bool * cancel,
         ggml_opt_callback callback,
         void * callback_data) {
     int count = 0;
@@ -19488,7 +19504,7 @@ static enum ggml_opt_result linesearch_backtracking(
     finit = *fx;
     dgtest = params->lbfgs.ftol*dginit;
 
-    while (true) {
+    while (!*cancel) {
         ggml_vec_cpy_f32(nx, x, xp);
         ggml_vec_mad_f32(nx, x, d, *step);
 
@@ -19502,13 +19518,19 @@ static enum ggml_opt_result linesearch_backtracking(
                 if (callback) {
                     // LBFG-S does not support learning rate -> ignore learning schedule
                     float sched = 0;
-                    callback(callback_data, accum_step, &sched);
+                    callback(callback_data, accum_step, &sched, cancel);
+                    if (*cancel) {
+                        break;
+                    }
                 }
                 // ggml_graph_reset  (gf);
                 ggml_set_f32      (f->grad, 1.0f);
                 ggml_graph_compute(gb, cplan);
                 ggml_opt_acc_grad(np, ps, g, accum_norm);
                 *fx += ggml_get_f32_1d(f, 0);
+            }
+            if (*cancel) {
+                break;
             }
             *fx *= accum_norm;
 
@@ -19628,6 +19650,8 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     float * lm_s     = opt->lbfgs.lms->data;
     float * lm_y     = opt->lbfgs.lmy->data;
 
+    bool cancel = false;
+
     // evaluate the function value and its gradient
     {
         ggml_opt_set_params(np, ps, x);
@@ -19638,13 +19662,19 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             if (callback) {
                 // LBFG-S does not support learning rate -> ignore learning schedule
                 float sched = 0;
-                callback(callback_data, accum_step, &sched);
+                callback(callback_data, accum_step, &sched, &cancel);
+                if (cancel) {
+                    break;
+                }
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
             ggml_graph_compute(gb, &cplan);
             ggml_opt_acc_grad(np, ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
+        }
+        if (cancel) {
+            return GGML_OPT_DID_NOT_CONVERGE;
         }
         fx *= accum_norm;
 
@@ -19704,7 +19734,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, callback, callback_data);
+        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
+        if (!cancel) {
+            break;
+        }
 
         if (ls < 0) {
             // linesearch failed - go back to the previous point and return

@@ -1044,6 +1044,7 @@ struct train_params_common get_default_train_params_common() {
     params.n_threads  =    6;
     params.n_batch    =    8;
     params.n_gradient_accumulation = 1;
+    params.n_epochs   = -1;
 
     params.custom_n_ctx = false;
 
@@ -1122,7 +1123,7 @@ void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train
     fprintf(stderr, "  --opt-past N               Number of optimization iterations to track for delta convergence test. Disabled when zero. (default %d)\n", params->opt_past);
     fprintf(stderr, "  --opt-delta N              Maximum delta for delta convergence test. Disabled when <= zero. (default %f)\n", params->opt_delta);
     fprintf(stderr, "  --opt-max-no-improvement N Maximum number of optimization iterations with no improvement. Disabled when <= zero. (default %d)\n", params->opt_max_no_improvement);
-    fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
+    fprintf(stderr, "  --epochs N                 Maximum number epochs to process. (default %d)\n", params->n_epochs);
     fprintf(stderr, "  --adam-iter N              Maximum number of Adam optimization iterations for each batch (default %d)\n", params->adam_n_iter);
     fprintf(stderr, "  --adam-alpha N             Adam learning rate alpha (default %f)\n", params->adam_alpha);
     fprintf(stderr, "  --adam-min-alpha N         Adam minimum learning rate alpha - including warmup phase (default %f)\n", params->adam_min_alpha);
@@ -1131,6 +1132,7 @@ void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train
     fprintf(stderr, "  --adam-beta1 N             AdamW beta1 in interval [0,1). How much to smooth the first moment of gradients. (default %f)\n", params->adam_beta1);
     fprintf(stderr, "  --adam-beta2 N             AdamW beta2 in interval [0,1). How much to smooth the second moment of gradients. (default %f)\n", params->adam_beta2);
     fprintf(stderr, "  --adam-gclip N             AdamW gradient clipping. Disabled when zero. (default %f)\n", params->adam_gclip);
+    fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
     fprintf(stderr, "\n");
 }
 
@@ -1296,6 +1298,12 @@ bool consume_common_train_arg(
             return true;
         }
         params->adam_eps_f = std::stof(argv[i]);
+    } else if (arg == "--epochs") {
+        if (++i >= argc) {
+            *invalid_param = true;
+            return true;
+        }
+        params->n_epochs = std::stoi(argv[i]);
     } else if (arg == "--adam-iter") {
         if (++i >= argc) {
             *invalid_param = true;
@@ -1359,7 +1367,7 @@ void finish_processing_train_args(struct train_params_common * params) {
     }
 }
 
-void train_opt_callback(void * vdata, int accum_step, float * sched) {
+void train_opt_callback(void * vdata, int accum_step, float * sched, bool * cancel) {
     struct train_opt_callback_data * data   = (struct train_opt_callback_data *) vdata;
     struct train_params_common     * params = data->params;
     struct train_state             * train  = data->train;
@@ -1474,5 +1482,15 @@ void train_opt_callback(void * vdata, int accum_step, float * sched) {
             data->samples_size,
             data->samples_count);
         train->shuffle_next_sample = 0;
+    }
+
+    const bool last_epoch_reached = (params->n_epochs > 0 && train->train_epochs - data->first_epoch >= params->n_epochs);
+    if (last_epoch_reached) {
+        // allow optimization iteration at last epoch to be completed before canceling
+        if (data->iter_at_last_epoch < 0) {
+            data->iter_at_last_epoch = opt->iter;
+        } else if (opt->iter > data->iter_at_last_epoch) {
+            *cancel = true;
+        }
     }
 }

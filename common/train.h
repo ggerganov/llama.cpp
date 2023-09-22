@@ -43,6 +43,7 @@ struct train_params_common {
     int n_threads;
     int n_batch;
     int n_gradient_accumulation;
+    int n_epochs;
 
     bool custom_n_ctx;
 
@@ -101,6 +102,8 @@ struct train_opt_callback_data {
     struct ggml_tensor         * tokens_input;
     struct ggml_tensor         * target_probs;
     int                          first_iter;
+    int                          first_epoch;
+    int                          iter_at_last_epoch;
     int64_t                      last_time;
     double                       millis_per_iter;
 };
@@ -224,4 +227,4 @@ void save_train_state_gguf(struct gguf_context * fctx, struct train_state * trai
 
 std::string get_train_filename(const char * filename, const char * pattern_it, const char * latest, int64_t iteration);
 
-void train_opt_callback(void * vdata, int accum_step, float * sched);
+void train_opt_callback(void * vdata, int accum_step, float * sched, bool * cancel);

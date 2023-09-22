@@ -1244,6 +1244,8 @@ int main(int argc, char ** argv) {
     opt_cb_data.tokens_input           = tokens_input;
     opt_cb_data.target_probs           = target_probs;
     opt_cb_data.first_iter             = opt->iter;
+    opt_cb_data.first_epoch            = train->train_epochs;
+    opt_cb_data.iter_at_last_epoch     = -1;
     opt_cb_data.last_time              = ggml_time_ms();
     opt_cb_data.millis_per_iter        = 0.0;
 
