@@ -41,13 +41,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          CC=gcc-8 make -j${LINHOST_THR}
+          CC=gcc-8 make -j ${LINHOST_THR}
 
       - name: Test
         id: make_test
         run: |
-          CC=gcc-8 make tests -j${LINHOST_THR}
-          make test -j${LINHOST_THR}
+          CC=gcc-8 make tests -j ${LINHOST_THR}
+          make test -j ${LINHOST_THR}
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          cmake --build . --config Release -j${LINHOST_THR}
+          cmake --build . --config Release -j ${LINHOST_THR}
 
       - name: Test
         id: cmake_test
@@ -104,7 +104,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --build . --config ${{ matrix.build_type }} -j${LINHOST_THR}
+          cmake --build . --config ${{ matrix.build_type }} -j ${LINHOST_THR}
 
       - name: Test
         id: cmake_test
@@ -138,7 +138,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_MPI=ON ..
-          cmake --build . --config Release -j${LINHOST_THR}
+          cmake --build . --config Release -j ${LINHOST_THR}
 
       - name: Test
         id: cmake_test
@@ -163,13 +163,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make -j${MACHOST_THR}
+          make -j ${MACHOST_THR}
 
       - name: Test
         id: make_test
         run: |
-          make tests -j${MACHOST_THR}
-          make test -j${MACHOST_THR}
+          make tests -j ${MACHOST_THR}
+          make test -j ${MACHOST_THR}
 
   macOS-latest-cmake:
     runs-on: macos-latest
@@ -192,7 +192,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
-          cmake --build . --config Release -j${MACHOST_THR}
+          cmake --build . --config Release -j ${MACHOST_THR}
 
       - name: Test
         id: cmake_test
@@ -226,7 +226,7 @@ jobs:
             -DLLAMA_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
-          cmake --build . --config Release -j${MACHOST_THR}
+          cmake --build . --config Release -j ${MACHOST_THR}
 
   macOS-latest-cmake-tvos:
     runs-on: macos-latest
@@ -254,7 +254,7 @@ jobs:
             -DLLAMA_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=tvOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
-          cmake --build . --config Release -j${MACHOST_THR}
+          cmake --build . --config Release -j ${MACHOST_THR}
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -327,7 +327,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release -j$env:WINHOST_THR
+          cmake --build . --config Release -j ${env:WINHOST_THR}
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -418,7 +418,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
-          cmake --build . --config Release -j$env:WINHOST_THR
+          cmake --build . --config Release -j ${env:WINHOST_THR}
 
       - name: Determine tag name
         id: tag
