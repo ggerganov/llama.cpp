@@ -611,7 +611,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
     printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N\n");
-    printf("                        number of threads to use during batch evaluation and prompt processing (default: same as --threads)\n");
+    printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  -p PROMPT, --prompt PROMPT\n");
     printf("                        prompt to start generation with (default: empty)\n");
     printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
@@ -702,6 +702,19 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("\n");
 }
+
+std::string get_system_info(const gpt_params & params) {
+    std::ostringstream os;
+
+    os << "system_info: n_threads = " << params.n_threads;
+    if (params.n_threads_batch != -1) {
+        os << " (n_threads_batch = " << params.n_threads_batch << ")";
+    }
+    os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
+
+    return os.str();
+}
+
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
     const int r = rng() % 10;

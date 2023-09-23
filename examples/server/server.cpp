@@ -1286,6 +1286,7 @@ int main(int argc, char **argv)
                             {"commit", BUILD_COMMIT}});
     LOG_INFO("system info", {
                                 {"n_threads", params.n_threads},
+                                {"n_threads_batch", params.n_threads_batch},
                                 {"total_threads", std::thread::hardware_concurrency()},
                                 {"system_info", llama_print_system_info()},
                             });
