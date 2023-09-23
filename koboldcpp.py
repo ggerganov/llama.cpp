@@ -354,7 +354,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.44.2"
+KcppVersion = "1.45"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -556,6 +556,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             lastc = handle.get_last_token_count()
             stopreason = handle.get_last_stop_reason()
             response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1)}).encode())
+        elif self.path.endswith(('/api')) or self.path.endswith(('/api/v1')):
+            response_body = (json.dumps({"result":"KoboldCpp partial API reference can be found at https://link.concedo.workers.dev/koboldapi"}).encode())
+
 
         if response_body is None:
             self.send_response(404)

@@ -9183,6 +9183,7 @@ Current version: 68
 				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
 					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
 					replacedText = replacedText.replace(/\*(\S[^*]+\S)\*/g, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
+					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					return replacedText;
 				});
@@ -9199,8 +9200,9 @@ Current version: 68
 		}
 		function wrapperSpan(role, type) {
 			let fontStyle = type=='action'?'italic':'normal';
-			let injectQuotes = type=='speech'?'&quot;':'';
-			let textCol = as[`${type}_tcolor_${role}`]; return `<span style='color: ${textCol}; font-style: ${fontStyle}; font-weight: normal'>${injectQuotes}$1${injectQuotes}</span>`;
+			let injectQuotes1 = type=='speech'?'“':'';
+			let injectQuotes2 = type=='speech'?'”':'';
+			let textCol = as[`${type}_tcolor_${role}`]; return `<span style='color: ${textCol}; font-style: ${fontStyle}; font-weight: normal'>${injectQuotes1}$1${injectQuotes2}</span>`;
 		}
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
