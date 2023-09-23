@@ -45,7 +45,7 @@ llama-bench can perform two types of tests:
 - Prompt processing (pp): processing a prompt in batches (`-p`)
 - Text generation (tg): generating a sequence of tokens (`-n`)
 
-With the exception of `-r`, `-o` and `-v`, all options can be specified multiple times to run multiple tests. Each pp and tg test is run with all combinations of the specified options. To specify multiple values for an option, the values can be separated by commas (eg. `-n 16,32`), or the option can be specified multiple times (eg. `-n 16 -n 32`).
+With the exception of `-r`, `-o` and `-v`, all options can be specified multiple times to run multiple tests. Each pp and tg test is run with all combinations of the specified options. To specify multiple values for an option, the values can be separated by commas (e.g. `-n 16,32`), or the option can be specified multiple times (e.g. `-n 16 -n 32`).
 
 Each test is repeated the number of times given by `-r`, and the results are averaged. The results are given in average tokens per second (t/s) and standard deviation. Some output formats (e.g. json) also include the individual results of each repetition.
 
