@@ -324,7 +324,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release -j %NUMBER_OF_PROCESSORS%
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -415,7 +415,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
-          cmake --build . --config Release -j %NUMBER_OF_PROCESSORS%
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
         id: tag
