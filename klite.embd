@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 67
+Current version: 68
 -Concedo
 -->
 
@@ -8842,16 +8842,6 @@ Current version: 67
 	const aestheticTextStyleTypes = ['text', 'speech', 'action'];	 // One style per speech type. Could add more later I guess.
 	const aestheticTextStyleRoles = ['uniform', 'you', 'AI', 'sys']; // Uniform for when you want all roles use the same styles.
 
-	class AestheticTextStyle {
-		constructor(options) {
-			options = options || {};
-			this.color = options.color || 'rgba(255,255,255, 1)';
-			this.fontWeight = options.bold ? 'bold' : 'normal';
-			this.fontStyle = options.italic ? 'italic' : 'normal';
-			this.opacity = options.opacity || 1;
-		}
-	}
-
 	class AestheticInstructUISettings {
 		constructor() {
 			this.bubbleColor_sys = 'rgba(20, 40, 40, 0.8)';
@@ -8880,9 +8870,9 @@ Current version: 67
 			this.use_uniform_colors = true; // Hides 'you, AI, sys' if set to true via settings UI.
 
 			for (let role of aestheticTextStyleRoles) {
-				this[`text_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255,1)'} );
-				this[`speech_color_${role}`] = new AestheticTextStyle({ color: 'rgba(150, 150, 200, 1)', italic: true });
-				this[`action_color_${role}`] = new AestheticTextStyle({ color: 'rgba(255,255,255, 0.7)', italic: true });
+				this[`text_tcolor_${role}`] = 'rgba(255,255,255,1)';
+				this[`speech_tcolor_${role}`] = 'rgba(150, 150, 200, 1)';
+				this[`action_tcolor_${role}`] = 'rgba(255,255,255, 0.7)';
 			}
 
 			this.code_block_background = 'black';
@@ -8909,10 +8899,10 @@ Current version: 67
 	function initializeInstructUIFunctionality() {
 
 		// Initialize foregroundColorPickers and backgroundColorPickers.
-		document.querySelectorAll('.enhancedTextColorPicker, .enhancedStandardColorPicker').forEach(element => {
+		document.querySelectorAll('.enhancedcolorPicker, .enhancedStandardColorPicker').forEach(element => {
 			// Create a fully transparent colorPicker for each element and initialize it as child of the textblock element.
 			// ..this happens because we want the colorPicker to open right below the element.
-			let useBackground = !element.classList.contains('enhancedTextColorPicker');
+			let useBackground = !element.classList.contains('enhancedcolorPicker');
 			let colorPicker = document.createElement('input');
 			colorPicker.type = 'color';
 			colorPicker.style.opacity = '0';
@@ -9034,8 +9024,7 @@ Current version: 67
 	function deepCopyAestheticSettings(original) {
 		let copy = new AestheticInstructUISettings();
 		for (let [key, value] of Object.entries(original)) {
-			if (value instanceof AestheticTextStyle) { copy[key] = new AestheticTextStyle({ color: value.color, bold: value.fontWeight === 'bold', italic: value.fontStyle === 'italic', opacity: value.opacity }); }
-			else { copy[key] = value; }
+			copy[key] = value;
 		}
 		return copy;
 	}
@@ -9049,7 +9038,7 @@ Current version: 67
 	function updateDataFromUI() {
 		for (let role of aestheticTextStyleRoles) {
 			for (let type of aestheticTextStyleTypes) {
-				aestheticInstructUISettings[`${type}_color_${role}`] = getTextStyleFromElement(`${role}-${type}-colorselector`);
+				aestheticInstructUISettings[`${type}_tcolor_${role}`] = getColorPickerValueFromElement(`${role}-${type}-colorselector`);
 			}
 			if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
 		}
@@ -9077,17 +9066,17 @@ Current version: 67
 		aestheticInstructUISettings.portrait_ratio_you = cleannum(aestheticInstructUISettings.portrait_ratio_you, 0.01, 3).toFixed(2);
 		aestheticInstructUISettings.background_minHeight = cleannum(aestheticInstructUISettings.background_minHeight, 0, 300);
 
-		function getTextStyleFromElement(id) {
+		function getColorPickerValueFromElement(id) {
 			let element = document.getElementById(id);
 			let computedStyle = window.getComputedStyle(element);
-			return new AestheticTextStyle({color: computedStyle.color, bold: computedStyle.fontWeight > 400, italic: computedStyle.fontStyle == 'italic', opacity: computedStyle.opacity});
+			return computedStyle.color;
 		}
 	}
 	function updateUIFromData() {
 		// Parse color settings and apply to the related parts in the UI.
 		for (let role of aestheticTextStyleRoles) {
 			for (let type of aestheticTextStyleTypes) {
-				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_color_${role}`]);
+				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_tcolor_${role}`]);
 			}
 			if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
 		}
@@ -9124,14 +9113,11 @@ Current version: 67
 		});
 
 
-		function setElementColor(id, textStyle) {
+		function setElementColor(id, newColor) {
 			let element = document.getElementById(id);
 			if (!element) { console.warn(`Element with ID: ${id} not found.`); return; }
 
-			element.style.color      = textStyle.color;
-			element.style.opacity    = textStyle.opacity;
-			element.style.fontWeight = textStyle.fontWeight;
-			element.style.fontStyle  = textStyle.fontStyle;
+			element.style.color = newColor;
 		}
 		function showOrHide(classID, value) {
 			if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
@@ -9208,8 +9194,14 @@ Current version: 67
 
 
 		// Helper functions to allow styling the chat log properly. These affect both the background of the chat bubbles and its content.
-		function style(role) { return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; display:flex; color: ${as[`text_color_${as.use_uniform_colors ? 'uniform' : role}`].color}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>${contextDict[`${role}Open`]}`; }
-		function wrapperSpan(role, type) { let textStyle = as[`${type}_color_${role}`]; return `<span style='color: ${textStyle.color}; font-style: ${textStyle.fontStyle}; font-weight: ${textStyle.fontWeight}'>$1</span>`; }
+		function style(role) {
+			return `${contextDict.closeTag}</div></div><div style='display:flex; align-items:stretch; flex-direction: row;'>${image(role)}<div style='flex: 1; display:flex; color: ${as[`text_tcolor_${as.use_uniform_colors ? 'uniform' : role}`]}; background-color:${as[`bubbleColor_${role}`]}; padding: ${as.padding()}; margin: ${as.margin()}; min-height:${as.background_minHeight}px; font-size: ${as.font_size}px; flex-direction:column; align-items: ${as.centerHorizontally ? 'center' : 'flex-start'}; justify-content: center; border-radius: ${as.rounded_bubbles ? '15px' : '0px'}'>${contextDict[`${role}Open`]}`;
+		}
+		function wrapperSpan(role, type) {
+			let fontStyle = type=='action'?'italic':'normal';
+			let injectQuotes = type=='speech'?'&quot;':'';
+			let textCol = as[`${type}_tcolor_${role}`]; return `<span style='color: ${textCol}; font-style: ${fontStyle}; font-weight: normal'>${injectQuotes}$1${injectQuotes}</span>`;
+		}
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
 			return `<div class='${role}-portrait-image${classSuffixStr}' style='width:${as.portraitSize(role).width}px; height:${as.portraitSize(role).height}px; border-radius: ${as.portraitRadius()}'></div>`;
@@ -10407,32 +10399,32 @@ Current version: 67
 									</div>
 									<div class="ui-settings-inline uniform-mode-font">
 										<div style="margin-right:48px; text-align: center;">Colors: </div>
-										<div class="enhancedTextColorPicker" id="uniform-text-colorselector">text🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="uniform-speech-colorselector">"speech"🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="uniform-action-colorselector">*action*🖌️</div>
+										<div class="enhancedcolorPicker" id="uniform-text-colorselector">text🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="uniform-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="uniform-action-colorselector">*action*🖌️</div>
 									</div>
 									<div class="ui-settings-inline custom-mode-font">
 										<div style="margin-right:58px; text-align: center;">You: </div>
-										<div class="enhancedTextColorPicker" id="you-text-colorselector">text🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="you-speech-colorselector">"speech"🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="you-action-colorselector">*action*🖌️</div>
+										<div class="enhancedcolorPicker" id="you-text-colorselector">text🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="you-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="you-action-colorselector">*action*🖌️</div>
 									</div>
 									<div class="ui-settings-inline custom-mode-font">
 										<div style="margin-right:67px; text-align: center;">AI: </div>
-										<div class="enhancedTextColorPicker" id="AI-text-colorselector">text🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="AI-speech-colorselector">"speech"🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="AI-action-colorselector">*action*🖌️</div>
+										<div class="enhancedcolorPicker" id="AI-text-colorselector">text🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="AI-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="AI-action-colorselector">*action*🖌️</div>
 									</div>
 									<div class="ui-settings-inline custom-mode-font">
 										<div style="margin-right:38px; text-align: center;">System: </div>
-										<div class="enhancedTextColorPicker" id="sys-text-colorselector">text🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="sys-speech-colorselector">"speech"🖌️</div>
-										<div class="enhancedTextColorPicker instruct-markdown-user" id="sys-action-colorselector">*action*🖌️</div>
+										<div class="enhancedcolorPicker" id="sys-text-colorselector">text🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="sys-speech-colorselector">"speech"🖌️</div>
+										<div class="enhancedcolorPicker instruct-markdown-user" id="sys-action-colorselector">*action*🖌️</div>
 									</div>
 									<div class="ui-settings-inline instruct-markdown-user">
 										<div style="margin-right:11px; text-align: center;">Code blocks: </div>
-										<div class="enhancedTextColorPicker" id="code-block-background-colorselector">background🖌️</div>
-										<div class="enhancedTextColorPicker" id="code-block-foreground-colorselector">foreground🖌️</div>
+										<div class="enhancedcolorPicker" id="code-block-background-colorselector">background🖌️</div>
+										<div class="enhancedcolorPicker" id="code-block-foreground-colorselector">foreground🖌️</div>
 									</div>
 								</div>
 								<br>
