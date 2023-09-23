@@ -458,7 +458,7 @@ jobs:
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
   freeBSD-latest:
-    runs-on: macos-12
+    runs-on: ubuntu-latest
     steps:
     - name: Clone
       uses: actions/checkout@v3
@@ -468,7 +468,7 @@ jobs:
       with:
         operating_system: freebsd
         version: '13.2'
-        hypervisor: 'xhyve'
+        hypervisor: 'qemu'
         run: |
             sudo pkg update
             sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
