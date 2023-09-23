@@ -145,12 +145,12 @@ int main(int argc, char ** argv) {
         params.n_ctx = 8;
     }
 
-    if (params.rope_freq_base != 10000.0) {
-        LOG_TEE("%s: warning: changing RoPE frequency base to %g (default 10000.0)\n", __func__, params.rope_freq_base);
+    if (params.rope_freq_base != 0.0) {
+        LOG_TEE("%s: warning: changing RoPE frequency base to %g.\n", __func__, params.rope_freq_base);
     }
 
-    if (params.rope_freq_scale != 1.0) {
-        LOG_TEE("%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
+    if (params.rope_freq_scale != 0.0) {
+        LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
