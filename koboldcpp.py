@@ -1542,10 +1542,15 @@ def show_old_gui():
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
     import urllib.request
+    from datetime import datetime
     global friendlymodelname, maxhordectx, maxhordelen, exitcounter, modelbusy
     epurl = f"http://localhost:{args.port}"
     if args.host!="":
         epurl = f"http://{args.host}:{args.port}"
+
+    def print_with_time(txt):
+        print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
+
 
     def make_url_request(url, data, method='POST'):
         try:
@@ -1565,12 +1570,12 @@ def run_horde_worker(args, api_key, worker_name):
         except urllib.error.HTTPError as e:
             try:
                 errmsg = e.read().decode('utf-8')
-                print(f"Error: {e} - {errmsg}, Make sure your Horde API key and worker name is valid.")
+                print_with_time(f"Error: {e} - {errmsg}, Make sure your Horde API key and worker name is valid.")
             except Exception as e:
-                print(f"Error: {e}, Make sure your Horde API key and worker name is valid.")
+                print_with_time(f"Error: {e}, Make sure your Horde API key and worker name is valid.")
             return None
         except Exception as e:
-            print(f"Error: {e} - {response_data}, Make sure your Horde API key and worker name is valid.")
+            print_with_time(f"Error: {e} - {response_data}, Make sure your Horde API key and worker name is valid.")
             return None
 
     current_id = None
@@ -1584,7 +1589,7 @@ def run_horde_worker(args, api_key, worker_name):
         time.sleep(3)
         readygo = make_url_request(f'{epurl}/api/v1/info/version', None,'GET')
         if readygo:
-            print("Embedded Horde Worker is started.")
+            print_with_time(f"Embedded Horde Worker is started.")
             break
 
     while exitcounter < 10:
@@ -1593,7 +1598,7 @@ def run_horde_worker(args, api_key, worker_name):
 
         #first, make sure we are not generating
         if modelbusy.locked():
-            time.sleep(0.5)
+            time.sleep(0.3)
             continue
 
         #pop new request
@@ -1609,20 +1614,23 @@ def run_horde_worker(args, api_key, worker_name):
         pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
         if not pop:
             exitcounter += 1
-            print(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
+            print_with_time(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
             time.sleep(5)
             continue
         if not pop["id"]:
-            slp = (2 if sleepy_counter<10 else (3 if sleepy_counter<20 else 4))
+            slp = (1 if sleepy_counter<10 else (2 if sleepy_counter<25 else 3))
             #print(f"Server {cluster} has no valid generations for us. Sleep for {slp}s")
             time.sleep(slp)
             sleepy_counter += 1
+            if sleepy_counter==20:
+                print_with_time(f"No recent jobs, entering low power mode...")
             continue
 
         sleepy_counter = 0
         current_id = pop['id']
         current_payload = pop['payload']
-        print(f"\nJob received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
+        print(f"") #empty newline
+        print_with_time(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
 
         #do gen
         while exitcounter < 10:
@@ -1634,10 +1642,11 @@ def run_horde_worker(args, api_key, worker_name):
                     currentjob_attempts += 1
                     if currentjob_attempts>5:
                         break
-            print("Server Busy - Not ready to generate...")
+            print_with_time("Server Busy - Not ready to generate...")
             time.sleep(5)
 
         #submit reply
+        print(f"") #empty newline
         if current_generation:
             submit_dict = {
                 "id": current_id,
@@ -1647,19 +1656,20 @@ def run_horde_worker(args, api_key, worker_name):
             reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
             if not reply:
                 exitcounter += 1
-                print("\nError: Job submit failed.")
+                print_with_time("Error: Job submit failed.")
             else:
-                print(f'\nSubmitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
+                print_with_time(f'Submitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
         else:
-            print("\nError: Abandoned current job due to errors. Getting new job.")
+            print_with_time("Error: Abandoned current job due to errors. Getting new job.")
         current_id = None
         current_payload = None
-        time.sleep(1)
+        time.sleep(0.2)
+
     if exitcounter<100:
-        print("Horde Worker Shutdown - Too many errors.")
+        print_with_time("Horde Worker Shutdown - Too many errors.")
         time.sleep(3)
     else:
-        print("Horde Worker Shutdown - Server Closing.")
+        print_with_time("Horde Worker Shutdown - Server Closing.")
         time.sleep(2)
     sys.exit(2)
 

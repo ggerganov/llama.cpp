@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 68
+Current version: 69
 -Concedo
 -->
 
@@ -2940,7 +2940,7 @@ Current version: 68
 		last_selected_preset: 0,
 		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
 		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
-		multiline_replies: false,
+		multiline_replies: true,
 		allow_continue_chat: false,
 		idle_responses: 0,
 		idle_duration: 60,
@@ -4229,8 +4229,8 @@ Current version: 68
 						let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
 						let cdesc = data.description?data.description:"";
 						let greeting = data.greeting?data.greeting:"";
-						let previewtxt = replaceAll(cdesc,"{{char}}",botname);
-						previewtxt = replaceAll(previewtxt,"{{user}}","You");
+						let previewtxt = replaceAll(cdesc,"{{char}}",botname,true);
+						previewtxt = replaceAll(previewtxt,"{{user}}","You",true);
 						temp_scenario =
 						{
 							"title":data.title?data.title:"",
@@ -5983,6 +5983,10 @@ Current version: 68
 				document.getElementById('instruct_starttag').value = "[INST] ";
 				document.getElementById('instruct_endtag').value = " [/INST]";
 				break;
+			case "5": //Q & A
+				document.getElementById('instruct_starttag').value = "\\nQuestion: ";
+				document.getElementById('instruct_endtag').value = "\\nAnswer: ";
+				break;
 			default:
 				break;
 		}
@@ -6268,8 +6272,8 @@ Current version: 68
 		//only do this for chat and instruct modes
 		if(localsettings.opmode==3||localsettings.opmode==4)
 		{
-			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You");
-			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent);
+			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You",true);
+			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent,true);
 			inputtxt = replaceAll(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
 			inputtxt = replaceAll(inputtxt,instructendplaceholder,get_instruct_endtag(false));
 			//failsafe to handle removing newline tags
@@ -6616,7 +6620,9 @@ Current version: 68
 					{
 						let recenttext = gametext_arr[gametext_arr.length-1].toLowerCase();
 						let spokennames = coarr.filter(x=>(recenttext.includes(x.toLowerCase())));
-						if(spokennames.length>0)
+						let selfname = localsettings.chatname + "\: ";
+						let wasself = (recenttext.includes(selfname.toLowerCase()));
+						if(wasself && spokennames.length>0)
 						{
 							co = spokennames[Math.floor(Math.random()*spokennames.length)];
 						}
@@ -8848,15 +8854,15 @@ Current version: 68
 			this.bubbleColor_you = '#29343a';
 			this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
 
-			this.background_margin = [10, 10, 5, 0];
-			this.background_padding = [25, 25, 10, 10];
-			this.background_minHeight = 100;
+			this.background_margin = [5, 5, 5, 0];
+			this.background_padding = [15, 15, 10, 10];
+			this.background_minHeight = 80;
 			this.centerHorizontally = false;
 
 			this.border_style = 'Rounded';
-			this.portrait_width_AI = 100;
+			this.portrait_width_AI = 80;
 			this.portrait_ratio_AI = 1.0;
-			this.portrait_width_you = 100;
+			this.portrait_width_you = 80;
 			this.portrait_ratio_you = 1.0;
 
 			this.show_chat_names = true;
@@ -9174,7 +9180,9 @@ Current version: 68
 		let newbodystr = noSystemPrompt ? input : style('sys') + input;					 // First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); } // Remove the last chat bubble if prompt ends with `end_sequence`.
 		newbodystr = transformInputToAestheticStyle(newbodystr); 						 // Transform input to aesthetic style, reduce any unnecessary spaces or newlines, and trim empty replies if they exist.
-		if (synchro_pending_stream != "") { newbodystr += getStreamingText(); } 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
+		if (synchro_pending_stream != "") {
+			newbodystr += getStreamingText();
+		} 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
 		newbodystr += contextDict.closeTag + '</p></div></div>';						 // Lastly, append the closing div so our body's raw form is completed.
 		if (aestheticInstructUISettings.use_markdown) {																// If markdown is enabled, style the content of each bubble as well.
 			let internalHTMLparts = []; // We'll cache the embedded HTML parts here to keep them intact.
@@ -9219,9 +9227,19 @@ Current version: 68
 		function transformInputToAestheticStyle(bodyStr) { // Trim unnecessary empty space and new lines, and append * or " to each bubble if start/end sequence ends with * or ", to preserve styling.
 			bodyStr = bodyStr.replaceAll(you + '\n', you).replaceAll(you + ' ', you).replaceAll(you, style('you') + `${you.endsWith('*') ? '*' : ''}` + `${you.endsWith('"') ? '"' : ''}`);
 			bodyStr = bodyStr.replaceAll(bot + '\n', bot).replaceAll(bot + ' ', bot).replaceAll(bot, style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}`);
-			return bodyStr.replaceAll('"', '&quot;');
+			if(gametext_arr.length==0)
+			{
+				return bodyStr; //to allow html in the welcome text
+			}
+			else
+			{
+				return bodyStr.replaceAll('"', '&quot;');
+			}
 		}
-		function getStreamingText() { return `${input.endsWith(bot) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream); }
+		function getStreamingText() {
+			let isChatBotReply = (localsettings.opmode==3 && pending_context_preinjection.startsWith("\n") && pending_context_preinjection.endsWith(":"));
+			return `${(input.endsWith(bot) || isChatBotReply) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream);
+		}
 	}
 
 	function updateTextPreview() {
@@ -9813,6 +9831,7 @@ Current version: 68
 								<option value="2">Vicuna</option>
 								<option value="3">Metharme</option>
 								<option value="4">Llama 2 Chat</option>
+								<option value="5">Q & A</option>
 							</select>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
