@@ -165,8 +165,8 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
     printf("  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
     printf("  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
-    printf("  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-    printf("  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
+    printf("  -ngl, --n-gpu-layers <n>          (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+    printf("  -mg, --main-gpu <i>               (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>               \n");
     printf("  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
@@ -355,7 +355,8 @@ struct cmd_params_instance {
     }
 
     bool equal_mparams(const cmd_params_instance & other) const {
-        return n_gpu_layers == other.n_gpu_layers &&
+        return model == other.model &&
+               n_gpu_layers == other.n_gpu_layers &&
                main_gpu == other.main_gpu &&
                tensor_split == other.tensor_split;
     }
