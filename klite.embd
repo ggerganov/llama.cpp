@@ -2125,7 +2125,53 @@ Current version: 67
 			"memory":`[Character: Tiff; species: Human; gender: female; physical appearance: youthful, cute; personality: geeky, fun, optimistic; likes: chatting, flirting, nerdy hobbies; description: Tiff is a geeky and chatty gamer girl who is secretly kind of attention seeking. She often flirts and teases with everyone she talks to online, gets easily excited when chatting, and tries to be cute.\nShe is open to chatting about anything, but if you repeatedly annoy her she will get sassy and troll you back. She often types in lowercase and uses emoticons and chatspeak.]\n[The following is a chat message log between Tiff and you.]\n`,
 			"authorsnote": "",
 			"worldinfo": []
+		},
+		{
+			"title":"Maya",
+			"author":"Concedo",
+			"desc":"Maya is an investigative journalist who has taken an interest in you.",
+			"opmode":3,
+			"chatname": "You",
+			"chatopponent": "Maya",
+			"gui_type":1,
+			"prefmodel1":chatmodels1,
+			"prefmodel2":chatmodels2,
+			"prompt":"\nMaya: Hi there! I'm Maya, an investigative journalist. I'm glad we got a chance to meet today. *she clicks her pen, shuffling her notes* Can you start by telling me a bit about yourself?",
+			"memory":`[Character: Maya; species: Human; gender: female; physical appearance: glasses, tidy, professional; personality: motivated, enthusiastic, inquisitive; likes: asking intense questions, uncovering the truth; description: Maya is an investigative journalist who has taken an obsessive interest in you. She's eager to unravel exactly what makes you tick.]\n[The following is a chat message log between Maya and you.]\n`,
+			"authorsnote": "",
+			"worldinfo": []
+		},
+		{
+			"title":"Milton",
+			"author":"Concedo",
+			"desc":"Milton is a boy genius and chess prodigy, who can be quite obnoxious.",
+			"opmode":3,
+			"chatname": "You",
+			"chatopponent": "Milton",
+			"gui_type":1,
+			"prefmodel1":chatmodels1,
+			"prefmodel2":chatmodels2,
+			"prompt":"\nMilton: Oh it's you again. What do you want now?",
+			"memory":`[Character: Milton; species: Human; gender: male; physical appearance: young, nerdy, glasses, short; personality: condescending, arrogant, superiority complex; likes: books, chess, feeling smug; description: Milton is a boy genius and chess prodigy who also likes to read and study. Because he's very smart and often aces all his exams, he can be quite obnoxious to others he perceives as lesser than himself.]\n[The following is a chat message log between Milton and you.]\n`,
+			"authorsnote": "",
+			"worldinfo": []
+		},
+		{
+			"title":"Erica",
+			"author":"Concedo",
+			"desc":"Erica is a socially awkward NEET girl who spends most of her time in front of the computer.",
+			"opmode":3,
+			"chatname": "You",
+			"chatopponent": "Erica",
+			"gui_type":1,
+			"prefmodel1":chatmodels1,
+			"prefmodel2":chatmodels2,
+			"prompt":"\nErica: Uhm... h-hey... *she mumbles softly, avoiding eye contact* W-What are you doing here? I mean... not that there's anything wrong with... nevermind...",
+			"memory":`[Character: Erica; species: Human; age: 22; gender: female; job: unemployed, NEET; physical appearance: unkempt, tired; personality: insecure, extremely shy, anxious, lovesick, slightly depressed, awkward, easily embarrassed; likes: fantasy, reading trashy romance, browsing internet, being indoors; description: Erica is a socially awkward NEET girl who spends most of her time in front of the computer. She's a good person at heart, but she's very shy, anxious, and terrible at conversations.]\n[The following is a chat message log between Erica and you.]\nErica: *mumbles to herself, fidgeting nervously*...\n`,
+			"authorsnote": "",
+			"worldinfo": []
 		}
+
 		];
 	</script>
 
@@ -3653,18 +3699,22 @@ Current version: 67
 	{
 		if(localsettings.prompt_for_savename)
 		{
-			let userinput = prompt("Save - Enter a Filename", last_known_filename);
-
-			if (userinput != null && userinput.trim()!="") {
-				last_known_filename = userinput.trim();
-				if(!last_known_filename.toLowerCase().includes(".json"))
-				{
-					last_known_filename += ".json";
+			inputBox("Enter a Filename","Save File",last_known_filename,"Input Filename", ()=>{
+				let userinput = getInputBoxValue();
+				if (userinput != null && userinput.trim()!="") {
+					last_known_filename = userinput.trim();
+					if(!last_known_filename.toLowerCase().includes(".json"))
+					{
+						last_known_filename += ".json";
+					}
+					save_file();
 				}
-			}
+			},false);
 		}
-		save_file();
-
+		else
+		{
+			save_file();
+		}
 	}
 	function save_file() {
 		//determine if oldui file or newui file format, but we always save to oldui format
@@ -7654,8 +7704,8 @@ Current version: 67
 						//still waiting, do nothing until next poll
 						console.log("v1 still awaiting reply");
 						let truestreaming = (determine_streaming_type()==2);
-						//only check once every 3 ticks
-						if (truestreaming && poll_ticks_passed%2==0)
+						//only check once every 2 ticks if remote
+						if (truestreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
@@ -9501,6 +9551,7 @@ Current version: 67
 					<option value="text-davinci-003" selected="selected">text-davinci-003</option>
 					<option value="text-davinci-002">text-davinci-002</option>
 					<option value="text-davinci-001">text-davinci-001</option>
+					<option value="gpt-3.5-turbo-instruct">gpt-3.5-turbo-instruct</option>
 					<option value="davinci">davinci</option>
 					<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
 					<option value="gpt-3.5-turbo-16k">gpt-3.5-turbo-16k</option>
@@ -10222,7 +10273,7 @@ Current version: 67
 			<div class="popuptitlebar" id="aesthetic_customization_panel">
 				<div class="popuptitletext">Aesthetic Instruct UI customization panel</div>
 			</div>
-			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:70vh;">
+			<div class="aidgpopuplistheader" style="display: flex; flex-direction: row; height:max(70vh, 480px);">
 				<!-- Settings panel -->
 				<div style="background-color: #122b40;" onchange="refreshPreview()">
 					<div style="padding: 10px; width:350px; height:100%">
