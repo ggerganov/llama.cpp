@@ -715,7 +715,6 @@ std::string get_system_info(const gpt_params & params) {
     return os.str();
 }
 
-
 std::string gpt_random_prompt(std::mt19937 & rng) {
     const int r = rng() % 10;
     switch (r) {
