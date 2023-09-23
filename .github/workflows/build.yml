@@ -22,7 +22,7 @@ env:
   LINHOST_THR: 2
   MACHOST_THR: 3
   WINHOST_THR: 2
-  
+
 jobs:
   ubuntu-focal-make:
     runs-on: ubuntu-20.04
