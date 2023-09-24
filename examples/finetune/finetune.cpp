@@ -644,9 +644,11 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     auto add_to_f32 = [] (struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
         if (ggml_is_quantized(a->type)) {
             return ggml_add_cast(ctx, a, b, GGML_TYPE_F32);
-        } else {
-            GGML_ASSERT(a->type == GGML_TYPE_F32);
+        } else if (a->type == GGML_TYPE_F32) {
             return ggml_add(ctx, a, b);
+        } else {
+            die_fmt("%s: Finetuning on tensors with type '%s' is not yet supported.\n",
+                __func__, ggml_type_name(a->type));
         }
     };
 
