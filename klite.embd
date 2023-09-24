@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 69
+Current version: 70
 -Concedo
 -->
 
@@ -2946,6 +2946,7 @@ Current version: 69
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
 		invert_colors: false,
+		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 
 		max_context_length: 1024,
 		max_length: 100,
@@ -4382,13 +4383,13 @@ Current version: 69
 	}
 	function confirm_scenario_verify()
 	{
-		if(temp_scenario.show_warning==true)
+		if(temp_scenario.show_warning==true && localsettings.passed_ai_warning==false)
 		{
 			let warntxt = `<p><b><u>Disclaimer: The AI is not suitable to be used as an actual therapist, counselor or advisor of any kind.</u></b></p>
 			<p>While some find it comforting to talk about their issues with an AI, the responses are unpredictable.</p>
 			<p>When using the AI for real world use-cases such as advice or counseling this means <b>you must be able to understand when an answer is wrong</b>.
 			If you would not trust a random person to pretend to be your advisor; you should definitely not use the AI for this. The models are simply too small and not trained for this purpose.</p>
-			<p>If you still wish to proceed, please type the phrase I understand in the box below, exactly as written.</p>
+			<p>If you still wish to proceed, please type the phrase &quot;I understand&quot; in the box below, exactly as written.</p>
 			<p><b>If you are experiencing feelings of distress, anxiety, suicidal thoughts, or other forms of mental discomfort, it's best to avoid using AI for non fiction or personal matters as it may exacerbate or encourage these feelings.</b></p>
 			`;
 			inputBox(warntxt,"AI Safety Warning","","Acknowledgement Required",()=>{
@@ -4396,6 +4397,7 @@ Current version: 69
 				if(userinput.includes("understand"))
 				{
 					confirm_scenario();
+					localsettings.passed_ai_warning = true; //remember flag for session
 				}
 			},true);
 		} else {
@@ -4551,12 +4553,15 @@ Current version: 69
 		msgbox(last_request_str,"Last Request Context",false);
 	}
 
+	var worker_data_showonly = []; //only for table display, dont mix
 	function get_and_show_workers() {
-		if(localflag)
-		{
+		if (localflag) {
 			return;
 		}
-		get_workers((wdata) => { show_workers(wdata) });
+		get_workers((wdata) => {
+			worker_data_showonly = wdata;
+			show_workers();
+		});
 	}
 	function get_workers(onDoneCallback) {
 		if(localflag)
@@ -4599,12 +4604,33 @@ Current version: 69
 
 	}
 
-	function show_workers(wdata) {
+	function worker_list_quick_search()
+	{
+		if(document.getElementById("workertable").innerHTML!="")
+		{
+			let searchstr = document.getElementById("workerlistquicksearch").value.toLowerCase();
+			for (var i = 0; i < worker_data_showonly.length; ++i) {
+				let elem = worker_data_showonly[i];
+				let tablerow = document.getElementById("workertablerow_"+i);
+				if(tablerow)
+				{
+					if(searchstr=="" || elem.name.toLowerCase().includes(searchstr) ||
+					elem.models[0].toLowerCase().includes(searchstr))
+					{
+						tablerow.style.display = "";
+					}else{
+						tablerow.style.display = "none";
+					}
+				}
+			}
+		}
+	}
+	function show_workers() {
 		document.getElementById("workercontainer").classList.remove("hidden");
 
 		let str = "";
-		for (var i = 0; i < wdata.length; ++i) {
-			let elem = wdata[i];
+		for (var i = 0; i < worker_data_showonly.length; ++i) {
+			let elem = worker_data_showonly[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
 			if(tokenspersec.toLowerCase()=="no requests fulfilled yet")
 			{
@@ -4619,10 +4645,16 @@ Current version: 69
 			{
 				workerNameHtml = "<a class=\"color_blueurl\" href=\"#\" onclick=\"msgbox(\'"+escapeHtml(replaceAll(elem.info,"\'","\\\'"))+"\','Worker Info',false,false,hide_msgbox)\">"+workerNameHtml+"</a>";
 			}
-			str += "<tr><td>" + workerNameHtml + "</td><td>" + escapeHtml(elem.models[0].substring(0, 32)) + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			let allmdls = "";
+			for (let n = 0; n < elem.models.length; ++n) {
+				if (n > 0) { allmdls += "<br>"; }
+				allmdls += escapeHtml(elem.models[n].substring(0, 32));
+			}
+
+			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
-		document.getElementById("worktitlecount").innerText = "Worker List - Total "+wdata.length;
+		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
 	}
 
 	function show_my_own_workers()
@@ -10154,6 +10186,9 @@ Current version: 69
 		<div class="popupbg flex"></div>
 		<div class="workerpopup">
 			<div class="popuptitlebar">
+				<div><span style="float:right;">
+					<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
+				</span></div>
 				<div class="popuptitletext" id="worktitlecount">Worker List</div>
 			</div>
 			<div class="workerTableDiv">
