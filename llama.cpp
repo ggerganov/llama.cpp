@@ -5658,9 +5658,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    // mmap consistently increases speed Linux, is inconsistent on macOS
-    // (possibly related to free memory), and has not been tested on Windows.
-#ifdef __linux__
+    // mmap consistently increases speed Linux, and also increases speed on Windows with
+    // hot cache. It may cause a slowdown on macOS, possibly related to free memory.
+#if defined(__linux__) || defined(_WIN32)
     constexpr bool use_mmap = true;
 #else
     constexpr bool use_mmap = false;
