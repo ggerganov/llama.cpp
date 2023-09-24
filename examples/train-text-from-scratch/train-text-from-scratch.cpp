@@ -1964,6 +1964,7 @@ void opt_callback(void * vdata, float * sched) {
 
     int impr_plot = std::isnan(opt->loss_after) ? 0 : -std::lround(1 + (opt->loss_before - opt->loss_after) * 10.0f);
     printf("%s: iter=%*d, sched=%f loss0=%f loss=%f | improvement: %*d>\n", __func__, 6, opt->iter, *sched, opt->loss_before, opt->loss_after, impr_plot, (int)0);
+    fflush(stdout);
 
     if (data->shuffle_countdown < n_batch) {
         printf("%s: reshuffle samples\n", __func__);
