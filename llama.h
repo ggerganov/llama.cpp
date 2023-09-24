@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
-
+#include <vector>
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
@@ -357,6 +357,8 @@ extern "C" {
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
             struct llama_model_params     params);
+
+    LLAMA_API void llama_split_layers_weighted(struct llama_context * ctx, std::vector<float> device_weights);
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 

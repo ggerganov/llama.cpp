@@ -1098,6 +1098,10 @@ struct llama_mmap {
         int flags = MAP_SHARED;
         // prefetch/readahead impairs performance on NUMA systems
         if (numa)  { prefetch = 0; }
+
+#ifdef GGML_USE_MPI
+        prefetch = 0;
+#endif
 #ifdef __linux__
         // advise the kernel to read the file sequentially (increases readahead)
         if (posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
@@ -1106,6 +1110,7 @@ struct llama_mmap {
         }
         if (prefetch) { flags |= MAP_POPULATE; }
 #endif
+
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
         if (addr == MAP_FAILED) { // NOLINT
             throw std::runtime_error(format("mmap failed: %s", strerror(errno)));
@@ -12697,9 +12702,7 @@ void llama_backend_init(void) {
         ggml_free(ctx);
     }
 
-#ifdef GGML_USE_MPI
-    ggml_mpi_backend_init();
-#endif
+
 }
 
 void llama_numa_init(enum ggml_numa_strategy numa) {
@@ -13075,18 +13078,19 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_MPI
     ctx->ctx_mpi = ggml_mpi_init();
 
-    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
-        // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        // TODO: needs fix after #3228
-        GGML_ASSERT(false && "not implemented");
-        //const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos(ctx));
-        //while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
-        llama_backend_free();
-        exit(1);
-    }
 #endif
 
     return ctx;
+}
+
+void llama_split_layers_weighted(struct llama_context * ctx, std::vector<float> device_weights) {
+#ifdef GGML_USE_MPI
+    if (ggml_mpi_rank(ctx->ctx_mpi) == 0 && ggml_mpi_size(ctx->ctx_mpi) != device_weights.size()) {
+        GGML_ASSERT(false && "Must have same number of split percentages as devices");
+    }
+    uint16_t** ranges = ggml_mpi_split_range(ctx->ctx_mpi, 0, ctx->model.hparams.n_layer - 1, device_weights.data());
+    ggml_mpi_scatter_layers(ctx->ctx_mpi, ranges);
+#endif
 }
 
 void llama_free(struct llama_context * ctx) {

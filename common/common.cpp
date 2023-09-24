@@ -663,6 +663,23 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS/SYCL. Setting the split mode has no effect.\n");
 #endif // GGML_USE_CUBLAS_SYCL
 
+        } else if (arg == "--mpi-layer-split") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string arg_next = argv[i];
+
+            // split string by , and /
+            const std::regex regex{R"([,/]+)"};
+            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
+            std::vector<std::string> split_arg{it, {}};
+            params.mpi_layer_split.resize(split_arg.size());
+            for (size_t node = 0; node < split_arg.size(); ++node) {
+                params.mpi_layer_split[node] = std::stof(split_arg[node]);
+            }
+
+
         } else if (arg == "--tensor-split" || arg == "-ts") {
             if (++i >= argc) {
                 invalid_param = true;

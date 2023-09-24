@@ -14,10 +14,14 @@
 struct ggml_mpi_context {
     int rank;
     int size;
+    MPI_Comm comm;
+    int layer_start;
+    int layer_end;
 };
 
 void ggml_mpi_backend_init(void) {
-    MPI_Init(NULL, NULL);
+    int ret;
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &ret);
 }
 
 void ggml_mpi_backend_free(void) {
@@ -29,8 +33,17 @@ struct ggml_mpi_context * ggml_mpi_init(void) {
 
     MPI_Comm_rank(MPI_COMM_WORLD, &ctx->rank);
     MPI_Comm_size(MPI_COMM_WORLD, &ctx->size);
+    ctx->comm = MPI_COMM_WORLD;
 
     return ctx;
+}
+
+struct ggml_mpi_context * ggml_mpi_split_comm(struct ggml_mpi_context * ctx, int color, int key) {
+    struct ggml_mpi_context * newCtx = calloc(1, sizeof(struct ggml_mpi_context));
+    MPI_Comm_split(ctx->comm, color, key, &newCtx->comm);
+    MPI_Comm_rank(newCtx->comm, &newCtx->rank);
+    MPI_Comm_size(newCtx->comm, &newCtx->size);
+    return newCtx;
 }
 
 void ggml_mpi_free(struct ggml_mpi_context * ctx) {
@@ -41,19 +54,21 @@ int ggml_mpi_rank(struct ggml_mpi_context * ctx) {
     return ctx->rank;
 }
 
+int ggml_mpi_size(struct ggml_mpi_context * ctx) {
+    return ctx->size;
+}
+
 void ggml_mpi_eval_init(
         struct ggml_mpi_context * ctx_mpi,
                             int * n_tokens,
                             int * n_past,
                             int * n_threads) {
-    UNUSED(ctx_mpi);
 
-    // synchronize the worker node parameters with the root node
-    MPI_Barrier(MPI_COMM_WORLD);
 
-    MPI_Bcast(n_tokens,  1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(n_past,    1, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(n_threads, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Barrier(ctx_mpi->comm);
+
+    MPI_Bcast(n_tokens,  1, MPI_INT, 0, ctx_mpi->comm);
+    MPI_Bcast(n_past,    1, MPI_INT, 0, ctx_mpi->comm);
 }
 
 static int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
@@ -73,7 +88,8 @@ static int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
     return -1;
 }
 
-static void ggml_mpi_tensor_send(struct ggml_tensor * t, int mpi_rank_dst) {
+
+static void ggml_mpi_tensor_send(struct ggml_tensor * t, int mpi_rank_dst, MPI_Comm comm) {
     MPI_Datatype mpi_type;
 
     switch (t->type) {
@@ -82,11 +98,11 @@ static void ggml_mpi_tensor_send(struct ggml_tensor * t, int mpi_rank_dst) {
         default: GGML_ASSERT(false && "not implemented");
     }
 
-    const int retval = MPI_Send(t->data, ggml_nelements(t), mpi_type, mpi_rank_dst, 0, MPI_COMM_WORLD);
+    const int retval = MPI_Send(t->data, ggml_nelements(t), mpi_type, mpi_rank_dst, 0, comm);
     GGML_ASSERT(retval == MPI_SUCCESS);
 }
 
-static void ggml_mpi_tensor_recv(struct ggml_tensor * t, int mpi_rank_src) {
+static void ggml_mpi_tensor_recv(struct ggml_tensor * t, int mpi_rank_src, MPI_Comm comm) {
     MPI_Datatype mpi_type;
 
     switch (t->type) {
@@ -97,8 +113,70 @@ static void ggml_mpi_tensor_recv(struct ggml_tensor * t, int mpi_rank_src) {
 
     MPI_Status status; UNUSED(status);
 
-    const int retval = MPI_Recv(t->data, ggml_nelements(t), mpi_type, mpi_rank_src, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    const int retval = MPI_Recv(t->data, ggml_nelements(t), mpi_type, mpi_rank_src, MPI_ANY_TAG, comm, &status);
     GGML_ASSERT(retval == MPI_SUCCESS);
+}
+
+uint16_t** ggml_mpi_split_range(
+    struct ggml_mpi_context * ctx_mpi,
+    uint16_t start,
+    uint16_t end,
+    float node_weights[]
+) {
+    // Splits the range given by start and end
+    // over the available nodes. This implementation
+    // assumes that node 0 handles the final part of the range
+    // while node 1 handles the beginning, to form a ring pipeline
+
+    // Only node 0 deals with the device splits, other nodes
+    // get the splits from the scatter layers operation
+
+    if (ctx_mpi->rank != 0) {
+        return NULL;
+    }
+
+    uint16_t range_length = end - start + 1;
+    uint16_t ** ranges = (uint16_t**) malloc(sizeof(uint16_t*) * ctx_mpi->size);
+    for (int i = 0; i < ctx_mpi->size; i++) {
+        ranges[i] = (uint16_t*) malloc(sizeof(uint16_t) * 2);
+    }
+    uint16_t next_layer = 0;
+    for (int i=1; i < ctx_mpi->size; i++) {
+        ranges[i][0] = next_layer;
+        ranges[i][1] = MIN(end, ranges[i][0] + (node_weights[i] * range_length) + start);
+        next_layer = ranges[i][1];
+    }
+
+    ranges[0][0] = next_layer;
+    ranges[0][1] = MIN(end, next_layer + (node_weights[0] * range_length) + start);
+    return ranges;
+
+}
+
+void ggml_mpi_scatter_layers(
+    struct ggml_mpi_context * ctx_mpi,
+    uint16_t ** layer_ranges
+) {
+    // Layer ranges is a 2d array with the first dimension
+    // having a length of the number of nodes and the second
+    // dimension having a length of 2. The inner arrays contain
+    // the start and end layer ID for a node.
+    uint16_t flattened_ranges[ctx_mpi->size * 2];
+
+    if (layer_ranges != NULL) {
+        for (int i = 0; i < ctx_mpi->size * 2; i += 2) {
+            fprintf(stderr, "In iteration %d\n", i);
+            flattened_ranges[i] = layer_ranges[i/2][0];
+            fprintf(stderr, "Got first element\n");
+            flattened_ranges[i + 1] = layer_ranges[i/2][1];
+        }
+    }
+
+    uint16_t received_range[2];
+    MPI_Scatter(flattened_ranges, 2, MPI_UINT16_T, received_range, 2, MPI_UINT16_T, 0, ctx_mpi->comm);
+    ctx_mpi->layer_start = received_range[0];
+    ctx_mpi->layer_end = received_range[1];
+    fprintf(stderr, "Ranges for rank %d: [%d, %d]\n", ctx_mpi->rank, ctx_mpi->layer_start, ctx_mpi->layer_end);
 }
 
 // TODO: there are many improvements that can be done to this implementation
@@ -134,29 +212,36 @@ void ggml_mpi_graph_compute_pre(
     // node n-1: [(n-2) * n_per_node, (n-1) * n_per_node)
     // node 0:   [(n-1) * n_per_node,            n_nodes)
     //
+
+
+
     if (mpi_rank > 0) {
         if (mpi_rank == 1) {
             // the first node (1) receives the input tokens from the main node (0)
-            ggml_mpi_tensor_recv(inp_tokens, 0);
+            ggml_mpi_tensor_recv(inp_tokens, 0, ctx_mpi->comm);
         } else {
             // recv input data for each node into the "inp0" tensor (i.e. the first node in the compute graph)
-            ggml_mpi_tensor_recv(inp0, mpi_rank - 1);
+            ggml_mpi_tensor_recv(inp0, mpi_rank - 1, ctx_mpi->comm);
         }
     } else if (mpi_size > 1) {
         // node 0 sends the input tokens to node 1
-        ggml_mpi_tensor_send(inp_tokens, 1);
+        ggml_mpi_tensor_send(inp_tokens, 1, ctx_mpi->comm);
 
         // recv the output data from the last node
-        ggml_mpi_tensor_recv(inp0, mpi_size - 1);
+        ggml_mpi_tensor_recv(inp0, mpi_size - 1, ctx_mpi->comm);
     }
 
     {
+
+
         const int n_per_node = (n_layers + (mpi_size - 1)) / mpi_size;
 
         const int mpi_idx = mpi_rank > 0 ? mpi_rank - 1 : mpi_size - 1;
 
-        const int il0 =               (mpi_idx + 0) * n_per_node;
-        const int il1 = MIN(n_layers, (mpi_idx + 1) * n_per_node);
+        //const int il0 =               (mpi_idx + 0) * n_per_node;
+        //const int il1 = MIN(n_layers, (mpi_idx + 1) * n_per_node);
+        int il0 = ctx_mpi->layer_start;
+        int il1 = MIN(n_layers, ctx_mpi->layer_end);
 
         char name_l0[GGML_MAX_NAME];
         char name_l1[GGML_MAX_NAME];
@@ -196,7 +281,6 @@ void ggml_mpi_graph_compute_pre(
 
         gf->n_nodes = idx_l1 - idx_l0;
 
-        //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, mpi_rank, gf->n_nodes, il0, il1);
     }
 }
 
@@ -211,6 +295,6 @@ void ggml_mpi_graph_compute_post(
 
     // send the output data to the next node
     if (mpi_rank > 0) {
-        ggml_mpi_tensor_send(gf->nodes[gf->n_nodes - 1], (mpi_rank + 1) % mpi_size);
+        ggml_mpi_tensor_send(gf->nodes[gf->n_nodes - 1], (mpi_rank + 1) % mpi_size, ctx_mpi->comm);
     }
 }
