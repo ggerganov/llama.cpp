@@ -1,0 +1,605 @@
+Zscaler (ZS) Q4 2023 Earnings Call Transcript
+ZS earnings call for the period ending June 30, 2023.
+
+Motley Fool Transcribing
+Zscaler (ZS 1.69%)
+Q4 2023 Earnings Call
+Sep 05, 2023, 4:30 p.m. ET
+
+Contents:
+
+Prepared Remarks
+Questions and Answers
+Call Participants
+Prepared Remarks:
+
+
+Operator
+
+Thank you for standing by, and welcome to Zscaler earnings announcement fiscal year 2023 fourth quarter conference call. At this time, all participants are on a listen-only mode. After the speakers' presentation, there will be a question-and-answer session. [Operator instructions] As a reminder, today's call is being recorded.
+
+I will now turn the conference over to your host, Mr. Bill Choi, senior vice president of investor relations and strategic finance. Please go ahead.
+
+Bill Choi -- Senior Vice President, Investor Relations and Strategic Finance
+
+Good afternoon, everyone, and welcome to the Zscaler fiscal fourth quarter and full year 2023 earnings conference call. On the call with me today are Jay Chaudhry, chairman and CEO; and Remo Canessa, CFO. Please note that we have posted our earnings release and a supplemental financial schedule to our investor relations website. Unless otherwise noted, all numbers we talk about today will be on an adjusted non-GAAP basis.
+
+You will find the reconciliation of GAAP to the non-GAAP financial measures in our earnings release. I'd like to remind you that today's discussion will contain forward-looking statements, including but not limited to the company's anticipated future revenue, calculated billings, operating performance, gross margin, operating expenses, operating income, net income, free cash flow, dollar-based net retention rate, future hiring decisions, remaining performance obligations, income taxes, earnings per share, our objectives and outlook, our customer response to our products, and our market share and market opportunity. These statements and other comments are not guarantees of future performance, but rather are subject to risk and uncertainty, some of which are beyond our control. These forward-looking statements apply as of today, and you should not rely on them as representing our views in the future.
+
+10 stocks we like better than Zscaler
+When our award-winning analyst team has a stock tip, it can pay to listen. After all, the newsletter they have run for over a decade, Motley Fool Stock Advisor, has tripled the market.* 
+
+They just revealed what they believe are the ten best stocks for investors to buy right now… and Zscaler wasn't one of them! That's right -- they think these 10 stocks are even better buys.
+
+See the 10 stocks
+
+*Stock Advisor returns as of September 5, 2023
+
+We undertake no obligation to update these statements after this call. For a more complete discussion of the risks and uncertainties, please see our filings with the SEC, as well as in today's earnings release. I would also like to inform you that we'll be attending the following upcoming events in September: Goldman Sachs Communacopia and Technology Conference on September 6th, Wolfe Research TMT Conference on September 7th, and Piper Sandler Growth Frontiers Conference on September 12th. Now, I'll turn the call over to Jay.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you, Bill. We had a strong close to our fiscal year. In Q4, we delivered 43% revenue growth and 38% billings growth, with balanced growth across all verticals, customer segments, and geographies. For the full year, our revenue grew 48% to $1.6 billion, and billings grew 37% to over $2 billion.
+
+In addition to achieving record billings in the quarter, we also set records across several other measures. We added the highest number of $1 million ARR customers, generated record new pipeline for Q4, and attained record operating profit margin. I'm proud of our team's achievements and humbled by the trust our customers are placing in our platform. While the macro environment remains challenging, we are executing well.
+
+With cybersecurity as a high priority, IT executives are moving forward with zero trust initiatives driving our business. As I mentioned before, we are partnering earlier with CXOs to create compelling CFO-ready business cases with clear ROI and payback periods. As our results demonstrate, refining our high touch sales process is helping get large deals across the finish line. We have a blueprint for delivering immediate value, which drives faster upsells, often within 12 months of initial purchase.
+
+We closed a record number of deals over $1 million ACV in Q4, driven by broad-based strength across our key industry verticals. In addition to our industry-leading top-line growth, we are generating record profitability. Due to our spending discipline, we achieved a record 19% operating margin as we more than doubled our operating income on a year-over-year basis. These outstanding results reflect the strong unit economics of our business with best-in-class 80% gross margins.
+
+Our innovation and customer obsession drove our net promoter score to exceed 80, which is more than two times the average for SaaS companies and contributed to our high 90% gross retention rate. I am very pleased to announce that we doubled our annual recurring revenue from $1 billion to over $2 billion in seven quarters, reaching a milestone only a select handful of SaaS companies have achieved. We secure over 7,700 customers and protect over 41 million users. With every customer looking to adopt zero trust architecture in today's world of cloud, AI, and mobility, we believe we are in the early stages of capturing a large share of our $72 billion market opportunity.
+
+We have our sights set on achieving our next goal of $5 billion in ARR. We are on a mission to take zero trust everywhere to users, workloads, and OT systems and become the go-to platform for vendor consolidation, cost savings, increased business agility, and better cyber and data protection. To fully realize the business value enabled by our platform, customers are increasingly buying Zscaler for users, our complete zero trust solution for user protection, which includes ZIA, ZPA, ZDX, and data protection. In addition, we are gaining traction with workload protection powered by the same core ZIA and ZPA technology.
+
+These broader platform purchases drove 37% year-over-year growth in customers with greater than $1 million in ARR. We ended the quarter with nearly 450 such customers, including 43 customers exceeding $5 million. Let me highlight one deal where the customer purchased all product pillars. A large global system integrator partner headquartered in Asia became a customer and adopted our platform to enable their work-from-anywhere strategy.
+
+They purchased ZIA, ZDX, and advanced data protection for 300,000 users and ZPA for 270,000 users. They also purchased workload protection and deception technology to improve application security for their hybrid environment. This customer can now open new offices and offshore development centers much faster and more securely. They are also seeing a 50% reduction in the time to onboard employees as a highly distributed organization with data everywhere.
+
+Data protection was a major consideration for them and accounted for 20% of the deal value. Data protection is an important new pillar of growth for us, approaching a $250 million in ARR and growing 60% per year. We are increasingly replacing incumbent legacy DLP in the largest of enterprises with data protection representing a $10 billion-plus opportunity for us. Due to targeted investments and rapid innovation, we believe our data protection solution is now the widest and the deepest in the market.
+
+And we are taking data protection beyond users to workloads and devices. Let me highlight a new logo win led by data protection. A large telecom operator purchased Zscaler for users for 80,000 employees. Data protection was a key driver for the win as this customer became increasingly uncomfortable with gaps left by their firewall and VPN-based security, which struggles with data protection for TLS-encrypted traffic that comprises over 85% of their internet traffic.
+
+With Zscaler, this customer is consolidating multiple point products and expects a payback on the purchase within nine months. Our emerging products, including ZDX and Zscaler for Workloads, continued to see increased adoption and contributed 18% of our new business in fiscal '23. We expect emerging products contribution to increase to over 20% in fiscal '24. I'd like to highlight two deals that were driven by our emerging products.
+
+In a seven-figure ACV upsell deal, a Fortune 50 insurance company purchased ZDX Advanced for all 170,000 users after realizing value from their initial ZIA deployment. With the Zscaler platform already in place, ZDX gets deployed quickly, reduces troubleshooting time, and improves field agent productivity. We directly impact the customers revenue and their agents ability to earn commissions. ZDX exemplifies the platform benefits of our zero trust exchange and expands our share of customer spending beyond security.
+
+In another seven-figure ACV upsell win, a Fortune 10 healthcare company purchased Zscaler for Workloads just one quarter after making their initial purchase of Zscaler for Users for all 150,000 employees. With workload protection, this customer is accelerating their plans to move most of their on-prem workloads to the cloud, as well as protect workload traffic from over 9,000 locations. Lastly, let me highlight our success in the federal vertical. Twelve of the 15 cabinet level agencies are our customers, and we are starting to see larger awards from these agencies.
+
+Let me highlight one such agencywide deal. We were awarded a multiyear contract from an agency with more than 100,000 users. The value of this contract will be realized over time based on deployment with the field units. Against this award, we received a mid seven-figure ACV task order for ZIA and ZPA.
+
+This customer chose the Zscaler over firewall vendors because our cloud-native architecture delivers better security and user experience, all while meeting FedRAMP requirements. We remain the only cloud security service to have two key products at the highest level of FedRAMP certification. These certifications and the executive order for zero trust security are driving a significant opportunity for us in the federal market. Next, let me discuss some key industry trends.
+
+Cybersecurity remains the No. 1 IT priority, and having the right security architecture is fundamental to reducing cyber risk. According to our latest Zscaler ThreatLabZ VPN risk report, nearly half of enterprises reported they were targeted by cyberattackers who exploited a VPN vulnerability, and a third of enterprises fell victim to ransomware attacks within the past year. Growing cyberthreats, including ransomware, are driving IT leaders to transform security from legacy network security to zero trust architecture.
+
+True zero trust security can't be built by spinning up a bunch of virtual firewalls and VPNs in a public cloud. Do you know any VPN vendor whose products have not been compromised? Our architectural differentiation gives us long-term advantage. As you may have seen, investors and regulators are increasing pressure on companies to improve cybersecurity. With the new SEC requirement to report a material security incident in four business days, there will be increased executive and board level focus on cybersecurity.
+
+Zscaler's zero trust exchange platform delivers comprehensive security controls, full visibility, and fast reporting, each of which is now a must have for meeting corporate governance requirements. In this environment, customers cannot risk transformational and mission-critical projects with immature offerings from unproven vendors. Both legacy vendors and newcomers in the security industry have tried to mimic our messaging. The reality is that no vendor comes close to providing a depth of functionality and level of performance at our scale.
+
+Good enough in cybersecurity is never good enough. Next, let me discuss AI, which is top of mind for customers and investors. Generative AI has tremendous potential to unlock insights, improve employee productivity, and solve complex problems. However, the risk of data loss and issue of data sovereignty are limiting the potential of this new technology.
+
+To address these concerns, we already delivered data protection capabilities that prevent the leakage of sensitive data through AI prompts and appropriated into public training models. For example, our browser isolation session would not let employees paste or type any sensitive information into gen AI prompts. This not only enables employees to use AI, but also do so in a secure manner for enterprises. Our engineering teams have innovated rapidly on new AI-driven functionality that's available in our premium price bundles, such as auto classification of unstructured data for advanced data protection and auto segmentation of applications for zero trust access.
+
+Second, we will have new products based on AI that will provide significant upsell opportunities with our customers. We recently launched Risk360, which enables executive teams and boards to better understand the risk posture of their organizations and provides unparalleled visibility with up-to-date security status and corrective actions they can implement in a timely fashion. Using AI, I believe we will be able to use our unique data set to also predict and prevent most of today's ransomware and other sophisticated attacks on our customers. AI-driven cyber insights and prevention have the potential to add tremendous customer value, and we believe we can monetize that opportunity.
+
+Zscaler has AI experts and data scientists and valuable anonymized private data to customize and train LLM models for the security domain. Based on a proxy architecture, our zero trust exchange is like a private switchboard that captures all communication logs. We have the largest inline security cloud, inspecting over 320 billion transactions daily with transactions doubling every 18 months. These logs provide more than 500 trillion signals per day that feed our AI models for better detection of user and application traffic anomalies, resulting in a positive network effect of superior threat protection for our customers.
+
+We have been investing in AI for quite a while, including our first AI acquisition in 2018, and we will continue to invest in fiscal '24 for rapid AI innovations, cloud enhancements, and go-to market to take our AI solutions to the market. All investments will be made within the envelope of margin guidance that Remo will discuss. In closing, we are excited about the opportunities ahead. We have a track record of building and growing new innovations like ZDX data protection and zero trust for workloads, and we are now turning our attention to AI.
+
+We believe these new products will contribute increasingly to our future growth. Our business value message is resonating in this challenging macro environment, and more customers are adopting our broader platform to consolidate multiple-point products. We believe customers trust Zscaler more than any other provider for securing their zero trust journey. We have grown our global team to nearly 6,000 employees with the mission to secure the hyperconnected world of cloud, AI, and mobility.
+
+I'm extremely proud of the strong growth and profitability we delivered in fiscal '23. I want to thank our employees and our partners for their tireless efforts and commitment to our customers success. We will invest aggressively to delight our customers and capture the large opportunity ahead of us while continuing to deliver operational excellence. Now, I'd like to turn over the call to Remo for our financial results.
+
+Remo Canessa -- Chief Financial Officer
+
+Thank you, Jay. We are pleased with our strong performance in Q4 and solid execution even with ongoing customer scrutiny of large deals. Revenue was $455 million, up 43% year over year and up 9% sequentially. ZPA product revenue grew 57% year over year.
+
+This will be the last quarter that we break out ZPA revenue separately as we are increasingly selling solution bundles that involve multiple product pillars. From a geographic perspective, Americas represented 53% of revenue, EMEA was 32%, and APJ was 15%. For the full year, revenue was $1.62 billion, up 48% year over year. Our total calculated billings in Q4 grew 38% year over year to $719 million.
+
+On a sequential basis, total billings grew 49% quarter over quarter. Total billings benefited from a $20 million upfront billing on a multiyear deal. As a reminder, our contract terms are typically one to three years. We primarily invoice our customers one year in advance.
+
+Our calculated current billings grew 33% year over year and 42% quarter over quarter. From a vertical perspective, we saw strong growth across our key verticals. Our remaining performance obligations, or RPO, grew 35% from a year ago to $3.51 billion. The current RPO is approximately 49% of the total RPO.
+
+We ended the year with 449 customers with greater than $1 million in ARR, adding a record 49 $1 million ARR customers in the quarter. The continued strength of this large customer metric speaks to the strategic role we play in our customers' digital transformation initiatives. We also ended the quarter with 2,609 customers with greater than $100,000 in ARR. Our 12-month trailing dollar-based net retention rate was 121% in Q4.
+
+Turning to the rest of our financial performance total gross margin of 80.7% compares to 80.2% in the prior quarter and 81.6% in the year-ago quarter. Higher public cloud usage for emerging products drove the year-over-year change in gross margin. As Jay mentioned, emerging products are growing as a percentage of our new business and contributed 18% of new ACV in fiscal 2023 compared to 14% in fiscal 2022. Moving on, our total operating expenses increased 3% sequentially and 27% year over year to $281 million.
+
+Due to our focus on spending discipline this year, we generated significant operating leverage in our model, with operating margin reaching 19%, an increase of approximately 200 basis points year over year. Our free cash flow margin was 22%, including data center capex of approximately 6% of revenue. For the full year, our operating margin was 15%, and free cash flow margin was 21%. We ended the quarter with over $2 billion in cash, cash equivalents, and short-term investments.
+
+In August, we've completed an assessment of the useful lives of our servers and network equipment. With advances in technology and efficiencies in how we operate our server and network equipment, starting in fiscal 2024, we're extending the depreciable useful life for these assets in our cloud infrastructure for four to five years. We expect the impact of this change to be approximately a 50 basis-point benefit to our gross margin for the full year. Next, let me share some observations about the macro environment and our framework for guidance.
+
+From our perspective, the global macro environment remains uncertain, and customers continue to scrutinize large deals. In addition, in select instances, we will continue to enable new strategic customers to ramp into larger subscription commitments. Typically, these ramp deals reduce our first year billings but will grow into a higher annual run rate level in the second year. In Q4, for example, the net impact of ramp deals was a headwind of approximately 1 percentage point to billings growth.
+
+We expect the net impact of ramps will be neutral to billings in fiscal 2024. In our outlook for fiscal '24, we're balancing our business optimism and confidence in our improved execution with ongoing macroeconomic uncertainties. We are entering Q1 with a record pipeline, and our customer engagements remain strong. However, we are mindful that in this environment predicting close rates and ramps in any 90-day period remains challenging.
+
+With a large market opportunity and customers increasingly adopting the broader platform, we'll invest aggressively to position us for long-term growth and profitability. With that in mind, let me provide our guidance for Q1 and full year fiscal 2024. As a reminder, these numbers are all non-GAAP. For the first quarter, we expect revenue in the range of $472 million to $474 million, reflecting a year-over-year growth of approximately 33%; gross margins of 80%, including the change in accounting for useful life of server equipment.
+
+I would also like to remind investors that a number of our emerging products, including newer products like ZDX and Zscaler for workloads will initially have lower gross margins than our core products. We're currently managing the emerging products for time to market and grow, not optimizing them for gross margins. In addition, we'll continue to invest in our cloud and AI infrastructure to scale with the growing demand; operating profit in the range of $70 million to $72 million; net other income of $14 million; income taxes of $8 million; earnings per share in the range of $0.48 to $0.49, assuming 159 million fully diluted shares. For the full year fiscal 2024, we expect revenue in the range of $2.05 billion to $2.065 billion, or year-over-year growth of approximately 27% to 28%; calculated billings in the range of $2.52 billion to $2.56 billion, or a year-over-year growth of 24% to 26%.
+
+We expect Q1 billings to grow approximately 30% on a year-over-year basis. We also expect our first-half mix to be approximately 42% of our full year billings guide; operating profit in the range of $330 million to $340 million, which reflects approximately 100 to 150 basis points of operating margin improvement compared to last year; income taxes of $35 million; earnings per share in the range of $2.20 to $2.25, assuming approximately 161 million fully diluted shares. We expect our free cash flow margin to be slightly above 20%. Finally, we expect our data center capex to be high single-digit percentage of revenue for the full year.
+
+Operator, you may now open the call for questions.
+
+Questions & Answers:
+
+
+Operator
+
+[Operator instructions] Our first question comes from the line of Brad Zelnick of Deutsche Bank. Your line is open.
+
+Brad Zelnick -- Deutsche Bank -- Analyst
+
+Great, thanks so much. And congrats on such a strong finish to the year. Jay, can you address why Zscaler wasn't included in Gartner's most recent Magic Quadrant for Single-Vendor SASE and if that's slowing you down at all? Because it certainly doesn't seem to be. And maybe just a quick one for Remo.
+
+Remo, guiding 25% billings growth off of a year where you're clearly outperforming peers is quite impressive. What should we be mindful of beyond what you've already told us in terms of your inputs and degrees of upside and downside risk versus what you've delivered historically? Thanks.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Right. So, Brad, this MQ is not slowing us down at all. SASE is a broad generic term. When Gartner started it a few years ago, it was an integration of SD-WAN and SSE, the gateway products we have.
+
+And we had done integration with every SD-WAN vendor that matters out there. So, but the MQ that got started this time was for single vendors SASE with SD-WAN offering in it. You know, we have often said that SD-WAN is the opposite of zero trust. We do offer zero trust SASE, but we don't offer SD-WAN SASE.
+
+So, we are not in MQ. We are about changing the world, not really propagating the old world, and we are very successful in doing so.
+
+Remo Canessa -- Chief Financial Officer
+
+And, Brad, related to guidance, you know, the positives are, our pipeline is record pipeline. Our execution was very good in Q4, which gives us confidence. You know, the potential downside is the global macro environment. We've taken that into account.
+
+From our view, you know, for fiscal '24, we're seeing a similar environment as we did in '23. You know, the guidance that we have, you called out, you know, 24% to 26%, you know, we feel is very strong guidance, which is supported by, you know, our optimism that we're seeing in our business related to also what we see, you know, global macro, you know, situation.
+
+Brad Zelnick -- Deutsche Bank -- Analyst
+
+Thank you very much, guys.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Matt Hedberg of RBC. Your line is open.
+
+Matt Hedberg -- RBC Capital Markets -- Analyst
+
+Great, thanks for taking my questions, guys. Congrats on the quarter. Jay, I was particularly impressed. You know, comments on emerging product success seems to be really kicking in here this year and even maybe more so next year.
+
+I was curious on workload protection seems to be resonating in a lot of partner conversations, and you mentioned on the call. Maybe just a little bit more details on why that's resonating because I think if some of these add-on products continue to do what they're doing, it certainly opens up much-larger TAM than kind of core ZIA/ZPA.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+So, when we started ZIA/ZPA, we started for users -- a user can securely communicate with applications. It's natural to extend ZIA for Workloads, ZPA for Workloads because workflows need to talk to each other in zero trust fashion. So, our customers understand it and appreciate it. It's a great upsell opportunity for us to expand our ARPU, as well as customer spend with us.
+
+So, we are seeing good success. The deal size is still smaller because the number of workloads in various stages, various customers. But we literally have no competition when it comes to this area because we are the only provider that's actually offering zero trust communication among workloads or workloads through internet. We are upbeat about it for fiscal 24 'as well.
+
+Matt Hedberg -- RBC Capital Markets -- Analyst
+
+Thanks, Jay. Congrats.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Roger Boyd of UBS. Again, Roger Boyd of Your Line is open.
+
+Roger Boyd -- UBS -- Analyst
+
+Hey, great. Thanks for taking the question, and congrats on a nice quarter. Jay, a lot has been made about Microsoft's entry into this market. Very high level, but Microsoft pretty specifically is targeting the SSE security edge space and not SASE space.
+
+And just maybe a follow-up to Brad's question, do you see that distinction as maybe further legitimizing the SSE approach relative to single-vendor SASE? Thanks.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you. So, SSE widely understood and accepted. It's essentially the combination of ZIA and ZPA we built. But the TAM for SSE is large, and it's getting larger than the market appreciates today.
+
+You know, for Microsoft, it was natural to be in the market for identity and endpoint security as they have traditionally owned Active Directory and Windows operating system. But inline security is a totally new area for them. This area of SSE that we pioneered has a very high bar, high performance, great security, no slowing down, and supporting a range of destinations. In fact, it's like being the [Inaudible] we have to connect to applications that are in Microsoft and AWS and GCP and a thousand SaaS applications out there.
+
+So, customers like the positioning of a provider like Zscaler that's not tied to applications itself. And Zscaler has earned the trust of large enterprises that take time for any new entrant. Yes, Microsoft entries further validation, but we don't believe it will impact us because of a positioning of the large enterprise market. And there may be some impact on the lower end of the market.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Ittai Kidron of Oppenheimer and Company. Your line is open.
+
+Ittai Kidron -- Oppenheimer and Company -- Analyst
+
+Thanks. Hi, gentlemen. Congrats, great finish for the year. I guess I want to talk about the competitive landscape of the more traditional firewall guys, Palo Alto and Fortinet more recently.
+
+And, I guess, checkpoint for an acquisition recently as well and clearly trying to make big efforts here. Maybe you could talk about the competitive environment. In what way is it today different than what it was a year ago? And what you seeing from your competitors more kind of near term here?
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you. On the high end of the market, we -- where we do extremely well, we really haven't seen a change. If there's any change, I would say our position has further solidified, and I wouldn't say it has gotten somewhat easier on the higher end of the market. When it comes to the firewall market, you know, we are replacing firewalls in the branches.
+
+When Zscaler gets deployed with zero trust architecture, there's no room for any firewall on the branch office. Now, there are still firewalls in the data center and the like because we don't play inside the data center for east-west traffic and the like. But as customers are doing local breakout or traffic from every location, the amount of traffic going through the data center is slowing down, which is bound to impact the sales and demand for firewalls out there. So, we do believe that the shift we have been talking about to truly zero trust away from traditional firewalls and VPNs is happening, and it will continue.
+
+Ittai Kidron -- Oppenheimer and Company -- Analyst
+
+Appreciate it. Thank you.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Andrew Nowinski of Wells Fargo. Your line is open.
+
+Andy Nowinski -- Wells Fargo Securities -- Analyst
+
+Great, thank you. Congrats on a great quarter, particularly on the billings. I mean it looks like you solidly exceeded that even if you pull out that $20 million deal upfront. So, I wanted to ask about the data protection products that you call out.
+
+You spent a lot of time talking about it on the call. And, you know, based on the info in your slide deck, it looks like there's a lot of components to that beyond just data protection. So, maybe could you just talk about some of the vendors that you're competing against there? I think you said one customer, you replaced two different vendors. If you just expand on, you know, what you're seeing there from a competitive perspective and how competitive is it relative to like the markets for Zia and ZPA? Thanks.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Yeah. So, data protection becomes a natural thing for us when traffic starts flowing through Zscaler. So, literally, it's hard to have any other data protection vendor when Zscaler is actually sitting in the traffic path. So, what are some of the pieces of success here? First of all, DLP, data loss prevention, which essentially is done on the traffic that's in line.
+
+We are replacing -- the No. 1 vendor we are replacing there is Symantec, which is widely deployed. So, first, we deployed Symantec Blue Coat boxes, and now, the DLP, is the secondary piece. The third big area we are replacing is some of the CASB vendors.
+
+CASB early on got sold as a point product as a module. For us, it's the feature. So, any customer who has pure-play CASB deployed essentially gets kind of replaced by our data protection platform. So, those are two big areas.
+
+But in addition, now we are seeing some of the newer areas coming up. For example, our end-point DLP which we recently launched, is getting tremendous attraction out there. The email DLP module we added is wonderful as well. Through acquisition of Canonic, we have added the SaaS -- the ecosystem -- sorry, supply chain data protection.
+
+So, all this has made these pillars the most comprehensive platform, and it's setting traffic line. That's why we kind of called it out because the growth is great over 60% year over year, and we are close to a quarter of $1 billion in. ARR.
+
+Andy Nowinski -- Wells Fargo Securities -- Analyst
+
+That's great. Thanks, Jay. Keep up the good work.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Brian Essex of JPMorgan. Your line is open.
+
+Brian Essex -- JPMorgan Chase and Company -- Analyst
+
+Hi, good afternoon. Thank you for taking the question, and congrats on the results. Jay, I was wondering if you may, or Remo as well, give us a little bit more color in terms of the ramp deals that you saw this quarter. Is there a way to quantify what percentage of deals were ramp versus prior quarters? And how does that typically -- how do the dynamics of those deals work in terms of the amounts of commitments, the pricing, and the flexibility around ramping? And does it give you more flexibility? Or does it give you more visibility around what you see in the pipeline in terms of coverage over future periods? Thanks.
+
+Remo Canessa -- Chief Financial Officer
+
+You know, I mean -- I'll start and, you know, maybe Jay can contribute also. Ramp was a headwind about 1%, you know, for us. For larger deals that we're doing as we talked about in the past is that, you know, we used ramp with our customers to basically ramp into the full, you know, suite of products that we have. What we're seeing is we're seeing customers buy more of our platform upfront.
+
+We're seeing also existing customers, you know, expanding their platform with, you know, ZIA, ZPA, ZDX, and data protection. So, when they're buying the full suite of our products, you know, basically, we use it as a vehicle to allow our customers to ramp into our products and we get that type of pricing. I would expect, you know, ramps, you know, just to kind of follow into fiscal '24, I would expect the same level of ramps in fiscal '24, you know, at this point. You know, the ramps do give us better visibility into billings because, basically, they'll start off with, you know, lower billings and then ramp up their billings in future periods.
+
+But, you know, it is a vehicle that we use. It's been very effective, and so we'll continue to use it. And, Jay?
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+The bigger the platform we sell, the more likely you need to provide ramp because of the more pieces to be done. Number two, there's some of the tighter macro environment with bigger deal scrutiny, ramp did pick up in the past year or so as compared to two years ago. We factor that in as a part of doing business, and it's not a bad thing. We just have to manage it right away.
+
+Brian Essex -- JPMorgan Chase and Company -- Analyst
+
+Great, thank you very much.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Gray Powell of BTIG. Your line is open.
+
+Gray Powell -- BTIG -- Analyst
+
+OK, great. Yeah, Gray Powell from BTIG. Thanks for taking the question, and congrats on the good results. So, a couple related questions on my side.
+
+Can you talk about the visibility you have on late-stage pipeline today relative to this time last year? And I guess I'm just trying to get your confidence in billings. The higher percentage of deals today, does that help give you better visibility on the growth outlook?
+
+Remo Canessa -- Chief Financial Officer
+
+Our visibility is good. So, you know, as we talked about, you know, we've had a record pipeline and our execution also in Q4. So, I would say, you know, visibility for us is good and supports our guidance. You know, certainly the billings, you know, with the ramps, you know, give us also good visibility to.
+
+So, you know, our guidance I feel, you know, 24% to 26% is, you know, very good guidance and takes into account our visibility and all factors.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+And also, if I may add, we have a record pipeline, and we're seeing pretty good momentum on our business. We are in Vegas doing our sales kickoff a couple of weeks ago. The energy and excitement in the room could be felt actually. It was very good because our sales team have a lot of confidence.
+
+We talked about the record pipeline, the record deals out there. We talked about the new momentum the channel is adding to us. So, we feel very good about our fiscal '24 business.
+
+Gray Powell -- BTIG -- Analyst
+
+That's perfect. Thank you very much.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Jonathan Ruykhaver of Cantor. Your line is open.
+
+Jonathan Ruykhaver -- Cantor Fitzgerald -- Analyst
+
+Yes, thank you. So, I have a question on the emerging product portfolio. You highlighted how it represented 18% of new business in fiscal '23. You expect that to get to plus 20% in fiscal '24.
+
+It just seems to me like, you know, plus 20%, I'm not sure, you know, what that plus could be. But it seems like a low bar just given your comments on data security, ZDX, and cloud, including the tailwind that you talked about from AI that is going to benefit some of those products. So, can you just help us understand, you know, demand dynamics within that portfolio, the puts and takes on specific products where you expect to see the strongest demand?
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Yes, if I may start, it's all coming out of 100% only, OK? That's the most important point, when the overall growth is pretty strong, OK? And for the new product, even if it grows 70%, 80% a year, it has to work very hard to even take away 1% or 2% from the total new ACV. That's pretty significant. So, the growth of these new products is much faster than the growth of the overall new ACV. But they are fairly small and they're growing into good business.
+
+We called out data protection as it became a significant part of the business. And I think here, too, you're seeing a combination of workload protection and ZDX. Both are growing at a much faster rate. So, I think we are actually happy with the growth rate.
+
+But the point I was trying to make is they are trying to steal away the market share from the rest of the overall portfolio, which has a much bigger base. That's why the math looks small, but it is pretty impressive.
+
+Jonathan Ruykhaver -- Cantor Fitzgerald -- Analyst
+
+Yeah, understood. Good point, Jay. Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Joshua Tilton of Wolfe Research line is open.
+
+Josh Tilton -- Wolfe Research -- Analyst
+
+Hey, guys, thanks for taking my question, and I echo my congrats on a good quarter. I kind of want to go back to the first question. And if you look at the guidance, the implied new billings kind of looks like a little bit more aggressive, I would say, in the last two years. So, maybe just, you know, level set for us or set some guardrails or expectations around kind of the puts and takes on what it would take for you guys to kind of outperform what you laid out for the next 12 months for us, please.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Let me start to give you a big picture, and, Remo, you can add your color to it. So, our guidance is starting with, first of all, a record pipeline and the momentum we have in the business. And we have plenty of product to sell. We have a growing market opportunity and many business drivers.
+
+We have a lot of new customers who are really buying zero trust for better security, lots of market that's not covered. We are still in about 30% of the Global 2000 market. And we are seeing public sector coming strong, federal market coming strong, and that's really further pushed by some of the mandates that are happening out there. And you saw in some of the deals that are announced, customers are increasingly buying, more of these kind of platform leading to bigger deals.
+
+ZIA, ZPA, our flagship products, are still doing strong. We have factored into good growth for data protection, which complements -- it actually needs to go in every Zscaler customer. Emerging products are contributing nicely, and they are contributing. So, when you look at all this, that's what we took into factor to give you our guidance.
+
+Remo Canessa -- Chief Financial Officer
+
+Yeah, I mean, you know our guidance basically balances our business optimism that we see with our company, also with the macro environment. We feel, you know, in this market, this is very solid guidance.
+
+Josh Tilton -- Wolfe Research -- Analyst
+
+Super helpful. Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Saket Kalia of Barclays. Your line is open.
+
+Saket Kalia -- Barclays -- Analyst
+
+OK, great. Hey, guys, thanks for taking my question here. And I echo my congrats on the result. Remo, maybe for you just to switch it up a little bit, great to see the free cash flow margin expansion thus far.
+
+Maybe looking forward, can you just talk about some of the puts and takes on free cash flow margin with, I think, the 20%-plus guide for next year? You know, how are you thinking about things like billing duration or capex or anything that's maybe influencing that number? Because it's great to see, you know, operating margin expand, why isn't free cash flow margin maybe expanding in the same way? Thanks.
+
+Remo Canessa -- Chief Financial Officer
+
+Yeah, Saket, that's a great question. You know, the billing duration, I would assume, so similar type billing duration as we had in fiscal '23, so no change. Capex, we do expect capex to be a higher percent. If you take a look at the last two years, our capex has been in the 6% range of our revenue.
+
+We expect our capex to be in the high single-digit type range. We're seeing the expansion of our business. We're making investments in our cloud. And again, it's -- that's the main reason.
+
+Saket Kalia -- Barclays -- Analyst
+
+Very helpful. Thanks.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Gregg Moskowitz of Mizuho. Your line is open.
+
+Gregg Moskowitz -- Mizuho Securities -- Analyst
+
+All right, thank you for taking the question, and I'll echo my congrats. Jay, getting back to data protection. So, your multimodal DLP that combines video and audio formats, that's interesting to me. Curious if you had any early customer feedback on that feature.
+
+And then, secondly, what has been the early uptake around your new Risk360 offering just in terms of visualizing risk, etc.? Thank you.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+So, multimodal DLP is still in development. It's not shipping, but there's a bunch of engagement with customers. And interest is high because there's nothing like this out there in the market. You know, Zscaler always likes to pioneer new things that no one has done out there.
+
+Risk360, on the other hand, is actually shipping. We have taken a bunch of orders. This product has more interest upfront than any of the other products I can think of because our engagement with CISOs are strong. When a CISO looks at Risk360 and say, "Wow, I have actually a single point to really tell me the holistic view of my business and actually where my risk factors are and what tangible prioritized actions I could take to improve my risk." So, this is a significant velocity going on.
+
+Very, very good feedback, and the product is growing very rapidly in terms of functionality as well.
+
+Gregg Moskowitz -- Mizuho Securities -- Analyst
+
+Perfect. Thank you.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of John DiFucci of Guggenheim. Your line is open.
+
+Again, Mr. DiFucci, your line is open.
+
+John DiFucci -- Guggenheim Partners -- Analyst
+
+Oh, thank you. So, it does -- everybody has said it, the numbers look good. It was a nice quarter. But when we try to look at the new business signings, it looks like it saw a tick down against a similar comp versus, what I think, was sort of a monster quarter, the third quarter.
+
+And, Remo, you mentioned the continued macro pressure. And, of course, everybody sees that. But is this quarter how we should expect Zscaler to sort of be going forward in regards to business momentum and new business signings? Or was the third quarter a better gauge on what we should expect going forward against this macro backdrop?
+
+Remo Canessa -- Chief Financial Officer
+
+Yeah, I mean our new and upsell bookings were up year over year, so, you know, for Q4. So, it was a good quarter. You know, from my perspective, John, I mean, it's a huge market opportunity, you know, on the part of Zscaler. I don't want to make any projections related to our doing upsell billings because we don't give that guidance.
+
+But let me just say that, you know, our pipeline for new and upsell is very strong. You know, we had really strong and good execution in our Q4 which gives us confidence. So, I feel that we're well positioned to go forward and really, you know, do well. As I mentioned, it has come up a few times, you know, the wild card really is the global macro backdrop.
+
+And so, we're expecting the global macro environment to stay similar year over year. And so, we'll see how that plays through. But from a company perspective, for what we did in Q4 and how our business tracked, we had a very strong quarter, which gives us optimism going into fiscal '24.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+The point I'll also add is, since Zscaler can actually reduce cost while reducing business risk, there's added attractions. We are able to engage with customers and close deals even when the macro is tight. We also kind of felt very good about the record number of $1 million deals we closed in Q4. So, I see strengths across all major areas, major vertical regions, and that's why we feel good about it.
+
+John DiFucci -- Guggenheim Partners -- Analyst
+
+That all makes sense, and thanks for taking my question. I mean what you guys are doing is better than most everybody out there. But I guess just a quick follow-up, you know, you said your bookings were up year over year. If you look at current billings -- and I don't know if you look at it that way, I guess I do, but -- and I'm looking -- I'm trying to back it with new ACV or new ARR, depending upon the company.
+
+For you, it's new ACV. Was that up year over year? For most companies, it's not. And we calculate it being down a little bit, but it's still better than most.
+
+Remo Canessa -- Chief Financial Officer
+
+Yeah, we're not commenting on new ACV. But our bookings were up year over year, and I think that's a good way to look at the business.
+
+John DiFucci -- Guggenheim Partners -- Analyst
+
+Thank you.
+
+Remo Canessa -- Chief Financial Officer
+
+Thank you.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Adam Borg of Stifel. Your line is open.
+
+Adam Borg -- Stifel Financial Corp. -- Analyst
+
+Awesome, and thanks so much for taking the question. Maybe just for Remo, a couple of related housekeeping follow-up. So, NRR, I think, was at 121, below 125 for the first time after a number of quarters, was hoping you could talk a little bit more about that and expectations for next year. And I apologize if I missed it as a follow-up, but billing duration in the quarter, just what did that turn out to be? Was that a headwind or tailwind? Thanks so much.
+
+Remo Canessa -- Chief Financial Officer
+
+Yeah, so NRR, 121%, you know, we feel is outstanding. What we're seeing is that we're seeing more customers buying more of our platform upfront. So, when customers are buying more of your platform upfront, that'll impact, you know, purchase in the future. Also, you know, we called out on the call a Fortune 10 company, you know, bought basically within one quarter.
+
+So, if you're buying within the year based on the calculation for NRR, that impacts it. You know, from my perspective, you know, we've been saying this since our public offering, is billings is really the best measure to really, you know, look at Zscaler. And we still feel that. The only time we look at NRR is really at the end of the quarter.
+
+It's a metric that we look at. But, you know, really, what I look at is basically our total billings, whether it comes from new or upsell. You know, related to, you know, billing duration, it was a tailwind in Q4.
+
+Adam Borg -- Stifel Financial Corp. -- Analyst
+
+Great. Thanks so much.
+
+Operator
+
+Thank you. One moment, please. Our next question comes from the line of Peter Levine of Evercore. Your line is open.
+
+Peter Levine -- Evercore ISI -- Analyst
+
+Great, thanks for squeezing me in here, guys. Maybe one just follow-up on the gen AI opportunity, you know, your analyst -- not your analyst day, but your customer conference a couple of weeks ago, you announced the security autopilot. Maybe, Remo, for one, can you just put a final point in terms of how you plan on monetizing that as usage-based? Is it just an upsell to kind of the normal contract subscription? And then, second to Jay, is, you know, your competitors are all saying the same thing in terms of their data is proprietary. Maybe the same question to you is what do you think makes, you know, Zscaler data proprietary? What's your competitive advantage when you go into an RFP versus, call it, like a Palo, whoever it might be, that your data is proprietary? There is a moat around your business.
+
+What would your answer to that be?
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+So, let's start with data. There are lots of companies have lots of data. What's exciting about Zscaler is we are designed as a switchboard for all communication between different parties. A firewall is not a switchboard.
+
+A firewall is a door, it's a gate. It says you are inside, you are outside. That's number one. Number two, firewall logs are often what's known as short logs.
+
+Still, a small number of firewall transactions, whether they are on-prem or in the cloud [Inaudible] access and decrypted. If the records aren't -- if the transactions aren't decrypted, your logs aren't of much use at all. Or if you take DNS logs, they're not very useful at all. It says which DNS domain are you going to? We have full logs after decryption about all the information, including the full URL.
+
+The URL has a lot of useful information that we have. Before any reconnaissance -- before any breach happens, reconnaissance starts, it could be trying to exploit software vulnerabilities. It could be trying to phish those employees. All of that traffic goes through us, and we collect those logs.
+
+And that's why we can actually do some of the things like being able to predict potential breach and the like. So, that's one big part on the log side of it. The second question of how do we monetize AI-driven products, don't think of Zscaler having only AI-driven products as a separate charge. It is going to influence all of our product lines.
+
+Today, some of our premium bundles include AI-powered products. So, we are actually monetizing it as a part of the premium bundles. And they are actually fairly highly priced as compared to other bundles. Products like Risk360, leveraging AI/ML big time, is charged SKU.
+
+Some of the new products we are building, they will have upsell, they'll have their own SKU. So, we think there's plenty of opportunities to charge because customers are seeing values from the products we're building.
+
+Peter Levine -- Evercore ISI -- Analyst
+
+Thank you.
+
+Operator
+
+Thank you. Our next question comes from the line of Patrick Colville. Your line is open. One moment.
+
+Patrick Colville -- Deutsche Bank -- Analyst
+
+All right. Thank you so much for putting me in.
+
+Remo Canessa -- Chief Financial Officer
+
+ Hello?
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Hello?
+
+Remo Canessa -- Chief Financial Officer
+
+Hey, Patrick, are you on? Patrick? Can we take our last question?
+
+Operator
+
+Our last -- Patrick's line was open. I don't know if he disconnected. One moment. Patrick, if you could star 1, 1 again.
+
+Remo Canessa -- Chief Financial Officer
+
+Let's try the next call.
+
+Operator
+
+OK, thank you. One moment. Our next question comes from the line of Ben Bollin of Cleveland Research. Your line is open.
+
+Ben Bollin -- Cleveland Research Company -- Analyst
+
+Good afternoon. Thanks for taking the question. I'm interested in how you feel about your progress throughout the broader channel, traditional two-tier cloud marketplace GSI. Any thoughts you have around kind of what you've learned over the last six, 12 months and how that's playing into your strategy over the next several years? Thank you.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Yeah, as you know, traditionally channel has played a limited role for us. We have been working on it. We are seeing more and more progress being made. Just to clarify, I mean, we do take all these to channel with some exceptions when customers insist on us.
+
+So, that's one part. We are seeing year after year, or in the past several quarters, channel providing more leverage to us. That means doing more work for us. We recently hired our channel chief, Karl Soderlund.
+
+He comes from extensive experience and strong relationships in the channel. And he has done a lot of work in three areas of the channel, system integrators, VARs, and service providers. In the system integration space, we have actually most of the large SIs. They have selected and deployed Zscaler for their own transformation and zero trust architecture.
+
+So, they are embedding our solution into the SI advisory services, which is very good because, then, it becomes a lot better. We also -- so we are counting on more leverage from broad channel, even the wider channel itself. They're going through some focused training program, enablement program, which will help them do more transformation with us. In fact, we had nearly 200 channel partners come to our sales kickoff and join hands and conduct session with our sales teams.
+
+We think that's bringing our teams a lot more closer to work together, common account planning, and the like. So, we're pleased of progress, and we think we're moving in the right direction.
+
+Ben Bollin -- Cleveland Research Company -- Analyst
+
+Thanks guys. Have a great night.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Thank you.
+
+Remo Canessa -- Chief Financial Officer
+
+Thank you.
+
+Operator
+
+Thank you. I'd like to turn the call back over to Jay Chaudhry for any closing remarks.
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Well, thank you all for your interest in Zscaler. I'm looking forward to seeing you at some of our investor conferences. Thank you again.
+
+Remo Canessa -- Chief Financial Officer
+
+Thank you.
+
+Operator
+
+Thank you. Ladies and gentlemen, that concludes today's conference. Thank you all for participating. [Operator signoff]
+
+Duration: 0 minutes
+
+Call participants:
+
+Bill Choi -- Senior Vice President, Investor Relations and Strategic Finance
+
+Jay Chaudhry -- Founder, Chairman, and Chief Executive Officer
+
+Remo Canessa -- Chief Financial Officer
+
+Brad Zelnick -- Deutsche Bank -- Analyst
+
+Matt Hedberg -- RBC Capital Markets -- Analyst
+
+Roger Boyd -- UBS -- Analyst
+
+Ittai Kidron -- Oppenheimer and Company -- Analyst
+
+Andy Nowinski -- Wells Fargo Securities -- Analyst
+
+Brian Essex -- JPMorgan Chase and Company -- Analyst
+
+Gray Powell -- BTIG -- Analyst
+
+Jonathan Ruykhaver -- Cantor Fitzgerald -- Analyst
+
+Josh Tilton -- Wolfe Research -- Analyst
+
+Saket Kalia -- Barclays -- Analyst
+
+Gregg Moskowitz -- Mizuho Securities -- Analyst
+
+John DiFucci -- Guggenheim Partners -- Analyst
+
+Adam Borg -- Stifel Financial Corp. -- Analyst
+
+Peter Levine -- Evercore ISI -- Analyst
+
+Patrick Colville -- Deutsche Bank -- Analyst
+
+Ben Bollin -- Cleveland Research Company -- Analyst
+
+More ZS analysis
+
+All earnings call transcripts
+
+This article is a transcript of this conference call produced for The Motley Fool. While we strive for our Foolish Best, there may be errors, omissions, or inaccuracies in this transcript. As with all our articles, The Motley Fool does not assume any responsibility for your use of this content, and we strongly encourage you to do your own research, including listening to the call yourself and reading the company's SEC filings. Please see our Terms and Conditions for additional details, including our Obligatory Capitalized Disclaimers of Liability.

@@ -11,6 +11,7 @@ let package = Package(
     ],
     products: [
         .library(name: "llama", targets: ["llama"]),
+        .library(name: "Bert", targets: ["Bert"])
     ],
     targets: [
         .target(
@@ -90,6 +91,40 @@ let package = Package(
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit")
             ]
+        ),
+        .target(
+            name: "Bert",
+            dependencies: [ "llama" ],
+            publicHeadersPath: "include",
+            cSettings: [
+                .define("GGML_USE_ACCELERATE"),
+                .unsafeFlags([
+                    "-Wall", "-Wextra", "-Wpedantic", "-Wshadow",
+                    "-Wcast-qual", "-Wstrict-prototypes", "-Wpointer-arith",
+                    "-Wdouble-promotion", "-Wno-unused-function",
+                    "-Wmissing-prototypes", "-Werror=vla", "-mavx", "-mavx2",
+                    "-mfma", "-mf16c", "-O3", "-DNDEBUG", "-O3", "-std=gnu11",
+                    "-Wno-format", "-mf16c", "-mfma", "-mavx", "-mavx2"
+                ])
+            ],
+            cxxSettings: [
+                .define("GGML_USE_ACCELERATE"),
+                .unsafeFlags([
+                    "-O3", "-DNDEBUG", "-O3", "-std=gnu++20",
+                    "-Wno-format", "-mf16c", "-mfma", "-mavx", "-mavx2"
+                ])
+            ],
+            linkerSettings: [
+                .linkedFramework("Accelerate"),
+                .linkedFramework("Foundation"),
+                .linkedFramework("NaturalLanguage")
+            ]
+        ),
+        .testTarget(name: "BertTests",
+                    dependencies: ["Bert"],
+                    resources: [
+                        .process("resources")
+                    ]
         )
     ],
     cxxLanguageStandard: .cxx11
