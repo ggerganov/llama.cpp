@@ -501,7 +501,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```sh
     mkdir build
     cd build
-    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_dir=/some/path
+    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
     cmake --build . --config Release
     ```
   - CMake (Windows):
