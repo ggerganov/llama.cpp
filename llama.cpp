@@ -12709,6 +12709,10 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }
+
+#ifdef GGML_USE_MPI
+    ggml_mpi_backend_init();
+#endif
 }
 
 void llama_backend_free(void) {
