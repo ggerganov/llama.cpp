@@ -20,6 +20,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+// TODO add Windows support
 #include <wordexp.h>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
@@ -116,10 +118,13 @@ int main(int argc, char ** argv) {
         return 2;
     }
 
+    // Manually add the path used to launch this program to the
+    // options
     std::string rawOptions = argv[0];
     rawOptions += ' ';
     std::ifstream optionsFile(argv[1]);
     if (optionsFile.is_open()) {
+        // Read in the options file, appending to the launch path
         std::ostringstream buf;
         buf << optionsFile.rdbuf();
         rawOptions += buf.str();
@@ -130,22 +135,21 @@ int main(int argc, char ** argv) {
         return 3;
     }
 
+    // wordexp doesn't work right if there's a trailing newline, so strip it
     rawOptions.erase(rawOptions.find_last_not_of(" \t\n\r\f\v") + 1);
 
     printf("%s", rawOptions.c_str());
 
     wordexp_t  splitOptions;
     wordexp(rawOptions.c_str(), &splitOptions, WRDE_NOCMD);
-    //char** loadedArgs = (char **) malloc(1 + sizeof(char*) * splitOptions.we_wordc);
-    //loadedArgs[0] = argv[0];
-    //memcpy(&loadedArgs[1], splitOptions.we_wordv, sizeof(char*) * splitOptions.we_wordc);
-    printf("Loaded argc: %d", splitOptions.we_wordc);
+    fprintf(stderr, "Loaded arguments: ");
     for (int i = 0; i < splitOptions.we_wordc; i++) {
 
-        printf(" %s", splitOptions.we_wordv[i]);
+        fprintf(stderr, " %s", splitOptions.we_wordv[i]);
     }
-    printf("\n");
+    fprintf(stderr, "\n");
 
+    // Now we can parse like normal, but using the loaded options instead of the passed argv
     if (gpt_params_parse(splitOptions.we_wordc, splitOptions.we_wordv, params) == false) {
         wordfree(&splitOptions);
         return 1;
