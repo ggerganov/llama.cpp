@@ -47,6 +47,7 @@ struct ggml_mpi_context * ggml_mpi_split_comm(struct ggml_mpi_context * ctx, int
 }
 
 void ggml_mpi_free(struct ggml_mpi_context * ctx) {
+    MPI_Comm_free(ctx->comm);
     free(ctx);
 }
 
