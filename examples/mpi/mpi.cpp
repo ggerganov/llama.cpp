@@ -134,16 +134,8 @@ int main(int argc, char ** argv) {
     // wordexp doesn't work right if there's a trailing newline, so strip it
     rawOptions.erase(rawOptions.find_last_not_of(" \t\n\r\f\v") + 1);
 
-    printf("%s", rawOptions.c_str());
-
     wordexp_t  splitOptions;
     wordexp(rawOptions.c_str(), &splitOptions, WRDE_NOCMD);
-    fprintf(stderr, "Loaded arguments: ");
-    for (int i = 0; i < splitOptions.we_wordc; i++) {
-
-        fprintf(stderr, " %s", splitOptions.we_wordv[i]);
-    }
-    fprintf(stderr, "\n");
 
     // Now we can parse like normal, but using the loaded options instead of the passed argv
     if (gpt_params_parse(splitOptions.we_wordc, splitOptions.we_wordv, params) == false) {
