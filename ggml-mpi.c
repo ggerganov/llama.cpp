@@ -166,9 +166,7 @@ void ggml_mpi_scatter_layers(
 
     if (layer_ranges != NULL) {
         for (int i = 0; i < ctx_mpi->size * 2; i += 2) {
-            fprintf(stderr, "In iteration %d\n", i);
             flattened_ranges[i] = layer_ranges[i/2][0];
-            fprintf(stderr, "Got first element\n");
             flattened_ranges[i + 1] = layer_ranges[i/2][1];
         }
     }
