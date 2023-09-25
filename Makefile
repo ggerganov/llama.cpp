@@ -39,9 +39,14 @@ endif
 #
 
 # keep standard at C11 and C++11
-CFLAGS   = -I.              -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c11   -fPIC -DGGML_USE_K_QUANTS -DLOG_DISABLE_LOGS -D_GNU_SOURCE
-CXXFLAGS = -I. -I./common -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c++11 -fPIC -DGGML_USE_K_QUANTS -DLOG_DISABLE_LOGS -D_GNU_SOURCE
+CFLAGS   = -I.            -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c11   -fPIC -DLOG_DISABLE_LOGS -D_GNU_SOURCE
+CXXFLAGS = -I. -I./common -I./include -I./include/CL -I./otherarch -I./otherarch/tools -Ofast -DNDEBUG -std=c++11 -fPIC -DLOG_DISABLE_LOGS -D_GNU_SOURCE
 LDFLAGS  =
+
+ifndef LLAMA_NO_K_QUANTS
+CFLAGS   += -DGGML_USE_K_QUANTS
+CXXFLAGS += -DGGML_USE_K_QUANTS
+endif
 
 # these are used on windows, to build some libraries with extra old device compatibility
 SIMPLECFLAGS =
@@ -285,19 +290,17 @@ ifeq ($(OS),Windows_NT)
 	endif
 else
 	DEFAULT_BUILD = $(CXX) $(CXXFLAGS)  $^ -shared -o $@.so $(LDFLAGS)
-	FAILSAFE_BUILD = $(CXX) $(CXXFLAGS) $^ -shared -o $@.so $(LDFLAGS)
+
 	ifdef LLAMA_OPENBLAS
 	OPENBLAS_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
-	NOAVX2_BUILD = $(CXX) $(CXXFLAGS) $^ $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 	endif
 	ifdef LLAMA_CLBLAST
 		ifeq ($(UNAME_S),Darwin)
-				CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -framework OpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
+			CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -framework OpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 		else
-				CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
+			CLBLAST_BUILD = $(CXX) $(CXXFLAGS) $^ -lclblast -lOpenCL $(ARCH_ADD) -lopenblas -shared -o $@.so $(LDFLAGS)
 		endif
 	endif
-
 	ifdef LLAMA_CUBLAS
 		CUBLAS_BUILD = $(CXX) $(CXXFLAGS) $(CUBLAS_FLAGS) $^ -shared -o $@.so $(CUBLASLD_FLAGS) $(LDFLAGS)
 	endif
@@ -351,12 +354,18 @@ ggml_cublas.o: ggml.c ggml.h ggml-cuda.h k_quants.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) $(CUBLAS_FLAGS) $(HIPFLAGS) -c $< -o $@
 
 #quants K
+ifndef LLAMA_NO_K_QUANTS
 k_quants.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS) $(FULLCFLAGS) -c $< -o $@
 k_quants_noavx2.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS) $(SIMPLECFLAGS) -c $< -o $@
 k_quants_failsafe.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
 	$(CC)  $(CFLAGS) $(NONECFLAGS) -c $< -o $@
+else
+k_quants.o:
+k_quants_noavx2.o:
+k_quants_failsafe.o:
+endif # LLAMA_NO_K_QUANTS
 
 #there's no intrinsics or special gpu ops used here, so we can have a universal object
 ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
@@ -425,22 +434,54 @@ main: examples/main/main.cpp build-info.h ggml.o k_quants.o ggml-alloc.o llama.o
 gguf: examples/gguf/gguf.cpp build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
+
 #generated libraries
 koboldcpp_default: ggml.o ggml_v2.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(DEFAULT_BUILD)
+
+ifdef OPENBLAS_BUILD
 koboldcpp_openblas: ggml_openblas.o ggml_v2_openblas.o ggml_v1.o expose.o common.o gpttype_adapter.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(OPENBLAS_BUILD)
+else
+koboldcpp_openblas:
+endif
+
+ifdef FAILSAFE_BUILD
 koboldcpp_failsafe: ggml_failsafe.o ggml_v2_failsafe.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_failsafe.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(FAILSAFE_BUILD)
+else
+koboldcpp_failsafe:
+endif
+
+ifdef NOAVX2_BUILD
 koboldcpp_noavx2: ggml_noavx2.o ggml_v2_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_failsafe.o k_quants_noavx2.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(NOAVX2_BUILD)
+else
+koboldcpp_noavx2:
+endif
+
+ifdef CLBLAST_BUILD
 koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o k_quants.o ggml-alloc.o grammar-parser.o $(OBJS)
 	$(CLBLAST_BUILD)
+else
+koboldcpp_clblast:
+endif
+
+ifdef CUBLAS_BUILD
 koboldcpp_cublas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o grammar-parser.o $(CUBLAS_OBJS) $(OBJS)
 	$(CUBLAS_BUILD)
+else
+koboldcpp_cublas:
+endif
+
+ifdef HIPBLAS_BUILD
 koboldcpp_hipblas: ggml_cublas.o ggml_v2_cublas.o ggml_v1.o expose.o common.o gpttype_adapter_cublas.o k_quants.o ggml-alloc.o grammar-parser.o $(HIP_OBJS) $(OBJS)
 	$(HIPBLAS_BUILD)
+else
+koboldcpp_hipblas:
+endif
 
+# tools
 quantize_llama: examples/quantize/quantize.cpp ggml.o llama.o k_quants.o ggml-alloc.o
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 quantize_gptj: ggml.o llama.o k_quants.o ggml-alloc.o otherarch/tools/gptj_quantize.cpp otherarch/tools/common-ggml.cpp

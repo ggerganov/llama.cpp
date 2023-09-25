@@ -576,9 +576,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         global modelbusy, requestsinqueue
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
-        basic_api_flag = False
-        kai_api_flag = False
-        kai_sse_stream_flag = False
         self.path = self.path.rstrip('/')
 
         if self.path.endswith(('/api/extra/tokencount')):
@@ -634,6 +631,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             requestsinqueue = (requestsinqueue - 1) if requestsinqueue>0 else 0
 
         try:
+            basic_api_flag = False
+            kai_api_flag = False
+            kai_sse_stream_flag = False
             if self.path.endswith('/request'):
                 basic_api_flag = True
 
@@ -1670,7 +1670,7 @@ def run_horde_worker(args, api_key, worker_name):
         time.sleep(3)
     else:
         print_with_time("Horde Worker Shutdown - Server Closing.")
-        time.sleep(2)
+        time.sleep(3)
     sys.exit(2)
 
 def unload_libs():
@@ -1752,7 +1752,7 @@ def main(launch_args,start_server=True):
                 setattr(args, key, value)
         else:
             print("Specified kcpp config file invalid or not found.")
-            time.sleep(2)
+            time.sleep(3)
             sys.exit(2)
     if not args.model_param:
         args.model_param = args.model
@@ -1896,8 +1896,6 @@ def main(launch_args,start_server=True):
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite))
     else:
         print(f"Server was not started, main function complete. Idling.")
-        # while True:
-        #     time.sleep(5)
 
 if __name__ == '__main__':
     print("***\nWelcome to KoboldCpp - Version " + KcppVersion) # just update version manually
