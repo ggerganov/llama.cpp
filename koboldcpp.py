@@ -1680,8 +1680,9 @@ def unload_libs():
     dll_close = None
     if OS == "Windows":  # pragma: Windows
         from ctypes import wintypes
-        ctypes.windll.kernel32.FreeLibrary.argtypes = [wintypes.HMODULE]
         dll_close = ctypes.windll.kernel32.FreeLibrary
+        dll_close.argtypes = [wintypes.HMODULE]
+        dll_close.restype = ctypes.c_int
     elif OS == "Darwin":
         try:
             try:  # macOS 11 (Big Sur). Possibly also later macOS 10s.
@@ -1693,19 +1694,27 @@ def unload_libs():
             # not even in PATH.
             stdlib = ctypes.CDLL("/usr/lib/system/libsystem_c.dylib")
         dll_close = stdlib.dlclose
+        dll_close.argtypes = [ctypes.c_void_p]
+        dll_close.restype = ctypes.c_int
     elif OS == "Linux":
         try:
             stdlib = ctypes.CDLL("")
         except OSError:
             stdlib = ctypes.CDLL("libc.so") # Alpine Linux.
         dll_close = stdlib.dlclose
+        dll_close.argtypes = [ctypes.c_void_p]
+        dll_close.restype = ctypes.c_int
     elif sys.platform == "msys":
         # msys can also use `ctypes.CDLL("kernel32.dll").FreeLibrary()`.
         stdlib = ctypes.CDLL("msys-2.0.dll")
         dll_close = stdlib.dlclose
+        dll_close.argtypes = [ctypes.c_void_p]
+        dll_close.restype = ctypes.c_int
     elif sys.platform == "cygwin":
         stdlib = ctypes.CDLL("cygwin1.dll")
         dll_close = stdlib.dlclose
+        dll_close.argtypes = [ctypes.c_void_p]
+        dll_close.restype = ctypes.c_int
     elif OS == "FreeBSD":
         # FreeBSD uses `/usr/lib/libc.so.7` where `7` is another version number.
         # It is not in PATH but using its name instead of its path is somehow the
@@ -1716,6 +1725,18 @@ def unload_libs():
     if handle and dll_close:
         print("Unloading Libraries...")
         dll_close(handle._handle)
+        del handle.load_model
+        del handle.generate
+        del handle.new_token
+        del handle.get_stream_count
+        del handle.has_finished
+        del handle.get_last_eval_time
+        del handle.get_last_process_time
+        del handle.get_last_token_count
+        del handle.get_last_stop_reason
+        del handle.abort_generate
+        del handle.token_count
+        del handle.get_pending_output
         del handle
         handle = None
 

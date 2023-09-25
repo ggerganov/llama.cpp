@@ -189,6 +189,18 @@ class model_backend(InferenceModel):
                                     'children': [{'text': 'False', 'value': False}, {'text': 'True', 'value': True}],
                                     })
         requested_parameters.append({
+                                    "uitype": "text",
+                                    "unit": "text",
+                                    "label": "GPU ID",
+                                    "id": "kcpp_tensor_split_str",
+                                    "default": "1",
+                                    "check": {"value": "", 'check': "!="},
+                                    "tooltip": "Which GPU's do we use? For example:1 2",
+                                    "menu_path": "",
+                                    "refresh_model_inputs": False,
+                                    "extra_classes": ""
+                                    })
+        requested_parameters.append({
                                     "uitype": "dropdown",
                                     "unit": "int",
                                     "label": "Debug Mode",
@@ -201,18 +213,6 @@ class model_backend(InferenceModel):
                                     "refresh_model_inputs": False,
                                     "extra_classes": "",
                                     'children': [{'text': 'False', 'value': 0}, {'text': 'True', 'value': 1}],
-                                    })
-        requested_parameters.append({
-                                    "uitype": "text",
-                                    "unit": "text",
-                                    "label": "Tensor Split",
-                                    "id": "kcpp_tensor_split_str",
-                                    "default": self.kcpp_tensor_split_str,
-                                    "check": {"value": "", 'check': "!="},
-                                    "tooltip": "Tensor Split, values are space separated",
-                                    "menu_path": "",
-                                    "refresh_model_inputs": False,
-                                    "extra_classes": ""
                                     })
         return requested_parameters
 
@@ -232,6 +232,7 @@ class model_backend(InferenceModel):
             self.kcpp_tensor_split = []
             for s in splits:
                 self.kcpp_tensor_split.append(int(s))
+                print(self.kcpp_tensor_split)
 
         accel = parameters["kcpp_accelerator"]
         if accel==0:
