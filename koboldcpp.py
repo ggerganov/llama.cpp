@@ -344,6 +344,12 @@ def utfprint(str):
         utf_string = utf_string.replace('\a', '') #remove bell characters
         print(utf_string)
 
+def bring_terminal_to_foreground():
+    if os.name=='nt':
+        ctypes.windll.user32.ShowWindow(ctypes.windll.kernel32.GetConsoleWindow(), 9)
+        ctypes.windll.user32.SetForegroundWindow(ctypes.windll.kernel32.GetConsoleWindow())
+
+
 #################################################################
 ### A hacky simple HTTP server simulating a kobold api by Concedo
 ### we are intentionally NOT using flask, because we want MINIMAL dependencies
@@ -674,6 +680,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if args.debugmode!=-1:
                     utfprint("\nInput: " + json.dumps(genparams))
 
+                if args.foreground:
+                    bring_terminal_to_foreground()
+
                 gen = asyncio.run(self.handle_request(genparams, api_format, kai_sse_stream_flag))
 
                 try:
@@ -923,6 +932,7 @@ def show_new_gui():
     psutil = ctk.IntVar()
     usemlock = ctk.IntVar()
     debugmode = ctk.IntVar()
+    keepforeground = ctk.IntVar()
 
     lowvram_var = ctk.IntVar()
     mmq_var = ctk.IntVar(value=1)
@@ -1064,7 +1074,7 @@ def show_new_gui():
     makelabelentry(hardware_tab, "Threads:" , threads_var, 8, 50)
 
     # hardware checkboxes
-    hardware_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "PSUtil Set Threads":psutil, "Debug Mode":debugmode,}
+    hardware_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "PSUtil Set Threads":psutil, "Debug Mode":debugmode, "Keep Foreground":keepforeground}
 
     for idx, name, in enumerate(hardware_boxes):
         makecheckbox(hardware_tab, name, hardware_boxes[name], int(idx/2) +30, idx%2)
@@ -1186,6 +1196,7 @@ def show_new_gui():
         args.stream = stream.get()==1
         args.smartcontext = smartcontext.get()==1
         args.unbantokens = unbantokens.get()==1
+        args.foreground = keepforeground.get()==1
 
         gpuchoiceidx = 0
         if gpu_choice_var.get()!="All":
@@ -1245,6 +1256,7 @@ def show_new_gui():
         stream.set(1 if "stream" in dict and dict["stream"] else 0)
         smartcontext.set(1 if "smartcontext" in dict and dict["smartcontext"] else 0)
         unbantokens.set(1 if "unbantokens" in dict and dict["unbantokens"] else 0)
+        keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
             if clblast_option is not None:
                 runopts_var.set(clblast_option)
@@ -1955,5 +1967,7 @@ if __name__ == '__main__':
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
     parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
     parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them. Polled-streaming is disabled while multiple requests are in queue.", action='store_true')
+    parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
+
 
     main(parser.parse_args(),start_server=True)
