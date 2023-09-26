@@ -6221,7 +6221,7 @@ struct ggml_tensor * ggml_mul_mat(
 
     const int64_t ne[4] = { a->ne[1], b->ne[1], b->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(a->n_dims, b->n_dims), ne);
-    GGML_PRINT("ggml_mul_mat result shape : (%lld, %lld, %lld, %lld)\n", ne[0], ne[1], ne[2], ne[3]);
+    //GGML_PRINT("ggml_mul_mat result shape : (%lld, %lld, %lld, %lld)\n", ne[0], ne[1], ne[2], ne[3]);
 
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -8883,13 +8883,14 @@ static void ggml_compute_forward_add_f32(
             }
         }
     }
-    if ((strncmp(src0->name, "preadd", 6) == 0
-     || strncmp(src0->name, "qkv_preadd", 10) == 0) 
-     && ith == 0) {
-        // print name
-        printf("\nadd outputs for %s\n", src0->name);
+    if (
+        strncmp(src0->name, "printme", 7) == 0
+        && params->ith == 0) { 
+        GGML_PRINT("\noutputs of add: %s + %s\n", src0->name, src1->name);
+        ggml_print_tensor(src0);
+        ggml_print_tensor(src1);
         ggml_print_tensor(dst);
-        int starts[] = {0, 3, 0};
+        int starts[] = {0, 1, 0};
         ggml_print_tensor_values(dst, starts, 0, 10);
     }
 }
@@ -10874,8 +10875,7 @@ static void ggml_compute_forward_norm_f32(
 
     GGML_ASSERT(src0->nb[0] == sizeof(float));
     // If the name starts with "layer_inputs", and we are on thread 0, print the tensor
-    if ((strncmp(src0->name, "layer_inputs", 12) == 0 
-        || strncmp(src0->name, "tmpq", 4) == 0)
+    if (strncmp(src0->name, "printme", 7) == 0 
         && params->ith == 0) {
         GGML_PRINT("\nlayernorm inputs for %s\n", src0->name);
         ggml_print_tensor(src0);
@@ -11313,6 +11313,7 @@ static void ggml_compute_forward_mul_mat(
         && params->ith == 0) { 
         GGML_PRINT("\nInputs to matmul: %s\n", src1->name);
         ggml_print_tensor(src1);
+        /*
         for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
             if (i % src1->ne[0] == 0) {
                 GGML_PRINT("\n");
@@ -11320,6 +11321,7 @@ static void ggml_compute_forward_mul_mat(
             GGML_PRINT(" %f ", ((float *)src1->data)[i + (src1->ne[0] * src1->ne[1])]);
         }
         GGML_PRINT("\n");
+        */
     }
 
     GGML_TENSOR_BINARY_OP_LOCALS;
@@ -12723,7 +12725,7 @@ static void ggml_compute_forward_rope_f32(
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
-    if (strncmp(src0->name, "krot", 4) == 0 && params->ith == 0) { 
+    if (strncmp(src0->name, "printme", 7) == 0 && params->ith == 0) { 
         GGML_PRINT("\ninputs of RoPE for %s\n", src0->name);
         ggml_print_tensor(src0);
         int starts[] = {0, 0, 1, 0};
@@ -12857,7 +12859,7 @@ static void ggml_compute_forward_rope_f32(
             }
         }
     }
-    if (strncmp(src0->name, "krot", 4) == 0 && params->ith == 0) { 
+    if (strncmp(src0->name, "printme", 7) == 0 && params->ith == 0) { 
         GGML_PRINT("\n dest at RoPE time for %s\n", src0->name);
         // print shape and strides
         int starts[4] = {0,0,1,0};
