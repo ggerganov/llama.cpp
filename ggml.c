@@ -20174,7 +20174,7 @@ const void * gguf_get_arr_data(const struct gguf_context * ctx, int i) {
 }
 
 const char * gguf_get_arr_str(const struct gguf_context * ctx, int key_id, int i) {
-    GGML_ASSERT(ctx->kv[i].type == GGUF_TYPE_ARRAY);
+    GGML_ASSERT(ctx->kv[key_id].type == GGUF_TYPE_ARRAY);
     struct gguf_kv * kv = &ctx->kv[key_id];
     struct gguf_str * str = &((struct gguf_str *) kv->value.arr.data)[i];
     return str->data;
