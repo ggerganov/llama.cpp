@@ -143,7 +143,12 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
 std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
            const std::string & text,
                         bool   add_bos);
 

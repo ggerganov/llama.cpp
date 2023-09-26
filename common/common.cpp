@@ -821,16 +821,23 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 //
 
 std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    return llama_tokenize(llama_get_model(ctx), text, add_bos);
+}
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
            const std::string & text,
                         bool   add_bos) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + add_bos;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(ctx, text.data(), text.length(), result.data(), result.size(), add_bos);
+    n_tokens = llama_tokenize_with_model(model, text.data(), text.length(), result.data(), result.size(), add_bos);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(ctx, text.data(), text.length(), result.data(), result.size(), add_bos);
+        int check = llama_tokenize_with_model(model, text.data(), text.length(), result.data(), result.size(), add_bos);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);

@@ -6427,6 +6427,10 @@ void llama_free(struct llama_context * ctx) {
     delete ctx;
 }
 
+const llama_model * llama_get_model(const struct llama_context * ctx) {
+    return &ctx->model;
+}
+
 int llama_n_vocab(const struct llama_context * ctx) {
     return llama_model_n_vocab(&ctx->model);
 }

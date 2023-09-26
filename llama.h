@@ -251,6 +251,8 @@ extern "C" {
     LLAMA_API bool llama_mmap_supported (void);
     LLAMA_API bool llama_mlock_supported(void);
 
+    LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
+
     LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
