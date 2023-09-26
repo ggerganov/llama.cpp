@@ -11,9 +11,9 @@ import argparse
 import json, sys, http.server, time, asyncio, socket, threading
 from concurrent.futures import ThreadPoolExecutor
 
-stop_token_max = 10
 sampler_order_max = 7
-ban_token_max = 10
+stop_token_max = 16
+ban_token_max = 16
 tensor_split_max = 16
 
 class load_model_inputs(ctypes.Structure):
@@ -749,7 +749,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
             exitcounter = 999
             self.httpd.server_close()
 
-    numThreads = 10
+    numThreads = 12
     threadArr = []
     for i in range(numThreads):
         threadArr.append(Thread(i))
