@@ -51,6 +51,9 @@ For more information, be sure to run the program with the `--help` flag.
 - If you're on Windows with an Nvidia GPU you can get CUDA support out of the box using the `--usecublas` flag, make sure you select the correct .exe with CUDA support.
 - You can attempt a CuBLAS build with `LLAMA_CUBLAS=1` or using the provided CMake file (best for visual studio users). If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC.
 
+## AMD
+- Please check out https://github.com/YellowRoseCx/koboldcpp-rocm
+
 ## Questions and Help
 - **First, please check out [The KoboldCpp FAQ and Knowledgebase](https://github.com/LostRuins/koboldcpp/wiki) which may already have answers to your questions! Also please search through past issues and discussions.**
 - If you cannot find an answer, open an issue on this github, or find us on the [KoboldAI Discord](https://koboldai.org/discord).
@@ -68,7 +71,7 @@ For more information, be sure to run the program with the `--help` flag.
 - The other files are also under the AGPL v3.0 License unless otherwise stated
 
 ## Notes
-- Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux. CLBlast speeds this up even further, and `--gpulayers` + `--useclblast` more so.
+- Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux. CLBlast speeds this up even further, and `--gpulayers` + `--useclblast` or `--usecublas` more so.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
 - Supported GGML models (Includes backward compatibility for older versions/legacy GGML models, though some newer features might be unavailable):
   - LLAMA and LLAMA2 (LLaMA / Alpaca / GPT4All / Vicuna / Koala / Pygmalion 7B / Metharme 7B / WizardLM and many more)
@@ -77,4 +80,5 @@ For more information, be sure to run the program with the `--help` flag.
   - RWKV
   - GPT-NeoX / Pythia / StableLM / Dolly / RedPajama
   - MPT models
+  - Falcon (GGUF only)
 
