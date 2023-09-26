@@ -11308,21 +11308,18 @@ static void ggml_compute_forward_mul_mat(
               struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
-    if (strncmp(src1->name, "KQ_soft_max", 11) == 0 && params->ith == 0
-        && src1->ne[0] == src1->ne[1]) { 
-        GGML_PRINT("\n KQ_softmax at mul mat time for %s\n", src1->name);
+    if (
+        strncmp(src1->name, "printme", 7) == 0
+        && params->ith == 0) { 
+        GGML_PRINT("\nInputs to matmul: %s\n", src1->name);
         ggml_print_tensor(src1);
-        if (ggml_nelements(src1) >= 14) {
-            for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
-                if (i % src1->ne[1] == 0) {
-                    GGML_PRINT("\n");
-                }
-                GGML_PRINT(" %f ", ((float *)src1->data)[i]);
+        for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
+            if (i % src1->ne[0] == 0) {
+                GGML_PRINT("\n");
             }
-            GGML_PRINT("\n");
-        } else {
-            GGML_PRINT("Not enough elements to print\n");
+            GGML_PRINT(" %f ", ((float *)src1->data)[i + (src1->ne[0] * src1->ne[1])]);
         }
+        GGML_PRINT("\n");
     }
 
     GGML_TENSOR_BINARY_OP_LOCALS;
@@ -12726,10 +12723,10 @@ static void ggml_compute_forward_rope_f32(
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
-    if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
-        GGML_PRINT("\nValues at RoPE time for %s\n", src0->name);
+    if (strncmp(src0->name, "krot", 4) == 0 && params->ith == 0) { 
+        GGML_PRINT("\ninputs of RoPE for %s\n", src0->name);
         ggml_print_tensor(src0);
-        int starts[] = {0, 1, 0, 0};
+        int starts[] = {0, 0, 1, 0};
         ggml_print_tensor_values(src0, starts, 0, 10);
     }
 
@@ -12860,7 +12857,7 @@ static void ggml_compute_forward_rope_f32(
             }
         }
     }
-    if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
+    if (strncmp(src0->name, "krot", 4) == 0 && params->ith == 0) { 
         GGML_PRINT("\n dest at RoPE time for %s\n", src0->name);
         // print shape and strides
         int starts[4] = {0,0,1,0};
