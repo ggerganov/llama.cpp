@@ -4290,6 +4290,65 @@ void ggml_print_objects(const struct ggml_context * ctx) {
     GGML_PRINT("%s: --- end ---\n", __func__);
 }
 
+static void ggml_print_tensor(const struct ggml_tensor * tensor) {
+    GGML_PRINT("Tensor (null): %s | rank %d | shape (", ggml_type_name(tensor->type), tensor->n_dims);
+    for (int i=0; i<tensor->n_dims; ++i) {
+        GGML_PRINT("%lld ", tensor->ne[i]);
+    }
+    GGML_PRINT(") | strides (");
+    for (int i=0; i<tensor->n_dims; ++i) {
+        GGML_PRINT("%lld ", tensor->nb[i]);
+    }
+    GGML_PRINT(")\n");
+}
+
+static void ggml_print_tensor_values(const struct ggml_tensor * tensor, int starts[], int dim, int nelts) {
+    GGML_ASSERT(tensor->type == GGML_TYPE_F32);
+    GGML_PRINT("printing values for %s[", tensor->name);
+    for (int i=0; i<tensor->n_dims; ++i) {
+        if (i!=dim) {
+            GGML_PRINT("%d", starts[i]);
+        } else {
+            if (starts[i] > 0) {
+                GGML_PRINT("%d:%d", starts[i], starts[i]+nelts);
+            } else {
+                GGML_PRINT(":%d", starts[i]+nelts);
+            }
+        }
+        if (i<tensor->n_dims-1) {
+            GGML_PRINT(",");
+        }
+    }
+    GGML_PRINT("]\n");
+
+    float *dataPtr = (float *) tensor->data;
+    
+    // Compute the offset into data for starts
+    int offset = 0;
+    for (int j = 0; j < tensor->n_dims; j++) {
+        offset += (starts[j] * tensor->nb[j]) / sizeof(float);  // Assuming nb[j] is in bytes, divide by sizeof(float) to get float offset.
+    }
+
+    dataPtr += offset;
+    
+    for (int i = 0; i < nelts; i++) {
+        GGML_PRINT("%f ", *dataPtr);
+        dataPtr += tensor->nb[dim] / sizeof(float);  // Increment by strides for the given dimension.
+    }
+    GGML_PRINT("\n");
+    /*
+    char * ptr = (char *)tensor->data;
+    for (int j=0; j<tensor->n_dims;j++) {
+        ptr += tensor->nb[j]*starts[j];
+    }
+    for (int i=0; i<nelts; i++) {
+        GGML_PRINT("%f ", (*((float *) ptr)));
+        ptr += tensor->nb[dim];
+    }
+    GGML_PRINT("\n");
+    */
+}
+
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
@@ -6162,6 +6221,7 @@ struct ggml_tensor * ggml_mul_mat(
 
     const int64_t ne[4] = { a->ne[1], b->ne[1], b->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(a->n_dims, b->n_dims), ne);
+    GGML_PRINT("ggml_mul_mat result shape : (%lld, %lld, %lld, %lld)\n", ne[0], ne[1], ne[2], ne[3]);
 
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -8823,6 +8883,15 @@ static void ggml_compute_forward_add_f32(
             }
         }
     }
+    if ((strncmp(src0->name, "preadd", 6) == 0
+     || strncmp(src0->name, "qkv_preadd", 10) == 0) 
+     && ith == 0) {
+        // print name
+        printf("\nadd outputs for %s\n", src0->name);
+        ggml_print_tensor(dst);
+        int starts[] = {0, 3, 0};
+        ggml_print_tensor_values(dst, starts, 0, 10);
+    }
 }
 
 static void ggml_compute_forward_add_f16_f32(
@@ -10804,6 +10873,18 @@ static void ggml_compute_forward_norm_f32(
     }
 
     GGML_ASSERT(src0->nb[0] == sizeof(float));
+    // If the name starts with "layer_inputs", and we are on thread 0, print the tensor
+    if ((strncmp(src0->name, "layer_inputs", 12) == 0 
+        || strncmp(src0->name, "tmpq", 4) == 0)
+        && params->ith == 0) {
+        GGML_PRINT("\nlayernorm inputs for %s\n", src0->name);
+        ggml_print_tensor(src0);
+        int starts[] = {0, 1, 0};
+        ggml_print_tensor_values(src0, starts, 0, 10);
+        for (int i=64; i<74; ++i) {
+            GGML_PRINT("%f ", ggml_get_f32_1d(src0, i));
+        }
+    }
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -11227,8 +11308,25 @@ static void ggml_compute_forward_mul_mat(
               struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
+    if (strncmp(src1->name, "KQ_soft_max", 11) == 0 && params->ith == 0
+        && src1->ne[0] == src1->ne[1]) { 
+        GGML_PRINT("\n KQ_softmax at mul mat time for %s\n", src1->name);
+        ggml_print_tensor(src1);
+        if (ggml_nelements(src1) >= 14) {
+            for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
+                if (i % src1->ne[1] == 0) {
+                    GGML_PRINT("\n");
+                }
+                GGML_PRINT(" %f ", ((float *)src1->data)[i]);
+            }
+            GGML_PRINT("\n");
+        } else {
+            GGML_PRINT("Not enough elements to print\n");
+        }
+    }
 
     GGML_TENSOR_BINARY_OP_LOCALS;
+    // If on thread 0, src1 starts with KQ_softmax, print
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -12628,6 +12726,12 @@ static void ggml_compute_forward_rope_f32(
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
+    if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
+        GGML_PRINT("\nValues at RoPE time for %s\n", src0->name);
+        ggml_print_tensor(src0);
+        int starts[] = {0, 0, 1, 0};
+        ggml_print_tensor_values(src0, starts, 1, 10);
+    }
 
     float freq_base;
     float freq_scale;
@@ -12755,6 +12859,13 @@ static void ggml_compute_forward_rope_f32(
                 }
             }
         }
+    }
+    if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
+        GGML_PRINT("\n dest at RoPE time for %s\n", src0->name);
+        // print shape and strides
+        int starts[4] = {0,0,0,0};
+        ggml_print_tensor(dst);
+        ggml_print_tensor_values(dst, starts, 0, 10);
     }
 }
 

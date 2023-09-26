@@ -87,12 +87,16 @@ def main(args_in: list[str] | None = None) -> None:
     gguf_writer.add_rope_dimension_count(hidden_size // head_count)
     gguf_writer.add_head_count(head_count)
     gguf_writer.add_head_count_kv(head_count_kv)
+    gguf_writer.add_rope_freq_base(hparams['rotary_emb_base'])
+    gguf_writer.add_layer_norm_eps(hparams['layernorm_epsilon'])
     if True:
         tokens, scores, toktypes = handle_tokenizer(dir_model)
         gguf_writer.add_tokenizer_model('llama')
         gguf_writer.add_token_list(tokens)
         gguf_writer.add_token_scores(scores)
         gguf_writer.add_token_types(toktypes)
+        gguf_writer.add_bos_token_id(71013)
+        gguf_writer.add_eos_token_id(71013)
     tensor_map = gguf.get_tensor_name_map(arch, block_count)
     print(tensor_map)
     tensors = {}
@@ -105,15 +109,17 @@ def main(args_in: list[str] | None = None) -> None:
         print(name)
 
         # we don't need these
-
-        if  name.endswith(".self_attention.rotary_emb.inv_freq"):
+        if name.endswith(".self_attention.rotary_emb.inv_freq"):
             continue
         old_dtype = data.dtype
-        if 'layernorm.weight' in name:
+        """
+        if 'layernorm.weight' in name or 'word_embeddings.weight' in name:
             data = data.to(torch.float32)
         else:
             if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float16)
+                data = data.to(torch.float32)
+        """
+        data = data.to(torch.float32)
         # check for nans 
         if torch.isnan(data).any():
             print("WARNING: tensor '" + name + "' contains NaNs")
