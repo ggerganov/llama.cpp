@@ -12729,8 +12729,8 @@ static void ggml_compute_forward_rope_f32(
     if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
         GGML_PRINT("\nValues at RoPE time for %s\n", src0->name);
         ggml_print_tensor(src0);
-        int starts[] = {0, 0, 1, 0};
-        ggml_print_tensor_values(src0, starts, 1, 10);
+        int starts[] = {0, 1, 0, 0};
+        ggml_print_tensor_values(src0, starts, 0, 10);
     }
 
     float freq_base;
@@ -12863,7 +12863,7 @@ static void ggml_compute_forward_rope_f32(
     if (strncmp(src0->name, "qrot", 4) == 0 && params->ith == 0) { 
         GGML_PRINT("\n dest at RoPE time for %s\n", src0->name);
         // print shape and strides
-        int starts[4] = {0,0,0,0};
+        int starts[4] = {0,0,1,0};
         ggml_print_tensor(dst);
         ggml_print_tensor_values(dst, starts, 0, 10);
     }

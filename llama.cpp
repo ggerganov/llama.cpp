@@ -3945,13 +3945,13 @@ static struct ggml_cgraph * llm_build_adept(
 
             struct ggml_tensor * qrotated = ggml_cont(ctx0, ggml_permute(ctx0,
                 ggml_rope_custom_inplace(
-                    ctx0, qrot, n_past, n_rot, 0, 0, freq_base, freq_scale
+                    ctx0, qrot, n_past, n_rot, 2, 0, freq_base, freq_scale
                 ),
                 2, 1, 0, 3
             ));
             struct ggml_tensor * krotated = ggml_cont(ctx0, ggml_permute(ctx0,
                 ggml_rope_custom_inplace(
-                    ctx0, krot, n_past, n_rot, 0, 0, freq_base, freq_scale
+                    ctx0, krot, n_past, n_rot, 2, 0, freq_base, freq_scale
                 ),
                 2, 1, 0, 3
             ));
