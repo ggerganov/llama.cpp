@@ -2787,7 +2787,7 @@ static struct ggml_cgraph * llm_build_llama(
     ggml_free(ctx0);
 
 #if defined(GGML_USE_KOMPUTE)
-    if (lctx.ctx_kompute && N == 1) {
+    if (lctx.ctx_kompute) {
         if (!ggml_vk_has_h2d_all(lctx.ctx_kompute)) {
             ggml_vk_h2d_all(lctx.ctx_kompute);
         } else {
