@@ -122,15 +122,15 @@ static NSString * const msl_library_source = @"see metal.metal";
 @end
 
 ggml_log_callback ggml_metal_log_callback = NULL;
-void *ggml_metal_log_user_data = NULL;
+void * ggml_metal_log_user_data = NULL;
 
 void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
-    ggml_metal_log_callback = log_callback;
+    ggml_metal_log_callback  = log_callback;
     ggml_metal_log_user_data = user_data;
 }
 
 static void ggml_metal_log(enum ggml_log_level level, const char* format, ...){
-    if ( ggml_metal_log_callback != NULL ) {
+    if (ggml_metal_log_callback != NULL) {
         va_list args;
         va_start(args, format);
         char buffer[128];
@@ -208,7 +208,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 
         //NSString * path = [[NSBundle mainBundle] pathForResource:@"../../examples/metal/metal" ofType:@"metal"];
         NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
-        NSString * path = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
+        NSString * path   = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
         GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [path UTF8String]);
 
         NSString * src  = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
@@ -518,7 +518,7 @@ bool ggml_metal_add_buffer(
                 ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
 
         if (ctx->device.currentAllocatedSize > ctx->device.recommendedMaxWorkingSetSize) {
-            GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+            GGML_METAL_LOG_WARN(", warning: current allocated size is greater than the recommended max working set size\n", __func__);
         } else {
             GGML_METAL_LOG_INFO("\n");
         }
@@ -1039,7 +1039,7 @@ void ggml_metal_graph_compute(
                                         } break;
                                     default:
                                         {
-                                            GGML_METAL_LOG_ERROR("Asserting on type %d\n",(int)src0t);
+                                            GGML_METAL_LOG_ERROR("Asserting on type %d\n", (int)src0t);
                                             GGML_ASSERT(false && "not implemented");
                                         }
                                 };
