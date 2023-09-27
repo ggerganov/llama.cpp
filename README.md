@@ -597,6 +597,11 @@ Several quantization methods are supported. They differ in the resulting model d
 |   13B | ms/tok @ 8th |      - |     73 |     82 |     98 |    105 |    128 |
 |   13B | bits/weight  |   16.0 |    4.5 |    5.0 |    5.5 |    6.0 |    8.5 |
 
+- [k-quants](https://github.com/ggerganov/llama.cpp/pull/1684)
+- recent k-quants improvements
+  - [#2707](https://github.com/ggerganov/llama.cpp/pull/2707)
+  - [#2807](https://github.com/ggerganov/llama.cpp/pull/2807)
+
 ### Perplexity (measuring model quality)
 
 You can use the `perplexity` example to measure perplexity over a given prompt (lower perplexity is better).
