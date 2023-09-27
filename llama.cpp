@@ -92,12 +92,12 @@
 //
 
 LLAMA_ATTRIBUTE_FORMAT(2, 3)
-static void llama_log_internal        (llama_log_level level, const char* format, ...);
-static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
+static void llama_log_internal        (ggml_log_level level, const char* format, ...);
+static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
-#define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
-#define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
-#define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
+#define LLAMA_LOG_WARN(...)  llama_log_internal(GGML_LOG_LEVEL_WARN , __VA_ARGS__)
+#define LLAMA_LOG_ERROR(...) llama_log_internal(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
 
 //
 // helpers
@@ -904,7 +904,7 @@ static std::string llama_token_to_str(const struct llama_context * ctx, llama_to
 
 struct llama_state {
     // We save the log callback globally
-    llama_log_callback log_callback = llama_log_callback_default;
+    ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
@@ -6366,6 +6366,7 @@ struct llama_context * llama_new_context_with_model(
                     llama_free(ctx);
                     return NULL;
                 }
+                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
                 ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
@@ -7199,12 +7200,12 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     return ctx->model.tensors_by_name;
 }
 
-void llama_log_set(llama_log_callback log_callback, void * user_data) {
+void llama_log_set(ggml_log_callback log_callback, void * user_data) {
     g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
     g_state.log_callback_user_data = user_data;
 }
 
-static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
+static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -7221,14 +7222,14 @@ static void llama_log_internal_v(llama_log_level level, const char * format, va_
     va_end(args_copy);
 }
 
-static void llama_log_internal(llama_log_level level, const char * format, ...) {
+static void llama_log_internal(ggml_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
     llama_log_internal_v(level, format, args);
     va_end(args);
 }
 
-static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
+static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
     fputs(text, stderr);

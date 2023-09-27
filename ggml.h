@@ -445,6 +445,12 @@ extern "C" {
         GGML_OBJECT_WORK_BUFFER
     };
 
+    enum ggml_log_level {
+        GGML_LOG_LEVEL_ERROR = 2,
+        GGML_LOG_LEVEL_WARN = 3,
+        GGML_LOG_LEVEL_INFO = 4
+    };
+
     // ggml object
     struct ggml_object {
         size_t offs;
@@ -1691,6 +1697,7 @@ extern "C" {
     };
 
     typedef void (*ggml_opt_callback)(void * data, float * sched);
+    typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
 
     // optimization parameters
     //

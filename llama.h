@@ -62,12 +62,6 @@ extern "C" {
 
     typedef int llama_token;
 
-    enum llama_log_level {
-        LLAMA_LOG_LEVEL_ERROR = 2,
-        LLAMA_LOG_LEVEL_WARN  = 3,
-        LLAMA_LOG_LEVEL_INFO  = 4
-    };
-
     enum llama_vocab_type {
         LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
         LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
@@ -150,13 +144,6 @@ extern "C" {
         bool use_mlock;  // force system to keep model in RAM
         bool embedding;  // embedding mode only
     };
-
-    // Signature for logging events
-    // Note that text includes the new line character at the end for most events.
-    // If your logging mechanism cannot handle that, check if the last character is '\n' and strip it
-    // if it exists.
-    // It might not exist for progress report where '.' is output repeatedly.
-    typedef void (*llama_log_callback)(enum llama_log_level level, const char * text, void * user_data);
 
     // model quantization parameters
     typedef struct llama_model_quantize_params {
@@ -526,7 +513,7 @@ extern "C" {
 
     // Set callback for all future logging events.
     // If this is not called, or NULL is supplied, everything is output on stderr.
-    LLAMA_API void llama_log_set(llama_log_callback log_callback, void * user_data);
+    LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 
