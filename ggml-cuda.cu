@@ -6059,8 +6059,9 @@ inline void ggml_cuda_op_mul_mat_cublas(
     // ldc == nrows of the matrix that cuBLAS writes into
     int ldc = dst->backend == GGML_BACKEND_GPU && id == g_main_device ? ne0 : row_diff;
 
-    // TODO: this may be slower in older architectures with poor fp16 support
-    if (src0->type == GGML_TYPE_F16 && ggml_is_contiguous(src0) && ldc == row_diff) {
+    const int compute_capability = g_compute_capabilities[id];
+
+    if (compute_capability >= CC_TURING && src0->type == GGML_TYPE_F16 && ggml_is_contiguous(src0) && ldc == row_diff) {
         // convert src1 to fp16, multiply as fp16, convert dst to fp32
         half * src1_as_f16 = nullptr;
         size_t src1_as = 0;
