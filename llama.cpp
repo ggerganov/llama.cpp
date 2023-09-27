@@ -4117,7 +4117,7 @@ static int llama_decode_internal(
     // after enough generations, the benefit from this heuristic disappears
     // if we start defragmenting the cache, the benefit from this will be more important
     //kv_self.n = std::max(32, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32));   // TODO: this might be better for CUDA?
-    kv_self.n = std::max(32, llama_kv_cache_cell_max(kv_self));
+    kv_self.n = std::min((int32_t) hparams.n_ctx, std::max(32, llama_kv_cache_cell_max(kv_self)));
 
     //printf("kv_self.n = %d\n", kv_self.n);
 
