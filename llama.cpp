@@ -221,16 +221,16 @@ enum llm_kv {
 };
 
 static std::map<llm_kv, std::string> LLM_KV_NAMES = {
-    { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"         },
-    { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version" },
-    { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"            },
-    { LLM_KV_GENERAL_NAME,                  "general.name"                 },
-    { LLM_KV_GENERAL_AUTHOR,                "general.author"               },
-    { LLM_KV_GENERAL_URL,                   "general.url"                  },
-    { LLM_KV_GENERAL_DESCRIPTION,           "general.description"          },
-    { LLM_KV_GENERAL_LICENSE,               "general.license"              },
-    { LLM_KV_GENERAL_SOURCE_URL,            "general.source_url"           },
-    { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source_hf_repo"       },
+    { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"                  },
+    { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version"          },
+    { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"                     },
+    { LLM_KV_GENERAL_NAME,                  "general.name"                          },
+    { LLM_KV_GENERAL_AUTHOR,                "general.author"                        },
+    { LLM_KV_GENERAL_URL,                   "general.url"                           },
+    { LLM_KV_GENERAL_DESCRIPTION,           "general.description"                   },
+    { LLM_KV_GENERAL_LICENSE,               "general.license"                       },
+    { LLM_KV_GENERAL_SOURCE_URL,            "general.source.url"                    },
+    { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source.huggingface.repository" },
 
     { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
     { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
