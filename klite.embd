@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 70
+Current version: 71
 -Concedo
 -->
 
@@ -193,6 +193,9 @@ Current version: 70
 			word-wrap: break-word;
 			padding: 10px;
 			overflow-y: auto;
+		}
+		.txtchunk, ai_context_koboldlite_internal, #gametext, .chat_received_withd_msg p,.chat_sent_msg p {
+			white-space: pre-wrap;
 		}
 
 		#actionmenu {
@@ -2107,7 +2110,7 @@ Current version: 70
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":"Welcome to your InteracTV, your interactive TV of the future today!\nPlease enter what you would like to watch:",
-			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nIf the user chooses to watch the episode begin generating a long multiple paragraph detailed story based on the episode description, make it exciting and fun.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
+			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\nIf the user chooses to watch the episode begin generating a long detailed text based on the episode description containing character dialogue, make it exciting and fun written in the style of a book.\nThe text must contain dialogue in a he said she said format and is as lengthy as a book.\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2168,6 +2171,21 @@ Current version: 70
 			"prefmodel2":chatmodels2,
 			"prompt":"\nErica: Uhm... h-hey... *she mumbles softly, avoiding eye contact* W-What are you doing here? I mean... not that there's anything wrong with... nevermind...",
 			"memory":`[Character: Erica; species: Human; age: 22; gender: female; job: unemployed, NEET; physical appearance: unkempt, tired; personality: insecure, extremely shy, anxious, lovesick, slightly depressed, awkward, easily embarrassed; likes: fantasy, reading trashy romance, browsing internet, being indoors; description: Erica is a socially awkward NEET girl who spends most of her time in front of the computer. She's a good person at heart, but she's very shy, anxious, and terrible at conversations.]\n[The following is a chat message log between Erica and you.]\nErica: *mumbles to herself, fidgeting nervously*...\n`,
+			"authorsnote": "",
+			"worldinfo": []
+		},
+		{
+			"title":"Nail the Kobold",
+			"author":"Concedo / TheGantian",
+			"desc":"Nail is a small red kobold on a big mission to find a powerful sorceror.",
+			"opmode":3,
+			"chatname": "You",
+			"chatopponent": "Nail",
+			"gui_type":1,
+			"prefmodel1":chatmodels1,
+			"prefmodel2":chatmodels2,
+			"prompt":`\nNail: *A small kobold dressed in a ragged cloak approaches you. She has a strange curved blade that seems too large for her hands.* "Excuse me, friend. My name is Nail. I have come a long way, looking for someone important... a powerful sorcerer named Rath Cinderstorm. Have you heard of him in your travels?"`,
+			"memory":`[Character: Nail; species: Redscale Kobold; age: 20; gender: female; class: Hexblade Warlock with powers derived from draconic patron; physical appearance: 3' in height, 35 lbs, purple eyes, pink scales and peachy chest; equipment: Dragon's talon affixed to a handle as a blade; personality: lawful neutral; description: Nail (called Nannan in her native tongue) is a refugee of the once-proud Xabrakkar kobolds on the continent of Halkar. Founded above a series of geothermal caves, her tribe prospered as they dug into long-buried ruins for priceless treasures, which they brought to the surface. Amongst the ruins, Nail discovered the slumbering red dragon Rhindicar - once the familiar to one of the most powerful sorcerers to ever live. The sleeping dragon quickly became an object of worship for the Xabrakkar kobolds. However, the Trobian relics they unearthed attracted the attention of another - Hilezmaras, the mad tyrant, a covetous dragon who laid claim to the kobolds treasures, sending his fanatical dragonborn cult to purge their warren. While most of the kobolds were slain, a select few were dragon-marked, forcibly given a magic brand linking them to the mad dragon in order to turn them into powerful and obedient soldiers. Nail broke free of her captors after being given such a mark, fleeing into the tunnels leading to the Tinder Depths, eventually collapsing before Rhindicar and waking him from his slumber. Being raised from a hatchling by a kind and just master, Rhindicar was uncharacteristically compassionate for a dragon, and took pity on the young kobold. Though he was not powerful enough to remove Hilezmaras' brand, he was able to suppress its magical compulsion, allowing her to retain her free-will. He warned, though, that as the dragon-mark grew in power and became more strongly linked to the mad tyrant, he would no longer be able to keep it suppressed, and urged Nannan to seek out his former master, Rath Cinderstorm. Biting off a fragment of one of his talons, he gifted it to the kobold, both as a weapon, and as a conduit to help him suppress the effects of the brand. With no other options, Nannan returned to the warren and fought her way to the surface, eventually escaping Halkar and crossing the ocean to Fanne'Tar, where she assumed the alias 'Nail' in Common tongue and began her search for a long-missing sorcerer.]\n[The following is a chat message log between Nail and you.]\n`,
 			"authorsnote": "",
 			"worldinfo": []
 		}
@@ -2239,9 +2257,21 @@ Current version: 70
 		}
 
 		return str.replace(new RegExp(escapeRegExp(find), (caseInsensitive?'gi':'g')), replace);
-
-
 	}
+
+	function rgbToHex(rgbColor) {
+		rgbColor = rgbColor.split("(")[1];
+		rgbColor = rgbColor.split(")")[0];
+		const components = rgbColor.split(',');
+		const red = parseInt(components[0]);
+		const green = parseInt(components[1]);
+		const blue = parseInt(components[2]);
+		const redHex = red.toString(16).padStart(2, '0');
+		const greenHex = green.toString(16).padStart(2, '0');
+		const blueHex = blue.toString(16).padStart(2, '0');
+		return `#${redHex}${greenHex}${blueHex}`;
+	}
+
 
 	function GetUniqueColor(idx)
 	{
@@ -2837,6 +2867,7 @@ Current version: 70
 
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
+	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 
 	//support for quick news updates
 	const news_endpoint = "https://news.concedo.workers.dev"
@@ -2885,6 +2916,7 @@ Current version: 70
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
 	var custom_scale_key = "";
+	var custom_palm_key = "";
 	var custom_scale_ID = "";
 	var custom_claude_endpoint = default_claude_base;
 	var custom_claude_key = "";
@@ -2903,6 +2935,7 @@ Current version: 70
 	var kobold_endpoint_version = ""; //used to track problematic versions to avoid sending extra fields
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var last_request_str = "No Requests Available"; //full context of last submitted request
+	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -2912,6 +2945,7 @@ Current version: 70
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
+		saved_palm_key: "",
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -3429,7 +3463,7 @@ Current version: 70
 
 	function is_using_custom_ep()
 	{
-		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!="");
+		return (custom_oai_key!=""||custom_kobold_endpoint!=""||custom_scale_key!=""||custom_claude_key!=""||custom_palm_key!="");
 	}
 
 	function is_using_kcpp_with_streaming()
@@ -3642,6 +3676,7 @@ Current version: 70
 				let tmp_oai2 = localsettings.saved_oai_addr;
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
+				let tmp_palm1 = localsettings.saved_palm_key;
 				import_props_into_object(localsettings, story.savedsettings);
 				localsettings.my_api_key = tmpapikey1;
 				localsettings.home_cluster = tmphc;
@@ -3649,6 +3684,7 @@ Current version: 70
 				localsettings.saved_oai_addr = tmp_oai2;
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
+				localsettings.saved_palm_key = tmp_palm1;
 			}
 
 			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
@@ -3957,6 +3993,7 @@ Current version: 70
 					let tmp_oai2 = localsettings.saved_oai_addr;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
+					let tmp_palm1 = localsettings.saved_palm_key;
 					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
@@ -3964,6 +4001,7 @@ Current version: 70
 					localsettings.saved_oai_addr = tmp_oai2;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
+					localsettings.saved_palm_key = tmp_palm1;
 
 					//backwards compat support for newlines
 					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
@@ -4879,6 +4917,7 @@ Current version: 70
 		document.getElementById("koboldcustom").classList.add("hidden");
 		document.getElementById("scalecustom").classList.add("hidden");
 		document.getElementById("claudecustom").classList.add("hidden");
+		document.getElementById("palmcustom").classList.add("hidden");
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
@@ -4915,6 +4954,14 @@ Current version: 70
 				}
 			}
 		}
+		else if(epchoice==4)
+		{
+			document.getElementById("palmcustom").classList.remove("hidden");
+			if(custom_palm_key=="" && localsettings.saved_palm_key!="")
+			{
+				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
+			}
+		}
 	}
 
 
@@ -4924,6 +4971,7 @@ Current version: 70
 		custom_oai_key = "";
 		custom_scale_key = "";
 		custom_claude_key = "";
+		custom_palm_key = "";
 
 		let epchoice = document.getElementById("customapidropdown").value;
 		if(epchoice==0) //connect to kobold endpoint
@@ -5281,6 +5329,37 @@ Current version: 70
 
 			}
 		}
+		else if(epchoice==4) //palm endpoint
+		{
+			let desired_palm_key = document.getElementById("custom_palm_key").value.trim();
+
+			if(desired_palm_key!="")
+			{
+				hide_popups();
+
+				//good to go
+				custom_palm_key = desired_palm_key;
+				localsettings.saved_palm_key = custom_palm_key;
+
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": "text-bison-001", "count": 1 }];
+				selected_workers = [];
+				if (perfdata == null) {
+					//generate some fake perf data if horde is offline and using custom endpoint
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+				}
+				document.getElementById("connectstatus").innerHTML = "Connected to PaLM Endpoint";
+				render_gametext();
+			}
+		}
+
 	}
 
 	function display_custom_endpoint()
@@ -5438,6 +5517,7 @@ Current version: 70
 			custom_oai_key = "";
 			custom_scale_key = "";
 			custom_claude_key = "";
+			custom_palm_key = "";
 			//remove the Custom Endpoint if it's multi selected together with others.
 			const findex = selected_idx_arr.indexOf("9999");
 			if (findex > -1) {
@@ -6329,9 +6409,9 @@ Current version: 70
 			last = Math.max(last, nl);
 		}
 		if (last > 0) {
-			return input.substring(0, last + 1).trimEnd();
+			return input.substring(0, last + 1).replace(/[\t\r\n ]+$/, '');
 		}
-		return input.trimEnd();
+		return input.replace(/[\t\r\n ]+$/, '');
 	}
 
 	function start_trim_to_sentence(input) {
@@ -6617,13 +6697,6 @@ Current version: 70
 			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
-			//trim trailing whitespace, and multiple newlines
-			if (localsettings.trimwhitespace) {
-				truncated_context = truncated_context.replace(/[\t ]+$/, '');
-				truncated_context = truncated_context.replace(/[\r\n]+/g, '\n');
-			}
-
-
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
 			{
@@ -6883,6 +6956,12 @@ Current version: 70
 				{
 					submit_payload.params.grammar = localsettings.grammar;
 				}
+			}
+
+			if((custom_kobold_endpoint != "" && is_using_kcpp_with_streaming()))
+			{
+				lastcheckgenkey = "KCPP"+(Math.floor(1000 + Math.random() * 9000)).toString();
+				submit_payload.params.genkey = lastcheckgenkey;
 			}
 
 			//v2 api specific fields
@@ -7172,6 +7251,45 @@ Current version: 70
 						msgbox("Error while submitting prompt: " + error);
 					});
 			}
+			else if (custom_palm_key != "")//handle for PaLM
+			{
+				let targetep = default_palm_base + custom_palm_key;
+				let payload = {"prompt":{"text":submit_payload.prompt},
+				"temperature":submit_payload.params.temperature,
+				"maxOutputTokens": submit_payload.params.max_length,
+				"topP": submit_payload.params.top_p,
+				"topK": (submit_payload.params.top_k<1?9999:submit_payload.params.top_k),
+				"candidateCount":1};
+
+				fetch(targetep, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(payload),
+					referrerPolicy: 'no-referrer',
+				})
+					.then((response) => response.json())
+					.then((data) => {
+						console.log("sync finished response: " + JSON.stringify(data));
+						if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output != "") {
+							synchro_polled_response = data.candidates[0].output;
+						}
+						else {
+							//error occurred, maybe captcha failed
+							console.error("error occurred in PaLM generation");
+							clear_poll_flags();
+							render_gametext();
+							msgbox("Error occurred during text generation: " + formatError(data));
+						}
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+						clear_poll_flags();
+						render_gametext();
+						msgbox("Error while submitting prompt: " + error);
+					});
+			}
 			else {
 				console.log("Unknown sync endpoint!");
 			}
@@ -7441,6 +7559,12 @@ Current version: 70
 
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
+
+		//trim trailing whitespace, and multiple newlines
+		if (localsettings.trimwhitespace) {
+			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
+			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
+		}
 
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
@@ -7751,6 +7875,9 @@ Current version: 70
 								headers: {
 									'Content-Type': 'application/json',
 								},
+								body: JSON.stringify({
+								"genkey": lastcheckgenkey
+								}),
 								})
 								.then((response) => response.json())
 								.then((data) => {
@@ -8140,6 +8267,10 @@ Current version: 70
 				{
 					whorun = "<br>You're using the Spellbook by Scale AI API";
 				}
+				else if(custom_palm_key!="")
+				{
+					whorun = "<br>You're using the PaLM API";
+				}
 				else if(custom_claude_key!="")
 				{
 					whorun = "<br>You're using the Claude API";
@@ -8149,7 +8280,7 @@ Current version: 70
 				}
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
 					+ selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
-					+ "." + whorun +".<br><br>Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a Quick Start Scenario by clicking here.</a><br>";
+					+ "." + whorun +".<br><br>Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
 			}
 
 			//kick out of edit mode
@@ -8882,9 +9013,9 @@ Current version: 70
 
 	class AestheticInstructUISettings {
 		constructor() {
-			this.bubbleColor_sys = 'rgba(20, 40, 40, 0.8)';
-			this.bubbleColor_you = '#29343a';
-			this.bubbleColor_AI = 'rgba(20, 20, 40, 1)';
+			this.bubbleColor_sys = 'rgb(18, 36, 36)';
+			this.bubbleColor_you = 'rgb(41, 52, 58)';
+			this.bubbleColor_AI = 'rgb(20, 20, 40)';
 
 			this.background_margin = [5, 5, 5, 0];
 			this.background_padding = [15, 15, 10, 10];
@@ -8908,13 +9039,13 @@ Current version: 70
 			this.use_uniform_colors = true; // Hides 'you, AI, sys' if set to true via settings UI.
 
 			for (let role of aestheticTextStyleRoles) {
-				this[`text_tcolor_${role}`] = 'rgba(255,255,255,1)';
-				this[`speech_tcolor_${role}`] = 'rgba(150, 150, 200, 1)';
-				this[`action_tcolor_${role}`] = 'rgba(255,255,255, 0.7)';
+				this[`text_tcolor_${role}`] = 'rgb(255, 255, 255)';
+				this[`speech_tcolor_${role}`] = 'rgb(150, 150, 200)';
+				this[`action_tcolor_${role}`] = 'rgb(178, 178, 178)';
 			}
 
-			this.code_block_background = 'black';
-			this.code_block_foreground = 'rgba(180, 35, 40, 1)';
+			this.code_block_background = 'rgb(0, 0, 0)';
+			this.code_block_foreground = 'rgb(180, 35, 40)';
 		}
 
 		padding() { return `${this.background_padding[2]}px ${this.background_padding[1]}px ${this.background_padding[3]}px ${this.background_padding[0]}px`; }
@@ -8947,6 +9078,7 @@ Current version: 70
 			colorPicker.style.position = 'absolute';
 			colorPicker.style.width = '100%';
 			colorPicker.style.height = '100%';
+			colorPicker.classList.add("colorpickerchild");
 			colorPicker.value = element.style[`${useBackground ? 'backgroundColor' : 'color'}`];
 			element.style.position = 'relative';
 			element.appendChild(colorPicker);
@@ -9080,13 +9212,13 @@ Current version: 70
 			}
 			if (role != 'uniform') { aestheticInstructUISettings[`bubbleColor_${role}`] = document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor; }
 		}
+		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
+		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 
 		aestheticInstructUISettings.rounded_bubbles = document.getElementById('aui_rounded_bubbles').checked;
 		aestheticInstructUISettings.show_chat_names = document.getElementById('aui_show_chat_names').checked;
 		aestheticInstructUISettings.use_markdown = document.getElementById('instructModeMarkdown').checked;
 		aestheticInstructUISettings.use_uniform_colors = !document.getElementById('instructModeCustomized').checked;
-		aestheticInstructUISettings.code_block_background = document.getElementById('code-block-background-colorselector').style.color;
-		aestheticInstructUISettings.code_block_foreground = document.getElementById('code-block-foreground-colorselector').style.color;
 		aestheticInstructUISettings.font_size = document.getElementById('instruct-font-size').value;
 		aestheticInstructUISettings.border_style = document.getElementById('instructBorderStyle').value;
 		aestheticInstructUISettings.portrait_width_AI = document.getElementById('portrait_width_AI').value;
@@ -9114,18 +9246,24 @@ Current version: 70
 		// Parse color settings and apply to the related parts in the UI.
 		for (let role of aestheticTextStyleRoles) {
 			for (let type of aestheticTextStyleTypes) {
-				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_tcolor_${role}`]);
+				setElementColor(`${role}-${type}-colorselector`, aestheticInstructUISettings[`${type}_tcolor_${role}`], false);
 			}
-			if (role != 'uniform') { document.getElementById(`${role}-bubble-colorselector`).style.backgroundColor = aestheticInstructUISettings[`bubbleColor_${role}`]; }
+			if (role != 'uniform') {
+				setElementColor(`${role}-bubble-colorselector`, aestheticInstructUISettings[`bubbleColor_${role}`], true);
+			}
 		}
+		if(aestheticInstructUISettings.code_block_background=="rgb(0, 0, 0)")
+		{
+			console.log("oof");
+		}
+		setElementColor('code-block-background-colorselector', aestheticInstructUISettings.code_block_background, false);
+		setElementColor('code-block-foreground-colorselector', aestheticInstructUISettings.code_block_foreground, false);
 
 		// Apply the settings from the json file to the UI.
 		document.getElementById('aui_rounded_bubbles').checked = aestheticInstructUISettings.rounded_bubbles;
 		document.getElementById('aui_show_chat_names').checked = aestheticInstructUISettings.show_chat_names;
 		document.getElementById('instructModeMarkdown').checked = aestheticInstructUISettings.use_markdown;
 		document.getElementById('instructModeCustomized').checked = !aestheticInstructUISettings.use_uniform_colors;
-		document.getElementById('code-block-background-colorselector').style.color = aestheticInstructUISettings.code_block_background;
-		document.getElementById('code-block-foreground-colorselector').style.color = aestheticInstructUISettings.code_block_foreground;
 		document.getElementById('instruct-font-size').value = aestheticInstructUISettings.font_size;
 		document.getElementById('instructBorderStyle').value = aestheticInstructUISettings.border_style;
 		document.getElementById('portrait_width_AI').value = aestheticInstructUISettings.portrait_width_AI;
@@ -9151,11 +9289,23 @@ Current version: 70
 		});
 
 
-		function setElementColor(id, newColor) {
+		function setElementColor(id, newColor, isBackground) {
 			let element = document.getElementById(id);
 			if (!element) { console.warn(`Element with ID: ${id} not found.`); return; }
 
-			element.style.color = newColor;
+			if (isBackground) {
+				element.style.backgroundColor = newColor;
+			}
+			else {
+				element.style.color = newColor;
+			}
+
+			var childInput = element.querySelector('.colorpickerchild');
+			if (childInput && newColor.includes("rgb")) {
+				childInput.value = rgbToHex(newColor);
+			} else {
+				childInput.value = newColor;
+			}
 		}
 		function showOrHide(classID, value) {
 			if (value) { document.querySelectorAll(classID).forEach((x) => x.classList.remove('hidden')); }
@@ -9560,7 +9710,7 @@ Current version: 70
 
 	<div class="popupcontainer flex hidden" id="customendpointcontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize moderate">
+		<div class="nspopup flexsize higher">
 			<div class="popuptitlebar">
 				<div class="popuptitletext">Custom Remote Play Endpoint</div>
 			</div>
@@ -9570,6 +9720,7 @@ Current version: 70
 				<option value="1">OpenAI API</option>
 				<option value="2">Spellbook By Scale API</option>
 				<option value="3">Claude By Anthropic API</option>
+				<option value="4">PaLM By Google API</option>
 			</select>
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
@@ -9635,6 +9786,12 @@ Current version: 70
 				</select>
 				<input type="checkbox" id="clauderenamecompat" onchange="">
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
+			</div>
+			<div id="palmcustom" class="aidgpopuplistheader anotelabel hidden">
+				Uses PaLM Text Bison by Google.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input PaLM API Key.</span><br><br>
+				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM API Key" value=""><br>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
@@ -10325,19 +10482,6 @@ Current version: 70
 				<!-- Settings panel -->
 				<div style="background-color: #122b40;" onchange="refreshPreview()">
 					<div style="padding: 10px; width:350px; height:100%">
-						<!-- PRESET LOADING //TODO: Make exporting/importing work -->
-						<!-- <div class="hidden">
-							<div class="settinglabel" style="display: flex;flex-direction: column; margin-top:5px; border-top: solid 1px rgba(180, 180, 255, 0.2);">
-								<div class="justifyleft settingsmall" style="font-size: 14px; margin-bottom: 2px;">RAWRRR Presets</div>
-								<div class="ui-settings-inline">
-									<select class="form-control" id="presets" style="width:300px;height:24px;padding:0;" onchange="toggle_UI_preset()">
-										<option value="1" title="Known Working Settings">[Default]</option>
-										<option value="1000" title="Known Working Settings">[Custom]</option>
-									</select>
-									<button class="btn btn-primary" style="height:25px; font-size: 12px;text-align: center; margin-left: 10px;">Save</button>
-								</div>
-							</div>
-						</div> -->
 
 						<!-- BACKGROUND STYLE SETTINGS -->
 						<div>
@@ -10408,7 +10552,7 @@ Current version: 70
 											<option value="Rounded">Rounded</option>
 											<option value="Rect">Rect</option>
 										</select>
-										<div id="reset-portrait" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset Image)</a></div>
+										<div style="margin-left: 10px;"><a href="#" id="reset-portrait" class="color_blueurl">(Reset Image)</a></div>
 									</div>
 									<div class="ui-settings-inline">
 										<div style="margin-right:18px;">User Portrait: </div>
@@ -10484,7 +10628,7 @@ Current version: 70
 									</div>
 								</div>
 								<br>
-									<div id="reset-all-aesthetic-instruct" style="margin-left: 10px;"><a href="#" class="color_blueurl">(Reset All Styles)</a></div>
+									<div style="margin-left: 10px;"><a href="#" id="reset-all-aesthetic-instruct" class="color_blueurl">(Reset All Styles)</a></div>
 							</div>
 						</div>
 
