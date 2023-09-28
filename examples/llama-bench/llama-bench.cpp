@@ -940,7 +940,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
 
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        llama_eval(ctx, tokens.data(), n_tokens, n_past + n_processed);
+        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens, n_past + n_processed, 0));
         n_processed += n_tokens;
     }
 }
@@ -951,11 +951,11 @@ static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) 
     llama_set_n_threads(ctx, n_threads, n_threads);
 
     for (int i = 0; i < n_gen; i++) {
-        llama_eval(ctx, &token, 1, n_past + i);
+        llama_decode(ctx, llama_batch_get_one(&token, 1, n_past + i, 0));
     }
 }
 
-static void llama_null_log_callback(enum llama_log_level level, const char * text, void * user_data) {
+static void llama_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) text;
     (void) user_data;
@@ -1037,6 +1037,8 @@ int main(int argc, char ** argv) {
 
         test t(inst, lmodel, ctx);
 
+        llama_kv_cache_tokens_rm(ctx, -1, -1);
+
         // warmup run
         if (t.n_prompt > 0) {
             test_prompt(ctx, std::min(2, t.n_batch), 0, t.n_batch, t.n_threads);
@@ -1046,6 +1048,8 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = 0; i < params.reps; i++) {
+            llama_kv_cache_tokens_rm(ctx, -1, -1);
+
             uint64_t t_start = get_time_ns();
             if (t.n_prompt > 0) {
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);

@@ -32,7 +32,7 @@ KEY_GENERAL_URL                  = "general.url"
 KEY_GENERAL_DESCRIPTION          = "general.description"
 KEY_GENERAL_LICENSE              = "general.license"
 KEY_GENERAL_SOURCE_URL           = "general.source.url"
-KEY_GENERAL_SOURCE_HF_REPO       = "general.source.hugginface.repository"
+KEY_GENERAL_SOURCE_HF_REPO       = "general.source.huggingface.repository"
 KEY_GENERAL_FILE_TYPE            = "general.file_type"
 
 # LLM
