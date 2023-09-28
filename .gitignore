@@ -52,6 +52,8 @@ models-mnt
 /server
 /simple
 /batched
+/export-lora
+/finetune
 /speculative
 /parallel
 /train-text-from-scratch

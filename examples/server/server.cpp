@@ -956,7 +956,23 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter = argv[i];
+            params.lora_adapter.push_back({argv[i], 1.0f});
+            params.use_mmap = false;
+        }
+        else if (arg == "--lora-scaled")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            const char * lora_adapter = argv[i];
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.lora_adapter.push_back({lora_adapter, std::stof(argv[i])});
             params.use_mmap = false;
         }
         else if (arg == "--lora-base")

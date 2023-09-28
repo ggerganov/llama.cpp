@@ -6298,7 +6298,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
 // TODO: after the GGUF PR, this likely won't work and needs to be updated
 static int llama_apply_lora_from_file_internal(
-    const struct llama_model & model, const char * path_lora, const char * path_base_model, int n_threads
+    const struct llama_model & model, const char * path_lora, float scale, const char * path_base_model, int n_threads
 ) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
@@ -6327,7 +6327,7 @@ static int llama_apply_lora_from_file_internal(
     int32_t lora_alpha;
     fin.read((char *) &lora_r, sizeof(lora_r));
     fin.read((char *) &lora_alpha, sizeof(lora_alpha));
-    float scaling = (float)lora_alpha / (float)lora_r;
+    float scaling = scale * (float)lora_alpha / (float)lora_r;
 
     LLAMA_LOG_INFO("%s: r = %d, alpha = %d, scaling = %.2f\n", __func__, lora_r, lora_alpha, scaling);
 
@@ -6543,9 +6543,10 @@ static int llama_apply_lora_from_file_internal(
                 ggml_set_name(r, "r_cpy");
             }
 
-            struct ggml_cgraph gf = ggml_build_forward(r);
+            struct ggml_cgraph * gf = ggml_new_graph(lora_ctx);
+            ggml_build_forward_expand(gf, r);
 
-            ggml_graph_compute_helper(work_buffer, &gf, n_threads);
+            ggml_graph_compute_helper(work_buffer, gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
@@ -6926,6 +6927,10 @@ uint64_t llama_model_n_params(const struct llama_model * model) {
     return nparams;
 }
 
+struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name) {
+    return ggml_get_tensor(model->ctx, name);
+}
+
 int llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
@@ -6939,18 +6944,18 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, const char * path_base_model, int n_threads) {
+int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, float scale, const char * path_base_model, int n_threads) {
     try {
-        return llama_apply_lora_from_file_internal(ctx->model, path_lora, path_base_model, n_threads);
+        return llama_apply_lora_from_file_internal(ctx->model, path_lora, scale, path_base_model, n_threads);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
         return 1;
     }
 }
 
-int llama_model_apply_lora_from_file(const struct llama_model * model, const char * path_lora, const char * path_base_model, int n_threads) {
+int llama_model_apply_lora_from_file(const struct llama_model * model, const char * path_lora, float scale, const char * path_base_model, int n_threads) {
     try {
-        return llama_apply_lora_from_file_internal(*model, path_lora, path_base_model, n_threads);
+        return llama_apply_lora_from_file_internal(*model, path_lora, scale, path_base_model, n_threads);
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: failed to apply lora adapter: %s\n", __func__, err.what());
         return 1;

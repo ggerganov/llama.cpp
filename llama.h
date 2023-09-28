@@ -287,6 +287,9 @@ extern "C" {
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
 
+    // Get a llama model tensor
+    LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
+
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
             const char * fname_inp,
@@ -302,15 +305,17 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
                       const char * path_lora,
+                           float   scale,
                       const char * path_base_model,
                              int   n_threads),
             "use llama_model_apply_lora_from_file instead");
 
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                          const char * path_lora,
-                          const char * path_base_model,
-                                 int   n_threads);
+                      const char * path_lora,
+                           float   scale,
+                      const char * path_base_model,
+                             int   n_threads);
 
     //
     // KV cache

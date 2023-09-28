@@ -85,8 +85,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
-    std::string lora_adapter = "";  // lora adapter path
-    std::string lora_base    = "";  // base model path for the lora adapter
+    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
+    std::string lora_base  = "";                              // base model path for the lora adapter
 
     int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
@@ -127,6 +127,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
 std::string gpt_random_prompt(std::mt19937 & rng);
+
+void process_escapes(std::string& input);
 
 //
 // Model utils
