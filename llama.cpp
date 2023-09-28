@@ -6773,6 +6773,29 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_CUBLAS
             ggml_cuda_set_scratch_size(alloc_size);
             LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MB\n", __func__, alloc_size / 1024.0 / 1024.0);
+
+            // calculate total VRAM usage
+            auto add_tensor = [](const ggml_tensor * t, size_t & size) {
+                if (t->backend == GGML_BACKEND_GPU || t->backend == GGML_BACKEND_GPU_SPLIT) {
+                    size += ggml_nbytes(t);
+                }
+            };
+            size_t model_vram_size = 0;
+            for (const auto & kv : model->tensors_by_name) {
+                add_tensor(kv.second, model_vram_size);
+            }
+
+            size_t kv_vram_size = 0;
+            add_tensor(ctx->kv_self.k, kv_vram_size);
+            add_tensor(ctx->kv_self.v, kv_vram_size);
+
+            size_t ctx_vram_size = alloc_size + kv_vram_size;
+            size_t total_vram_size = model_vram_size + ctx_vram_size;
+
+            LLAMA_LOG_INFO("%s: total VRAM used: %.2f MB (model: %.2f MB, context: %.2f MB)\n", __func__,
+                    total_vram_size / 1024.0 / 1024.0,
+                    model_vram_size / 1024.0 / 1024.0,
+                    ctx_vram_size / 1024.0 / 1024.0);
 #endif
         }
 
