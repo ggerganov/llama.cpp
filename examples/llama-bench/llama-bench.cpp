@@ -903,7 +903,7 @@ static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) 
     }
 }
 
-static void llama_null_log_callback(enum llama_log_level level, const char * text, void * user_data) {
+static void llama_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) text;
     (void) user_data;

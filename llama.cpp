@@ -93,12 +93,12 @@
 //
 
 LLAMA_ATTRIBUTE_FORMAT(2, 3)
-static void llama_log_internal        (llama_log_level level, const char* format, ...);
-static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data);
+static void llama_log_internal        (ggml_log_level level, const char* format, ...);
+static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
-#define LLAMA_LOG_INFO(...)  llama_log_internal(LLAMA_LOG_LEVEL_INFO , __VA_ARGS__)
-#define LLAMA_LOG_WARN(...)  llama_log_internal(LLAMA_LOG_LEVEL_WARN , __VA_ARGS__)
-#define LLAMA_LOG_ERROR(...) llama_log_internal(LLAMA_LOG_LEVEL_ERROR, __VA_ARGS__)
+#define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
+#define LLAMA_LOG_WARN(...)  llama_log_internal(GGML_LOG_LEVEL_WARN , __VA_ARGS__)
+#define LLAMA_LOG_ERROR(...) llama_log_internal(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
 
 //
 // helpers
@@ -222,16 +222,16 @@ enum llm_kv {
 };
 
 static std::map<llm_kv, std::string> LLM_KV_NAMES = {
-    { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"         },
-    { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version" },
-    { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"            },
-    { LLM_KV_GENERAL_NAME,                  "general.name"                 },
-    { LLM_KV_GENERAL_AUTHOR,                "general.author"               },
-    { LLM_KV_GENERAL_URL,                   "general.url"                  },
-    { LLM_KV_GENERAL_DESCRIPTION,           "general.description"          },
-    { LLM_KV_GENERAL_LICENSE,               "general.license"              },
-    { LLM_KV_GENERAL_SOURCE_URL,            "general.source_url"           },
-    { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source_hf_repo"       },
+    { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"                  },
+    { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version"          },
+    { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"                     },
+    { LLM_KV_GENERAL_NAME,                  "general.name"                          },
+    { LLM_KV_GENERAL_AUTHOR,                "general.author"                        },
+    { LLM_KV_GENERAL_URL,                   "general.url"                           },
+    { LLM_KV_GENERAL_DESCRIPTION,           "general.description"                   },
+    { LLM_KV_GENERAL_LICENSE,               "general.license"                       },
+    { LLM_KV_GENERAL_SOURCE_URL,            "general.source.url"                    },
+    { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source.huggingface.repository" },
 
     { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
     { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
@@ -905,7 +905,7 @@ static std::string llama_token_to_str(const struct llama_context * ctx, llama_to
 
 struct llama_state {
     // We save the log callback globally
-    llama_log_callback log_callback = llama_log_callback_default;
+    ggml_log_callback log_callback = llama_log_callback_default;
     void * log_callback_user_data = nullptr;
 };
 
@@ -930,23 +930,22 @@ static const size_t kB = 1024;
 static const size_t MB = kB*kB;
 static const size_t GB = kB*kB*kB;
 
-// default hparams (LLaMA 7B)
 struct llama_hparams {
-    uint32_t n_vocab     = 32000;
-    uint32_t n_ctx_train = 2048;  // the context size used during training
-    uint32_t n_ctx       = 512;   // the context size used during inference
-    uint32_t n_embd      = 4096;
-    uint32_t n_head      = 32;
-    uint32_t n_head_kv   = 32;
-    uint32_t n_layer     = 32;
-    uint32_t n_rot       = 64;
-    uint32_t n_ff        = 11008;
+    uint32_t n_vocab;
+    uint32_t n_ctx_train; // context size the model was trained on
+    uint32_t n_ctx;       // context size used during inference
+    uint32_t n_embd;
+    uint32_t n_head;
+    uint32_t n_head_kv;
+    uint32_t n_layer;
+    uint32_t n_rot;
+    uint32_t n_ff;
 
-    float f_norm_eps     = 1e-5;
-    float f_norm_rms_eps = 1e-5;
+    float f_norm_eps;
+    float f_norm_rms_eps;
 
-    float rope_freq_base  = 10000.0f;
-    float rope_freq_scale = 1.0f;
+    float rope_freq_base;
+    float rope_freq_scale;
 
     bool operator!=(const llama_hparams & other) const {
         return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
@@ -1097,7 +1096,7 @@ struct llama_model {
 
     std::string name = "n/a";
 
-    llama_hparams hparams;
+    llama_hparams hparams = {};
     llama_vocab   vocab;
 
     struct ggml_tensor * tok_embeddings;
@@ -1830,28 +1829,17 @@ static void llm_load_hparams(
     hparams.n_head_kv = hparams.n_head;
     GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
 
-    // TODO: manually setting rope freq base and scale should override this
-    // FIXME: partial fix when the param specified is not the default value, but
-    //        will not work for overriding the model value to the params default
-
-    llama_context_params defaults = llama_context_default_params();
-
-    // rope_freq_base
-    {
-        float ropebase = 10000.0f;
-        GGUF_GET_KEY(ctx, ropebase, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
-        if (ropebase != 10000.0f && rope_freq_base == defaults.rope_freq_base) {
-            rope_freq_base = ropebase;
-        }
+    // rope_freq_base (optional)
+    if (rope_freq_base == 0.0f) {
+        rope_freq_base = 10000.0f;
+        GGUF_GET_KEY(ctx, rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
     }
 
     // rope_freq_scale (inverse of the kv) is optional
-    {
+    if (rope_freq_scale == 0.0f) {
         float ropescale = 1.0f;
         GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
-        if (ropescale != 1.0f && rope_freq_scale == defaults.rope_freq_scale) {
-            rope_freq_scale = 1.0f/ropescale;
-        }
+        rope_freq_scale = 1.0f/ropescale;
     }
 
     // sanity check for n_rot (optional)
@@ -4153,6 +4141,15 @@ static int llama_decode_internal(
     //       with the BLAS calls. need a better solution
     if (n_tokens >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
         n_threads = std::min(4, n_threads);
+    }
+
+    // If all tensors can be run on the GPU then using more than 1 thread is detrimental.
+    const bool full_offload_supported = model.arch == LLM_ARCH_LLAMA ||
+        model.arch == LLM_ARCH_BAICHUAN ||
+        model.arch == LLM_ARCH_FALCON;
+    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 3;
+    if (ggml_cpu_has_cublas() && full_offload_supported && fully_offloaded) {
+        n_threads = 1;
     }
 
     struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
@@ -6588,8 +6585,8 @@ struct llama_context_params llama_context_default_params() {
         /*.n_gpu_layers                =*/ 0,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
-        /*.rope_freq_base              =*/ 10000.0f,
-        /*.rope_freq_scale             =*/ 1.0f,
+        /*.rope_freq_base              =*/ 0.0f,
+        /*.rope_freq_scale             =*/ 0.0f,
         /*.progress_callback           =*/ nullptr,
         /*.progress_callback_user_data =*/ nullptr,
         /*.low_vram                    =*/ false,
@@ -6769,6 +6766,7 @@ struct llama_context * llama_new_context_with_model(
                     llama_free(ctx);
                     return NULL;
                 }
+                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
                 //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
@@ -7674,12 +7672,12 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
     return ctx->model.tensors_by_name;
 }
 
-void llama_log_set(llama_log_callback log_callback, void * user_data) {
+void llama_log_set(ggml_log_callback log_callback, void * user_data) {
     g_state.log_callback = log_callback ? log_callback : llama_log_callback_default;
     g_state.log_callback_user_data = user_data;
 }
 
-static void llama_log_internal_v(llama_log_level level, const char * format, va_list args) {
+static void llama_log_internal_v(ggml_log_level level, const char * format, va_list args) {
     va_list args_copy;
     va_copy(args_copy, args);
     char buffer[128];
@@ -7696,14 +7694,14 @@ static void llama_log_internal_v(llama_log_level level, const char * format, va_
     va_end(args_copy);
 }
 
-static void llama_log_internal(llama_log_level level, const char * format, ...) {
+static void llama_log_internal(ggml_log_level level, const char * format, ...) {
     va_list args;
     va_start(args, format);
     llama_log_internal_v(level, format, args);
     va_end(args);
 }
 
-static void llama_log_callback_default(llama_log_level level, const char * text, void * user_data) {
+static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) user_data;
     fputs(text, stderr);

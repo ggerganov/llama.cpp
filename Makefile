@@ -305,6 +305,8 @@ ifndef LLAMA_NO_ACCELERATE
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
 		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
+		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
+		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
@@ -514,22 +516,22 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
 
-simple: examples/simple/simple.cpp                            ggml.o llama.o common.o $(OBJS)
+simple: examples/simple/simple.cpp                            build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize: examples/quantize/quantize.cpp                      ggml.o llama.o $(OBJS)
+quantize: examples/quantize/quantize.cpp                      build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-quantize-stats: examples/quantize-stats/quantize-stats.cpp    ggml.o llama.o $(OBJS)
+quantize-stats: examples/quantize-stats/quantize-stats.cpp    build-info.h ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-perplexity: examples/perplexity/perplexity.cpp                ggml.o llama.o common.o $(OBJS)
+perplexity: examples/perplexity/perplexity.cpp                build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-embedding: examples/embedding/embedding.cpp                   ggml.o llama.o common.o $(OBJS)
+embedding: examples/embedding/embedding.cpp                   build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o common.o $(OBJS)
+save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp build-info.h ggml.o llama.o common.o grammar-parser.o $(OBJS)
@@ -585,7 +587,7 @@ build-info.h: $(wildcard .git/index) scripts/build-info.sh
 
 tests: $(TEST_TARGETS)
 
-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp ggml.o $(OBJS)
+benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	./$@
 
