@@ -10,9 +10,11 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL]\n" , argv[0]);
         return 1 ;
     }
+
+    int n_parallel = 1;
 
     if (argc >= 2) {
         params.model = argv[1];
@@ -22,11 +24,15 @@ int main(int argc, char ** argv) {
         params.prompt = argv[2];
     }
 
+    if (argc >= 4) {
+        n_parallel = std::atoi(argv[3]);
+    }
+
     if (params.prompt.empty()) {
         params.prompt = "Hello my name is";
     }
 
-    // total length of the sequence including the prompt
+    // total length of the sequences including the prompt
     const int n_len = 32;
 
     // init LLM
@@ -58,9 +64,9 @@ int main(int argc, char ** argv) {
     tokens_list = ::llama_tokenize(ctx, params.prompt, true);
 
     const int n_ctx    = llama_n_ctx(ctx);
-    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
+    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size())*n_parallel;
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_kv_req);
+    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_parallel = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_parallel, n_kv_req);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
@@ -102,7 +108,24 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    // assign the system KV cache to all parallel sequences
+    // this way, the parallel sequences will "reuse" the prompt tokens without having to copy them
+    for (int32_t i = 1; i < n_parallel; ++i) {
+        llama_kv_cache_seq_cp(ctx, 0, i, 0, batch.n_tokens);
+    }
+
+    if (n_parallel > 1) {
+        LOG_TEE("\n\n%s: generating %d sequences ...\n", __func__, n_parallel);
+    }
+
     // main loop
+
+    // we will store the parallel decoded sequences in this vector
+    std::vector<std::string> streams(n_parallel);
+
+    // remember the batch index of the last token for each parallel sequence
+    // we need this to determine which logits to sample from
+    std::vector<int32_t> i_batch(n_parallel, batch.n_tokens - 1);
 
     int n_cur    = batch.n_tokens;
     int n_decode = 0;
@@ -116,10 +139,18 @@ int main(int argc, char ** argv) {
             return 1;
         }
 
-        // sample the next token
-        {
+        // prepare the next batch
+        batch.n_tokens = 0;
+
+        // sample the next token for each parallel sequence / stream
+        for (int32_t i = 0; i < n_parallel; ++i) {
+            if (i_batch[i] < 0) {
+                // the stream has already finished
+                continue;
+            }
+
             auto n_vocab = llama_n_vocab(ctx);
-            auto logits  = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+            auto logits  = llama_get_logits_ith(ctx, i_batch[i]);
 
             std::vector<llama_token_data> candidates;
             candidates.reserve(n_vocab);
@@ -130,37 +161,67 @@ int main(int argc, char ** argv) {
 
             llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
-            // sample the most likely token
-            const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
+            const int   top_k = 40;
+            const float top_p = 0.9f;
+            const float temp  = 0.4f;
 
-            // is it an end of stream?
+            llama_sample_top_k(ctx, &candidates_p, top_k, 1);
+            llama_sample_top_p(ctx, &candidates_p, top_p, 1);
+            llama_sample_temp (ctx, &candidates_p, temp);
+
+            const llama_token new_token_id = llama_sample_token(ctx, &candidates_p);
+
+            //const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
+
+            // is it an end of stream? -> mark the stream as finished
             if (new_token_id == llama_token_eos(ctx) || n_cur == n_len) {
+                i_batch[i] = -1;
                 LOG_TEE("\n");
+                if (n_parallel > 1) {
+                    LOG_TEE("%s: stream %d finished", __func__, i);
+                }
 
-                break;
+                continue;
             }
 
-            LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
-            fflush(stdout);
+            // if there is only one stream, we print immediately to stdout
+            if (n_parallel == 1) {
+                LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
+                fflush(stdout);
+            }
 
-            // prepare the next batch
-            batch.n_tokens = 0;
+            streams[i] += llama_token_to_piece(ctx, new_token_id);
 
             // push this new token for next evaluation
             batch.token [batch.n_tokens] = new_token_id;
             batch.pos   [batch.n_tokens] = n_cur;
-            batch.seq_id[batch.n_tokens] = 0;
+            batch.seq_id[batch.n_tokens] = i;
             batch.logits[batch.n_tokens] = true;
+
+            i_batch[i] = batch.n_tokens;
 
             batch.n_tokens += 1;
 
             n_decode += 1;
         }
 
+        // all streams are finished
+        if (batch.n_tokens == 0) {
+            break;
+        }
+
         n_cur += 1;
     }
 
     LOG_TEE("\n");
+
+    if (n_parallel > 1) {
+        LOG_TEE("\n");
+
+        for (int32_t i = 0; i < n_parallel; ++i) {
+            LOG_TEE("sequence %d:\n\n%s%s\n\n", i, params.prompt.c_str(), streams[i].c_str());
+        }
+    }
 
     const auto t_main_end = ggml_time_us();
 
