@@ -7380,12 +7380,8 @@ int llama_eval(
     llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
 
     const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0), n_threads);
-    if (ret != 0) {
-        if (ret < 0) {
-            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-        }
-
-        return ret;
+    if (ret < 0) {
+        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
     return ret;
@@ -7402,12 +7398,8 @@ int llama_eval_embd(
     llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, n_past, 1, 0, };
 
     const int ret = llama_decode_internal(*ctx, batch, n_threads);
-    if (ret != 0) {
-        if (ret < 0) {
-            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-        }
-
-        return ret;
+    if (ret < 0) {
+        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
     return ret;
@@ -7460,12 +7452,8 @@ int llama_decode(
           struct llama_batch   batch,
                          int   n_threads) {
     const int ret = llama_decode_internal(*ctx, batch, n_threads);
-    if (ret != 0) {
-        if (ret < 0) {
-            LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
-        }
-
-        return ret;
+    if (ret < 0) {
+        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }
 
     return ret;
