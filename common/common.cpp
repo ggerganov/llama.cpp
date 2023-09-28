@@ -129,6 +129,15 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             if (params.n_threads <= 0) {
                 params.n_threads = std::thread::hardware_concurrency();
             }
+        } else if (arg == "-tb" || arg == "--threads-batch") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads_batch = std::stoi(argv[i]);
+            if (params.n_threads_batch <= 0) {
+                params.n_threads_batch = std::thread::hardware_concurrency();
+            }
         } else if (arg == "-p" || arg == "--prompt") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -452,12 +461,6 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 #else
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. Disabling mul_mat_q kernels has no effect.\n");
 #endif // GGML_USE_CUBLAS
-        } else if (arg == "--low-vram" || arg == "-lv") {
-#ifdef GGML_USE_CUBLAS
-            params.low_vram = true;
-#else
-            fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set lower vram usage.\n");
-#endif // GGML_USE_CUBLAS
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
         } else if (arg == "--numa") {
@@ -630,7 +633,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        (can be specified more than once for multiple prompts).\n");
     printf("  --color               colorise output to distinguish prompt and user input from generations\n");
     printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    printf("  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
+    printf("  -tb N, --threads-batch N\n");
+    printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  -p PROMPT, --prompt PROMPT\n");
     printf("                        prompt to start generation with (default: empty)\n");
     printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
@@ -645,7 +650,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -f FNAME, --file FNAME\n");
     printf("                        prompt file to start generation.\n");
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
-    printf("  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
@@ -705,7 +710,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ts SPLIT --tensor-split SPLIT\n");
     printf("                        how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1\n");
     printf("  -mg i, --main-gpu i   the GPU to use for scratch and small tensors\n");
-    printf("  -lv, --low-vram       don't allocate VRAM scratch buffer\n");
 #ifdef GGML_USE_CUBLAS
     printf("  -nommq, --no-mul-mat-q\n");
     printf("                        use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.\n");
@@ -724,6 +728,18 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("\n");
+}
+
+std::string get_system_info(const gpt_params & params) {
+    std::ostringstream os;
+
+    os << "system_info: n_threads = " << params.n_threads;
+    if (params.n_threads_batch != -1) {
+        os << " (n_threads_batch = " << params.n_threads_batch << ")";
+    }
+    os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
+
+    return os.str();
 }
 
 std::string gpt_random_prompt(std::mt19937 & rng) {
@@ -749,40 +765,50 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 // Model utils
 //
 
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
-    auto lparams = llama_context_default_params();
+struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
+    auto mparams = llama_model_default_params();
 
-    lparams.n_ctx           = params.n_ctx;
-    lparams.n_batch         = params.n_batch;
     if (params.n_gpu_layers != -1) {
-        lparams.n_gpu_layers = params.n_gpu_layers;
+        mparams.n_gpu_layers = params.n_gpu_layers;
     }
-    lparams.main_gpu        = params.main_gpu;
-    lparams.tensor_split    = params.tensor_split;
-    lparams.low_vram        = params.low_vram;
-    lparams.mul_mat_q       = params.mul_mat_q;
-    lparams.seed            = params.seed;
-    lparams.f16_kv          = params.memory_f16;
-    lparams.use_mmap        = params.use_mmap;
-    lparams.use_mlock       = params.use_mlock;
-    lparams.logits_all      = params.logits_all;
-    lparams.embedding       = params.embedding;
-    lparams.rope_freq_base  = params.rope_freq_base;
-    lparams.rope_freq_scale = params.rope_freq_scale;
+    mparams.main_gpu        = params.main_gpu;
+    mparams.tensor_split    = params.tensor_split;
+    mparams.use_mmap        = params.use_mmap;
+    mparams.use_mlock       = params.use_mlock;
 
-    return lparams;
+    return mparams;
+}
+
+struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
+    auto cparams = llama_context_default_params();
+
+    cparams.n_ctx           = params.n_ctx;
+    cparams.n_batch         = params.n_batch;
+    cparams.n_threads       = params.n_threads;
+    cparams.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    cparams.mul_mat_q       = params.mul_mat_q;
+    cparams.seed            = params.seed;
+    cparams.f16_kv          = params.memory_f16;
+    cparams.logits_all      = params.logits_all;
+    cparams.embedding       = params.embedding;
+    cparams.rope_freq_base  = params.rope_freq_base;
+    cparams.rope_freq_scale = params.rope_freq_scale;
+
+    return cparams;
 }
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
-    auto lparams = llama_context_params_from_gpt_params(params);
+    auto mparams = llama_model_params_from_gpt_params(params);
 
-    llama_model * model  = llama_load_model_from_file(params.model.c_str(), lparams);
+    llama_model * model  = llama_load_model_from_file(params.model.c_str(), mparams);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
         return std::make_tuple(nullptr, nullptr);
     }
 
-    llama_context * lctx = llama_new_context_with_model(model, lparams);
+    auto cparams = llama_context_params_from_gpt_params(params);
+
+    llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);
@@ -815,7 +841,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         LOG("warming up the model with an empty run\n");
 
         std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
-        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0), params.n_threads);
+        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_tokens_rm(lctx, -1, -1);
         llama_reset_timings(lctx);
     }
@@ -828,16 +854,23 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 //
 
 std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos) {
+    return llama_tokenize(llama_get_model(ctx), text, add_bos);
+}
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
            const std::string & text,
                         bool   add_bos) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + add_bos;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(ctx, text.data(), text.length(), result.data(), result.size(), add_bos);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(ctx, text.data(), text.length(), result.data(), result.size(), add_bos);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -847,10 +880,10 @@ std::vector<llama_token> llama_tokenize(
 
 std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(ctx, token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(ctx, token, result.data(), result.size());
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);
@@ -905,7 +938,7 @@ llama_token llama_sample_token(
          std::vector<llama_token_data> & candidates,
                                    int   idx) {
     const int n_ctx   = llama_n_ctx(ctx);
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
 
     const float   temp            = params.temp;
     const int32_t top_k           = params.top_k <= 0 ? n_vocab : params.top_k;
@@ -1191,7 +1224,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
 #endif // NDEBUG
 
     fprintf(stream, "model_desc: %s\n", model_desc);
-    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", llama_n_vocab(lctx));
+    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", llama_n_vocab(llama_get_model(lctx)));
 
 #ifdef __OPTIMIZE__
     fprintf(stream, "optimize: true\n");
@@ -1258,7 +1291,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
         fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
     }
     fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
-    fprintf(stream, "low_vram: %s # default: false\n", params.low_vram ? "true" : "false");
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "memory_f32: %s # default: false\n", !params.memory_f16 ? "true" : "false");
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", params.mirostat);

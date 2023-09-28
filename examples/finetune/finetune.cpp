@@ -304,7 +304,7 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
 
         gguf_free(mctx);
     }
-    hparams.n_vocab = llama_model_n_vocab(input);
+    hparams.n_vocab = llama_n_vocab(input);
     hparams.n_ctx = n_ctx;
 
     // get tensors from llama_model (possibly mmapped)
@@ -1540,12 +1540,14 @@ int main(int argc, char ** argv) {
     printf("%s: seed: %u\n", __func__, params.common.seed);
     srand(params.common.seed);
 
-    struct llama_context_params llama_params = llama_context_default_params();
-    llama_params.vocab_only = false;
+    struct llama_model_params llama_mparams = llama_model_default_params();
+    llama_mparams.vocab_only = false;
 
     printf("%s: model base = '%s'\n", __func__, params.fn_model_base);
-    struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_params);
-    struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_params);
+    struct llama_model * lmodel = llama_load_model_from_file(params.fn_model_base, llama_mparams);
+
+    struct llama_context_params llama_cparams = llama_context_default_params();
+    struct llama_context * lctx = llama_new_context_with_model(lmodel, llama_cparams);
 
     struct my_llama_model model;
     init_model(lmodel, &model, params.fn_model_base, params.common.n_ctx);

@@ -858,7 +858,7 @@ size_t tokenize_file(
         out_tokens.resize(buf.size() + n_max_tokens_overhead);
 
         int n_tokens = llama_tokenize(
-            lctx,
+            llama_get_model(lctx),
             buf.data(),
             (int) buf.size(),
             out_tokens.data(),
@@ -867,7 +867,7 @@ size_t tokenize_file(
         if (n_tokens < 0) {
             out_tokens.resize(-n_tokens);
             n_tokens = llama_tokenize(
-                lctx,
+                llama_get_model(lctx),
                 buf.data(),
                 (int) buf.size(),
                 out_tokens.data(),
@@ -920,7 +920,7 @@ size_t tokenize_file(
         size_t found_max_sample_size  = 0;
 
         size_t max_token_text_size = 0;
-        int n_vocab = llama_n_vocab(lctx);
+        int n_vocab = llama_n_vocab(llama_get_model(lctx));
         for (llama_token token=0; token < n_vocab; ++token) {
             max_token_text_size = std::max(
                 max_token_text_size,
@@ -961,7 +961,7 @@ size_t tokenize_file(
 
                 // tokenize the sample
                 tok_sample.resize(buf_sample.size() + n_max_tokens_overhead);
-                int n_tokens = llama_tokenize(lctx,
+                int n_tokens = llama_tokenize(llama_get_model(lctx),
                     buf_sample.data(),
                     (int) buf_sample.size(),
                     tok_sample.data(),
@@ -969,7 +969,7 @@ size_t tokenize_file(
                     false);
                 if (n_tokens < 0) {
                     tok_sample.resize(-n_tokens);
-                    n_tokens = llama_tokenize(lctx,
+                    n_tokens = llama_tokenize(llama_get_model(lctx),
                         buf_sample.data(),
                         (int) buf_sample.size(),
                         tok_sample.data(),
