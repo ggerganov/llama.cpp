@@ -29,7 +29,7 @@ else
 	else
 		CC_IS_APPLE_CLANG=1
 	endif
-	CC_VER := $(shell $(CC) --version | sed -n 's/^.* version \([0-9.]*\) .*$$/\1/p' \
+	CC_VER := $(shell $(CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
 				| awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
 endif
 
