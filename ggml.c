@@ -6,6 +6,10 @@
 #include "k_quants.h"
 #endif
 
+#ifdef GGML_USE_SQLLM
+#include "sqllm.h"
+#endif
+
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
@@ -1777,6 +1781,19 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .type_size                = sizeof(block_q8_K),
         .is_quantized             = true,
         .from_float               = quantize_row_q8_K,
+    },
+#endif
+#ifdef GGML_USE_SQLLM
+    [GGML_TYPE_Q4_SQ] = {
+        .type_name                = "q4_sq",
+        .blck_size                = 1,
+        .type_size                = sizeof(int32_t),
+        .is_quantized             = true,
+        .to_float                 = NULL,
+        .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
+        .from_float_reference     = NULL,
+        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_q4_sq_fp16,
+        .vec_dot_type             = GGML_TYPE_F16,
     }
 #endif
 };
@@ -4414,6 +4431,7 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_MOSTLY_Q4_K:          wtype = GGML_TYPE_Q4_K;  break;
         case GGML_FTYPE_MOSTLY_Q5_K:          wtype = GGML_TYPE_Q5_K;  break;
         case GGML_FTYPE_MOSTLY_Q6_K:          wtype = GGML_TYPE_Q6_K;  break;
+        case GGML_FTYPE_MOSTLY_Q4_SQ:         wtype = GGML_TYPE_Q4_SQ; break;
         case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT; break;
         case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT; break;
     }
@@ -4788,7 +4806,13 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         view_src   = view_src->view_src;
     }
 
-    size_t data_size = ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
+    size_t data_size = 0;
+    if (type == GGML_TYPE_Q4_SQ) { //SQLLM
+        data_size += 16*2 + (ne[0]/2);
+    } else {
+        data_size += ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
+    }
+
     for (int i = 1; i < n_dims; i++) {
         data_size *= ne[i];
     }
@@ -4856,8 +4880,13 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         result->ne[i] = ne[i];
     }
 
-    result->nb[0] = ggml_type_size(type);
-    result->nb[1] = result->nb[0]*(result->ne[0]/ggml_blck_size(type));
+    if (type == GGML_TYPE_Q4_SQ) { //SQLLM
+        result->nb[0] = ggml_type_size(type);
+        result->nb[1] = result->nb[0]*(16/2 + result->ne[0]/8);
+    } else {
+        result->nb[0] = ggml_type_size(type);
+        result->nb[1] = result->nb[0]*(result->ne[0]/ggml_blck_size(type));
+    }
     for (int i = 2; i < GGML_MAX_DIMS; i++) {
         result->nb[i] = result->nb[i - 1]*result->ne[i - 1];
     }
@@ -9039,6 +9068,7 @@ static void ggml_compute_forward_add(
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
+        case GGML_TYPE_Q4_SQ:
             {
                 ggml_compute_forward_add_q_f32(params, src0, src1, dst);
             } break;
@@ -9303,6 +9333,7 @@ static void ggml_compute_forward_add1(
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
+        case GGML_TYPE_Q4_SQ:
             {
                 ggml_compute_forward_add1_q_f32(params, src0, src1, dst);
             } break;
@@ -9418,6 +9449,7 @@ static void ggml_compute_forward_acc(
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
+        case GGML_TYPE_Q4_SQ:
         default:
             {
                 GGML_ASSERT(false);
@@ -11330,8 +11362,9 @@ static void ggml_compute_forward_mul_mat(
     }
 #endif
 
-    if (params->type == GGML_TASK_INIT) {
+    if (params->type == GGML_TASK_INIT){
         if (src1->type != vec_dot_type) {
+
             char * wdata = params->wdata;
             const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
 
@@ -11352,8 +11385,15 @@ static void ggml_compute_forward_mul_mat(
         return;
     }
 
-    const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
-    const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+    void * wdata;
+    size_t row_size;
+    if (src0->type != GGML_TYPE_Q4_SQ) {
+      row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+      wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
+    } else {
+      row_size = ne10*sizeof(int16_t); // for fp16 row
+      wdata    = params->wdata;
+    }
 
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = ne11*ne12*ne13; // src1 rows
@@ -11417,7 +11457,7 @@ static void ggml_compute_forward_mul_mat(
                 //       the original src1 data pointer, so we should index using the indices directly
                 // TODO: this is a bit of a hack, we should probably have a better way to handle this
                 const char * src1_col = (const char *) wdata +
-                    (src1_cont || src1->type != vec_dot_type
+                    (src1_cont || src1->type != vec_dot_type || src0->type == GGML_TYPE_Q4_SQ
                      ? (i11      + i12*ne11 + i13*ne12*ne11)*row_size
                      : (i11*nb11 + i12*nb12 + i13*nb13));
 
@@ -11735,6 +11775,7 @@ static void ggml_compute_forward_set(
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
+        case GGML_TYPE_Q4_SQ:
         default:
             {
                 GGML_ASSERT(false);
@@ -11905,6 +11946,7 @@ static void ggml_compute_forward_get_rows(
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
+        case GGML_TYPE_Q4_SQ:
             {
                 ggml_compute_forward_get_rows_q(params, src0, src1, dst);
             } break;
@@ -12534,6 +12576,7 @@ static void ggml_compute_forward_alibi(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q8_K:
+        case GGML_TYPE_Q4_SQ:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
@@ -12608,6 +12651,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
         case GGML_TYPE_Q8_K:
+        case GGML_TYPE_Q4_SQ:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
