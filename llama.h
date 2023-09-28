@@ -358,7 +358,7 @@ extern "C" {
                              const char * path_model,
             struct llama_model_params     params);
 
-    LLAMA_API void llama_split_layers_weighted(struct llama_context * ctx, std::vector<float> device_weights);
+    LLAMA_API void llama_split_layers_weighted(struct llama_context * ctx, float device_weights[], size_t num_weights);
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 

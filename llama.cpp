@@ -13087,12 +13087,12 @@ struct llama_context * llama_new_context_with_model(
     return ctx;
 }
 
-void llama_split_layers_weighted(struct llama_context * ctx, std::vector<float> device_weights) {
+void llama_split_layers_weighted(struct llama_context * ctx, float device_weights[], size_t num_weights) {
 #ifdef GGML_USE_MPI
-    if (ggml_mpi_rank(ctx->ctx_mpi) == 0 && ggml_mpi_size(ctx->ctx_mpi) != device_weights.size()) {
+    if (ggml_mpi_rank(ctx->ctx_mpi) == 0 && ggml_mpi_size(ctx->ctx_mpi) != num_weights) {
         GGML_ASSERT(false && "Must have same number of split percentages as devices");
     }
-    uint16_t** ranges = ggml_mpi_split_range(ctx->ctx_mpi, 0, ctx->model.hparams.n_layer - 1, device_weights.data());
+    uint16_t** ranges = ggml_mpi_split_range(ctx->ctx_mpi, 0, ctx->model.hparams.n_layer - 1, device_weights);
     ggml_mpi_scatter_layers(ctx->ctx_mpi, ranges);
 #endif
 }

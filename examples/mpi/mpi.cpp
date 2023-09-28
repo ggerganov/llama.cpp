@@ -243,7 +243,7 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    llama_split_layers_weighted(ctx, params.mpi_layer_split);
+    llama_split_layers_weighted(ctx, params.mpi_layer_split.data(), params.mpi_layer_split.size());
 
     std::string path_session = params.path_prompt_cache;
     std::vector<llama_token> session_tokens;
