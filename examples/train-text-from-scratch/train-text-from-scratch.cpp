@@ -786,7 +786,7 @@ struct train_params {
     float rope_freq_scale;
 };
 
-struct train_params get_default_train_params() {
+static struct train_params get_default_train_params() {
     struct train_params params;
     params.common = get_default_train_params_common();
     params.fn_vocab_model    = "ggml-vic7b-uncensored-q4_0.bin";
