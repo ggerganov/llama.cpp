@@ -274,16 +274,13 @@ extern "C" {
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
-    LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
     LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd     (const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
+    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 
-    LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
-    LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
+    LLAMA_API int llama_n_vocab    (const struct llama_model * model);
+    LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
+    LLAMA_API int llama_n_embd     (const struct llama_model * model);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
@@ -454,7 +451,9 @@ extern "C" {
             struct llama_context * ctx,
               struct llama_batch   batch);
 
-    // Set the number of threads
+    // Set the number of threads used for decoding
+    // n_threads is the number of threads used for generation (single token)
+    // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
     // Token logits obtained from the last call to llama_eval()
@@ -496,14 +495,6 @@ extern "C" {
     // Returns the number of tokens on success, no more than n_max_tokens
     // Returns a negative number on failure - the number of tokens that would have been returned
     LLAMA_API int llama_tokenize(
-            struct llama_context * ctx,
-                      const char * text,
-                             int   text_len,
-                     llama_token * tokens,
-                             int   n_max_tokens,
-                            bool   add_bos);
-
-    LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
                              int   text_len,
@@ -516,12 +507,6 @@ extern "C" {
     // Does not write null terminator to the buffer.
     // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
     LLAMA_API int llama_token_to_piece(
-            const struct llama_context * ctx,
-                           llama_token   token,
-                                  char * buf,
-                                  int    length);
-
-    LLAMA_API int llama_token_to_piece_with_model(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,

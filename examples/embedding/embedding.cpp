@@ -42,7 +42,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(ctx);
+    const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
     if (n_ctx > n_ctx_train) {
@@ -87,8 +87,8 @@ int main(int argc, char ** argv) {
         embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_tokens);
     }
 
-    const int n_embd = llama_n_embd(ctx);
-    const auto embeddings = llama_get_embeddings(ctx);
+    const int n_embd = llama_n_embd(model);
+    const auto * embeddings = llama_get_embeddings(ctx);
 
     for (int i = 0; i < n_embd; i++) {
         printf("%f ", embeddings[i]);

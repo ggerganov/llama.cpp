@@ -470,7 +470,7 @@ struct llama_server_context
 
         // out of user input, sample next token
         const float temp = params.temp;
-        const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+        const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(model) : params.top_k;
         const float top_p = params.top_p;
         const float tfs_z = params.tfs_z;
         const float typical_p = params.typical_p;
@@ -486,7 +486,7 @@ struct llama_server_context
 
         {
             auto *logits = llama_get_logits(ctx);
-            auto n_vocab = llama_n_vocab(ctx);
+            auto n_vocab = llama_n_vocab(model);
 
             // Apply params.logit_bias map
             for (const auto &it : params.logit_bias)
@@ -690,7 +690,7 @@ struct llama_server_context
 
     std::vector<float> getEmbedding()
     {
-        static const int n_embd = llama_n_embd(ctx);
+        static const int n_embd = llama_n_embd(model);
         if (!params.embedding)
         {
             LOG_WARNING("embedding disabled", {
@@ -1166,7 +1166,7 @@ static void parse_options_completion(const json &body, llama_server_context &lla
     const auto &logit_bias = body.find("logit_bias");
     if (logit_bias != body.end() && logit_bias->is_array())
     {
-        const int n_vocab = llama_n_vocab(llama.ctx);
+        const int n_vocab = llama_n_vocab(llama.model);
         for (const auto &el : *logit_bias)
         {
             if (el.is_array() && el.size() == 2 && el[0].is_number_integer())

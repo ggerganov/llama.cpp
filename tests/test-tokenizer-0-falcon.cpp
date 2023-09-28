@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (llama_vocab_type(ctx) != LLAMA_VOCAB_TYPE_BPE) {
+    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
         fprintf(stderr, "%s : error: vocab type is not SPM\n", __func__);
         llama_free_model(model);
         llama_free(ctx);

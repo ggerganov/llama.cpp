@@ -155,7 +155,7 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
-            auto   n_vocab = llama_n_vocab(ctx);
+            auto   n_vocab = llama_n_vocab(model);
             auto * logits  = llama_get_logits_ith(ctx, i_batch[i]);
 
             std::vector<llama_token_data> candidates;

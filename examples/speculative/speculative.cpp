@@ -78,8 +78,8 @@ int main(int argc, char ** argv) {
 
     // the 2 models should have the same vocab
     const int n_ctx   = llama_n_ctx(ctx_tgt);
-    const int n_vocab = llama_n_vocab(ctx_tgt);
-    //GGML_ASSERT(n_vocab == llama_n_vocab(ctx_dft));
+    const int n_vocab = llama_n_vocab(model_tgt);
+    //GGML_ASSERT(n_vocab == llama_n_vocab(model_dft));
 
     // how many tokens to draft each time
     int n_draft = params.n_draft;

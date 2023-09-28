@@ -73,7 +73,7 @@ int main(int argc, char ** argv) {
 
     for (auto i = 0; i < params.n_predict; i++) {
         auto * logits = llama_get_logits(ctx);
-        auto n_vocab = llama_n_vocab(ctx);
+        auto n_vocab = llama_n_vocab(model);
         std::vector<llama_token_data> candidates;
         candidates.reserve(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -133,7 +133,7 @@ int main(int argc, char ** argv) {
     // second run
     for (auto i = 0; i < params.n_predict; i++) {
         auto * logits = llama_get_logits(ctx2);
-        auto n_vocab = llama_n_vocab(ctx2);
+        auto n_vocab = llama_n_vocab(model);
         std::vector<llama_token_data> candidates;
         candidates.reserve(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {

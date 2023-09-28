@@ -70,7 +70,7 @@ bool eval_float(void * model, float * input, int N){
     MyModel * mymodel = (MyModel*)model;
     llama_context * ctx = mymodel->ctx;
     gpt_params params = mymodel->params;
-    int n_emb = llama_n_embd(ctx);
+    int n_emb = llama_n_embd(llama_get_model(ctx));
     int n_past = mymodel->n_past;
     int n_batch = N; // params.n_batch;
 
@@ -132,7 +132,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
 
     // out of user input, sample next token
     const float   temp            = params.temp;
-    const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+    const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx)) : params.top_k;
     const float   top_p           = params.top_p;
     const float   tfs_z           = params.tfs_z;
     const float   typical_p       = params.typical_p;
@@ -148,7 +148,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
     llama_token id = 0;
     {
         auto logits  = llama_get_logits(ctx);
-        auto n_vocab = llama_n_vocab(ctx);
+        auto n_vocab = llama_n_vocab(llama_get_model(ctx));
 
         // Apply params.logit_bias map
         for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {

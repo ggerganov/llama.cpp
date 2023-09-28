@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    GGML_ASSERT(llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM);
+    GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
 
 #ifdef _WIN32
     // We need this for unicode console support
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(model);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = llama_detokenize_spm(ctx, std::vector<int>(1, i));

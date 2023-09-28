@@ -975,10 +975,10 @@ int tokenize_file(struct llama_context * lctx, const char * filename, std::vecto
 
     buf[size] = '\0';
 
-    int n_tokens = llama_tokenize(lctx, buf.data(), buf.size(), out.data(), out.size(), false);
+    int n_tokens = llama_tokenize(llama_get_model(lctx), buf.data(), buf.size(), out.data(), out.size(), false);
     if (n_tokens < 0) {
         out.resize(-n_tokens);
-        n_tokens = llama_tokenize(lctx, buf.data(), buf.size(), out.data(), out.size(), false);
+        n_tokens = llama_tokenize(llama_get_model(lctx), buf.data(), buf.size(), out.data(), out.size(), false);
     }
     GGML_ASSERT(n_tokens >= 0);
     out.resize(n_tokens);
@@ -2027,7 +2027,7 @@ int main(int argc, char ** argv) {
     printf("%s: number of training tokens: %d\n", __func__, (int) train_tokens.size());
 
     struct my_llama_model model;
-    model.hparams.n_vocab = llama_n_vocab(lctx);
+    model.hparams.n_vocab = llama_n_vocab(lmodel);
     model.hparams.n_ctx   = params.n_ctx;
     model.hparams.n_embd  = params.n_embd;
     model.hparams.n_head  = params.n_head;
