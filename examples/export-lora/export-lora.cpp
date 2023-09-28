@@ -200,12 +200,12 @@ static bool export_lora_params_parse(int argc, char ** argv, struct export_lora_
     }
 
     if (params->fn_model_base == default_params.fn_model_base) {
-        fprintf(stderr, "error: please specify a filename for model-base.\n", arg.c_str());
+        fprintf(stderr, "error: please specify a filename for model-base.\n");
         export_lora_print_usage(argc, argv, &default_params);
         exit(1);
     }
     if (params->fn_model_out == default_params.fn_model_out) {
-        fprintf(stderr, "error: please specify a filename for model-out.\n", arg.c_str());
+        fprintf(stderr, "error: please specify a filename for model-out.\n");
         export_lora_print_usage(argc, argv, &default_params);
         exit(1);
     }

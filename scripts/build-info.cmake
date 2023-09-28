@@ -8,16 +8,12 @@ set(BUILD_TARGET "unknown")
 # Look for git
 find_package(Git)
 if(NOT Git_FOUND)
-    execute_process(
-        COMMAND which git
-        OUTPUT_VARIABLE GIT_EXECUTABLE
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    if(NOT GIT_EXECUTABLE STREQUAL "")
+    find_program(GIT_EXECUTABLE NAMES git git.exe)
+    if(GIT_EXECUTABLE)
         set(Git_FOUND TRUE)
-        message(STATUS "Found Git using 'which': ${GIT_EXECUTABLE}")
+        message(STATUS "Found Git: ${GIT_EXECUTABLE}")
     else()
-        message(WARNING "Git not found using 'find_package' or 'which'. Build info will not be accurate. Consider installing Git or ensuring it is in the PATH.")
+        message(WARNING "Git not found. Build info will not be accurate.")
     endif()
 endif()
 
@@ -28,43 +24,32 @@ if(Git_FOUND)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE HEAD
         OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE GIT_HEAD_RESULT
     )
     execute_process(
         COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE COUNT
         OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE GIT_COUNT_RESULT
     )
-    if(GIT_HEAD_RESULT EQUAL 0 AND GIT_COUNT_RESULT EQUAL 0)
-        set(BUILD_COMMIT ${HEAD})
-        set(BUILD_NUMBER ${COUNT})
-    endif()
-endif()
-
-if(GIT_HEAD_RESULT EQUAL 0 AND GIT_COUNT_RESULT EQUAL 0)
     set(BUILD_COMMIT ${HEAD})
     set(BUILD_NUMBER ${COUNT})
 endif()
 
-execute_process(
-    COMMAND sh -c "$@ --version | head -1" _ ${CMAKE_C_COMPILER}
-    OUTPUT_VARIABLE OUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE RES
-)
-if (RES EQUAL 0)
+if(MSVC)
+    set(BUILD_COMPILER "${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+    set(BUILD_TARGET ${CMAKE_VS_PLATFORM_NAME})
+else()
+    execute_process(
+        COMMAND sh -c "$@ --version | head -1" _ ${CMAKE_C_COMPILER}
+        OUTPUT_VARIABLE OUT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
     set(BUILD_COMPILER ${OUT})
-endif()
-
-execute_process(
-    COMMAND ${CMAKE_C_COMPILER} -dumpmachine
-    OUTPUT_VARIABLE OUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE RES
-)
-if (RES EQUAL 0)
+    execute_process(
+        COMMAND ${CMAKE_C_COMPILER} -dumpmachine
+        OUTPUT_VARIABLE OUT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
     set(BUILD_TARGET ${OUT})
 endif()
 

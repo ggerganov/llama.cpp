@@ -1484,7 +1484,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched, bool * canc
         train->shuffle_next_sample = 0;
     }
 
-    const bool last_epoch_reached = (params->n_epochs > 0 && train->train_epochs - data->first_epoch >= params->n_epochs);
+    const bool last_epoch_reached = (params->n_epochs > 0 && (int64_t) train->train_epochs - data->first_epoch >= params->n_epochs);
     if (last_epoch_reached) {
         // allow optimization iteration at last epoch to be completed before canceling
         if (data->iter_at_last_epoch < 0) {

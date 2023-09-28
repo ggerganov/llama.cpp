@@ -1,4 +1,5 @@
 #define LLAMA_API_INTERNAL
+#include "build-info.h"
 #include "common.h"
 #include "ggml.h"
 #include "llama.h"

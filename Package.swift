@@ -45,6 +45,8 @@ let package = Package(
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
                 .define("GGML_USE_K_QUANTS"),
                 .define("GGML_USE_ACCELERATE")
+                .define("ACCELERATE_NEW_LAPACK")
+                .define("ACCELERATE_LAPACK_ILP64")
             ] + additionalSettings,
             linkerSettings: [
                 .linkedFramework("Accelerate")
