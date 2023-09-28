@@ -1,9 +1,12 @@
 #include "ggml.h"
 #include "train.h"
+
 #include <vector>
 #include <cassert>
-#include <random>
+#include <cstdlib>
 #include <cstring>
+#include <random>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -64,7 +67,7 @@ static struct ggml_tensor * randomize_tensor(
             break;
         default:
             assert(false);
-    };
+    }
 
     return tensor;
 }
@@ -389,7 +392,7 @@ static void randomize_model_lora(
     free_random_normal_distribution(rnd);
 }
 
-static bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
+static void init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -415,14 +418,12 @@ static bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * mod
 
         if (!cache->ctx) {
             fprintf(stderr, "%s: failed to allocate memory for kv cache\n", __func__);
-            return false;
+            exit(1);
         }
     }
 
     cache->k = ggml_new_tensor_1d(cache->ctx, GGML_TYPE_F32, n_elements);
     cache->v = ggml_new_tensor_1d(cache->ctx, GGML_TYPE_F32, n_elements);
-
-    return true;
 }
 
 static bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * model, int n_batch) {

@@ -483,7 +483,7 @@ static struct ggml_tensor * llama_build_train_graphs(
 }
 
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-{ \
+do { \
     const std::string skey(key); \
     const int kid = gguf_find_key(ctx, skey.c_str()); \
     if (kid >= 0) { \
@@ -495,7 +495,7 @@ static struct ggml_tensor * llama_build_train_graphs(
     } else if (req) { \
         die_fmt("key not found in model: %s", skey.c_str()); \
     } \
-}
+} while (0)
 
 static void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_context * f_ggml_ctx, struct my_llama_model * model) {
     // NOTE: gguf_context must be initialized with f_ggml_ctx and no_alloc=false, otherwise tensor data can not be read
@@ -786,7 +786,7 @@ struct train_params {
     float rope_freq_scale;
 };
 
-struct train_params get_default_train_params() {
+static struct train_params get_default_train_params() {
     struct train_params params;
     params.common = get_default_train_params_common();
     params.fn_vocab_model    = "ggml-vic7b-uncensored-q4_0.bin";

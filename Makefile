@@ -1,5 +1,5 @@
 # Define the default target now so that it is always the first target
-BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot train-text-from-scratch convert-llama2c-to-ggml simple batched save-load-state server embd-input-test gguf llama-bench baby-llama beam-search speculative parallel finetune export-lora tests/test-c.o
+BUILD_TARGETS = main quantize quantize-stats perplexity embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml simple batched save-load-state server embd-input-test gguf llama-bench baby-llama beam-search speculative benchmark-matmult parallel finetune export-lora tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama tests/test-tokenizer-0-falcon tests/test-tokenizer-1-llama
@@ -17,6 +17,20 @@ endif
 
 ifndef UNAME_M
 UNAME_M := $(shell uname -m)
+endif
+
+ifeq '' '$(findstring clang,$(shell $(CC) --version))'
+	CC_IS_GCC=1
+	CC_VER := $(shell $(CC) -dumpfullversion -dumpversion | awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
+else
+	CC_IS_CLANG=1
+	ifeq '' '$(findstring Apple LLVM,$(shell $(CC) --version))'
+		CC_IS_LLVM_CLANG=1
+	else
+		CC_IS_APPLE_CLANG=1
+	endif
+	CC_VER := $(shell $(CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
+				| awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
 endif
 
 # Mac OS + Arm can report x86_64
@@ -86,9 +100,6 @@ ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
 endif
-
-CCV := $(shell $(CC) --version | head -n 1)
-CXXV := $(shell $(CXX) --version | head -n 1)
 
 #
 # Compile flags
@@ -173,20 +184,33 @@ ifdef LLAMA_DISABLE_LOGS
 endif # LLAMA_DISABLE_LOGS
 
 # warnings
-MK_CFLAGS    += -Wall -Wextra -Wpedantic -Wcast-qual -Wdouble-promotion -Wshadow -Wstrict-prototypes -Wpointer-arith \
-				-Wmissing-prototypes -Werror=implicit-int -Wno-unused-function
-MK_CXXFLAGS  += -Wall -Wextra -Wpedantic -Wcast-qual -Wmissing-declarations -Wno-unused-function -Wno-multichar
+WARN_FLAGS    = -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function
+MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int \
+				-Werror=implicit-function-declaration
+MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 
-# TODO(cebtenzzre): remove this once PR #2632 gets merged
-TTFS_CXXFLAGS = $(CXXFLAGS) -Wno-missing-declarations
+ifeq ($(CC_IS_CLANG), 1)
+	# clang options
+	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return
+	MK_HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
 
-ifneq '' '$(findstring clang,$(shell $(CXX) --version))'
-	# clang++ only
-	MK_CXXFLAGS   += -Wmissing-prototypes
-	TTFS_CXXFLAGS += -Wno-missing-prototypes
+	ifneq '' '$(and $(CC_IS_LLVM_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 030800)))'
+		MK_CFLAGS += -Wdouble-promotion
+	endif
+	ifneq '' '$(and $(CC_IS_APPLE_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 070300)))'
+		MK_CFLAGS += -Wdouble-promotion
+	endif
 else
-	# g++ only
-	MK_CXXFLAGS += -Wno-format-truncation -Wno-array-bounds
+	# gcc options
+	MK_CFLAGS        += -Wdouble-promotion
+	MK_HOST_CXXFLAGS += -Wno-array-bounds
+
+	ifeq ($(shell expr $(CC_VER) \>= 070100), 1)
+		MK_HOST_CXXFLAGS += -Wno-format-truncation
+	endif
+	ifeq ($(shell expr $(CC_VER) \>= 080100), 1)
+		MK_HOST_CXXFLAGS += -Wextra-semi
+	endif
 endif
 
 # OS specific
@@ -382,7 +406,7 @@ ifdef LLAMA_CUDA_CCBIN
 	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) -Wno-pedantic -c $< -o $@
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -472,8 +496,8 @@ $(info I CFLAGS:    $(CFLAGS))
 $(info I CXXFLAGS:  $(CXXFLAGS))
 $(info I NVCCFLAGS: $(NVCCFLAGS))
 $(info I LDFLAGS:   $(LDFLAGS))
-$(info I CC:        $(CCV))
-$(info I CXX:       $(CXXV))
+$(info I CC:        $(shell $(CC) --version | head -n 1))
+$(info I CXX:       $(shell $(CXX) --version | head -n 1))
 $(info )
 
 #
@@ -554,7 +578,7 @@ gguf: examples/gguf/gguf.cpp ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o common.o train.o $(OBJS)
-	$(CXX) $(TTFS_CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp ggml.o llama.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
@@ -601,9 +625,16 @@ tests: $(TEST_TARGETS)
 
 benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+run-benchmark-matmult: benchmark-matmult
 	./$@
 
+.PHONY: run-benchmark-matmult
+
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+q8dot: pocs/vdot/q8dot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp build-info.h ggml.o common.o grammar-parser.o $(OBJS)
