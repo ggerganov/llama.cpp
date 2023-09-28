@@ -36,17 +36,20 @@ const Maker = struct {
     }
 
     fn init(builder: *std.build.Builder) !Maker {
-        const commit_hash = @embedFile(".git/refs/heads/master");
+        // const commit_hash = @embedFile(".git/refs/heads/master");
+        const target = builder.standardTargetOptions(.{});
         const config_header = builder.addConfigHeader(
             .{ .style = .blank, .include_path = "build-info.h" },
             .{
                 .BUILD_NUMBER = 0,
-                .BUILD_COMMIT = commit_hash[0 .. commit_hash.len - 1], // omit newline
+                .BUILD_COMMIT = "12345", // omit newline
+                .BUILD_COMPILER = "Zig 0.11.0",
+                .BUILD_TARGET = try target.allocDescription(builder.allocator),
             },
         );
         var m = Maker{
             .builder = builder,
-            .target = builder.standardTargetOptions(.{}),
+            .target = target,
             .optimize = builder.standardOptimizeOption(.{}),
             .config_header = config_header,
             .enable_lto = false,
@@ -58,7 +61,7 @@ const Maker = struct {
         try m.addCFlag("-std=c11");
         try m.addCxxFlag("-std=c++11");
         try m.addProjectInclude(&.{});
-        try m.addProjectInclude(&.{"examples"});
+        try m.addProjectInclude(&.{"common"});
         return m;
     }
 
@@ -71,6 +74,7 @@ const Maker = struct {
             o.addCSourceFiles(&.{src}, m.cxxflags.items);
             o.linkLibCpp();
         }
+        o.addConfigHeader(m.config_header);
         for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
         o.want_lto = m.enable_lto;
         return o;
@@ -104,15 +108,15 @@ pub fn build(b: *std.build.Builder) !void {
     const ggml = make.obj("ggml", "ggml.c");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
     const llama = make.obj("llama", "llama.cpp");
-    const common = make.obj("common", "examples/common.cpp");
-    const console = make.obj("common", "examples/console.cpp");
-    const grammar_parser = make.obj("grammar-parser", "examples/grammar-parser.cpp");
+    const common = make.obj("common", "common/common.cpp");
+    const console = make.obj("common", "common/console.cpp");
+    const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
 
     _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, llama, common, console, grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, llama });
+    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, llama, common });
     _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, llama, common });
     _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, llama, common });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, llama });
+    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, llama, common });
 
     const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, llama, common, grammar_parser });
     if (server.target.isWindows()) {
