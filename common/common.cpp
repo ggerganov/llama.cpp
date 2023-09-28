@@ -905,7 +905,7 @@ llama_token llama_sample_token(
 
     llama_token id = 0;
 
-    float * logits = llama_get_logits(ctx) + idx * n_vocab;
+    float * logits = llama_get_logits_ith(ctx, idx);
 
     // Apply params.logit_bias map
     for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {

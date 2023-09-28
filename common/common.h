@@ -183,7 +183,7 @@ std::string llama_detokenize_bpe(
 //  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
 //  - grammar:       grammar to use for sampling, ignore if NULL
 //  - last_tokens:   needed for repetition penalty, ignore if empty
-//  - idx:           sample from llama_get_logits(ctx) + idx * n_vocab
+//  - idx:           sample from llama_get_logits_ith(ctx, idx)
 //
 // returns:
 //  - token:      sampled token
