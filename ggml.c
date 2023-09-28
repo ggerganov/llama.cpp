@@ -5228,29 +5228,17 @@ int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i
     void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
     switch (tensor->type) {
         case GGML_TYPE_I8:
-            {
-                return ((int8_t *) data)[0];
-            } break;
+            return ((int8_t *) data)[0];
         case GGML_TYPE_I16:
-            {
-                return ((int16_t *) data)[0];
-            } break;
+            return ((int16_t *) data)[0];
         case GGML_TYPE_I32:
-            {
-                return ((int32_t *) data)[0];
-            } break;
+            return ((int32_t *) data)[0];
         case GGML_TYPE_F16:
-            {
-                return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
-            } break;
+            return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
         case GGML_TYPE_F32:
-            {
-                return ((float *) data)[0];
-            } break;
+            return ((float *) data)[0];
         default:
-            {
-                GGML_ASSERT(false);
-            } break;
+            GGML_ASSERT(false);
     }
 
     return 0.0f;
@@ -5371,29 +5359,17 @@ float ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2,
     void * data   = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
     switch (tensor->type) {
         case GGML_TYPE_I8:
-            {
-                return ((int8_t *) data)[0];
-            } break;
+            return ((int8_t *) data)[0];
         case GGML_TYPE_I16:
-            {
-                return ((int16_t *) data)[0];
-            } break;
+            return ((int16_t *) data)[0];
         case GGML_TYPE_I32:
-            {
-                return ((int32_t *) data)[0];
-            } break;
+            return ((int32_t *) data)[0];
         case GGML_TYPE_F16:
-            {
-                return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
-            } break;
+            return GGML_FP16_TO_FP32(((ggml_fp16_t *) data)[0]);
         case GGML_TYPE_F32:
-            {
-                return ((float *) data)[0];
-            } break;
+            return ((float *) data)[0];
         default:
-            {
-                GGML_ASSERT(false);
-            } break;
+            GGML_ASSERT(false);
     }
 
     return 0.0f;
