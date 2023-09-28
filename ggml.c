@@ -4304,49 +4304,34 @@ static void ggml_print_tensor(const struct ggml_tensor * tensor) {
 
 static void ggml_print_tensor_values(const struct ggml_tensor * tensor, int starts[], int dim, int nelts) {
     GGML_ASSERT(tensor->type == GGML_TYPE_F32);
-    GGML_PRINT("printing values for %s[", tensor->name);
+    GGML_PRINT("Printing values for tensor %s[", tensor->name);
     for (int i=0; i<tensor->n_dims; ++i) {
-        if (i!=dim) {
-            GGML_PRINT("%d", starts[i]);
-        } else {
-            if (starts[i] > 0) {
+        GGML_ASSERT(starts[i] >= 0);
+        if (i == dim) {
+            if (starts[i] > 0)  {
                 GGML_PRINT("%d:%d", starts[i], starts[i]+nelts);
             } else {
                 GGML_PRINT(":%d", starts[i]+nelts);
             }
+        } else {
+            GGML_PRINT("%d", starts[i]);
         }
         if (i<tensor->n_dims-1) {
             GGML_PRINT(",");
         }
     }
     GGML_PRINT("]\n");
-
-    float *dataPtr = (float *) tensor->data;
-    
-    // Compute the offset into data for starts
+    float *data_ptr = (float *) tensor->data;
     int offset = 0;
     for (int j = 0; j < tensor->n_dims; j++) {
-        offset += (starts[j] * tensor->nb[j]) / sizeof(float);  // Assuming nb[j] is in bytes, divide by sizeof(float) to get float offset.
+        offset += (starts[j] * tensor->nb[j]) / ggml_type_size(GGML_TYPE_F32);
     }
-
-    dataPtr += offset;
-    
+    data_ptr += offset;
     for (int i = 0; i < nelts; i++) {
-        GGML_PRINT("%f ", *dataPtr);
-        dataPtr += tensor->nb[dim] / sizeof(float);  // Increment by strides for the given dimension.
+        GGML_PRINT("%f ", *data_ptr);
+        data_ptr += tensor->nb[dim] / ggml_type_size(GGML_TYPE_F32);
     }
     GGML_PRINT("\n");
-    /*
-    char * ptr = (char *)tensor->data;
-    for (int j=0; j<tensor->n_dims;j++) {
-        ptr += tensor->nb[j]*starts[j];
-    }
-    for (int i=0; i<nelts; i++) {
-        GGML_PRINT("%f ", (*((float *) ptr)));
-        ptr += tensor->nb[dim];
-    }
-    GGML_PRINT("\n");
-    */
 }
 
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
@@ -8883,14 +8868,14 @@ static void ggml_compute_forward_add_f32(
             }
         }
     }
-    if (
-        strncmp(src0->name, "printme", 7) == 0
+    if ((strncmp(src0->name, "printme", 7) == 0
+        ||strncmp(src1->name, "printme", 7) == 0)
         && params->ith == 0) { 
         GGML_PRINT("\noutputs of add: %s + %s\n", src0->name, src1->name);
         ggml_print_tensor(src0);
         ggml_print_tensor(src1);
         ggml_print_tensor(dst);
-        int starts[] = {0, 1, 0};
+        int starts[] = {0, 0, 0};
         ggml_print_tensor_values(dst, starts, 0, 10);
     }
 }
@@ -10879,11 +10864,8 @@ static void ggml_compute_forward_norm_f32(
         && params->ith == 0) {
         GGML_PRINT("\nlayernorm inputs for %s\n", src0->name);
         ggml_print_tensor(src0);
-        int starts[] = {0, 1, 0};
+        int starts[] = {0, 0, 0};
         ggml_print_tensor_values(src0, starts, 0, 10);
-        for (int i=64; i<74; ++i) {
-            GGML_PRINT("%f ", ggml_get_f32_1d(src0, i));
-        }
     }
 
     const int ith = params->ith;
@@ -11313,15 +11295,14 @@ static void ggml_compute_forward_mul_mat(
         && params->ith == 0) { 
         GGML_PRINT("\nInputs to matmul: %s\n", src1->name);
         ggml_print_tensor(src1);
-        /*
+        size_t offset = 0;//(src1->ne[0] * src1->ne[1])
         for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
             if (i % src1->ne[0] == 0) {
                 GGML_PRINT("\n");
             }
-            GGML_PRINT(" %f ", ((float *)src1->data)[i + (src1->ne[0] * src1->ne[1])]);
+            GGML_PRINT(" %f ", ((float *)src1->data)[i + offset]);
         }
         GGML_PRINT("\n");
-        */
     }
 
     GGML_TENSOR_BINARY_OP_LOCALS;

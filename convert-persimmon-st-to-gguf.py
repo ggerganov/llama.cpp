@@ -19,7 +19,7 @@ def file_is_safetensors(path: Path) -> bool:
         return False
     return struct.unpack('<Q', first8)[0] < 16 * 1024 * 1024
 
-def handle_tokenizer(dir_model: Path):
+def get_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
     print('gguf: get sentencepiece tokenizer from', tokenizer_path)
     tokenizer = SentencePieceProcessor(str(tokenizer_path))  
@@ -56,21 +56,20 @@ def handle_tokenizer(dir_model: Path):
 
 
 def main(args_in: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Convert an Adept model (e.g. Persimmon 8b) to a GGML compatible file")
+    parser = argparse.ArgumentParser(description="Convert a Persimmon model from Adept (e.g. Persimmon 8b chat) to a GGML compatible file")
     parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
-    parser.add_argument("--outtype",     choices=["f32"], help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
+    parser.add_argument("--outtype",     choices=["f32"],        help="currently only support fp32")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
-    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
+    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.safetensors)")
     parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
     args = parser.parse_args(args_in)
 
     assert file_is_safetensors(args.model), 'Error: model file is not a SafeTensors file'
-    model = lazy_load_safetensors_file(open(args.model, 'rb'), args.model)
     dir_model = args.model.parent
     with open(dir_model / 'config.json', 'r') as f:
         hparams = json.load(f)
     pprint(hparams)
-    arch = gguf.MODEL_ARCH.ADEPT
+    arch = gguf.MODEL_ARCH.PERSIMMON
     gguf_writer = gguf.GGUFWriter(args.outfile, gguf.MODEL_ARCH_NAMES[arch])
     
     block_count = hparams['num_layers']
@@ -90,7 +89,7 @@ def main(args_in: list[str] | None = None) -> None:
     gguf_writer.add_rope_freq_base(hparams['rotary_emb_base'])
     gguf_writer.add_layer_norm_eps(hparams['layernorm_epsilon'])
     if True:
-        tokens, scores, toktypes = handle_tokenizer(dir_model)
+        tokens, scores, toktypes = get_tokenizer_info(dir_model)
         gguf_writer.add_tokenizer_model('llama')
         gguf_writer.add_token_list(tokens)
         gguf_writer.add_token_scores(scores)
@@ -103,32 +102,13 @@ def main(args_in: list[str] | None = None) -> None:
     with safe_open(args.model, framework="pt") as f:
         for k in f.keys():
             tensors[k] = f.get_tensor(k)
-    print(len(tensors.keys()))
     for name in tensors.keys():
         data = tensors[name]
-        print(name)
-
-        # we don't need these
         if name.endswith(".self_attention.rotary_emb.inv_freq"):
             continue
         old_dtype = data.dtype
-        """
-        if 'layernorm.weight' in name or 'word_embeddings.weight' in name:
-            data = data.to(torch.float32)
-        else:
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
-        """
-        data = data.to(torch.float32)
-        # check for nans 
-        if torch.isnan(data).any():
-            print("WARNING: tensor '" + name + "' contains NaNs")
-            sys.exit()
-        if torch.isinf(data).any():
-            print("WARNING: tensor '" + name + "' contains infinities")
-            sys.exit()
-
-        data = data.squeeze().numpy()
+        # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
+        data = data.to(torch.float32).squeeze().numpy()
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
         if new_name is None:
             print("Can not map tensor '" + name + "'")

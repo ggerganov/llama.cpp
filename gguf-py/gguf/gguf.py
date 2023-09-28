@@ -85,7 +85,7 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX       : int = auto()
     MPT           : int = auto()
     STARCODER     : int = auto()
-    ADEPT         : int = auto()
+    PERSIMMON         : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -119,7 +119,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
-    MODEL_ARCH.ADEPT:          "adept",
+    MODEL_ARCH.PERSIMMON:      "persimmon",
 }
 
 MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
@@ -189,7 +189,7 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
-    MODEL_ARCH.ADEPT: {
+    MODEL_ARCH.PERSIMMON: {
         MODEL_TENSOR.TOKEN_EMBD:   "token_embd",
         MODEL_TENSOR.OUTPUT:        "output",
         MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
@@ -219,7 +219,7 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
-    MODEL_ARCH.ADEPT: [
+    MODEL_ARCH.PERSIMMON: [
         MODEL_TENSOR.ROPE_FREQS,
     ]
 }
