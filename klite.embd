@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 71
+Current version: 72
 -Concedo
 -->
 
@@ -4324,13 +4324,26 @@ Current version: 71
 		//load contexts
 		gametext_arr = [];
 		if (temp_scenario.prompt != "") {
-			gametext_arr.push(temp_scenario.prompt);
+			let prompttxt = temp_scenario.prompt;
+			if(!localsettings.placeholder_tags) //do a one-time replace instead
+			{
+				prompttxt = replace_placeholders_direct(prompttxt);
+			}
+			gametext_arr.push(prompttxt);
 		}
 		if (temp_scenario.authorsnote != "") {
 			current_anote = temp_scenario.authorsnote;
+			if(!localsettings.placeholder_tags)
+			{
+				current_anote = replace_placeholders_direct(current_anote);
+			}
 		}
 		if (temp_scenario.memory != "") {
 			current_memory = temp_scenario.memory;
+			if(!localsettings.placeholder_tags)
+			{
+				current_memory = replace_placeholders_direct(current_memory);
+			}
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = [];
@@ -4395,8 +4408,6 @@ Current version: 71
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
-
-
 
 		render_gametext();
 	}
@@ -6385,18 +6396,23 @@ Current version: 71
 		render_gametext();
 	}
 
+	function replace_placeholders_direct(inputtxt)
+	{
+		inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You",true);
+		inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent,true);
+		inputtxt = replaceAll(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
+		inputtxt = replaceAll(inputtxt,instructendplaceholder,get_instruct_endtag(false));
+		//failsafe to handle removing newline tags
+		inputtxt = replaceAll(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
+		inputtxt = replaceAll(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
+		return inputtxt;
+	}
 	function replace_placeholders(inputtxt)
 	{
 		//only do this for chat and instruct modes
 		if(localsettings.placeholder_tags)
 		{
-			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You",true);
-			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent,true);
-			inputtxt = replaceAll(inputtxt,instructstartplaceholder,get_instruct_starttag(false));
-			inputtxt = replaceAll(inputtxt,instructendplaceholder,get_instruct_endtag(false));
-			//failsafe to handle removing newline tags
-			inputtxt = replaceAll(inputtxt,instructstartplaceholder.trim(),get_instruct_starttag(false));
-			inputtxt = replaceAll(inputtxt,instructendplaceholder.trim(),get_instruct_endtag(false));
+			inputtxt = replace_placeholders_direct(inputtxt);
 		}
 		return inputtxt;
 	}
@@ -10184,13 +10200,14 @@ Current version: 71
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" id="tokenstreaminglabel" title="Attempts to use token streaming if available.">Token Streaming </div>
-						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0 0;">
+							<div class="justifyleft settingsmall" id="tokenstreaminglabel" title="">Token Streaming <span class="helpicon">?<span
+								class="helptext">Attempts to use token streaming if supported. Not available on Horde.</span></span></div>
+						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0px 0px auto;">
 						</div>
 
 						<div id="idlesection" class="settinglabel">
 							<div class="justifyleft settingsmall" title="Allow the AI to send more responses if you are idle.">Idle Responses&nbsp;</div>
-							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_responses">
+							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="idle_responses">
 								<option value="0">Off</option>
 								<option value="1">1x</option>
 								<option value="2">2x</option>
@@ -10210,21 +10227,24 @@ Current version: 71
 
 
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Trims incomplete sentences in AI output">Trim Sentences </div>
-						   <input type="checkbox" id="trimsentences" style="margin:0px 0 0;">
+							<div class="justifyleft settingsmall" title="">Trim Sentences <span class="helpicon">?<span
+								class="helptext">Trims incomplete sentences in AI output.</span></span></div>
+						   <input type="checkbox" id="trimsentences" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Trim trailing whitespace at the end of context">Trim Whitespace </div>
-						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0 0;">
+							<div class="justifyleft settingsmall" title="">Trim Whitespace <span class="helpicon">?<span
+								class="helptext">Compresses double newlines and removes trailing whitespace in AI output.</span></span></div>
+						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban EOS Tokens </div>
-						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
+							<div class="justifyleft settingsmall" title="">Unban EOS Tokens <span class="helpicon">?<span
+								class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
+						   <input type="checkbox" id="unban_tokens" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Placeholder Tags <span class="helpicon">?<span
 								class="helptext">If enabled, uses universal {{user}} and {{[INPUT]}} placeholders that get swapped on submit. If disabled, uses plaintext chat or instruct tags verbatim.</span></span></div>
-						   <input type="checkbox" id="placeholder_tags" style="margin:0px 0 0;">
+						   <input type="checkbox" id="placeholder_tags" style="margin:0px 0px 0px auto;">
 						</div>
 					</div>
 
@@ -10232,23 +10252,23 @@ Current version: 71
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Autosave Session </div>
-						   <input type="checkbox" id="persist_session" style="margin:0px 0 0;">
+						   <input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Save File Incl. Settings </div>
-						   <input type="checkbox" id="export_settings" style="margin:0px 0 0;">
+						   <input type="checkbox" id="export_settings" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Prompts to input a different filename when saving file.">Show Rename Save File </div>
-						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0 0;">
+						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll Text </div>
-						   <input type="checkbox" id="autoscroll" style="margin:0px 0 0;">
+						   <input type="checkbox" id="autoscroll" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>
-						   <input type="checkbox" id="invert_colors" style="margin:0px 0 0;">
+						   <input type="checkbox" id="invert_colors" style="margin:0px 0px 0px auto;">
 						</div>
 					</div>
 

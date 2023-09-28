@@ -395,7 +395,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 genparams["top_k"] = int(genparams.get('top_k', 120))
                 genparams["max_length"]=genparams.get('max', 50)
             elif api_format==3:
-                scaled_rep_pen = genparams.get('presence_penalty', 0.1) + 1
+                frqp = genparams.get('frequency_penalty', 0.1)
+                scaled_rep_pen = genparams.get('presence_penalty', frqp) + 1
                 genparams["max_length"] = genparams.get('max_tokens', 50)
                 genparams["rep_pen"] = scaled_rep_pen
 
@@ -832,7 +833,7 @@ def show_new_gui():
     # slider data
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024", "2048"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024","2048"]
-    contextsize_text = ["512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384"]
+    contextsize_text = ["512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384", "24576", "32768"]
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
     if not any(runopts):
@@ -1154,18 +1155,18 @@ def show_new_gui():
     # horde
     makelabel(network_tab, "Horde:", 5).grid(pady=10)
 
-    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 7, 180)
-    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 8, 50)
-    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 9, 50)
-    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 10, 180)
-    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 11, 180)
+    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 10, 180)
+    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 11, 50)
+    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 12, 50)
+    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 13, 180)
+    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 14, 180)
 
     def togglehorde(a,b,c):
         labels = [horde_name_label, horde_gen_label, horde_context_label, horde_apikey_label, horde_workername_label]
         for idx, item in enumerate([horde_name_entry, horde_gen_entry, horde_context_entry, horde_apikey_entry, horde_workername_entry]):
             if usehorde_var.get() == 1:
-                item.grid(row=5 + idx, column = 1, padx=8, pady=1, stick="nw")
-                labels[idx].grid(row=5 + idx, padx=8, pady=1, stick="nw")
+                item.grid(row=10 + idx, column = 1, padx=8, pady=1, stick="nw")
+                labels[idx].grid(row=10 + idx, padx=8, pady=1, stick="nw")
             else:
                 item.grid_forget()
                 labels[idx].grid_forget()
@@ -1614,6 +1615,8 @@ def run_horde_worker(args, api_key, worker_name):
     current_id = None
     current_payload = None
     current_generation = None
+    session_kudos_earned = 0
+    session_starttime = datetime.now()
     sleepy_counter = 0 #if this exceeds a value, worker becomes sleepy (slower)
     print("===\nEmbedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
@@ -1691,7 +1694,16 @@ def run_horde_worker(args, api_key, worker_name):
                 exitcounter += 1
                 print_with_time("Error: Job submit failed.")
             else:
-                print_with_time(f'Submitted generation to {cluster} with id {current_id} and contributed for {reply["reward"]}')
+                reward = reply["reward"]
+                session_kudos_earned += reward
+                curtime = datetime.now()
+                elapsedtime=curtime-session_starttime
+                hrs = elapsedtime.seconds // 3600
+                mins = elapsedtime.seconds // 60 % 60
+                secs = elapsedtime.seconds % 60
+                elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
+                earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
+                print_with_time(f'Submitted {current_id} and earned {reward:.0f} kd - [Total:{session_kudos_earned:.0f}kd, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f}kd/hr]')
         else:
             print_with_time("Error: Abandoned current job due to errors. Getting new job.")
         current_id = None
@@ -1952,7 +1964,7 @@ if __name__ == '__main__':
     parser.add_argument("--blasthreads", help="Use a different number of threads during BLAS if specified. Otherwise, has the same value as --threads",metavar=('[threads]'), type=int, default=0)
     parser.add_argument("--psutil_set_threads", help="Experimental flag. If set, uses psutils to determine thread count based on physical cores.", action='store_true')
     parser.add_argument("--highpriority", help="Experimental flag. If set, increases the process CPU priority, potentially speeding up generation. Use caution.", action='store_true')
-    parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,3072,4096,6144,8192,12288,16384], default=2048)
+    parser.add_argument("--contextsize", help="Controls the memory allocated for maximum context size, only change if you need more RAM for big contexts. (default 2048)", type=int,choices=[512,1024,2048,3072,4096,6144,8192,12288,16384,24576,32768], default=2048)
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512). Setting it to -1 disables BLAS mode, but keeps other benefits like GPU offload.", type=int,choices=[-1,32,64,128,256,512,1024,2048], default=512)
     parser.add_argument("--ropeconfig", help="If set, uses customized RoPE scaling from configured frequency scale and frequency base (e.g. --ropeconfig 0.25 10000). Otherwise, uses NTK-Aware scaling set automatically based on context size. For linear rope, simply set the freq-scale and ignore the freq-base",metavar=('[rope-freq-scale]', '[rope-freq-base]'), default=[0.0, 10000.0], type=float, nargs='+')
     parser.add_argument("--stream", help="Uses streaming when generating tokens. Only for the Kobold Lite UI.", action='store_true')
