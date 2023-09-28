@@ -461,7 +461,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         current_token = 0
 
         incomplete_token_buffer = bytearray()
-        while not handle.has_finished():
+        while True:
+            streamDone = handle.has_finished() #exit next loop on done
+            tokenStr = ""
             streamcount = handle.get_stream_count()
             while current_token < streamcount:
                 token = handle.new_token(current_token)
@@ -470,17 +472,23 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     break
 
                 current_token += 1
-
                 newbyte = ctypes.string_at(token)
                 incomplete_token_buffer += bytearray(newbyte)
-                tokenStr = incomplete_token_buffer.decode("UTF-8","ignore")
-                if tokenStr!="":
+                tokenSeg = incomplete_token_buffer.decode("UTF-8","ignore")
+                if tokenSeg!="":
                     incomplete_token_buffer.clear()
-                    event_data = {"token": tokenStr}
-                    event_str = json.dumps(event_data)
-                    await self.send_sse_event("message", event_str)
+                    tokenStr += tokenSeg
 
-            await asyncio.sleep(0.02) #this should keep things responsive
+            if tokenStr!="":
+                event_data = {"token": tokenStr}
+                event_str = json.dumps(event_data)
+                tokenStr = ""
+                await self.send_sse_event("message", event_str)
+            else:
+                await asyncio.sleep(0.02) #this should keep things responsive
+
+            if streamDone:
+                break
 
         # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
         self.wfile.flush()

@@ -2959,7 +2959,7 @@ Current version: 71
 		instruct_starttag: "\\n### Instruction:\\n",
 		instruct_endtag: "\\n### Response:\\n",
 		instruct_has_markdown: false,
-		raw_instruct_tags: false,
+		placeholder_tags: true,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
@@ -5144,8 +5144,11 @@ Current version: 71
 			{
 				desired_oai_ep = desired_oai_ep.slice(0, -1);
 			}
-			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v")) {
-				desired_oai_ep = desired_oai_ep + "/v1";
+			if (document.getElementById("oaiaddversion").checked)
+			{
+				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v")) {
+					desired_oai_ep = desired_oai_ep + "/v1";
+				}
 			}
 			if(desired_oai_key!="" && desired_oai_ep!="")
 			{
@@ -5288,8 +5291,11 @@ Current version: 71
 			{
 				desired_claude_ep = desired_claude_ep.slice(0, -1);
 			}
-			if(desired_claude_ep!="" && desired_claude_ep.length > 4 && !desired_claude_ep.slice(-4).toLowerCase().includes("/v")) {
-				desired_claude_ep = desired_claude_ep + "/v1";
+			if (document.getElementById("claudeaddversion").checked)
+			{
+				if (desired_claude_ep != "" && desired_claude_ep.length > 4 && !desired_claude_ep.slice(-4).toLowerCase().includes("/v")) {
+					desired_claude_ep = desired_claude_ep + "/v1";
+				}
 			}
 			if(desired_claude_key!="" && desired_claude_ep!="")
 			{
@@ -5815,7 +5821,7 @@ Current version: 71
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
 		document.getElementById("adventure_context_mod").checked = localsettings.adventure_context_mod;
 		document.getElementById("instruct_has_markdown").checked = localsettings.instruct_has_markdown;
-		document.getElementById("raw_instruct_tags").checked = localsettings.raw_instruct_tags;
+		document.getElementById("placeholder_tags").checked = localsettings.placeholder_tags;
 		document.getElementById("auto_ctxlen").checked = localsettings.auto_ctxlen;
 		document.getElementById("auto_genamt").checked = localsettings.auto_genamt;
 		if(localflag)
@@ -5994,7 +6000,7 @@ Current version: 71
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
-		localsettings.raw_instruct_tags = (document.getElementById("raw_instruct_tags").checked ? true : false);
+		localsettings.placeholder_tags = (document.getElementById("placeholder_tags").checked ? true : false);
 		localsettings.generate_images = document.getElementById("generate_images").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
@@ -6382,7 +6388,7 @@ Current version: 71
 	function replace_placeholders(inputtxt)
 	{
 		//only do this for chat and instruct modes
-		if(localsettings.opmode==3||localsettings.opmode==4)
+		if(localsettings.placeholder_tags)
 		{
 			inputtxt = replaceAll(inputtxt,"{{user}}",localsettings.chatname?localsettings.chatname:"You",true);
 			inputtxt = replaceAll(inputtxt,"{{char}}",localsettings.chatopponent?localsettings.chatopponent:defaultchatopponent,true);
@@ -6583,7 +6589,7 @@ Current version: 71
 				if(newgen != "")
 				{
 					//append instruction for instruct mode
-					if (localsettings.raw_instruct_tags) {
+					if (!localsettings.placeholder_tags) {
 						newgen = get_instruct_starttag(false) + newgen + get_instruct_endtag(false);
 					}
 					else {
@@ -6593,7 +6599,7 @@ Current version: 71
 				else //may be continuting existing instruction OR starting a brand new session. check if first action
 				{
 					if (gametext_arr.length == 0) {
-						if (localsettings.raw_instruct_tags) {
+						if (!localsettings.placeholder_tags) {
 							newgen = get_instruct_endtag(false); //bot response as first msg
 						} else {
 							newgen = instructendplaceholder;
@@ -7560,12 +7566,6 @@ Current version: 71
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 
-		//trim trailing whitespace, and multiple newlines
-		if (localsettings.trimwhitespace) {
-			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
-			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
-		}
-
 		//always trim incomplete sentences for adventure and chat (if not multiline)
 		if (localsettings.opmode == 2 || (localsettings.opmode == 3 && !localsettings.allow_continue_chat) || localsettings.trimsentences == true) {
 			gentxt = end_trim_to_sentence(gentxt,true);
@@ -7573,6 +7573,12 @@ Current version: 71
 
 		//do a second pass, this time removing the actual stop token
 		gentxt = trim_extra_stop_seqs(gentxt,false);
+
+		//trim trailing whitespace, and multiple newlines
+		if (localsettings.trimwhitespace) {
+			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
+			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
+		}
 
 		//if we are in adventure mode, truncate to action if it appears
 		if (localsettings.opmode == 2)
@@ -9753,6 +9759,8 @@ Current version: 71
 					<option value="gpt-4">gpt-4</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
 				</select>
+				<input type="checkbox" id="oaiaddversion" onchange="" checked>
+				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
 				<div class="box-label" title="Adds extra text to improve AI response">Improve Prompt (System Message Injection)</div>
 				<input class="form-control hidden" type="text" id="jailbreakprompttext" placeholder="(Enter System Message)"
@@ -9784,6 +9792,8 @@ Current version: 71
 					<option value="claude-2">claude-2</option>
 					<option value="claude-2.0">claude-2.0</option>
 				</select>
+				<input type="checkbox" id="claudeaddversion" onchange="" checked>
+				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<input type="checkbox" id="clauderenamecompat" onchange="">
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
 			</div>
@@ -10032,9 +10042,7 @@ Current version: 71
 								<td><input class="settinglabel miniinput" type="text" placeholder="\\n### Response:\\n" value="" id="instruct_endtag" onchange="edit_instruct_tag_format()" title="The sequence to end an instruction prompt"></td>
 								</tr>
 							</table>
-							<div class="justifyleft settingsmall">Raw Instruct Tags <span class="helpicon">?<span
-								class="helptext">If enabled, uses instruct tags verbatim. If disabled, uses universal instruct placeholders that get swapped on submit.</span></span> </div>
-							<input type="checkbox" id="raw_instruct_tags" style="margin:0px 0 0;">
+
 							<div class="justifyleft settingsmall">Enable Markdown <span class="helpicon">?<span
 								class="helptext">Allows the UI to use markdown formatting such as quotes and code blocks.</span></span> </div>
 							<input type="checkbox" id="instruct_has_markdown" style="margin:0px 0 0;">
@@ -10212,6 +10220,11 @@ Current version: 71
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Allow the EOS token and others to be used">Unban EOS Tokens </div>
 						   <input type="checkbox" id="unban_tokens" style="margin:0px 0 0;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Placeholder Tags <span class="helpicon">?<span
+								class="helptext">If enabled, uses universal {{user}} and {{[INPUT]}} placeholders that get swapped on submit. If disabled, uses plaintext chat or instruct tags verbatim.</span></span></div>
+						   <input type="checkbox" id="placeholder_tags" style="margin:0px 0 0;">
 						</div>
 					</div>
 
