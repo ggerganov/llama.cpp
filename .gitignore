@@ -51,7 +51,9 @@ models-mnt
 /save-load-state
 /server
 /simple
+/batched
 /speculative
+/parallel
 /train-text-from-scratch
 /vdot
 build-info.h
