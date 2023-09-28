@@ -434,6 +434,10 @@ struct llama_server_context
             {
                 n_eval = params.n_batch;
             }
+
+            // since #3228 we now have to manually manage the KV cache
+            llama_kv_cache_tokens_rm(ctx, n_past, -1);
+
             if (llama_decode(ctx, llama_batch_get_one(&embd[n_past], n_eval, n_past, 0), params.n_threads))
             {
                 LOG_ERROR("failed to eval", {
