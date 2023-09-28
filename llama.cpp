@@ -6749,7 +6749,7 @@ struct llama_context * llama_new_context_with_model(
                     llama_free(ctx);
                     return NULL;
                 }
-                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
+                ggml_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
                 //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
