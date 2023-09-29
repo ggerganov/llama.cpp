@@ -787,6 +787,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
     ggml_allocr_alloc(alloc, t36->grad);
+    // KQ_pos
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
 
     // make sure base model tensors data cannot be used in viewable operations
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
