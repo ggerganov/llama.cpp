@@ -11,8 +11,10 @@ echo >> $PUBLIC/index.js # add newline
 
 FILES=$(ls $PUBLIC)
 
+cd $PUBLIC
 for FILE in $FILES; do
-  func=$(echo $FILE | tr '.' '_')
-  echo "generate $FILE.hpp ($func)"
-  xxd -n $func -i $PUBLIC/$FILE > $DIR/$FILE.hpp
+  echo "generate $FILE.hpp"
+
+  # use simple flag for old version of xxd
+  xxd -i $FILE > $DIR/$FILE.hpp
 done

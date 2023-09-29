@@ -1,6 +1,6 @@
+#include "build-info.h"
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 
 #include <vector>
 #include <cstdio>
@@ -13,41 +13,33 @@ int main(int argc, char ** argv) {
     params.repeat_last_n = 64;
     params.prompt = "The quick brown fox";
 
-    if (gpt_params_parse(argc, argv, params) == false) {
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    print_build_info();
 
     if (params.n_predict < 0) {
         params.n_predict = 16;
     }
 
-    auto lparams = llama_context_default_params();
-
-    lparams.n_ctx     = params.n_ctx;
-    lparams.n_gqa     = params.n_gqa;
-    lparams.seed      = params.seed;
-    lparams.f16_kv    = params.memory_f16;
-    lparams.use_mmap  = params.use_mmap;
-    lparams.use_mlock = params.use_mlock;
-
     auto n_past = 0;
     auto last_n_tokens_data = std::vector<llama_token>(params.repeat_last_n, 0);
 
     // init
-    auto model = llama_load_model_from_file(params.model.c_str(), lparams);
+    llama_model * model;
+    llama_context * ctx;
+
+    std::tie(model, ctx) = llama_init_from_gpt_params( params );
     if (model == nullptr) {
         return 1;
     }
-    auto ctx = llama_new_context_with_model(model, lparams);
     if (ctx == nullptr) {
         llama_free_model(model);
         return 1;
     }
-    auto tokens = std::vector<llama_token>(params.n_ctx);
-    auto n_prompt_tokens = llama_tokenize(ctx, params.prompt.c_str(), tokens.data(), int(tokens.size()), true);
-
+    auto tokens = llama_tokenize(ctx, params.prompt, true);
+    auto n_prompt_tokens = tokens.size();
     if (n_prompt_tokens < 1) {
         fprintf(stderr, "%s : failed to tokenize prompt\n", __func__);
         llama_free(ctx);
@@ -56,7 +48,7 @@ int main(int argc, char ** argv) {
     }
 
     // evaluate prompt
-    llama_eval(ctx, tokens.data(), n_prompt_tokens, n_past, params.n_threads);
+    llama_decode(ctx, llama_batch_get_one(tokens.data(), n_prompt_tokens, n_past, 0));
 
     last_n_tokens_data.insert(last_n_tokens_data.end(), tokens.data(), tokens.data() + n_prompt_tokens);
     n_past += n_prompt_tokens;
@@ -80,8 +72,8 @@ int main(int argc, char ** argv) {
     printf("\n%s", params.prompt.c_str());
 
     for (auto i = 0; i < params.n_predict; i++) {
-        auto logits = llama_get_logits(ctx);
-        auto n_vocab = llama_n_vocab(ctx);
+        auto * logits = llama_get_logits(ctx);
+        auto n_vocab = llama_n_vocab(model);
         std::vector<llama_token_data> candidates;
         candidates.reserve(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -89,11 +81,11 @@ int main(int argc, char ** argv) {
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
         auto next_token = llama_sample_token(ctx, &candidates_p);
-        auto next_token_str = llama_token_to_str(ctx, next_token);
+        auto next_token_str = llama_token_to_piece(ctx, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
-        if (llama_eval(ctx, &next_token, 1, n_past, params.n_threads)) {
+        printf("%s", next_token_str.c_str());
+        if (llama_decode(ctx, llama_batch_get_one(&next_token, 1, n_past, 0))) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx);
             llama_free_model(model);
@@ -108,7 +100,7 @@ int main(int argc, char ** argv) {
     llama_free(ctx);
 
     // make new context
-    auto ctx2 = llama_new_context_with_model(model, lparams);
+    auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
     // Load state (rng, logits, embedding and kv_cache) from file
     {
@@ -140,8 +132,8 @@ int main(int argc, char ** argv) {
 
     // second run
     for (auto i = 0; i < params.n_predict; i++) {
-        auto logits = llama_get_logits(ctx2);
-        auto n_vocab = llama_n_vocab(ctx2);
+        auto * logits = llama_get_logits(ctx2);
+        auto n_vocab = llama_n_vocab(model);
         std::vector<llama_token_data> candidates;
         candidates.reserve(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
@@ -149,11 +141,11 @@ int main(int argc, char ** argv) {
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
         auto next_token = llama_sample_token(ctx2, &candidates_p);
-        auto next_token_str = llama_token_to_str(ctx2, next_token);
+        auto next_token_str = llama_token_to_piece(ctx2, next_token);
         last_n_tokens_data.push_back(next_token);
 
-        printf("%s", next_token_str);
-        if (llama_eval(ctx2, &next_token, 1, n_past, params.n_threads)) {
+        printf("%s", next_token_str.c_str());
+        if (llama_decode(ctx, llama_batch_get_one(&next_token, 1, n_past, 0))) {
             fprintf(stderr, "\n%s : failed to evaluate\n", __func__);
             llama_free(ctx2);
             llama_free_model(model);

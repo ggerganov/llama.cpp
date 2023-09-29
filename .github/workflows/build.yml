@@ -18,7 +18,6 @@ on:
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
-  GGML_NITER: 1
   GGML_N_THREADS: 1
 
 jobs:
@@ -28,7 +27,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -39,7 +38,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          CC=gcc-8 make
+          CC=gcc-8 make -j $(nproc)
+
+      - name: Test
+        id: make_test
+        run: |
+          CC=gcc-8 make tests -j $(nproc)
+          make test -j $(nproc)
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
@@ -47,7 +52,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -61,7 +66,7 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -82,7 +87,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -96,7 +101,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --build . --config ${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -116,7 +121,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -130,7 +135,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_MPI=ON ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -144,7 +149,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -155,9 +160,44 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make
+          make -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: make_test
+        run: |
+          make tests -j $(sysctl -n hw.logicalcpu)
+          make test -j $(sysctl -n hw.logicalcpu)
 
   macOS-latest-cmake:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose --timeout 900
+
+  macOS-latest-cmake-ios:
     runs-on: macos-latest
 
     steps:
@@ -177,14 +217,41 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
-          cmake --build . --config Release
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
-      - name: Test
-        id: cmake_test
+  macOS-latest-cmake-tvos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
         run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
           cd build
-          ctest --verbose --timeout 900
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=tvOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -198,22 +265,24 @@ jobs:
       matrix:
         include:
           - build: 'noavx'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx2'
-            defines: '-DLLAMA_BUILD_SERVER=ON'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'avx'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx512'
             defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'clblast'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
           - build: 'openblas'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Download OpenCL SDK
         id: get_opencl
@@ -255,7 +324,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -291,93 +360,95 @@ jobs:
           cd build
           ctest -C Release --verbose --timeout 900
 
-      - name: Get commit hash
-        id: commit
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: pr-mpt/actions-commit-hash@v2
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Pack artifacts
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
           Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
-          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip .\build\bin\Release\*
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v3
         with:
           path: |
-            llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-x64.zip
+            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
 
   windows-latest-cmake-cublas:
     runs-on: windows-latest
 
     strategy:
       matrix:
-        cuda: ['12.1.0', '11.7.1']
+        cuda: ['12.2.0', '11.7.1']
         build: ['cublas']
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - uses: Jimver/cuda-toolkit@v0.2.10
+      - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
         with:
           cuda: ${{ matrix.cuda }}
-          # TODO(green-sky): _dev seems to fail, and non dev are not enought
-          #sub-packages: '["nvcc", "cudart", "cublas", "cudart_dev", "cublas_dev"]'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON
-          cmake --build . --config Release
+          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
-      - name: Get commit hash
-        id: commit
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: pr-mpt/actions-commit-hash@v2
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Pack artifacts
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
-          7z a llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v3
         with:
           path: |
-            llama-${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '12.1.0' }}
-        # TODO(green-sky): paths are cuda 12 specific
         run: |
           echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_12.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
-
-      - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '11.7.1' }}
-        # TODO(green-sky): paths are cuda 11 specific
-        run: |
-          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          ls "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin"
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_110.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_11.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_11.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+          $dst='.\build\bin\cudart\'
+          robocopy "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -385,6 +456,23 @@ jobs:
         with:
           path: |
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+
+#  freeBSD-latest:
+#    runs-on: macos-12
+#    steps:
+#    - name: Clone
+#      uses: actions/checkout@v3
+#
+#    - name: Build
+#      uses: cross-platform-actions/action@v0.19.0
+#      with:
+#        operating_system: freebsd
+#        version: '13.2'
+#        hypervisor: 'qemu'
+#        run: |
+#            sudo pkg update
+#            sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
+#            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -400,13 +488,28 @@ jobs:
       - windows-latest-cmake-cublas
 
     steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download artifacts
         id: download-artifact
         uses: actions/download-artifact@v3
-
-      - name: Get commit hash
-        id: commit
-        uses: pr-mpt/actions-commit-hash@v2
 
       - name: Create release
         id: create_release
@@ -414,7 +517,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.BRANCH_NAME }}-${{ steps.commit.outputs.short }}
+          tag_name: ${{ steps.tag.outputs.name }}
 
       - name: Upload release
         id: upload_release
@@ -447,7 +550,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -471,7 +574,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -495,7 +598,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -525,7 +628,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -564,7 +667,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -610,7 +713,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
