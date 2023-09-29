@@ -14817,7 +14817,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
 #elif defined(GGML_USE_VULKAN)
-    bool skip_cpu = ggml_vk_compute_forward(params, tensor);
+    const bool skip_cpu = ggml_vk_compute_forward(params, tensor);
     if (skip_cpu) {
         return;
     }

@@ -110,7 +110,22 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
         plan.work_data = buf.data();
     }
 
+#ifdef GGML_USE_VULKAN
+    for (int i = 0; i < graph->n_nodes; i++) {
+        ggml_vk_preallocate_buffers_graph(graph->nodes[i]);
+    }
+    ggml_vk_preallocate_buffers();
+
+    for (int i = 0; i < graph->n_nodes; i++) {
+        ggml_vk_build_graph(graph->nodes[i]);
+    }
+#endif
+
     ggml_graph_compute(graph, &plan);
+
+#ifdef GGML_USE_VULKAN
+    ggml_vk_graph_cleanup();
+#endif
 }
 
 //

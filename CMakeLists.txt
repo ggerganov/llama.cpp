@@ -75,6 +75,7 @@ set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA k
 option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some calculations"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
+option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
@@ -355,12 +356,14 @@ if (LLAMA_CLBLAST)
 endif()
 
 if (LLAMA_VULKAN)
-    find_package(Vulkan COMPONENTS glslc SPIRV-Tools)
+    find_package(Vulkan COMPONENTS shaderc_combined)
+    find_package(glslang)
+    find_package(SPIRV-Tools-opt)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
 
         add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
-        target_link_libraries(ggml-vulkan PUBLIC Vulkan::Vulkan SPIRV SPIRV-Tools-opt SPIRV-Tools shaderc_combined)
+        target_link_libraries(ggml-vulkan PUBLIC Vulkan::Vulkan Vulkan::shaderc_combined)
 
         add_compile_definitions(GGML_USE_VULKAN)
 
