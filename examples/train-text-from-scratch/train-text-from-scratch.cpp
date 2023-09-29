@@ -334,7 +334,8 @@ static struct ggml_tensor * llama_build_train_graphs(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
-    {
+    ggml_allocr_alloc(alloc, KQ_pos);
+    if (!ggml_allocr_is_measure(alloc)) {
         int * data = (int *) KQ_pos->data;
         for (int i = 0; i < N; ++i) {
             data[i] = n_past + i;
