@@ -13,6 +13,7 @@ add_library(kompute STATIC Algorithm.cpp
     OpAlgoDispatch.cpp
     OpMemoryBarrier.cpp
     OpTensorCopy.cpp
+    OpTensorFill.cpp
     OpTensorSyncDevice.cpp
     OpTensorSyncLocal.cpp
     OpBufferSyncDevice.cpp

@@ -10,7 +10,9 @@
 
 #include "common.comp"
 
-layout(local_size_x = 64) in;
+#extension GL_KHR_shader_subgroup_arithmetic : require
+
+layout(local_size_x_id = 0) in;
 
 layout (binding = 0) readonly buffer tensorInA { float16_t inA[]; };
 layout (binding = 1) readonly buffer tensorInB { float inB[]; };
@@ -29,8 +31,6 @@ layout (push_constant) uniform parameter {
     int ne1;
 } pcs;
 
-shared float sum[gl_WorkGroupSize.x];
-
 void main() {
     const uint r0 = gl_WorkGroupID.x;
     const uint r1 = gl_WorkGroupID.y;
@@ -39,24 +39,13 @@ void main() {
     const uint x = (r0*pcs.nb01 + im*pcs.nb02) / 2 + pcs.inAOff; // Based from inA
     const uint y = (r1*pcs.nb11 + im*pcs.nb12) / 4 + pcs.inBOff; // based from inB
 
-    sum[gl_LocalInvocationID.x] = 0.0;
-
-    for (uint i = gl_LocalInvocationID.x; i < pcs.ne00; i += gl_WorkGroupSize.x) {
-        sum[gl_LocalInvocationID.x] += float(inA[x+i]) * float(inB[y+i]);
+    float sumf = 0.0f;
+    for (uint i = gl_SubgroupInvocationID.x; i < pcs.ne00; i += gl_SubgroupSize) {
+        sumf += float(inA[x+i]) * float(inB[y+i]);
     }
 
-    // accumulate the sum from all threads in the threadgroup
-    barrier();
-    memoryBarrierShared();
-    [[unroll]] for (uint i = gl_WorkGroupSize.x/2; i > 0; i /= 2) {
-        if (gl_LocalInvocationID.x < i) {
-            sum[gl_LocalInvocationID.x] += sum[gl_LocalInvocationID.x + i];
-        }
-        barrier();
-        memoryBarrierShared();
-    }
-
-    if (gl_LocalInvocationID.x == 0) {
-        out_[im*pcs.ne1*pcs.ne0 + r1*pcs.ne0 + r0 + pcs.outOff] = sum[0];
+    const float all_sum = subgroupAdd(sumf);
+    if (subgroupElect()) {
+        out_[im*pcs.ne1*pcs.ne0 + r1*pcs.ne0 + r0 + pcs.outOff] = all_sum;
     }
 }

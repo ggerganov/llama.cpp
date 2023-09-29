@@ -34,6 +34,7 @@ struct ggml_vk_device {
     size_t heapSize = 0;
     std::string name;
     std::string vendor;
+    int subgroupSize = 0;
 };
 
 std::vector<ggml_vk_device> ggml_vk_available_devices(size_t memoryRequired);

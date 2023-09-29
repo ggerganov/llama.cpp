@@ -6495,7 +6495,8 @@ struct llama_context * llama_new_context_with_model(
     if (ggml_vk_has_device() && params.n_gpu_layers > 0
         && (model->ftype == LLAMA_FTYPE_ALL_F32
             || model->ftype == LLAMA_FTYPE_MOSTLY_F16
-            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_0)) {
+            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_0
+            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_1)) {
         // this allocates all Vulkan resources and memory buffers
         ctx->ctx_kompute = ggml_vk_init();
 

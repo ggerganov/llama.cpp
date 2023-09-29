@@ -10,9 +10,9 @@
 
 #include "common.comp"
 
-#define nth 32
+#extension GL_KHR_shader_subgroup_arithmetic : require
 
-layout(local_size_x = nth) in;
+layout(local_size_x_id = 0) in;
 
 layout(binding = 0) buffer restrict readonly tensorIn { float in_[]; };
 layout(binding = 1) buffer restrict writeonly tensorOut { float out_[]; };
@@ -25,8 +25,6 @@ layout(push_constant) uniform PushConstants {
     int ne02;
 } pcs;
 
-shared float buf[nth];
-
 void main() {
     const uint i03 = gl_WorkGroupID.z;
     const uint i02 = gl_WorkGroupID.y;
@@ -37,46 +35,22 @@ void main() {
     const uint pdst = extra_off + pcs.outOff; // Based from out_
 
     // parallel max
-    buf[gl_LocalInvocationID.x] = uintBitsToFloat(0xFF800000);
-    for (uint i00 = gl_LocalInvocationID.x; i00 < pcs.ne00; i00 += nth) {
-        buf[gl_LocalInvocationID.x] = max(buf[gl_LocalInvocationID.x], in_[psrc0 + i00]);
+    float localMax = uintBitsToFloat(0xFF800000);
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+        localMax = max(localMax, in_[psrc0 + i00]);
     }
-
-    // reduce
-    barrier();
-    memoryBarrierShared();
-    [[unroll]] for (uint i = nth/2; i > 0; i /= 2) {
-        if (gl_LocalInvocationID.x < i) {
-            buf[gl_LocalInvocationID.x] = max(buf[gl_LocalInvocationID.x], buf[gl_LocalInvocationID.x + i]);
-        }
-        barrier();
-        memoryBarrierShared();
-    }
-
-    // broadcast
-    const float max_ = buf[0];
+    float max_ = subgroupMax(localMax);
 
     // parallel sum
-    buf[gl_LocalInvocationID.x] = 0.0;
-    for (uint i00 = gl_LocalInvocationID.x; i00 < pcs.ne00; i00 += nth) {
-        buf[gl_LocalInvocationID.x] += exp(in_[psrc0 + i00] - max_);
+    float localSum = 0.0f;
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+        const float exp_psrc0 = exp(in_[psrc0 + i00] - max_);
+        localSum += exp_psrc0;
+        out_[pdst + i00] = exp_psrc0;
     }
 
-    // reduce
-    barrier();
-    memoryBarrierShared();
-    [[unroll]] for (uint i = nth/2; i > 0; i /= 2) {
-        if (gl_LocalInvocationID.x < i) {
-            buf[gl_LocalInvocationID.x] += buf[gl_LocalInvocationID.x + i];
-        }
-        barrier();
-        memoryBarrierShared();
-    }
-
-    // broadcast
-    const float sum = buf[0];
-
-    for (uint i00 = gl_LocalInvocationID.x; i00 < pcs.ne00; i00 += nth) {
-        out_[pdst + i00] = exp(in_[psrc0 + i00] - max_) / sum;
+    const float sum = subgroupAdd(localSum);
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+        out_[pdst + i00] /= sum;
     }
 }

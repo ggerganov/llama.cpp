@@ -216,6 +216,13 @@ Tensor::recordCopyBuffer(const vk::CommandBuffer& commandBuffer,
 }
 
 void
+Tensor::recordFill(const vk::CommandBuffer &commandBuffer,
+                   uint32_t fill)
+{
+    commandBuffer.fillBuffer(*this->mPrimaryBuffer, mOffset, this->memorySize(), fill);
+}
+
+void
 Tensor::recordPrimaryBufferMemoryBarrier(const vk::CommandBuffer& commandBuffer,
                                          vk::AccessFlagBits srcAccessMask,
                                          vk::AccessFlagBits dstAccessMask,

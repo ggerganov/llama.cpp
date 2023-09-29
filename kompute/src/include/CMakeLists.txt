@@ -21,6 +21,7 @@ target_sources(kompute PRIVATE
     kompute/operations/OpMemoryBarrier.hpp
     kompute/operations/OpMult.hpp
     kompute/operations/OpTensorCopy.hpp
+    kompute/operations/OpTensorFill.hpp
     kompute/operations/OpTensorSyncDevice.hpp
     kompute/operations/OpTensorSyncLocal.hpp
     kompute/operations/OpBufferSyncDevice.hpp

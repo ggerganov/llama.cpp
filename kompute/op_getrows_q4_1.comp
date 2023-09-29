@@ -43,7 +43,7 @@ void dequantize_row_q4_1(uint x /*Based from inA unaligned*/, uint y /*Based fro
     const uint nb = k / qk;
 
     for (uint i = 0; i < nb; i++) {
-        const block_q4_1 block = get_unaligned_block_q4_1(x + i*sizeof_block_q4_0);
+        const block_q4_1 block = get_unaligned_block_q4_1(x + i*sizeof_block_q4_1);
 
         const float16_t d = block.d;
         const float16_t m = block.m;
