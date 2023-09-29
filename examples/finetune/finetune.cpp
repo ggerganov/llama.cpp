@@ -626,7 +626,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
-    {
+    ggml_allocr_alloc(alloc, KQ_pos);
+    if (!ggml_allocr_is_measure(alloc)) {
         int * data = (int *) KQ_pos->data;
         for (int i = 0; i < N; ++i) {
             data[i] = n_past + i;
@@ -786,6 +787,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
     ggml_allocr_alloc(alloc, t36->grad);
+    // KQ_pos
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
 
     // make sure base model tensors data cannot be used in viewable operations
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
