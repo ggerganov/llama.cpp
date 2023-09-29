@@ -11,7 +11,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- Parallel decoding + continuous batching support incoming: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
+- Parallel decoding + continuous batching support added: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
   **Devs should become familiar with the new API**
 - Local Falcon 180B inference on Mac Studio
 
@@ -92,7 +92,8 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
 - [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
-- [X] Mistral AI v0.1
+- [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
+- [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 
 **Bindings:**
 
