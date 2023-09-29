@@ -36,12 +36,15 @@ int32_t get_num_physical_cores();
 struct gpt_params {
     uint32_t seed                           = -1;   // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_threads_batch                 = -1;   // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_predict                       = -1;   // new tokens to predict
     int32_t n_ctx                           = 512;  // context size
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel                      = 1;    // number of parallel sequences to decode
+    int32_t n_sequences                     = 1;    // number of sequences to decode
     int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
@@ -83,8 +86,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
-    std::string lora_adapter = "";  // lora adapter path
-    std::string lora_base    = "";  // base model path for the lora adapter
+    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
+    std::string lora_base  = "";                              // base model path for the lora adapter
 
     int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
@@ -93,7 +96,6 @@ struct gpt_params {
     bool hellaswag         = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
-    bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
@@ -107,16 +109,16 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
+    bool cont_batching     = false; // insert new sequences for decoding on-the-fly
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
-    bool perplexity        = false; // compute perplexity over the prompt
+    bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool numa              = false; // attempt optimizations that help on some NUMA systems
-    bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
 };
 
@@ -124,13 +126,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
+std::string get_system_info(const gpt_params & params);
+
 std::string gpt_random_prompt(std::mt19937 & rng);
+
+void process_escapes(std::string& input);
 
 //
 // Model utils
 //
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
+struct llama_model_params   llama_model_params_from_gpt_params(const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 //
@@ -140,7 +147,12 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
 std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
            const std::string & text,
                         bool   add_bos);
 
@@ -181,7 +193,7 @@ std::string llama_detokenize_bpe(
 //  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
 //  - grammar:       grammar to use for sampling, ignore if NULL
 //  - last_tokens:   needed for repetition penalty, ignore if empty
-//  - idx:           sample from llama_get_logits(ctx) + idx * n_vocab
+//  - idx:           sample from llama_get_logits_ith(ctx, idx)
 //
 // returns:
 //  - token:      sampled token

@@ -124,7 +124,7 @@ int main(int argc, char ** argv) {
     console::init(params.simple_io, params.use_color);
     atexit([]() { console::cleanup(); });
 
-    if (params.perplexity) {
+    if (params.logits_all) {
         printf("\n************\n");
         printf("%s: please use the 'perplexity' tool for perplexity calculations\n", __func__);
         printf("************\n\n");
@@ -140,12 +140,17 @@ int main(int argc, char ** argv) {
         return 0;
     }
 
-    if (params.rope_freq_base != 10000.0) {
-        LOG_TEE("%s: warning: changing RoPE frequency base to %g (default 10000.0)\n", __func__, params.rope_freq_base);
+    if (params.n_ctx != 0 && params.n_ctx < 8) {
+        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
+        params.n_ctx = 8;
     }
 
-    if (params.rope_freq_scale != 1.0) {
-        LOG_TEE("%s: warning: scaling RoPE frequency by %g (default 1.0)\n", __func__, params.rope_freq_scale);
+    if (params.rope_freq_base != 0.0) {
+        LOG_TEE("%s: warning: changing RoPE frequency base to %g.\n", __func__, params.rope_freq_base);
+    }
+
+    if (params.rope_freq_scale != 0.0) {
+        LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
     LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
@@ -184,29 +189,19 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(ctx);
-    if (params.n_ctx > n_ctx_train) {
+    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx = llama_n_ctx(ctx);
+    LOG("n_ctx: %d\n", n_ctx);
+
+    if (n_ctx > n_ctx_train) {
         LOG_TEE("%s: warning: model was trained on only %d context tokens (%d specified)\n",
-                __func__, n_ctx_train, params.n_ctx);
-    } else if (params.n_ctx < 8) {
-        LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
-        params.n_ctx = 8;
+                __func__, n_ctx_train, n_ctx);
     }
 
     // print system information
     {
         LOG_TEE("\n");
-        LOG_TEE("system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
-    }
-
-    // export the cgraph and exit
-    if (params.export_cgraph) {
-        llama_eval_export(ctx, "llama.ggml");
-        llama_free(ctx);
-        llama_free_model(model);
-
-        return 0;
+        LOG_TEE("%s\n", get_system_info(params).c_str());
     }
 
     std::string path_session = params.path_prompt_cache;
@@ -220,7 +215,7 @@ int main(int argc, char ** argv) {
         if (fp != NULL) {
             std::fclose(fp);
 
-            session_tokens.resize(params.n_ctx);
+            session_tokens.resize(n_ctx);
             size_t n_token_count_out = 0;
             if (!llama_load_session_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.capacity(), &n_token_count_out)) {
                 LOG_TEE("%s: error: failed to load session file '%s'\n", __func__, path_session.c_str());
@@ -235,7 +230,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM;
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;
@@ -275,9 +270,6 @@ int main(int argc, char ** argv) {
         LOG("original_prompt_len: %s", log_tostr(original_prompt_len));
         LOG("guidance_offset:     %s", log_tostr(guidance_offset));
     }
-
-    const int n_ctx = llama_n_ctx(ctx);
-    LOG("n_ctx: %d\n", n_ctx);
 
     if ((int) embd_inp.size() > n_ctx - 4) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
@@ -475,7 +467,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(model);
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -508,17 +500,22 @@ int main(int argc, char ** argv) {
                     break;
                 }
 
-                const int n_left = n_past - params.n_keep;
-                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d\n", n_past, n_left, n_ctx, params.n_keep);
+                const int n_left    = n_past - params.n_keep - 1;
+                const int n_discard = n_left/2;
 
-                // always keep the first token - BOS
-                n_past          = std::max(1, params.n_keep);
-                n_past_guidance = std::max(1, params.n_keep + guidance_offset);
+                LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
+                    n_past, n_left, n_ctx, params.n_keep, n_discard);
+
+                llama_kv_cache_seq_rm   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
+                llama_kv_cache_seq_shift(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
+
+                n_past -= n_discard;
+
+                if (ctx_guidance) {
+                    n_past_guidance -= n_discard;
+                }
 
                 LOG("after swap: n_past = %d, n_past_guidance = %d\n", n_past, n_past_guidance);
-
-                // insert n_left/2 tokens at the start of embd from last_tokens
-                embd.insert(embd.begin(), last_tokens.begin() + n_ctx - n_left/2 - embd.size(), last_tokens.end() - embd.size());
 
                 LOG("embd: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
 
@@ -580,7 +577,7 @@ int main(int argc, char ** argv) {
 
                 for (int i = 0; i < input_size; i += params.n_batch) {
                     int n_eval = std::min(input_size - i, params.n_batch);
-                    if (llama_eval(ctx_guidance, input_buf + i, n_eval, n_past_guidance, params.n_threads)) {
+                    if (llama_decode(ctx_guidance, llama_batch_get_one(input_buf + i, n_eval, n_past_guidance, 0))) {
                         LOG_TEE("%s : failed to eval\n", __func__);
                         return 1;
                     }
@@ -597,7 +594,7 @@ int main(int argc, char ** argv) {
 
                 LOG("eval: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd));
 
-                if (llama_eval(ctx, &embd[i], n_eval, n_past, params.n_threads)) {
+                if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
                     LOG_TEE("%s : failed to eval\n", __func__);
                     return 1;
                 }
@@ -855,7 +852,7 @@ int main(int argc, char ** argv) {
     llama_backend_free();
 
 #ifndef LOG_DISABLE_LOGS
-    LOG_TEE("Log end\n")
+    LOG_TEE("Log end\n");
 #endif // LOG_DISABLE_LOGS
 
     return 0;

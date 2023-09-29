@@ -92,6 +92,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
 - [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
+- [X] Mistral AI v0.1
 
 **Bindings:**
 
@@ -596,6 +597,11 @@ Several quantization methods are supported. They differ in the resulting model d
 |   13B | ms/tok @ 4th |      - |    103 |    105 |    148 |    160 |    131 |
 |   13B | ms/tok @ 8th |      - |     73 |     82 |     98 |    105 |    128 |
 |   13B | bits/weight  |   16.0 |    4.5 |    5.0 |    5.5 |    6.0 |    8.5 |
+
+- [k-quants](https://github.com/ggerganov/llama.cpp/pull/1684)
+- recent k-quants improvements
+  - [#2707](https://github.com/ggerganov/llama.cpp/pull/2707)
+  - [#2807](https://github.com/ggerganov/llama.cpp/pull/2807)
 
 ### Perplexity (measuring model quality)
 
