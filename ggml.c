@@ -11583,6 +11583,7 @@ static void ggml_compute_forward_mul_mat(
               struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
+
     GGML_TENSOR_BINARY_OP_LOCALS
 
     const int ith = params->ith;

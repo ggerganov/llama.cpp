@@ -167,18 +167,18 @@ extern "C" {
 
     struct llama_context_params {
         uint32_t seed;            // RNG seed, -1 for random
-        uint32_t n_ctx;           // text context
-        uint32_t n_batch;         // prompt processing batch size
+        uint32_t n_ctx;           // text context, 0 = from model
+        uint32_t n_batch;         // prompt processing maximum batch size
         uint32_t n_threads;       // number of threads to use for generation
         uint32_t n_threads_batch; // number of threads to use for batch processing
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float rope_freq_base;  // RoPE base frequency
-        float rope_freq_scale; // RoPE frequency scaling factor
+        float rope_freq_base;  // RoPE base frequency, 0 = from model
+        float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
-        bool f16_kv;     // use fp16 for KV cache
+        bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool embedding;  // embedding mode only
     };
