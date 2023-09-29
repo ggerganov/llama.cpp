@@ -80,6 +80,8 @@ set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kern
 set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
 option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some calculations"   OFF)
 set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for Q2_K/Q6_K")
+set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
+                                             "llama: max. batch size for using peer access")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
@@ -116,7 +118,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
         COMMENT "Generating build details from Git"
-        COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
+        COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION} -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS "${GIT_DIR}/index"
         VERBATIM
@@ -160,6 +162,8 @@ if (APPLE AND LLAMA_ACCELERATE)
         message(STATUS "Accelerate framework found")
 
         add_compile_definitions(GGML_USE_ACCELERATE)
+        add_compile_definitions(ACCELERATE_NEW_LAPACK)
+        add_compile_definitions(ACCELERATE_LAPACK_ILP64)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${ACCELERATE_FRAMEWORK})
     else()
         message(WARNING "Accelerate framework not found")
@@ -304,6 +308,7 @@ if (LLAMA_CUBLAS)
             add_compile_definitions(GGML_CUDA_F16)
         endif()
         add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
+        add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
 
         if (LLAMA_STATIC)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -409,37 +414,38 @@ endif()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
-        set(c_flags
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wcast-qual
-            -Wdouble-promotion
-            -Wshadow
-            -Wstrict-prototypes
-            -Wpointer-arith
-            -Wmissing-prototypes
-            -Werror=implicit-int
-            -Wno-unused-function
-        )
-        set(cxx_flags
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wcast-qual
-            -Wmissing-declarations
-            -Wno-unused-function
-            -Wno-multichar
-        )
-        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            # g++ only
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
+        set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
+        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int
+            -Werror=implicit-function-declaration)
+        set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
+
+        if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+            set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
+            set(cxx_flags ${cxx_flags} -Wmissing-prototypes -Wextra-semi)
+
+            if (
+                (CMAKE_C_COMPILER_ID STREQUAL "Clang"      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 3.8.0) OR
+                (CMAKE_C_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 7.3.0)
+            )
+                set(c_flags ${c_flags} -Wdouble-promotion)
+            endif()
+        elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+            set(c_flags ${c_flags} -Wdouble-promotion)
+            set(cxx_flags ${cxx_flags} -Wno-array-bounds)
+
+            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 7.1.0)
+                set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+            endif()
+            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 8.1.0)
+                set(cxx_flags ${cxx_flags} -Wextra-semi)
+            endif()
         endif()
     else()
         # todo : msvc
     endif()
 
     add_compile_options(
+            ${warning_flags}
             "$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
             "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
     )
