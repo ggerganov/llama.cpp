@@ -6,10 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import struct
 import sys
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -234,6 +232,27 @@ for part_name in part_names:
         break
     print("gguf: loading model part '" + part_name + "'")
     model_part = torch.load(dir_model / part_name, map_location="cpu")
+
+    for i in range(block_count):
+        if f"transformer.h.{i}.attn.kv.weight" in model_part:
+            data = model_part[f"transformer.h.{i}.attn.kv.weight"]
+            model_part[f"model.layers.{i}.self_attn.k_proj.weight"] = data[
+                : n_head_kv * head_dim
+            ]
+            model_part[f"model.layers.{i}.self_attn.v_proj.weight"] = data[
+                n_head_kv * head_dim :
+            ]
+            del model_part[f"transformer.h.{i}.attn.kv.weight"]
+        if f"transformer.h.{i}.attn.q.weight" in model_part:
+            model_part[f"model.layers.{i}.self_attn.q_proj.weight"] = model_part[
+                f"transformer.h.{i}.attn.q.weight"
+            ]
+            del model_part[f"transformer.h.{i}.attn.q.weight"]
+        if f"transformer.h.{i}.mlp.gate_up_proj.weight" in model_part:
+            data = model_part[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
+            model_part[f"model.layers.{i}.mlp.gate_proj.weight"] = data[:ff_dim]
+            model_part[f"model.layers.{i}.mlp.up_proj.weight"] = data[ff_dim:]
+            del model_part[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
 
     for name in model_part.keys():
         data = model_part[name]

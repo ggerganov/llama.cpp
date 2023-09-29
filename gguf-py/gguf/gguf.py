@@ -286,21 +286,18 @@ class TensorNameMap:
         # Attention query
         MODEL_TENSOR.ATTN_Q: (
             "model.layers.{bid}.self_attn.q_proj", # llama-hf
-            "transformer.h.{bid}.attn.q",          # refact
             "layers.{bid}.attention.wq",           # llama-pth
         ),
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
             "model.layers.{bid}.self_attn.k_proj", # llama-hf
-            "transformer.h.{bid}.attn.k",           # refact
             "layers.{bid}.attention.wk",           # llama-pth
         ),
 
         # Attention value
         MODEL_TENSOR.ATTN_V: (
             "model.layers.{bid}.self_attn.v_proj", # llama-hf
-            "transformer.h.{bid}.attn.v",          # refact
             "layers.{bid}.attention.wv",           # llama-pth
         ),
 
@@ -335,15 +332,13 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.c_fc",            # gpt2
             "transformer.blocks.{bid}.ffn.up_proj",    # mpt
             "transformer.h.{bid}.mlp.dense_h_to_4h",   # falcon
-            "model.layers.{bid}.mlp.up_proj",          # llama-hf
+            "model.layers.{bid}.mlp.up_proj",          # llama-hf refact
             "layers.{bid}.feed_forward.w3",            # llama-pth
-            "transformer.h.{bid}.mlp.linear_3",        # refact
         ),
 
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
-            "model.layers.{bid}.mlp.gate_proj", # llama-hf
-            "transformer.h.{bid}.mlp.linear_1", # refact
+            "model.layers.{bid}.mlp.gate_proj", # llama-hf refact
             "layers.{bid}.feed_forward.w1",     # llama-pth
         ),
 
