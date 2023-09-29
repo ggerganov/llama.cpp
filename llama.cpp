@@ -7655,10 +7655,6 @@ int llama_tokenize(
     return res.size();
 }
 
-int llama_token_to_piece(const struct llama_context * ctx, llama_token token, char * buf, int length) {
-    return llama_token_to_piece_with_model(&ctx->model, token, buf, length);
-}
-
 static std::string llama_decode_text(const std::string& text) {
     std::string decoded_text;
     auto unicode_sequences = codepoints_from_utf8(text);
@@ -7670,7 +7666,7 @@ static std::string llama_decode_text(const std::string& text) {
 }
 
 // does not write null-terminator to buf
-int llama_token_to_piece_with_model(const struct llama_model * model, llama_token token, char * buf, int length) {
+int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length) {
     if (0 <= token && token < llama_model_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
