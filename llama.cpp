@@ -4595,7 +4595,6 @@ private:
         std::vector<std::string> bpe_encoded_words;
 
         std::string token = "";
-        const char* raw_text_p = text.c_str();
         // GPT2 system regex:  's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+
         bool collecting_numeric = false;
         bool collecting_letter = false;
@@ -4609,7 +4608,7 @@ private:
         bpe_encoded_words.reserve(text.size());
 
         auto cps = codepoints_from_utf8(text);
-        for (auto i = 0; i < cps.size(); ++i)
+        for (size_t i = 0; i < cps.size(); ++i)
             text_utf.emplace_back(codepoint_to_utf8(cps[i]));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
