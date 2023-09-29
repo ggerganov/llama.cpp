@@ -1,28 +1,31 @@
-from convert import lazy_load_safetensors_file
-import sys
 import torch
-from safetensors import safe_open
-from pathlib import Path
+import os
 from pprint import pprint
-from sentencepiece import SentencePieceProcessor
+import sys
 import argparse
+from pathlib import Path
+from sentencepiece import SentencePieceProcessor
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
-import json
-import struct
 
-def file_is_safetensors(path: Path) -> bool:
-    fp = open(path, 'rb')
-    first8 = fp.read(8)
-    fp.seek(0)
-    if first8[:2] == b'PK':
-        # A zip file, i.e. PyTorch format
-        return False
-    return struct.unpack('<Q', first8)[0] < 16 * 1024 * 1024
+def _flatten_dict(dct, tensors, prefix=None):
+    assert isinstance(dct, dict)
+    for key in dct.keys():
+        new_prefix = prefix + '.' + key if prefix is not None else key
+        if isinstance(dct[key], torch.Tensor):
+            tensors[new_prefix] = dct[key]
+        elif isinstance(dct[key], dict):
+            _flatten_dict(dct[key], tensors, new_prefix)
+        else:
+            raise ValueError(type(dct[key]))
+    return None
 
 def get_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
     print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
     tokenizer = SentencePieceProcessor(str(tokenizer_path))  
+    print('gguf: adding tokens')
     tokens: list[bytes] = []
     scores: list[float] = []
     toktypes: list[int] = []
@@ -54,41 +57,40 @@ def get_tokenizer_info(dir_model: Path):
         pass
     return tokens, scores, toktypes
 
-
-def get_args():
+def main():
     parser = argparse.ArgumentParser(description="Convert a Persimmon model from Adept (e.g. Persimmon 8b chat) to a GGML compatible file")
-    parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
-    parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.safetensors)")
+    parser.add_argument("--outfile",             type=Path, help="path to write to; default: based on input")
+    parser.add_argument("--ckpt-path",           type=Path, help="path to persimmon checkpoint .pt file")
+    parser.add_argument("--model-dir",           type=Path, help="directory containing model e.g. 8b_chat_model_release")
+    parser.add_argument("--adept-inference-dir", type=str, help="path to adept-inference code directory")
     args = parser.parse_args()
-    return args
+    sys.path.append(str(args.adept_inference_dir))
+    persimmon_model = torch.load(args.ckpt_path)
+    hparams = persimmon_model['args']
+    pprint(hparams)
+    tensors = {}
+    _flatten_dict(persimmon_model['model'], tensors, None)
 
-
-def main() -> None:
-    args = get_args()
-    assert file_is_safetensors(args.model), 'Error: model file is not a SafeTensors file'
-    dir_model = args.model.parent
-    with open(dir_model / 'config.json', 'r') as f:
-        hparams = json.load(f)
     arch = gguf.MODEL_ARCH.PERSIMMON
     gguf_writer = gguf.GGUFWriter(args.outfile, gguf.MODEL_ARCH_NAMES[arch])
     
-    block_count = hparams['num_layers']
-    head_count = hparams['num_attention_heads']
+    block_count = hparams.num_layers
+    head_count = hparams.num_attention_heads
     head_count_kv = head_count
-    ctx_length = hparams['seq_length']
-    hidden_size = hparams['hidden_size']
+    ctx_length = hparams.seq_length
+    hidden_size = hparams.hidden_size
 
     gguf_writer.add_name('persimmon-8b-chat')
     gguf_writer.add_context_length(ctx_length)
     gguf_writer.add_embedding_length(hidden_size)
     gguf_writer.add_block_count(block_count)
-    gguf_writer.add_feed_forward_length(hparams['ffn_hidden_size'])
+    gguf_writer.add_feed_forward_length(hparams.ffn_hidden_size)
     gguf_writer.add_rope_dimension_count(hidden_size // head_count)
     gguf_writer.add_head_count(head_count)
     gguf_writer.add_head_count_kv(head_count_kv)
-    gguf_writer.add_rope_freq_base(hparams['rotary_emb_base'])
-    gguf_writer.add_layer_norm_eps(hparams['layernorm_epsilon'])
-    tokens, scores, toktypes = get_tokenizer_info(dir_model)
+    gguf_writer.add_rope_freq_base(hparams.rotary_emb_base)
+    gguf_writer.add_layer_norm_eps(hparams.layernorm_epsilon)
+    tokens, scores, toktypes = get_tokenizer_info(args.model_dir)
     gguf_writer.add_tokenizer_model('llama')
     gguf_writer.add_token_list(tokens)
     gguf_writer.add_token_scores(scores)
@@ -98,10 +100,6 @@ def main() -> None:
 
     tensor_map = gguf.get_tensor_name_map(arch, block_count)
     print(tensor_map)
-    tensors = {}
-    with safe_open(args.model, framework="pt") as f:
-        for k in f.keys():
-            tensors[k] = f.get_tensor(k)
     for name in tensors.keys():
         data = tensors[name]
         if name.endswith(".self_attention.rotary_emb.inv_freq"):
