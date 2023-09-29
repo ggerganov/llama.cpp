@@ -2633,10 +2633,6 @@ static struct ggml_cgraph * llm_build_llama(
     const int32_t n_tokens = batch.n_tokens;
     const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
     const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
-    LLAMA_LOG_INFO("n_kv = %d\n", n_kv);
-    LLAMA_LOG_INFO("n_tokens = %d\n", n_tokens);
-    LLAMA_LOG_INFO("n_ctx = %d\n", n_ctx);
-    LLAMA_LOG_INFO("kvself.n = %d\n", kv_self.n);
 
     const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
 
@@ -2875,7 +2871,6 @@ static struct ggml_cgraph * llm_build_llama(
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
             offload_func_v(KQ_soft_max);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
-            //ggml_set_name(KQ_soft_max, format("printme_KQ_soft_max_%d", il).c_str());
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -4017,19 +4012,6 @@ static struct ggml_cgraph * llm_build_starcoder(
     return gf;
 }
 
-static void log_tensor(
-    ggml_tensor * a
-) {
-    LLAMA_LOG_INFO("Shape of %s is ", a->name);
-    for (int i = 0; i < a->n_dims; ++i) {
-        LLAMA_LOG_INFO("%d", a->ne[i]);
-        if (i < a->n_dims - 1) {
-            LLAMA_LOG_INFO(",");
-        }
-        LLAMA_LOG_INFO(" ");
-    }
-    LLAMA_LOG_INFO("\n");
-}
 
 static struct ggml_cgraph * llm_build_persimmon(
     llama_context & lctx,
@@ -4042,31 +4024,24 @@ static struct ggml_cgraph * llm_build_persimmon(
 
     GGML_ASSERT(!!kv_self.ctx);
 
+    const auto & cparams = lctx.cparams;
     const int64_t n_embd      = hparams.n_embd;
     const int64_t n_layer     = hparams.n_layer;
-    const int64_t n_ctx       = hparams.n_ctx;
+    const int64_t n_ctx       = cparams.n_ctx;
     const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_head      = hparams.n_head;
     const int64_t n_embd_head = hparams.n_embd_head();
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
 
-    const float freq_base  = hparams.rope_freq_base;
-    const float freq_scale = hparams.rope_freq_scale;
-    const float norm_eps   = 1e-5f;
+    const float freq_base  = cparams.rope_freq_base;
+    const float freq_scale = cparams.rope_freq_scale;
+
+    float norm_eps = hparams.f_norm_eps < 0 ? 1e-5f : hparams.f_norm_eps;
 
     const int32_t n_tokens    = batch.n_tokens;
     const int32_t n_kv        = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
     const int32_t kv_head     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
     const size_t n_rot = n_embd_head / 2;
-    /*
-    printf("\nnorm_eps is %f\n", norm_eps);
-    printf("freq_base is %f\n", freq_base);
-    LLAMA_LOG_INFO("n_kv = %d\n", n_kv);
-    LLAMA_LOG_INFO("n_tokens = %d\n", n_tokens);
-    LLAMA_LOG_INFO("n_ctx = %d\n", n_ctx);
-    LLAMA_LOG_INFO("kvself.n = %d\n", kv_self.n);
-    */
-
     const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
 
     auto & buf_compute = lctx.buf_compute;
@@ -4091,13 +4066,6 @@ static struct ggml_cgraph * llm_build_persimmon(
             memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
         }
         ggml_set_name(inp_tokens, "inp_tokens");
-        /*
-        LLAMA_LOG_INFO("\ninp_tokens: [");
-        for (int i = 0; i < n_tokens; ++i) {
-            LLAMA_LOG_INFO("%d, ", batch.token[i]);
-        }
-        LLAMA_LOG_INFO("]\n");
-        */
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
@@ -4165,21 +4133,16 @@ static struct ggml_cgraph * llm_build_persimmon(
             ggml_build_forward_expand(gf, tmp);
         }
     }
-    //LLAMA_LOG_INFO("Entering n_layers loop\n", __func__);
     for (int il=0; il < n_layer; ++il) {
-        //ggml_format_name(inpL, "printme_layer_input_%d", il);
         struct ggml_tensor * residual = ggml_dup(ctx0, inpL);
         {
-            //ggml_format_name(inpL, "printme_inputs_%d", il);
             cur = ggml_norm(ctx0, inpL, norm_eps);
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            //ggml_format_name(cur, "printme_layernorm_outputs%d", il);
             cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
             ggml_format_name(cur, "input_layernorm_%d", il);
         } 
         // self attention 
         {
-            //log_tensor(cur);
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
             ggml_format_name(cur, "qkv_preadd_%d", il);
             cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
@@ -4211,12 +4174,10 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ));
             tmpq = ggml_norm(ctx0, tmpq, norm_eps);
             tmpq =  ggml_mul(ctx0, tmpq, model.layers[il].attn_q_norm);
-            //ggml_format_name(tmpq, "printme_tmpq_%d", il);
             tmpq =  ggml_add(ctx0, tmpq, model.layers[il].attn_q_norm_b);
 
             tmpk = ggml_norm(ctx0, tmpk, norm_eps);
             tmpk =  ggml_mul(ctx0, tmpk, model.layers[il].attn_k_norm);
-            //ggml_format_name(tmpk, "printme_tmpk_%d", il);
             tmpk =  ggml_add(ctx0, tmpk, model.layers[il].attn_k_norm_b);
             
             struct ggml_tensor * qrot = ggml_cont(ctx0, ggml_view_3d(
@@ -4231,7 +4192,6 @@ static struct ggml_cgraph * llm_build_persimmon(
                 /* nb2    = */ ggml_element_size(tmpk) * n_embd_head * n_head,
                 /* offset = */ 0
             );
-            //ggml_format_name(krottmp, "printme_krottmp_%d", il);
             struct ggml_tensor * krot = ggml_cont(ctx0, krottmp);
             // get the second half of tmpq, e.g tmpq[n_rot:, :, :]
             struct ggml_tensor * qpass = ggml_cont(ctx0, ggml_view_3d(
@@ -4247,7 +4207,6 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ggml_element_size(tmpk) * n_rot
             ));
             ggml_set_name(qrot, format("qrot_%d", il).c_str());
-            //ggml_set_name(krot, format("printme_krot_%d", il).c_str()); 
             ggml_set_name(qpass, format("qpass_%d", il).c_str());
             ggml_set_name(kpass, format("kpass_%d", il).c_str());
 
@@ -4272,7 +4231,6 @@ static struct ggml_cgraph * llm_build_persimmon(
                   ggml_concat(ctx0, qrotated, qpass),
                 2, 1, 0, 3));
             struct ggml_tensor * tmp = ggml_permute(ctx0, ggml_concat(ctx0, krotated, kpass), 2, 1, 0, 3);
-            //ggml_format_name(tmp, "printme_tmp_%d", il);
             struct ggml_tensor * Kcur = ggml_cont(ctx0, tmp);
             ggml_set_name(Qcur, format("Qcur_%d", il).c_str());
             // kcur appears healthy.
@@ -4295,41 +4253,16 @@ static struct ggml_cgraph * llm_build_persimmon(
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
-                /*
-                struct ggml_tensor * Vcur = ggml_cont(ctx0,
-                    ggml_transpose(
-                        ctx0, ggml_reshape_2d(ctx0, ggml_cont(ctx0, tmpv), n_embd, n_tokens)
-                ));
-                ggml_set_name(Vcur, "Vcur");
-                struct ggml_tensor * k = ggml_view_1d(
-                    ctx0, kv_self.k, n_tokens*n_embd,
-                    (ggml_element_size(kv_self.k)*n_embd)*(il*n_ctx + kv_head)
-                );
-                ggml_set_name(k, "k");
-
-                struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd,
-                        (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-
-                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
-                ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
-                */
             }
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
             ggml_set_name(Q, "Q");
-            //log_tensor(Q);
-            // For some reason this is all zeros and no balls...
             struct ggml_tensor * K = ggml_view_3d(ctx0, kv_self.k,
                     n_embd_head, n_kv, n_head_kv,
                     ggml_element_size(kv_self.k)*n_embd_gqa,
                     ggml_element_size(kv_self.k)*n_embd_head,
                     ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            //ggml_format_name(K, "printme_K_%d", il);
-            //log_tensor(K);
 
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            //ggml_set_name(KQ, "KQ");
-            //ggml_format_name(KQ, "printme_KQ_%d", il);
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
@@ -4337,7 +4270,6 @@ static struct ggml_cgraph * llm_build_persimmon(
             ggml_set_name(KQ_masked, "KQ_masked");
 
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
-            //ggml_set_name(KQ_soft_max, format("printme_KQ_soft_max_%d", il).c_str());
 
             struct ggml_tensor * V = 
                 ggml_view_3d(ctx0, kv_self.v,
@@ -4357,7 +4289,6 @@ static struct ggml_cgraph * llm_build_persimmon(
             ggml_set_name(cur, "KQV_merged_contiguous");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
-            //ggml_format_name(cur, "printme_wo_%d", il);
             cur = ggml_add(ctx0, cur, model.layers[il].bo);
             ggml_set_name(cur, "result_wo");
         }
@@ -4376,7 +4307,6 @@ static struct ggml_cgraph * llm_build_persimmon(
         cur = ggml_add(ctx0, cur, model.layers[il].b3);
         cur = ggml_sqr(ctx0, ggml_relu(ctx0, cur));
         cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-        //ggml_format_name(cur, "printme_ffn_down_%d", il);
         struct ggml_tensor * ffn_out = ggml_add(ctx0, 
             cur,
             model.layers[il].b2);
@@ -4389,7 +4319,6 @@ static struct ggml_cgraph * llm_build_persimmon(
     {
         cur = ggml_norm(ctx0, cur, norm_eps);
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        //ggml_set_name(cur, "printme_final");
         cur = ggml_add(ctx0, cur, model.output_norm_b);
         ggml_set_name(cur, "result_norm");
     }
@@ -7166,12 +7095,6 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_LOG_INFO("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
 
-<<<<<<< HEAD
-        const auto & hparams = ctx->model.hparams;
-
-        //LLAMA_LOG_INFO("hg\n", __func__);
-=======
->>>>>>> bc39553c901a91cfcb757863586250838c83eeab
         // resized during inference
         if (params.logits_all) {
             ctx->logits.reserve(cparams.n_ctx*hparams.n_vocab);
@@ -7198,25 +7121,12 @@ struct llama_context * llama_new_context_with_model(
             ggml_cgraph * gf = llama_build_graph(*ctx, llama_batch_get_one(&token, n_tokens, n_past, 0));
 
 #ifdef GGML_USE_METAL
-<<<<<<< HEAD
-            if (false) {
-                if (params.n_gpu_layers > 0) {
-                    ctx->ctx_metal = ggml_metal_init(1);
-                    if (!ctx->ctx_metal) {
-                        LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
-                        llama_free(ctx);
-                        return NULL;
-                    }
-                    ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
-                    ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
-=======
             if (model->n_gpu_layers > 0) {
                 ctx->ctx_metal = ggml_metal_init(1);
                 if (!ctx->ctx_metal) {
                     LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
                     llama_free(ctx);
                     return NULL;
->>>>>>> bc39553c901a91cfcb757863586250838c83eeab
                 }
                 ggml_metal_log_set_callback(llama_log_callback_default, NULL);
                 //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
