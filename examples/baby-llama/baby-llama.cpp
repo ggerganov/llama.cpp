@@ -1,8 +1,12 @@
 #include "ggml.h"
+#include "train.h"
+
 #include <vector>
 #include <cassert>
-#include <random>
+#include <cstdlib>
 #include <cstring>
+#include <random>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -13,31 +17,6 @@ constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 #else
 constexpr float rms_norm_eps = 5e-6f;
 #endif
-
-static float frand() {
-    return (float)rand()/(float)RAND_MAX;
-}
-
-struct random_normal_distribution {
-    std::mt19937 gen;
-    std::normal_distribution<float> nd;
-    float min;
-    float max;
-};
-
-static void init_random_normal_distribution(
-    struct random_normal_distribution * rnd, int seed, float mean, float std, float min, float max
-) {
-    rnd->gen = std::mt19937(seed);
-    rnd->nd = std::normal_distribution<float>{mean, std};
-    rnd->min = min;
-    rnd->max = max;
-}
-
-static float frand_normal(struct random_normal_distribution * rnd) {
-    const float r = rnd->nd(rnd->gen);
-    return ((r < rnd->min) ? (rnd->min) : (r > rnd->max) ? (rnd->max) : r);
-}
 
 static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
     struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
@@ -88,55 +67,7 @@ static struct ggml_tensor * randomize_tensor(
             break;
         default:
             assert(false);
-    };
-
-    return tensor;
-}
-
-static struct ggml_tensor * randomize_tensor_normal(
-    struct ggml_tensor * tensor, int ndims, const int64_t ne[], struct random_normal_distribution * rnd
-) {
-    float scale = 1.0; // xavier
-    switch (ndims) {
-        case 1:
-            scale /= sqrtf(ne[0]);
-            for (int i0 = 0; i0 < ne[0]; i0++) {
-                ((float *)tensor->data)[i0] = scale * frand_normal(rnd);
-            }
-            break;
-        case 2:
-            scale /= sqrtf(ne[0]+ne[1]);
-            for (int i1 = 0; i1 < ne[1]; i1++) {
-                for (int i0 = 0; i0 < ne[0]; i0++) {
-                    ((float *)tensor->data)[i1*ne[0] + i0] = scale * frand_normal(rnd);
-                }
-            }
-            break;
-        case 3:
-            scale /= sqrtf(ne[0]+ne[1]);
-            for (int i2 = 0; i2 < ne[2]; i2++) {
-                for (int i1 = 0; i1 < ne[1]; i1++) {
-                    for (int i0 = 0; i0 < ne[0]; i0++) {
-                        ((float *)tensor->data)[i2*ne[1]*ne[0] + i1*ne[0] + i0] = scale * frand_normal(rnd);
-                    }
-                }
-            }
-            break;
-        case 4:
-            scale /= sqrtf(ne[0]+ne[1]);
-            for (int i3 = 0; i3 < ne[3]; i3++) {
-                for (int i2 = 0; i2 < ne[2]; i2++) {
-                    for (int i1 = 0; i1 < ne[1]; i1++) {
-                        for (int i0 = 0; i0 < ne[0]; i0++) {
-                            ((float *)tensor->data)[i3*ne[2]*ne[1]*ne[0] + i2*ne[1]*ne[0] + i1*ne[0] + i0] = scale * frand_normal(rnd);
-                        }
-                    }
-                }
-            }
-            break;
-        default:
-            assert(false);
-    };
+    }
 
     return tensor;
 }
@@ -398,27 +329,29 @@ static void randomize_model(struct llama_model * model, int seed, float mean, fl
 
     const uint32_t n_layer = hparams.n_layer;
 
-    struct random_normal_distribution rnd;
-    init_random_normal_distribution(&rnd, seed, mean, std, min, max);
-    randomize_tensor_normal(model->tok_embeddings, model->tok_embeddings->n_dims, model->tok_embeddings->ne, &rnd);
-    randomize_tensor_normal(model->norm,           model->norm->n_dims,           model->norm->ne,           &rnd);
-    randomize_tensor_normal(model->output,         model->output->n_dims,         model->output->ne,         &rnd);
+    struct random_normal_distribution * rnd = init_random_normal_distribution(seed, mean, std, min, max);
+
+    randomize_tensor_normal(model->tok_embeddings , rnd);
+    randomize_tensor_normal(model->norm           , rnd);
+    randomize_tensor_normal(model->output         , rnd);
 
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
-        randomize_tensor_normal(layer.attention_norm, layer.attention_norm->n_dims, layer.attention_norm->ne, &rnd);
+        randomize_tensor_normal(layer.attention_norm, rnd);
 
-        randomize_tensor_normal(layer.wq, layer.wq->n_dims, layer.wq->ne, &rnd);
-        randomize_tensor_normal(layer.wk, layer.wk->n_dims, layer.wk->ne, &rnd);
-        randomize_tensor_normal(layer.wv, layer.wv->n_dims, layer.wv->ne, &rnd);
-        randomize_tensor_normal(layer.wo, layer.wo->n_dims, layer.wo->ne, &rnd);
+        randomize_tensor_normal(layer.wq, rnd);
+        randomize_tensor_normal(layer.wk, rnd);
+        randomize_tensor_normal(layer.wv, rnd);
+        randomize_tensor_normal(layer.wo, rnd);
 
-        randomize_tensor_normal(layer.ffn_norm, layer.ffn_norm->n_dims, layer.ffn_norm->ne, &rnd);
+        randomize_tensor_normal(layer.ffn_norm, rnd);
 
-        randomize_tensor_normal(layer.w1, layer.w1->n_dims, layer.w1->ne, &rnd);
-        randomize_tensor_normal(layer.w2, layer.w2->n_dims, layer.w2->ne, &rnd);
-        randomize_tensor_normal(layer.w3, layer.w3->n_dims, layer.w3->ne, &rnd);
+        randomize_tensor_normal(layer.w1, rnd);
+        randomize_tensor_normal(layer.w2, rnd);
+        randomize_tensor_normal(layer.w3, rnd);
     }
+
+    free_random_normal_distribution(rnd);
 }
 
 
@@ -429,35 +362,37 @@ static void randomize_model_lora(
 
     const uint32_t n_layer = hparams.n_layer;
 
-    struct random_normal_distribution rnd;
-    init_random_normal_distribution(&rnd, seed, mean, std, min, max);
-    randomize_tensor_normal(model->tok_embeddings, model->tok_embeddings->n_dims, model->tok_embeddings->ne, &rnd);
-    randomize_tensor_normal(model->norm,           model->norm->n_dims,           model->norm->ne,           &rnd);
-    randomize_tensor_normal(model->outputa,        model->outputa->n_dims,        model->outputa->ne,         &rnd);
-    randomize_tensor_normal(model->outputb,        model->outputb->n_dims,        model->outputb->ne,         &rnd);
+    struct random_normal_distribution * rnd = init_random_normal_distribution(seed, mean, std, min, max);
+
+    randomize_tensor_normal(model->tok_embeddings, rnd);
+    randomize_tensor_normal(model->norm          , rnd);
+    randomize_tensor_normal(model->outputa       , rnd);
+    randomize_tensor_normal(model->outputb       , rnd);
 
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
-        randomize_tensor_normal(layer.attention_norm, layer.attention_norm->n_dims, layer.attention_norm->ne, &rnd);
+        randomize_tensor_normal(layer.attention_norm, rnd);
 
-        randomize_tensor_normal(layer.wqa, layer.wqa->n_dims, layer.wqa->ne, &rnd);
-        randomize_tensor_normal(layer.wqb, layer.wqb->n_dims, layer.wqb->ne, &rnd);
-        randomize_tensor_normal(layer.wka, layer.wka->n_dims, layer.wka->ne, &rnd);
-        randomize_tensor_normal(layer.wkb, layer.wkb->n_dims, layer.wkb->ne, &rnd);
-        randomize_tensor_normal(layer.wva, layer.wva->n_dims, layer.wva->ne, &rnd);
-        randomize_tensor_normal(layer.wvb, layer.wvb->n_dims, layer.wvb->ne, &rnd);
-        randomize_tensor_normal(layer.woa, layer.woa->n_dims, layer.woa->ne, &rnd);
-        randomize_tensor_normal(layer.wob, layer.wob->n_dims, layer.wob->ne, &rnd);
+        randomize_tensor_normal(layer.wqa, rnd);
+        randomize_tensor_normal(layer.wqb, rnd);
+        randomize_tensor_normal(layer.wka, rnd);
+        randomize_tensor_normal(layer.wkb, rnd);
+        randomize_tensor_normal(layer.wva, rnd);
+        randomize_tensor_normal(layer.wvb, rnd);
+        randomize_tensor_normal(layer.woa, rnd);
+        randomize_tensor_normal(layer.wob, rnd);
 
-        randomize_tensor_normal(layer.ffn_norm, layer.ffn_norm->n_dims, layer.ffn_norm->ne, &rnd);
+        randomize_tensor_normal(layer.ffn_norm, rnd);
 
-        randomize_tensor_normal(layer.w1, layer.w1->n_dims, layer.w1->ne, &rnd);
-        randomize_tensor_normal(layer.w2, layer.w2->n_dims, layer.w2->ne, &rnd);
-        randomize_tensor_normal(layer.w3, layer.w3->n_dims, layer.w3->ne, &rnd);
+        randomize_tensor_normal(layer.w1, rnd);
+        randomize_tensor_normal(layer.w2, rnd);
+        randomize_tensor_normal(layer.w3, rnd);
     }
+
+    free_random_normal_distribution(rnd);
 }
 
-static bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
+static void init_kv_cache(struct llama_kv_cache* cache, struct llama_model * model, int n_batch) {
     const auto & hparams = model->hparams;
 
     const uint32_t n_ctx   = hparams.n_ctx;
@@ -483,14 +418,12 @@ static bool init_kv_cache(struct llama_kv_cache* cache, struct llama_model * mod
 
         if (!cache->ctx) {
             fprintf(stderr, "%s: failed to allocate memory for kv cache\n", __func__);
-            return false;
+            exit(1);
         }
     }
 
     cache->k = ggml_new_tensor_1d(cache->ctx, GGML_TYPE_F32, n_elements);
     cache->v = ggml_new_tensor_1d(cache->ctx, GGML_TYPE_F32, n_elements);
-
-    return true;
 }
 
 static bool init_kv_cache_lora(struct llama_kv_cache* cache, struct llama_model_lora * model, int n_batch) {
@@ -554,6 +487,14 @@ static struct ggml_tensor * forward(
     struct ggml_tensor * kc = kv_self.k;
     struct ggml_tensor * vc = kv_self.v;
 
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    {
+        int * data = (int *) KQ_pos->data;
+        for (int i = 0; i < N; ++i) {
+            data[i] = n_past + i;
+        }
+    }
+
     // inpL shape [n_embd,N,1,1]
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model->tok_embeddings, tokens);
     for (int il = 0; il < n_layer; ++il) {
@@ -581,8 +522,8 @@ static struct ggml_tensor * forward(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, 1]
             // Kcur shape [n_embd/n_head, n_head, N, 1]
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N), KQ_pos, n_rot, 0, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N), KQ_pos, n_rot, 0, 0);
 
             // store key and value to memory
             {
@@ -754,32 +695,6 @@ static struct ggml_tensor * forward(
     return inpL;
 }
 
-static void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
-    GGML_ASSERT(tensor->n_dims == 1);
-    GGML_ASSERT(tensor->ne[0] == ne0);
-}
-
-static void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
-    GGML_ASSERT(tensor->n_dims == 2);
-    GGML_ASSERT(tensor->ne[0] == ne0);
-    GGML_ASSERT(tensor->ne[1] == ne1);
-}
-
-static void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
-    GGML_ASSERT(tensor->n_dims == 3);
-    GGML_ASSERT(tensor->ne[0] == ne0);
-    GGML_ASSERT(tensor->ne[1] == ne1);
-    GGML_ASSERT(tensor->ne[2] == ne2);
-}
-
-static void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
-    GGML_ASSERT(tensor->n_dims == 4);
-    GGML_ASSERT(tensor->ne[0] == ne0);
-    GGML_ASSERT(tensor->ne[1] == ne1);
-    GGML_ASSERT(tensor->ne[2] == ne2);
-    GGML_ASSERT(tensor->ne[3] == ne3);
-}
-
 static struct ggml_tensor * forward_batch(
     struct llama_model    * model,
     struct llama_kv_cache * cache,
@@ -808,9 +723,18 @@ static struct ggml_tensor * forward_batch(
     struct ggml_tensor * kc = kv_self.k;
     struct ggml_tensor * vc = kv_self.v;
 
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    {
+        int * data = (int *) KQ_pos->data;
+        for (int i = 0; i < N; ++i) {
+            data[i] = n_past + i;
+        }
+    }
+
     // inpL shape [n_embd,N*n_batch,1]
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model->tok_embeddings, tokens);
     assert_shape_2d(inpL, n_embd, N*n_batch);
+
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
 
@@ -838,8 +762,8 @@ static struct ggml_tensor * forward_batch(
             // wk   shape [n_embd, n_embd, 1, 1]
             // Qcur shape [n_embd/n_head, n_head, N, n_batch]
             // Kcur shape [n_embd/n_head, n_head, N, n_batch]
-            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
-            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), n_past, n_rot, 0, 0);
+            struct ggml_tensor * Qcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wq, cur), n_embd/n_head, n_head, N, n_batch), KQ_pos, n_rot, 0, 0);
+            struct ggml_tensor * Kcur = ggml_rope(ctx0, ggml_reshape_4d(ctx0, ggml_mul_mat(ctx0, model->layers[il].wk, cur), n_embd/n_head, n_head, N, n_batch), KQ_pos, n_rot, 0, 0);
             assert_shape_4d(Qcur, n_embd/n_head, n_head, N, n_batch);
             assert_shape_4d(Kcur, n_embd/n_head, n_head, N, n_batch);
 
@@ -1097,6 +1021,14 @@ static struct ggml_tensor * forward_lora(
     struct ggml_tensor * kc = kv_self.k;
     struct ggml_tensor * vc = kv_self.v;
 
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
+    {
+        int * data = (int *) KQ_pos->data;
+        for (int i = 0; i < N; ++i) {
+            data[i] = n_past + i;
+        }
+    }
+
     // inpL shape [n_embd,N,1,1]
     struct ggml_tensor * inpL = ggml_get_rows(ctx0, model->tok_embeddings, tokens);
     for (int il = 0; il < n_layer; ++il) {
@@ -1130,7 +1062,7 @@ static struct ggml_tensor * forward_lora(
                                                         model->layers[il].wqb,
                                                         cur)),
                                                 n_embd/n_head, n_head, N),
-                                            n_past, n_rot, 0, 0);
+                                            KQ_pos, n_rot, 0, 0);
             struct ggml_tensor * Kcur = ggml_rope(ctx0,
                                             ggml_reshape_3d(ctx0,
                                                 ggml_mul_mat(ctx0,
@@ -1139,7 +1071,7 @@ static struct ggml_tensor * forward_lora(
                                                         model->layers[il].wkb,
                                                         cur)),
                                                 n_embd/n_head, n_head, N),
-                                            n_past, n_rot, 0, 0);
+                                            KQ_pos, n_rot, 0, 0);
 
             // store key and value to memory
             {

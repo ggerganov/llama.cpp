@@ -132,7 +132,6 @@ struct cmd_params {
     std::vector<int> n_gpu_layers;
     std::vector<int> main_gpu;
     std::vector<bool> mul_mat_q;
-    std::vector<bool> low_vram;
     std::vector<std::array<float, LLAMA_MAX_DEVICES>> tensor_split;
     int reps;
     bool verbose;
@@ -149,7 +148,6 @@ static const cmd_params cmd_params_defaults = {
     /* n_gpu_layers  */ {99},
     /* main_gpu      */ {0},
     /* mul_mat_q     */ {true},
-    /* low_vram      */ {false},
     /* tensor_split  */ {{}},
     /* reps          */ 5,
     /* verbose       */ false,
@@ -167,9 +165,8 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -b, --batch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
     printf("  --memory-f32 <0|1>                (default: %s)\n", join(cmd_params_defaults.f32_kv, ",").c_str());
     printf("  -t, --threads <n>                 (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
-    printf("  -ngl N, --n-gpu-layers <n>        (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-    printf("  -mg i, --main-gpu <n>             (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
-    printf("  -lv, --low-vram <0|1>             (default: %s)\n", join(cmd_params_defaults.low_vram, ",").c_str());
+    printf("  -ngl, --n-gpu-layers <n>          (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+    printf("  -mg, --main-gpu <i>               (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -mmq, --mul-mat-q <0|1>           (default: %s)\n", join(cmd_params_defaults.mul_mat_q, ",").c_str());
     printf("  -ts, --tensor_split <ts0/ts1/..>               \n");
     printf("  -r, --repetitions <n>             (default: %d)\n", cmd_params_defaults.reps);
@@ -255,13 +252,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             params.main_gpu = split<int>(argv[i], split_delim);
-        } else if (arg == "-lv" || arg == "--low-vram") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            auto p = split<bool>(argv[i], split_delim);
-            params.low_vram.insert(params.low_vram.end(), p.begin(), p.end());
         } else if (arg == "-mmq" || arg == "--mul-mat-q") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -336,7 +326,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.n_gpu_layers.empty()) { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.mul_mat_q.empty())    { params.mul_mat_q = cmd_params_defaults.mul_mat_q; }
-    if (params.low_vram.empty())     { params.low_vram = cmd_params_defaults.low_vram; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
 
@@ -353,21 +342,34 @@ struct cmd_params_instance {
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
-    bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
 
-    llama_context_params to_llama_params() const {
-        llama_context_params lparams = llama_context_default_params();
-        lparams.n_ctx = n_prompt + n_gen;
-        lparams.n_batch = n_batch;
-        lparams.f16_kv = !f32_kv;
-        lparams.n_gpu_layers = n_gpu_layers;
-        lparams.main_gpu = main_gpu;
-        lparams.mul_mat_q = mul_mat_q;
-        lparams.low_vram = low_vram;
-        lparams.tensor_split = tensor_split.data();
+    llama_model_params to_llama_mparams() const {
+        llama_model_params mparams = llama_model_default_params();
 
-        return lparams;
+        mparams.n_gpu_layers = n_gpu_layers;
+        mparams.main_gpu = main_gpu;
+        mparams.tensor_split = tensor_split.data();
+
+        return mparams;
+    }
+
+    bool equal_mparams(const cmd_params_instance & other) const {
+        return model == other.model &&
+               n_gpu_layers == other.n_gpu_layers &&
+               main_gpu == other.main_gpu &&
+               tensor_split == other.tensor_split;
+    }
+
+    llama_context_params to_llama_cparams() const {
+        llama_context_params cparams = llama_context_default_params();
+
+        cparams.n_ctx = n_prompt + n_gen;
+        cparams.n_batch = n_batch;
+        cparams.f16_kv = !f32_kv;
+        cparams.mul_mat_q = mul_mat_q;
+
+        return cparams;
     }
 };
 
@@ -375,13 +377,12 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
     std::vector<cmd_params_instance> instances;
 
     for (const auto & m : params.model)
-    for (const auto & nb : params.n_batch)
-    for (const auto & fk : params.f32_kv)
     for (const auto & nl : params.n_gpu_layers)
     for (const auto & mg : params.main_gpu)
-    for (const auto & mmq : params.mul_mat_q)
-    for (const auto & lv : params.low_vram)
     for (const auto & ts : params.tensor_split)
+    for (const auto & nb : params.n_batch)
+    for (const auto & fk : params.f32_kv)
+    for (const auto & mmq : params.mul_mat_q)
     for (const auto & nt : params.n_threads) {
         cmd_params_instance instance = {
             /* .model        = */ m,
@@ -393,7 +394,6 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
             /* .n_gpu_layers = */ nl,
             /* .main_gpu     = */ mg,
             /* .mul_mat_q    = */ mmq,
-            /* .low_vram     = */ lv,
             /* .tensor_split = */ ts,
         };
         instances.push_back(instance);
@@ -404,6 +404,56 @@ static std::vector<cmd_params_instance> get_cmd_params_instances_int(const cmd_p
 static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_params & params) {
     std::vector<cmd_params_instance> instances;
 
+#if 1
+    // this ordering minimizes the number of times that each model needs to be reloaded
+    for (const auto & m : params.model)
+    for (const auto & nl : params.n_gpu_layers)
+    for (const auto & mg : params.main_gpu)
+    for (const auto & ts : params.tensor_split)
+    for (const auto & nb : params.n_batch)
+    for (const auto & fk : params.f32_kv)
+    for (const auto & mmq : params.mul_mat_q)
+    for (const auto & nt : params.n_threads) {
+        for (const auto & n_prompt : params.n_prompt) {
+            if (n_prompt == 0) {
+                continue;
+            }
+            cmd_params_instance instance = {
+                /* .model        = */ m,
+                /* .n_prompt     = */ n_prompt,
+                /* .n_gen        = */ 0,
+                /* .n_batch      = */ nb,
+                /* .f32_kv       = */ fk,
+                /* .n_threads    = */ nt,
+                /* .n_gpu_layers = */ nl,
+                /* .main_gpu     = */ mg,
+                /* .mul_mat_q    = */ mmq,
+                /* .tensor_split = */ ts,
+            };
+            instances.push_back(instance);
+        }
+
+        for (const auto & n_gen : params.n_gen) {
+            if (n_gen == 0) {
+                continue;
+            }
+            cmd_params_instance instance = {
+                /* .model        = */ m,
+                /* .n_prompt     = */ 0,
+                /* .n_gen        = */ n_gen,
+                /* .n_batch      = */ nb,
+                /* .f32_kv       = */ fk,
+                /* .n_threads    = */ nt,
+                /* .n_gpu_layers = */ nl,
+                /* .main_gpu     = */ mg,
+                /* .mul_mat_q    = */ mmq,
+                /* .tensor_split = */ ts,
+            };
+            instances.push_back(instance);
+        }
+    }
+#else
+    // this ordering separates the prompt and generation tests
     for (const auto & n_prompt : params.n_prompt) {
         if (n_prompt == 0) {
             continue;
@@ -419,6 +469,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
         auto instances_gen = get_cmd_params_instances_int(params, n_gen, 0);
         instances.insert(instances.end(), instances_gen.begin(), instances_gen.end());
     }
+#endif
 
     return instances;
 }
@@ -443,7 +494,6 @@ struct test {
     int n_gpu_layers;
     int main_gpu;
     bool mul_mat_q;
-    bool low_vram;
     std::array<float, LLAMA_MAX_DEVICES> tensor_split;
     int n_prompt;
     int n_gen;
@@ -463,7 +513,6 @@ struct test {
         n_gpu_layers = inst.n_gpu_layers;
         main_gpu = inst.main_gpu;
         mul_mat_q = inst.mul_mat_q;
-        low_vram = inst.low_vram;
         tensor_split = inst.tensor_split;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
@@ -524,7 +573,7 @@ struct test {
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_threads", "f16_kv",
-            "n_gpu_layers", "main_gpu", "mul_mat_q", "low_vram", "tensor_split",
+            "n_gpu_layers", "main_gpu", "mul_mat_q", "tensor_split",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts"
@@ -543,7 +592,7 @@ struct test {
             return INT;
         }
         if (field == "cuda" || field == "opencl" || field == "metal" || field == "gpu_blas" || field == "blas" ||
-            field == "f16_kv" || field == "mul_mat_q" || field == "low_vram") {
+            field == "f16_kv" || field == "mul_mat_q") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -574,7 +623,7 @@ struct test {
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_threads), std::to_string(!f32_kv),
-            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), std::to_string(low_vram), tensor_split_str,
+            std::to_string(n_gpu_layers), std::to_string(main_gpu), std::to_string(mul_mat_q), tensor_split_str,
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -606,9 +655,9 @@ struct printer {
     virtual ~printer() {}
 
     FILE * fout;
-    virtual void print_header(const cmd_params & params) { (void) params; };
+    virtual void print_header(const cmd_params & params) { (void) params; }
     virtual void print_test(const test & t) = 0;
-    virtual void print_footer() { };
+    virtual void print_footer() { }
 };
 
 struct csv_printer : public printer {
@@ -766,9 +815,6 @@ struct markdown_printer : public printer {
         if (params.mul_mat_q.size() > 1 || params.mul_mat_q != cmd_params_defaults.mul_mat_q) {
             fields.push_back("mul_mat_q");
         }
-        if (params.low_vram.size() > 1 || params.low_vram != cmd_params_defaults.low_vram) {
-            fields.push_back("low_vram");
-        }
         if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
             fields.push_back("tensor_split");
         }
@@ -889,21 +935,27 @@ struct sql_printer : public printer {
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
     std::vector<llama_token> tokens(n_batch, llama_token_bos(ctx));
     int n_processed = 0;
+
+    llama_set_n_threads(ctx, n_threads, n_threads);
+
     while (n_processed < n_prompt) {
         int n_tokens = std::min(n_prompt - n_processed, n_batch);
-        llama_eval(ctx, tokens.data(), n_tokens, n_past + n_processed, n_threads);
+        llama_decode(ctx, llama_batch_get_one(tokens.data(), n_tokens, n_past + n_processed, 0));
         n_processed += n_tokens;
     }
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
     llama_token token = llama_token_bos(ctx);
+
+    llama_set_n_threads(ctx, n_threads, n_threads);
+
     for (int i = 0; i < n_gen; i++) {
-        llama_eval(ctx, &token, 1, n_past + i, n_threads);
+        llama_decode(ctx, llama_batch_get_one(&token, 1, n_past + i, 0));
     }
 }
 
-static void llama_null_log_callback(enum llama_log_level level, const char * text, void * user_data) {
+static void llama_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
     (void) level;
     (void) text;
     (void) user_data;
@@ -958,17 +1010,25 @@ int main(int argc, char ** argv) {
 
     std::vector<cmd_params_instance> params_instances = get_cmd_params_instances(params);
 
-    for (const auto & inst : params_instances) {
-        // TODO: keep the model between tests when possible
-        llama_context_params lparams = inst.to_llama_params();
+    llama_model * lmodel = nullptr;
+    const cmd_params_instance * prev_inst = nullptr;
 
-        llama_model * lmodel  = llama_load_model_from_file(inst.model.c_str(), lparams);
-        if (lmodel == NULL) {
-            fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
-            return 1;
+    for (const auto & inst : params_instances) {
+        // keep the same model between tests when possible
+        if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
+            if (lmodel) {
+                llama_free_model(lmodel);
+            }
+
+            lmodel = llama_load_model_from_file(inst.model.c_str(), inst.to_llama_mparams());
+            if (lmodel == NULL) {
+                fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, inst.model.c_str());
+                return 1;
+            }
+            prev_inst = &inst;
         }
 
-        llama_context * ctx = llama_new_context_with_model(lmodel, lparams);
+        llama_context * ctx = llama_new_context_with_model(lmodel, inst.to_llama_cparams());
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, inst.model.c_str());
             llama_free_model(lmodel);
@@ -976,6 +1036,8 @@ int main(int argc, char ** argv) {
         }
 
         test t(inst, lmodel, ctx);
+
+        llama_kv_cache_tokens_rm(ctx, -1, -1);
 
         // warmup run
         if (t.n_prompt > 0) {
@@ -986,6 +1048,8 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = 0; i < params.reps; i++) {
+            llama_kv_cache_tokens_rm(ctx, -1, -1);
+
             uint64_t t_start = get_time_ns();
             if (t.n_prompt > 0) {
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
@@ -1002,8 +1066,9 @@ int main(int argc, char ** argv) {
         llama_print_timings(ctx);
 
         llama_free(ctx);
-        llama_free_model(lmodel);
     }
+
+    llama_free_model(lmodel);
 
     p->print_footer();
 

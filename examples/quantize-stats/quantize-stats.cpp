@@ -1,4 +1,5 @@
 #define LLAMA_API_INTERNAL
+#include "build-info.h"
 #include "common.h"
 #include "ggml.h"
 #include "llama.h"
@@ -308,21 +309,22 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
 
     {
-        auto lparams = llama_context_default_params();
+        auto mparams = llama_model_default_params();
+        mparams.use_mlock  = false;
 
-        lparams.n_ctx      = 256;
-        lparams.seed       = 1;
-        lparams.f16_kv     = false;
-        lparams.use_mlock  = false;
-
-        model = llama_load_model_from_file(params.model.c_str(), lparams);
+        model = llama_load_model_from_file(params.model.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
             return 1;
         }
 
-        ctx = llama_new_context_with_model(model, lparams);
+        auto cparams = llama_context_default_params();
+        cparams.n_ctx      = 256;
+        cparams.seed       = 1;
+        cparams.f16_kv     = false;
+
+        ctx = llama_new_context_with_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
