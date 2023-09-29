@@ -842,7 +842,7 @@ class SpecialVocab:
         tokenizer_file = path / 'tokenizer.json'
         if not tokenizer_file.is_file():
             return False
-        with open(tokenizer_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_file, encoding = 'utf-8') as f:
             tokenizer = json.load(f)
         if self.load_merges:
             merges = tokenizer.get('model', {}).get('merges')
@@ -852,7 +852,7 @@ class SpecialVocab:
         added_tokens = tokenizer.get('added_tokens')
         if added_tokens is None or not tokenizer_config_file.is_file():
             return True
-        with open(tokenizer_config_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
         for typ in self.special_token_types:
             entry = tokenizer_config.get(f'{typ}_token')
@@ -875,7 +875,7 @@ class SpecialVocab:
         config_file = path / 'config.json'
         if not config_file.is_file():
             return False
-        with open(config_file, 'r', encoding = 'utf-8') as f:
+        with open(config_file, encoding = 'utf-8') as f:
             config = json.load(f)
         for typ in self.special_token_types:
             maybe_token_id = config.get(f'{typ}_token_id')
@@ -883,7 +883,7 @@ class SpecialVocab:
                 self.special_token_ids[typ] = maybe_token_id
         return True
 
-    def add_to_gguf(self, gw: GGUFWriter):
+    def add_to_gguf(self, gw: GGUFWriter) -> None:
         if len(self.merges) > 0:
             print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
@@ -895,8 +895,8 @@ class SpecialVocab:
             print(f'gguf: Setting special token type {typ} to {tokid}')
             handler(tokid)
 
-    def __repr__(self):
-        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids if self.special_token_ids else "unset"}>'
+    def __repr__(self) -> str:
+        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids or "unset"}>'
 
 
 # Example usage:
