@@ -338,9 +338,6 @@ class BpeVocab:
 
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
-        from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
-        byte_encoder = tokenization_gpt2.bytes_to_unicode()
-        byte_decoder = {v: k for k, v in byte_encoder.items()}
         score = 0.0
         for i, item in enumerate(tokenizer):
             text: bytes = item.encode("utf-8")
