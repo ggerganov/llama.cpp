@@ -108,7 +108,7 @@ int main(int argc, char ** argv) {
     fflush(stderr);
 
     const int n_ctx   = llama_n_ctx(ctx);
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(model);
 
     std::vector<client> clients(n_clients);
     for (size_t i = 0; i < clients.size(); ++i) {
@@ -153,7 +153,7 @@ int main(int argc, char ** argv) {
             batch.logits[i] = false;
         }
 
-        if (llama_decode(ctx, batch, params.n_threads) != 0) {
+        if (llama_decode(ctx, batch) != 0) {
             LOG_TEE("%s: llama_decode() failed\n", __func__);
             return 1;
         }
@@ -272,7 +272,7 @@ int main(int argc, char ** argv) {
                 0, 0, 0, // unused
             };
 
-            const int ret = llama_decode(ctx, batch_view, params.n_threads);
+            const int ret = llama_decode(ctx, batch_view);
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size

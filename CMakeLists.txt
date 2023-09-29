@@ -414,37 +414,38 @@ endif()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
-        set(c_flags
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wcast-qual
-            -Wdouble-promotion
-            -Wshadow
-            -Wstrict-prototypes
-            -Wpointer-arith
-            -Wmissing-prototypes
-            -Werror=implicit-int
-            -Wno-unused-function
-        )
-        set(cxx_flags
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wcast-qual
-            -Wmissing-declarations
-            -Wno-unused-function
-            -Wno-multichar
-        )
-        if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            # g++ only
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation -Wno-array-bounds)
+        set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
+        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int
+            -Werror=implicit-function-declaration)
+        set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
+
+        if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+            set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
+            set(cxx_flags ${cxx_flags} -Wmissing-prototypes -Wextra-semi)
+
+            if (
+                (CMAKE_C_COMPILER_ID STREQUAL "Clang"      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 3.8.0) OR
+                (CMAKE_C_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 7.3.0)
+            )
+                set(c_flags ${c_flags} -Wdouble-promotion)
+            endif()
+        elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
+            set(c_flags ${c_flags} -Wdouble-promotion)
+            set(cxx_flags ${cxx_flags} -Wno-array-bounds)
+
+            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 7.1.0)
+                set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+            endif()
+            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 8.1.0)
+                set(cxx_flags ${cxx_flags} -Wextra-semi)
+            endif()
         endif()
     else()
         # todo : msvc
     endif()
 
     add_compile_options(
+            ${warning_flags}
             "$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
             "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
     )

@@ -45,6 +45,7 @@ models-mnt
 /main
 /metal
 /perplexity
+/q8dot
 /quantize
 /quantize-stats
 /result
@@ -52,6 +53,8 @@ models-mnt
 /server
 /simple
 /batched
+/export-lora
+/finetune
 /speculative
 /parallel
 /train-text-from-scratch

@@ -214,8 +214,8 @@
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
 #define GGML_MAX_DIMS          4
-#define GGML_MAX_NODES         4096
-#define GGML_MAX_PARAMS        256
+#define GGML_MAX_NODES         16384
+#define GGML_MAX_PARAMS        1024
 #define GGML_MAX_CONTEXTS      64
 #define GGML_MAX_SRC           6
 #define GGML_MAX_NAME          64
@@ -247,6 +247,14 @@
             abort(); \
         } \
     } while (0)
+
+#ifndef NDEBUG
+#define GGML_UNREACHABLE() GGML_ASSERT(!"statement should not be reached")
+#elif defined(__GNUC__)
+#define GGML_UNREACHABLE() __builtin_unreachable()
+#else
+#define GGML_UNREACHABLE() ((void) 0)
+#endif
 
 // used to copy the number of elements and stride in bytes of tensors into local variables.
 // main purpose is to reduce code duplication and improve readability.
@@ -473,8 +481,8 @@ extern "C" {
         int     n_dims;
         int64_t ne[GGML_MAX_DIMS]; // number of elements
         size_t  nb[GGML_MAX_DIMS]; // stride in bytes:
-                                   // nb[0] = sizeof(type)
-                                   // nb[1] = nb[0]   * ne[0] + padding
+                                   // nb[0] = ggml_type_size(type)
+                                   // nb[1] = nb[0]   * (ne[0] / ggml_blck_size(type)) + padding
                                    // nb[i] = nb[i-1] * ne[i-1]
 
         // compute data
@@ -526,7 +534,15 @@ extern "C" {
     // next prime after GGML_MAX_NODES
     // #define GGML_GRAPH_HASHTABLE_SIZE 4099
     // next prime after GGML_MAX_NODES * 2 (nodes + leafs)
-    #define GGML_GRAPH_HASHTABLE_SIZE 8273
+    // #define GGML_GRAPH_HASHTABLE_SIZE 8273
+    // #define GGML_GRAPH_HASHTABLE_SIZE 16411
+    #define GGML_GRAPH_HASHTABLE_SIZE 32771
+
+    enum ggml_cgraph_eval_order {
+        GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT = 0,
+        GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT,
+        GGML_CGRAPH_EVAL_ORDER_COUNT
+    };
 
     // computation graph
     struct ggml_cgraph {
@@ -538,6 +554,8 @@ extern "C" {
         struct ggml_tensor * leafs[GGML_MAX_NODES];
 
         void * visited_hash_table[GGML_GRAPH_HASHTABLE_SIZE];
+
+        enum ggml_cgraph_eval_order order;
 
         // performance
         int     perf_runs;
@@ -686,11 +704,20 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
     GGML_API struct ggml_tensor * ggml_set_f32 (struct ggml_tensor * tensor, float value);
 
+    // Converts a flat index into coordinates
+    GGML_API void    ggml_unravel_index(const struct ggml_tensor * tensor, int64_t i, int64_t * i0, int64_t * i1, int64_t * i2, int64_t * i3);
+
     GGML_API int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i);
     GGML_API void    ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value);
 
+    GGML_API int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
+    GGML_API void    ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, int32_t value);
+
     GGML_API float   ggml_get_f32_1d(const struct ggml_tensor * tensor, int i);
     GGML_API void    ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value);
+
+    GGML_API float   ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3);
+    GGML_API void    ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value);
 
     GGML_API void *  ggml_get_data    (const struct ggml_tensor * tensor);
     GGML_API float * ggml_get_data_f32(const struct ggml_tensor * tensor);
@@ -724,6 +751,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor * ggml_add_cast(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            enum   ggml_type      type);
 
     GGML_API struct ggml_tensor * ggml_add1(
             struct ggml_context * ctx,
@@ -834,6 +867,7 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
+    // sums repetitions in a into shape of b
     GGML_API struct ggml_tensor * ggml_repeat_back(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -1689,6 +1723,16 @@ extern "C" {
     // dump the graph into a file using the dot format
     GGML_API void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph * gf, const char * filename);
 
+    // build gradient checkpointing backward graph gb for gf using provided checkpoints
+    // gb_tmp will contain original backward graph with rewritten backward process nodes,
+    // but without the second forward pass nodes.
+    GGML_API void ggml_build_backward_gradient_checkpointing(
+            struct ggml_context   * ctx,
+            struct ggml_cgraph    * gf,
+            struct ggml_cgraph    * gb,
+            struct ggml_cgraph    * gb_tmp,
+            struct ggml_tensor  * * checkpoints,
+            int                     n_checkpoints);
     //
     // optimization
     //
@@ -1723,7 +1767,7 @@ extern "C" {
         GGML_LINESEARCH_INVALID_PARAMETERS,
     };
 
-    typedef void (*ggml_opt_callback)(void * data, float * sched);
+    typedef void (*ggml_opt_callback)(void * data, int accum_step, float * sched, bool * cancel);
     typedef void (*ggml_log_callback)(enum ggml_log_level level, const char * text, void * user_data);
 
     // optimization parameters
@@ -1754,6 +1798,8 @@ extern "C" {
 
         bool print_forward_graph;
         bool print_backward_graph;
+
+        int n_gradient_accumulation;
 
         // ADAM parameters
         struct {
@@ -1800,6 +1846,7 @@ extern "C" {
         float loss_after;
 
         struct {
+            struct ggml_tensor * g;  // current gradient
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
             struct ggml_tensor * pf; // past function values
@@ -1916,26 +1963,26 @@ extern "C" {
 
     GGML_API int          gguf_get_n_kv(const struct gguf_context * ctx);
     GGML_API int          gguf_find_key(const struct gguf_context * ctx, const char * key);
-    GGML_API const char * gguf_get_key (const struct gguf_context * ctx, int i);
+    GGML_API const char * gguf_get_key (const struct gguf_context * ctx, int key_id);
 
-    GGML_API enum gguf_type gguf_get_kv_type (const struct gguf_context * ctx, int i);
-    GGML_API enum gguf_type gguf_get_arr_type(const struct gguf_context * ctx, int i);
+    GGML_API enum gguf_type gguf_get_kv_type (const struct gguf_context * ctx, int key_id);
+    GGML_API enum gguf_type gguf_get_arr_type(const struct gguf_context * ctx, int key_id);
 
-    // results are undefined if the wrong type is used for the key
-    GGML_API uint8_t      gguf_get_val_u8  (const struct gguf_context * ctx, int i);
-    GGML_API int8_t       gguf_get_val_i8  (const struct gguf_context * ctx, int i);
-    GGML_API uint16_t     gguf_get_val_u16 (const struct gguf_context * ctx, int i);
-    GGML_API int16_t      gguf_get_val_i16 (const struct gguf_context * ctx, int i);
-    GGML_API uint32_t     gguf_get_val_u32 (const struct gguf_context * ctx, int i);
-    GGML_API int32_t      gguf_get_val_i32 (const struct gguf_context * ctx, int i);
-    GGML_API float        gguf_get_val_f32 (const struct gguf_context * ctx, int i);
-    GGML_API uint64_t     gguf_get_val_u64 (const struct gguf_context * ctx, int i);
-    GGML_API int64_t      gguf_get_val_i64 (const struct gguf_context * ctx, int i);
-    GGML_API double       gguf_get_val_f64 (const struct gguf_context * ctx, int i);
-    GGML_API bool         gguf_get_val_bool(const struct gguf_context * ctx, int i);
-    GGML_API const char * gguf_get_val_str (const struct gguf_context * ctx, int i);
-    GGML_API int          gguf_get_arr_n   (const struct gguf_context * ctx, int i);
-    GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int i);
+    // will abort if the wrong type is used for the key
+    GGML_API uint8_t      gguf_get_val_u8  (const struct gguf_context * ctx, int key_id);
+    GGML_API int8_t       gguf_get_val_i8  (const struct gguf_context * ctx, int key_id);
+    GGML_API uint16_t     gguf_get_val_u16 (const struct gguf_context * ctx, int key_id);
+    GGML_API int16_t      gguf_get_val_i16 (const struct gguf_context * ctx, int key_id);
+    GGML_API uint32_t     gguf_get_val_u32 (const struct gguf_context * ctx, int key_id);
+    GGML_API int32_t      gguf_get_val_i32 (const struct gguf_context * ctx, int key_id);
+    GGML_API float        gguf_get_val_f32 (const struct gguf_context * ctx, int key_id);
+    GGML_API uint64_t     gguf_get_val_u64 (const struct gguf_context * ctx, int key_id);
+    GGML_API int64_t      gguf_get_val_i64 (const struct gguf_context * ctx, int key_id);
+    GGML_API double       gguf_get_val_f64 (const struct gguf_context * ctx, int key_id);
+    GGML_API bool         gguf_get_val_bool(const struct gguf_context * ctx, int key_id);
+    GGML_API const char * gguf_get_val_str (const struct gguf_context * ctx, int key_id);
+    GGML_API int          gguf_get_arr_n   (const struct gguf_context * ctx, int key_id);
+    GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_arr_str (const struct gguf_context * ctx, int key_id, int i);
 
     GGML_API int    gguf_get_n_tensors    (const struct gguf_context * ctx);

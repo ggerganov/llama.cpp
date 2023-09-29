@@ -9,6 +9,8 @@ add_library(${TARGET} OBJECT
     console.cpp
     grammar-parser.h
     grammar-parser.cpp
+    train.h
+    train.cpp
     )
 
 if (BUILD_SHARED_LIBS)

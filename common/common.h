@@ -36,6 +36,7 @@ int32_t get_num_physical_cores();
 struct gpt_params {
     uint32_t seed                           = -1;   // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
+    int32_t n_threads_batch                 = -1;   // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_predict                       = -1;   // new tokens to predict
     int32_t n_ctx                           = 512;  // context size
     int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
@@ -85,8 +86,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
-    std::string lora_adapter = "";  // lora adapter path
-    std::string lora_base    = "";  // base model path for the lora adapter
+    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
+    std::string lora_base  = "";                              // base model path for the lora adapter
 
     int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
@@ -95,7 +96,6 @@ struct gpt_params {
     bool hellaswag         = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
-    bool low_vram          = false; // if true, reduce VRAM usage at the cost of performance
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
@@ -126,13 +126,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
 
+std::string get_system_info(const gpt_params & params);
+
 std::string gpt_random_prompt(std::mt19937 & rng);
+
+void process_escapes(std::string& input);
 
 //
 // Model utils
 //
 
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
+struct llama_model_params   llama_model_params_from_gpt_params(const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 //
@@ -142,7 +147,12 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
 std::vector<llama_token> llama_tokenize(
-        struct llama_context * ctx,
+  const struct llama_context * ctx,
+           const std::string & text,
+                        bool   add_bos);
+
+std::vector<llama_token> llama_tokenize(
+    const struct llama_model * model,
            const std::string & text,
                         bool   add_bos);
 

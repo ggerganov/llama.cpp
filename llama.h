@@ -149,18 +149,10 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
-    struct llama_context_params {
-        uint32_t seed;         // RNG seed, -1 for random
-        int32_t  n_ctx;        // text context
-        int32_t  n_batch;      // prompt processing batch size
-        int32_t  n_gpu_layers; // number of layers to store in VRAM
-        int32_t  main_gpu;     // the GPU that is used for scratch and small tensors
-
+    struct llama_model_params {
+        int32_t n_gpu_layers; // number of layers to store in VRAM
+        int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
-
-        // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float    rope_freq_base;  // RoPE base frequency
-        float    rope_freq_scale; // RoPE frequency scaling factor
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
@@ -168,13 +160,26 @@ extern "C" {
         void * progress_callback_user_data;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool low_vram;   // if true, reduce VRAM usage at the cost of performance
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
-        bool f16_kv;     // use fp16 for KV cache
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
+    };
+
+    struct llama_context_params {
+        uint32_t seed;            // RNG seed, -1 for random
+        uint32_t n_ctx;           // text context
+        uint32_t n_batch;         // prompt processing batch size
+        uint32_t n_threads;       // number of threads to use for generation
+        uint32_t n_threads_batch; // number of threads to use for batch processing
+
+        // ref: https://github.com/ggerganov/llama.cpp/pull/2054
+        float rope_freq_base;  // RoPE base frequency
+        float rope_freq_scale; // RoPE frequency scaling factor
+
+        // Keep the booleans together to avoid misalignment during copy-by-value.
+        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
+        bool f16_kv;     // use fp16 for KV cache
+        bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool embedding;  // embedding mode only
     };
 
@@ -236,6 +241,7 @@ extern "C" {
     };
 
     // Helpers for getting default parameters
+    LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
     LLAMA_API struct llama_model_quantize_params llama_model_quantize_default_params(void);
 
@@ -249,7 +255,7 @@ extern "C" {
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
-            struct llama_context_params   params);
+            struct llama_model_params     params);
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 
@@ -266,17 +272,15 @@ extern "C" {
     LLAMA_API bool llama_mmap_supported (void);
     LLAMA_API bool llama_mlock_supported(void);
 
-    LLAMA_API int llama_n_vocab    (const struct llama_context * ctx);
+    LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
+
     LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
-    LLAMA_API int llama_n_ctx_train(const struct llama_context * ctx);
-    LLAMA_API int llama_n_embd     (const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_context * ctx);
+    LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 
-    LLAMA_API int llama_model_n_vocab    (const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx      (const struct llama_model * model);
-    LLAMA_API int llama_model_n_ctx_train(const struct llama_model * model);
-    LLAMA_API int llama_model_n_embd     (const struct llama_model * model);
+    LLAMA_API int llama_n_vocab    (const struct llama_model * model);
+    LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
+    LLAMA_API int llama_n_embd     (const struct llama_model * model);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
@@ -286,6 +290,9 @@ extern "C" {
 
     // Returns the total number of parameters in the model
     LLAMA_API uint64_t llama_model_n_params(const struct llama_model * model);
+
+    // Get a llama model tensor
+    LLAMA_API struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const char * name);
 
     // Returns 0 on success
     LLAMA_API int llama_model_quantize(
@@ -302,15 +309,17 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_apply_lora_from_file(
             struct llama_context * ctx,
                       const char * path_lora,
+                           float   scale,
                       const char * path_base_model,
                              int   n_threads),
             "use llama_model_apply_lora_from_file instead");
 
     LLAMA_API int llama_model_apply_lora_from_file(
             const struct llama_model * model,
-                          const char * path_lora,
-                          const char * path_base_model,
-                                 int   n_threads);
+                      const char * path_lora,
+                           float   scale,
+                      const char * path_base_model,
+                             int   n_threads);
 
     //
     // KV cache
@@ -404,8 +413,7 @@ extern "C" {
             struct llama_context * ctx,
                      llama_token * tokens,
                          int32_t   n_tokens,
-                             int   n_past,
-                             int   n_threads),
+                             int   n_past),
             "use llama_decode() instead");
 
     // Same as llama_eval, but use float matrix input directly.
@@ -414,8 +422,7 @@ extern "C" {
             struct llama_context * ctx,
                            float * embd,
                          int32_t   n_tokens,
-                             int   n_past,
-                             int   n_threads),
+                             int   n_past),
             "use llama_decode() instead");
 
     // Return batch for single sequence of tokens starting at pos_0
@@ -447,8 +454,12 @@ extern "C" {
     // < 0 - error
     LLAMA_API int llama_decode(
             struct llama_context * ctx,
-              struct llama_batch   batch,
-                             int   n_threads);
+              struct llama_batch   batch);
+
+    // Set the number of threads used for decoding
+    // n_threads is the number of threads used for generation (single token)
+    // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
+    LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
     // Token logits obtained from the last call to llama_eval()
     // The logits for the last token are stored in the last row
@@ -489,14 +500,6 @@ extern "C" {
     // Returns the number of tokens on success, no more than n_max_tokens
     // Returns a negative number on failure - the number of tokens that would have been returned
     LLAMA_API int llama_tokenize(
-            struct llama_context * ctx,
-                      const char * text,
-                             int   text_len,
-                     llama_token * tokens,
-                             int   n_max_tokens,
-                            bool   add_bos);
-
-    LLAMA_API int llama_tokenize_with_model(
         const struct llama_model * model,
                       const char * text,
                              int   text_len,
@@ -509,12 +512,6 @@ extern "C" {
     // Does not write null terminator to the buffer.
     // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
     LLAMA_API int llama_token_to_piece(
-            const struct llama_context * ctx,
-                           llama_token   token,
-                                  char * buf,
-                                  int    length);
-
-    LLAMA_API int llama_token_to_piece_with_model(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
@@ -695,15 +692,13 @@ extern "C" {
     /// @param n_beams Number of beams to use.
     /// @param n_past Number of tokens already evaluated.
     /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-    /// @param n_threads Number of threads as passed to llama_eval().
     LLAMA_API void llama_beam_search(
                    struct llama_context * ctx,
         llama_beam_search_callback_fn_t   callback,
                                    void * callback_data,
                                  size_t   n_beams,
                                     int   n_past,
-                                    int   n_predict,
-                                    int   n_threads);
+                                    int   n_predict);
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
