@@ -54,6 +54,12 @@
 
 #define VK_NUM_TYPES 16
 
+#ifndef K_QUANTS_PER_ITERATION
+#define K_QUANTS_PER_ITERATION 1
+#else
+static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUANTS_PER_ITERATION must be 1 or 2");
+#endif
+
 typedef void (*ggml_vk_func_t)(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
 
 struct vk_buffer {
@@ -714,6 +720,9 @@ static inline bool ggml_vk_build_shader_type_defines(std::stringstream& stream, 
     case GGML_TYPE_Q8_0:
         stream << shader_q8_0_defines << (compat ? shader_q8_0_dequant_func_compat : shader_q8_0_dequant_func);
         return true;
+    case GGML_TYPE_Q6_K:
+        stream << shader_q6_K_defines;
+        return true;
     default:
         return false;
     }
@@ -789,9 +798,20 @@ static void ggml_vk_generate_shaders() {
             continue;
         }
 
-        stream << dequant_body;
+        int work_group_denom;
 
-        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_string("dequant_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {256*32, 1, 1}, {}, 1);
+        switch ((ggml_type)i) {
+        case GGML_TYPE_Q6_K:
+            stream << dequant_q6_K_body;
+            work_group_denom = 64 * 4;
+            break;
+        default:
+            stream << dequant_body;
+            work_group_denom = 256 * 32;
+            break;
+        }
+
+        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_string("dequant_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {work_group_denom, 1, 1}, {}, 1);
     }
 
     // mul mat vec
@@ -808,10 +828,17 @@ static void ggml_vk_generate_shaders() {
             continue;
         }
 
-        stream << mul_mat_vec_body;
+        switch ((ggml_type)i) {
+        case GGML_TYPE_Q6_K:
+            stream << mul_mat_vec_q6_K_body;
+            break;
+        default:
+            stream << mul_mat_vec_body;
+            break;
+        }
 
-        vk_pipeline_dequant_mul_mat_vec[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "B_TYPE", "float", "D_TYPE", "float16_t" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-        vk_pipeline_dequant_mul_mat_vec_f32[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)) + "_f32", stream.str(), { "B_TYPE", "float", "D_TYPE", "float" }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "B_TYPE", "float", "D_TYPE", "float16_t", "K_QUANTS_PER_ITERATION", std::to_string(K_QUANTS_PER_ITERATION) }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[i] = ggml_vk_create_pipeline_from_string("mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i)) + "_f32", stream.str(), { "B_TYPE", "float", "D_TYPE", "float", "K_QUANTS_PER_ITERATION", std::to_string(K_QUANTS_PER_ITERATION) }, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
     }
 
     // add
@@ -1049,6 +1076,7 @@ static inline vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q6_K:
             break;
         default:
             return nullptr;
@@ -1068,6 +1096,7 @@ static inline vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bo
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q6_K:
             break;
         default:
             return nullptr;
@@ -1205,7 +1234,7 @@ void ggml_vk_host_free(void* ptr) {
         }
     }
     if (buf == nullptr) {
-        fprintf(stderr, "WARNING: to free pinned memory: memory not in map\n");
+        fprintf(stderr, "WARNING: failed to free pinned memory: memory not in map\n");
         return;
     }
 
