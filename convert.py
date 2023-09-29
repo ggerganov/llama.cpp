@@ -439,7 +439,7 @@ Vocab: TypeAlias = 'BpeVocab | SentencePieceVocab'
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
     #print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
-        n_head = n_head_kv
+        n_head //= n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                 .swapaxes(1, 2)
                 .reshape(weights.shape))
@@ -701,18 +701,13 @@ class LazyUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str) -> Any:
         if not module.startswith('torch'):
             return super().find_class(module, name)
-        if (module, name) in self.CLASSES:
-            return self.CLASSES[(module, name)]
-        else:
-            print(f'Missing mapping for {module}.{name}')
-            raise KeyError
+        return self.CLASSES[(module, name)]
 
 
 def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
     zf = zipfile.ZipFile(outer_fp)
     pickle_paths = [name for name in zf.namelist() if name.endswith('.pkl')]
     assert len(pickle_paths) == 1, pickle_paths
-    print(pickle_paths)
     pickle_fp = zf.open(pickle_paths[0], 'r')
     unpickler = LazyUnpickler(pickle_fp,
                               data_base_path=pickle_paths[0][:-4],

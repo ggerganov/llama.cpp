@@ -21,7 +21,7 @@ def file_is_safetensors(path: Path) -> bool:
 
 def get_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
-    print('gguf: get sentencepiece tokenizer from', tokenizer_path)
+    print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
     tokenizer = SentencePieceProcessor(str(tokenizer_path))  
     tokens: list[bytes] = []
     scores: list[float] = []
@@ -55,20 +55,20 @@ def get_tokenizer_info(dir_model: Path):
     return tokens, scores, toktypes
 
 
-def main(args_in: list[str] | None = None) -> None:
+def get_args():
     parser = argparse.ArgumentParser(description="Convert a Persimmon model from Adept (e.g. Persimmon 8b chat) to a GGML compatible file")
-    parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
-    parser.add_argument("--outtype",     choices=["f32"],        help="currently only support fp32")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.safetensors)")
-    parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
-    args = parser.parse_args(args_in)
+    args = parser.parse_args()
+    return args
 
+
+def main() -> None:
+    args = get_args()
     assert file_is_safetensors(args.model), 'Error: model file is not a SafeTensors file'
     dir_model = args.model.parent
     with open(dir_model / 'config.json', 'r') as f:
         hparams = json.load(f)
-    pprint(hparams)
     arch = gguf.MODEL_ARCH.PERSIMMON
     gguf_writer = gguf.GGUFWriter(args.outfile, gguf.MODEL_ARCH_NAMES[arch])
     
@@ -88,14 +88,14 @@ def main(args_in: list[str] | None = None) -> None:
     gguf_writer.add_head_count_kv(head_count_kv)
     gguf_writer.add_rope_freq_base(hparams['rotary_emb_base'])
     gguf_writer.add_layer_norm_eps(hparams['layernorm_epsilon'])
-    if True:
-        tokens, scores, toktypes = get_tokenizer_info(dir_model)
-        gguf_writer.add_tokenizer_model('llama')
-        gguf_writer.add_token_list(tokens)
-        gguf_writer.add_token_scores(scores)
-        gguf_writer.add_token_types(toktypes)
-        gguf_writer.add_bos_token_id(71013)
-        gguf_writer.add_eos_token_id(71013)
+    tokens, scores, toktypes = get_tokenizer_info(dir_model)
+    gguf_writer.add_tokenizer_model('llama')
+    gguf_writer.add_token_list(tokens)
+    gguf_writer.add_token_scores(scores)
+    gguf_writer.add_token_types(toktypes)
+    gguf_writer.add_bos_token_id(71013)
+    gguf_writer.add_eos_token_id(71013)
+
     tensor_map = gguf.get_tensor_name_map(arch, block_count)
     print(tensor_map)
     tensors = {}
