@@ -824,18 +824,21 @@ class SpecialVocab:
     special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
     special_token_ids: dict[str, int] = {}
 
-    def __init__(self, path: Path, load_merges: bool = False, special_token_types: tuple[str, ...] | None = None):
+    def __init__(
+        self, path: str | os.PathLike[str], load_merges: bool = False,
+        special_token_types: tuple[str, ...] | None = None,
+    ):
         self.special_token_ids = {}
         self.load_merges = load_merges
         if special_token_types is not None:
             self.special_token_types = special_token_types
-        self.load(path)
+        self._load(Path(path))
 
-    def load(self, path: Path):
-        if not self.try_load_from_tokenizer_json(path):
-            self.try_load_from_config_json(path)
+    def _load(self, path: Path) -> None:
+        if not self._try_load_from_tokenizer_json(path):
+            self._try_load_from_config_json(path)
 
-    def try_load_from_tokenizer_json(self, path: Path) -> bool:
+    def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
         if not tokenizer_file.is_file():
             return False
@@ -868,7 +871,7 @@ class SpecialVocab:
                 break
         return True
 
-    def try_load_from_config_json(self, path: Path) -> bool:
+    def _try_load_from_config_json(self, path: Path) -> bool:
         config_file = path / 'config.json'
         if not config_file.is_file():
             return False
