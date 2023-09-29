@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(model);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = llama_detokenize_bpe(ctx, std::vector<int>(1, i));
