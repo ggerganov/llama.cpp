@@ -250,7 +250,7 @@ static std::string codepoint_to_utf8(uint32_t cp) {
 
 static std::string codepoints_to_utf8(const std::vector<uint32_t>& cps) {
     std::string result;
-    for (auto i = 0; i < cps.size(); ++i) {
+    for (size_t i = 0; i < cps.size(); ++i) {
         result.append(codepoint_to_utf8(cps[i]));
     }
     return result;
@@ -315,7 +315,7 @@ static std::vector<uint16_t> codepoint_to_utf16(uint32_t cp) {
 
 static std::vector<uint16_t> codepoints_to_utf16(const std::vector<uint32_t>& cps) {
     std::vector<uint16_t> result;
-    for (auto i = 0; i < cps.size(); ++i) {
+    for (size_t i = 0; i < cps.size(); ++i) {
         auto temp = codepoint_to_utf16(cps[i]);
         result.insert(result.end(), temp.begin(), temp.end());
     }
