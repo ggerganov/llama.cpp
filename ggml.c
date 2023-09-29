@@ -4345,50 +4345,6 @@ void ggml_print_objects(const struct ggml_context * ctx) {
     GGML_PRINT("%s: --- end ---\n", __func__);
 }
 
-static void ggml_print_tensor(const struct ggml_tensor * tensor) {
-    GGML_PRINT("Tensor (null): %s | rank %d | shape (", ggml_type_name(tensor->type), tensor->n_dims);
-    for (int i=0; i<tensor->n_dims; ++i) {
-        GGML_PRINT("%lld ", tensor->ne[i]);
-    }
-    GGML_PRINT(") | strides (");
-    for (int i=0; i<tensor->n_dims; ++i) {
-        GGML_PRINT("%lld ", tensor->nb[i]);
-    }
-    GGML_PRINT(")\n");
-}
-
-static void ggml_print_tensor_values(const struct ggml_tensor * tensor, int starts[], int dim, int nelts) {
-    GGML_ASSERT(tensor->type == GGML_TYPE_F32);
-    GGML_PRINT("Printing values for tensor %s[", tensor->name);
-    for (int i=0; i<tensor->n_dims; ++i) {
-        GGML_ASSERT(starts[i] >= 0);
-        if (i == dim) {
-            if (starts[i] > 0)  {
-                GGML_PRINT("%d:%d", starts[i], starts[i]+nelts);
-            } else {
-                GGML_PRINT(":%d", starts[i]+nelts);
-            }
-        } else {
-            GGML_PRINT("%d", starts[i]);
-        }
-        if (i<tensor->n_dims-1) {
-            GGML_PRINT(",");
-        }
-    }
-    GGML_PRINT("]\n");
-    float *data_ptr = (float *) tensor->data;
-    int offset = 0;
-    for (int j = 0; j < tensor->n_dims; j++) {
-        offset += (starts[j] * tensor->nb[j]) / ggml_type_size(GGML_TYPE_F32);
-    }
-    data_ptr += offset;
-    for (int i = 0; i < nelts; i++) {
-        GGML_PRINT("%f ", *data_ptr);
-        data_ptr += tensor->nb[dim] / ggml_type_size(GGML_TYPE_F32);
-    }
-    GGML_PRINT("\n");
-}
-
 int64_t ggml_nelements(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
@@ -6442,7 +6398,6 @@ struct ggml_tensor * ggml_mul_mat(
 
     const int64_t ne[4] = { a->ne[1], b->ne[1], b->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(a->n_dims, b->n_dims), ne);
-    //GGML_PRINT("ggml_mul_mat result shape : (%lld, %lld, %lld, %lld)\n", ne[0], ne[1], ne[2], ne[3]);
 
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -11205,7 +11160,6 @@ static void ggml_compute_forward_norm_f32(
     }
 
     GGML_ASSERT(src0->nb[0] == sizeof(float));
-    // If the name starts with "layer_inputs", and we are on thread 0, print the tensor
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -12322,16 +12276,8 @@ static void ggml_compute_forward_view(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0) {
     // NOP
-    if (strncmp(src0->name, "cache_k", 7) == 0 && params->ith == 0) { 
-        /*
-        GGML_PRINT("\noutputs of cache_k for view%s\n", src0->name);
-        ggml_print_tensor(src0);
-        int starts[] = {4096 * };
-        ggml_print_tensor_values(src0, starts, 0, 10);
-        */
-    }
-    //UNUSED(params);
-    //UNUSED(src0);
+    UNUSED(params);
+    UNUSED(src0);
 }
 
 // ggml_compute_forward_permute

@@ -234,7 +234,7 @@ class TensorNameMap:
             "transformer.word_embeddings", # falcon
             "model.embed_tokens",          # llama-hf
             "tok_embeddings",              # llama-pth
-            "language_model.embedding.word_embeddings", # adept
+            "language_model.embedding.word_embeddings", # persimmon
         ),
 
         # Position embeddings
@@ -247,7 +247,7 @@ class TensorNameMap:
             "embed_out", # gptneox
             "lm_head",   # gpt2 mpt falcon llama-hf baichuan
             "output",    # llama-pth
-            "word_embeddings_for_head", # adept
+            "word_embeddings_for_head", # persimmon
         ),
 
         # Output norm
@@ -256,7 +256,7 @@ class TensorNameMap:
             "transformer.ln_f",          # gpt2 falcon
             "model.norm",                # llama-hf baichuan
             "norm",                      # llama-pth
-            "language_model.encoder.final_layernorm", # adept
+            "language_model.encoder.final_layernorm", # persimmon
         ),
 
         # Rope frequencies
@@ -275,7 +275,7 @@ class TensorNameMap:
             "transformer.h.{bid}.ln_mlp",            # falcon40b
             "model.layers.{bid}.input_layernorm",    # llama-hf
             "layers.{bid}.attention_norm",           # llama-pth
-            "language_model.encoder.layers.{bid}.input_layernorm", # adept
+            "language_model.encoder.layers.{bid}.input_layernorm", # persimmon
         ),
 
         # Attention norm 2
@@ -289,7 +289,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.c_attn",                    # gpt2
             "transformer.blocks.{bid}.attn.Wqkv",                 # mpt
             "transformer.h.{bid}.self_attention.query_key_value", # falcon
-            "language_model.encoder.layers.{bid}.self_attention.query_key_value", # adept
+            "language_model.encoder.layers.{bid}.self_attention.query_key_value", # persimmon
         ),
 
         # Attention query
@@ -318,7 +318,7 @@ class TensorNameMap:
             "transformer.h.{bid}.self_attention.dense", # falcon
             "model.layers.{bid}.self_attn.o_proj",      # llama-hf
             "layers.{bid}.attention.wo",                # llama-pth
-            "language_model.encoder.layers.{bid}.self_attention.dense" # adept
+            "language_model.encoder.layers.{bid}.self_attention.dense" # persimmon
         ),
 
         # Rotary embeddings
@@ -334,7 +334,7 @@ class TensorNameMap:
             "transformer.blocks.{bid}.norm_2",                # mpt
             "model.layers.{bid}.post_attention_layernorm",    # llama-hf
             "layers.{bid}.ffn_norm",                          # llama-pth
-            "language_model.encoder.layers.{bid}.post_attention_layernorm", # adept
+            "language_model.encoder.layers.{bid}.post_attention_layernorm", # persimmon
         ),
 
         # Feed-forward up
@@ -345,7 +345,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.dense_h_to_4h",   # falcon
             "model.layers.{bid}.mlp.up_proj",          # llama-hf
             "layers.{bid}.feed_forward.w3",            # llama-pth
-            "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h", # adept
+            "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h", # persimmon
         ),
 
         # Feed-forward gate
@@ -362,7 +362,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.dense_4h_to_h",   # falcon
             "model.layers.{bid}.mlp.down_proj",        # llama-hf
             "layers.{bid}.feed_forward.w2",            # llama-pth
-            "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h", # adept
+            "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h", # persimmon
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -374,7 +374,7 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (
-            "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq", # adept
+            "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq", # persimmon
         )
     }
 

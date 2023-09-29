@@ -7088,7 +7088,6 @@ struct llama_context * llama_new_context_with_model(
             llama_free(ctx);
             return nullptr;
         }
-        LLAMA_LOG_INFO("Kv self cache: %7.2f MB\n", ggml_nbytes(ctx->kv_self.k) / 1024.0 / 1024.0);
 
         {
             const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
