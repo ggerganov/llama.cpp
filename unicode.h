@@ -224,7 +224,7 @@ static const std::vector<std::pair<uint32_t, uint32_t>> control_ranges = {
 
 static std::string codepoint_to_utf8(uint32_t cp) {
     std::string result;
-    if (0x00 <= cp && cp <= 0x7f) {
+    if (/* 0x00 <= cp && */ cp <= 0x7f) {
         result.push_back(cp);
     }
     else if (0x80 <= cp && cp <= 0x7ff) {
@@ -300,7 +300,7 @@ static std::vector<uint32_t> codepoints_from_utf8(const std::string& utf8) {
 
 static std::vector<uint16_t> codepoint_to_utf16(uint32_t cp) {
     std::vector<uint16_t> result;
-    if (0x0000 <= cp && cp <= 0xffff) {
+    if (/* 0x0000 <= cp && */ cp <= 0xffff) {
         result.emplace_back(cp);
     }
     else if (0x10000 <= cp && cp <= 0x10ffff) {
