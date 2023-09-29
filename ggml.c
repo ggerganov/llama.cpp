@@ -8831,6 +8831,12 @@ static void ggml_compute_forward_dup(
         struct ggml_tensor * dst) {
     if (ggml_is_contiguous(src0) && ggml_is_contiguous(dst) && src0->type == dst->type) {
         ggml_compute_forward_dup_same_cont(params, src0, dst);
+        if (strncmp(src0->name, "printme_tmp_", 12) == 0 && params->ith == 0) { 
+            GGML_PRINT("\noutputs of dupe for %s\n", src0->name);
+            ggml_print_tensor(dst);
+            int starts[] = {0, 0, 0, 0};
+            ggml_print_tensor_values(dst, starts, 0, 10);
+        }
         return;
     }
     switch (src0->type) {
@@ -8846,6 +8852,12 @@ static void ggml_compute_forward_dup(
             {
                 GGML_ASSERT(false);
             } break;
+    }
+    if (strncmp(src0->name, "printme_tmp_", 12) == 0 && params->ith == 0) { 
+        GGML_PRINT("\noutputs of dupe for %s\n", src0->name);
+        ggml_print_tensor(dst);
+        int starts[] = {0, 0, 0, 0};
+        ggml_print_tensor_values(dst, starts, 0, 10);
     }
 }
 
@@ -8926,10 +8938,8 @@ static void ggml_compute_forward_add_f32(
         ||strncmp(src1->name, "printme", 7) == 0)
         && params->ith == 0) { 
         GGML_PRINT("\noutputs of add: %s + %s\n", src0->name, src1->name);
-        ggml_print_tensor(src0);
-        ggml_print_tensor(src1);
         ggml_print_tensor(dst);
-        int starts[] = {0, 0, 0};
+        int starts[] = {0, 0, 0, 0};
         ggml_print_tensor_values(dst, starts, 0, 10);
     }
 }
@@ -10918,7 +10928,7 @@ static void ggml_compute_forward_norm_f32(
         && params->ith == 0) {
         GGML_PRINT("\nlayernorm inputs for %s\n", src0->name);
         ggml_print_tensor(src0);
-        int starts[] = {0, 0, 0};
+        int starts[] = {0, 1, 0};
         ggml_print_tensor_values(src0, starts, 0, 10);
     }
 
@@ -11344,19 +11354,36 @@ static void ggml_compute_forward_mul_mat(
               struct ggml_tensor * dst) {
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
-    if (
-        strncmp(src1->name, "printme", 7) == 0
+    if ((strncmp(src0->name, "printme", 7) == 0 ||
+        strncmp(src1->name, "printme", 7) == 0)
         && params->ith == 0) { 
         GGML_PRINT("\nInputs to matmul: %s\n", src1->name);
-        ggml_print_tensor(src1);
         size_t offset = 0;//(src1->ne[0] * src1->ne[1])
-        for (int i=0; i < src1->ne[0] * src1->ne[1]; ++i) {
-            if (i % src1->ne[0] == 0) {
+        size_t x = src1->ne[0];
+        size_t y = src1->ne[1];
+        for (int i=0; i < x * y; ++i) {
+            if (i % x == 0) {
                 GGML_PRINT("\n");
             }
-            GGML_PRINT(" %f ", ((float *)src1->data)[i + offset]);
+            if (i % x < 4) {
+                GGML_PRINT(" %f ", ((float *)src1->data)[i + offset]);
+            }
         }
         GGML_PRINT("\n");
+        /*
+        GGML_PRINT("\nInputs to matmul: %s\n", src0->name);
+        ggml_print_tensor(src0);
+        if (src0->type == GGML_TYPE_F16) {
+            for (int i=0; i < src0->ne[0] * src0->ne[1]; ++i) {
+                if (i % src0->ne[0] == 0) {
+                    GGML_PRINT("\n");
+                }
+                GGML_PRINT(" %f", ((ggml_fp16_t *) src0->data)[i]);
+            }
+        }
+        GGML_PRINT("\n");
+        */
+
     }
 
     GGML_TENSOR_BINARY_OP_LOCALS;
@@ -11753,6 +11780,12 @@ static void ggml_compute_forward_scale_f32(
         }
         ggml_vec_scale_f32(nc, (float *) ((char *) dst->data + i1*nb1), v);
     }
+    if (strncmp(src0->name, "printme", 7) == 0 && params->ith == 0) { 
+        GGML_PRINT("\nInputs of scale: %s\n", dst->name);
+        ggml_print_tensor(src0);
+        int starts[4] = {0, 0, 0, 0};
+        ggml_print_tensor_values(src0, starts, 0, 32);
+    }
 }
 
 static void ggml_compute_forward_scale(
@@ -11910,8 +11943,16 @@ static void ggml_compute_forward_view(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0) {
     // NOP
-    UNUSED(params);
-    UNUSED(src0);
+    if (strncmp(src0->name, "cache_k", 7) == 0 && params->ith == 0) { 
+        /*
+        GGML_PRINT("\noutputs of cache_k for view%s\n", src0->name);
+        ggml_print_tensor(src0);
+        int starts[] = {4096 * };
+        ggml_print_tensor_values(src0, starts, 0, 10);
+        */
+    }
+    //UNUSED(params);
+    //UNUSED(src0);
 }
 
 // ggml_compute_forward_permute
@@ -12895,7 +12936,7 @@ static void ggml_compute_forward_rope_f32(
     if (strncmp(src0->name, "printme", 7) == 0 && params->ith == 0) { 
         GGML_PRINT("\n dest at RoPE time for %s\n", src0->name);
         // print shape and strides
-        int starts[4] = {0,0,1,0};
+        int starts[3] = {0,0,1};
         ggml_print_tensor(dst);
         ggml_print_tensor_values(dst, starts, 0, 10);
     }
