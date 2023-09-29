@@ -1939,6 +1939,14 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_PERSIMMON:
+        {
+            GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+            switch (hparams.n_layer) {
+                case 36: model.type = e_model::MODEL_8B; break;
+                default: model.type = e_model::MODEL_UNKNOWN;
+            }
+        }
         default: (void)0;
     }
 
@@ -4037,8 +4045,7 @@ static struct ggml_cgraph * llm_build_persimmon(
     const float freq_base  = cparams.rope_freq_base;
     const float freq_scale = cparams.rope_freq_scale;
 
-    float norm_eps = 1e-5f;//: hparams.f_norm_eps;
-    LLAMA_LOG_INFO("norm_eps: %f\n", hparams.f_norm_eps);
+    float norm_eps = hparams.f_norm_eps;
 
     const int32_t n_tokens    = batch.n_tokens;
     const int32_t n_kv        = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
@@ -4068,11 +4075,6 @@ static struct ggml_cgraph * llm_build_persimmon(
             memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
         }
         ggml_set_name(inp_tokens, "inp_tokens");
-        LLAMA_LOG_INFO("Input tokens are: [");
-        for (int i = 0; i < n_tokens; ++i) {
-            LLAMA_LOG_INFO("%d, ", batch.token[i]);
-        }
-        LLAMA_LOG_INFO("]\n");
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
@@ -4401,7 +4403,6 @@ static struct ggml_cgraph * llm_build_persimmon(
         cur = ggml_mul(ctx0, cur, model.output_norm);
         offload_func_nr(cur);
 
-        ggml_set_name(cur, "printme_final");
         cur = ggml_add(ctx0, cur, model.output_norm_b);
         // offload_func_nr(cur);
 
