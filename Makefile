@@ -542,6 +542,7 @@ main: examples/main/main.cpp                                  build-info.h ggml.
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
 infill: examples/infill/infill.cpp                            build-info.h ggml.o llama.o common.o console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
