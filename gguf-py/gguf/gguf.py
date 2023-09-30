@@ -212,10 +212,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     # TODO
 }
 
-MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
-    m: {t: TENSOR_NAMES[t] for t in ts} for m, ts in MODEL_TENSORS.items()
-}
-
 # tensors that will not be serialized
 MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.LLAMA: [
@@ -363,28 +359,24 @@ class TensorNameMap:
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
 
-    tensor_names: dict[MODEL_TENSOR, str]
-
     def __init__(self, arch: MODEL_ARCH, n_blocks: int):
-        mapping = self.mapping = {}
-        tensor_names = self.tensor_names = MODEL_TENSOR_NAMES[arch]
+        self.mapping = {}
         for tensor, keys in self.mappings_cfg.items():
-            tensor_name = tensor_names.get(tensor)
-            if tensor_name is None:
+            if tensor not in MODEL_TENSORS[ARCH]:
                 continue
-            mapping[tensor_name] = (tensor, tensor_name)
+            tensor_name = TENSOR_NAMES[tensor]
+            self.mapping[tensor_name] = (tensor, tensor_name)
             for key in keys:
-                mapping[key] = (tensor, tensor_name)
+                self.mapping[key] = (tensor, tensor_name)
         for bid in range(n_blocks):
             for tensor, keys in self.block_mappings_cfg.items():
-                tensor_name = tensor_names.get(tensor)
-                if tensor_name is None:
+                if tensor not in MODEL_TENSORS[ARCH]:
                     continue
-                tensor_name = tensor_name.format(bid = bid)
-                mapping[tensor_name] = (tensor, tensor_name)
+                tensor_name = TENSOR_NAMES[tensor].format(bid = bid)
+                self.mapping[tensor_name] = (tensor, tensor_name)
                 for key in keys:
                     key = key.format(bid = bid)
-                    mapping[key] = (tensor, tensor_name)
+                    self.mapping[key] = (tensor, tensor_name)
 
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
         result = self.mapping.get(key)
