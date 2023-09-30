@@ -390,7 +390,6 @@ struct llama_server_context
 
         // compare the evaluated prompt with the new prompt
         n_past = common_part(embd, prompt_tokens);
-        printf("n_past: %d\n", n_past);
         embd = prompt_tokens;
         if (n_past == num_prompt_tokens)
         {
