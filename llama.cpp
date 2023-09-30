@@ -1926,7 +1926,11 @@ static void llm_load_hparams(
         case LLM_ARCH_MPT:
             {
                 GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
-                GGUF_GET_KEY(ctx, hparams.f_clamp_kqv, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_CLAMP_KQV));
+                if (gguf_find_key(ctx, kv(LLM_KV_ATTENTION_CLAMP_KQV).c_str()) >= 0) {
+                    GGUF_GET_KEY(ctx, hparams.f_clamp_kqv, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_CLAMP_KQV));
+                } else {
+                    hparams.f_clamp_kqv = 0.0f;
+                }
                 GGUF_GET_KEY(ctx, hparams.f_max_alibi_bias, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_MAX_ALIBI_BIAS));
 
                 switch (hparams.n_layer) {
