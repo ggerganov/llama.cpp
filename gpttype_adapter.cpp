@@ -832,7 +832,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         n_vocab = llama_n_vocab(llama_ctx_v4);
 
         //determine mem per token
-        const std::vector<int> tmp = {1, 2, 3, 4};
+        std::vector<int> tmp = {1, 2, 3, 4};
         auto er = llama_eval(llama_ctx_v4, tmp.data(), tmp.size(), 0, params.n_threads);
         if(er!=0)
         {
@@ -1465,7 +1465,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         ::utreplace(tmp, "\n", "\\n");
         outstr += tmp;
 
-        outstr += "\n\n[Debug: Context Size = " + std::to_string(current_context_tokens.size()) + "]\n";
+        outstr += "\n\n[Debug: n_past="+std::to_string(n_past)+" Context Size = " + std::to_string(current_context_tokens.size()) + "]\n";
         tmp = "";
         for (auto id : current_context_tokens)
         {

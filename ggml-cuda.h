@@ -31,6 +31,7 @@ GGML_API void   ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tens
 
 GGML_API void   ggml_cuda_assign_buffers_no_alloc(struct ggml_tensor * tensor);
 GGML_API void   ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset);
+GGML_API void   ggml_cuda_copy_to_device(struct ggml_tensor * tensor);
 
 GGML_API void   ggml_cuda_set_main_device(int main_device);
 GGML_API void   ggml_cuda_set_mul_mat_q(bool mul_mat_q);
