@@ -4044,8 +4044,10 @@ static struct ggml_cgraph * llm_build_persimmon(
 
     const float freq_base  = cparams.rope_freq_base;
     const float freq_scale = cparams.rope_freq_scale;
+    const float norm_eps = hparams.f_norm_eps;
 
-    float norm_eps = hparams.f_norm_eps;
+    const int n_gpu_layers = model.n_gpu_layers;
+
 
     const int32_t n_tokens    = batch.n_tokens;
     const int32_t n_kv        = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
@@ -4083,6 +4085,8 @@ static struct ggml_cgraph * llm_build_persimmon(
             memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
         }
     }
+    const int i_gpu_start = n_layer - n_gpu_layers;
+    (void) i_gpu_start;
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
     offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
