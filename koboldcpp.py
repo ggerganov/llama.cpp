@@ -279,7 +279,7 @@ def load_model(model_filename):
     return ret
 
 def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], use_default_badwordsids=True, stream_sse=False, grammar='', genkey=''):
-    global maxctx, args, currentusergenkey
+    global maxctx, args, currentusergenkey, totalgens
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
     inputs.prompt = prompt.encode("UTF-8")
@@ -330,6 +330,7 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
         else:
             inputs.stop_sequence[n] = stop_sequence[n].encode("UTF-8")
     currentusergenkey = genkey
+    totalgens += 1
     ret = handle.generate(inputs,outputs)
     if(ret.status==1):
         return ret.text.decode("UTF-8","ignore")
@@ -366,6 +367,7 @@ showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
 exitcounter = 0
+totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
 args = None #global args
 
@@ -515,7 +517,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def do_GET(self):
-        global maxctx, maxhordelen, friendlymodelname, KcppVersion, streamLock
+        global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens
         self.path = self.path.rstrip('/')
         response_body = None
 
@@ -570,7 +572,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
-            if requestsinqueue==0:
+            if requestsinqueue==0 and totalgens>0:
                 pendtxt = handle.get_pending_output()
                 pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
@@ -595,7 +597,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         return
 
     def do_POST(self):
-        global modelbusy, requestsinqueue, currentusergenkey
+        global modelbusy, requestsinqueue, currentusergenkey, totalgens
         content_length = int(self.headers['Content-Length'])
         body = self.rfile.read(content_length)
         self.path = self.path.rstrip('/')
@@ -637,9 +639,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 multiuserkey = ""
                 pass
 
-            if (multiuserkey!="" and multiuserkey==currentusergenkey) or requestsinqueue==0:
-                pendtxt = handle.get_pending_output()
-                pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
+            if totalgens>0:
+                if (multiuserkey!="" and multiuserkey==currentusergenkey) or requestsinqueue==0:
+                    pendtxt = handle.get_pending_output()
+                    pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             self.send_response(200)
             self.end_headers()
             self.wfile.write(json.dumps({"results": [{"text": pendtxtStr}]}).encode())
@@ -790,10 +793,13 @@ def show_new_gui():
         import tkinter as tk
         root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file or .kcpps config")
         root.destroy()
+        if args.model_param and args.model_param!="" and args.model_param.lower().endswith('.kcpps'):
+            print("\nLoading configuration...")
+            loadconfigfile(args.model_param)
         if not args.model_param:
-            print("\nNo ggml model file was selected. Exiting.")
+            print("\nNo ggml model or kcpps file was selected. Exiting.")
             time.sleep(3)
             sys.exit(2)
         return
@@ -1180,7 +1186,7 @@ def show_new_gui():
     # launch
     def guilaunch():
         if model_var.get() == "":
-            tmp = askopenfilename(title="Select ggml model .bin or .gguf files")
+            tmp = askopenfilename(title="Select ggml model .bin or .gguf file")
             model_var.set(tmp)
         nonlocal nextstate
         nextstate = 1
@@ -1556,7 +1562,7 @@ def show_old_gui():
 
         root = tk.Tk()
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file")
         root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
@@ -1566,7 +1572,7 @@ def show_old_gui():
     else:
         root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf files")
+        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file")
         root.destroy()
         if not args.model_param:
             print("\nNo ggml model file was selected. Exiting.")
@@ -1785,16 +1791,19 @@ def unload_libs():
         del handle
         handle = None
 
+def loadconfigfile(filename):
+    with open(filename, 'r') as f:
+        config = json.load(f)
+        for key, value in config.items():
+            setattr(args, key, value)
+
 def main(launch_args,start_server=True):
     global args
     args = launch_args
     embedded_kailite = None
-    if args.config:
-        if isinstance(args.config, str) and os.path.exists(args.config):
-            with open(args.config, 'r') as f:
-                config = json.load(f)
-            for key, value in config.items():
-                setattr(args, key, value)
+    if args.config and len(args.config)==1:
+        if isinstance(args.config[0], str) and os.path.exists(args.config[0]):
+           loadconfigfile(args.config[0])
         else:
             print("Specified kcpp config file invalid or not found.")
             time.sleep(3)
@@ -1955,7 +1964,7 @@ if __name__ == '__main__':
     parser.add_argument("--host", help="Host IP to listen on. If empty, all routable interfaces are accepted.", default="")
     parser.add_argument("--launch", help="Launches a web browser when load is completed.", action='store_true')
     parser.add_argument("--lora", help="LLAMA models only, applies a lora file on top of model. Experimental.", metavar=('[lora_filename]', '[lora_base]'), nargs='+')
-    parser.add_argument("--config", help="Load settings from a .kcpps file. Other arguments will be ignored", type=str, nargs='?')
+    parser.add_argument("--config", help="Load settings from a .kcpps file. Other arguments will be ignored", type=str, nargs=1)
     physical_core_limit = 1
     if os.cpu_count()!=None and os.cpu_count()>1:
         physical_core_limit = int(os.cpu_count()/2)
