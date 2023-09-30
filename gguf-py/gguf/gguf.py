@@ -120,6 +120,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+    MODEL_TENSOR.POS_EMBD:      "position_embd",
     MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
     MODEL_TENSOR.OUTPUT:        "output",
     MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
@@ -212,7 +213,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
 }
 
 MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
-    {t: TENSOR_NAMES[t] for t in ts} for m, ts in MODEL_TENSORS.items()
+    m: {t: TENSOR_NAMES[t] for t in ts} for m, ts in MODEL_TENSORS.items()
 }
 
 # tensors that will not be serialized
