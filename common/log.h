@@ -225,31 +225,31 @@ enum LogTriState
 //  USE LOG() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_IMPL(str, ...)                                                                                          \
-    {                                                                                                               \
+    #define LOG_IMPL(str, ...)                                                                                      \
+    do {                                                                                                            \
         if (LOG_TARGET != nullptr)                                                                                  \
         {                                                                                                           \
             fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, __VA_ARGS__); \
             fflush(LOG_TARGET);                                                                                     \
         }                                                                                                           \
-    }
+    } while (0)
 #else
-    #define LOG_IMPL(str, ...)                                                                                               \
-    {                                                                                                                    \
+    #define LOG_IMPL(str, ...)                                                                                           \
+    do {                                                                                                                 \
         if (LOG_TARGET != nullptr)                                                                                       \
         {                                                                                                                \
             fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", ##__VA_ARGS__); \
             fflush(LOG_TARGET);                                                                                          \
         }                                                                                                                \
-    }
+    } while (0)
 #endif
 
 // INTERNAL, DO NOT USE
 //  USE LOG_TEE() INSTEAD
 //
 #ifndef _MSC_VER
-    #define LOG_TEE_IMPL(str, ...)                                                                                                          \
-    {                                                                                                                                   \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                      \
+    do {                                                                                                                                \
         if (LOG_TARGET != nullptr)                                                                                                      \
         {                                                                                                                               \
             fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL, __VA_ARGS__);                     \
@@ -260,10 +260,10 @@ enum LogTriState
             fprintf(LOG_TEE_TARGET, LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL, __VA_ARGS__); \
             fflush(LOG_TEE_TARGET);                                                                                                     \
         }                                                                                                                               \
-    }
+    } while (0)
 #else
-    #define LOG_TEE_IMPL(str, ...)                                                                                                               \
-    {                                                                                                                                        \
+    #define LOG_TEE_IMPL(str, ...)                                                                                                           \
+    do {                                                                                                                                     \
         if (LOG_TARGET != nullptr)                                                                                                           \
         {                                                                                                                                    \
             fprintf(LOG_TARGET, LOG_TIMESTAMP_FMT LOG_FLF_FMT str "%s" LOG_TIMESTAMP_VAL LOG_FLF_VAL "", ##__VA_ARGS__);                     \
@@ -274,7 +274,7 @@ enum LogTriState
             fprintf(LOG_TEE_TARGET, LOG_TEE_TIMESTAMP_FMT LOG_TEE_FLF_FMT str "%s" LOG_TEE_TIMESTAMP_VAL LOG_TEE_FLF_VAL "", ##__VA_ARGS__); \
             fflush(LOG_TEE_TARGET);                                                                                                          \
         }                                                                                                                                    \
-    }
+    } while (0)
 #endif
 
 // The '\0' as a last argument, is a trick to bypass the silly
@@ -435,41 +435,41 @@ inline FILE *log_handler() { return log_handler1_impl(); }
 inline void log_test()
 {
     log_disable();
-    LOG("01 Hello World to nobody, because logs are disabled!\n")
+    LOG("01 Hello World to nobody, because logs are disabled!\n");
     log_enable();
-    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET))
-    LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n")
+    LOG("02 Hello World to default output, which is \"%s\" ( Yaaay, arguments! )!\n", LOG_STRINGIZE(LOG_TARGET));
+    LOG_TEE("03 Hello World to **both** default output and " LOG_TEE_TARGET_STRING "!\n");
     log_set_target(stderr);
-    LOG("04 Hello World to stderr!\n")
-    LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n")
+    LOG("04 Hello World to stderr!\n");
+    LOG_TEE("05 Hello World TEE with double printing to stderr prevented!\n");
     log_set_target(LOG_DEFAULT_FILE_NAME);
-    LOG("06 Hello World to default log file!\n")
+    LOG("06 Hello World to default log file!\n");
     log_set_target(stdout);
-    LOG("07 Hello World to stdout!\n")
+    LOG("07 Hello World to stdout!\n");
     log_set_target(LOG_DEFAULT_FILE_NAME);
-    LOG("08 Hello World to default log file again!\n")
+    LOG("08 Hello World to default log file again!\n");
     log_disable();
-    LOG("09 Hello World _1_ into the void!\n")
+    LOG("09 Hello World _1_ into the void!\n");
     log_enable();
-    LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n")
+    LOG("10 Hello World back from the void ( you should not see _1_ in the log or the output )!\n");
     log_disable();
     log_set_target("llama.anotherlog.log");
-    LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n")
+    LOG("11 Hello World _2_ to nobody, new target was selected but logs are still disabled!\n");
     log_enable();
-    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n")
+    LOG("12 Hello World this time in a new file ( you should not see _2_ in the log or the output )?\n");
     log_set_target("llama.yetanotherlog.log");
-    LOG("13 Hello World this time in yet new file?\n")
+    LOG("13 Hello World this time in yet new file?\n");
     log_set_target(log_filename_generator("llama_autonamed", "log"));
-    LOG("14 Hello World in log with generated filename!\n")
+    LOG("14 Hello World in log with generated filename!\n");
 #ifdef _MSC_VER
-    LOG_TEE("15 Hello msvc TEE without arguments\n")
-    LOG_TEE("16 Hello msvc TEE with (%d)(%s) arguments\n", 1, "test")
-    LOG_TEELN("17 Hello msvc TEELN without arguments\n")
-    LOG_TEELN("18 Hello msvc TEELN with (%d)(%s) arguments\n", 1, "test")
-    LOG("19 Hello msvc LOG without arguments\n")
-    LOG("20 Hello msvc LOG with (%d)(%s) arguments\n", 1, "test")
-    LOGLN("21 Hello msvc LOGLN without arguments\n")
-    LOGLN("22 Hello msvc LOGLN with (%d)(%s) arguments\n", 1, "test")
+    LOG_TEE("15 Hello msvc TEE without arguments\n");
+    LOG_TEE("16 Hello msvc TEE with (%d)(%s) arguments\n", 1, "test");
+    LOG_TEELN("17 Hello msvc TEELN without arguments\n");
+    LOG_TEELN("18 Hello msvc TEELN with (%d)(%s) arguments\n", 1, "test");
+    LOG("19 Hello msvc LOG without arguments\n");
+    LOG("20 Hello msvc LOG with (%d)(%s) arguments\n", 1, "test");
+    LOGLN("21 Hello msvc LOGLN without arguments\n");
+    LOGLN("22 Hello msvc LOGLN with (%d)(%s) arguments\n", 1, "test");
 #endif
 }
 
@@ -542,7 +542,7 @@ inline void log_dump_cmdline_impl(int argc, char **argv)
             buf << " " << argv[i];
         }
     }
-    LOGLN("Cmd:%s", buf.str().c_str())
+    LOGLN("Cmd:%s", buf.str().c_str());
 }
 
 #define log_tostr(var) log_var_to_string_impl(var).c_str()
@@ -620,10 +620,10 @@ inline std::string log_var_to_string_impl(const std::vector<int> & var)
 #define LOGLN(...) // dummy stub
 
 #undef LOG_TEE
-#define LOG_TEE(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+#define LOG_TEE(...) fprintf(stderr, __VA_ARGS__) // convert to normal fprintf
 
 #undef LOG_TEELN
-#define LOG_TEELN(...) fprintf(stderr, __VA_ARGS__); // convert to normal fprintf
+#define LOG_TEELN(...) fprintf(stderr, __VA_ARGS__) // convert to normal fprintf
 
 #undef LOG_DISABLE
 #define LOG_DISABLE() // dummy stub

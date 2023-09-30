@@ -755,10 +755,9 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
         case 7: return "He";
         case 8: return "She";
         case 9: return "They";
-        default: return "To";
     }
 
-    return "The";
+    GGML_UNREACHABLE();
 }
 
 //

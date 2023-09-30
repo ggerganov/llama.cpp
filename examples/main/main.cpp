@@ -852,7 +852,7 @@ int main(int argc, char ** argv) {
     llama_backend_free();
 
 #ifndef LOG_DISABLE_LOGS
-    LOG_TEE("Log end\n")
+    LOG_TEE("Log end\n");
 #endif // LOG_DISABLE_LOGS
 
     return 0;

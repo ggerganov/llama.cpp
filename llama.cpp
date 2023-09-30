@@ -449,7 +449,7 @@ struct LLM_TN {
 //
 
 #define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-{ \
+do { \
     const std::string skey(key); \
     const int kid = gguf_find_key(ctx, skey.c_str()); \
     if (kid >= 0) { \
@@ -461,7 +461,7 @@ struct LLM_TN {
     } else if (req) { \
         throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
     } \
-}
+} while (0)
 
 //
 // ggml helpers
@@ -1913,7 +1913,7 @@ static void llm_load_hparams(
                 }
             } break;
         default: (void)0;
-    };
+    }
 
     model.ftype = ml.ftype;
 }
@@ -2438,7 +2438,7 @@ static void llm_load_tensors(
                 } break;
             default:
                 throw std::runtime_error("unknown architecture");
-        };
+        }
     }
 
     ml.done_getting_tensors();
@@ -3981,7 +3981,7 @@ static struct ggml_cgraph * llama_build_graph(
             } break;
         default:
             GGML_ASSERT(false);
-    };
+    }
 
     return result;
 }
@@ -4626,7 +4626,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 llm_tokenizer_bpe tokenizer(vocab);
                 tokenizer.tokenize(raw_text, output);
             } break;
-    };
+    }
 
     return output;
 }
@@ -6027,7 +6027,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         nthread = std::thread::hardware_concurrency();
     }
 
-    llama_model_loader ml(fname_inp, /*use_mmap*/ false);
+    // mmap consistently increases speed Linux, and also increases speed on Windows with
+    // hot cache. It may cause a slowdown on macOS, possibly related to free memory.
+#if defined(__linux__) || defined(_WIN32)
+    constexpr bool use_mmap = true;
+#else
+    constexpr bool use_mmap = false;
+#endif
+
+    llama_model_loader ml(fname_inp, use_mmap);
+    if (ml.use_mmap) {
+        ml.mapping.reset(new llama_mmap(&ml.file, /* prefetch */ 0, ggml_is_numa()));
+    }
 
     llama_model model;
     llm_load_arch(ml, model);
@@ -6105,10 +6116,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         const std::string name = ggml_get_name(tensor);
 
-        if (read_data.size() < ggml_nbytes(tensor)) {
-            read_data.resize(ggml_nbytes(tensor));
+        if (!ml.use_mmap) {
+            if (read_data.size() < ggml_nbytes(tensor)) {
+                read_data.resize(ggml_nbytes(tensor));
+            }
+            tensor->data = read_data.data();
         }
-        tensor->data = read_data.data();
         ml.load_data_for(tensor);
 
         LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
@@ -7520,7 +7533,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             buf[2] = '\x85';
             return 3;
         } else if (llama_is_control_token(model->vocab, token)) {
-            ;
+            // do nothing
         } else if (llama_is_byte_token(model->vocab, token)) {
             if (length < 1) {
                 return -1;

@@ -655,9 +655,9 @@ struct printer {
     virtual ~printer() {}
 
     FILE * fout;
-    virtual void print_header(const cmd_params & params) { (void) params; };
+    virtual void print_header(const cmd_params & params) { (void) params; }
     virtual void print_test(const test & t) = 0;
-    virtual void print_footer() { };
+    virtual void print_footer() { }
 };
 
 struct csv_printer : public printer {
