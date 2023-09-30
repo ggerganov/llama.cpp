@@ -6511,10 +6511,12 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         const std::string name = ggml_get_name(meta);
 
         // TODO: avoid hardcoded tensor names - use the TN_* constants
-        if (name.find("attn_v.weight") != std::string::npos) {
+        if (name.find("attn_v.weight") != std::string::npos ||
+            name.find("attn.Wqkv.weight") != std::string::npos) {
             ++n_attention_wv;
         }
-        else if (name.find("ffn_down.weight") != std::string::npos) {
+        else if (name.find("ffn_down.weight") != std::string::npos ||
+                 name.find("ffn.down_proj.weight") != std::string::npos) {
             ++n_feed_forward_w2;
         }
     }
