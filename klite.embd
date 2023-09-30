@@ -2895,6 +2895,7 @@ Current version: 72
 	var pending_response_horde = text_hordes[0]; //the url to poll for pending response from a v2 submit
 	var poll_in_progress = false; //are we currently waiting for a text generation
 	var poll_ticks_passed = 0; //how much time passed after polling
+	var horde_poll_nearly_completed = false; //if true, increase polling rate
 	var prev_hl_chunk = null; //will store the last highlighted element
 	var pending_context_preinjection = ""; //this will be injected before the AI's next RESPONSE
 	var current_memory = ""; //stored memory
@@ -6365,6 +6366,7 @@ Current version: 72
 		synchro_polled_response = null;
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
+		horde_poll_nearly_completed = false;
 	}
 
 	function restart_new_game() {
@@ -6526,6 +6528,7 @@ Current version: 72
 		{
 			synchro_polled_response = synchro_pending_stream;
 			poll_in_progress = false;
+			horde_poll_nearly_completed = false;
 			poll_pending_response();
 		}
 
@@ -7640,7 +7643,9 @@ Current version: 72
 		if (localsettings.opmode == 3) {
 			//sometimes the bot repeats its own name at the very start. if that happens, trim it away.
 			let oppomatch = localsettings.chatopponent + "\: ";
+			let oppomatchwithNL = "\n" + localsettings.chatopponent + "\: ";
 			let foundOppoName = gentxt.indexOf(oppomatch);
+			let foundOppoNameWithNL = gentxt.indexOf(oppomatchwithNL);
 			if(localsettings.chatopponent!="" && foundOppoName==0)
 			{
 				gentxt = gentxt.substring(oppomatch.length);
@@ -7655,6 +7660,10 @@ Current version: 72
 			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
 			{
 				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
+			}
+			else if (foundOppoNameWithNL > 0) //split by oppo name
+			{
+				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
 			}
 			else //if no name found
 			{
@@ -7892,8 +7901,8 @@ Current version: 72
 	{
 		++poll_ticks_passed;
 
-		//for horde requests, slow down by 3 times
-		if(!is_using_custom_ep() && poll_ticks_passed%3!=0)
+		//for horde requests, slow down by 3 times unless almost done
+		if(!is_using_custom_ep() && poll_ticks_passed%3!=0 && !horde_poll_nearly_completed)
 		{
 			return;
 		}
@@ -8009,6 +8018,7 @@ Current version: 72
 												console.log("Finished " + pending_response_id + ": " + JSON.stringify(data));
 												pending_response_id = "";
 												poll_in_progress = false;
+												horde_poll_nearly_completed = false;
 												if (data.generations != null && data.generations.length > 0) {
 													let gentxt = data.generations[0].text;
 													let genworker = data.generations[0].worker_name;
@@ -8035,6 +8045,7 @@ Current version: 72
 								else {
 									//still waiting, do nothing until next poll
 									poll_in_progress = false;
+									horde_poll_nearly_completed = false;
 									//depending on the queue_position, set loader color
 									let mtl = document.getElementById("maintxtloader");
 									if (mtl) {
@@ -8044,6 +8055,10 @@ Current version: 72
 											mtl.classList.add("redloader");
 										} else if (data.processing == 1 && data.queue_position == 0) {
 											mtl.classList.add("greenloader");
+											if(data.wait_time<=3)
+											{
+												horde_poll_nearly_completed = true;
+											}
 										}
 										let oln = document.getElementById("outerloadernum");
 										if(oln)
@@ -8328,9 +8343,10 @@ Current version: 72
 				else {
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
 				}
+				let nowmode = (localsettings.opmode==1?"Story Mode":(localsettings.opmode==2?"Adventure Mode":(localsettings.opmode==3?"Chat Mode":"Instruct Mode")));
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
 					+ selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
-					+ "." + whorun +".<br><br>Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
+					+ "." + whorun +".<br><br><b><span class=\"color_orange\">"+ nowmode +" Selected</span></b> - Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
 			}
 
 			//kick out of edit mode
