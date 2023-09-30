@@ -135,7 +135,7 @@ int main(int argc, char ** argv) {
             k_prompts.resize(index + 1);
             k_prompts[index] = prompt;
             index++;
-            std::cout << std::setw(3) << std::right << index << " prompt: " << prompt << std::endl;
+            std::cout << std::setw(2) << std::right << index << " prompt: " << prompt << std::endl;
         }
     }
 
@@ -395,14 +395,14 @@ int main(int argc, char ** argv) {
     printDateTime();
 
     LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
-    LOG_TEE("\n");
+    std::cout << "external prompt file (if any): " << params.prompt_file << "\n\n";
 
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total speed (AVG):   %6s  speed: %5.2f t/s\n", "",             (double) (n_total_prompt + n_total_gen) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Cache misses:        %6d\n", n_cache_miss);
 
-    LOG_TEE("\n\n");
+    LOG_TEE("\n");
 
     llama_print_timings(ctx);
 
