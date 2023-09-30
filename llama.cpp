@@ -377,15 +377,15 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
     {
         LLM_ARCH_MPT,
         {
-            { LLM_TENSOR_TOKEN_EMBD,      "wte" },
-            { LLM_TENSOR_OUTPUT_NORM,     "norm_f" },
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
             { LLM_TENSOR_OUTPUT,          "output" },
-            { LLM_TENSOR_ATTN_NORM,       "blk.%d.norm_1" },
-            { LLM_TENSOR_FFN_NORM,        "blk.%d.norm_2" },
-            { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn.Wqkv" },
-            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn.out_proj" },
-            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn.down_proj" },
-            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn.up_proj" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
+            { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
     {
@@ -6516,11 +6516,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         // TODO: avoid hardcoded tensor names - use the TN_* constants
         if (name.find("attn_v.weight") != std::string::npos ||
-            name.find("attn.Wqkv.weight") != std::string::npos) {
+            name.find("attn_qkv.weight") != std::string::npos) {
             ++n_attention_wv;
         }
-        else if (name.find("ffn_down.weight") != std::string::npos ||
-                 name.find("ffn.down_proj.weight") != std::string::npos) {
+        else if (name.find("ffn_down.weight") != std::string::npos) {
             ++n_feed_forward_w2;
         }
     }

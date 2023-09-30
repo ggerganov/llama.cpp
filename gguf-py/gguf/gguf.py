@@ -186,17 +186,17 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
     MODEL_ARCH.MPT: {
-        MODEL_TENSOR.TOKEN_EMBD:    "wte",
-        MODEL_TENSOR.OUTPUT_NORM:   "norm_f",
+        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
         # note: MPT output is tied to (same as) wte in original model;
         # for easier implementation in llama.cpp it's duplicated in GGUF, though :/
         MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.norm_1",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.norm_2",
-        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn.Wqkv",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn.out_proj",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn.down_proj",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn.up_proj",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
     MODEL_ARCH.GPT2: {
         # TODO
