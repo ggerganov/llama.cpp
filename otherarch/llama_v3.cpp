@@ -1592,10 +1592,11 @@ static struct ggml_cgraph * llama_v3_build_graph(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-
             struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-            offload_func_kq(KQ_pos);
             ggml_set_name(KQ_pos, "KQ_pos");
+
+#ifdef LLAMA_V3_USE_ALLOCATOR
+            offload_func_kq(KQ_pos); //don't offload rope for cublas, its broken now since ring buffer was added
             ggml_allocr_alloc(lctx.alloc, KQ_pos);
             if (!ggml_allocr_is_measure(lctx.alloc)) {
                int * data = (int *) KQ_pos->data;
@@ -1603,6 +1604,14 @@ static struct ggml_cgraph * llama_v3_build_graph(
                     data[i] = n_past + i;
                 }
             }
+#else
+            {
+                int * data = (int *) KQ_pos->data;
+                for (int i = 0; i < N; ++i) {
+                    data[i] = n_past + i;
+                }
+            }
+#endif
 
             struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(Kcur);

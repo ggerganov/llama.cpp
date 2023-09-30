@@ -4066,6 +4066,25 @@ Current version: 72
 		render_gametext();
 	}
 
+	function load_agnai_wi(obj,chatopponent,myname)
+	{
+		console.log("Append Agnai WI");
+		current_wi = [];
+		for (let key in obj.entries) {
+			var itm = obj.entries[key];
+			var karr = itm.keywords;
+			let nwi = {
+				"key": karr.join(","),
+				"keysecondary": "",
+				"content": itm.entry,
+				"comment": "",
+				"folder": null,
+				"selective": false,
+				"constant": false
+			};
+			current_wi.push(nwi);
+		}
+	}
 	function load_tavern_wi(obj,chatopponent,myname)
 	{
 		console.log("Append Tavern WI");
@@ -4084,7 +4103,7 @@ Current version: 72
 			}
 			let nwi = {
 				"key": karr.join(","),
-				"keysecondary": (ksarr.length > 0 ? ksarr.join(",") : ""),
+				"keysecondary": ((ksarr && ksarr.length) > 0 ? ksarr.join(",") : ""),
 				"content": itm.content,
 				"comment": itm.comment,
 				"folder": null,
@@ -4119,10 +4138,15 @@ Current version: 72
 			examplemsg = "\n"+examplemsg;
 		}
 		let combinedmem = memory + scenario + examplemsg;
+		let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
 		{
 			load_tavern_wi(obj,chatopponent,myname);
+		}
+		else if(agnaidatafieldsempty.trim()=="" && obj.entries && obj.kind=="memory")
+		{
+			load_agnai_wi(obj,chatopponent,myname);
 		}
 		else
 		{
@@ -4137,6 +4161,10 @@ Current version: 72
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
 				load_tavern_wi(obj.character_book,chatopponent,myname);
+			}
+			else if(obj.entries && obj.entries.length>0)
+			{
+				load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
 		render_gametext();
