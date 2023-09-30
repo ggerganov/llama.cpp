@@ -731,7 +731,7 @@ int main(int argc, char ** argv) {
                 }
             }
 
-            if (n_past > 0 && is_interacting ) {
+            if (n_past > 0 && is_interacting) {
                 LOG("waiting for user input\n");
 
                 if (params.instruct) {
