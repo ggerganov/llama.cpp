@@ -185,6 +185,19 @@ MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
         MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
         MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
     },
+    MODEL_ARCH.MPT: {
+        MODEL_TENSOR.TOKEN_EMBD:    "wte",
+        MODEL_TENSOR.OUTPUT_NORM:   "norm_f",
+        # note: MPT output is tied to (same as) wte in original model;
+        # for easier implementation in llama.cpp it's duplicated in GGUF, though :/
+        MODEL_TENSOR.OUTPUT:        "output",
+        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.norm_1",
+        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.norm_2",
+        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn.Wqkv",
+        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn.out_proj",
+        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn.down_proj",
+        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn.up_proj",
+    },
     MODEL_ARCH.GPT2: {
         # TODO
     },
@@ -231,6 +244,7 @@ class TensorNameMap:
         MODEL_TENSOR.OUTPUT_NORM: (
             "gpt_neox.final_layer_norm", # gptneox
             "transformer.ln_f",          # gpt2 falcon
+            "transformer.norm_f",        # mpt
             "model.norm",                # llama-hf baichuan
             "norm",                      # llama-pth
         ),
