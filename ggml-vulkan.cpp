@@ -50,8 +50,6 @@
 #define VK_DEVICE_DESCRIPTOR_POOL_MODE_MULTI 1
 #define VK_DEVICE_DESCRIPTOR_POOL_MODE_SINGLE 2
 
-#define VK_SUBMIT_BATCH 3
-
 #define VK_NUM_TYPES 16
 
 #ifndef K_QUANTS_PER_ITERATION
@@ -166,6 +164,7 @@ struct vk_staging_memcpy {
 };
 
 struct ggml_vk_tensor_extra_gpu {
+    uint32_t batch_size;
     std::vector<uint32_t> buffer_idx;
 
     std::vector<vk_staging_memcpy> memcpys;
@@ -1243,10 +1242,14 @@ void ggml_vk_host_free(void* ptr) {
     vk_pinned_memory.erase(vk_pinned_memory.begin() + index);
 }
 
-static vk_submission ggml_vk_begin_submission(vk_queue& q) {
+static vk_submission ggml_vk_begin_submission(vk_queue& q, bool one_time = true) {
     vk_submission s;
     s.buffer = ggml_vk_create_cmd_buffer(q);
-    s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    if (one_time) {
+        s.buffer.begin({ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    } else {
+        s.buffer.begin({ vk::CommandBufferUsageFlags{} });
+    }
 
     return s;
 }
