@@ -8,7 +8,7 @@ int main(int argc, char** argv) {
     auto mymodel = create_mymodel(argc, argv);
     int N = 10;
     int max_tgt_len = 500;
-    int n_embd = llama_n_embd(mymodel->ctx);
+    int n_embd = llama_n_embd(llama_get_model(mymodel->ctx));
 
     // add random float embd to test evaluation
     float * data = new float[N*n_embd];

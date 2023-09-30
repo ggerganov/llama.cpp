@@ -48,8 +48,7 @@ struct MyModel* create_mymodel(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+        fprintf(stderr, "%s\n", get_system_info(params).c_str());
     }
     struct MyModel * ret = new MyModel();
     ret->ctx = ctx;
@@ -71,7 +70,7 @@ bool eval_float(void * model, float * input, int N){
     MyModel * mymodel = (MyModel*)model;
     llama_context * ctx = mymodel->ctx;
     gpt_params params = mymodel->params;
-    int n_emb = llama_n_embd(ctx);
+    int n_emb = llama_n_embd(llama_get_model(ctx));
     int n_past = mymodel->n_past;
     int n_batch = N; // params.n_batch;
 
@@ -80,7 +79,8 @@ bool eval_float(void * model, float * input, int N){
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        if (llama_eval_embd(ctx, (input+i*n_emb), n_eval, n_past, params.n_threads)) {
+        llama_batch batch = {  int32_t(n_eval), nullptr, (input+i*n_emb), nullptr, nullptr, nullptr, n_past, 1, 0, };
+        if (llama_decode(ctx, batch)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return false;
         }
@@ -101,7 +101,7 @@ bool eval_tokens(void * model, std::vector<llama_token> tokens) {
         if (n_eval > params.n_batch) {
             n_eval = params.n_batch;
         }
-        if (llama_eval(ctx, &tokens[i], n_eval, n_past, params.n_threads)) {
+        if (llama_decode(ctx, llama_batch_get_one(&tokens[i], n_eval, n_past, 0))) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return false;
         }
@@ -132,7 +132,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
 
     // out of user input, sample next token
     const float   temp            = params.temp;
-    const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(ctx) : params.top_k;
+    const int32_t top_k           = params.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx)) : params.top_k;
     const float   top_p           = params.top_p;
     const float   tfs_z           = params.tfs_z;
     const float   typical_p       = params.typical_p;
@@ -148,7 +148,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
     llama_token id = 0;
     {
         auto logits  = llama_get_logits(ctx);
-        auto n_vocab = llama_n_vocab(ctx);
+        auto n_vocab = llama_n_vocab(llama_get_model(ctx));
 
         // Apply params.logit_bias map
         for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
@@ -183,11 +183,11 @@ llama_token sampling_id(struct MyModel* mymodel) {
             if (mirostat == 1) {
                 static float mirostat_mu = 2.0f * mirostat_tau;
                 const int mirostat_m = 100;
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
             } else if (mirostat == 2) {
                 static float mirostat_mu = 2.0f * mirostat_tau;
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
             } else {
                 // Temperature sampling
@@ -195,7 +195,7 @@ llama_token sampling_id(struct MyModel* mymodel) {
                 llama_sample_tail_free(ctx, &candidates_p, tfs_z, 1);
                 llama_sample_typical(ctx, &candidates_p, typical_p, 1);
                 llama_sample_top_p(ctx, &candidates_p, top_p, 1);
-                llama_sample_temperature(ctx, &candidates_p, temp);
+                llama_sample_temp(ctx, &candidates_p, temp);
                 id = llama_sample_token(ctx, &candidates_p);
             }
         }

@@ -38,13 +38,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          CC=gcc-8 make
+          CC=gcc-8 make -j $(nproc)
 
       - name: Test
         id: make_test
         run: |
-          CC=gcc-8 make tests
-          make test
+          CC=gcc-8 make tests -j $(nproc)
+          make test -j $(nproc)
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
@@ -66,7 +66,7 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -101,7 +101,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --build . --config ${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -135,7 +135,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_MPI=ON ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -160,13 +160,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make
+          make -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: make_test
         run: |
-          make tests
-          make test
+          make tests -j $(sysctl -n hw.logicalcpu)
+          make test -j $(sysctl -n hw.logicalcpu)
 
   macOS-latest-cmake:
     runs-on: macos-latest
@@ -189,7 +189,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: cmake_test
@@ -223,7 +223,7 @@ jobs:
             -DLLAMA_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
   macOS-latest-cmake-tvos:
     runs-on: macos-latest
@@ -251,7 +251,7 @@ jobs:
             -DLLAMA_BUILD_SERVER=OFF \
             -DCMAKE_SYSTEM_NAME=tvOS \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -324,7 +324,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -415,7 +415,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
-          cmake --build . --config Release
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
         id: tag
@@ -457,22 +457,22 @@ jobs:
           path: |
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
-  freeBSD-latest:
-    runs-on: macos-12
-    steps:
-    - name: Clone
-      uses: actions/checkout@v3
-
-    - name: Build
-      uses: cross-platform-actions/action@v0.19.0
-      with:
-        operating_system: freebsd
-        version: '13.2'
-        hypervisor: 'qemu'
-        run: |
-            sudo pkg update
-            sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
-            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15
+#  freeBSD-latest:
+#    runs-on: macos-12
+#    steps:
+#    - name: Clone
+#      uses: actions/checkout@v3
+#
+#    - name: Build
+#      uses: cross-platform-actions/action@v0.19.0
+#      with:
+#        operating_system: freebsd
+#        version: '13.2'
+#        hypervisor: 'qemu'
+#        run: |
+#            sudo pkg update
+#            sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
+#            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
