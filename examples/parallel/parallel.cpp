@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <ctime>
+#include <iomanip>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
@@ -70,6 +72,22 @@ struct client {
     std::vector<llama_token> tokens_prev;
 };
 
+static void printDateTime() {
+    std::time_t currentTime = std::time(nullptr);
+    std::cout << "\n\033[35mRUN PARAMETERS as at \033[0m" << std::ctime(&currentTime);
+}
+
+// Define a split string function to ...
+static std::vector<std::string> splitString(const std::string& input, char delimiter) {
+    std::vector<std::string> tokens;
+    std::istringstream stream(input);
+    std::string token;
+    while (std::getline(stream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 int main(int argc, char ** argv) {
     srand(1234);
 
@@ -103,6 +121,23 @@ int main(int argc, char ** argv) {
     // load the target model
     params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
+
+    // load the prompts from an external file if there are any
+    if (params.prompt.empty()) {
+        std::cout << "\n\033[32mNo new questions so proceed with build-in defaults.\033[0m";
+    } else {
+        // Output each line of the input params.prompts vector and copy to k_prompts
+        int index = 0;
+        std::cout << "\n\033[32mNow printing the external prompt file " << params.prompt_file << "\033[0m\n\n";
+
+        std::vector<std::string> prompts = splitString(params.prompt, '\n');
+        for (const auto& prompt : prompts) {
+            k_prompts.resize(index + 1);
+            k_prompts[index] = prompt;
+            index++;
+            std::cout << std::setw(3) << std::right << index << " prompt: " << prompt << std::endl;
+        }
+    }
 
     fprintf(stderr, "\n\n");
     fflush(stderr);
@@ -336,8 +371,8 @@ int main(int argc, char ** argv) {
 
                     const auto t_main_end = ggml_time_us();
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \n\nInput:    %s\nResponse: %s\n\n",
-                            client.id, client.seq_id, client.n_prompt, client.n_decoded,
+                    LOG_TEE("\033[31mClient %3d, seq %3d/%3d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \nInput:    %s\n\033[35mResponse: %s\033[0m\n\n",
+                            client.id, client.seq_id, n_seq, client.n_prompt, client.n_decoded,
                             (t_main_end - client.t_start_prompt) / 1e6,
                             (double) (client.n_prompt + client.n_decoded) / (t_main_end - client.t_start_prompt) * 1e6,
                             n_cache_miss,
@@ -357,7 +392,11 @@ int main(int argc, char ** argv) {
 
     const auto t_main_end = ggml_time_us();
 
-    LOG_TEE("\n\n");
+    printDateTime();
+
+    LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
+    LOG_TEE("\n");
+
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total speed (AVG):   %6s  speed: %5.2f t/s\n", "",             (double) (n_total_prompt + n_total_gen) / (t_main_end - t_main_start) * 1e6);
