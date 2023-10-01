@@ -694,10 +694,8 @@ int main(int argc, char ** argv) {
                     if (last_output.find(antiprompt, search_start_pos) != std::string::npos) {
                         if (params.interactive) {
                             is_interacting = true;
-                            console::set_display(console::user_input);
                         }
                         is_antiprompt = true;
-                        fflush(stdout);
                         break;
                     }
                 }
@@ -721,8 +719,6 @@ int main(int argc, char ** argv) {
 
                     is_interacting = true;
                     printf("\n");
-                    console::set_display(console::user_input);
-                    fflush(stdout);
                 } else if (params.instruct) {
                     is_interacting = true;
                 }
@@ -746,6 +742,9 @@ int main(int argc, char ** argv) {
                     buffer += params.input_prefix;
                     printf("%s", buffer.c_str());
                 }
+
+                // color user input only
+                console::set_display(console::user_input);
 
                 std::string line;
                 bool another_line = true;
