@@ -292,18 +292,18 @@ def chat_completions():
     if (not stream):
         data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData))
         print(data.json())
-        resData = make_resData(data.json(), chat=True, promptToken=promptToken, function_call=body.get("function_call"))
+        resData = make_resData(data.json(), chat=True, promptToken=promptToken, function_call=body.get("function_call", {}))
         return jsonify(resData)
     else:
         def generate():
             data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData), stream=True)
             time_now = int(time.time())
-            resData = make_resData_stream({}, chat=True, time_now=time_now, start=True, function_call=body.get("function_call"))
+            resData = make_resData_stream({}, chat=True, time_now=time_now, start=True, function_call=body.get("function_call", {}))
             yield 'data: {}\n'.format(json.dumps(resData))
             for line in data.iter_lines():
                 if line:
                     decoded_line = line.decode('utf-8')
-                    resData = make_resData_stream(json.loads(decoded_line[6:]), chat=True, time_now=time_now, function_call=body.get("function_call"))
+                    resData = make_resData_stream(json.loads(decoded_line[6:]), chat=True, time_now=time_now, function_call=body.get("function_call", {}))
                     yield 'data: {}\n'.format(json.dumps(resData))
         return Response(generate(), mimetype='text/event-stream')
 
