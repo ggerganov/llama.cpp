@@ -163,7 +163,7 @@ def make_grammar(schema, root):
 
         def propery_to_grammar(name, typename):
             return f'"\\"" "{name}" "\\"" ":" {typename}'
-       
+
         properties = ' "," '.join([
             propery_to_grammar(name, schema_typename(prefix, prop, defs, arrs))
             for name, prop in schema['properties'].items()
@@ -215,10 +215,10 @@ string ::=
   "\"" (
     [^"\\] |
     "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) # escapes
-  )* "\"" 
+  )* "\""
 bool ::= "True" | "False"
-integer ::= ("-"? ([0-9] | [1-9] [0-9]*)) 
-number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? 
+integer ::= ("-"? ([0-9] | [1-9] [0-9]*))
+number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)?
 '''))
         return grammar
 
@@ -294,7 +294,7 @@ def make_resData(data, chat=False, promptToken=[], function_call={}):
     }
     if (len(promptToken) != 0):
         resData["promptToken"] = promptToken
-    
+
     if chat and is_present(function_call, "name"):
             resData["choices"][0]["delta"] = [{
                 "index": 0,
