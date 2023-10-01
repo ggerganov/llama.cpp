@@ -453,8 +453,16 @@ if (LLAMA_ALL_WARNINGS)
 
 endif()
 
+if (NOT MSVC)
+    set(cuda_flags -Wno-pedantic)
+endif()
+set(cuda_flags ${cxx_flags} -use_fast_math ${cuda_flags})
+
 list(JOIN host_cxx_flags " " cuda_host_flags)  # pass host compiler flags as a single argument
-set(cuda_flags ${cxx_flags} -use_fast_math -Wno-pedantic ${cuda_flags} -Xcompiler ${cuda_host_flags})
+if (NOT cuda_host_flags STREQUAL "")
+    set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_host_flags})
+endif()
+
 add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
 
 if (WIN32)
