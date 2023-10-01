@@ -638,15 +638,7 @@ class GGUFValueType(IntEnum):
 
 class GGUFWriter:
     fout: BufferedWriter
-    arch: str
-    offset_tensor = 0
-    data_alignment = GGUF_DEFAULT_ALIGNMENT
-    kv_data = b""
-    kv_data_count = 0
-    ti_data = b""
-    ti_data_count = 0
-    use_temp_file: bool
-    temp_file: tempfile.SpooledTemporaryFile[bytes] | None = None
+    temp_file: tempfile.SpooledTemporaryFile[bytes] | None
     tensors: list[tuple[np.ndarray[Any, Any], int]]
 
     @property
@@ -673,11 +665,19 @@ class GGUFWriter:
             GGUFValueType.FLOAT64: f"{self.pack_prefix}d",
             GGUFValueType.BOOL:    "?" ,
         }
-        self.add_architecture()
+        self.offset_tensor = 0
+        self.data_alignment = GGUF_DEFAULT_ALIGNMENT
+        self.kv_data = b""
+        self.kv_data_count = 0
+        self.ti_data = b""
+        self.ti_data_count = 0
         self.use_temp_file = use_temp_file
+        self.temp_file = None
         self.tensors = []
         endianess_str = "Big Endian" if self.endianess == GGUFEndian.BIG else "Little Endian"
         print(f"This gguf file is for {endianess_str} only")
+
+        self.add_architecture()
 
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
@@ -983,11 +983,8 @@ class GGUFWriter:
 
 
 class SpecialVocab:
-    load_merges: bool = False
-    merges: list[str] = []
-    special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
-    special_token_ids: dict[str, int] = {}
-    n_vocab: int | None = None
+    merges: list[str]
+    special_token_ids: dict[str, int]
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
@@ -997,8 +994,11 @@ class SpecialVocab:
         self.special_token_ids = {}
         self.n_vocab = n_vocab
         self.load_merges = load_merges
+        self.merges = []
         if special_token_types is not None:
             self.special_token_types = special_token_types
+        else:
+            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad')
         self._load(Path(path))
 
     def _load(self, path: Path) -> None:
