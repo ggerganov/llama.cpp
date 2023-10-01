@@ -419,10 +419,11 @@ if (LLAMA_ALL_WARNINGS)
         set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int
             -Werror=implicit-function-declaration)
         set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
+        set(host_cxx_flags "")
 
         if (CMAKE_C_COMPILER_ID MATCHES "Clang")
             set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
-            set(cxx_flags ${cxx_flags} -Wmissing-prototypes -Wextra-semi)
+            set(host_cxx_flags ${host_cxx_flags} -Wmissing-prototypes -Wextra-semi)
 
             if (
                 (CMAKE_C_COMPILER_ID STREQUAL "Clang"      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 3.8.0) OR
@@ -432,26 +433,29 @@ if (LLAMA_ALL_WARNINGS)
             endif()
         elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
             set(c_flags ${c_flags} -Wdouble-promotion)
-            set(cxx_flags ${cxx_flags} -Wno-array-bounds)
+            set(host_cxx_flags ${host_cxx_flags} -Wno-array-bounds)
 
             if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 7.1.0)
-                set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+                set(host_cxx_flags ${host_cxx_flags} -Wno-format-truncation)
             endif()
             if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 8.1.0)
-                set(cxx_flags ${cxx_flags} -Wextra-semi)
+                set(host_cxx_flags ${host_cxx_flags} -Wextra-semi)
             endif()
         endif()
     else()
         # todo : msvc
     endif()
 
-    add_compile_options(
-            ${warning_flags}
-            "$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
-            "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
-    )
+    set(c_flags   ${c_flags}   ${warning_flags})
+    set(cxx_flags ${cxx_flags} ${warning_flags})
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
+                        "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags} ${host_cxx_flags}>")
 
 endif()
+
+list(JOIN host_cxx_flags " " cuda_host_flags)  # pass host compiler flags as a single argument
+set(cuda_flags ${cxx_flags} -use_fast_math -Wno-pedantic ${cuda_flags} -Xcompiler ${cuda_host_flags})
+add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
