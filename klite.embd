@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 72
+Current version: 73
 -Concedo
 -->
 
@@ -5823,7 +5823,8 @@ Current version: 72
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
-		document.getElementById("chatopponent").value = localsettings.chatopponent;
+		document.getElementById("chatopponent").value = replaceAll(localsettings.chatopponent,"||$||","\n");
+		handle_bot_name_onchange();
 		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
 		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
 		document.getElementById("top_k").value = localsettings.top_k;
@@ -5845,6 +5846,7 @@ Current version: 72
 		}
 
 		document.getElementById("setgrammar").disabled = !is_using_kcpp_with_grammar();
+		document.getElementById("grammar_retain_state").disabled = document.getElementById("setgrammar").disabled;
 
 		if(custom_kobold_endpoint!="")
 		{
@@ -6047,7 +6049,7 @@ Current version: 72
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = document.getElementById("chatopponent").value;
+		localsettings.chatopponent = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
 			localsettings.instruct_starttag = "\\n### Instruction:\\n";
@@ -6153,6 +6155,26 @@ Current version: 72
 	{
 		document.getElementById('instruct_tag_format').value = "0";
 	}
+
+	function handle_bot_name_input()
+	{
+		let textarea = document.getElementById("chatopponent");
+		textarea.value = replaceAll(textarea.value,"||$||","\n");
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		numberOfLineBreaks = numberOfLineBreaks>8?8:numberOfLineBreaks;
+		textarea.rows = numberOfLineBreaks+1;
+	}
+	function handle_bot_name_onchange()
+	{
+		let textarea = document.getElementById("chatopponent");
+		textarea.value = replaceAll(textarea.value,"||$||","\n");
+		textarea.value = textarea.value.replace(/[\r\n]+/g, '\n');
+		textarea.value = textarea.value.trim();
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		numberOfLineBreaks = numberOfLineBreaks>8?8:numberOfLineBreaks;
+		textarea.rows = numberOfLineBreaks+1;
+	}
+
 
 	function toggle_uistyle()
 	{
@@ -7008,6 +7030,7 @@ Current version: 72
 				if(localsettings.grammar && localsettings.grammar!="")
 				{
 					submit_payload.params.grammar = localsettings.grammar;
+					submit_payload.params.grammar_retain_state = document.getElementById("grammar_retain_state").checked;
 				}
 			}
 
@@ -7902,7 +7925,7 @@ Current version: 72
 		++poll_ticks_passed;
 
 		//for horde requests, slow down by 3 times unless almost done
-		if(!is_using_custom_ep() && poll_ticks_passed%3!=0 && !horde_poll_nearly_completed)
+		if(!is_using_custom_ep() && (horde_poll_nearly_completed?(poll_ticks_passed%2!=0):(poll_ticks_passed%3!=0)))
 		{
 			return;
 		}
@@ -8055,7 +8078,7 @@ Current version: 72
 											mtl.classList.add("redloader");
 										} else if (data.processing == 1 && data.queue_position == 0) {
 											mtl.classList.add("greenloader");
-											if(data.wait_time<=3)
+											if(data.wait_time<5)
 											{
 												horde_poll_nearly_completed = true;
 											}
@@ -8344,8 +8367,18 @@ Current version: 72
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
 				}
 				let nowmode = (localsettings.opmode==1?"Story Mode":(localsettings.opmode==2?"Adventure Mode":(localsettings.opmode==3?"Chat Mode":"Instruct Mode")));
+				let selmodelstr = "";
+				const maxmodelnames = 7;
+				if(selected_models.length>maxmodelnames)
+				{
+					let shortenedarr = selected_models.slice(0, maxmodelnames-1);
+					selmodelstr = shortenedarr.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + " and " + (selected_models.length-(maxmodelnames-1)) + " others";
+				}else{
+					selmodelstr = selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "");
+				}
+
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
-					+ selected_models.reduce((s, a) => s + (s == "" ? "" : ", ") + a.name, "") + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
+					+ selmodelstr + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
 					+ "." + whorun +".<br><br><b><span class=\"color_orange\">"+ nowmode +" Selected</span></b> - Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
 			}
 
@@ -10063,11 +10096,11 @@ Current version: 72
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
 								<th>Your Name</th>
-								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names with ||$||</span></span></th>
+								<th>AI Name <span class="helpicon">?<span class="helptext">The name of the person you want to chat with. Multiple opponents can be specified, creating a group chat, separate their names using multiple lines.</span></span></th>
 								</tr>
 								<tr>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
-								<td><input class="settinglabel miniinput" type="text" placeholder="(Auto)" value="" id="chatopponent"  title="The name of the person you want to chat with"></td>
+								<td style="vertical-align: top;"><input class="settinglabel miniinput" type="text" placeholder="(Enter Name)" value="" id="chatname" title="The name that you will be chatting as"></td>
+								<td style="vertical-align: top;"><textarea class="settinglabel miniinput" style="resize: none;overflow:hidden;" id="chatopponent" placeholder="(Auto)" rows="1" wrap="off" title="The name of the person you want to chat with" oninput="handle_bot_name_input()" onchange="handle_bot_name_onchange()"></textarea></td>
 								</tr>
 							  </table>
 
@@ -10195,6 +10228,8 @@ Current version: 72
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Additional Configs <span class="helpicon">?<span class="helptext">Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures.</span></span></div>
 							<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">Set Grammar</button>
+							<div class="settingsmall" style="padding:2px 3px;margin-top:4px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
+						   	<input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:6px;height: max-content;">
 						</div>
 					</div>
 				</div>

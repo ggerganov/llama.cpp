@@ -64,7 +64,8 @@ class generation_inputs(ctypes.Structure):
                 ("unban_tokens_rt", ctypes.c_bool),
                 ("stop_sequence", ctypes.c_char_p * stop_token_max),
                 ("stream_sse", ctypes.c_bool),
-                ("grammar", ctypes.c_char_p)]
+                ("grammar", ctypes.c_char_p),
+                ("grammar_retain_state", ctypes.c_bool)]
 
 class generation_outputs(ctypes.Structure):
     _fields_ = [("status", ctypes.c_int),
@@ -278,7 +279,7 @@ def load_model(model_filename):
     ret = handle.load_model(inputs)
     return ret
 
-def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], use_default_badwordsids=True, stream_sse=False, grammar='', genkey=''):
+def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_k=120, top_a=0.0, top_p=0.85, typical_p=1.0, tfs=1.0, rep_pen=1.1, rep_pen_range=128, mirostat=0, mirostat_tau=5.0, mirostat_eta=0.1, sampler_order=[6,0,1,3,4,2,5], seed=-1, stop_sequence=[], use_default_badwordsids=True, stream_sse=False, grammar='', grammar_retain_state=False, genkey=''):
     global maxctx, args, currentusergenkey, totalgens
     inputs = generation_inputs()
     outputs = ctypes.create_unicode_buffer(ctypes.sizeof(generation_outputs))
@@ -301,6 +302,7 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
     inputs.rep_pen_range = rep_pen_range
     inputs.stream_sse = stream_sse
     inputs.grammar = grammar.encode("UTF-8")
+    inputs.grammar_retain_state = grammar_retain_state
     inputs.unban_tokens_rt = not use_default_badwordsids
     if args.usemirostat and args.usemirostat[0]>0:
         inputs.mirostat = int(args.usemirostat[0])
@@ -423,6 +425,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 use_default_badwordsids=genparams.get('use_default_badwordsids', True),
                 stream_sse=stream_flag,
                 grammar=genparams.get('grammar', ''),
+                grammar_retain_state = genparams.get('grammar_retain_state', False),
                 genkey=genparams.get('genkey', ''))
 
         recvtxt = ""

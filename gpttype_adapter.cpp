@@ -44,6 +44,7 @@ std::vector<std::string> generated_tokens;
 
 llama_grammar *  grammar = nullptr; //currently used grammar
 grammar_parser::parse_state parsed_grammar;
+static std::string current_grammar = "";
 
 //return val: 0=fail, 1=(original ggml, alpaca), 2=(ggmf), 3=(ggjt)
 static FileFormat file_format = FileFormat::BADFORMAT;
@@ -1282,7 +1283,20 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     generated_tokens.clear(); // New Generation, new tokens
 
     std::string grammarstr = inputs.grammar;
-    load_grammar(grammarstr);
+    bool grammar_retain_state = inputs.grammar_retain_state;
+    if(grammar_retain_state)
+    {
+        if(grammarstr=="" || current_grammar!=grammarstr) //if grammar is identical, retain state
+        {
+            load_grammar(grammarstr);
+        }
+    }
+    else
+    {
+        load_grammar(grammarstr);
+    }
+    current_grammar = grammarstr;
+
 
     if (params.repeat_last_n < 1)
     {

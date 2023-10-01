@@ -358,7 +358,7 @@ KQ1 =
 KQ2 =
 KQ3 =
 ifndef LLAMA_NO_K_QUANTS
-KQ1 = kquants.o
+KQ1 = k_quants.o
 KQ2 = k_quants_noavx2.o
 KQ3 = k_quants_failsafe.o
 k_quants.o: k_quants.c k_quants.h ggml.h ggml-cuda.h
