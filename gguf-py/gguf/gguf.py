@@ -639,7 +639,7 @@ class GGUFValueType(IntEnum):
 class GGUFWriter:
     fout: BufferedWriter
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None
-    tensors: list[tuple[np.ndarray[Any, Any], int]]
+    tensors: list[np.ndarray[Any, Any]]
 
     @property
     def pack_prefix(self):
@@ -815,18 +815,14 @@ class GGUFWriter:
         shape: Sequence[int] = raw_shape if raw_shape is not None else tensor.shape
         self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
 
-        pad = GGUFWriter.ggml_pad(tensor.nbytes, self.data_alignment) - tensor.nbytes
-
-        if  self.temp_file is None:
-            self.tensors.append((tensor, pad))
+        if self.temp_file is None:
+            self.tensors.append(tensor)
             return
 
         tensor.tofile(self.temp_file)
+        self.write_padding(self.temp_file, tensor.nbytes)
 
-        if pad != 0:
-            self.temp_file.write(bytes([0] * pad))
-
-    def write_padding(self, fp: BinaryIO, n: int, align: int | None = None):
+    def write_padding(self, fp: IO[bytes], n: int, align: int | None = None):
         pad = GGUFWriter.ggml_pad(n, align if align is not None else self.data_alignment) - n
         if pad != 0:
             fp.write(bytes([0] * pad))
@@ -844,10 +840,9 @@ class GGUFWriter:
         self.write_padding(self.fout, self.fout.tell())
 
         if self.temp_file is None:
-            for (currtensor, currpad) in self.tensors:
-                currtensor.tofile(self.fout)
-                if currpad != 0:
-                    self.fout.write(bytes([0] * currpad))
+            for tensor in self.tensors:
+                tensor.tofile(self.fout)
+                self.write_padding(self.fout, tensor.nbytes)
             return
 
         self.temp_file.seek(0)
