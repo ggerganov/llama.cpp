@@ -1712,7 +1712,7 @@ def run_horde_worker(args, api_key, worker_name):
                 secs = elapsedtime.seconds % 60
                 elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
                 earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
-                print_with_time(f'Submitted {current_id} and earned {reward:.0f} kd - [Total:{session_kudos_earned:.0f}kd, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f}kd/hr]')
+                print_with_time(f'Submitted {current_id} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f} kudos/hr]')
         else:
             print_with_time("Error: Abandoned current job due to errors. Getting new job.")
         current_id = None
