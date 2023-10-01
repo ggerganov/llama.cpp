@@ -667,7 +667,7 @@ int main(int argc, char ** argv) {
             }
             fflush(stdout);
         }
-        // reset color to default if we there is no pending user input
+        // reset color to default if there is no pending user input
         if (input_echo && (int) embd_inp.size() == n_consumed) {
             console::set_display(console::reset);
         }
