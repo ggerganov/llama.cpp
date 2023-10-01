@@ -144,7 +144,7 @@ for i in range(vocab_size):
         print(f"Key {i} not in tokenizer vocabulary. Padding with an arbitrary token.")
         pad_token = f"[PAD{i}]".encode("utf8")
         text = bytearray(pad_token)
-    elif i in added_tokens:
+    elif i in added_token_ids:
         # these tokens are not encoded, see https://github.com/huggingface/transformers/issues/1133
         text = bytearray(reverse_vocab[i].encode('utf-8'))
     else:
