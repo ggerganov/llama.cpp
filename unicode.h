@@ -356,38 +356,41 @@ static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t>& 
 #define CODEPOINT_TYPE_SYMBOL 6
 #define CODEPOINT_TYPE_CONTROL 7
 
-static int codepoint_type(uint32_t cp) {
-    static std::unordered_map<uint32_t, int> codepoint_types;
-    if(codepoint_types.size() == 0) {
-        for(auto p : digit_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_DIGIT;
-        }
-        for(auto p : letter_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_LETTER;
-        }
-        for(auto p : whitespace_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_WHITESPACE;
-        }
-        for(auto p : accent_mark_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_ACCENT_MARK;
-        }
-        for(auto p : punctuation_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_PUNCTUATION;
-        }
-        for (auto p : symbol_ranges) {
-            for (auto i = p.first; i <= p.second; ++i)
-                codepoint_types[i] = CODEPOINT_TYPE_SYMBOL;
-        }
-        for(auto p : control_ranges) {
-            for(auto i = p.first; i <= p.second; ++ i)
-                codepoint_types[i] = CODEPOINT_TYPE_CONTROL;
-        }
+static std::unordered_map<uint32_t, int> codepoint_type_map() {
+    std::unordered_map<uint32_t, int> codepoint_types;
+    for(auto p : digit_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_DIGIT;
     }
+    for(auto p : letter_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_LETTER;
+    }
+    for(auto p : whitespace_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_WHITESPACE;
+    }
+    for(auto p : accent_mark_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_ACCENT_MARK;
+    }
+    for(auto p : punctuation_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_PUNCTUATION;
+    }
+    for (auto p : symbol_ranges) {
+        for (auto i = p.first; i <= p.second; ++i)
+            codepoint_types[i] = CODEPOINT_TYPE_SYMBOL;
+    }
+    for(auto p : control_ranges) {
+        for(auto i = p.first; i <= p.second; ++ i)
+            codepoint_types[i] = CODEPOINT_TYPE_CONTROL;
+    }
+    return codepoint_types;
+}
+
+static int codepoint_type(uint32_t cp) {
+    static std::unordered_map<uint32_t, int> codepoint_types = codepoint_type_map();
     return codepoint_types[cp];
 }
 
@@ -398,8 +401,8 @@ static int codepoint_type(std::string utf8) {
     return codepoint_type(codepoint_from_utf8(utf8, offset));
 }
 
-static std::string bytes_to_unicode_bpe(uint8_t byte) {
-    static std::unordered_map<uint8_t, std::string> map;
+static std::unordered_map<uint8_t, std::string> bytes_to_unicode_map_bpe() {
+    std::unordered_map<uint8_t, std::string> map;
     for (int ch = u'!'; ch <= u'~'; ++ch) {
         map[ch] = codepoint_to_utf8(ch);
     }
@@ -416,29 +419,37 @@ static std::string bytes_to_unicode_bpe(uint8_t byte) {
             ++n;
         }
     }
+    return map;
+}
+
+static std::string bytes_to_unicode_bpe(uint8_t byte) {
+    static std::unordered_map<uint8_t, std::string> map = bytes_to_unicode_map_bpe();
     return map.at(byte);
 }
 
-static uint8_t unicode_to_bytes_bpe(const std::string& utf8) {
-    static std::unordered_map<std::string, uint8_t> map;
-    if (map.size() == 0) {
-        for (int ch = u'!'; ch <= u'~'; ++ch) {
-            map[codepoint_to_utf8(ch)] = ch;
-        }
-        for (int ch = u'¡'; ch <= u'¬'; ++ch) {
-            map[codepoint_to_utf8(ch)] = ch;
-        }
-        for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
-            map[codepoint_to_utf8(ch)] = ch;
-        }
-        auto n = 0;
-        for (int ch = 0; ch < 256; ++ch) {
-            if (map.find(codepoint_to_utf8(ch)) == map.end()) {
-                map[codepoint_to_utf8(256 + n)] = ch;
-                ++n;
-            }
+static std::unordered_map<std::string, uint8_t> unicode_to_bytes_map_bpe() {
+    std::unordered_map<std::string, uint8_t> map;
+    for (int ch = u'!'; ch <= u'~'; ++ch) {
+        map[codepoint_to_utf8(ch)] = ch;
+    }
+    for (int ch = u'¡'; ch <= u'¬'; ++ch) {
+        map[codepoint_to_utf8(ch)] = ch;
+    }
+    for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
+        map[codepoint_to_utf8(ch)] = ch;
+    }
+    auto n = 0;
+    for (int ch = 0; ch < 256; ++ch) {
+        if (map.find(codepoint_to_utf8(ch)) == map.end()) {
+            map[codepoint_to_utf8(256 + n)] = ch;
+            ++n;
         }
     }
+    return map;
+}
+
+static uint8_t unicode_to_bytes_bpe(const std::string& utf8) {
+    static std::unordered_map<std::string, uint8_t> map = unicode_to_bytes_map_bpe();
     return map.at(utf8);
 }
 
