@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 73
+Current version: 74
 -Concedo
 -->
 
@@ -2898,6 +2898,7 @@ Current version: 73
 	var horde_poll_nearly_completed = false; //if true, increase polling rate
 	var prev_hl_chunk = null; //will store the last highlighted element
 	var pending_context_preinjection = ""; //this will be injected before the AI's next RESPONSE
+	var last_reply_was_empty = false; //set to true if last reply is empty
 	var current_memory = ""; //stored memory
 	var current_anote = ""; //stored author note
 	var current_anotetemplate = "[Author\'s note: <|>]";
@@ -2951,7 +2952,7 @@ Current version: 73
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
-		unban_tokens: false, //allow the EOS token when using locally
+		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban
 		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
@@ -2966,6 +2967,7 @@ Current version: 73
 		beep_on: false,
 		image_styles: "",
 		grammar:"",
+		tokenstreaming: (localflag?true:false),
 		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -3105,12 +3107,6 @@ Current version: 73
 			}
 		}
 
-		const tokenstreaming = urlParams.get('streaming');
-		if(tokenstreaming)
-		{
-			document.getElementById("tokenstreaming").checked = true;
-		}
-
 		const fromfile = ( window.location.protocol == 'file:' );
 		if(!dbgmode && !fromfile){
 			if(!window.console) window.console = {};
@@ -3143,6 +3139,12 @@ Current version: 73
 
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
+		}
+
+		const tokenstreaming = urlParams.get('streaming');
+		if(tokenstreaming)
+		{
+			localsettings.tokenstreaming = true;
 		}
 
 		//toggle genimg btn
@@ -3483,7 +3485,7 @@ Current version: 73
 	//0 is none, 1 is pseudostreaming, 2 is true streaming
 	function determine_streaming_type()
 	{
-		let streamtype = (document.getElementById("tokenstreaming").checked ? 1 : 0);
+		let streamtype = (localsettings.tokenstreaming ? 1 : 0);
 		let pstreamamount = urlParams.get('streamamount');
 		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
 		{
@@ -3495,6 +3497,27 @@ Current version: 73
 			streamtype = 0;
 		}
 		return streamtype;
+	}
+
+	function determine_if_ban_eos(input_was_empty) {
+		if (localsettings.eos_ban_mode == 0) {
+			if (localsettings.opmode == 1) {
+				return true; //story mode always ban
+			}
+			else if (localsettings.opmode == 3 && !localsettings.allow_continue_chat) {
+				return false; //chat mode always unban unless cont allowed
+			}
+			else if (!input_was_empty) //if user input is not empty, ALWAYS unban EOS.
+			{
+				return false;
+			}
+			else {
+				return last_reply_was_empty;
+			}
+		}
+		else {
+			return (localsettings.eos_ban_mode == 2 ? true : false);
+		}
 	}
 
 	function is_using_web_lite()
@@ -4703,6 +4726,15 @@ Current version: 73
 			}
 		}
 	}
+
+	function format_uptime(seconds)
+	{
+		const days = Math.floor(seconds / (3600 * 24));
+		const hours = Math.floor((seconds % (3600 * 24)) / 3600);
+		const minutes = Math.floor((seconds % 3600) / 60);
+		return days+"d "+hours+"h "+minutes+"m";
+	}
+
 	function show_workers() {
 		document.getElementById("workercontainer").classList.remove("hidden");
 
@@ -4729,7 +4761,7 @@ Current version: 73
 				allmdls += escapeHtml(elem.models[n].substring(0, 32));
 			}
 
-			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
@@ -4757,7 +4789,7 @@ Current version: 73
 						let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
 						let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
 						let eleminfo = ((elem.info && elem.info!="")?elem.info:"");
-						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + elem.uptime + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
+						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
 					}
 					document.getElementById("myownworkertable").innerHTML = str;
 
@@ -5819,7 +5851,7 @@ Current version: 73
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
-		document.getElementById("unban_tokens").checked = localsettings.unban_tokens;
+		document.getElementById("eos_ban_mode").value = localsettings.eos_ban_mode;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
 		document.getElementById("chatname").value = localsettings.chatname;
@@ -5912,6 +5944,7 @@ Current version: 73
 			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
 		}
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
+		document.getElementById("tokenstreaming").checked = localsettings.tokenstreaming;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
@@ -6026,7 +6059,7 @@ Current version: 73
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
-		localsettings.unban_tokens = (document.getElementById("unban_tokens").checked ? true : false);
+		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		if(document.getElementById("opmode").value==3)
 		{
@@ -6073,6 +6106,7 @@ Current version: 73
 
 		localsettings.image_styles = pendingstyle;
 		localsettings.grammar = pendinggrammar;
+		localsettings.tokenstreaming = (document.getElementById("tokenstreaming").checked ? true : false);
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -6317,7 +6351,7 @@ Current version: 73
 		//v2 api specific fields
 		submit_payload.workers = selected_workers.map((m) => { return m.id });
 
-		dispatch_submit_generation(submit_payload);
+		dispatch_submit_generation(submit_payload,false);
 		render_gametext();
 		document.getElementById("memorytext").value = "[<|Generating summary, do not close window...|>]"
 		};
@@ -6403,6 +6437,7 @@ Current version: 73
 		synchro_polled_response = null;
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
+		last_reply_was_empty = false;
 		current_memory = "";
 		current_anote = "";
 		current_wi = [];
@@ -6640,9 +6675,10 @@ Current version: 73
 	function submit_generation() {
 
 		let newgen = document.getElementById("input_text").value;
+		const user_input_empty = (newgen.trim()=="");
 		let doNotGenerate = false;
 
-		if (newgen.trim() != "" || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
+		if (!user_input_empty || gametext_arr.length > 0 || current_memory != "" || current_anote != "")
 		{
 			waiting_for_autosummary = false;
 			idle_timer = 0;
@@ -7045,7 +7081,7 @@ Current version: 73
 
 			if (!doNotGenerate)
 			{
-				dispatch_submit_generation(submit_payload);
+				dispatch_submit_generation(submit_payload, user_input_empty);
 			}
 			else
 			{
@@ -7056,7 +7092,7 @@ Current version: 73
 		}
 	}
 
-	function dispatch_submit_generation(submit_payload)
+	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
 		last_request_str = JSON.stringify(submit_payload);
@@ -7132,7 +7168,7 @@ Current version: 73
 				//version 1.2.4 and later supports unban tokens
 				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
 				{
-					submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
+					submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
 				}
 
 				let pseudostreaming = (determine_streaming_type()==1);
@@ -7411,7 +7447,7 @@ Current version: 73
 			}
 
 			//horde supports unban tokens
-			submit_payload.use_default_badwordsids = (localsettings.unban_tokens?false:true);
+			submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
 
 			fetch(selectedhorde.submit_endpoint, {
 				method: 'POST', // or 'PUT'
@@ -7632,7 +7668,6 @@ Current version: 73
 	}
 
 	function handle_incoming_text(gentxt, genworker, genmdl, genkudos) {
-
 		//handle stopping tokens if they got missed (eg. horde)
 		gentxt = trim_extra_stop_seqs(gentxt,true);
 
@@ -7984,6 +8019,7 @@ Current version: 73
 						pending_response_id = "";
 						poll_in_progress = false;
 						let resp = synchro_polled_response;
+						last_reply_was_empty = (resp=="" || resp.trim()=="");
 						if (resp != null && resp != "") {
 							let gentxt = resp;
 							let genworker = "Custom Endpoint";
@@ -8051,6 +8087,7 @@ Current version: 73
 														handle_incoming_autosummary(gentxt);
 													}
 													else {
+														last_reply_was_empty = (gentxt=="" || gentxt.trim()=="");
 														handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 													}
 												}
@@ -8138,6 +8175,7 @@ Current version: 73
 			if (oldInnerText != edited) {
 				gametext_arr = [];
 				redo_arr = [];
+				last_reply_was_empty = false;
 				retry_prev_text = "";
 				redo_prev_text = "";
 
@@ -8991,7 +9029,7 @@ Current version: 73
 
 		console.log("Clear story");
 		if (pending_response_id == "" && gametext_arr.length > 0) {
-
+			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
 			{
 				if(retry_prev_text!="")
@@ -9017,6 +9055,7 @@ Current version: 73
 	}
 	function btn_back() {
 		if (pending_response_id == "" && gametext_arr.length > 0) {
+			last_reply_was_empty = false;
 			if(retry_prev_text!="")
 			{
 				redo_prev_text = gametext_arr.pop();
@@ -9039,6 +9078,7 @@ Current version: 73
 
 		console.log("Redo All story");
 		if (pending_response_id == "" && redo_arr.length > 0) {
+			last_reply_was_empty = false;
 			while(redo_arr.length > 0)
 			{
 				retry_prev_text = "";
@@ -9058,11 +9098,13 @@ Current version: 73
 	function btn_redo() {
 		if (pending_response_id == "") {
 			if (redo_arr.length > 0) {
+				last_reply_was_empty = false;
 				retry_prev_text = "";
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 				render_gametext();
 			}else if (redo_prev_text != "") {
+				last_reply_was_empty = false;
 				retry_prev_text = gametext_arr.pop();
 				gametext_arr.push(redo_prev_text);
 				redo_prev_text = "";
@@ -9074,6 +9116,7 @@ Current version: 73
 	function btn_retry() {
 		if (pending_response_id == "" && (gametext_arr.length > 1 ||
 		(gametext_arr.length > 0 && (current_memory != "" || current_anote != "")))) {
+			last_reply_was_empty = false;
 			let boxtextstash = document.getElementById("input_text").value;
 			document.getElementById("input_text").value = "";
 			let temp = gametext_arr[gametext_arr.length-1];
@@ -10105,7 +10148,7 @@ Current version: 73
 							  </table>
 
 							<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses. Not recommended.">Multiline Replies </div>
+							<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses.">Multiline Replies </div>
 							<input type="checkbox" id="multiline_replies" style="margin:0px 0 0;">
 							</div>
 							<div class="settinglabel">
@@ -10316,9 +10359,13 @@ Current version: 73
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="">Unban EOS Tokens <span class="helpicon">?<span
+							<div class="justifyleft settingsmall" title="">EOS Token Ban <span class="helpicon">?<span
 								class="helptext">Allow the End-Of-Stream (EOS) token and potentially other restricted special tokens to be generated.</span></span></div>
-						   <input type="checkbox" id="unban_tokens" style="margin:0px 0px 0px auto;">
+						   <select style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="eos_ban_mode">
+								<option value="0">Auto</option>
+								<option value="1">Unban</option>
+								<option value="2">Ban</option>
+							</select>
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Placeholder Tags <span class="helpicon">?<span
