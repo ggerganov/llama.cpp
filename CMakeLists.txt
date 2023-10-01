@@ -58,12 +58,19 @@ option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"       
 option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     OFF)
 
 # instruction set specific
-option(LLAMA_AVX                        "llama: enable AVX"                                     ON)
-option(LLAMA_AVX2                       "llama: enable AVX2"                                    ON)
+if (APPLE AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    # Need to disable these llama.cpp flags on Apple x86_64,
+    # otherwise users may encounter invalid instruction errors
+    option(NOT_APPLE_X86 OFF)
+else()
+    option(NOT_APPLE_X86 ON)
+endif()
+option(LLAMA_AVX                        "llama: enable AVX"                                     ${NOT_APPLE_X86})
+option(LLAMA_AVX2                       "llama: enable AVX2"                                    ${NOT_APPLE_X86})
 option(LLAMA_AVX512                     "llama: enable AVX512"                                  OFF)
 option(LLAMA_AVX512_VBMI                "llama: enable AVX512-VBMI"                             OFF)
 option(LLAMA_AVX512_VNNI                "llama: enable AVX512-VNNI"                             OFF)
-option(LLAMA_FMA                        "llama: enable FMA"                                     ON)
+option(LLAMA_FMA                        "llama: enable FMA"                                     ${NOT_APPLE_X86})
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
     option(LLAMA_F16C                   "llama: enable F16C"                                    ON)
