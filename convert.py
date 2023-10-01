@@ -340,8 +340,6 @@ class BpeVocab:
         tokenizer = self.bpe_tokenizer
         from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.items()}
-        byte_encoder = tokenization_gpt2.bytes_to_unicode()
-        byte_decoder = {v: k for k, v in byte_encoder.items()}
 
         for i, _ in enumerate(tokenizer):
             yield reverse_vocab[i], 0.0, gguf.TokenType.NORMAL
