@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12) # Don't bump this version for no reason
+cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
