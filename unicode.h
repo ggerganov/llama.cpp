@@ -248,7 +248,7 @@ static std::string codepoint_to_utf8(uint32_t cp) {
     return result;
 }
 
-static std::string codepoints_to_utf8(const std::vector<uint32_t>& cps) {
+static std::string codepoints_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
     for (size_t i = 0; i < cps.size(); ++i) {
         result.append(codepoint_to_utf8(cps[i]));
@@ -256,7 +256,7 @@ static std::string codepoints_to_utf8(const std::vector<uint32_t>& cps) {
     return result;
 }
 
-static uint32_t codepoint_from_utf8(const std::string& utf8, size_t& offset) {
+static uint32_t codepoint_from_utf8(const std::string & utf8, size_t & offset) {
     assert(offset < utf8.size());
     if (!(utf8[offset + 0] & 0x80)) {
         auto result = utf8[offset + 0];
@@ -290,7 +290,7 @@ static uint32_t codepoint_from_utf8(const std::string& utf8, size_t& offset) {
     throw std::invalid_argument("invalid string");
 }
 
-static std::vector<uint32_t> codepoints_from_utf8(const std::string& utf8) {
+static std::vector<uint32_t> codepoints_from_utf8(const std::string & utf8) {
     std::vector<uint32_t> result;
     size_t offset = 0;
     while (offset < utf8.size()) {
@@ -314,7 +314,7 @@ static std::vector<uint16_t> codepoint_to_utf16(uint32_t cp) {
     return result;
 }
 
-static std::vector<uint16_t> codepoints_to_utf16(const std::vector<uint32_t>& cps) {
+static std::vector<uint16_t> codepoints_to_utf16(const std::vector<uint32_t> & cps) {
     std::vector<uint16_t> result;
     for (size_t i = 0; i < cps.size(); ++i) {
         auto temp = codepoint_to_utf16(cps[i]);
@@ -323,7 +323,7 @@ static std::vector<uint16_t> codepoints_to_utf16(const std::vector<uint32_t>& cp
     return result;
 }
 
-static uint32_t codepoint_from_utf16(const std::vector<uint16_t>& utf16, size_t& offset) {
+static uint32_t codepoint_from_utf16(const std::vector<uint16_t> & utf16, size_t & offset) {
     assert(offset < utf16.size());
     if (((utf16[0] >> 10) << 10) != 0xd800) {
         auto result = utf16[offset + 0];
@@ -340,7 +340,7 @@ static uint32_t codepoint_from_utf16(const std::vector<uint16_t>& utf16, size_t&
     throw std::invalid_argument("invalid string");
 }
 
-static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t>& utf16) {
+static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t> & utf16) {
     std::vector<uint32_t> result;
     size_t offset = 0;
     while (offset < utf16.size())
@@ -395,7 +395,7 @@ static int codepoint_type(uint32_t cp) {
     return codepoint_types[cp];
 }
 
-static int codepoint_type(std::string utf8) {
+static int codepoint_type(const std::string & utf8) {
     if (utf8.length() == 0)
         return CODEPOINT_TYPE_UNIDENTIFIED;
     size_t offset = 0;

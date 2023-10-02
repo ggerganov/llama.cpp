@@ -4590,7 +4590,7 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string& text) {
+    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
         std::vector<std::string> bpe_words;
         std::vector<std::string> bpe_encoded_words;
 
@@ -4612,13 +4612,13 @@ private:
             text_utf.emplace_back(codepoint_to_utf8(cps[i]));
 
         for (int i = 0; i < (int)text_utf.size(); i++) {
-            const std::string& utf_char = text_utf[i];
+            const std::string & utf_char = text_utf[i];
             bool split_condition = false;
             // const char* text_pos = raw_text_p + utf_char.seq_offset_bytes;
             int bytes_remain = text_utf.size() - i;
             // forward backward lookups
-            const std::string& utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
-            const std::string& utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
+            const std::string & utf_char_next = (i + 1 < (int)text_utf.size()) ? text_utf[i + 1] : "";
+            const std::string & utf_char_next_next = (i + 2 < (int)text_utf.size()) ? text_utf[i + 2] : "";
 
             // handling contractions
             if (!split_condition && bytes_remain >= 2) {
@@ -4719,9 +4719,9 @@ private:
             }
         }
 
-        for (std::string& word : bpe_words) {
+        for (std::string & word : bpe_words) {
             std::string encoded_token = "";
-            for (char& c : word) {
+            for (char & c : word) {
                 encoded_token += bytes_to_unicode_bpe(c);
             }
             bpe_encoded_words.emplace_back(encoded_token);
@@ -7654,7 +7654,7 @@ int llama_tokenize(
     return res.size();
 }
 
-static std::string llama_decode_text(const std::string& text) {
+static std::string llama_decode_text(const std::string & text) {
     std::string decoded_text;
     auto unicode_sequences = codepoints_from_utf8(text);
     for (auto& unicode_sequence : unicode_sequences) {

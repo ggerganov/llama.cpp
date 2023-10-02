@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
                 return 2;
             }
         }
-        catch (const std::invalid_argument&) {
+        catch (const std::invalid_argument &) {
             fprintf(stderr, "%s : info: utf8 conversion %d '%s'\n", __func__, i, str.c_str());
         }
     }
