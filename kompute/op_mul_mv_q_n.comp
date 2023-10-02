@@ -6,9 +6,6 @@
  * this software. Except as expressly granted in the SOM license, all rights are reserved by Nomic, Inc.
  */
 
-#extension GL_KHR_shader_subgroup_arithmetic : require
-#extension GL_EXT_debug_printf : enable
-
 void main() {
     const uint nb = uint(pcs.ne00/BLOCKS_IN_QUANT);
     const uint r0 = gl_WorkGroupID.x;
@@ -27,9 +24,9 @@ void main() {
 
     uint yb = y + ix * BLOCKS_IN_QUANT + il;
 
-    debugPrintfEXT("gl_NumSubgroups=%d, gl_SubgroupID=%d, gl_SubgroupInvocationID=%d, glSubgroupSize=%d, gl_WorkGroupSize.x=%d, gl_WorkGroupSize.y=%d, gl_WorkGroupSize.z=%d\n",
-        gl_NumSubgroups, gl_SubgroupID, gl_SubgroupInvocationID, gl_SubgroupSize,
-        gl_WorkGroupSize.x, gl_WorkGroupSize.y, gl_WorkGroupSize.z);
+    //debugPrintfEXT("gl_NumSubgroups=%d, gl_SubgroupID=%d, gl_SubgroupInvocationID=%d, glSubgroupSize=%d, gl_WorkGroupSize.x=%d, gl_WorkGroupSize.y=%d, gl_WorkGroupSize.z=%d\n",
+    //    gl_NumSubgroups, gl_SubgroupID, gl_SubgroupInvocationID, gl_SubgroupSize,
+    //    gl_WorkGroupSize.x, gl_WorkGroupSize.y, gl_WorkGroupSize.z);
 
     for (uint ib = ix; ib < nb; ib += gl_SubgroupSize/2) {
         for (int row = 0; row < N_ROWS; row++) {

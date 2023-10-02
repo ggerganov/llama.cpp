@@ -10,8 +10,6 @@
 
 #include "common.comp"
 
-#extension GL_KHR_shader_subgroup_arithmetic : require
-
 layout(local_size_x_id = 0) in;
 
 layout(binding = 0) buffer restrict readonly tensorIn { float in_[]; };
