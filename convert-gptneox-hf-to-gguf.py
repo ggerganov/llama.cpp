@@ -131,23 +131,18 @@ print("gguf: get tokenizer metadata")
 
 tokens: list[bytearray] = []
 
-tokenizer_json_file = dir_model / 'tokenizer.json'
-if not tokenizer_json_file.is_file():
-    print(f'Error: Missing {tokenizer_json_file}', file = sys.stderr)
-    sys.exit(1)
-
 # gpt2 tokenizer
 gguf_writer.add_tokenizer_model("gpt2")
 
-with open(tokenizer_json_file, "r", encoding="utf-8") as f:
-    tokenizer_json = json.load(f)
-
 print("gguf: get gpt2 tokenizer vocab")
-
-vocab_size = len(tokenizer_json["model"]["vocab"])
 
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
+
+# The number of tokens in tokenizer.json can differ from the expected vocab size.
+# This causes downstream issues with mismatched tensor sizes when running the inference
+vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
+assert max(tokenizer.vocab.values()) < vocab_size
 
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
 byte_encoder = bytes_to_unicode()
