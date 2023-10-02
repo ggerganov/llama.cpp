@@ -2473,7 +2473,7 @@ static void llm_load_tensors(
                 } break;
             case LLM_ARCH_PERSIMMON:
                 { 
-                    model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
+                    model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"),  {n_embd, n_vocab}, GGML_BACKEND_CPU);
                     model.output_norm    = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          GGML_BACKEND_CPU);
                     model.output_norm_b  = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd},          GGML_BACKEND_CPU);
                     model.output         = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
@@ -2612,8 +2612,8 @@ static bool llama_model_load(
 }
 
 static struct ggml_cgraph * llm_build_llama(
-        llama_context & lctx,
-        const llama_batch & batch) {
+    llama_context & lctx,
+    const llama_batch & batch) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -4016,9 +4016,8 @@ static struct ggml_cgraph * llm_build_starcoder(
 
 
 static struct ggml_cgraph * llm_build_persimmon(
-    llama_context & lctx,
-    const llama_batch & batch
-) {
+         llama_context & lctx,
+     const llama_batch & batch) {
     const auto & model = lctx.model;
     const auto & hparams = model.hparams;
 

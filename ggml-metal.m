@@ -870,8 +870,8 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_MUL:
                         {
-                            GGML_ASSERT(ggml_is_contiguous(src1));
                             GGML_ASSERT(ggml_is_contiguous(src0));
+                            GGML_ASSERT(ggml_is_contiguous(src1));
 
                             // utilize float4
                             GGML_ASSERT(ne00 % 4 == 0);
@@ -952,9 +952,8 @@ void ggml_metal_graph_compute(
 
                             [encoder setComputePipelineState:ctx->pipeline_sqr];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                            [encoder setBuffer:id_dst offset:offs_dst atIndex:1];
+                            [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
 
-                            //GGML_METAL_LOG_WARN("%s: node %3d, op = %8s dispatching \n", __func__, i, ggml_op_name(dst->op));
                             const int64_t n = ggml_nelements(dst);
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
