@@ -4460,7 +4460,7 @@ struct llm_bigram_bpe {
 struct llm_tokenizer_bpe {
     llm_tokenizer_bpe(const llama_vocab & vocab): vocab(vocab) {}
 
-    void tokenize(const std::string & text, std::vector<llama_vocab::id>& output) {
+    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
         auto word_collection = bpe_gpt2_preprocess(text);
 
