@@ -362,7 +362,7 @@ class TensorNameMap:
     def __init__(self, arch: MODEL_ARCH, n_blocks: int):
         self.mapping = {}
         for tensor, keys in self.mappings_cfg.items():
-            if tensor not in MODEL_TENSORS[ARCH]:
+            if tensor not in MODEL_TENSORS[arch]:
                 continue
             tensor_name = TENSOR_NAMES[tensor]
             self.mapping[tensor_name] = (tensor, tensor_name)
@@ -370,7 +370,7 @@ class TensorNameMap:
                 self.mapping[key] = (tensor, tensor_name)
         for bid in range(n_blocks):
             for tensor, keys in self.block_mappings_cfg.items():
-                if tensor not in MODEL_TENSORS[ARCH]:
+                if tensor not in MODEL_TENSORS[arch]:
                     continue
                 tensor_name = TENSOR_NAMES[tensor].format(bid = bid)
                 self.mapping[tensor_name] = (tensor, tensor_name)
