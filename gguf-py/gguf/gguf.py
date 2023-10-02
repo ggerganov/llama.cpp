@@ -118,76 +118,97 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.STARCODER:      "starcoder",
 }
 
-MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
-    MODEL_ARCH.LLAMA: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
-        MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
-        MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.GPTNEOX: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.FALCON: {
-        MODEL_TENSOR.TOKEN_EMBD:  "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM: "output_norm",
-        MODEL_TENSOR.OUTPUT:      "output",
-        MODEL_TENSOR.ATTN_NORM:   "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_NORM_2: "blk.{bid}.attn_norm_2",
-        MODEL_TENSOR.ATTN_QKV:    "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:    "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_DOWN:    "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:      "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.BAICHUAN: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
-        MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
-        MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.STARCODER: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.POS_EMBD:      "position_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.GPT2: {
+TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
+    MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+    MODEL_TENSOR.POS_EMBD:      "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+    MODEL_TENSOR.OUTPUT:        "output",
+    MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
+
+    MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:   "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+}
+
+MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
+    MODEL_ARCH.LLAMA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPTNEOX: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.FALCON: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_NORM_2,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.BAICHUAN: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.STARCODER: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPT2: [
         # TODO
-    },
+    ],
     # TODO
 }
 
@@ -338,28 +359,24 @@ class TensorNameMap:
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
 
-    tensor_names: dict[MODEL_TENSOR, str]
-
     def __init__(self, arch: MODEL_ARCH, n_blocks: int):
-        mapping = self.mapping = {}
-        tensor_names = self.tensor_names = MODEL_TENSOR_NAMES[arch]
+        self.mapping = {}
         for tensor, keys in self.mappings_cfg.items():
-            tensor_name = tensor_names.get(tensor)
-            if tensor_name is None:
+            if tensor not in MODEL_TENSORS[arch]:
                 continue
-            mapping[tensor_name] = (tensor, tensor_name)
+            tensor_name = TENSOR_NAMES[tensor]
+            self.mapping[tensor_name] = (tensor, tensor_name)
             for key in keys:
-                mapping[key] = (tensor, tensor_name)
+                self.mapping[key] = (tensor, tensor_name)
         for bid in range(n_blocks):
             for tensor, keys in self.block_mappings_cfg.items():
-                tensor_name = tensor_names.get(tensor)
-                if tensor_name is None:
+                if tensor not in MODEL_TENSORS[arch]:
                     continue
-                tensor_name = tensor_name.format(bid = bid)
-                mapping[tensor_name] = (tensor, tensor_name)
+                tensor_name = TENSOR_NAMES[tensor].format(bid = bid)
+                self.mapping[tensor_name] = (tensor, tensor_name)
                 for key in keys:
                     key = key.format(bid = bid)
-                    mapping[key] = (tensor, tensor_name)
+                    self.mapping[key] = (tensor, tensor_name)
 
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
         result = self.mapping.get(key)
@@ -800,22 +817,25 @@ class SpecialVocab:
     special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
     special_token_ids: dict[str, int] = {}
 
-    def __init__(self, path: Path, load_merges: bool = False, special_token_types: tuple[str, ...] | None = None):
+    def __init__(
+        self, path: str | os.PathLike[str], load_merges: bool = False,
+        special_token_types: tuple[str, ...] | None = None,
+    ):
         self.special_token_ids = {}
         self.load_merges = load_merges
         if special_token_types is not None:
             self.special_token_types = special_token_types
-        self.load(path)
+        self._load(Path(path))
 
-    def load(self, path: Path):
-        if not self.try_load_from_tokenizer_json(path):
-            self.try_load_from_config_json(path)
+    def _load(self, path: Path) -> None:
+        if not self._try_load_from_tokenizer_json(path):
+            self._try_load_from_config_json(path)
 
-    def try_load_from_tokenizer_json(self, path: Path) -> bool:
+    def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
         if not tokenizer_file.is_file():
             return False
-        with open(tokenizer_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_file, encoding = 'utf-8') as f:
             tokenizer = json.load(f)
         if self.load_merges:
             merges = tokenizer.get('model', {}).get('merges')
@@ -825,7 +845,7 @@ class SpecialVocab:
         added_tokens = tokenizer.get('added_tokens')
         if added_tokens is None or not tokenizer_config_file.is_file():
             return True
-        with open(tokenizer_config_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
         for typ in self.special_token_types:
             entry = tokenizer_config.get(f'{typ}_token')
@@ -844,11 +864,11 @@ class SpecialVocab:
                 break
         return True
 
-    def try_load_from_config_json(self, path: Path) -> bool:
+    def _try_load_from_config_json(self, path: Path) -> bool:
         config_file = path / 'config.json'
         if not config_file.is_file():
             return False
-        with open(config_file, 'r', encoding = 'utf-8') as f:
+        with open(config_file, encoding = 'utf-8') as f:
             config = json.load(f)
         for typ in self.special_token_types:
             maybe_token_id = config.get(f'{typ}_token_id')
@@ -856,7 +876,7 @@ class SpecialVocab:
                 self.special_token_ids[typ] = maybe_token_id
         return True
 
-    def add_to_gguf(self, gw: GGUFWriter):
+    def add_to_gguf(self, gw: GGUFWriter) -> None:
         if len(self.merges) > 0:
             print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
@@ -868,8 +888,8 @@ class SpecialVocab:
             print(f'gguf: Setting special token type {typ} to {tokid}')
             handler(tokid)
 
-    def __repr__(self):
-        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids if self.special_token_ids else "unset"}>'
+    def __repr__(self) -> str:
+        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids or "unset"}>'
 
 
 # Example usage:
