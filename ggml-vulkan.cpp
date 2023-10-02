@@ -939,7 +939,6 @@ void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_siz
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
-    seq.record<kp::OpTensorFill>({out});
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
@@ -951,7 +950,6 @@ void ggml_vk_mul_mat_q4_0(Args&&... args) {
     ggml_vk_mul_mat_q4_x(spirv, 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
-// FIXME: This could be improved like was done in q4_0 version but needs testing...
 template <typename... Args>
 void ggml_vk_mul_mat_q4_1(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_1_comp_spv,
