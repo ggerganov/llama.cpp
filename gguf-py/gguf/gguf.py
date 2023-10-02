@@ -863,7 +863,11 @@ class GGUFWriter:
         self.write_padding(self.fout, self.fout.tell())
 
         if self.temp_file is None:
-            for tensor in self.tensors:
+            while True:
+                try:
+                    tensor = self.tensors.pop(0)
+                except IndexError:
+                    break
                 tensor.tofile(self.fout)
                 self.write_padding(self.fout, tensor.nbytes)
             return
