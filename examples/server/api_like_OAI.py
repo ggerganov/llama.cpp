@@ -53,12 +53,6 @@ def convert_chat(messages):
         if (line["role"] == "function"):
             prompt += f"{fn_n}{line['content']}"
         if (line["role"] == "assistant"):
-            # if (not is_present(line, 'content') or line['content'] is None):
-            #     if is_present(line, 'function_call'):
-            #         # line['content'] = json.dumps({'function_call': line['function_call']})
-            #         fname = line['function_call']['name']
-            #         line['content'] = f'call {fname}'
-
             prompt += f"{ai_n}{line['content']}{stop}"
     prompt += ai_n.rstrip()
 
@@ -120,17 +114,12 @@ def make_grammar(schema, root):
         rules[rulename] = f'( {values} )'
 
     def declare_rules(indent, rules, prefix, name, schema, defs, arrs):
-        # print(indent, "declare_rules() prefix", prefix)
-        # print(indent, "declare_rules() name", name)
-        # print(indent, "declare_rules() schema", schema)
         if 'enum' in schema:
             enum_to_rules(rules, prefix, format_rulename(name), schema)
         elif 'anyOf' in schema:
             anyof_to_rules(rules, prefix, format_rulename(name), schema, defs, arrs)
         elif schema.get('type', None) == 'object':
             obj_to_rules(indent + indent_inc, rules, prefix, format_rulename(name), schema, defs, arrs, is_toplevel=False)
-        # else:
-            # print(indent,"warning, did not declare any rules for (prefix,name,schema)", prefix, name, schema)
 
     def obj_to_rules(indent, rules, prefix, name, schema, defs, arrs, is_toplevel):
         assert(schema['type'] == 'object')
@@ -144,11 +133,6 @@ def make_grammar(schema, root):
         if not is_toplevel:
             rulename = prefix+rulename
         rulename = format_rulename(rulename)
-
-        # print(indent, "obj_to_rules() prefix", prefix)
-        # print(indent, "obj_to_rules() name", name)
-        # print(indent, "obj_to_rules() schema", schema)
-        # print(indent, "obj_to_rules() rulename", rulename)
 
         if '$defs' in schema:
             for name, _def in schema['$defs'].items():
@@ -168,10 +152,8 @@ def make_grammar(schema, root):
             propery_to_grammar(name, schema_typename(prefix, prop, defs, arrs))
             for name, prop in schema['properties'].items()
         ])
-        # rule = f'{rulename} ::= "{{" {properties} "}}"'
         rules[rulename] = f'"{{" {properties} "}}"'
 
-        # print("indent", "obj_to_rules() arrs", arrs)
         for arrtype, elemtype in arrs.items():
             arr_to_rules(rules, prefix, arrtype, elemtype)
 
@@ -184,21 +166,12 @@ def make_grammar(schema, root):
         fns = {}
         arrs = {}
 
-        # print(indent, "model_grammar() schema")
-        # print(indent, schema)
-        # print(indent, "model_grammar() root", root)
-
         for fn in schema:
             name = fn['name']
             params = fn['parameters']
             prefix = f"{name}-"
             fns[name] = obj_to_rules(indent + indent_inc, rules, prefix, name, params, {}, {}, is_toplevel=True)
 
-        # print(indent, "fns")
-        # print(indent, fns)
-
-        # assert("name" in root)
-        # assert(root["name"] in fns)
         root = format_rulename(fns[root["name"]])
 
         rules['root'] = root
@@ -254,8 +227,6 @@ def make_postData(body, chat=False, stream=False, decide_function=False, functio
         grammar = make_grammar(body["functions"], function_call)
         if grammar is not None:
             postData["grammar"] = grammar
-            # print("grammar")
-            # print(grammar)
 
     if(is_present(body, "temperature")): postData["temperature"] = body["temperature"]
     if(is_present(body, "top_k")): postData["top_k"] = body["top_k"]
