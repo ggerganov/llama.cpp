@@ -46,7 +46,7 @@ inline static int32_t vaddvq_s32(int32x4_t v) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <intrin.h>
 #else
-#if !defined(__riscv)
+#if !defined(__riscv) && !defined(__s390__)
 #include <immintrin.h>
 #endif
 #endif
