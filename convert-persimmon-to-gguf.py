@@ -21,7 +21,7 @@ def _flatten_dict(dct, tensors, prefix=None):
             raise ValueError(type(dct[key]))
     return None
 
-def get_tokenizer_info(dir_model: Path):
+def _get_sentencepiece_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
     print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
     tokenizer = SentencePieceProcessor(str(tokenizer_path))  
@@ -38,14 +38,11 @@ def get_tokenizer_info(dir_model: Path):
         text = piece.encode("utf-8")
         score = tokenizer.get_score(i)
 
-        toktype = 1  # defualt to normal token type
+        toktype = 1
         if tokenizer.is_unknown(i):
             toktype = 2
         if tokenizer.is_control(i):
             toktype = 3
-
-        # toktype = 4 is user-defined = tokens from added_tokens.json
-
         if tokenizer.is_unused(i):
             toktype = 5
         if tokenizer.is_byte(i):
@@ -90,7 +87,8 @@ def main():
     gguf_writer.add_head_count_kv(head_count_kv)
     gguf_writer.add_rope_freq_base(hparams.rotary_emb_base)
     gguf_writer.add_layer_norm_eps(hparams.layernorm_epsilon)
-    tokens, scores, toktypes = get_tokenizer_info(args.model_dir)
+
+    tokens, scores, toktypes = _get_sentencepiece_tokenizer_info(args.model_dir)
     gguf_writer.add_tokenizer_model('llama')
     gguf_writer.add_token_list(tokens)
     gguf_writer.add_token_scores(scores)
@@ -113,7 +111,6 @@ def main():
             sys.exit()
         n_dims = len(data.shape)
         print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
-
         gguf_writer.add_tensor(new_name, data)
     print("gguf: write header")
     gguf_writer.write_header_to_file()
