@@ -17,7 +17,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-// #define CLIP_DEBUG
+#define CLIP_DEBUG
 
 static std::string format(const char * fmt, ...) {
     va_list ap;
@@ -267,19 +267,19 @@ size_t get_mem_req_by_size(struct clip_ctx * ctx) {
     switch (n_tensors) {
     case 397:                    // base, two-tower
     case 200:                    // base, vision-only
-        if (n_positions == 50) { // patch size = 32
-            return 12 * mb;
+        if (vision_hparams->patch_size == 32) { // patch size = 32
+            return 96 * mb;
         } else { // patch size = 16
-            return 24 * mb;
+            return 256 * mb;
         }
     case 197: // base or large, text-only
-        return 12 * mb;
+        return 16 * mb;
     case 589:                     // large, two-tower
     case 392:                     // large, vision-only
         if (n_positions == 257) { // input image size = 224
-            return 24 * mb;
-        } else { // input image size = 336
             return 60 * mb;
+        } else { // input image size = 336
+            return 96 * mb;
         }
     case 909: // huge, two-tower
     case 520: // huge, vision-only
@@ -873,8 +873,8 @@ bool clip_text_encode(const clip_ctx * ctx, const int n_threads, const clip_toke
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = {};
 
-    static size_t scr0_size = get_scr_buf_req_by_size((struct clip_ctx *)ctx);
-    static void * scr0 = malloc(scr0_size);
+    //static size_t scr0_size = get_scr_buf_req_by_size((struct clip_ctx *)ctx);
+    //static void * scr0 = malloc(scr0_size);
 
     struct ggml_tensor * input_ids = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(input_ids->data, tokens->data, N * ggml_element_size(input_ids));
@@ -892,7 +892,7 @@ bool clip_text_encode(const clip_ctx * ctx, const int n_threads, const clip_toke
     for (int il = 0; il < n_layer; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
-        ggml_set_scratch(ctx0, {0, scr0_size, scr0});
+        //ggml_set_scratch(ctx0, {0, scr0_size, scr0});
 
         // layernorm1
         {
@@ -982,7 +982,7 @@ bool clip_text_encode(const clip_ctx * ctx, const int n_threads, const clip_toke
     struct ggml_tensor * eot = ggml_new_i32(ctx0, N - 1);
     embeddings = ggml_get_rows(ctx0, embeddings, eot);
 
-    ggml_set_scratch(ctx0, {0, 0, nullptr});
+    //ggml_set_scratch(ctx0, {0, 0, nullptr});
 
     // text projection
     embeddings = ggml_mul_mat(ctx0, model.projection, embeddings);
@@ -998,11 +998,14 @@ bool clip_text_encode(const clip_ctx * ctx, const int n_threads, const clip_toke
     // run the computation
 
     ggml_build_forward_expand(&gf, embeddings);
+    /*
     ggml_cplan cplan = ggml_graph_plan(&gf, n_threads);
     if (cplan.work_size != 0) {
         cplan.work_data = (uint8_t *)malloc(cplan.work_size);
     }
     ggml_graph_compute(&gf, &cplan);
+*/
+ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
 
 // print
 #ifdef CLIP_DEBUG
@@ -1050,10 +1053,11 @@ bool clip_text_encode(const clip_ctx * ctx, const int n_threads, const clip_toke
     printf("used_mem = %zu\n", ggml_used_mem(ctx0));
 #endif
     memcpy(vec, ggml_get_data_f32(embeddings), sizeof(float) * projection_dim);
-
+/*
     if (cplan.work_size != 0) {
         free(cplan.work_data);
     }
+*/
 
     ggml_free(ctx0);
 
@@ -1107,8 +1111,8 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph gf = {};
 
-    static size_t scr0_size = get_scr_buf_req_by_size((struct clip_ctx *)ctx);
-    static void * scr0 = malloc(scr0_size);
+    //static size_t scr0_size = get_scr_buf_req_by_size((struct clip_ctx *)ctx);
+    //static void * scr0 = malloc(scr0_size);
 
     struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size, image_size, 3, batch_size);
 
@@ -1172,7 +1176,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
 
         const size_t nb_q_w = model.layers[il].q_w->nb[0];
 
-        ggml_set_scratch(ctx0, {0, scr0_size, scr0});
+        //ggml_set_scratch(ctx0, {0, scr0_size, scr0});
 
         // layernorm1
         {
@@ -1265,7 +1269,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
                               ggml_repeat(ctx0, model.post_ln_b, embeddings));
     }
 
-    ggml_set_scratch(ctx0, {0, 0, nullptr});
+    //ggml_set_scratch(ctx0, {0, 0, nullptr});
 
     // final visual projection
     embeddings = ggml_mul_mat(ctx0, model.projection, embeddings);
@@ -1285,12 +1289,15 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
 
     // run the computation
     ggml_build_forward_expand(&gf, output);
+    /*
     ggml_cplan cplan = ggml_graph_plan(&gf, n_threads);
     cplan.work_size *= batch_size;
     if (cplan.work_size != 0) {
         cplan.work_data = (uint8_t *)malloc(cplan.work_size);
     }
     ggml_graph_compute(&gf, &cplan);
+*/
+ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
 
 // print
 #ifdef CLIP_DEBUG
@@ -1340,10 +1347,11 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
 #endif
 
     memcpy(vec, ggml_get_data_f32(output), sizeof(float) * projection_dim * batch_size);
-
+/*
     if (cplan.work_size != 0) {
         free(cplan.work_data);
     }
+*/
 
     ggml_free(ctx0);
 
