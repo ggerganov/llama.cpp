@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-MODEL=./models/ggml-vicuna-13b-1.1-q4_0.bin
-MODEL_NAME=Vicuna
+MODEL=./models/llama-2-7b/ggml-model-q4_0.gguf
+MODEL_NAME=Llama2-7b-ggml-q4
 
 # exec options
-prefix="Human: " # Ex. Vicuna uses "Human: "
+prefix="Question: " # Ex. Vicuna uses "Human: "
 opts="--temp 0 -n 80" # additional flags
 nl='
 '
@@ -13,6 +13,7 @@ introduction="You will be playing a game of Jeopardy. Simply answer the question
 
 # file options
 question_file=./examples/jeopardy/questions.txt
+# if the required model file doesn't exist, create it; otherwise update it
 touch ./examples/jeopardy/results/$MODEL_NAME.txt
 output_file=./examples/jeopardy/results/$MODEL_NAME.txt
 
@@ -21,7 +22,7 @@ counter=1
 echo 'Running'
 while IFS= read -r question
 do
-  exe_cmd="./main -p "\"$prefix$introduction$nl$prefix$question\"" "$opts" -m ""\"$MODEL\""" >> ""\"$output_file\""
+  exe_cmd="./build/bin/main -p "\"$nl$prefix$question\"" "$opts" -m ""\"$MODEL\""" >> ""\"$output_file\""
   echo $counter
   echo "Current Question: $question"
   eval "$exe_cmd"
