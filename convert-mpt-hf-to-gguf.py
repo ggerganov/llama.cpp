@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# HF gptneox--> gguf conversion
+# HF mpt--> gguf conversion
 
 from __future__ import annotations
 
