@@ -293,8 +293,9 @@ static uint32_t codepoint_from_utf8(const std::string& utf8, size_t& offset) {
 static std::vector<uint32_t> codepoints_from_utf8(const std::string& utf8) {
     std::vector<uint32_t> result;
     size_t offset = 0;
-    while (offset < utf8.size())
+    while (offset < utf8.size()) {
         result.push_back(codepoint_from_utf8(utf8, offset));
+    }
     return result;
 }
 
