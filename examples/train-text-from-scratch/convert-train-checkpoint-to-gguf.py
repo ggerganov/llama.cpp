@@ -364,7 +364,7 @@ class ModelParams:
         gguf_writer.add_feed_forward_length(self.get_n_ff())
 
 def tensor_name(key, bid=None):
-    return gguf.MODEL_TENSOR_NAMES[gguf.MODEL_ARCH.LLAMA][key].format(bid=bid) + ".weight"
+    return gguf.TENSOR_NAMES[key].format(bid=bid) + ".weight"
 
 class Layer:
     def __init__(self, params, bid):
