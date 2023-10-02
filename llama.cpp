@@ -4304,11 +4304,11 @@ static struct ggml_cgraph * llm_build_mpt(
             offload_func_kq(KQ_scaled);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
-			// TODO: replace with ggml_add()
-			struct ggml_tensor * KQ_scaled_alibi =
-				ggml_alibi(ctx0, KQ_scaled, std::max(kv_head, n_kv - n_tokens), n_head, max_alibi_bias);
+            // TODO: replace with ggml_add()
+            struct ggml_tensor * KQ_scaled_alibi =
+                ggml_alibi(ctx0, KQ_scaled, std::max(kv_head, n_kv - n_tokens), n_head, max_alibi_bias);
             offload_func_kq(KQ_scaled_alibi);
-			ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
+            ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
             offload_func_kq(KQ_masked);

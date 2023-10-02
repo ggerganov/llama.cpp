@@ -121,7 +121,7 @@ gguf_writer.add_embedding_length(hparams["d_model"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_feed_forward_length(4 * hparams["d_model"])
 gguf_writer.add_head_count(hparams["n_heads"])
-gguf_writer.add_layer_norm_eps(1e-05) 
+gguf_writer.add_layer_norm_eps(1e-05)
 if hparams["attn_config"]["clip_qkv"] is not None:
     gguf_writer.add_clamp_kqv(hparams["attn_config"]["clip_qkv"])
 gguf_writer.add_max_alibi_bias(hparams["attn_config"]["alibi_bias_max"])
