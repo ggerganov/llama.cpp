@@ -367,7 +367,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.45.1"
+KcppVersion = "1.45.2"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -583,7 +583,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
 
-        elif self.path.endswith('/api/extra/oai/v1/models'):
+        elif self.path.endswith('/v1/models') or self.path.endswith('/models'):
             response_body = (json.dumps({"object":"list","data":[{"id":"koboldcpp","object":"model","created":1,"owned_by":"koboldcpp","permission":[],"root":"koboldcpp"}]}).encode())
 
         elif self.path.endswith(('/api')) or self.path.endswith(('/api/v1')):
@@ -684,7 +684,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 api_format = 2
                 kai_sse_stream_flag = True
 
-            if self.path.endswith('/api/extra/oai/v1/completions'):
+            if self.path.endswith('/v1/completions') or self.path.endswith('/completions'):
                 api_format = 3
 
             if api_format>0:

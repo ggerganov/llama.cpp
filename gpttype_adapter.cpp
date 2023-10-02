@@ -788,6 +788,8 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.rope_freq_base = rope_freq_base;
         llama_ctx_params.rope_freq_scale = rope_freq_scale;
         llama_ctx_params.n_batch = blasbatchsize;
+        llama_ctx_params.n_threads = n_threads;
+        llama_ctx_params.n_threads_batch = n_blasthreads;
 
         #if defined(GGML_USE_CUBLAS)
         bool ts_all_zero = true;
@@ -1365,7 +1367,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         params.n_batch = bbs; //received reports of 1024 and above crashing on some models
         if(!ggml_cpu_has_gpublas())
         {
-            params.n_threads = 1; //do not limit here anymore.
+            //does not limit here for gguf anymore. this is kept for older models.
+            //new models will override threads inside decode fn.
+            params.n_threads = 1;
             params.n_threads_batch = 1;
         }
         else
