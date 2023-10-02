@@ -750,19 +750,18 @@ void ggml_metal_graph_compute(
                 id<MTLBuffer> id_dst  = dst  ? ggml_metal_get_buffer(ctx, dst,  &offs_dst)  : nil;
 
                 //GGML_METAL_LOG_INFO("%s: op - %s\n", __func__, ggml_op_name(dst->op));
-                if (src0) {
-                    GGML_METAL_LOG_INFO("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
-                            ggml_is_contiguous(src0), src0->name);
-                }
-                if (src1) {
-                    GGML_METAL_LOG_INFO("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
-                            ggml_is_contiguous(src1), src1->name);
-                }
-                if (dst) {
-                    GGML_METAL_LOG_INFO("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
-                            dst->name);
-                }
-*/
+                //if (src0) {
+                //    GGML_METAL_LOG_INFO("%s: src0 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src0t), ne00, ne01, ne02,
+                //            ggml_is_contiguous(src0), src0->name);
+                //}
+                //if (src1) {
+                //    GGML_METAL_LOG_INFO("%s: src1 - %4s [%5lld, %5lld, %5lld], %d, %s\n", __func__, ggml_type_name(src1t), ne10, ne11, ne12,
+                //            ggml_is_contiguous(src1), src1->name);
+                //}
+                //if (dst) {
+                //    GGML_METAL_LOG_INFO("%s: dst  - %4s [%5lld, %5lld, %5lld], 1, %s\n",  __func__, ggml_type_name(dstt),  ne0,  ne1,  ne2,
+                //            dst->name);
+                //}
 
                 switch (dst->op) {
                     case GGML_OP_NONE:
@@ -775,8 +774,6 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_CONCAT:
                         {
-                            GGML_ASSERT(ggml_is_contiguous(src0));
-                            GGML_ASSERT(ggml_is_contiguous(src1));
 
                             int64_t nb = ne00;
                             [encoder setComputePipelineState:ctx->pipeline_concat];
@@ -951,6 +948,8 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_SQR:
                         {
+                            GGML_ASSERT(ggml_is_contiguous(src0));
+
                             [encoder setComputePipelineState:ctx->pipeline_sqr];
                             [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                             [encoder setBuffer:id_dst offset:offs_dst atIndex:1];

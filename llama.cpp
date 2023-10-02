@@ -3037,10 +3037,8 @@ static struct ggml_cgraph * llm_build_baichaun(
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size,
         /*.mem_buffer =*/ buf_compute.data,
-        /*.no_alloc   =*/ false,
+        /*.no_alloc   =*/ true,
     };
-
-    params.no_alloc = true;
 
     struct ggml_context * ctx0 = ggml_init(params);
 
@@ -3445,10 +3443,8 @@ static struct ggml_cgraph * llm_build_falcon(
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size,
         /*.mem_buffer =*/ buf_compute.data,
-        /*.no_alloc   =*/ false,
+        /*.no_alloc   =*/ true,
     };
-
-    params.no_alloc = true;
 
     struct ggml_context * ctx0 = ggml_init(params);
 
@@ -3805,10 +3801,8 @@ static struct ggml_cgraph * llm_build_starcoder(
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_compute.size,
         /*.mem_buffer =*/ buf_compute.data,
-        /*.no_alloc   =*/ false,
+        /*.no_alloc   =*/ true,
     };
-
-    params.no_alloc = true;
 
     struct ggml_context * ctx0 = ggml_init(params);
 
