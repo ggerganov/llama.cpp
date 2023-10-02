@@ -1076,6 +1076,10 @@ struct llama_vocab {
     id special_pad_id = -1;
 
     id linefeed_id = 13;
+    id special_prefix_id = 32007;
+    id special_middle_id = 32009;
+    id special_suffix_id = 32008;
+    id special_eot_id = 32010;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
         replace_all(token_left,  " ",  "\u0120");
@@ -6756,13 +6760,14 @@ struct llama_context * llama_new_context_with_model(
 
 #ifdef GGML_USE_METAL
             if (model->n_gpu_layers > 0) {
+                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
+
                 ctx->ctx_metal = ggml_metal_init(1);
                 if (!ctx->ctx_metal) {
                     LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
                     llama_free(ctx);
                     return NULL;
                 }
-                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
                 //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
@@ -7489,6 +7494,22 @@ llama_token llama_token_eos(const struct llama_context * ctx) {
 llama_token llama_token_nl(const struct llama_context * ctx) {
     return ctx->model.vocab.linefeed_id;
 }
+llama_token llama_token_prefix(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_prefix_id;
+}
+
+llama_token llama_token_middle(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_middle_id;
+}
+
+llama_token llama_token_suffix(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_suffix_id;
+}
+
+llama_token llama_token_eot(const struct llama_context * ctx) {
+    return ctx->model.vocab.special_eot_id;
+}
+
 
 int llama_tokenize(
     const struct llama_model * model,
