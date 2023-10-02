@@ -359,7 +359,7 @@ static std::vector<uint32_t> codepoints_from_utf16(const std::vector<uint16_t>& 
 
 static std::unordered_map<uint32_t, int> codepoint_type_map() {
     std::unordered_map<uint32_t, int> codepoint_types;
-    for(auto p : digit_ranges) {
+    for (auto p : digit_ranges) {
         for(auto i = p.first; i <= p.second; ++ i)
             codepoint_types[i] = CODEPOINT_TYPE_DIGIT;
     }
