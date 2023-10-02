@@ -1,0 +1,25 @@
+/**
+ * Copyright (c) 2023 Nomic, Inc. All rights reserved.
+ *
+ * This software is licensed under the terms of the Software for Open Models License (SOM),
+ * version 1.0, as detailed in the LICENSE_SOM.txt file. A copy of this license should accompany
+ * this software. Except as expressly granted in the SOM license, all rights are reserved by Nomic, Inc.
+ */
+
+void main() {
+    const uint i = gl_WorkGroupID.x;
+    const int r = inB[i + pcs.inBOff];
+
+    int z = 0;
+    for (uint ind = gl_LocalInvocationID.x; ind < pcs.ne00/16; ind += gl_WorkGroupSize.x) {
+        const uint inIndex = (r * pcs.nb01 + pcs.inAOff) + ind/NL * SIZE_OF_BLOCK;
+        const mat4 result = dequantize_block(inIndex, ind%NL);
+        for (uint j = 0; j < 4; ++j) {
+            for (uint k = 0; k < 4; ++k) {
+                const uint outIndex = i * pcs.nb1/BYTES_FOR_TYPE + pcs.outOff + z;
+                out_[outIndex] = result[j][k];
+                ++z;
+            }
+        }
+    }
+}

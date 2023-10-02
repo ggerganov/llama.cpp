@@ -25,11 +25,15 @@ layout (push_constant) uniform parameter {
     int nb1;
 } pcs;
 
+void dequantize_row_f16(uint x /*Based from inA unaligned*/, uint y /*Based from out_*/, int k) {
+    for (int j = 0; j < k; j++) {
+        out_[y + j] = inA[x + j];
+    }
+}
+
 void main() {
     const uint i = gl_WorkGroupID.x;
     const int r = inB[i + pcs.inBOff];
 
-    for (int j = 0; j < pcs.ne00; j++) {
-        out_[i*pcs.nb1 + j + pcs.outOff] = inA[r*pcs.nb01/2+j + pcs.inAOff];
-    }
+    dequantize_row_f16(r*pcs.nb01/2/*bytes for float16*/ + pcs.inAOff, i*pcs.nb1 + pcs.outOff, pcs.ne00);
 }
