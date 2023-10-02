@@ -25,9 +25,11 @@
 #include "shaderop_mul_mat_f16.h"
 #include "shaderop_mul_mat_q4_0.h"
 #include "shaderop_mul_mat_q4_1.h"
+#include "shaderop_mul_mat_q6_k.h"
 #include "shaderop_getrows_f16.h"
 #include "shaderop_getrows_q4_0.h"
 #include "shaderop_getrows_q4_1.h"
+#include "shaderop_getrows_q6_k.h"
 #include "shaderop_rope.h"
 #include "shaderop_cpy_f16_f16.h"
 #include "shaderop_cpy_f16_f32.h"
@@ -52,6 +54,7 @@
 #define QK4_0 32
 #define QR4_0 2
 #define QK4_1 32
+#define QK_NL 16
 
 typedef ggml_fp16_t half;
 struct ggml_kompute_context {
@@ -958,6 +961,38 @@ void ggml_vk_mul_mat_q4_1(Args&&... args) {
     ggml_vk_mul_mat_q4_x(spirv, 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
+void ggml_vk_mul_mat_q6_k(kp::Sequence& seq,
+                          const std::shared_ptr<kp::Tensor>& inA,
+                          const std::shared_ptr<kp::Tensor>& inB,
+                          const std::shared_ptr<kp::Tensor>& out,
+                          uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+                          int32_t ne00, int32_t ne10, int32_t ne0, int32_t ne1,
+                          int32_t ne01, int32_t ne11, int32_t ne12, int32_t ne02) {
+    const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q6_k_comp_spv,
+        kp::shader_data::op_mul_mat_q6_k_comp_spv_len);
+
+    struct PushConstants {
+        uint32_t inAOff, inBOff, outOff;
+        int32_t ne00, ne10, ne0, ne1, ne01, gqa;
+    } pushConsts {
+        inAOff, safe_divide(inBOff, 4), safe_divide(outOff, 4),
+        ne00, ne10, ne0, ne1, ne01, ne12/ne02
+    };
+
+    std::shared_ptr<kp::Algorithm> s_algo = nullptr;
+    if (!komputeManager()->hasAlgorithm(__func__)) {
+//        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {inA, inB, out}, spirv, {unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)}, {2,32}, {pushConsts});
+    } else {
+        s_algo = komputeManager()->getAlgorithm(__func__);
+        s_algo->setTensors({inA, inB, out});
+        s_algo->setWorkgroup({unsigned((ne01 + 1)/2), unsigned(ne11), unsigned(ne12)});
+        s_algo->setPushConstants<PushConstants>({pushConsts});
+        s_algo->updateDescriptors(s_kompute_context->pool.get());
+    }
+    seq.record<kp::OpAlgoDispatch>(s_algo);
+}
+
 void ggml_vk_get_rows(const std::vector<uint32_t>& spirv,
                       unsigned element_size, unsigned qk,
                       kp::Sequence& seq,
@@ -1014,6 +1049,13 @@ void ggml_vk_get_rows_q4_1(Args&&... args) {
         kp::shader_data::op_getrows_q4_1_comp_spv_len);
 
     ggml_vk_get_rows(spirv, 1/*We access blocks unaligned*/, QK4_1, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+void ggml_vk_get_rows_q6_k(Args&&... args) {
+    const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q6_k_comp_spv,
+        kp::shader_data::op_getrows_q6_k_comp_spv_len);
+    ggml_vk_get_rows(spirv, 1/*We access blocks unaligned*/, QK_NL, std::forward<Args>(args)...);
 }
 
 void ggml_vk_rope(kp::Sequence& seq,
@@ -1297,6 +1339,9 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                                 case GGML_TYPE_Q4_1:
                                     ggml_vk_mul_mat_q4_1(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02);
                                     break;
+                                case GGML_TYPE_Q6_K:
+                                    ggml_vk_mul_mat_q6_k(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne10, ne0, ne1, ne01, ne11, ne12, ne02);
+                                    break;
                                 default: {
                                     fprintf(stderr, "%s: %s: Unsupported quantization: %u/%u\n", __func__, ggml_op_name(dst->op), src0t, src1t);
                                     goto not_implemented;
@@ -1312,6 +1357,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                             ggml_vk_get_rows_q4_0(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else if (src0t == GGML_TYPE_Q4_1) {
                             ggml_vk_get_rows_q4_1(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
+                        } else if (src0t == GGML_TYPE_Q6_K) {
+                            ggml_vk_get_rows_q6_k(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, nb01, nb1, ggml_nelements(src1));
                         } else {
                             fprintf(stderr, "%s: %s: Unsupported quantization: %u\n", __func__, ggml_op_name(dst->op), src0t);
                             goto not_implemented;
