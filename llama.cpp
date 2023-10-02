@@ -7276,7 +7276,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         }
 
         ctx->kv_self.head = kv_ntok;
-        ctx->kv_self.size = kv_size;
+        ctx->kv_self.size = n_ctx;
     }
 
     const size_t nread    = inp - src;
