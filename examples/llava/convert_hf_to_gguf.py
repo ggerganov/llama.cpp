@@ -10,8 +10,10 @@ from transformers import CLIPModel, CLIPProcessor
 TEXT = "clip.text"
 VISION = "clip.vision"
 
+
 def k(raw_key: str, arch: str) -> str:
     return raw_key.format(arch=arch)
+
 
 def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: bool) -> bool:
     if name in (
@@ -20,22 +22,23 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
         "vision_model.embeddings.position_ids",
     ):
         return True
-    
-    if name == "visual_projection.weight" and has_llava:
+
+    if has_llava and name in ["visual_projection.weight", "vision_model.post_layernorm.weight", "vision_model.post_layernorm.bias"]:
         return True
-    
+
     if name.startswith("v") and not has_vision:
         return True
-    
+
     if name.startswith("t") and not has_text:
         return True
-    
+
     return False
+
 
 def get_tensor_name(name: str) -> str:
     if "projection" in name:
         return name
-    
+
     return name.replace("text_model", "t").replace("vision_model", "v").replace("encoder.layers", "blk").replace("embeddings.", "").replace("_proj", "").replace("self_attn.", "attn_").replace("layer_norm", "ln").replace("layernorm", "ln").replace("mlp.fc1", "ffn_down").replace("mlp.fc2", "ffn_up").replace("embedding", "embd").replace("final", "post").replace("layrnorm", "ln")
 
 
@@ -64,11 +67,14 @@ def bytes_to_unicode():
     cs = [chr(n) for n in cs]
     return dict(zip(bs, cs))
 
+
 ap = argparse.ArgumentParser(prog="convert_hf_to_gguf.py")
 ap.add_argument("-m", "--model-dir", help="Path to model directory cloned from HF Hub", required=True)
 ap.add_argument("--use-f32", action="store_true", default=False, help="Use f32 instead of f16")
-ap.add_argument("--text-only", action="store_true", required=False, help="Save a text-only model. It can't be used to encode images")
-ap.add_argument("--vision-only", action="store_true", required=False, help="Save a vision-only model. It can't be used to encode texts")
+ap.add_argument("--text-only", action="store_true", required=False,
+                help="Save a text-only model. It can't be used to encode images")
+ap.add_argument("--vision-only", action="store_true", required=False,
+                help="Save a vision-only model. It can't be used to encode texts")
 ap.add_argument("--llava-projector", help="Path to projector.pt file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--image-mean", nargs=3, type=float, required=False, help="Override image mean values")
 ap.add_argument("--image-std", nargs=3, type=float, required=False, help="Override image std values")
@@ -76,7 +82,7 @@ ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Defaul
 
 args = ap.parse_args()
 
-    
+
 if args.text_only and args.vision_only:
     print("--text-only and --image-only arguments cannot be specified at the same time.")
     exit(1)
@@ -91,7 +97,7 @@ dir_model = args.model_dir
 with open(dir_model + "/vocab.json", "r", encoding="utf-8") as f:
     vocab = json.load(f)
     tokens = [key for key in vocab]
-    
+
 with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
     v_hparams = config["vision_config"]
@@ -108,7 +114,7 @@ ftype = 1
 if args.use_f32:
     ftype = 0
 
-        
+
 model = CLIPModel.from_pretrained(dir_model)
 processor = CLIPProcessor.from_pretrained(dir_model)
 
@@ -182,8 +188,6 @@ use_gelu = v_hparams["hidden_act"] == "gelu"
 fout.add_bool("clip.use_gelu", use_gelu)
 
 
-    
-
 if has_llava_projector:
     model.vision_model.encoder.layers.pop(-1)
     projector = torch.load(args.llava_projector)
@@ -203,7 +207,7 @@ for name, data in list_vars.items():
 
     name = get_tensor_name(name)
     data = data.squeeze().numpy()
-    
+
     n_dims = len(data.shape)
 
     # ftype == 0 -> float32, ftype == 1 -> float16
@@ -229,8 +233,7 @@ for name, data in list_vars.items():
 
     print(f"{name} - {ftype_str[ftype_cur]} - shape = {data.shape}")
     fout.add_tensor(name, data)
-    
-        
+
 
 fout.write_header_to_file()
 fout.write_kv_data_to_file()
