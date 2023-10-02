@@ -6760,13 +6760,14 @@ struct llama_context * llama_new_context_with_model(
 
 #ifdef GGML_USE_METAL
             if (model->n_gpu_layers > 0) {
+                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
+
                 ctx->ctx_metal = ggml_metal_init(1);
                 if (!ctx->ctx_metal) {
                     LLAMA_LOG_ERROR("%s: ggml_metal_init() failed\n", __func__);
                     llama_free(ctx);
                     return NULL;
                 }
-                ggml_metal_log_set_callback(llama_log_callback_default, NULL);
                 //ggml_metal_graph_find_concurrency(ctx->ctx_metal, gf, false);
                 //ggml_allocr_set_parse_seq(ctx->alloc, ggml_metal_get_concur_list(ctx->ctx_metal), ggml_metal_if_optimized(ctx->ctx_metal));
             }
