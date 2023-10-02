@@ -490,6 +490,11 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
     LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    // codellama infill tokens
+    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
 
     //
     // Tokenization
