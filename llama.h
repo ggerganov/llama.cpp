@@ -167,18 +167,18 @@ extern "C" {
 
     struct llama_context_params {
         uint32_t seed;            // RNG seed, -1 for random
-        uint32_t n_ctx;           // text context
-        uint32_t n_batch;         // prompt processing batch size
+        uint32_t n_ctx;           // text context, 0 = from model
+        uint32_t n_batch;         // prompt processing maximum batch size
         uint32_t n_threads;       // number of threads to use for generation
         uint32_t n_threads_batch; // number of threads to use for batch processing
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float rope_freq_base;  // RoPE base frequency
-        float rope_freq_scale; // RoPE frequency scaling factor
+        float rope_freq_base;  // RoPE base frequency, 0 = from model
+        float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
-        bool f16_kv;     // use fp16 for KV cache
+        bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool embedding;  // embedding mode only
     };
@@ -490,6 +490,11 @@ extern "C" {
     LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
     LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
     LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    // codellama infill tokens
+    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
 
     //
     // Tokenization

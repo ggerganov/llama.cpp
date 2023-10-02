@@ -56,11 +56,13 @@ find_library(llama_LIBRARY llama
     HINTS ${LLAMA_LIB_DIR})
 
 set(_llama_link_deps "Threads::Threads" "@LLAMA_EXTRA_LIBS@")
+set(_llama_transient_defines "@LLAMA_TRANSIENT_DEFINES@")
 add_library(llama UNKNOWN IMPORTED)
 set_target_properties(llama
     PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${LLAMA_INCLUDE_DIR}"
         INTERFACE_LINK_LIBRARIES "${_llama_link_deps}"
+        INTERFACE_COMPILE_DEFINITIONS "${_llama_transient_defines}"
         IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
         IMPORTED_LOCATION "${llama_LIBRARY}"
         INTERFACE_COMPILE_FEATURES cxx_std_11
