@@ -330,12 +330,16 @@ extern "C" {
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
     // Remove all tokens data of cells in [c0, c1)
+    // c0 < -1 : [0,  c1]
+    // c1 < -1 : [c0, inf)
     LLAMA_API void llama_kv_cache_tokens_rm(
             struct llama_context * ctx,
                          int32_t   c0,
                          int32_t   c1);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
+    // p0 < -1 : [0,  p1]
+    // p1 < -1 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
@@ -344,6 +348,8 @@ extern "C" {
 
     // Copy all tokens that belong to the specified sequence to another sequence
     // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
+    // p0 < -1 : [0,  p1]
+    // p1 < -1 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_cp(
             struct llama_context * ctx,
                     llama_seq_id   seq_id_src,
@@ -358,6 +364,8 @@ extern "C" {
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly
+    // p0 < -1 : [0,  p1]
+    // p1 < -1 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_shift(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,

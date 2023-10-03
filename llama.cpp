@@ -1281,8 +1281,8 @@ static bool llama_kv_cache_init(
 // find an empty slot of size "n_tokens" in the cache
 // updates the cache head
 static bool llama_kv_cache_find_slot(
-             struct llama_kv_cache & cache,
-          const struct llama_batch & batch) {
+           struct llama_kv_cache & cache,
+        const struct llama_batch & batch) {
     const uint32_t n_ctx    = cache.size;
     const uint32_t n_tokens = batch.n_tokens;
 
@@ -1350,10 +1350,13 @@ static void llama_kv_cache_tokens_rm(struct llama_kv_cache & cache, int32_t c0, 
 }
 
 static void llama_kv_cache_seq_rm(
-             struct llama_kv_cache & cache,
-                      llama_seq_id   seq_id,
-                         llama_pos   p0,
-                         llama_pos   p1) {
+        struct llama_kv_cache & cache,
+                 llama_seq_id   seq_id,
+                    llama_pos   p0,
+                    llama_pos   p1) {
+    if (p0 < 0) p0 = 0;
+    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].seq_id.erase(seq_id);
@@ -1365,11 +1368,14 @@ static void llama_kv_cache_seq_rm(
 }
 
 static void llama_kv_cache_seq_cp(
-             struct llama_kv_cache & cache,
-                      llama_seq_id   seq_id_src,
-                      llama_seq_id   seq_id_dst,
-                         llama_pos   p0,
-                         llama_pos   p1) {
+        struct llama_kv_cache & cache,
+                 llama_seq_id   seq_id_src,
+                 llama_seq_id   seq_id_dst,
+                    llama_pos   p0,
+                    llama_pos   p1) {
+    if (p0 < 0) p0 = 0;
+    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id_src) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].seq_id.insert(seq_id_dst);
@@ -1387,11 +1393,14 @@ static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id 
 }
 
 static void llama_kv_cache_seq_shift(
-             struct llama_kv_cache & cache,
-                      llama_seq_id   seq_id,
-                         llama_pos   p0,
-                         llama_pos   p1,
-                         llama_pos   delta) {
+        struct llama_kv_cache & cache,
+                 llama_seq_id   seq_id,
+                    llama_pos   p0,
+                    llama_pos   p1,
+                    llama_pos   delta) {
+    if (p0 < 0) p0 = 0;
+    if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].pos += delta;
@@ -7478,25 +7487,6 @@ void llama_batch_free(struct llama_batch batch) {
 int llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
-    // TODO: temporary solution to auto clear "future" tokens from the cache
-    //       ref: https://github.com/ggerganov/llama.cpp/pull/3400
-    if (batch.pos) {
-        std::map<llama_seq_id, llama_pos> seq_min_pos;
-        for (int i = 0; i < batch.n_tokens; i++) {
-            if (seq_min_pos.count(batch.seq_id[i]) == 0) {
-                seq_min_pos[batch.seq_id[i]] = batch.pos[i];
-            } else {
-                seq_min_pos[batch.seq_id[i]] = std::min(seq_min_pos[batch.seq_id[i]], batch.pos[i]);
-            }
-        }
-
-        for (auto & kv : seq_min_pos) {
-            llama_kv_cache_seq_rm(ctx->kv_self, kv.first, kv.second, ctx->cparams.n_ctx);
-        }
-    } else {
-        llama_kv_cache_seq_rm(ctx->kv_self, batch.all_seq_id, batch.all_pos_0, ctx->cparams.n_ctx);
-    }
-
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
