@@ -34,7 +34,6 @@ class load_model_inputs(ctypes.Structure):
                 ("use_mmap", ctypes.c_bool),
                 ("use_mlock", ctypes.c_bool),
                 ("use_smartcontext", ctypes.c_bool),
-                ("unban_tokens", ctypes.c_bool),
                 ("clblast_info", ctypes.c_int),
                 ("cublas_info", ctypes.c_int),
                 ("blasbatchsize", ctypes.c_int),
@@ -224,7 +223,6 @@ def load_model(model_filename):
         if len(args.lora) > 1:
             inputs.lora_base = args.lora[1].encode("UTF-8")
     inputs.use_smartcontext = args.smartcontext
-    inputs.unban_tokens = args.unbantokens
     inputs.blasbatchsize = args.blasbatchsize
     inputs.forceversion = args.forceversion
     inputs.gpulayers = args.gpulayers
@@ -307,11 +305,7 @@ def generate(prompt,max_length=20, max_context_length=512, temperature=0.8, top_
     inputs.grammar = grammar.encode("UTF-8")
     inputs.grammar_retain_state = grammar_retain_state
     inputs.unban_tokens_rt = not use_default_badwordsids
-    if args.usemirostat and args.usemirostat[0]>0:
-        inputs.mirostat = int(args.usemirostat[0])
-        inputs.mirostat_tau = float(args.usemirostat[1])
-        inputs.mirostat_eta = float(args.usemirostat[2])
-    elif mirostat in (1, 2):
+    if mirostat in (1, 2):
         inputs.mirostat = mirostat
         inputs.mirostat_tau = mirostat_tau
         inputs.mirostat_eta = mirostat_eta
@@ -367,7 +361,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.45.2"
+KcppVersion = "1.46"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -529,17 +523,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         force_json = False
 
         if self.path in ["", "/?"] or self.path.startswith(('/?','?')): #it's possible for the root url to have ?params without /
-            if args.stream and not "streaming=1" in self.path:
-                self.path = self.path.replace("streaming=0","")
-                if self.path.startswith(('/?','?')):
-                    self.path += "&streaming=1"
-                else:
-                    self.path = self.path + "?streaming=1"
-                self.send_response(302)
-                self.send_header("Location", self.path)
-                self.end_headers()
-                print("Force redirect to streaming mode, as --stream is set.")
-                return None
 
             if self.embedded_kailite is None:
                 response_body = (f"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href='https://lite.koboldai.net?local=1&port={self.port}'>use this URL</a> to connect.").encode()
@@ -954,28 +937,18 @@ def show_new_gui():
     launchbrowser = ctk.IntVar(value=1)
     highpriority = ctk.IntVar()
     disablemmap = ctk.IntVar()
-    psutil = ctk.IntVar()
     usemlock = ctk.IntVar()
     debugmode = ctk.IntVar()
     keepforeground = ctk.IntVar()
 
     lowvram_var = ctk.IntVar()
     mmq_var = ctk.IntVar(value=1)
-
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
     version_var =ctk.StringVar(value="0")
 
-    stream = ctk.IntVar()
     smartcontext = ctk.IntVar()
-    unbantokens = ctk.IntVar()
-    usemirostat = ctk.IntVar()
-    mirostat_var = ctk.StringVar(value="2")
-    mirostat_tau = ctk.StringVar(value="5.0")
-    mirostat_eta = ctk.StringVar(value="0.1")
-
     context_var = ctk.IntVar()
-
     customrope_var = ctk.IntVar()
     customrope_scale = ctk.StringVar(value="1.0")
     customrope_base = ctk.StringVar(value="10000")
@@ -1066,7 +1039,7 @@ def show_new_gui():
     makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
 
     # quick boxes
-    quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Streaming Mode":stream, "Use SmartContext":smartcontext, "Unban Tokens":unbantokens, "Disable MMAP":disablemmap,}
+    quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Use SmartContext":smartcontext, "Disable MMAP":disablemmap,}
     for idx, name, in enumerate(quick_boxes):
         makecheckbox(quick_tab, name, quick_boxes[name], int(idx/2) +20, idx%2)
     # context size
@@ -1099,7 +1072,7 @@ def show_new_gui():
     makelabelentry(hardware_tab, "Threads:" , threads_var, 8, 50)
 
     # hardware checkboxes
-    hardware_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "PSUtil Set Threads":psutil, "Debug Mode":debugmode, "Keep Foreground":keepforeground}
+    hardware_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "Debug Mode":debugmode, "Keep Foreground":keepforeground}
 
     for idx, name, in enumerate(hardware_boxes):
         makecheckbox(hardware_tab, name, hardware_boxes[name], int(idx/2) +30, idx%2)
@@ -1117,24 +1090,10 @@ def show_new_gui():
     # Tokens Tab
     tokens_tab = tabcontent["Tokens"]
     # tokens checkboxes
-    token_boxes = {"Streaming Mode":stream, "Use SmartContext":smartcontext, "Unban Tokens":unbantokens}
+    token_boxes = {"Use SmartContext":smartcontext}
     for idx, name, in enumerate(token_boxes):
         makecheckbox(tokens_tab, name, token_boxes[name], idx + 1)
 
-    mirostat_entry, mirostate_label = makelabelentry(tokens_tab, "Mirostat:", mirostat_var)
-    mirostat_tau_entry, mirostat_tau_label = makelabelentry(tokens_tab, "Mirostat Tau:", mirostat_tau)
-    mirostat_eta_entry, mirostat_eta_label = makelabelentry(tokens_tab, "Mirostat Eta:", mirostat_eta)
-    def togglemiro(a,b,c):
-        items = [mirostate_label, mirostat_entry, mirostat_tau_label, mirostat_tau_entry, mirostat_eta_label, mirostat_eta_entry]
-        for idx, item in enumerate(items):
-            if usemirostat.get() == 1:
-                item.grid(row=11 + int(idx/2), column=idx%2, padx=8, stick="nw")
-            else:
-                item.grid_forget()
-
-
-    makecheckbox(tokens_tab, "Use Mirostat", row=10, variable=usemirostat, command=togglemiro)
-    togglemiro(1,1,1)
 
     # context size
     makeslider(tokens_tab, "Context Size:",contextsize_text, context_var, 0, len(contextsize_text)-1, 20, set=2)
@@ -1217,10 +1176,7 @@ def show_new_gui():
         args.launch     = launchbrowser.get()==1
         args.highpriority = highpriority.get()==1
         args.nommap = disablemmap.get()==1
-        args.psutil_set_threads = psutil.get()==1
-        args.stream = stream.get()==1
         args.smartcontext = smartcontext.get()==1
-        args.unbantokens = unbantokens.get()==1
         args.foreground = keepforeground.get()==1
 
         gpuchoiceidx = 0
@@ -1251,7 +1207,6 @@ def show_new_gui():
         args.blasbatchsize = int(blasbatchsize_values[int(blas_size_var.get())])
         args.forceversion = 0 if version_var.get()=="" else int(version_var.get())
 
-        args.usemirostat = [int(mirostat_var.get()), float(mirostat_tau.get()), float(mirostat_eta.get())] if usemirostat.get()==1 else None
         args.contextsize = int(contextsize_text[context_var.get()])
 
         if customrope_var.get()==1:
@@ -1277,10 +1232,7 @@ def show_new_gui():
         launchbrowser.set(1 if "launch" in dict and dict["launch"] else 0)
         highpriority.set(1 if "highpriority" in dict and dict["highpriority"] else 0)
         disablemmap.set(1 if "nommap" in dict and dict["nommap"] else 0)
-        psutil.set(1 if "psutil_set_threads" in dict and dict["psutil_set_threads"] else 0)
-        stream.set(1 if "stream" in dict and dict["stream"] else 0)
         smartcontext.set(1 if "smartcontext" in dict and dict["smartcontext"] else 0)
-        unbantokens.set(1 if "unbantokens" in dict and dict["unbantokens"] else 0)
         keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
             if clblast_option is not None:
@@ -1330,12 +1282,6 @@ def show_new_gui():
             blas_size_var.set(blasbatchsize_values.index(str(dict["blasbatchsize"])))
         if "forceversion" in dict and dict["forceversion"]:
             version_var.set(str(dict["forceversion"]))
-
-        if "usemirostat" in dict and dict["usemirostat"] and len(dict["usemirostat"])>1:
-            usemirostat.set(0 if str(dict["usemirostat"][0])=="0" else 1)
-            mirostat_var.set(str(dict["usemirostat"][0]))
-            mirostat_tau.set(str(dict["usemirostat"][1]))
-            mirostat_eta.set(str(dict["usemirostat"][2]))
 
         if "model_param" in dict and dict["model_param"]:
             model_var.set(dict["model_param"])
@@ -1496,18 +1442,14 @@ def show_old_gui():
         frameC.grid(row=4,column=0,pady=4)
         onDropdownChange(None)
 
-        stream = tk.IntVar()
         smartcontext = tk.IntVar()
         launchbrowser = tk.IntVar(value=1)
-        unbantokens = tk.IntVar()
         highpriority = tk.IntVar()
         disablemmap = tk.IntVar()
         frameD = tk.Frame(root)
-        tk.Checkbutton(frameD, text='Streaming Mode',variable=stream, onvalue=1, offvalue=0).grid(row=0,column=0)
         tk.Checkbutton(frameD, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).grid(row=0,column=1)
         tk.Checkbutton(frameD, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
         tk.Checkbutton(frameD, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
-        tk.Checkbutton(frameD, text='Unban Tokens',variable=unbantokens, onvalue=1, offvalue=0).grid(row=2,column=0)
         tk.Checkbutton(frameD, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1)
         frameD.grid(row=5,column=0,pady=4)
 
@@ -1526,11 +1468,8 @@ def show_old_gui():
         #load all the vars
         args.threads = int(threads_var.get())
         args.gpulayers = int(gpu_layers_var.get())
-
-        args.stream = (stream.get()==1)
         args.smartcontext = (smartcontext.get()==1)
         args.launch = (launchbrowser.get()==1)
-        args.unbantokens = (unbantokens.get()==1)
         args.highpriority = (highpriority.get()==1)
         args.nommap = (disablemmap.get()==1)
         selrunchoice = runchoice.get()
@@ -1899,11 +1838,6 @@ def main(launch_args,start_server=True):
                 else:
                     args.lora[1] = os.path.abspath(args.lora[1])
 
-    if args.psutil_set_threads:
-        import psutil
-        args.threads = psutil.cpu_count(logical=False)
-        print("Overriding thread count, using " + str(args.threads) + " threads instead.")
-
     if not args.blasthreads or args.blasthreads <= 0:
         args.blasthreads = args.threads
 
@@ -1955,17 +1889,6 @@ def main(launch_args,start_server=True):
         timer_thread = threading.Timer(1, onready_subprocess) #1 second delay
         timer_thread.start()
 
-    # show deprecation warnings
-    if args.unbantokens:
-        print("WARNING: --unbantokens is DEPRECATED and will be removed soon! EOS unbans should now be set via the generate API.")
-    if args.usemirostat:
-        print("WARNING: --usemirostat is DEPRECATED and will be removed soon! Mirostat values should now be set via the generate API.")
-    if args.stream:
-        print("WARNING: --stream is DEPRECATED and will be removed soon! This was a Kobold Lite only parameter, which is now a proper setting toggle inside Lite.")
-    if args.psutil_set_threads:
-        print("WARNING: --psutil_set_threads is DEPRECATED and will be removed soon! This parameter was generally unhelpful and unnecessary, as the defaults were usually sufficient")
-
-
     if start_server:
         print(f"Please connect to custom endpoint at {epurl}")
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite))
@@ -2012,13 +1935,7 @@ if __name__ == '__main__':
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
     parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
-    parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them. Polled-streaming is disabled while multiple requests are in queue.", action='store_true')
+    parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them.", action='store_true')
     parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
-
-    #deprecated
-    parser.add_argument("--psutil_set_threads", help="--psutil_set_threads is DEPRECATED and will be removed soon! This parameter was generally unhelpful and unnecessary,  as the defaults were usually sufficient.", action='store_true')
-    parser.add_argument("--stream", help="--stream is DEPRECATED and will be removed soon! This was a Kobold Lite only parameter, which is now a proper setting toggle inside Lite.", action='store_true')
-    parser.add_argument("--unbantokens", help="--unbantokens is DEPRECATED and will be removed soon! EOS unbans should now be set via the generate API", action='store_true')
-    parser.add_argument("--usemirostat", help="--usemirostat is DEPRECATED and will be removed soon! Mirostat values should now be set via the generate API",metavar=('[type]', '[tau]', '[eta]'), type=float, nargs=3)
 
     main(parser.parse_args(),start_server=True)

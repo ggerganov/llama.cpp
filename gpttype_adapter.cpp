@@ -78,7 +78,6 @@ static int n_threads = 4;
 static int n_blasthreads = 4;
 static int n_batch = 8;
 static bool useSmartContext = false;
-static bool unbanTokens = false;
 static int blasbatchsize = 512;
 static int debugmode = 0; //-1 = hide all, 0 = normal, 1 = showall
 static std::string modelname;
@@ -556,7 +555,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     modelname = params.model = inputs.model_filename;
     useSmartContext = inputs.use_smartcontext;
     debugmode = inputs.debugmode;
-    unbanTokens = inputs.unban_tokens;
     blasbatchsize = inputs.blasbatchsize;
     if(blasbatchsize<=0)
     {
@@ -1656,7 +1654,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 lowestLogit = LowestLogit(logits);
             }
 
-            if (!unbanTokens && !inputs.unban_tokens_rt)
+            if (!inputs.unban_tokens_rt)
             {
                 // set the logit of the eos token to very low to avoid sampling it
                 logitsPtr[eosID] = lowestLogit;
@@ -1721,7 +1719,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 printf("]\n");
             }
 
-            if((unbanTokens||inputs.unban_tokens_rt) && id==eosID)
+            if(inputs.unban_tokens_rt && id==eosID)
             {
                 stopper_unused_tokens = remaining_tokens;
                 printf("\n(EOS token triggered!)");

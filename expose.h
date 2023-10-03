@@ -38,7 +38,6 @@ struct load_model_inputs
     const bool use_mmap;
     const bool use_mlock;
     const bool use_smartcontext;
-    const bool unban_tokens;
     const int clblast_info = 0;
     const int cublas_info = 0;
     const int blasbatchsize = 512;
