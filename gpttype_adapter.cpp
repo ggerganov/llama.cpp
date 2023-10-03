@@ -1722,7 +1722,10 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             if(inputs.unban_tokens_rt && id==eosID)
             {
                 stopper_unused_tokens = remaining_tokens;
-                printf("\n(EOS token triggered!)");
+                if(debugmode!=-1)
+                {
+                    printf("\n(EOS token triggered!)");
+                }
                 remaining_tokens = 0;
                 last_stop_reason = stop_reason::EOS_TOKEN;
             }

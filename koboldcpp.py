@@ -365,6 +365,8 @@ KcppVersion = "1.46"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
+session_kudos_earned = 0
+session_starttime = None
 exitcounter = 0
 totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
@@ -1370,7 +1372,7 @@ def show_gui_msgbox(title,message):
 def run_horde_worker(args, api_key, worker_name):
     import urllib.request
     from datetime import datetime
-    global friendlymodelname, maxhordectx, maxhordelen, exitcounter, modelbusy
+    global friendlymodelname, maxhordectx, maxhordelen, exitcounter, modelbusy, session_starttime
     epurl = f"http://localhost:{args.port}"
     if args.host!="":
         epurl = f"http://{args.host}:{args.port}"
@@ -1378,11 +1380,30 @@ def run_horde_worker(args, api_key, worker_name):
     def print_with_time(txt):
         print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
 
+    def submit_completed_generation(jobid, submit_dict):
+        global exitcounter, session_kudos_earned, session_starttime
+        reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
+        if not reply:
+            exitcounter += 1
+            print_with_time(f"Error, Job submit failed.")
+            time.sleep(0.1)
+        else:
+            reward = reply["reward"]
+            session_kudos_earned += reward
+            curtime = datetime.now()
+            elapsedtime=curtime-session_starttime
+            hrs = elapsedtime.seconds // 3600
+            mins = elapsedtime.seconds // 60 % 60
+            secs = elapsedtime.seconds % 60
+            elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
+            earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
+            print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f} kudos/hr]')
+            time.sleep(0.1)
 
     def make_url_request(url, data, method='POST'):
         try:
             request = None
-            headers = {"apikey": api_key,'User-Agent':'KoboldCpp Embedded Worker v1','Client-Agent':'KoboldCppEmbedWorker:1'}
+            headers = {"apikey": api_key,'User-Agent':'KoboldCppEmbeddedWorkerV2','Client-Agent':'KoboldCppEmbedWorker:2'}
             if method=='POST':
                 json_payload = json.dumps(data).encode('utf-8')
                 request = urllib.request.Request(url, data=json_payload, headers=headers, method=method)
@@ -1408,17 +1429,16 @@ def run_horde_worker(args, api_key, worker_name):
     current_id = None
     current_payload = None
     current_generation = None
-    session_kudos_earned = 0
     session_starttime = datetime.now()
     sleepy_counter = 0 #if this exceeds a value, worker becomes sleepy (slower)
-    print("===\nEmbedded Horde Worker '"+worker_name+"' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
-    BRIDGE_AGENT = f"KoboldCppEmbedWorker:1:https://github.com/LostRuins/koboldcpp"
+    print(f"===\nEmbedded Horde Worker '{worker_name}' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
+    BRIDGE_AGENT = f"KoboldCppEmbedWorker:2:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
     while exitcounter < 10:
         time.sleep(3)
         readygo = make_url_request(f'{epurl}/api/v1/info/version', None,'GET')
         if readygo:
-            print_with_time(f"Embedded Horde Worker is started.")
+            print_with_time(f"Embedded Horde Worker '{worker_name}' is started.")
             break
 
     while exitcounter < 10:
@@ -1427,7 +1447,7 @@ def run_horde_worker(args, api_key, worker_name):
 
         #first, make sure we are not generating
         if modelbusy.locked():
-            time.sleep(0.3)
+            time.sleep(0.2)
             continue
 
         #pop new request
@@ -1448,7 +1468,6 @@ def run_horde_worker(args, api_key, worker_name):
             continue
         if not pop["id"]:
             slp = (1 if sleepy_counter<10 else (2 if sleepy_counter<25 else 3))
-            #print(f"Server {cluster} has no valid generations for us. Sleep for {slp}s")
             time.sleep(slp)
             sleepy_counter += 1
             if sleepy_counter==20:
@@ -1471,7 +1490,7 @@ def run_horde_worker(args, api_key, worker_name):
                     currentjob_attempts += 1
                     if currentjob_attempts>5:
                         break
-            print_with_time("Server Busy - Not ready to generate...")
+            print_with_time(f"Server Busy - Not ready to generate...")
             time.sleep(5)
 
         #submit reply
@@ -1482,32 +1501,19 @@ def run_horde_worker(args, api_key, worker_name):
                 "generation": current_generation["results"][0]["text"],
                 "state": "ok"
             }
-            reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
-            if not reply:
-                exitcounter += 1
-                print_with_time("Error: Job submit failed.")
-            else:
-                reward = reply["reward"]
-                session_kudos_earned += reward
-                curtime = datetime.now()
-                elapsedtime=curtime-session_starttime
-                hrs = elapsedtime.seconds // 3600
-                mins = elapsedtime.seconds // 60 % 60
-                secs = elapsedtime.seconds % 60
-                elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
-                earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
-                print_with_time(f'Submitted {current_id} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f} kudos/hr]')
+            submit_thread = threading.Thread(target=submit_completed_generation, args=(current_id, submit_dict))
+            submit_thread.start() #submit job in new thread so nothing is waiting
         else:
-            print_with_time("Error: Abandoned current job due to errors. Getting new job.")
+            print_with_time(f"Error, Abandoned current job due to errors. Getting new job.")
         current_id = None
         current_payload = None
-        time.sleep(0.2)
+        time.sleep(0.1)
 
     if exitcounter<100:
-        print_with_time("Horde Worker Shutdown - Too many errors.")
+        print_with_time(f"Horde Worker Shutdown - Too many errors.")
         time.sleep(3)
     else:
-        print_with_time("Horde Worker Shutdown - Server Closing.")
+        print_with_time(f"Horde Worker Shutdown - Server Closing.")
         time.sleep(3)
     sys.exit(2)
 
