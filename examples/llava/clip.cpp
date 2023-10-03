@@ -1120,6 +1120,9 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
     const int projection_dim = hparams.projection_dim;
     const float eps = hparams.eps;
     int batch_size = imgs->size;
+    if(ctx->has_llava_projector) {
+        GGML_ASSERT(batch_size == 1);
+    }
 
     auto & buf_compute = ctx->buf_compute;
 
@@ -1192,7 +1195,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
     }
 
     // loop over layers
-    for (int il = 0; il < n_layer; il++) {
+    for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
         const size_t nb_q_w = model.layers[il].q_w->nb[0];
@@ -1283,6 +1286,12 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
         output = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
         embeddings = ggml_mul_mat(ctx0, model.llava_proj_w, embeddings);
         output = ggml_add(ctx0, ggml_repeat(ctx0, model.llava_proj_b, embeddings), embeddings);
+        output = ggml_reshape_2d(ctx0, output, output->ne[0], output->ne[1]);
+        struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
+        for (int i = 0; i < num_patches; ++i) {
+            ggml_set_i32_1d(patches, i, i+1);
+        }
+        output = ggml_get_rows(ctx0, output, patches);
     } else {
         // get the output of cls token, e.g., 0th index
         struct ggml_tensor * cls = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, batch_size);
