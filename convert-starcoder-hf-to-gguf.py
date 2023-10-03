@@ -121,7 +121,7 @@ tokenizer = AutoTokenizer.from_pretrained(dir_model)
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
 
 for i in range(vocab_size):
-    tokens.append(reverse_vocab[i])
+    tokens.append(reverse_vocab[i] if i in reverse_vocab else f"[PAD{i}]")
     scores.append(0.0) # dummy
     toktypes.append(gguf.TokenType.NORMAL)
 
