@@ -1380,25 +1380,23 @@ def run_horde_worker(args, api_key, worker_name):
     def print_with_time(txt):
         print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
 
-    def submit_completed_generation(jobid, submit_dict):
-        global exitcounter, session_kudos_earned, session_starttime
-        reply = make_url_request(cluster + '/api/v2/generate/text/submit', submit_dict)
+    def submit_completed_generation(url, jobid, sessionstart, submit_dict):
+        global exitcounter, session_kudos_earned
+        reply = make_url_request(url, submit_dict)
         if not reply:
             exitcounter += 1
             print_with_time(f"Error, Job submit failed.")
-            time.sleep(0.1)
         else:
             reward = reply["reward"]
             session_kudos_earned += reward
             curtime = datetime.now()
-            elapsedtime=curtime-session_starttime
+            elapsedtime=curtime-sessionstart
             hrs = elapsedtime.seconds // 3600
             mins = elapsedtime.seconds // 60 % 60
             secs = elapsedtime.seconds % 60
             elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
             earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
             print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f} kudos/hr]')
-            time.sleep(0.1)
 
     def make_url_request(url, data, method='POST'):
         try:
@@ -1501,7 +1499,8 @@ def run_horde_worker(args, api_key, worker_name):
                 "generation": current_generation["results"][0]["text"],
                 "state": "ok"
             }
-            submit_thread = threading.Thread(target=submit_completed_generation, args=(current_id, submit_dict))
+            submiturl = cluster + '/api/v2/generate/text/submit'
+            submit_thread = threading.Thread(target=submit_completed_generation, args=(submiturl, current_id, session_starttime, submit_dict))
             submit_thread.start() #submit job in new thread so nothing is waiting
         else:
             print_with_time(f"Error, Abandoned current job due to errors. Getting new job.")
