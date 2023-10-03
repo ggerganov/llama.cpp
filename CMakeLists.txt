@@ -414,6 +414,7 @@ if (LLAMA_HIPBLAS)
 endif()
 
 if (LLAMA_KOMPUTE)
+    add_compile_definitions(VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
     find_package(Vulkan COMPONENTS glslc REQUIRED)
     find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
     if (NOT glslc_executable)
@@ -429,8 +430,11 @@ if (LLAMA_KOMPUTE)
         set(spv_file ${source}.spv)
         add_custom_command(
             OUTPUT ${spv_file}
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source} ${CMAKE_CURRENT_SOURCE_DIR}/kompute/common.comp
-            COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/common.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/op_getrows.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/op_mul_mv_q_n.comp
+              COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
             COMMENT "Compiling ${source} to ${source}.spv"
         )
 
@@ -478,9 +482,11 @@ if (LLAMA_KOMPUTE)
           kompute/op_mul_mat_f16.comp
           kompute/op_mul_mat_q4_0.comp
           kompute/op_mul_mat_q4_1.comp
+          kompute/op_mul_mat_q6_k.comp
           kompute/op_getrows_f16.comp
           kompute/op_getrows_q4_0.comp
           kompute/op_getrows_q4_1.comp
+          kompute/op_getrows_q6_k.comp
           kompute/op_rope.comp
           kompute/op_cpy_f16_f16.comp
           kompute/op_cpy_f16_f32.comp
@@ -505,9 +511,11 @@ if (LLAMA_KOMPUTE)
           shaderop_mul_mat_f16.h
           shaderop_mul_mat_q4_0.h
           shaderop_mul_mat_q4_1.h
+          shaderop_mul_mat_q6_k.h
           shaderop_getrows_f16.h
           shaderop_getrows_q4_0.h
           shaderop_getrows_q4_1.h
+          shaderop_getrows_q6_k.h
           shaderop_rope.h
           shaderop_cpy_f16_f16.h
           shaderop_cpy_f16_f32.h
