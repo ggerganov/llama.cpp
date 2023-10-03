@@ -6295,12 +6295,12 @@ inline void ggml_cuda_op_alibi(
     const int64_t ne02 = src0->ne[2];
     const int64_t nrows = ggml_nrows(src0);
 
-    const int n_past = ((int32_t *) dst->op_params)[0];
+    //const int n_past = ((int32_t *) dst->op_params)[0];
     const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
 
-    GGML_ASSERT(ne01 + n_past == ne00);
+    //GGML_ASSERT(ne01 + n_past == ne00);
     GGML_ASSERT(n_head == ne02);
 
     const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));

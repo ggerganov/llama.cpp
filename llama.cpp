@@ -4076,8 +4076,6 @@ static struct ggml_cgraph * llm_build_mpt(
     const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
     const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
-
     //printf("kv_head = %d, n_kv = %d, n_tokens = %d, n_ctx = %d, is_measure = %d, has_shift = %d\n",
     //        kv_head, n_kv, n_tokens, n_ctx, ggml_allocr_is_measure(lctx.alloc), kv_self.has_shift);
 
@@ -4175,34 +4173,6 @@ static struct ggml_cgraph * llm_build_mpt(
             }
         }
     }
-
-    // shift the entire K-cache if needed
-    // TODO: Do we need to handle it? (MPT uses alibi instead of rope)
-/*    if (do_rope_shift) {
-        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-        offload_func_kq(K_shift);
-        ggml_set_name(K_shift, "K_shift");
-        ggml_allocr_alloc(lctx.alloc, K_shift);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            int * data = (int *) K_shift->data;
-            for (int i = 0; i < n_ctx; ++i) {
-                data[i] = kv_self.cells[i].delta;
-            }
-        }
-
-        for (int il = 0; il < n_layer; ++il) {
-            struct ggml_tensor * tmp =
-                    ggml_rope_custom_inplace(ctx0,
-                        ggml_view_3d(ctx0, kv_self.k,
-                            n_embd_head, n_head_kv, n_ctx,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 2, 0, freq_base, freq_scale);
-            offload_func_kq(tmp);
-            ggml_build_forward_expand(gf, tmp);
-        }
-    }*/
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * attn_norm;
@@ -4306,7 +4276,7 @@ static struct ggml_cgraph * llm_build_mpt(
 
             // TODO: replace with ggml_add()
             struct ggml_tensor * KQ_scaled_alibi =
-                ggml_alibi(ctx0, KQ_scaled, std::max(kv_head, n_kv - n_tokens), n_head, max_alibi_bias);
+                ggml_alibi(ctx0, KQ_scaled, 0, n_head, max_alibi_bias);
             offload_func_kq(KQ_scaled_alibi);
             ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
 
