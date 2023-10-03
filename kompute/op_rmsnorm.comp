@@ -10,7 +10,7 @@
 
 #include "common.comp"
 
-#define nth 256
+#define nth 512
 
 layout(local_size_x = nth) in;
 
@@ -56,7 +56,7 @@ void main() {
 
     const float scale = 1.0f/sqrt(sum[0] + pcs.eps);
 
-    const uint y = (gl_WorkGroupID.x*pcs.ne00/4) + pcs.outOff; // Based from out_
+    const uint y = (gl_WorkGroupID.x*pcs.ne00) + pcs.outOff; // Based from out_
     for (uint i00 = gl_LocalInvocationID.x; i00 < pcs.ne00; i00 += nth) {
         out_[y+i00] = in_[x+i00] * scale;
     }
