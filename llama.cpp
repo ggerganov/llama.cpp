@@ -1035,6 +1035,9 @@ struct llama_kv_cache {
 
     struct ggml_tensor * k = NULL;
     struct ggml_tensor * v = NULL;
+    std::vector<ggml_tensor*> k_l; // per layer
+
+    std::vector<ggml_tensor*> v_l;
 
     struct ggml_context * ctx = NULL;
 
@@ -1239,6 +1242,7 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
+
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
 
     struct ggml_init_params params;
@@ -1248,34 +1252,48 @@ static bool llama_kv_cache_init(
 
     cache.ctx = ggml_init(params);
 
+    size_t vram_kv_cache = 0;
+
     if (!cache.ctx) {
         LLAMA_LOG_ERROR("%s: failed to allocate memory for kv cache\n", __func__);
         return false;
     }
 
-    cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-    cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-    ggml_set_name(cache.k, "cache_k");
-    ggml_set_name(cache.v, "cache_v");
+    // cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
+    // cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
+    // ggml_set_name(cache.k, "cache_k");
+    // ggml_set_name(cache.v, "cache_v");
 
-    (void) n_gpu_layers;
+    cache.k_l.reserve(n_layer);
+    cache.v_l.reserve(n_layer);
+
+    const int i_gpu_start = n_layer - n_gpu_layers;
+
+    for (uint32_t i = 0; i < n_layer; i++) {
+        ggml_tensor * k = ggml_new_tensor_1d(cache.ctx, wtype, n_embd*n_ctx);
+        ggml_tensor * v = ggml_new_tensor_1d(cache.ctx, wtype, n_embd*n_ctx);
+        ggml_format_name(k, "cache_k_l%d", i);
+        ggml_format_name(v, "cache_v_l%d", i);
+        cache.k_l.push_back(k);
+        cache.v_l.push_back(v);
 #ifdef GGML_USE_CUBLAS
-    size_t vram_kv_cache = 0;
+    if ((int)i >= i_gpu_start) {
+        ggml_cuda_assign_buffers_no_scratch(k);
+        LLAMA_LOG_INFO("%s: offloading k[%d] cache to GPU\n", __func__, i);
+        vram_kv_cache += ggml_nbytes(k);
 
-    if (n_gpu_layers > (int)n_layer + 1) {
-        ggml_cuda_assign_buffers_no_scratch(cache.v);
-        LLAMA_LOG_INFO("%s: offloading v cache to GPU\n", __func__);
-        vram_kv_cache += ggml_nbytes(cache.v);
+        ggml_cuda_assign_buffers_no_scratch(v);
+        LLAMA_LOG_INFO("%s: offloading v[%d] cache to GPU\n", __func__, i);
+        vram_kv_cache += ggml_nbytes(v);
     }
-    if (n_gpu_layers > (int)n_layer + 2) {
-        ggml_cuda_assign_buffers_no_scratch(cache.k);
-        LLAMA_LOG_INFO("%s: offloading k cache to GPU\n", __func__);
-        vram_kv_cache += ggml_nbytes(cache.k);
+#endif // GGML_USE_CUBLAS
     }
+
     if (vram_kv_cache > 0) {
         LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
     }
-#endif // GGML_USE_CUBLAS
+
+    (void) n_gpu_layers;
 
     return true;
 }
@@ -2634,17 +2652,17 @@ static struct ggml_cgraph * llm_build_llama(
     // offload functions set the tensor output backend to GPU
     // tensors are GPU-accelerated if any input or the output has been offloaded
     offload_func_t offload_func_nr = llama_nop; // nr = non-repeating
-    offload_func_t offload_func_kq = llama_nop;
     offload_func_t offload_func_v  = llama_nop;
+    offload_func_t offload_func_kq = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
     if (n_gpu_layers > n_layer) {
         offload_func_nr = ggml_cuda_assign_buffers_no_alloc;
     }
-    if (n_gpu_layers > n_layer + 1) {
+    if (n_gpu_layers > 0) {
         offload_func_v  = ggml_cuda_assign_buffers_no_alloc;
     }
-    if (n_gpu_layers > n_layer + 2) {
+    if (n_gpu_layers > 0) {
         offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
     }
 #endif // GGML_USE_CUBLAS
@@ -2708,11 +2726,11 @@ static struct ggml_cgraph * llm_build_llama(
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
-                        ggml_view_3d(ctx0, kv_self.k,
+                        ggml_view_3d(ctx0, kv_self.k_l[il],
                             n_embd_head, n_head_kv, n_ctx,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
+                            ggml_element_size(kv_self.k_l[il])*n_embd_head,
+                            ggml_element_size(kv_self.k_l[il])*n_embd_gqa,
+                            0),
                         K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(tmp);
             ggml_build_forward_expand(gf, tmp);
@@ -2723,10 +2741,14 @@ static struct ggml_cgraph * llm_build_llama(
         ggml_format_name(inpL, "layer_inp_%d", il);
 
         offload_func_t offload_func = llama_nop;
+        offload_func_v  = llama_nop;
+        offload_func_kq = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
         if (il >= i_gpu_start) {
-            offload_func = ggml_cuda_assign_buffers_no_alloc;
+            offload_func    = ggml_cuda_assign_buffers_no_alloc;
+            offload_func_v  = ggml_cuda_assign_buffers_no_alloc;
+            offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
         }
 #endif // GGML_USE_CUBLAS
 
@@ -2775,13 +2797,13 @@ static struct ggml_cgraph * llm_build_llama(
                 offload_func_v(Vcur);
                 ggml_set_name(Vcur, "Vcur");
 
-                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
+                struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k_l[il])*n_embd_gqa)*(kv_head));
                 offload_func_kq(k);
                 ggml_set_name(k, "k");
 
-                struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
-                        (   n_ctx)*ggml_element_size(kv_self.v),
-                        (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
+                struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v_l[il], n_tokens, n_embd_gqa,
+                        (   n_ctx)*ggml_element_size(kv_self.v_l[il]),
+                           kv_head*ggml_element_size(kv_self.v_l[il]));
                 offload_func_v(v);
                 ggml_set_name(v, "v");
 
@@ -2795,11 +2817,11 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(Q, "Q");
 
             struct ggml_tensor * K =
-                ggml_view_3d(ctx0, kv_self.k,
+                ggml_view_3d(ctx0, kv_self.k_l[il],
                         n_embd_head, n_kv, n_head_kv,
-                        ggml_element_size(kv_self.k)*n_embd_gqa,
-                        ggml_element_size(kv_self.k)*n_embd_head,
-                        ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
+                        ggml_element_size(kv_self.k_l[il])*n_embd_gqa,
+                        ggml_element_size(kv_self.k_l[il])*n_embd_head,
+                        0);
             offload_func_kq(K);
             ggml_set_name(K, "K");
 
@@ -2826,11 +2848,11 @@ static struct ggml_cgraph * llm_build_llama(
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
-                ggml_view_3d(ctx0, kv_self.v,
+                ggml_view_3d(ctx0, kv_self.v_l[il],
                         n_kv, n_embd_head, n_head_kv,
-                        ggml_element_size(kv_self.v)*n_ctx,
-                        ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
-                        ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
+                        ggml_element_size(kv_self.v_l[il])*n_ctx,
+                        ggml_element_size(kv_self.v_l[il])*n_ctx*n_embd_head,
+                        0);
             offload_func_v(V);
             ggml_set_name(V, "V");
 
@@ -6872,7 +6894,14 @@ struct llama_context * llama_new_context_with_model(
         }
 
         {
-            const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
+            // const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
+            size_t memory_size = 0;
+            for (auto & k : ctx->kv_self.k_l) {
+                memory_size += ggml_nbytes(k);
+            }
+            for (auto & v : ctx->kv_self.v_l) {
+                memory_size += ggml_nbytes(v);
+            }
             LLAMA_LOG_INFO("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
         }
 
@@ -6946,8 +6975,12 @@ struct llama_context * llama_new_context_with_model(
             }
 
             size_t kv_vram_size = 0;
-            add_tensor(ctx->kv_self.k, kv_vram_size);
-            add_tensor(ctx->kv_self.v, kv_vram_size);
+            for (auto & k : ctx->kv_self.k_l) {
+                add_tensor(k, kv_vram_size);
+            }
+            for (auto & v : ctx->kv_self.v_l) {
+                add_tensor(v, kv_vram_size);
+            }
 
             size_t ctx_vram_size = alloc_size + kv_vram_size;
             size_t total_vram_size = model_vram_size + ctx_vram_size;
