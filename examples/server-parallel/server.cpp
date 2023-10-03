@@ -112,7 +112,7 @@ struct server_parallel_context {
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
         if (model == nullptr)
         {
-            LOG_TEE("unable to load model: %s", params.model);
+            LOG_TEE("unable to load model: %s", params.model.c_str());
             return false;
         }
         n_ctx = llama_n_ctx(ctx);
