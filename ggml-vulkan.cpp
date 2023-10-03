@@ -797,20 +797,16 @@ static void ggml_vk_generate_shaders() {
             continue;
         }
 
-        int work_group_denom;
-
         switch ((ggml_type)i) {
         case GGML_TYPE_Q6_K:
             stream << dequant_q6_K_body;
-            work_group_denom = 64 * 4;
             break;
         default:
             stream << dequant_body;
-            work_group_denom = 256 * 32;
             break;
         }
 
-        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_string("dequant_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {work_group_denom, 1, 1}, {}, 1);
+        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_string("dequant_" + std::string(ggml_type_name((ggml_type)i)), stream.str(), { "D_TYPE", "float16_t" }, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
     }
 
     // mul mat vec
@@ -891,6 +887,8 @@ void ggml_vk_init(void) {
     };
     validation_features.setPNext(nullptr);
     instance_create_info.setPNext(&validation_features);
+
+std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
 #endif
     vk_instance = vk::createInstance(instance_create_info);
 

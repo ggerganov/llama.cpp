@@ -468,23 +468,28 @@ layout (push_constant) uniform parameter
 } p;
 
 void main() {
-    const int i = int(gl_WorkGroupID.x);
-    const int tid = int(gl_LocalInvocationID.x);
-    const int ip = tid / 32;
-    const int il = tid - 32 * ip;
-    const int is = 8 * ip + il / 16;
+    for (int wgy = 0; wgy < 256; wgy++) {
+        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+        if (i >= p.M * p.K / QUANT_K) {
+            return;
+        }
+        const int tid = int(gl_LocalInvocationID.x);
+        const int ip = tid / 32;
+        const int il = tid - 32 * ip;
+        const int is = 8 * ip + il / 16;
 
-    const int y_idx = i * QUANT_K + 128 * ip + il;
+        const int y_idx = i * QUANT_K + 128 * ip + il;
 
-    const int ql_idx = 64 * ip + il;
-    const uint8_t qh = x[i].qh[32 * ip + il];
+        const int ql_idx = 64 * ip + il;
+        const uint8_t qh = x[i].qh[32 * ip + il];
 
-    const FLOAT_TYPE d = FLOAT_TYPE(x[i].d);
+        const FLOAT_TYPE d = FLOAT_TYPE(x[i].d);
 
-    y[y_idx +  0] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 0] * (int8_t((x[i].ql[ql_idx +  0] & 0xF) | (((qh >> 0) & 3) << 4)) - 32)));
-    y[y_idx + 32] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 2] * (int8_t((x[i].ql[ql_idx + 32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32)));
-    y[y_idx + 64] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 4] * (int8_t((x[i].ql[ql_idx +  0] >>  4) | (((qh >> 4) & 3) << 4)) - 32)));
-    y[y_idx + 96] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 6] * (int8_t((x[i].ql[ql_idx + 32] >>  4) | (((qh >> 6) & 3) << 4)) - 32)));
+        y[y_idx +  0] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 0] * (int8_t((x[i].ql[ql_idx +  0] & 0xF) | (((qh >> 0) & 3) << 4)) - 32)));
+        y[y_idx + 32] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 2] * (int8_t((x[i].ql[ql_idx + 32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32)));
+        y[y_idx + 64] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 4] * (int8_t((x[i].ql[ql_idx +  0] >>  4) | (((qh >> 4) & 3) << 4)) - 32)));
+        y[y_idx + 96] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 6] * (int8_t((x[i].ql[ql_idx + 32] >>  4) | (((qh >> 6) & 3) << 4)) - 32)));
+    }
 }
 )";
 
