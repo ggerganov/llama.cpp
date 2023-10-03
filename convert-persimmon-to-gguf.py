@@ -24,7 +24,7 @@ def _flatten_dict(dct, tensors, prefix=None):
 def _get_sentencepiece_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
     print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
-    tokenizer = SentencePieceProcessor(str(tokenizer_path))  
+    tokenizer = SentencePieceProcessor(str(tokenizer_path))
     print('gguf: adding tokens')
     tokens: list[bytes] = []
     scores: list[float] = []
@@ -70,7 +70,7 @@ def main():
 
     arch = gguf.MODEL_ARCH.PERSIMMON
     gguf_writer = gguf.GGUFWriter(args.outfile, gguf.MODEL_ARCH_NAMES[arch])
-    
+
     block_count = hparams.num_layers
     head_count = hparams.num_attention_heads
     head_count_kv = head_count

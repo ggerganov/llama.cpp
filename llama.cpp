@@ -2476,7 +2476,7 @@ static void llm_load_tensors(
                     }
                 } break;
             case LLM_ARCH_PERSIMMON:
-                { 
+                {
                     model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"),  {n_embd, n_vocab}, GGML_BACKEND_CPU);
                     model.output_norm    = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          GGML_BACKEND_CPU);
                     model.output_norm_b  = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd},          GGML_BACKEND_CPU);
@@ -4162,8 +4162,8 @@ static struct ggml_cgraph * llm_build_persimmon(
             cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
             offload_func(cur);
             ggml_format_name(cur, "input_layernorm_%d", il);
-        } 
-        // self attention 
+        }
+        // self attention
         {
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
             offload_func_kq(cur);
@@ -4206,7 +4206,7 @@ static struct ggml_cgraph * llm_build_persimmon(
             offload_func_v(tmpk);
             tmpk =  ggml_add(ctx0, tmpk, model.layers[il].attn_k_norm_b);
             offload_func_v(tmpk);
-            
+
             // RoPE the first n_rot of q/k, pass the other half, and concat.
             struct ggml_tensor * qrot = ggml_view_3d(
                 ctx0, tmpq, n_rot, n_head, n_tokens,
@@ -4227,7 +4227,7 @@ static struct ggml_cgraph * llm_build_persimmon(
 
             // get the second half of tmpq, e.g tmpq[n_rot:, :, :]
             struct ggml_tensor * qpass = ggml_view_3d(
-                ctx0, tmpq, n_rot, n_head, n_tokens, 
+                ctx0, tmpq, n_rot, n_head, n_tokens,
                 ggml_element_size(tmpq) * n_embd_head,
                 ggml_element_size(tmpq) * n_embd_head * n_head,
                 ggml_element_size(tmpq) * n_rot
@@ -4328,9 +4328,9 @@ static struct ggml_cgraph * llm_build_persimmon(
             offload_func_kq(KQ_soft_max);
             ggml_set_name(KQ_soft_max, "KQ_soft_max");
 
-            struct ggml_tensor * V = 
+            struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
-                        n_kv, n_embd_head, n_head_kv,    
+                        n_kv, n_embd_head, n_head_kv,
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
@@ -4361,11 +4361,11 @@ static struct ggml_cgraph * llm_build_persimmon(
         ggml_set_name(inpFF, "inpFF");
         {
             // MLP
-            { 
+            {
                 // Norm
                 cur = ggml_norm(ctx0, inpFF, norm_eps);
                 offload_func(cur);
-                cur = ggml_add(ctx0, 
+                cur = ggml_add(ctx0,
                     ggml_mul(ctx0, cur, model.layers[il].ffn_norm),
                     model.layers[il].ffn_norm_b
                 );
@@ -4386,7 +4386,7 @@ static struct ggml_cgraph * llm_build_persimmon(
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
             offload_func(cur);
-            cur = ggml_add(ctx0, 
+            cur = ggml_add(ctx0,
                 cur,
                 model.layers[il].b2);
             offload_func(cur);

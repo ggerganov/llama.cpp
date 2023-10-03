@@ -1129,7 +1129,7 @@ kernel void kernel_concat(
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]]) {
-    
+
     const int64_t i03 = tgpig.z;
     const int64_t i02 = tgpig.y;
     const int64_t i01 = tgpig.x;
