@@ -398,7 +398,7 @@ int main(int argc, char ** argv) {
     print_date_time();
 
     LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
-    printf("external prompt file (if any): %s \n\n", params.prompt_file.c_str());
+    printf("external prompt file (if any): %s\n\n", params.prompt_file.c_str());
 
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
