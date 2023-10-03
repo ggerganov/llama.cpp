@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "common.h"
+#include "console.h"
 
 #include <cstdio>
 #include <string>
@@ -85,11 +86,17 @@ int main(int argc, char **argv) {
     }
 
     if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
-        fprintf(stderr, "%s : error: vocab type is not SPM\n", __func__);
+        fprintf(stderr, "%s : error: vocab type is not BPE\n", __func__);
         llama_free_model(model);
         llama_free(ctx);
         return 2;
     }
+
+#ifdef _WIN32
+    // We need this for unicode console support
+    console::init(false, false);
+    atexit([]() { console::cleanup(); });
+#endif
 
     bool success = true;
 

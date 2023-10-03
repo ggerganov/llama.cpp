@@ -923,6 +923,7 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
         result += piece;
     }
 
+    // NOTE: the original tokenizer decodes bytes after collecting the pieces.
     return result;
 }
 
