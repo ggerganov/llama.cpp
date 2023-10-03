@@ -7038,6 +7038,10 @@ int llama_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
+float llama_rope_freq_scale_train(const struct llama_model * model) {
+    return model->hparams.rope_freq_scale_train;
+}
+
 int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
             llama_model_arch_name(model->arch).c_str(),

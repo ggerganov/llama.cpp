@@ -282,6 +282,9 @@ extern "C" {
     LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int llama_n_embd     (const struct llama_model * model);
 
+    // Get the model's RoPE frequency scaling factor
+    LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
+
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
 
