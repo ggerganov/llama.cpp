@@ -785,7 +785,7 @@ void ggml_vk_soft_max(kp::Sequence& seq,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
-        const uint32_t local_x = ggml_vk_current_device().subgroupSize * 2;
+        const uint32_t local_x = ggml_vk_current_device().subgroupSize;
         s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {local_x}, {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
