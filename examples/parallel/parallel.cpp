@@ -332,7 +332,7 @@ int main(int argc, char ** argv) {
                     }
 
                     // delete only the generated part of the sequence, i.e. keep the system prompt in the cache
-                    llama_kv_cache_seq_rm(ctx, client.id, n_tokens_system, n_ctx);
+                    llama_kv_cache_seq_rm(ctx, client.id, n_tokens_system, -1);
 
                     const auto t_main_end = ggml_time_us();
 
