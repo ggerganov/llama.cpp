@@ -798,7 +798,7 @@ def show_new_gui():
         return
 
     import customtkinter as ctk
-    nextstate = 0 #0=exit, 1=launch, 2=oldgui
+    nextstate = 0 #0=exit, 1=launch
     windowwidth = 530
     windowheight = 500
     ctk.set_appearance_mode("dark")
@@ -836,7 +836,9 @@ def show_new_gui():
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
     if not any(runopts):
-        show_gui_warning("No Backend Available")
+        show_gui_msgbox("No Backends Available!","KoboldCPP couldn't locate any backends to use (i.e Default, OpenBLAS, CLBlast, CuBLAS).\n\nTo use the program, please run the 'make' command from the directory.")
+        time.sleep(3)
+        sys.exit(2)
     def tabbuttonaction(name):
         for t in tabcontent:
             if name == t:
@@ -1162,15 +1164,8 @@ def show_new_gui():
         root.destroy()
         pass
 
-    def switch_old_gui():
-        nonlocal nextstate
-        nextstate = 2
-        root.destroy()
-        pass
-
     def export_vars():
         args.threads = int(threads_var.get())
-
         args.usemlock   = usemlock.get() == 1
         args.debugmode  = debugmode.get() == 1
         args.launch     = launchbrowser.get()==1
@@ -1341,9 +1336,8 @@ def show_new_gui():
 
     ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", hover_color="#085a88", command = save_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
     ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", hover_color="#085a88", command = load_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
-    ctk.CTkButton(tabs , text = "Help", fg_color="#992222", hover_color="#bb3333", command = display_help, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 135, pady=5)
+    ctk.CTkButton(tabs , text = "Help", fg_color="#992222", hover_color="#bb3333", command = display_help, width=90, height = 35 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
 
-    ctk.CTkButton(tabs , text = "Old GUI", fg_color="#084a66", hover_color="#085a88", command = switch_old_gui, width=100, height = 35 ).grid(row=1,column=0, stick="sw", padx= 5, pady=5)
     # runs main loop until closed or launch clicked
     root.mainloop()
 
@@ -1351,9 +1345,6 @@ def show_new_gui():
         print("Exiting by user request.")
         time.sleep(3)
         sys.exit()
-    elif nextstate==2:
-        time.sleep(0.1)
-        show_old_gui()
     else:
         # processing vars
         export_vars()
@@ -1363,170 +1354,17 @@ def show_new_gui():
             time.sleep(3)
             sys.exit(2)
 
-def show_gui_warning(issue=None):
-    from tkinter import messagebox
-    import tkinter as tk
-    root = tk.Tk()
-    root.attributes("-alpha", 0)
-    if issue == "No Backend Available":
-        messagebox.showerror(title="No Backends Available!", message="KoboldCPP couldn't locate any backends to use.\n\nTo use the program, please run the 'make' command from the directory.")
-        root.destroy()
-        print("No Backend Available (i.e Default, OpenBLAS, CLBlast, CuBLAS). To use the program, please run the 'make' command from the directory.")
-        time.sleep(3)
-        sys.exit(2)
-    else:
-        messagebox.showerror(title="New GUI failed, using Old GUI", message="The new GUI failed to load.\n\nTo use new GUI, please install the customtkinter python module.")
-        root.destroy()
-
-def show_old_gui():
-    import tkinter as tk
-    from tkinter.filedialog import askopenfilename
-    from tkinter import messagebox
-
-    if len(sys.argv) == 1:
-        #no args passed at all. Show nooby gui
-        root = tk.Tk()
-        launchclicked = False
-
-        def guilaunch():
-            nonlocal launchclicked
-            launchclicked = True
-            root.destroy()
-            pass
-
-        # Adjust size
-        root.geometry("480x360")
-        root.title("KoboldCpp v"+KcppVersion)
-        root.grid_columnconfigure(0, weight=1)
-        tk.Label(root, text = "KoboldCpp Easy Launcher",
-                font = ("Arial", 12)).grid(row=0,column=0)
-        tk.Label(root, text = "(Note: KoboldCpp only works with GGML model formats!)",
-                font = ("Arial", 9)).grid(row=1,column=0)
-
-        blasbatchopts = ["Don't Batch BLAS","BLAS = 32","BLAS = 64","BLAS = 128","BLAS = 256","BLAS = 512","BLAS = 1024","BLAS = 2048"]
-        blaschoice = tk.StringVar()
-        blaschoice.set("BLAS = 512")
-
-        runopts = ["Use OpenBLAS","Use CLBLast GPU #1","Use CLBLast GPU #2","Use CLBLast GPU #3","Use CuBLAS GPU","Use No BLAS","NoAVX2 Mode (Old CPU)","Failsafe Mode (Old CPU)"]
-        runchoice = tk.StringVar()
-        runchoice.set("Use OpenBLAS")
-
-        def onDropdownChange(event):
-            sel = runchoice.get()
-            if sel==runopts[1] or sel==runopts[2] or sel==runopts[3] or sel==runopts[4]:
-                frameC.grid(row=4,column=0,pady=4)
-            else:
-                frameC.grid_forget()
-
-        frameA = tk.Frame(root)
-        tk.OptionMenu( frameA , runchoice , command = onDropdownChange ,*runopts ).grid(row=0,column=0)
-        tk.OptionMenu( frameA , blaschoice ,*blasbatchopts ).grid(row=0,column=1)
-        frameA.grid(row=2,column=0)
-
-        frameB = tk.Frame(root)
-        threads_var=tk.StringVar()
-        threads_var.set(str(default_threads))
-        threads_lbl = tk.Label(frameB, text = 'Threads: ', font=('calibre',10, 'bold'))
-        threads_input = tk.Entry(frameB,textvariable = threads_var, font=('calibre',10,'normal'))
-        threads_lbl.grid(row=0,column=0)
-        threads_input.grid(row=0,column=1)
-        frameB.grid(row=3,column=0,pady=4)
-
-        frameC = tk.Frame(root)
-        gpu_layers_var=tk.StringVar()
-        gpu_layers_var.set("0")
-        gpu_lbl = tk.Label(frameC, text = 'GPU Layers: ', font=('calibre',10, 'bold'))
-        gpu_layers_input = tk.Entry(frameC,textvariable = gpu_layers_var, font=('calibre',10,'normal'))
-        gpu_lbl.grid(row=0,column=0)
-        gpu_layers_input.grid(row=0,column=1)
-        frameC.grid(row=4,column=0,pady=4)
-        onDropdownChange(None)
-
-        smartcontext = tk.IntVar()
-        launchbrowser = tk.IntVar(value=1)
-        highpriority = tk.IntVar()
-        disablemmap = tk.IntVar()
-        frameD = tk.Frame(root)
-        tk.Checkbutton(frameD, text='Use SmartContext',variable=smartcontext, onvalue=1, offvalue=0).grid(row=0,column=1)
-        tk.Checkbutton(frameD, text='High Priority',variable=highpriority, onvalue=1, offvalue=0).grid(row=1,column=0)
-        tk.Checkbutton(frameD, text='Disable MMAP',variable=disablemmap, onvalue=1, offvalue=0).grid(row=1,column=1)
-        tk.Checkbutton(frameD, text='Launch Browser',variable=launchbrowser, onvalue=1, offvalue=0).grid(row=2,column=1)
-        frameD.grid(row=5,column=0,pady=4)
-
-        # Create button, it will change label text
-        tk.Button(root , text = "Launch", font = ("Impact", 18), bg='#54FA9B', command = guilaunch ).grid(row=6,column=0)
-        tk.Label(root, text = "(Please use the Command Line for more advanced options)\nThis GUI is deprecated. Please install customtkinter.",
-                font = ("Arial", 9)).grid(row=7,column=0)
-
-        root.mainloop()
-
-        if launchclicked==False:
-            print("Exiting by user request.")
-            time.sleep(3)
-            sys.exit()
-
-        #load all the vars
-        args.threads = int(threads_var.get())
-        args.gpulayers = int(gpu_layers_var.get())
-        args.smartcontext = (smartcontext.get()==1)
-        args.launch = (launchbrowser.get()==1)
-        args.highpriority = (highpriority.get()==1)
-        args.nommap = (disablemmap.get()==1)
-        selrunchoice = runchoice.get()
-        selblaschoice = blaschoice.get()
-
-        if selrunchoice==runopts[1]:
-            args.useclblast = [0,0]
-        if selrunchoice==runopts[2]:
-            args.useclblast = [1,0]
-        if selrunchoice==runopts[3]:
-            args.useclblast = [0,1]
-        if selrunchoice==runopts[4]:
-            args.usecublas = ["normal"]
-        if selrunchoice==runopts[5]:
-            args.noblas = True
-        if selrunchoice==runopts[6]:
-            args.noavx2 = True
-        if selrunchoice==runopts[7]:
-            args.noavx2 = True
-            args.noblas = True
-            args.nommap = True
-
-        if selblaschoice==blasbatchopts[0]:
-            args.blasbatchsize = -1
-        if selblaschoice==blasbatchopts[1]:
-            args.blasbatchsize = 32
-        if selblaschoice==blasbatchopts[2]:
-            args.blasbatchsize = 64
-        if selblaschoice==blasbatchopts[3]:
-            args.blasbatchsize = 128
-        if selblaschoice==blasbatchopts[4]:
-            args.blasbatchsize = 256
-        if selblaschoice==blasbatchopts[5]:
-            args.blasbatchsize = 512
-        if selblaschoice==blasbatchopts[6]:
-            args.blasbatchsize = 1024
-        if selblaschoice==blasbatchopts[7]:
-            args.blasbatchsize = 2048
-
+def show_gui_msgbox(title,message):
+    print(title + ": " + message)
+    try:
+        from tkinter import messagebox
+        import tkinter as tk
         root = tk.Tk()
         root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file")
+        messagebox.showerror(title=title, message=message)
         root.destroy()
-        if not args.model_param:
-            print("\nNo ggml model file was selected. Exiting.")
-            time.sleep(3)
-            sys.exit(2)
-
-    else:
-        root = tk.Tk() #we dont want the useless window to be visible, but we want it in taskbar
-        root.attributes("-alpha", 0)
-        args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file")
-        root.destroy()
-        if not args.model_param:
-            print("\nNo ggml model file was selected. Exiting.")
-            time.sleep(3)
-            sys.exit(2)
+    except Exception as ex2:
+        pass
 
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
@@ -1766,18 +1604,10 @@ def main(launch_args,start_server=True):
         try:
             show_new_gui()
         except Exception as ex:
-            print("Failed to use new GUI. Reason: " + str(ex))
-            print("Make sure customtkinter is installed!!!")
-            print("Attempting to use old GUI...")
-            if not args.model_param:
-                try:
-                    show_gui_warning()
-                    show_old_gui()
-                except Exception as ex2:
-                    print("File selection GUI unsupported. Please check command line: script.py --help")
-                    print("Reason for no GUI: " + str(ex2))
-                    time.sleep(3)
-                    sys.exit(2)
+            ermsg = "Reason: " + str(ex) + "\nFile selection GUI unsupported.\ncustomtkinter python module required!\nPlease check command line: script.py --help"
+            show_gui_msgbox("Warning, GUI failed to start",ermsg)
+            time.sleep(3)
+            sys.exit(2)
 
     if args.hordeconfig and args.hordeconfig[0]!="":
         global friendlymodelname, maxhordelen, maxhordectx, showdebug
