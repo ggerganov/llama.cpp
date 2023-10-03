@@ -249,7 +249,7 @@ struct server_parallel_context {
             request_clean_kv = false;
             LOG_TEE("%s: clearing the KV cache\n", __func__);
         }
-        
+
         // assign workload to the slots
         if (params.cont_batching || batch.n_tokens == 0) {
             for (llama_client_slot & slot : slots) {
@@ -287,7 +287,7 @@ struct server_parallel_context {
                 }
             }
         }
-        
+
         if (batch.n_tokens == 0) {
             return true;
         }
