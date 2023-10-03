@@ -72,13 +72,17 @@ struct client {
     std::vector<llama_token> tokens_prev;
 };
 
-static void printDateTime() {
-    std::time_t currentTime = std::time(nullptr);
-    std::cout << "\n\033[35mRUN PARAMETERS as at \033[0m" << std::ctime(&currentTime);
+static void print_date_time() {
+    std::time_t current_time = std::time(nullptr);
+    std::tm* local_time = std::localtime(&current_time);
+    char buffer[80];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", local_time);
+
+    printf("\n\033[35mrun parameters as at %s\033[0m\n", buffer);
 }
 
 // Define a split string function to ...
-static std::vector<std::string> splitString(const std::string& input, char delimiter) {
+static std::vector<std::string> split_string(const std::string& input, char delimiter) {
     std::vector<std::string> tokens;
     std::istringstream stream(input);
     std::string token;
@@ -124,18 +128,18 @@ int main(int argc, char ** argv) {
 
     // load the prompts from an external file if there are any
     if (params.prompt.empty()) {
-        std::cout << "\n\033[32mNo new questions so proceed with build-in defaults.\033[0m";
+        printf("\n\033[32mNo new questions so proceed with build-in defaults.\033[0m");
     } else {
         // Output each line of the input params.prompts vector and copy to k_prompts
         int index = 0;
-        std::cout << "\n\033[32mNow printing the external prompt file " << params.prompt_file << "\033[0m\n\n";
+        printf("\n\033[32mNow printing the external prompt file %s\033[0m\n\n", params.prompt_file);
 
-        std::vector<std::string> prompts = splitString(params.prompt, '\n');
+        std::vector<std::string> prompts = split_string(params.prompt, '\n');
         for (const auto& prompt : prompts) {
             k_prompts.resize(index + 1);
             k_prompts[index] = prompt;
             index++;
-            std::cout << std::setw(2) << std::right << index << " prompt: " << prompt << std::endl;
+            printf("%3d prompt: %s\n", index, prompt);
         }
     }
 
@@ -392,10 +396,10 @@ int main(int argc, char ** argv) {
 
     const auto t_main_end = ggml_time_us();
 
-    printDateTime();
+    print_date_time();
 
     LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
-    std::cout << "external prompt file (if any): " << params.prompt_file << "\n\n";
+    printf("external prompt file (if any): %s \n\n", params.prompt_file);
 
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
