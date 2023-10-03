@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 #include <ctime>
-#include <iomanip>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
@@ -132,14 +131,14 @@ int main(int argc, char ** argv) {
     } else {
         // Output each line of the input params.prompts vector and copy to k_prompts
         int index = 0;
-        printf("\n\033[32mNow printing the external prompt file %s\033[0m\n\n", params.prompt_file);
+        printf("\n\033[32mNow printing the external prompt file %s\033[0m\n\n", params.prompt_file.c_str());
 
         std::vector<std::string> prompts = split_string(params.prompt, '\n');
         for (const auto& prompt : prompts) {
             k_prompts.resize(index + 1);
             k_prompts[index] = prompt;
             index++;
-            printf("%3d prompt: %s\n", index, prompt);
+            printf("%3d prompt: %s\n", index, prompt.c_str());
         }
     }
 
@@ -272,7 +271,7 @@ int main(int argc, char ** argv) {
                     client.n_decoded = 0;
                     client.i_batch   = batch.n_tokens - 1;
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
+                    LOG_TEE("\033[31mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
 
                     g_seq_id += 1;
 
@@ -399,7 +398,7 @@ int main(int argc, char ** argv) {
     print_date_time();
 
     LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
-    printf("external prompt file (if any): %s \n\n", params.prompt_file);
+    printf("external prompt file (if any): %s \n\n", params.prompt_file.c_str());
 
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
