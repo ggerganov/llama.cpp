@@ -1,22 +1,27 @@
 
 const auto index_html = R"(
-   <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <title>llama.cpp - server parallel PoC</title>
 </head>
 <body>
   <div style="width: 90%;margin: auto;">
-    <h2>Server parallel - Proof of Concept</h2>
-    <form id="myForm">
-      <label for="client_slot">Client Slot (-1 load in a idle client)</label>
-      <input type="number" id="client_slot" value="-1" required>
-      <br><br>
+    <h2>Server parallel - PoC</h2>
+    <form id="myForm" >
+      <label for="slot_id">Slot ID (-1 load in a idle slot)</label>
+          <input type="number" id="slot_id" value="-1" required>
+          <br>
+          <label for="temperature">Temperature</label>
+          <input type="number" id="temperature" value="0.1" required>
+          <br>
       <label for="message">Message</label>
       <input id="message" style="width: 80%;" required>
       <br><br>
       <button type="button" id="btn_send" onclick="perform() " >Send</button>
-      <button type="button" onclick="reset() " >Reset</button>
+      <br>
+      <br>
+      <button type="button" id="btn_reset" onclick="resetBtn() " >Reset</button>
     </form>
     <div id="conversation_view">
     </div>
@@ -26,9 +31,20 @@ const auto index_html = R"(
     let conversation = [];
     let current_message = -1;
     const questions = ["Who is Elon Musk?", "Who is Jeff Bezos?", "How to get a job at google?", "What are you?", "When was born Abraham Lincoln?"];
-    window.onload = function() {
+
+    docReady(() => {
       document.getElementById("message").value = questions[Math.floor(Math.random() * questions.length)];
-    };
+    });
+
+    function docReady(fn) {
+    // see if DOM is already available
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        // call on next available tick
+        setTimeout(fn, 1);
+    } else {
+        document.addEventListener("DOMContentLoaded", fn);
+    }
+}
 
     function updateView() {
       let conv_view = document.getElementById("conversation_view");
@@ -64,6 +80,7 @@ const auto index_html = R"(
         while (cont) {
           const result = await reader.read();
           if (result.done) {
+            document.getElementById("btn_send").disabled = false;
             break;
           }
 
@@ -108,43 +125,51 @@ const auto index_html = R"(
     }
 
     function generatePrompt() {
+      // generate a good prompt to have coherence
       let prompt = '';
       for(let index in conversation) {
         if(index == 0) {
           prompt += conversation[index].user + "\n";
         } else {
-          prompt += "User: " + conversation[index].user + "\n";
+          prompt += "User:" + conversation[index].user + "\n";
         }
         if(index == current_message) {
           prompt += "Assistant:";
         } else {
-          prompt += "Assistant: " + conversation[index].assistant;
+          prompt += "Assistant:" + conversation[index].assistant;
         }
       }
       return prompt;
     }
 
-    function reset() {
-      conversation = [];
-      document.getElementById("client_slot").value = "-1";
-      document.getElementById("message").value = "";
+    function resetBtn() {
+      document.getElementById("slot_id").value = "-1";
+      document.getElementById("temperature").value = "0.1";
+      document.getElementById("message").value = questions[Math.floor(Math.random() * questions.length)];
       document.getElementById("conversation_view").innerHTML = "";
+      conversation = [];
+      current_message = -1;
     }
 
     async function perform() {
-      var client_slot = parseFloat(document.getElementById("client_slot").value);
-      var prompt = document.getElementById("message").value;
-      if (!isNaN(client_slot) && prompt.length > 0) {
+      document.getElementById("btn_send").disabled = true;
+      var slot_id = parseInt(document.getElementById("slot_id").value);
+      var temperature = parseFloat(document.getElementById("temperature").value);
+      var prompt = " " + document.getElementById("message").value;
+      if (!isNaN(slot_id) && !isNaN(temperature) && prompt.length > 0) {
         current_message++;
         conversation.push({
           user: prompt,
           assistant: ''
         });
         updateView();
+        document.getElementById("message").value = "";
         await call_llama({
-          client_slot,
+          slot_id,
+          temperature,
           prompt: generatePrompt()
         });
+
       } else {
         document.getElementById("conversation_view").innerText = "please, insert valid props.";
       }
