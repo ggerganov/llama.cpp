@@ -124,7 +124,7 @@ static void replace_all(std::string & s, const std::string & search, const std::
     s = std::move(result);
 }
 
-bool is_float_eq(float a, float b, float abs_tol) {
+static bool is_float_eq(float a, float b, float abs_tol) {
     // Check for non-negative tolerance
     if (abs_tol < 0.0) {
         throw std::invalid_argument("Tolerance must be non-negative");
@@ -969,30 +969,25 @@ struct llama_hparams {
     float rope_freq_base_train;
     float rope_freq_scale_train;
 
-    bool operator==(const llama_hparams & other) const {
-        if (this->vocab_only != other.vocab_only) return false;
-        if (this->n_vocab != other.n_vocab) return false;
-        if (this->n_ctx_train != other.n_ctx_train) return false;
-        if (this->n_embd != other.n_embd) return false;
-        if (this->n_head != other.n_head) return false;
-        if (this->n_head_kv != other.n_head_kv) return false;
-        if (this->n_layer != other.n_layer) return false;
-        if (this->n_rot != other.n_rot) return false;
-        if (this->n_ff != other.n_ff) return false;
+    bool operator!=(const llama_hparams & other) const {
+        if (this->vocab_only != other.vocab_only) return true;
+        if (this->n_vocab != other.n_vocab) return true;
+        if (this->n_ctx_train != other.n_ctx_train) return true;
+        if (this->n_embd != other.n_embd) return true;
+        if (this->n_head != other.n_head) return true;
+        if (this->n_head_kv != other.n_head_kv) return true;
+        if (this->n_layer != other.n_layer) return true;
+        if (this->n_rot != other.n_rot) return true;
+        if (this->n_ff != other.n_ff) return true;
 
         const float EPSILON = 1e-9;
 
-        if (!is_float_eq(this->f_norm_eps, other.f_norm_eps, EPSILON)) return false;
-        if (!is_float_eq(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return false;
-        if (!is_float_eq(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return false;
-        if (!is_float_eq(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return false;
+        if (!is_float_eq(this->f_norm_eps, other.f_norm_eps, EPSILON)) return true;
+        if (!is_float_eq(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return true;
+        if (!is_float_eq(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return true;
+        if (!is_float_eq(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
 
-        return true;
-    }
-
-    // implement != explicitly using the "==" implementation above so we don't get a warning about it
-    bool operator!=(const llama_hparams & other) const {
-        return !(*this == other);
+        return false;
     }
 
     uint32_t n_gqa() const {
