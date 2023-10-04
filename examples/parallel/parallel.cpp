@@ -399,7 +399,7 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
     if (params.prompt_file.empty()) {
-        params.prompt_file = "used build-in defaults";
+        params.prompt_file = "used built-in defaults";
     }
     printf("External prompt file: \033[32m%s\033[0m\n", params.prompt_file.c_str());
     printf("Model and path used: \033[32m%s\033[0m\n\n", params.model.c_str());
