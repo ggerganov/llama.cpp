@@ -141,8 +141,7 @@ static bool is_float_eq(float a, float b, float abs_tol) {
     }
 
     // Regular comparison using the provided absolute tolerance
-    double diff = std::fabs(b - a);
-    return (diff <= abs_tol);
+    return std::fabs(b - a) <= abs_tol;
 }
 
 #ifdef GGML_USE_CPU_HBM
