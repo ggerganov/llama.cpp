@@ -28,9 +28,6 @@ build*/
 out/
 tmp/
 
-cmake-all.sh
-cmake_all.sh
-
 models/*
 models-mnt
 
