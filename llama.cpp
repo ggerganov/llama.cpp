@@ -124,7 +124,7 @@ static void replace_all(std::string & s, const std::string & search, const std::
     s = std::move(result);
 }
 
-static bool is_float_eq(float a, float b, float abs_tol) {
+static bool is_float_close(float a, float b, float abs_tol) {
     // Check for non-negative tolerance
     if (abs_tol < 0.0) {
         throw std::invalid_argument("Tolerance must be non-negative");
@@ -981,10 +981,10 @@ struct llama_hparams {
 
         const float EPSILON = 1e-9;
 
-        if (!is_float_eq(this->f_norm_eps, other.f_norm_eps, EPSILON)) return true;
-        if (!is_float_eq(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return true;
-        if (!is_float_eq(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return true;
-        if (!is_float_eq(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
+        if (!is_float_close(this->f_norm_eps, other.f_norm_eps, EPSILON)) return true;
+        if (!is_float_close(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
 
         return false;
     }
