@@ -6492,7 +6492,9 @@ struct llama_context * llama_new_context_with_model(
 #undef LLAMA_METAL_CHECK_BUF
         }
 #elif defined(GGML_USE_KOMPUTE)
+    // TODO(cebtenzzre): we need to check the type of each tensor because Q8_0 is not currently supported
     if (ggml_vk_has_device() && params.n_gpu_layers > 0
+        && model->arch == LLM_ARCH_LLAMA
         && (model->ftype == LLAMA_FTYPE_ALL_F32
             || model->ftype == LLAMA_FTYPE_MOSTLY_F16
             || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_0
