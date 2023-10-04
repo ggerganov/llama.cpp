@@ -1032,8 +1032,8 @@ static void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * r
             y[i].qs[j] = (xi0 & 0x0F) | ((xi1 & 0x0F) << 4);
 
             // get the 5-th bit and store it in qh at the right position
-            qh |= ((xi0 & 0x10) >> 4) << (j + 0);
-            qh |= ((xi1 & 0x10) >> 4) << (j + qk/2);
+            qh |= ((xi0 & 0x10u) >> 4) << (j + 0);
+            qh |= ((xi1 & 0x10u) >> 4) << (j + qk/2);
         }
 
         memcpy(&y[i].qh, &qh, sizeof(qh));
@@ -1080,8 +1080,8 @@ static void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * r
             y[i].qs[j] = (xi0 & 0x0F) | ((xi1 & 0x0F) << 4);
 
             // get the 5-th bit and store it in qh at the right position
-            qh |= ((xi0 & 0x10) >> 4) << (j + 0);
-            qh |= ((xi1 & 0x10) >> 4) << (j + qk/2);
+            qh |= ((xi0 & 0x10u) >> 4) << (j + 0);
+            qh |= ((xi1 & 0x10u) >> 4) << (j + qk/2);
         }
 
         memcpy(&y[i].qh, &qh, sizeof(y[i].qh));
