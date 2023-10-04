@@ -13082,6 +13082,7 @@ static void ggml_compute_forward_alibi_f32(
         return;
     }
 
+    const int n_past = ((int32_t *) dst->op_params)[0]; UNUSED(n_past);
     const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
