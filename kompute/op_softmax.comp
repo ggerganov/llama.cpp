@@ -24,6 +24,9 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 void main() {
+    if (gl_SubgroupInvocationID > 31)
+        return;
+
     const uint i03 = gl_WorkGroupID.z;
     const uint i02 = gl_WorkGroupID.y;
     const uint i01 = gl_WorkGroupID.x;
@@ -34,21 +37,21 @@ void main() {
 
     // parallel max
     float localMax = uintBitsToFloat(0xFF800000);
-    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += 32) {
         localMax = max(localMax, in_[psrc0 + i00]);
     }
     float max_ = subgroupMax(localMax);
 
     // parallel sum
     float localSum = 0.0f;
-    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += 32) {
         const float exp_psrc0 = exp(in_[psrc0 + i00] - max_);
         localSum += exp_psrc0;
         out_[pdst + i00] = exp_psrc0;
     }
 
     const float sum = subgroupAdd(localSum);
-    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += gl_SubgroupSize) {
+    for (uint i00 = gl_SubgroupInvocationID.x; i00 < pcs.ne00; i00 += 32) {
         out_[pdst + i00] /= sum;
     }
 }

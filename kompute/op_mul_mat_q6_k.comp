@@ -44,31 +44,38 @@ void main() {
     const uint r1 = gl_WorkGroupID.y;
     const uint r2 = gl_WorkGroupID.z;
 
-    const uint row = 2 * r0 + gl_SubgroupID;
+    const uint row = (r0 * gl_NumSubgroups + gl_SubgroupID);
     const uint offset0 = r2/pcs.gqa*(nb*pcs.ne0);
     const uint x = row * nb + offset0; // Based from inA without base offset
     const uint yy = r1*pcs.ne10 + r2*pcs.ne00*pcs.ne1+pcs.inBOff; // Based from inB
 
     float sumf = 0;
 
-    const uint tid  = gl_SubgroupInvocationID/2;
-    const uint ix   = gl_SubgroupInvocationID%2;
-    const uint ip   = tid/8;         // 0 or 1
-    const uint il   = tid%8;
-    const uint n    = 4;
-    const uint l0   = n*il;
-    const uint is   = 8*ip + l0/16;
+    // bits of invocation ID for gl_SubgroupSize=32:
+    //  x   x   x   x   x
+    //  4   3   2   1   0
+    // (     tid     ) ix
+    //  ip (   il    )
+
+    const uint block_stride = gl_SubgroupSize / 16;         // number of blocks each subgroup processes
+    const uint tid  = gl_SubgroupInvocationID/block_stride; // first block_stride groups have tid=0
+    const uint ix   = gl_SubgroupInvocationID%block_stride; // first block is 0..block_stride-1
+    const uint ip   = tid/8;        // first or second half of block (0 or 1)
+    const uint il   = tid%8;        // each half has 8 parts, one per scale
+    const uint n    = 4;            // 4 scales at a time (and 4 sums)
+    const uint l0   = n*il;         // offset into half-block, 0..28
+    const uint is   = 8*ip + l0/16; // 0, 1, 8, 9
 
     const uint y_offset = 128*ip + l0;
     const uint q_offset_l = 64*ip + l0;
     const uint q_offset_h = 32*ip + l0;
 
-    for (uint i = ix; i < nb; i += 2) {
+    for (uint i = ix; i < nb; i += block_stride) {
 
         const uint baseIndex = (x + i) * SIZE_OF_BLOCK + pcs.inAOff;
 
         const uint qlIndex = q_offset_l;
-        const uint q2Index = qlIndex + 32;
+        const uint q2Index = qlIndex + QK_K/8;
         const uint qhIndex = q_offset_h;
         const uint y = yy + i * QK_K + y_offset;
 

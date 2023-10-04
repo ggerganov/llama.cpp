@@ -7,6 +7,9 @@
  */
 
 void main() {
+    if (gl_SubgroupInvocationID > 31)
+        return;
+
     const uint nb = uint(pcs.ne00/BLOCKS_IN_QUANT);
     const uint r0 = gl_WorkGroupID.x;
     const uint r1 = gl_WorkGroupID.y;
@@ -28,13 +31,13 @@ void main() {
     //    gl_NumSubgroups, gl_SubgroupID, gl_SubgroupInvocationID, gl_SubgroupSize,
     //    gl_WorkGroupSize.x, gl_WorkGroupSize.y, gl_WorkGroupSize.z);
 
-    for (uint ib = ix; ib < nb; ib += gl_SubgroupSize/2) {
+    for (uint ib = ix; ib < nb; ib += 16) {
         for (int row = 0; row < N_ROWS; row++) {
             const uint block_index = x + ib + row * nb;
             sumf[row] += block_q_n_dot_y(block_index, yb, il);
         }
 
-        yb += BLOCKS_IN_QUANT * gl_SubgroupSize/2;
+        yb += BLOCKS_IN_QUANT * 16;
     }
 
     for (int row = 0; row < N_ROWS; ++row) {
