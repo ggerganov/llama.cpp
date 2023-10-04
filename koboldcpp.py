@@ -1169,7 +1169,7 @@ def show_new_gui():
     def export_vars():
         args.threads = int(threads_var.get())
         args.usemlock   = usemlock.get() == 1
-        args.debugmode  = debugmode.get() == 1
+        args.debugmode  = debugmode.get()
         args.launch     = launchbrowser.get()==1
         args.highpriority = highpriority.get()==1
         args.nommap = disablemmap.get()==1
@@ -1225,7 +1225,8 @@ def show_new_gui():
         if "threads" in dict:
             threads_var.set(dict["threads"])
         usemlock.set(1 if "usemlock" in dict and dict["usemlock"] else 0)
-        debugmode.set(1 if "debugmode" in dict and dict["debugmode"] else 0)
+        if "debugmode" in dict:
+            debugmode.set(dict["debugmode"])
         launchbrowser.set(1 if "launch" in dict and dict["launch"] else 0)
         highpriority.set(1 if "highpriority" in dict and dict["highpriority"] else 0)
         disablemmap.set(1 if "nommap" in dict and dict["nommap"] else 0)
@@ -1616,7 +1617,9 @@ def main(launch_args,start_server=True):
 
     if args.hordeconfig and args.hordeconfig[0]!="":
         global friendlymodelname, maxhordelen, maxhordectx, showdebug
-        friendlymodelname = "koboldcpp/"+args.hordeconfig[0]
+        friendlymodelname = args.hordeconfig[0]
+        if not friendlymodelname.startswith("koboldcpp/"):
+            friendlymodelname = "koboldcpp/" + friendlymodelname
         if len(args.hordeconfig) > 1:
             maxhordelen = int(args.hordeconfig[1])
         if len(args.hordeconfig) > 2:
@@ -1760,7 +1763,7 @@ if __name__ == '__main__':
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
     parser.add_argument("--usemlock", help="For Apple Systems. Force system to keep model in RAM rather than swapping or compressing", action='store_true')
     parser.add_argument("--noavx2", help="Do not use AVX2 instructions, a slower compatibility mode for older devices. Does not work with --clblast.", action='store_true')
-    parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", action='store_const', const=1, default=0)
+    parser.add_argument("--debugmode", help="Shows additional debug info in the terminal.", nargs='?', const=1, type=int, default=0)
     parser.add_argument("--skiplauncher", help="Doesn't display or use the GUI launcher.", action='store_true')
     parser.add_argument("--hordeconfig", help="Sets the display model name to something else, for easy use on AI Horde. Optional additional parameters set the horde max genlength, max ctxlen, API key and worker name.",metavar=('[hordemodelname]', '[hordegenlength] [hordemaxctx] [hordeapikey] [hordeworkername]'), nargs='+')
     compatgroup = parser.add_mutually_exclusive_group()
