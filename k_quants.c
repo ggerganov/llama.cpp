@@ -69,7 +69,6 @@ inline static int32_t vaddvq_s32(int32x4_t v) {
 // 2-6 bit quantization in super-blocks
 //
 
-
 //
 // ===================== Helper functions
 //
@@ -348,7 +347,6 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
     const float q4scale = 15.f;
 
     for (int i = 0; i < nb; i++) {
-
         float max_scale = 0; // as we are deducting the min, scales are always positive
         float max_min = 0;
         for (int j = 0; j < QK_K/16; ++j) {

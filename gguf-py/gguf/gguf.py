@@ -85,6 +85,7 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX       : int = auto()
     MPT           : int = auto()
     STARCODER     : int = auto()
+    REFACT        : int = auto()
     BERT          : int = auto()
 
 
@@ -118,6 +119,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
+    MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
 }
 
@@ -247,6 +249,20 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.REFACT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.GPT2: [
         # TODO
     ],
@@ -271,7 +287,7 @@ class TensorNameMap:
         # Token embeddings
         MODEL_TENSOR.TOKEN_EMBD: (
             "gpt_neox.embed_in",            # gptneox
-            "transformer.wte",              # gpt2 gpt-j mpt
+            "transformer.wte",              # gpt2 gpt-j mpt refact
             "transformer.word_embeddings",  # falcon
             "model.embed_tokens",           # llama-hf
             "tok_embeddings",               # llama-pth
@@ -304,6 +320,7 @@ class TensorNameMap:
             "norm",                       # llama-pth
             "embeddings.LayerNorm",       # bert
             "transformer.norm_f",         # mpt
+            "ln_f",                       # refact
         ),
 
         # Rope frequencies
@@ -316,7 +333,7 @@ class TensorNameMap:
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
             "gpt_neox.layers.{bid}.input_layernorm",           # gptneox
-            "transformer.h.{bid}.ln_1",                        # gpt2 gpt-j
+            "transformer.h.{bid}.ln_1",                        # gpt2 gpt-j refact
             "transformer.blocks.{bid}.norm_1",                 # mpt
             "transformer.h.{bid}.input_layernorm",             # falcon7b
             "transformer.h.{bid}.ln_mlp",                      # falcon40b
@@ -365,7 +382,7 @@ class TensorNameMap:
         # Attention output
         MODEL_TENSOR.ATTN_OUT: (
             "gpt_neox.layers.{bid}.attention.dense",       # gptneox
-            "transformer.h.{bid}.attn.c_proj",             # gpt2
+            "transformer.h.{bid}.attn.c_proj",             # gpt2 refact
             "transformer.blocks.{bid}.attn.out_proj",      # mpt
             "transformer.h.{bid}.self_attention.dense",    # falcon
             "model.layers.{bid}.self_attn.o_proj",         # llama-hf
@@ -383,7 +400,7 @@ class TensorNameMap:
         # Feed-forward norm
         MODEL_TENSOR.FFN_NORM: (
             "gpt_neox.layers.{bid}.post_attention_layernorm",  # gptneox
-            "transformer.h.{bid}.ln_2",                        # gpt2
+            "transformer.h.{bid}.ln_2",                        # gpt2 refact
             "transformer.blocks.{bid}.norm_2",                 # mpt
             "model.layers.{bid}.post_attention_layernorm",     # llama-hf
             "layers.{bid}.ffn_norm",                           # llama-pth
@@ -396,7 +413,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.c_fc",             # gpt2
             "transformer.blocks.{bid}.ffn.up_proj",     # mpt
             "transformer.h.{bid}.mlp.dense_h_to_4h",    # falcon
-            "model.layers.{bid}.mlp.up_proj",           # llama-hf
+            "model.layers.{bid}.mlp.up_proj",           # llama-hf refact
             "layers.{bid}.feed_forward.w3",             # llama-pth
             "encoder.layer.{bid}.intermediate.dense",   # bert
             "transformer.h.{bid}.mlp.fc_in",            # gpt-j
@@ -404,14 +421,14 @@ class TensorNameMap:
 
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
-            "model.layers.{bid}.mlp.gate_proj", # llama-hf
+            "model.layers.{bid}.mlp.gate_proj", # llama-hf refact
             "layers.{bid}.feed_forward.w1",     # llama-pth
         ),
 
         # Feed-forward down
         MODEL_TENSOR.FFN_DOWN: (
             "gpt_neox.layers.{bid}.mlp.dense_4h_to_h",  # gptneox
-            "transformer.h.{bid}.mlp.c_proj",           # gpt2
+            "transformer.h.{bid}.mlp.c_proj",           # gpt2 refact
             "transformer.blocks.{bid}.ffn.down_proj",   # mpt
             "transformer.h.{bid}.mlp.dense_4h_to_h",    # falcon
             "model.layers.{bid}.mlp.down_proj",         # llama-hf
