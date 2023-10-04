@@ -389,6 +389,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.interactive_first = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
+        } else if (arg == "--infill") {
+            params.infill = true;
         } else if (arg == "--multiline-input") {
             params.multiline_input = true;
         } else if (arg == "--simple-io") {
@@ -921,6 +923,7 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
         result += piece;
     }
 
+    // NOTE: the original tokenizer decodes bytes after collecting the pieces.
     return result;
 }
 
