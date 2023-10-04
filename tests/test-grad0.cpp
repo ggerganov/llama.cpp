@@ -208,26 +208,6 @@ static struct ggml_tensor * get_random_tensor_i32(
     return result;
 }
 
-static void print_elements(const char* label, const struct ggml_tensor * t) {
-    if (!t) {
-        printf("%s: %s = null\n", __func__, label);
-        return;
-    }
-    const int nelements = ggml_nelements(t);
-    printf("%s: %s = [", __func__, label);
-    for (int k = 0; k < nelements; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%.5f", ggml_get_f32_1d(t, k));
-    }
-    printf("] shape: [");
-    for (int k = 0; k < t->n_dims; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%d", (int)t->ne[k]);
-    }
-    printf("]\n");
-
-}
-
 static bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
