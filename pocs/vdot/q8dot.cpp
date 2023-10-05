@@ -43,7 +43,7 @@ static_assert(QK4_1 == QK8_0, "QK4_1 and QK8_0 must be the same");
 static_assert(QK4_0 == QK8_0, "QK4_0 and QK8_0 must be the same");
 
 template <typename T>
-void fillQ4blocks(std::vector<T>& blocks, std::mt19937& rndm) {
+static void fillQ4blocks(std::vector<T>& blocks, std::mt19937& rndm) {
     for (auto& b : blocks) {
         b.d = 1;
         for (int i=0; i<QK4_1/2; ++i) {
@@ -54,7 +54,7 @@ void fillQ4blocks(std::vector<T>& blocks, std::mt19937& rndm) {
     }
 }
 
-void fillQ80blocks(std::vector<block_q8_0>& blocks, std::mt19937& rndm) {
+static void fillQ80blocks(std::vector<block_q8_0>& blocks, std::mt19937& rndm) {
     for (auto& b : blocks) {
         b.d = 1;
         int sum = 0;
@@ -66,7 +66,7 @@ void fillQ80blocks(std::vector<block_q8_0>& blocks, std::mt19937& rndm) {
     }
 }
 
-float simpleDot(const block_q4_0& x, const block_q8_0& y) {
+static float simpleDot(const block_q4_0& x, const block_q8_0& y) {
     int s1 = 0; //, s2 = 0;
     for (int i=0; i<QK4_1/2; i+=2) {
         int v1 = x.qs[i+0] & 0xf;
@@ -81,7 +81,7 @@ float simpleDot(const block_q4_0& x, const block_q8_0& y) {
     //return y.d * x.d * (s1 - 8 * s2);
 }
 
-float simpleDot(const block_q4_1& x, const block_q8_0& y) {
+static float simpleDot(const block_q4_1& x, const block_q8_0& y) {
     int s1 = 0; //, s2 = 0;
     for (int i=0; i<QK4_1/2; i+=2) {
         int v1 = x.qs[i+0] & 0xf;

@@ -107,7 +107,7 @@ static struct ggml_tensor * get_random_tensor_f32(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
 }
@@ -155,7 +155,7 @@ static struct ggml_tensor * get_random_tensor_f16(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
 }
@@ -203,29 +203,9 @@ static struct ggml_tensor * get_random_tensor_i32(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
-}
-
-static void print_elements(const char* label, const struct ggml_tensor * t) {
-    if (!t) {
-        printf("%s: %s = null\n", __func__, label);
-        return;
-    }
-    const int nelements = ggml_nelements(t);
-    printf("%s: %s = [", __func__, label);
-    for (int k = 0; k < nelements; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%.5f", ggml_get_f32_1d(t, k));
-    }
-    printf("] shape: [");
-    for (int k = 0; k < t->n_dims; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%d", (int)t->ne[k]);
-    }
-    printf("]\n");
-
 }
 
 static bool check_gradient(
@@ -251,18 +231,20 @@ static bool check_gradient(
         printf("GGML_N_THREADS = %d\n", n_threads);
     }
 
-    struct ggml_cgraph gf = ggml_build_forward (f);
-    struct ggml_cgraph gb = ggml_build_backward(ctx0, &gf, false);
+    struct ggml_cgraph * gf = ggml_build_forward_ctx(ctx0, f);
+    struct ggml_cgraph * gb = ggml_new_graph(ctx0);
+    *gb = *gf;
+    ggml_build_backward_expand(ctx0, gf, gb, false);
 
-    ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
+    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
 
-    ggml_graph_reset  (&gf);
+    ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
 
-    ggml_graph_compute_with_ctx(ctx0, &gb, n_threads);
+    ggml_graph_compute_with_ctx(ctx0, gb, n_threads);
 
-    // ggml_graph_dump_dot(&gf, NULL, "test-grad0-forward.dot");
-    // ggml_graph_dump_dot(&gb, &gf,  "test-grad0-backward.dot");
+    // ggml_graph_dump_dot(gf, NULL, "test-grad0-forward.dot");
+    // ggml_graph_dump_dot(gb, gf,  "test-grad0-backward.dot");
 
     for (int i = 0; i < nargs; ++i) {
         const int nelements = ggml_nelements(x[i]);
@@ -273,13 +255,13 @@ static bool check_gradient(
             const float xp = x0 + eps;
             ggml_set_f32_1d(x[i], k, xp);
 
-            ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
+            ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
 
             const double f0 = ggml_get_f32_1d(f, 0);
 
             ggml_set_f32_1d(x[i], k, xm);
 
-            ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
+            ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
 
             const double f1 = ggml_get_f32_1d(f, 0);
             const double g0 = (f0 - f1)/(2.0*(double) eps);
@@ -287,10 +269,10 @@ static bool check_gradient(
             ggml_set_f32_1d(x[i], k, x0);
 
             // compute gradient using backward graph
-            ggml_graph_reset  (&gf);
+            ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
 
-            ggml_graph_compute_with_ctx(ctx0, &gb, n_threads);
+            ggml_graph_compute_with_ctx(ctx0, gb, n_threads);
 
             const double g1 = ggml_get_f32_1d(x[i]->grad, k);
 
@@ -373,7 +355,7 @@ static bool check_mat_mul(
 
 int main(int argc, const char ** argv) {
     struct ggml_init_params params = {
-        /* .mem_size   = */ 128*1024*1024,
+        /* .mem_size   = */ 256*1024*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ false,
     };
@@ -405,6 +387,7 @@ int main(int argc, const char ** argv) {
         }
     }
 
+    unsigned seed_iter = 1;
 
     // original loop: 1000
     int niter = 4;
@@ -416,6 +399,10 @@ int main(int argc, const char ** argv) {
         niter = atoi(argv[1]);
     }
     for (int iter = 0; iter < niter; ++iter) {
+        srand(seed_iter);
+        seed_iter = rand();
+        unsigned seed = rand();
+
         printf("test-grad0: iter:%d/%d\n", iter, niter);
         struct ggml_context * ctx0 = ggml_init(params);
 
@@ -425,6 +412,7 @@ int main(int argc, const char ** argv) {
 
         // add f32
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -441,6 +429,7 @@ int main(int argc, const char ** argv) {
 
         // add f16
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -457,6 +446,7 @@ int main(int argc, const char ** argv) {
 
         // sub
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -473,6 +463,7 @@ int main(int argc, const char ** argv) {
 
         // mul
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -489,6 +480,7 @@ int main(int argc, const char ** argv) {
 
         // div
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -505,6 +497,7 @@ int main(int argc, const char ** argv) {
 
         // sqr
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -521,6 +514,7 @@ int main(int argc, const char ** argv) {
 
         // sqrt
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -537,6 +531,7 @@ int main(int argc, const char ** argv) {
 
         // log
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -553,6 +548,7 @@ int main(int argc, const char ** argv) {
 
         // sum
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -570,6 +566,7 @@ int main(int argc, const char ** argv) {
 
         // sum_rows
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -587,6 +584,7 @@ int main(int argc, const char ** argv) {
         // mean, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -604,6 +602,7 @@ int main(int argc, const char ** argv) {
         // argmax
         if (0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -620,6 +619,7 @@ int main(int argc, const char ** argv) {
 
         // repeat
         {
+            srand(seed);
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
@@ -642,6 +642,7 @@ int main(int argc, const char ** argv) {
 
         // repeat back
         {
+            srand(seed);
             int64_t ne2[4];
             get_random_dims(ne2, 4);
 
@@ -680,6 +681,7 @@ int main(int argc, const char ** argv) {
 
         // sgn
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -696,6 +698,7 @@ int main(int argc, const char ** argv) {
 
         // neg
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -712,6 +715,7 @@ int main(int argc, const char ** argv) {
 
         // step
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -729,6 +733,7 @@ int main(int argc, const char ** argv) {
         // tanh, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -745,33 +750,45 @@ int main(int argc, const char ** argv) {
 
         // mul_mat
         {
+            srand(seed);
             const int nargs = 2;
 
-            for (int ndims = 2; ndims <= 2; ++ndims) {
+            for (int ndims = 2; ndims <= 4; ++ndims) {
+                int max_nrep = (ndims >= 3) ? 2 : 1;
                 x[0] = get_random_tensor_f32(ctx0, ndims, ne, -1.0f, 1.0f);
-                {
-                    int64_t ne2[4];
-                    get_random_dims(ne2, 4);
-                    ne2[0] = ne[0];
-                    x[1] = get_random_tensor_f32(ctx0, ndims, ne2, -1.0f, 1.0f);
+                for (int nrep2 = 1; nrep2 < max_nrep; ++nrep2) {
+                    for (int nrep3 = 1; nrep3 < max_nrep; ++nrep3) {
+                        {
+                            int64_t ne2[4];
+                            get_random_dims(ne2, 4);
+                            ne2[0] = ne[0];
+                            ne2[2] = nrep2 * ne[2];
+                            ne2[3] = nrep3 * ne[3];
+                            x[1] = get_random_tensor_f32(ctx0, ndims, ne2, -1.0f, 1.0f);
+                        }
+
+                        ggml_set_param(ctx0, x[0]);
+                        ggml_set_param(ctx0, x[1]);
+
+                        struct ggml_tensor * m = ggml_mul_mat(ctx0, x[1], x[0]);
+                        struct ggml_tensor * f = ggml_sum(ctx0, m);
+
+                        GGML_PRINT_DEBUG("testing: mul_mat, [%lld, %lld] (%d) * [%lld, %lld] (%d)\n", x[1]->ne[0], x[1]->ne[1], x[1]->n_dims, x[0]->ne[0], x[0]->ne[1], x[0]->n_dims);
+
+                        check_gradient("mul_mat", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
+                        if (ndims == 2) {
+                            // check_mat_mul does not support ndims > 2
+                            check_mat_mul(m, x[1], x[0]);
+                        }
+                    }
                 }
-
-                ggml_set_param(ctx0, x[0]);
-                ggml_set_param(ctx0, x[1]);
-
-                struct ggml_tensor * m = ggml_mul_mat(ctx0, x[1], x[0]);
-                struct ggml_tensor * f = ggml_sum(ctx0, m);
-
-                GGML_PRINT_DEBUG("testing: mul_mat, [%lld, %lld] (%d) * [%lld, %lld] (%d)\n", x[1]->ne[0], x[1]->ne[1], x[1]->n_dims, x[0]->ne[0], x[0]->ne[1], x[0]->n_dims);
-
-                check_gradient("mul_mat", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
-                check_mat_mul(m, x[1], x[0]);
             }
         }
 
         // elu, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -788,6 +805,7 @@ int main(int argc, const char ** argv) {
 
         // relu
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -805,6 +823,7 @@ int main(int argc, const char ** argv) {
         // gelu, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 4; ++ndims) {
@@ -821,6 +840,7 @@ int main(int argc, const char ** argv) {
 
         // silu
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -842,6 +862,7 @@ int main(int argc, const char ** argv) {
 
         // rms_norm
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -858,6 +879,7 @@ int main(int argc, const char ** argv) {
 
         // scale
         {
+            srand(seed);
             const int nargs = 2;
 
             int64_t ne2[4];
@@ -878,6 +900,7 @@ int main(int argc, const char ** argv) {
 
         // cpy f32
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -895,6 +918,7 @@ int main(int argc, const char ** argv) {
 
         // cpy f16
         {
+            srand(seed);
             const int nargs = 2;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -912,6 +936,7 @@ int main(int argc, const char ** argv) {
 
         // reshape (1d->nd)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -935,6 +960,7 @@ int main(int argc, const char ** argv) {
 
         // reshape (nd->1d)
         {
+            srand(seed);
             const int nargs = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
@@ -958,6 +984,7 @@ int main(int argc, const char ** argv) {
 
         // acc 1d
         {
+            srand(seed);
             int64_t ne2[4] = { 1, 1, 1, 1 };
 
             const int nargs = 2;
@@ -985,6 +1012,7 @@ int main(int argc, const char ** argv) {
 
         // acc 2d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1017,6 +1045,7 @@ int main(int argc, const char ** argv) {
 
         // acc 3d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1051,6 +1080,7 @@ int main(int argc, const char ** argv) {
 
         // acc 4d
         {
+            srand(seed);
             int64_t ne2[4]         = { 1, 1, 1, 1 };
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1087,6 +1117,7 @@ int main(int argc, const char ** argv) {
 
         // set_1d
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 2;
@@ -1114,6 +1145,7 @@ int main(int argc, const char ** argv) {
 
         // set_2d
         {
+            srand(seed);
             int64_t ne2[4];
             int64_t max_offsets[4] = { 0, 0, 0, 0 };
             int64_t offsets[4]     = { 0, 0, 0, 0 };
@@ -1146,6 +1178,7 @@ int main(int argc, const char ** argv) {
 
         // view_1d
         {
+            srand(seed);
             const int nargs = 1;
             for (int ndims = 1; ndims <= 4; ++ndims) {
 
@@ -1169,6 +1202,7 @@ int main(int argc, const char ** argv) {
 
         // view_2d
         {
+            srand(seed);
             int64_t ne2[4];
             int64_t nb2[4];
 
@@ -1199,6 +1233,7 @@ int main(int argc, const char ** argv) {
 
         // view_3d
         {
+            srand(seed);
             int64_t ne2[4] = {1,1,1,1};
             int64_t nb2[4] = {0,0,0,0};
 
@@ -1230,6 +1265,7 @@ int main(int argc, const char ** argv) {
 
         // permute
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 1;
@@ -1263,6 +1299,7 @@ int main(int argc, const char ** argv) {
 
         // transpose
         {
+            srand(seed);
             int64_t ne2[4];
 
             const int nargs = 1;
@@ -1290,6 +1327,7 @@ int main(int argc, const char ** argv) {
 
         // get_rows
         {
+            srand(seed);
             int64_t ne2[4] = {ne[0], ne[1], 1, 1};
             int64_t ne3[4] = {1+irand(ne[1]), 1, 1, 1};
             const int nargs = 1;
@@ -1306,6 +1344,7 @@ int main(int argc, const char ** argv) {
 
         // diag_mask_inf
         {
+            srand(seed);
             const int nargs = 1;
             const int ndims = 2;
 
@@ -1321,6 +1360,7 @@ int main(int argc, const char ** argv) {
 
         // diag_mask_zero
         {
+            srand(seed);
             const int nargs = 1;
             const int ndims = 2;
 
@@ -1336,6 +1376,7 @@ int main(int argc, const char ** argv) {
 
         // softmax
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1357,11 +1398,16 @@ int main(int argc, const char ** argv) {
                                                     ggml_new_f32(ctx0, eps))));
 
                 check_gradient("softmax", ctx0, x, f, ndims, nargs, 1e-3f, 2e-1f, INFINITY);
+                // NOTE: softmax forward is computed using f16 table lookup instead of using actual expf, but backward assumes actual expf.
+                // this may result in different gradients too finite differences.
+                // when this test reports errors, first try to replace the table lookup with actual expf and test again to see if just that was the cause.
+                // if only the table lookup causes gradients to differ this is acceptable.
             }
         }
 
         // cross_entropy_loss
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1392,6 +1438,7 @@ int main(int argc, const char ** argv) {
 
         // rope f32
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1404,6 +1451,11 @@ int main(int argc, const char ** argv) {
                     for (int n_past = 1; n_past < ne2[2]; ++n_past) {
                         x[0] = get_random_tensor_f32(ctx0, ndims, ne2, -1.0f, 1.0f);
 
+                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne2[2]);
+                        for (int i = 0; i < ne2[2]; ++i) {
+                            ((int32_t *) p->data)[i] = n_past + i;
+                        }
+
                         ggml_set_param(ctx0, x[0]);
 
                         const bool skip_past = (mode & 1);
@@ -1415,7 +1467,7 @@ int main(int argc, const char ** argv) {
                             continue;
                         }
 
-                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], n_past, n_rot, mode, 0));
+                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], p, n_rot, mode, 0));
 
                         GGML_PRINT_DEBUG("rope f32: n_past: %d n_rot: %d mode: %d\n", n_past, n_rot, mode);
                         check_gradient("rope f32", ctx0, x, f, ndims, nargs, 1e-2f, 1e-3f, INFINITY);
@@ -1426,6 +1478,7 @@ int main(int argc, const char ** argv) {
 
         // rope f16
         {
+            srand(seed);
             const int nargs = 1;
 
             int64_t ne2[4];
@@ -1438,6 +1491,11 @@ int main(int argc, const char ** argv) {
                     for (int n_past = 1; n_past < ne2[2]; ++n_past) {
                         x[0] = get_random_tensor_f16(ctx0, ndims, ne2, -1.0f, 1.0f);
 
+                        struct ggml_tensor * p = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, ne2[2]);
+                        for (int i = 0; i < ne2[2]; ++i) {
+                            ((int32_t *) p->data)[i] = n_past + i;
+                        }
+
                         ggml_set_param(ctx0, x[0]);
 
                         const bool skip_past = (mode & 1);
@@ -1449,7 +1507,7 @@ int main(int argc, const char ** argv) {
                             continue;
                         }
 
-                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], n_past, n_rot, mode, 0));
+                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_rope(ctx0, x[0], p, n_rot, mode, 0));
 
                         GGML_PRINT_DEBUG("rope f16: n_past: %d n_rot: %d mode: %d\n", n_past, n_rot, mode);
                         check_gradient("rope f16", ctx0, x, f, ndims, nargs, 1e-1f, 1e-1f, INFINITY);
@@ -1460,6 +1518,7 @@ int main(int argc, const char ** argv) {
 
         // flash_attn f32
         {
+            srand(seed);
             const int nargs = 3;
 
             int64_t ne2[4];
@@ -1472,28 +1531,31 @@ int main(int argc, const char ** argv) {
 
             for (int masked = 0; masked <= 1; ++masked) {
                 for (int ndims = 2; ndims <= 4; ++ndims) {
-                    int64_t neq[4] = { D, N, B, ne[3] };
-                    int64_t nek[4] = { D, M, B, ne[3] };
-                    int64_t nev[4] = { M, D, B, ne[3] };
-                    if (ndims == 2) {
-                        neq[2] = 1; neq[3] = 1;
-                        nek[2] = 1; nek[3] = 1;
-                        nev[2] = 1; nev[3] = 1;
-                    } else if (ndims == 3) {
-                        neq[3] = 1;
-                        nek[3] = 1;
-                        nev[3] = 1;
+                    int max_nrep = (ndims >= 3) ? 2 : 1;
+                    for (int nrep = 1; nrep < max_nrep; ++nrep) {
+                        int64_t neq[4] = { D, N, B*nrep, ne[3] };
+                        int64_t nek[4] = { D, M, B, ne[3] };
+                        int64_t nev[4] = { M, D, B, ne[3] };
+                        if (ndims == 2) {
+                            neq[2] = 1; neq[3] = 1;
+                            nek[2] = 1; nek[3] = 1;
+                            nev[2] = 1; nev[3] = 1;
+                        } else if (ndims == 3) {
+                            neq[3] = 1;
+                            nek[3] = 1;
+                            nev[3] = 1;
+                        }
+                        x[0] = get_random_tensor_f32(ctx0, ndims, neq, -0.1250f, 0.1250f);
+                        x[1] = get_random_tensor_f32(ctx0, ndims, nek, -0.1250f, 0.1250f);
+                        x[2] = get_random_tensor_f32(ctx0, ndims, nev, -0.1250f, 0.1250f);
+                        ggml_set_param(ctx0, x[0]);
+                        ggml_set_param(ctx0, x[1]);
+                        ggml_set_param(ctx0, x[2]);
+
+                        struct ggml_tensor * f = ggml_sum(ctx0, ggml_flash_attn(ctx0, x[0], x[1], x[2], (masked == 0)));
+
+                        check_gradient("flash_attn f32", ctx0, x, f, ndims, nargs, 1.5e-4f, 1e-3f, INFINITY);
                     }
-                    x[0] = get_random_tensor_f32(ctx0, ndims, neq, -0.1250f, 0.1250f);
-                    x[1] = get_random_tensor_f32(ctx0, ndims, nek, -0.1250f, 0.1250f);
-                    x[2] = get_random_tensor_f32(ctx0, ndims, nev, -0.1250f, 0.1250f);
-                    ggml_set_param(ctx0, x[0]);
-                    ggml_set_param(ctx0, x[1]);
-                    ggml_set_param(ctx0, x[2]);
-
-                    struct ggml_tensor * f = ggml_sum(ctx0, ggml_flash_attn(ctx0, x[0], x[1], x[2], (masked == 0)));
-
-                    check_gradient("flash_attn f32", ctx0, x, f, ndims, nargs, 1.5e-4f, 1e-3f, INFINITY);
                 }
             }
         }
@@ -1501,6 +1563,7 @@ int main(int argc, const char ** argv) {
         // flash_attn f16, not yet fully implemented
         if(0)
         {
+            srand(seed);
             const int nargs = 3;
 
             int64_t ne2[4];

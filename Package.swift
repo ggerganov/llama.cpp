@@ -10,7 +10,7 @@ let platforms: [SupportedPlatform]? = [
     .tvOS(.v14)
 ]
 let exclude: [String] = []
-let additionalSources: [String] = ["ggml-metal.m"]
+let additionalSources: [String] = ["ggml-metal.m", "ggml-metal.metal"]
 let additionalSettings: [CSetting] = [
     .unsafeFlags(["-fno-objc-arc"]),
     .define("GGML_SWIFT"),
@@ -44,7 +44,9 @@ let package = Package(
             cSettings: [
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
                 .define("GGML_USE_K_QUANTS"),
-                .define("GGML_USE_ACCELERATE")
+                .define("GGML_USE_ACCELERATE"),
+                .define("ACCELERATE_NEW_LAPACK"),
+                .define("ACCELERATE_LAPACK_ILP64")
             ] + additionalSettings,
             linkerSettings: [
                 .linkedFramework("Accelerate")

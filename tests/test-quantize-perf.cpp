@@ -76,22 +76,21 @@ static void * align_with_offset(void * ptr, int offset) {
     return (char *) std::align(MAX_ALIGNMENT, MAX_ALIGNMENT, ptr, dummy_size) + offset;
 }
 
-static void benchmark_function(size_t size, size_t q_size, int64_t iterations, const std::function<size_t(void)> & function) {
+static void benchmark_function(size_t size, size_t q_size, int64_t iterations, const std::function<float(void)> & func) {
     int64_t min_time_us = INT64_MAX;
     int64_t total_time_us = 0;
     int64_t min_time_cycles = INT64_MAX;
     int64_t total_time_cycles = 0;
 
     for (int i = 0; i < WARMUP; i++) {
-        function();
+        func();
     }
-
 
     for (int i = 0; i < iterations; i++) {
         const int64_t start_time = ggml_time_us();
         const int64_t start_cycles = cpu_cycles();
 
-        function();
+        func();
 
         const int64_t end_cycles = cpu_cycles();
         const int64_t end_time = ggml_time_us();
@@ -245,15 +244,15 @@ int main(int argc, char * argv[]) {
 
     std::vector<uint8_t> test_data1_v(largest*4 + MAX_ALIGNMENT*2);
     std::vector<uint8_t> test_data2_v(largest*4 + MAX_ALIGNMENT*2);
-    std::vector<uint8_t> test_q1_v(largest*4 + MAX_ALIGNMENT*2);
-    std::vector<uint8_t> test_q2_v(largest*4 + MAX_ALIGNMENT*2);
-    std::vector<uint8_t> test_out_v(largest*4 + MAX_ALIGNMENT*2);
+    std::vector<uint8_t> test_q1_v   (largest*4 + MAX_ALIGNMENT*2);
+    std::vector<uint8_t> test_q2_v   (largest*4 + MAX_ALIGNMENT*2);
+    std::vector<uint8_t> test_out_v  (largest*4 + MAX_ALIGNMENT*2);
 
     float * test_data1 = (float *) align_with_offset(test_data1_v.data(), params.alignment_offset);
     float * test_data2 = (float *) align_with_offset(test_data2_v.data(), params.alignment_offset);
-    float * test_q1 = (float *) align_with_offset(test_q1_v.data(), params.alignment_offset);
-    float * test_q2 = (float *) align_with_offset(test_q2_v.data(), params.alignment_offset);
-    float * test_out = (float *) align_with_offset(test_out_v.data(), params.alignment_offset);
+    float * test_q1    = (float *) align_with_offset(test_q1_v.data(),    params.alignment_offset);
+    float * test_q2    = (float *) align_with_offset(test_q2_v.data(),    params.alignment_offset);
+    float * test_out   = (float *) align_with_offset(test_out_v.data(),   params.alignment_offset);
 
     generate_data(0, largest, test_data1);
     generate_data(1, largest, test_data2);
@@ -283,7 +282,7 @@ int main(int argc, char * argv[]) {
                 printf("  quantize_row_q_reference\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
-                    auto quantize_fn = [&](void ) {
+                    auto quantize_fn = [&](void) -> float {
                         qfns.from_float_reference(test_data1, test_q1, size);
                         return test_q1[0];
                     };
@@ -297,7 +296,7 @@ int main(int argc, char * argv[]) {
                 printf("  quantize_row_q\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
-                    auto quantize_fn = [&](void ) {
+                    auto quantize_fn = [&](void) -> float {
                         qfns.from_float(test_data1, test_q1, size);
                         return test_q1[0];
                     };
@@ -312,7 +311,7 @@ int main(int argc, char * argv[]) {
                 qfns.from_float(test_data1, test_q1, largest);
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
-                    auto quantize_fn = [&](void ) {
+                    auto quantize_fn = [&](void) -> float {
                         qfns.to_float(test_q1, test_out, size);
                         return test_out[0];
                     };
@@ -326,7 +325,7 @@ int main(int argc, char * argv[]) {
                 printf("  quantize_row_q_dot\n");
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
-                    auto quantize_fn = [&](void ) {
+                    auto quantize_fn = [&](void) -> float {
                         auto vdot = ggml_internal_get_type_traits(qfns.vec_dot_type);
                         vdot.from_float(test_data1, test_q1, size);
                         return test_q1[0];
@@ -343,7 +342,7 @@ int main(int argc, char * argv[]) {
                 qfns.from_float(test_data2, test_q2, largest);
                 for (size_t size : params.test_sizes) {
                     printf("    %zu values (%.2f MB)\n", size, 4*size/(float)(1024*1024));
-                    auto quantize_fn = [&](void ) {
+                    auto quantize_fn = [&](void) -> float {
                         float result;
                         qfns.vec_dot(size, &result, test_q1, test_q2);
                         return result;

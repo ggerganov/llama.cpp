@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -14,9 +15,11 @@
 // for rocblas_initialize()
 #include "rocblas/rocblas.h"
 #endif // __HIP_PLATFORM_AMD__
+#define CUBLAS_COMPUTE_16F HIPBLAS_R_16F
 #define CUBLAS_COMPUTE_32F HIPBLAS_R_32F
 #define CUBLAS_COMPUTE_32F_FAST_16F HIPBLAS_R_32F
 #define CUBLAS_GEMM_DEFAULT HIPBLAS_GEMM_DEFAULT
+#define CUBLAS_GEMM_DEFAULT_TENSOR_OP HIPBLAS_GEMM_DEFAULT
 #define CUBLAS_OP_N HIPBLAS_OP_N
 #define CUBLAS_OP_T HIPBLAS_OP_T
 #define CUBLAS_STATUS_SUCCESS HIPBLAS_STATUS_SUCCESS
@@ -31,6 +34,9 @@
 #define cublasSetStream hipblasSetStream
 #define cublasSgemm hipblasSgemm
 #define cublasStatus_t hipblasStatus_t
+#define cudaDeviceCanAccessPeer hipDeviceCanAccessPeer
+#define cudaDeviceDisablePeerAccess hipDeviceDisablePeerAccess
+#define cudaDeviceEnablePeerAccess hipDeviceEnablePeerAccess
 #define cudaDeviceProp hipDeviceProp_t
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
@@ -61,7 +67,7 @@
 #define cudaStreamCreateWithFlags hipStreamCreateWithFlags
 #define cudaStreamNonBlocking hipStreamNonBlocking
 #define cudaStreamSynchronize hipStreamSynchronize
-#define cudaStreamWaitEvent(stream, event) hipStreamWaitEvent(stream, event, 0)
+#define cudaStreamWaitEvent(stream, event, flags) hipStreamWaitEvent(stream, event, flags)
 #define cudaStream_t hipStream_t
 #define cudaSuccess hipSuccess
 #else
@@ -74,9 +80,9 @@
 #include "ggml.h"
 
 #define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
-#define CC_TURING     700
+#define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
-#define CC_RDNA2      CC_OFFSET_AMD + 1030
+#define CC_RDNA2      (CC_OFFSET_AMD + 1030)
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
@@ -190,6 +196,12 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
     } while (0)
 #endif // CUDART_VERSION >= 11
 
+#if CUDART_VERSION >= 11100
+#define GGML_CUDA_ASSUME(x) __builtin_assume(x)
+#else
+#define GGML_CUDA_ASSUME(x)
+#endif // CUDART_VERSION >= 11100
+
 #ifdef GGML_CUDA_F16
 typedef half dfloat; // dequantize float
 typedef half2 dfloat2;
@@ -226,8 +238,12 @@ static __device__ __forceinline__ int get_int_from_uint8_aligned(const uint8_t *
     return *((int *) (x8 + sizeof(int) * i32)); // assume at least 4 byte alignment
 }
 
+template<typename T>
+using to_t_cuda_t = void (*)(const void * __restrict__ x, T * __restrict__ y, int k, cudaStream_t stream);
+typedef to_t_cuda_t<float> to_fp32_cuda_t;
+typedef to_t_cuda_t<half> to_fp16_cuda_t;
+
 typedef void (*dequantize_kernel_t)(const void * vx, const int ib, const int iqs, dfloat2 & v);
-typedef void (*to_fp32_cuda_t)(const void * __restrict__ x, float * __restrict__ y, int k, cudaStream_t stream);
 typedef void (*dot_kernel_k_t)(const void * __restrict__ vx, const int ib, const int iqs, const float * __restrict__ y, float & v);
 typedef void (*cpy_kernel_t)(const char * cx, char * cdst);
 typedef void (*ggml_cuda_func_t)(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
@@ -418,6 +434,10 @@ static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_
 static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUANTS_PER_ITERATION must be 1 or 2");
 #endif
 
+#ifndef GGML_CUDA_PEER_MAX_BATCH_SIZE
+#define GGML_CUDA_PEER_MAX_BATCH_SIZE 128
+#endif // GGML_CUDA_PEER_MAX_BATCH_SIZE
+
 #define MUL_MAT_SRC1_COL_STRIDE 128
 
 #define MAX_STREAMS 8
@@ -448,7 +468,7 @@ static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
 static bool g_mul_mat_q = true;
 
 static void * g_scratch_buffer = nullptr;
-static size_t g_scratch_size = 1024*1024*1024; // 1 GB by default
+static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
@@ -695,7 +715,8 @@ static __device__ __forceinline__ void dequantize_q8_0(const void * vx, const in
 
 //================================== k-quants
 
-static __global__ void dequantize_block_q2_K(const void * __restrict__ vx, float * __restrict__ yy) {
+template<typename dst_t>
+static __global__ void dequantize_block_q2_K(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 
     const int i   = blockIdx.x;
     const block_q2_K * x = (const block_q2_K *) vx;
@@ -707,7 +728,7 @@ static __global__ void dequantize_block_q2_K(const void * __restrict__ vx, float
     const int is  = 8*n + l/16;
 
     const uint8_t q = x[i].qs[32*n + l];
-    float * y = yy + i*QK_K + 128*n;
+    dst_t * y = yy + i*QK_K + 128*n;
 
     float dall = __low2half(x[i].dm);
     float dmin = __high2half(x[i].dm);
@@ -719,7 +740,7 @@ static __global__ void dequantize_block_q2_K(const void * __restrict__ vx, float
     const int is = tid/16;  // 0 or 1
     const int il = tid%16;  // 0...15
     const uint8_t q = x[i].qs[il] >> (2*is);
-    float * y = yy + i*QK_K + 16*is + il;
+    dst_t * y = yy + i*QK_K + 16*is + il;
     float dall = __low2half(x[i].dm);
     float dmin = __high2half(x[i].dm);
     y[ 0] = dall * (x[i].scales[is+0] & 0xF) * ((q >> 0) & 3) - dmin * (x[i].scales[is+0] >> 4);
@@ -728,7 +749,8 @@ static __global__ void dequantize_block_q2_K(const void * __restrict__ vx, float
 
 }
 
-static __global__ void dequantize_block_q3_K(const void * __restrict__ vx, float * __restrict__ yy) {
+template<typename dst_t>
+static __global__ void dequantize_block_q3_K(const void * __restrict__ vx, dst_t * __restrict__ yy) {
 
     const int i = blockIdx.x;
     const block_q3_K * x = (const block_q3_K *) vx;
@@ -752,7 +774,7 @@ static __global__ void dequantize_block_q3_K(const void * __restrict__ vx, float
     float d_all = x[i].d;
     float dl = d_all * (us - 32);
 
-    float * y = yy + i*QK_K + 128*n + 32*j;
+    dst_t * y = yy + i*QK_K + 128*n + 32*j;
     const uint8_t * q = x[i].qs + 32*n;
     const uint8_t * hm = x[i].hmask;
 
@@ -764,7 +786,7 @@ static __global__ void dequantize_block_q3_K(const void * __restrict__ vx, float
     const int im  = il/8;    // 0...1
     const int in  = il%8;    // 0...7
 
-    float * y = yy + i*QK_K + 16*is + il;
+    dst_t * y = yy + i*QK_K + 16*is + il;
 
     const uint8_t q = x[i].qs[il] >> (2*is);
     const uint8_t h = x[i].hmask[in] >> (2*is + im);
@@ -792,7 +814,8 @@ static inline __device__ void get_scale_min_k4(int j, const uint8_t * q, uint8_t
 }
 #endif
 
-static __global__ void dequantize_block_q4_K(const void * __restrict__ vx, float * __restrict__ yy) {
+template<typename dst_t>
+static __global__ void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restrict__ yy) {
     const block_q4_K * x = (const block_q4_K *) vx;
 
     const int i = blockIdx.x;
@@ -805,7 +828,7 @@ static __global__ void dequantize_block_q4_K(const void * __restrict__ vx, float
     const int is  = 2*il;
     const int n   = 4;
 
-    float * y = yy + i*QK_K + 64*il + n*ir;
+    dst_t * y = yy + i*QK_K + 64*il + n*ir;
 
     const float dall = __low2half(x[i].dm);
     const float dmin = __high2half(x[i].dm);
@@ -824,7 +847,7 @@ static __global__ void dequantize_block_q4_K(const void * __restrict__ vx, float
 #else
     const int tid = threadIdx.x;
     const uint8_t * q = x[i].qs;
-    float * y = yy + i*QK_K;
+    dst_t * y = yy + i*QK_K;
     const float d = (float)x[i].dm[0];
     const float m = (float)x[i].dm[1];
     y[tid+ 0] = d * (x[i].scales[0] & 0xF) * (q[tid] & 0xF) - m * (x[i].scales[0] >> 4);
@@ -832,7 +855,8 @@ static __global__ void dequantize_block_q4_K(const void * __restrict__ vx, float
 #endif
 }
 
-static __global__ void dequantize_block_q5_K(const void * __restrict__ vx, float * __restrict__ yy) {
+template<typename dst_t>
+static __global__ void dequantize_block_q5_K(const void * __restrict__ vx, dst_t * __restrict__ yy) {
     const block_q5_K * x = (const block_q5_K *) vx;
 
     const int i = blockIdx.x;
@@ -844,7 +868,7 @@ static __global__ void dequantize_block_q5_K(const void * __restrict__ vx, float
     const int ir  = tid%16;   // ir is in 0...15
     const int is  = 2*il;     // is is in 0...6
 
-    float * y = yy + i*QK_K + 64*il + 2*ir;
+    dst_t * y = yy + i*QK_K + 64*il + 2*ir;
 
     const float dall = __low2half(x[i].dm);
     const float dmin = __high2half(x[i].dm);
@@ -872,13 +896,14 @@ static __global__ void dequantize_block_q5_K(const void * __restrict__ vx, float
     const int is = tid/16; // 0 or 1
     const uint8_t h = x[i].qh[in] >> im;
     const float d = x[i].d;
-    float * y = yy + i*QK_K + tid;
+    dst_t * y = yy + i*QK_K + tid;
     y[ 0] = d * x[i].scales[is+0] * ((q & 0xF) - ((h >> 0) & 1 ? 0 : 16));
     y[32] = d * x[i].scales[is+2] * ((q >>  4) - ((h >> 4) & 1 ? 0 : 16));
 #endif
 }
 
-static __global__ void dequantize_block_q6_K(const void * __restrict__ vx, float * __restrict__ yy) {
+template<typename dst_t>
+static __global__ void dequantize_block_q6_K(const void * __restrict__ vx, dst_t * __restrict__ yy) {
     const block_q6_K * x = (const block_q6_K *) vx;
 
     const int i = blockIdx.x;
@@ -890,7 +915,7 @@ static __global__ void dequantize_block_q6_K(const void * __restrict__ vx, float
     const int il  = tid - 32*ip; // 0...32
     const int is  = 8*ip + il/16;
 
-    float * y = yy + i*QK_K + 128*ip + il;
+    dst_t * y = yy + i*QK_K + 128*ip + il;
 
     const float d = x[i].d;
 
@@ -909,7 +934,7 @@ static __global__ void dequantize_block_q6_K(const void * __restrict__ vx, float
     const int ip  = tid/16;         // 0 or 1
     const int il  = tid - 16*ip;    // 0...15
 
-    float * y = yy + i*QK_K + 16*ip + il;
+    dst_t * y = yy + i*QK_K + 16*ip + il;
 
     const float d = x[i].d;
 
@@ -1502,6 +1527,14 @@ static __device__ void convert_f16(const void * vx, const int ib, const int iqs,
     v.y = x[ib + iqs + 1];
 }
 
+static __device__ void convert_f32(const void * vx, const int ib, const int iqs, dfloat2 & v){
+    const float * x = (const float *) vx;
+
+    // automatic half -> float type cast if dfloat == float
+    v.x = x[ib + iqs + 0];
+    v.y = x[ib + iqs + 1];
+}
+
 static __global__ void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, const int kx, const int kx_padded) {
     const int ix = blockDim.x*blockIdx.x + threadIdx.x;
 
@@ -1541,8 +1574,8 @@ static __global__ void quantize_q8_1(const float * __restrict__ x, void * __rest
     reinterpret_cast<half&>(y[ib].ds.y) = sum;
 }
 
-template <int qk, int qr, dequantize_kernel_t dequantize_kernel>
-static __global__ void dequantize_block(const void * __restrict__ vx, float * __restrict__ y, const int k) {
+template <int qk, int qr, dequantize_kernel_t dequantize_kernel, typename dst_t>
+static __global__ void dequantize_block(const void * __restrict__ vx, dst_t * __restrict__ y, const int k) {
     const int i = blockDim.x*blockIdx.x + 2*threadIdx.x;
 
     if (i >= k) {
@@ -2145,10 +2178,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI4_0;
     const int kqsx = k % QI4_0;
@@ -2239,10 +2272,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI4_1;
     const int kqsx = k % QI4_1;
@@ -2331,10 +2364,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI5_0;
     const int kqsx = k % QI5_0;
@@ -2445,10 +2478,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset < nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset < nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI5_1;
     const int kqsx = k % QI5_1;
@@ -2551,10 +2584,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI8_0;
     const int kqsx = k % QI8_0;
@@ -2642,10 +2675,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI2_K;
     const int kqsx = k % QI2_K;
@@ -2763,10 +2796,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI3_K;
     const int kqsx = k % QI3_K;
@@ -2981,10 +3014,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI4_K; // == 0 if QK_K == 256
     const int kqsx = k % QI4_K; // == k if QK_K == 256
@@ -3162,10 +3195,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI5_K; // == 0 if QK_K == 256
     const int kqsx = k % QI5_K; // == k if QK_K == 256
@@ -3291,10 +3324,10 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
     const void * __restrict__ vx, int * __restrict__ x_ql, half2 * __restrict__ x_dm, int * __restrict__ x_qh,
     int * __restrict__ x_sc, const int & i_offset, const int & i_max, const int & k, const int & blocks_per_row) {
 
-    __builtin_assume(i_offset >= 0);
-    __builtin_assume(i_offset <  nwarps);
-    __builtin_assume(k >= 0);
-    __builtin_assume(k <  WARP_SIZE);
+    GGML_CUDA_ASSUME(i_offset >= 0);
+    GGML_CUDA_ASSUME(i_offset <  nwarps);
+    GGML_CUDA_ASSUME(k >= 0);
+    GGML_CUDA_ASSUME(k <  WARP_SIZE);
 
     const int kbx  = k / QI6_K; // == 0 if QK_K == 256
     const int kqsx = k % QI6_K; // == k if QK_K == 256
@@ -3520,7 +3553,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q4_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_0_AMPERE;
     const int nwarps = NWARPS_Q4_0_AMPERE;
@@ -3540,7 +3573,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q4_0_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q4_1_RDNA2  64
@@ -3561,9 +3594,9 @@ template <bool need_check> static __global__ void
 #if defined(RDNA3) || defined(RDNA2)
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
-#elif __CUDA_ARCH__ < CC_TURING
+#elif __CUDA_ARCH__ < CC_VOLTA
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_TURING
+#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_1(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
@@ -3583,7 +3616,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q4_1_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_1_AMPERE;
     const int nwarps = NWARPS_Q4_1_AMPERE;
@@ -3603,7 +3636,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q4_1_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_0_RDNA2  64
@@ -3644,7 +3677,7 @@ template <bool need_check> static __global__ void
         load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q5_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_0_AMPERE;
     const int nwarps = NWARPS_Q5_0_AMPERE;
@@ -3664,7 +3697,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q5_0_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_1_RDNA2  64
@@ -3705,7 +3738,7 @@ mul_mat_q5_1(
         load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q5_1_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_1_AMPERE;
     const int nwarps = NWARPS_Q5_1_AMPERE;
@@ -3725,7 +3758,7 @@ mul_mat_q5_1(
 #else
     (void) vec_dot_q5_1_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q8_0_RDNA2  64
@@ -3766,7 +3799,7 @@ template <bool need_check> static __global__ void
         load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q8_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q8_0_AMPERE;
     const int nwarps = NWARPS_Q8_0_AMPERE;
@@ -3786,7 +3819,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q8_0_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q2_K_RDNA2  64
@@ -3827,7 +3860,7 @@ mul_mat_q2_K(
         load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q2_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q2_K_AMPERE;
     const int nwarps = NWARPS_Q2_K_AMPERE;
@@ -3847,7 +3880,7 @@ mul_mat_q2_K(
 #else
     (void) vec_dot_q2_K_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q3_K_RDNA2  128
@@ -3868,9 +3901,9 @@ template <bool need_check> static __global__ void
 #if defined(RDNA3) || defined(RDNA2)
     __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
-#elif __CUDA_ARCH__ < CC_TURING
+#elif __CUDA_ARCH__ < CC_VOLTA
     __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_TURING
+#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q3_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
@@ -3890,7 +3923,7 @@ template <bool need_check> static __global__ void
         load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q3_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q3_K_AMPERE;
     const int nwarps = NWARPS_Q3_K_AMPERE;
@@ -3910,7 +3943,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q3_K_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q4_K_RDNA2  64
@@ -3931,9 +3964,9 @@ template <bool need_check> static __global__ void
 #if defined(RDNA3) || defined(RDNA2)
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
-#elif __CUDA_ARCH__ < CC_TURING
+#elif __CUDA_ARCH__ < CC_VOLTA
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_TURING
+#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
@@ -3953,7 +3986,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q4_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_K_AMPERE;
     const int nwarps = NWARPS_Q4_K_AMPERE;
@@ -3973,7 +4006,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q4_K_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_K_RDNA2  64
@@ -4014,7 +4047,7 @@ mul_mat_q5_K(
         load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q5_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_K_AMPERE;
     const int nwarps = NWARPS_Q5_K_AMPERE;
@@ -4034,7 +4067,7 @@ mul_mat_q5_K(
 #else
     (void) vec_dot_q5_K_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q6_K_RDNA2  64
@@ -4055,9 +4088,9 @@ template <bool need_check> static __global__ void
 #if defined(RDNA3) || defined(RDNA2)
     __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
-#elif __CUDA_ARCH__ < CC_TURING
+#elif __CUDA_ARCH__ < CC_VOLTA
     __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_TURING
+#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q6_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst) {
@@ -4077,7 +4110,7 @@ template <bool need_check> static __global__ void
         load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 
-#elif __CUDA_ARCH__ >= CC_TURING
+#elif __CUDA_ARCH__ >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q6_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q6_K_AMPERE;
     const int nwarps = NWARPS_Q6_K_AMPERE;
@@ -4097,7 +4130,7 @@ template <bool need_check> static __global__ void
 #else
     (void) vec_dot_q6_K_q8_1_mul_mat;
     assert(false);
-#endif // __CUDA_ARCH__ >= CC_TURING
+#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 template <int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
@@ -4342,8 +4375,10 @@ static __global__ void cpy_f32_f16(const char * cx, char * cdst, const int ne,
 }
 
 // rope == RoPE == rotary positional embedding
-static __global__ void rope_f32(const float * x, float * dst, const int ncols, const float p0,
-                                const float p_delta, const int p_delta_rows, const float theta_scale) {
+
+template<typename T, bool has_pos>
+static __global__ void rope(const T * x, T * dst, const int ncols, const int32_t * pos, const float freq_scale,
+                            const int p_delta_rows, const float theta_scale) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
 
     if (col >= ncols) {
@@ -4352,8 +4387,11 @@ static __global__ void rope_f32(const float * x, float * dst, const int ncols, c
 
     const int row = blockDim.x*blockIdx.x + threadIdx.x;
     const int i = row*ncols + col;
+    const int i2 = row/p_delta_rows;
 
-    const float theta = (p0 + p_delta * (row/p_delta_rows))*powf(theta_scale, col/2);
+    const int p = has_pos ? pos[i2] : 0;
+    const float p0 = p*freq_scale;
+    const float theta = p0*powf(theta_scale, col/2);
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
@@ -4364,8 +4402,9 @@ static __global__ void rope_f32(const float * x, float * dst, const int ncols, c
     dst[i + 1] = x0*sin_theta + x1*cos_theta;
 }
 
-static __global__ void rope_neox_f32(const float * x, float * dst, const int ncols, const float p0,
-                                const float p_delta, const int p_delta_rows, const float theta_scale) {
+template<typename T, bool has_pos>
+static __global__ void rope_neox(const T * x, T * dst, const int ncols, const int32_t * pos, const float freq_scale,
+                                 const int p_delta_rows, const float theta_scale) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
 
     if (col >= ncols) {
@@ -4374,8 +4413,11 @@ static __global__ void rope_neox_f32(const float * x, float * dst, const int nco
 
     const int row = blockDim.x*blockIdx.x + threadIdx.x;
     const int i = row*ncols + col/2;
+    const int i2 = row/p_delta_rows;
 
-    const float theta = (p0 + p_delta * (row/p_delta_rows))*powf(theta_scale, col/2);
+    const int p = has_pos ? pos[i2] : 0;
+    const float p0 = p*freq_scale;
+    const float theta = p0*powf(theta_scale, col/2);
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
@@ -4386,8 +4428,8 @@ static __global__ void rope_neox_f32(const float * x, float * dst, const int nco
     dst[i + ncols/2] = x0*sin_theta + x1*cos_theta;
 }
 
-static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const float p0,
-                                    const float p_delta, const int p_delta_rows, const float theta_scale, const int n_ctx) {
+static __global__ void rope_glm_f32(const float * x, float * dst, const int ncols, const int32_t * pos, const float freq_scale,
+                                    const int p_delta_rows, const float theta_scale, const int n_ctx) {
     const int col = blockDim.x*blockIdx.x + threadIdx.x;
     const int half_n_dims = ncols/4;
 
@@ -4397,11 +4439,13 @@ static __global__ void rope_glm_f32(const float * x, float * dst, const int ncol
 
     const int row = blockDim.y*blockIdx.y + threadIdx.y;
     const int i = row*ncols + col;
+    const int i2 = row/p_delta_rows;
 
     const float col_theta_scale = powf(theta_scale, col);
-    const float p = p0 + p_delta*(row/p_delta_rows);
+     // FIXME: this is likely wrong
+    const int p = pos != nullptr ? pos[i2] : 0;
 
-    const float theta = min(p, p_delta*(n_ctx - 2))*col_theta_scale;
+    const float theta = min(p, n_ctx - 2)*freq_scale*col_theta_scale;
     const float sin_theta = sinf(theta);
     const float cos_theta = cosf(theta);
 
@@ -4411,7 +4455,7 @@ static __global__ void rope_glm_f32(const float * x, float * dst, const int ncol
     dst[i + 0]           = x0*cos_theta - x1*sin_theta;
     dst[i + half_n_dims] = x0*sin_theta + x1*cos_theta;
 
-    const float block_theta = max(p - p_delta*(n_ctx - 2), 0.f)*col_theta_scale;
+    const float block_theta = ((float)max(p - n_ctx - 2, 0))*col_theta_scale;
     const float sin_block_theta = sinf(block_theta);
     const float cos_block_theta = cosf(block_theta);
 
@@ -4565,32 +4609,38 @@ static void quantize_row_q8_1_cuda(const float * x, void * vy, const int kx, con
     quantize_q8_1<<<num_blocks, block_size, 0, stream>>>(x, vy, kx, kx_padded);
 }
 
-static void dequantize_row_q4_0_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q4_0_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
     dequantize_block<QK4_0, QR4_0, dequantize_q4_0><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
-static void dequantize_row_q4_1_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q4_1_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
     dequantize_block<QK4_1, QR4_1, dequantize_q4_1><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
-static void dequantize_row_q5_0_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q5_0_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
     dequantize_block<QK5_0, QR5_0, dequantize_q5_0><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
-static void dequantize_row_q5_1_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q5_1_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
     dequantize_block<QK5_1, QR5_1, dequantize_q5_1><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
-static void dequantize_row_q8_0_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q8_0_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_DEQUANTIZE_BLOCK_SIZE - 1) / CUDA_DEQUANTIZE_BLOCK_SIZE;
     dequantize_block<QK8_0, QR8_0, dequantize_q8_0><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
-static void dequantize_row_q2_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q2_K_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
 #if QK_K == 256
     dequantize_block_q2_K<<<nb, 64, 0, stream>>>(vx, y);
@@ -4599,7 +4649,8 @@ static void dequantize_row_q2_K_cuda(const void * vx, float * y, const int k, cu
 #endif
 }
 
-static void dequantize_row_q3_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q3_K_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
 #if QK_K == 256
     dequantize_block_q3_K<<<nb, 64, 0, stream>>>(vx, y);
@@ -4608,12 +4659,14 @@ static void dequantize_row_q3_K_cuda(const void * vx, float * y, const int k, cu
 #endif
 }
 
-static void dequantize_row_q4_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q4_K_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
     dequantize_block_q4_K<<<nb, 32, 0, stream>>>(vx, y);
 }
 
-static void dequantize_row_q5_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q5_K_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
 #if QK_K == 256
     dequantize_block_q5_K<<<nb, 64, 0, stream>>>(vx, y);
@@ -4622,7 +4675,8 @@ static void dequantize_row_q5_K_cuda(const void * vx, float * y, const int k, cu
 #endif
 }
 
-static void dequantize_row_q6_K_cuda(const void * vx, float * y, const int k, cudaStream_t stream) {
+template<typename dst_t>
+static void dequantize_row_q6_K_cuda(const void * vx, dst_t * y, const int k, cudaStream_t stream) {
     const int nb = k / QK_K;
 #if QK_K == 256
     dequantize_block_q6_K<<<nb, 64, 0, stream>>>(vx, y);
@@ -4813,6 +4867,11 @@ static void convert_fp16_to_fp32_cuda(const void * vx, float * y, const int k, c
     dequantize_block<1, 1, convert_f16><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
 }
 
+static void convert_fp32_to_fp16_cuda(const void * vx, half * y, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_QUANTIZE_BLOCK_SIZE - 1) / CUDA_QUANTIZE_BLOCK_SIZE;
+    dequantize_block<1, 1, convert_f32><<<num_blocks, CUDA_DEQUANTIZE_BLOCK_SIZE, 0, stream>>>(vx, y, k);
+}
+
 static void convert_mul_mat_vec_f16_cuda(const void * vx, const dfloat * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     GGML_ASSERT(ncols % GGML_CUDA_DMMV_X == 0);
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
@@ -4820,6 +4879,35 @@ static void convert_mul_mat_vec_f16_cuda(const void * vx, const dfloat * y, floa
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
     dequantize_mul_mat_vec<1, 1, convert_f16>
         <<<block_nums, block_dims, 0, stream>>>(vx, y, dst, ncols, nrows);
+}
+
+static to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+            return dequantize_row_q4_0_cuda;
+        case GGML_TYPE_Q4_1:
+            return dequantize_row_q4_1_cuda;
+        case GGML_TYPE_Q5_0:
+            return dequantize_row_q5_0_cuda;
+        case GGML_TYPE_Q5_1:
+            return dequantize_row_q5_1_cuda;
+        case GGML_TYPE_Q8_0:
+            return dequantize_row_q8_0_cuda;
+        case GGML_TYPE_Q2_K:
+            return dequantize_row_q2_K_cuda;
+        case GGML_TYPE_Q3_K:
+            return dequantize_row_q3_K_cuda;
+        case GGML_TYPE_Q4_K:
+            return dequantize_row_q4_K_cuda;
+        case GGML_TYPE_Q5_K:
+            return dequantize_row_q5_K_cuda;
+        case GGML_TYPE_Q6_K:
+            return dequantize_row_q6_K_cuda;
+        case GGML_TYPE_F32:
+            return convert_fp32_to_fp16_cuda;
+        default:
+            return nullptr;
+    }
 }
 
 static to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
@@ -4868,7 +4956,7 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(
         mmq_x  =  MMQ_X_Q4_0_RDNA1;
         mmq_y  =  MMQ_Y_Q4_0_RDNA1;
         nwarps = NWARPS_Q4_0_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q4_0_AMPERE;
         mmq_y  =  MMQ_Y_Q4_0_AMPERE;
         nwarps = NWARPS_Q4_0_AMPERE;
@@ -4913,7 +5001,7 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(
         mmq_x  =  MMQ_X_Q4_1_RDNA1;
         mmq_y  =  MMQ_Y_Q4_1_RDNA1;
         nwarps = NWARPS_Q4_1_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q4_1_AMPERE;
         mmq_y  =  MMQ_Y_Q4_1_AMPERE;
         nwarps = NWARPS_Q4_1_AMPERE;
@@ -4958,7 +5046,7 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(
         mmq_x  =  MMQ_X_Q5_0_RDNA1;
         mmq_y  =  MMQ_Y_Q5_0_RDNA1;
         nwarps = NWARPS_Q5_0_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q5_0_AMPERE;
         mmq_y  =  MMQ_Y_Q5_0_AMPERE;
         nwarps = NWARPS_Q5_0_AMPERE;
@@ -5003,7 +5091,7 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(
         mmq_x  =  MMQ_X_Q5_1_RDNA1;
         mmq_y  =  MMQ_Y_Q5_1_RDNA1;
         nwarps = NWARPS_Q5_1_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q5_1_AMPERE;
         mmq_y  =  MMQ_Y_Q5_1_AMPERE;
         nwarps = NWARPS_Q5_1_AMPERE;
@@ -5048,7 +5136,7 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(
         mmq_x  =  MMQ_X_Q8_0_RDNA1;
         mmq_y  =  MMQ_Y_Q8_0_RDNA1;
         nwarps = NWARPS_Q8_0_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q8_0_AMPERE;
         mmq_y  =  MMQ_Y_Q8_0_AMPERE;
         nwarps = NWARPS_Q8_0_AMPERE;
@@ -5093,7 +5181,7 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(
         mmq_x  =  MMQ_X_Q2_K_RDNA1;
         mmq_y  =  MMQ_Y_Q2_K_RDNA1;
         nwarps = NWARPS_Q2_K_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q2_K_AMPERE;
         mmq_y  =  MMQ_Y_Q2_K_AMPERE;
         nwarps = NWARPS_Q2_K_AMPERE;
@@ -5140,7 +5228,7 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(
         mmq_x  =  MMQ_X_Q3_K_RDNA1;
         mmq_y  =  MMQ_Y_Q3_K_RDNA1;
         nwarps = NWARPS_Q3_K_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q3_K_AMPERE;
         mmq_y  =  MMQ_Y_Q3_K_AMPERE;
         nwarps = NWARPS_Q3_K_AMPERE;
@@ -5186,7 +5274,7 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(
         mmq_x  =  MMQ_X_Q4_K_RDNA1;
         mmq_y  =  MMQ_Y_Q4_K_RDNA1;
         nwarps = NWARPS_Q4_K_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q4_K_AMPERE;
         mmq_y  =  MMQ_Y_Q4_K_AMPERE;
         nwarps = NWARPS_Q4_K_AMPERE;
@@ -5231,7 +5319,7 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(
         mmq_x  =  MMQ_X_Q5_K_RDNA1;
         mmq_y  =  MMQ_Y_Q5_K_RDNA1;
         nwarps = NWARPS_Q5_K_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q5_K_AMPERE;
         mmq_y  =  MMQ_Y_Q5_K_AMPERE;
         nwarps = NWARPS_Q5_K_AMPERE;
@@ -5276,7 +5364,7 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(
         mmq_x  =  MMQ_X_Q6_K_RDNA1;
         mmq_y  =  MMQ_Y_Q6_K_RDNA1;
         nwarps = NWARPS_Q6_K_RDNA1;
-    } else if (compute_capability >= CC_TURING) {
+    } else if (compute_capability >= CC_VOLTA) {
         mmq_x  =  MMQ_X_Q6_K_AMPERE;
         mmq_y  =  MMQ_Y_Q6_K_AMPERE;
         nwarps = NWARPS_Q6_K_AMPERE;
@@ -5348,31 +5436,41 @@ static void scale_f32_cuda(const float * x, float * dst, const float scale, cons
     scale_f32<<<num_blocks, CUDA_SCALE_BLOCK_SIZE, 0, stream>>>(x, dst, scale, k);
 }
 
-static void rope_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p0,
-                          const float p_delta, const int p_delta_rows, const float theta_scale, cudaStream_t stream) {
+template<typename T>
+static void rope_cuda(const T * x, T * dst, const int ncols, const int nrows, const int32_t * pos, const float freq_scale,
+                          const int p_delta_rows, const float theta_scale, cudaStream_t stream) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
     const int num_blocks_x = (ncols + 2*CUDA_ROPE_BLOCK_SIZE - 1) / (2*CUDA_ROPE_BLOCK_SIZE);
     const dim3 block_nums(nrows, num_blocks_x, 1);
-    rope_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale);
+    if (pos == nullptr) {
+        rope<T, false><<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, pos, freq_scale, p_delta_rows, theta_scale);
+    } else {
+        rope<T, true><<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, pos, freq_scale, p_delta_rows, theta_scale);
+    }
 }
 
-static void rope_neox_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p0,
-                          const float p_delta, const int p_delta_rows, const float theta_scale, cudaStream_t stream) {
+template<typename T>
+static void rope_neox_cuda(const T * x, T * dst, const int ncols, const int nrows, const int32_t * pos, const float freq_scale,
+                          const int p_delta_rows, const float theta_scale, cudaStream_t stream) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
     const int num_blocks_x = (ncols + 2*CUDA_ROPE_BLOCK_SIZE - 1) / (2*CUDA_ROPE_BLOCK_SIZE);
     const dim3 block_nums(nrows, num_blocks_x, 1);
-    rope_neox_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale);
+    if (pos == nullptr) {
+        rope_neox<T, false><<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, pos, freq_scale, p_delta_rows, theta_scale);
+    } else {
+        rope_neox<T, true><<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, pos, freq_scale, p_delta_rows, theta_scale);
+    }
 }
 
-static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float p0,
-                              const float p_delta, const int p_delta_rows, const float theta_scale, const int n_ctx, cudaStream_t stream) {
+static void rope_glm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const int32_t * pos, const float freq_scale,
+                              const int p_delta_rows, const float theta_scale, const int n_ctx, cudaStream_t stream) {
     GGML_ASSERT(ncols % 4 == 0);
     const dim3 block_dims(CUDA_ROPE_BLOCK_SIZE/4, 1, 1);
     const int num_blocks_x = (ncols + CUDA_ROPE_BLOCK_SIZE - 1) / CUDA_ROPE_BLOCK_SIZE;
     const dim3 block_nums(num_blocks_x, nrows, 1);
-    rope_glm_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, p0, p_delta, p_delta_rows, theta_scale, n_ctx);
+    rope_glm_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols, pos, freq_scale, p_delta_rows, theta_scale, n_ctx);
 }
 
 static void alibi_f32_cuda(const float * x, float * dst, const int ncols, const int nrows,
@@ -5844,7 +5942,7 @@ static int64_t get_row_rounding(ggml_type type) {
     switch(type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-            return max_compute_capability >= CC_TURING ? 128 : 64;
+            return max_compute_capability >= CC_VOLTA ? 128 : 64;
         case GGML_TYPE_Q5_0:
         case GGML_TYPE_Q5_1:
         case GGML_TYPE_Q8_0:
@@ -5855,7 +5953,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
-            return max_compute_capability >= CC_TURING ? 128 : 64;
+            return max_compute_capability >= CC_VOLTA ? 128 : 64;
         case GGML_TYPE_Q6_K:
             return 64;
         default:
@@ -6003,8 +6101,6 @@ inline void ggml_cuda_op_mul_mat_cublas(
     GGML_ASSERT(src1_ddf_i != nullptr);
     GGML_ASSERT(dst_dd_i != nullptr);
 
-    const float alpha = 1.0f;
-    const float beta = 0.0f;
 
     const int64_t ne00 = src0->ne[0];
 
@@ -6013,16 +6109,6 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const int64_t ne0 = dst->ne[0];
     const int64_t row_diff = row_high - row_low;
 
-    float * src0_ddq_as_f32;
-    size_t src0_as = 0;
-
-    if (src0->type != GGML_TYPE_F32) {
-        const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src0->type);
-        src0_ddq_as_f32 = (float *) ggml_cuda_pool_malloc(row_diff*ne00 * sizeof(float), &src0_as); // NOLINT
-        to_fp32_cuda(src0_dd_i, src0_ddq_as_f32, row_diff*ne00, stream);
-    }
-    const float * src0_ddf_i = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i : src0_ddq_as_f32;
-
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
@@ -6030,16 +6116,87 @@ inline void ggml_cuda_op_mul_mat_cublas(
     // ldc == nrows of the matrix that cuBLAS writes into
     int ldc = dst->backend == GGML_BACKEND_GPU && id == g_main_device ? ne0 : row_diff;
 
-    CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
-    CUBLAS_CHECK(
-        cublasSgemm(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
-                row_diff, src1_ncols, ne10,
-                &alpha, src0_ddf_i, ne00,
-                        src1_ddf_i,  ne10,
-                &beta,  dst_dd_i,   ldc));
+    const int compute_capability = g_compute_capabilities[id];
 
-    if (src0_as > 0) {
-        ggml_cuda_pool_free(src0_ddq_as_f32, src0_as);
+    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1]) {
+        // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
+        half * src0_as_f16 = nullptr;
+        size_t src0_as = 0;
+        if (src0->type != GGML_TYPE_F16) {
+            const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src0->type);
+            GGML_ASSERT(to_fp16_cuda != nullptr);
+            size_t ne = row_diff*ne00;
+            src0_as_f16 = (half *) ggml_cuda_pool_malloc(ne * sizeof(half), &src0_as);
+            to_fp16_cuda(src0_dd_i, src0_as_f16, ne, stream);
+        }
+        const half * src0_ptr = src0->type == GGML_TYPE_F16 ? (const half *) src0_dd_i : src0_as_f16;
+
+        half * src1_as_f16 = nullptr;
+        size_t src1_as = 0;
+        if (src1->type != GGML_TYPE_F16) {
+            const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src1->type);
+            GGML_ASSERT(to_fp16_cuda != nullptr);
+            size_t ne = src1_ncols*ne10;
+            src1_as_f16 = (half *) ggml_cuda_pool_malloc(ne * sizeof(half), &src1_as);
+            to_fp16_cuda(src1_ddf_i, src1_as_f16, ne, stream);
+        }
+        const half * src1_ptr = src1->type == GGML_TYPE_F16 ? (const half *) src1_ddq_i : src1_as_f16;
+
+        size_t dst_as = 0;
+        half * dst_f16 = (half *) ggml_cuda_pool_malloc(row_diff*src1_ncols * sizeof(half), &dst_as);
+
+        const half alpha_f16 = 1.0f;
+        const half beta_f16 = 0.0f;
+
+        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
+        CUBLAS_CHECK(
+            cublasGemmEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
+                    row_diff, src1_ncols, ne10,
+                    &alpha_f16, src0_ptr, CUDA_R_16F, ne00,
+                                src1_ptr, CUDA_R_16F, ne10,
+                    &beta_f16,   dst_f16, CUDA_R_16F, ldc,
+                    CUBLAS_COMPUTE_16F,
+                    CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+
+        const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(GGML_TYPE_F16);
+        to_fp32_cuda(dst_f16, dst_dd_i, row_diff*src1_ncols, stream);
+
+        ggml_cuda_pool_free(dst_f16, dst_as);
+
+        if (src0_as != 0) {
+            ggml_cuda_pool_free(src0_as_f16, src0_as);
+        }
+
+        if (src1_as != 0) {
+            ggml_cuda_pool_free(src1_as_f16, src1_as);
+        }
+    }
+    else {
+        float * src0_ddq_as_f32 = nullptr;
+        size_t src0_as = 0;
+
+        if (src0->type != GGML_TYPE_F32) {
+            const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src0->type);
+            GGML_ASSERT(to_fp32_cuda != nullptr);
+            src0_ddq_as_f32 = (float *) ggml_cuda_pool_malloc(row_diff*ne00 * sizeof(float), &src0_as); // NOLINT
+            to_fp32_cuda(src0_dd_i, src0_ddq_as_f32, row_diff*ne00, stream);
+        }
+        const float * src0_ddf_i = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i : src0_ddq_as_f32;
+
+        const float alpha = 1.0f;
+        const float beta = 0.0f;
+
+        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
+        CUBLAS_CHECK(
+            cublasSgemm(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
+                    row_diff, src1_ncols, ne10,
+                    &alpha, src0_ddf_i, ne00,
+                            src1_ddf_i,  ne10,
+                    &beta,  dst_dd_i,   ldc));
+
+        if (src0_as != 0) {
+            ggml_cuda_pool_free(src0_ddq_as_f32, src0_as);
+        }
     }
 
     (void) dst;
@@ -6051,14 +6208,16 @@ inline void ggml_cuda_op_rope(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
-    GGML_ASSERT(src0->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F32);
+    GGML_ASSERT(src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16);
+    GGML_ASSERT( dst->type == GGML_TYPE_F32 ||  dst->type == GGML_TYPE_F16);
+    GGML_ASSERT(src0->type == dst->type);
 
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
+    const int64_t ne2 = dst->ne[2];
     const int64_t nrows = ggml_nrows(src0);
 
-    const int n_past = ((int32_t *) dst->op_params)[0];
+    //const int n_past = ((int32_t *) dst->op_params)[0];
     const int n_dims = ((int32_t *) dst->op_params)[1];
     const int mode   = ((int32_t *) dst->op_params)[2];
     const int n_ctx  = ((int32_t *) dst->op_params)[3];
@@ -6069,19 +6228,38 @@ inline void ggml_cuda_op_rope(
     memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
-    const float p0 = (((mode & 1) == 0 ? n_past : 0)) * freq_scale;
+
+    const int32_t * pos = nullptr;
+    if ((mode & 1) == 0) {
+        GGML_ASSERT(src1->type == GGML_TYPE_I32);
+        GGML_ASSERT(src1->ne[0] == ne2);
+        pos = (const int32_t *) src1_dd;
+    }
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
 
     // compute
     if (is_glm) {
-        rope_glm_f32_cuda(src0_dd, dst_dd, ne00, nrows, p0, freq_scale, ne01, theta_scale, n_ctx, main_stream);
+        GGML_ASSERT(false);
+        rope_glm_f32_cuda(src0_dd, dst_dd, ne00, nrows, pos, freq_scale, ne01, theta_scale, n_ctx, main_stream);
     } else if (is_neox) {
         GGML_ASSERT(ne00 == n_dims && "ne00 != n_dims is not implemented for CUDA yet");
-        rope_neox_f32_cuda(src0_dd, dst_dd, ne00, nrows, p0, freq_scale, ne01, theta_scale, main_stream);
+        if (src0->type == GGML_TYPE_F32) {
+            rope_neox_cuda((const float *)src0_dd, (float *)dst_dd, ne00, nrows, pos, freq_scale, ne01, theta_scale, main_stream);
+        } else if (src0->type == GGML_TYPE_F16) {
+            rope_neox_cuda((const half *)src0_dd, (half *)dst_dd, ne00, nrows, pos, freq_scale, ne01, theta_scale, main_stream);
+        } else {
+            GGML_ASSERT(false);
+        }
     } else {
-        rope_f32_cuda(src0_dd, dst_dd, ne00, nrows, p0, freq_scale, ne01, theta_scale, main_stream);
+        if (src0->type == GGML_TYPE_F32) {
+            rope_cuda((const float *)src0_dd, (float *)dst_dd, ne00, nrows, pos, freq_scale, ne01, theta_scale, main_stream);
+        } else if (src0->type == GGML_TYPE_F16) {
+            rope_cuda((const half *)src0_dd, (half *)dst_dd, ne00, nrows, pos, freq_scale, ne01, theta_scale, main_stream);
+        } else {
+            GGML_ASSERT(false);
+        }
     }
 
     (void) src1;
@@ -6252,6 +6430,43 @@ static void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * s
     }
 }
 
+static void ggml_cuda_set_peer_access(const int n_tokens) {
+    static bool peer_access_enabled = false;
+
+    const bool enable_peer_access = n_tokens <= GGML_CUDA_PEER_MAX_BATCH_SIZE;
+
+    if (peer_access_enabled == enable_peer_access) {
+        return;
+    }
+
+#ifdef NDEBUG
+    for (int id = 0; id < g_device_count; ++id) {
+        CUDA_CHECK(ggml_cuda_set_device(id));
+
+        for (int id_other = 0; id_other < g_device_count; ++id_other) {
+            if (id == id_other) {
+                continue;
+            }
+            if (id != g_main_device && id_other != g_main_device) {
+                continue;
+            }
+
+            int can_access_peer;
+            CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
+            if (can_access_peer) {
+                if (enable_peer_access) {
+                    CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
+                } else {
+                    CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+                }
+            }
+        }
+    }
+#endif // NDEBUG
+
+    peer_access_enabled = enable_peer_access;
+}
+
 static void ggml_cuda_op_mul_mat(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, ggml_cuda_op_mul_mat_t op,
     const bool convert_src1_to_q8_1) {
@@ -6275,6 +6490,8 @@ static void ggml_cuda_op_mul_mat(
 
     const int nb2 = dst->nb[2];
     const int nb3 = dst->nb[3];
+
+    ggml_cuda_set_peer_access(ne11);
 
     GGML_ASSERT(dst->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(src1->backend != GGML_BACKEND_GPU_SPLIT);
@@ -6408,7 +6625,7 @@ static void ggml_cuda_op_mul_mat(
 
             // wait for main GPU data if necessary
             if (split && (id != g_main_device || is != 0)) {
-                CUDA_CHECK(cudaStreamWaitEvent(stream, src0_extra->events[g_main_device][0]));
+                CUDA_CHECK(cudaStreamWaitEvent(stream, src0_extra->events[g_main_device][0], 0));
             }
 
             for (int64_t i0 = 0; i0 < ne13*ne12; ++i0) {
@@ -6530,7 +6747,7 @@ static void ggml_cuda_op_mul_mat(
         CUDA_CHECK(ggml_cuda_set_device(g_main_device));
         for (int64_t id = 0; id < g_device_count; ++id) {
             for (int64_t is = 0; is < is_max; ++is) {
-                CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][0], src0_extra->events[id][is]));
+                CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][0], src0_extra->events[id][is], 0));
             }
         }
     }
@@ -6541,27 +6758,27 @@ static void ggml_cuda_op_mul_mat(
     }
 }
 
-void ggml_cuda_add(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_add(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_add);
 }
 
-void ggml_cuda_mul(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_mul(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_mul);
 }
 
-void ggml_cuda_gelu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_gelu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_gelu);
 }
 
-void ggml_cuda_silu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_silu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_silu);
 }
 
-void ggml_cuda_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_norm);
 }
 
-void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_rms_norm);
 }
 
@@ -6572,17 +6789,13 @@ bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_te
     const int64_t ne1 = dst->ne[1];
 
     // TODO: find the optimal values for these
-    if ((src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
-        src1->type == GGML_TYPE_F32 &&
-        dst->type == GGML_TYPE_F32 &&
-        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
-        return true;
-    }
-
-    return false;
+    return (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) &&
+            src1->type == GGML_TYPE_F32 &&
+             dst->type == GGML_TYPE_F32 &&
+            (ne0 >= 32 && ne1 >= 32 && ne10 >= 32);
 }
 
-void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
+static void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
     GGML_ASSERT(ggml_is_permuted(src0) && ggml_is_permuted(src1));
     GGML_ASSERT(src0->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(src0->nb[0] <= src0->nb[1] && src0->nb[2] <= src0->nb[3]); // 0213 permutation
@@ -6611,7 +6824,7 @@ void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tensor * sr
     ggml_mul_mat_p021_f16_f32_cuda(src0_ddq, src1_ddf, dst_ddf, ne00, ne01, ne02, ne12, main_stream);
 }
 
-void ggml_cuda_mul_mat_vec_nc(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
+static void ggml_cuda_mul_mat_vec_nc(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
     GGML_ASSERT(!ggml_is_contiguous(src0) && ggml_is_contiguous(src1));
     GGML_ASSERT(!ggml_is_permuted(src0));
     GGML_ASSERT(src0->backend != GGML_BACKEND_GPU_SPLIT);
@@ -6645,7 +6858,7 @@ void ggml_cuda_mul_mat_vec_nc(const ggml_tensor * src0, const ggml_tensor * src1
     ggml_mul_mat_vec_nc_f16_f32_cuda(src0_ddq, src1_ddf, dst_ddf, ne00, ne01, row_stride_x, ne02, ne12, channel_stride_x, main_stream);
 }
 
-void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     bool all_on_device = (src0->backend == GGML_BACKEND_GPU || src0->backend == GGML_BACKEND_GPU_SPLIT) &&
         src1->backend == GGML_BACKEND_GPU && dst->backend == GGML_BACKEND_GPU;
 
@@ -6689,11 +6902,11 @@ void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_
     }
 }
 
-void ggml_cuda_scale(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_scale(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_scale);
 }
 
-void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const int64_t ne = ggml_nelements(src0);
     GGML_ASSERT(ne == ggml_nelements(src1));
 
@@ -6735,35 +6948,37 @@ void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tens
         ggml_cpy_f32_f16_cuda(src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02,
                               ne10, ne11, nb10, nb11, nb12, main_stream);
     } else {
+        fprintf(stderr, "%s: unsupported type combination (%s to %s)\n", __func__,
+                ggml_type_name(src0->type), ggml_type_name(src1->type));
         GGML_ASSERT(false);
     }
 
     (void) dst;
 }
 
-void ggml_cuda_dup(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_dup(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_cpy(src0, dst, nullptr);
     (void) src1;
 }
 
-void ggml_cuda_diag_mask_inf(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_diag_mask_inf(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_diag_mask_inf);
 }
 
-void ggml_cuda_soft_max(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_soft_max(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_soft_max);
 }
 
-void ggml_cuda_rope(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_rope(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(src0)); // TODO: this restriction is temporary until non-cont support is implemented
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_rope);
 }
 
-void ggml_cuda_alibi(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_alibi(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_alibi);
 }
 
-void ggml_cuda_nop(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_nop(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     (void) src0;
     (void) src1;
     (void) dst;
@@ -6886,10 +7101,12 @@ static struct ggml_tensor_extra_gpu * ggml_cuda_alloc_temp_tensor_extra() {
     return extra;
 }
 
-void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bool force_inplace, bool no_alloc) {
+static void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bool force_inplace, bool no_alloc) {
     if (scratch && g_scratch_size == 0) {
         return;
     }
+
+    tensor->backend = GGML_BACKEND_GPU;
 
     // recursively assign CUDA buffers until a compute tensor is found
     if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_CPU) {
@@ -6901,8 +7118,6 @@ void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scratch, bo
     if (tensor->op == GGML_OP_CPY && tensor->src[1]->backend == GGML_BACKEND_CPU) {
         ggml_cuda_assign_buffers_impl(tensor->src[1], scratch, force_inplace, no_alloc);
     }
-
-    tensor->backend = GGML_BACKEND_GPU;
 
     if (scratch && no_alloc) {
         return;
@@ -6964,6 +7179,7 @@ void ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset)
         return;
     }
     if (g_scratch_buffer == nullptr) {
+        ggml_cuda_set_device(g_main_device);
         CUDA_CHECK(cudaMalloc(&g_scratch_buffer, g_scratch_size));
     }
 
@@ -6987,6 +7203,15 @@ void ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset)
     tensor->extra = extra;
 }
 
+void ggml_cuda_copy_to_device(struct ggml_tensor * tensor) {
+    GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
+    GGML_ASSERT(ggml_is_contiguous(tensor));
+
+    struct ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
+    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    CUDA_CHECK(cudaMemcpy(extra->data_device[g_main_device], tensor->data, ggml_nbytes(tensor), cudaMemcpyHostToDevice));
+}
+
 void ggml_cuda_assign_buffers(struct ggml_tensor * tensor) {
     ggml_cuda_assign_buffers_impl(tensor, true, false, false);
 }
@@ -7003,7 +7228,7 @@ void ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tensor) {
     ggml_cuda_assign_buffers_impl(tensor, false, true, false);
 }
 
-void ggml_cuda_set_main_device(int main_device) {
+void ggml_cuda_set_main_device(const int main_device) {
     if (main_device >= g_device_count) {
         fprintf(stderr, "warning: cannot set main_device=%d because there are only %d devices. Using device %d instead.\n",
                 main_device, g_device_count, g_main_device);
@@ -7017,12 +7242,17 @@ void ggml_cuda_set_main_device(int main_device) {
     }
 }
 
-void ggml_cuda_set_mul_mat_q(bool mul_mat_q) {
+void ggml_cuda_set_mul_mat_q(const bool mul_mat_q) {
     g_mul_mat_q = mul_mat_q;
 }
 
-void ggml_cuda_set_scratch_size(size_t scratch_size) {
-    g_scratch_size = scratch_size;
+void ggml_cuda_set_scratch_size(const size_t scratch_size) {
+    // this is a hack to not completely break llama.cpp when using multiple models or contexts simultaneously
+    // it still won't always work as expected, but it's better than nothing
+    if (scratch_size > g_scratch_size) {
+        ggml_cuda_free_scratch();
+    }
+    g_scratch_size = std::max(g_scratch_size, scratch_size);
 }
 
 void ggml_cuda_free_scratch() {
