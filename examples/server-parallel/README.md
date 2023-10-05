@@ -48,16 +48,9 @@ The above command will start a server that by default listens on `127.0.0.1:8080
 *Example request:*
 ```json
 {
-    // this changes the system prompt on runtime
-    "system_prompt": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
-
-Human: Hello
-Assistant: Hi, how may I help you?
-Human:",
+    "system_prompt": "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.\n\nHuman: Hello\nAssistant: Hi, how may I help you?\nHuman:",
     "anti_prompt": "Human:",
     "assistant_name": "Assistant:",
-
-    // required options
     "prompt": "When is the day of independency of US?",
     "temperature": 0.2
 }
