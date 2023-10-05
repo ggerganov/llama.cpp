@@ -791,7 +791,6 @@ def show_new_gui():
         args.model_param = askopenfilename(title="Select ggml model .bin or .gguf file or .kcpps config")
         root.destroy()
         if args.model_param and args.model_param!="" and args.model_param.lower().endswith('.kcpps'):
-            print("\nLoading configuration...")
             loadconfigfile(args.model_param)
         if not args.model_param:
             print("\nNo ggml model or kcpps file was selected. Exiting.")
@@ -1585,6 +1584,7 @@ def unload_libs():
         handle = None
 
 def loadconfigfile(filename):
+    print("Loading kcpps configuration file...")
     with open(filename, 'r') as f:
         config = json.load(f)
         for key, value in config.items():
@@ -1601,8 +1601,14 @@ def main(launch_args,start_server=True):
             print("Specified kcpp config file invalid or not found.")
             time.sleep(3)
             sys.exit(2)
+
+    #positional handling for kcpps files (drag and drop)
+    if args.model_param and args.model_param!="" and args.model_param.lower().endswith('.kcpps'):
+        loadconfigfile(args.model_param)
+
     if not args.model_param:
         args.model_param = args.model
+
     if not args.model_param:
         #give them a chance to pick a file
         print("For command line arguments, please refer to --help")

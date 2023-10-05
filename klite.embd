@@ -6224,6 +6224,10 @@ Current version: 75
 				document.getElementById('instruct_starttag').value = "\\nQuestion: ";
 				document.getElementById('instruct_endtag').value = "\\nAnswer: ";
 				break;
+			case "6": //ChatML
+				document.getElementById('instruct_starttag').value = "<|im_start|>user";
+				document.getElementById('instruct_endtag').value = "<|im_start|>assistant";
+				break;
 			default:
 				break;
 		}
@@ -9208,7 +9212,7 @@ Current version: 75
 			this.bubbleColor_AI = 'rgb(20, 20, 40)';
 
 			this.background_margin = [5, 5, 5, 0];
-			this.background_padding = [15, 15, 10, 10];
+			this.background_padding = [15, 15, 10, 5];
 			this.background_minHeight = 80;
 			this.centerHorizontally = false;
 
@@ -10216,6 +10220,7 @@ Current version: 75
 								<option value="3">Metharme</option>
 								<option value="4">Llama 2 Chat</option>
 								<option value="5">Q & A</option>
+								<option value="6">ChatML</option>
 							</select>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
