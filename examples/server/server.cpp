@@ -504,9 +504,11 @@ struct llama_server_context
                                            });
         }
 
+        bool tg = true;
         while (n_past < embd.size())
         {
             int n_eval = (int)embd.size() - n_past;
+            tg = n_eval == 1;
             if (n_eval > params.n_batch)
             {
                 n_eval = params.n_batch;
@@ -633,7 +635,9 @@ struct llama_server_context
 
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(result.tok);
-            num_tokens_predicted++;
+            if (tg) {
+                num_tokens_predicted++;
+            }
         }
 
         // add it to the context
@@ -1123,8 +1127,6 @@ static json format_embedding_response(llama_server_context &llama)
 static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
-
-    assert(timings.n_eval == ptrdiff_t(llama.num_tokens_predicted));
 
     return json{
         {"prompt_n", timings.n_p_eval},
