@@ -77,6 +77,7 @@ For more information, be sure to run the program with the `--help` flag.
 ## Notes
 - Generation delay scales linearly with original prompt length. If OpenBLAS is enabled then prompt ingestion becomes about 2-3x faster. This is automatic on windows, but will require linking on OSX and Linux. CLBlast speeds this up even further, and `--gpulayers` + `--useclblast` or `--usecublas` more so.
 - I have heard of someone claiming a false AV positive report. The exe is a simple pyinstaller bundle that includes the necessary python scripts and dlls to run. If this still concerns you, you might wish to rebuild everything from source code using the makefile, and you can rebuild the exe yourself with pyinstaller by using `make_pyinstaller.bat`
+- API documentation available at `/api` and https://lite.koboldai.net/koboldcpp_api
 - Supported GGML models (Includes backward compatibility for older versions/legacy GGML models, though some newer features might be unavailable):
   - LLAMA and LLAMA2 (LLaMA / Alpaca / GPT4All / Vicuna / Koala / Pygmalion 7B / Metharme 7B / WizardLM and many more)
   - GPT-2 / Cerebras

@@ -662,6 +662,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         if self.path.endswith('/api/extra/abort'):
             if requestsinqueue==0:
                 ag = handle.abort_generate()
+                time.sleep(0.3) #short delay before replying
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
@@ -702,7 +703,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }}).encode())
             return
         if reqblocking:
-            requestsinqueue = (requestsinqueue - 1) if requestsinqueue>0 else 0
+            requestsinqueue = (requestsinqueue - 1) if requestsinqueue > 0 else 0
 
         try:
             sse_stream_flag = False
@@ -727,7 +728,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 api_format = 4
                 force_json = True
 
-            if api_format>0:
+            if api_format > 0:
                 genparams = None
                 try:
                     genparams = json.loads(body)
@@ -755,7 +756,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(json.dumps(gen).encode())
                 except:
                     print("Generate: The response could not be sent, maybe connection was terminated?")
-
                 return
         finally:
             modelbusy.release()
@@ -950,10 +950,10 @@ def show_new_gui():
         return entry, label
 
 
-    def makefileentry(parent, text, searchtext, var, row=0, width=250):
+    def makefileentry(parent, text, searchtext, var, row=0, width=250, filetypes=[]):
         makelabel(parent, text, row)
         def getfilename(var, text):
-            var.set(askopenfilename(title=text))
+            var.set(askopenfilename(title=text,filetypes=filetypes))
         entry = ctk.CTkEntry(parent, width, textvariable=var)
         entry.grid(row=row+1, column=0, padx=8, stick="nw")
         button = ctk.CTkButton(parent, 50, text="Browse", command= lambda a=var,b=searchtext:getfilename(a,b))
@@ -1106,7 +1106,7 @@ def show_new_gui():
     makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=2)
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170)
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170,filetypes=[("GGML Model Files", "*.gguf;*.bin;*.ggml")])
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
@@ -1173,7 +1173,7 @@ def show_new_gui():
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1)
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, filetypes=[("GGML Model Files", "*.gguf;*.bin;*.ggml")])
     makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
     makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
 
@@ -1646,8 +1646,14 @@ def loadconfigfile(filename):
         for key, value in config.items():
             setattr(args, key, value)
 
+def sanitize_string(input_string):
+    # alphanumeric characters, dots, dashes, and underscores
+    import re
+    sanitized_string = re.sub( r'[^\w\d\.\-_]', '', input_string)
+    return sanitized_string
+
 def main(launch_args,start_server=True):
-    global args
+    global args, friendlymodelname
     args = launch_args
     embedded_kailite = None
     embedded_kcpp_docs = None
@@ -1678,8 +1684,14 @@ def main(launch_args,start_server=True):
             time.sleep(3)
             sys.exit(2)
 
+    # sanitize and replace the default vanity name. remember me....
+    if args.model_param!="":
+        newmdldisplayname = os.path.basename(args.model_param)
+        newmdldisplayname = os.path.splitext(newmdldisplayname)[0]
+        friendlymodelname = "koboldcpp/" + sanitize_string(newmdldisplayname)
+
     if args.hordeconfig and args.hordeconfig[0]!="":
-        global friendlymodelname, maxhordelen, maxhordectx, showdebug
+        global maxhordelen, maxhordectx, showdebug
         friendlymodelname = args.hordeconfig[0]
         if not friendlymodelname.startswith("koboldcpp/"):
             friendlymodelname = "koboldcpp/" + friendlymodelname
