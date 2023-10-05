@@ -154,11 +154,17 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // load the default.metallib file
     {
         NSError * error = nil;
+        
+        NSBundle * bundle = [NSBundle mainBundle];
 
-        NSBundle * bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
-        NSString * llamaBundlePath = [bundle pathForResource:@"llama_llama" ofType:@"bundle"];
-        NSBundle * llamaBundle = [NSBundle bundleWithPath:llamaBundlePath];
-        NSString * libPath = [llamaBundle pathForResource:@"default" ofType:@"metallib"];
+        NSArray *paths = [bundle pathsForResourcesOfType:@"metallib" inDirectory:nil];
+
+        for (NSString *path in paths) {
+            NSLog(@"Found path: %@", path);
+        }
+        NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
+        
+        NSLog(@"metallib path: %@", libPath);
         NSURL * libURL = [NSURL fileURLWithPath:libPath];
 
         // Load the metallib file into a Metal library

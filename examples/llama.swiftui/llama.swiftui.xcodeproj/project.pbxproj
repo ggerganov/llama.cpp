@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS"; }; };
 		542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */; };
 		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL"; }; };
 		542EA0A62AC872A100A8AEE9 /* k_quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A52AC872A100A8AEE9 /* k_quants.c */; };
 		549479CB2AC9E16000E0F78B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 549479CA2AC9E16000E0F78B /* Metal.framework */; };
 		549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 549479C52AC9E0F200E0F78B /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc -DGGML_SWIFT -DGGML_USE_METAL"; }; };
-		549479D42AC9E86200E0F78B /* llama_llama in Resources */ = {isa = PBXBuildFile; fileRef = 549479D32AC9E86200E0F78B /* llama_llama */; };
 		8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */; };
 		8A1C83792AC328BD0096AF73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83782AC328BD0096AF73 /* ContentView.swift */; };
 		8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A1C837A2AC328BE0096AF73 /* Assets.xcassets */; };
@@ -37,8 +37,6 @@
 		549479C62AC9E0F200E0F78B /* ggml-metal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-metal.h"; path = "../../ggml-metal.h"; sourceTree = "<group>"; };
 		549479C82AC9E10B00E0F78B /* ggml-metal.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; name = "ggml-metal.metal"; path = "../../ggml-metal.metal"; sourceTree = "<group>"; };
 		549479CA2AC9E16000E0F78B /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		549479D02AC9E63A00E0F78B /* default.metallib */ = {isa = PBXFileReference; lastKnownFileType = "archive.metal-library"; path = default.metallib; sourceTree = "<group>"; };
-		549479D32AC9E86200E0F78B /* llama_llama */ = {isa = PBXFileReference; lastKnownFileType = folder; name = llama_llama; path = llama.swiftui/Resources/llama_llama; sourceTree = "<group>"; };
 		8A08D20A2AC73B1500FE6CD4 /* bridging-header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bridging-header.h"; sourceTree = "<group>"; };
 		8A1C83732AC328BD0096AF73 /* llama.swiftui.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = llama.swiftui.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = llama_swiftuiApp.swift; sourceTree = "<group>"; };
@@ -65,14 +63,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		549479D22AC9E79600E0F78B /* llama_llama */ = {
-			isa = PBXGroup;
-			children = (
-				549479D02AC9E63A00E0F78B /* default.metallib */,
-			);
-			path = llama_llama;
-			sourceTree = "<group>";
-		};
 		8A08D1F62AC7383900FE6CD4 /* llama.cpp */ = {
 			isa = PBXGroup;
 			children = (
@@ -94,7 +84,6 @@
 		8A1C836A2AC328BD0096AF73 = {
 			isa = PBXGroup;
 			children = (
-				549479D32AC9E86200E0F78B /* llama_llama */,
 				8A08D1F62AC7383900FE6CD4 /* llama.cpp */,
 				8A907F312AC7134E006146EA /* llama.cpp.swift */,
 				8A3F84232AC4C891005E2EE8 /* models */,
@@ -145,7 +134,6 @@
 		8A3F84102AC4BD85005E2EE8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				549479D22AC9E79600E0F78B /* llama_llama */,
 				8A3F84112AC4BD8C005E2EE8 /* models */,
 			);
 			path = Resources;
@@ -247,7 +235,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				549479D42AC9E86200E0F78B /* llama_llama in Resources */,
+				542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */,
 				8A3F84242AC4C891005E2EE8 /* models in Resources */,
 				8A1C837E2AC328BE0096AF73 /* Preview Assets.xcassets in Resources */,
 				8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */,
