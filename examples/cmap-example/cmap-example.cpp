@@ -16,7 +16,7 @@ int main() {
     printf("Value of apple: %d\n", dict[std::string("apple")]);
 
     for (const auto& pair : dict) {
-    printf("Key: %s, Value: $s\n", pair.first, pair.second);
+    printf("Key: %s, Value: $d\n", pair.first.c_str(), pair.second);
     }
 
     return 0;
