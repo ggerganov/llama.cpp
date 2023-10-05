@@ -10,7 +10,7 @@ let platforms: [SupportedPlatform]? = [
     .tvOS(.v14)
 ]
 let exclude: [String] = []
-let additionalSources: [String] = ["ggml-metal.m"]
+let additionalSources: [String] = ["ggml-metal.m", "ggml-metal.metal"]
 let additionalSettings: [CSetting] = [
     .unsafeFlags(["-fno-objc-arc"]),
     .define("GGML_SWIFT"),
@@ -45,6 +45,11 @@ let package = Package(
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
                 .define("GGML_USE_K_QUANTS"),
                 .define("GGML_USE_ACCELERATE")
+                // NOTE: NEW_LAPACK will required iOS version 16.4+
+                // We should consider add this in the future when we drop support for iOS 14
+                // (ref: ref: https://developer.apple.com/documentation/accelerate/1513264-cblas_sgemm?language=objc)
+                // .define("ACCELERATE_NEW_LAPACK"),
+                // .define("ACCELERATE_LAPACK_ILP64")
             ] + additionalSettings,
             linkerSettings: [
                 .linkedFramework("Accelerate")

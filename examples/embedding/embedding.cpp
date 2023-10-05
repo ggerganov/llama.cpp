@@ -42,17 +42,18 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx_train = llama_n_ctx_train(ctx);
-    if (params.n_ctx > n_ctx_train) {
+    const int n_ctx_train = llama_n_ctx_train(model);
+    const int n_ctx = llama_n_ctx(ctx);
+
+    if (n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
-                __func__, n_ctx_train, params.n_ctx);
+                __func__, n_ctx_train, n_ctx);
     }
 
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "system_info: n_threads = %d / %d | %s\n",
-                params.n_threads, std::thread::hardware_concurrency(), llama_print_system_info());
+        fprintf(stderr, "%s\n", get_system_info(params).c_str());
     }
 
     int n_past = 0;
@@ -70,15 +71,15 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "\n");
     }
 
-    if (embd_inp.size() > (size_t)params.n_ctx) {
+    if (embd_inp.size() > (size_t)n_ctx) {
         fprintf(stderr, "%s: error: prompt is longer than the context window (%zu tokens, n_ctx = %d)\n",
-                __func__, embd_inp.size(), params.n_ctx);
+                __func__, embd_inp.size(), n_ctx);
         return 1;
     }
 
     while (!embd_inp.empty()) {
         int n_tokens = std::min(params.n_batch, (int) embd_inp.size());
-        if (llama_eval(ctx, embd_inp.data(), n_tokens, n_past, params.n_threads)) {
+        if (llama_decode(ctx, llama_batch_get_one(embd_inp.data(), n_tokens, n_past, 0))) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return 1;
         }
@@ -86,8 +87,8 @@ int main(int argc, char ** argv) {
         embd_inp.erase(embd_inp.begin(), embd_inp.begin() + n_tokens);
     }
 
-    const int n_embd = llama_n_embd(ctx);
-    const auto embeddings = llama_get_embeddings(ctx);
+    const int n_embd = llama_n_embd(model);
+    const auto * embeddings = llama_get_embeddings(ctx);
 
     for (int i = 0; i < n_embd; i++) {
         printf("%f ", embeddings[i]);
