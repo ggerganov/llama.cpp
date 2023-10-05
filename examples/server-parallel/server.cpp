@@ -5,7 +5,7 @@
 #include <sstream>
 #include <thread>
 #include <vector>
-#include "index.h"
+#include "frontend.h"
 #include "common.h"
 #include "llama.h"
 
@@ -69,15 +69,6 @@ enum slot_command {
     RELEASE
 };
 
-static std::string system_prompt =
-R"(Transcript of a never ending dialog, where the User interacts with an Assistant.
-The Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.
-
-User: Recommend a nice restaurant in the area.
-Assistant: I recommend the restaurant "The Golden Duck". It is a 5 star restaurant with a great view of the city. The food is delicious and the service is excellent. The prices are reasonable and the portions are generous. The restaurant is located at 123 Main Street, New York, NY 10001. The phone number is (212) 555-1234. The hours are Monday through Friday from 11:00 am to 10:00 pm. The restaurant is closed on Saturdays and Sundays.
-User: Who is Richard Feynman?
-Assistant: Richard Feynman was an American physicist who is best known for his work in quantum mechanics and particle physics. He was awarded the Nobel Prize in Physics in 1965 for his contributions to the development of quantum electrodynamics. He was a popular lecturer and author, and he wrote several books, including "Surely You're Joking, Mr. Feynman!" and "What Do You Care What Other People Think?".
-User:)";
 
 struct llama_client_slot
 {
@@ -117,11 +108,23 @@ struct llama_client_slot
     void nofity() {
         newToken = !newToken;
     }
+
+    void release() {
+        if(state == PROCESSING) {
+            command = RELEASE;
+        }
+    }
 };
 
 struct server_parallel_context {
     // example props
     vector<llama_client_slot> slots;
+    std::string system_prompt = "";
+    bool update_system_prompt = true;
+
+    // broadcast to all clients to keep the same prompt format
+    std::string user_name = ""; // this should be the anti prompt
+    std::string assistant_name = ""; // this is for generate the prompt
 
     // llama native props
     gpt_params params;
@@ -131,9 +134,8 @@ struct server_parallel_context {
     int n_vocab;
     std::vector<llama_token_data> candidates;
     std::vector<llama_token> tokens_system;
-    int32_t n_tokens_system;
+    int32_t n_tokens_system = 0;
     llama_batch batch;
-    bool request_clean_kv = true;
 
     bool loadModel(gpt_params params_) {
         params = params_;
@@ -149,7 +151,8 @@ struct server_parallel_context {
         return true;
     }
 
-    void initializeSlots() {
+    void initialize() {
+        // create slots
         LOG_TEE("Available slots:\n");
         for (int i = 0; i < params.n_parallel; i++)
         {
@@ -162,49 +165,87 @@ struct server_parallel_context {
             LOG_TEE(" - slot %i\n", slot.id);
             slots.push_back(slot);
         }
-    }
-
-    bool loadSystemPrompt() {
-        tokens_system = ::llama_tokenize(ctx, system_prompt, true);
-        n_tokens_system = tokens_system.size();
         batch = llama_batch_init(params.n_ctx, 0);
 
-        {
-            LOG_TEE("Evaluating the system prompt ...\n");
-
-            batch.n_tokens = n_tokens_system;
-
-            for (int32_t i = 0; i < batch.n_tokens; ++i)
-            {
-                batch.token[i] = tokens_system[i];
-                batch.pos[i] = i;
-                batch.seq_id[i] = 0;
-                batch.logits[i] = false;
-            }
-
-            if (llama_decode(ctx, batch) != 0)
-            {
-                LOG_TEE("%s: llama_decode() failed\n", __func__);
-                return false;
-            }
-
-            // assign the system KV cache to all parallel sequences
-            for (int32_t i = 1; i < params.n_parallel; ++i)
-            {
-                llama_kv_cache_seq_cp(ctx, 0, i, 0, n_tokens_system);
-            }
-        }
-        return true;
+        // always assign a default system prompt
+        system_prompt = system_prompt_default;
+        user_name = "User:";
+        assistant_name = "Assistant:";
+        params.antiprompt.push_back(user_name);
     }
 
-    llama_client_slot* loadPrompt(int slot_id, string prompt, float temp_) {
+    void updateSystemPrompt() {
+        tokens_system = ::llama_tokenize(ctx, system_prompt, true);
+        n_tokens_system = tokens_system.size();
+
+        batch.n_tokens = n_tokens_system;
+
+        // clear the entire KV cache
+        for (int i = 0; i < params.n_parallel; ++i)
+        {
+            llama_kv_cache_seq_rm(ctx, i, 0, -1);
+        }
+
+        for (int32_t i = 0; i < batch.n_tokens; ++i)
+        {
+            batch.token[i] = tokens_system[i];
+            batch.pos[i] = i;
+            batch.seq_id[i] = 0;
+            batch.logits[i] = false;
+        }
+
+        if (llama_decode(ctx, batch) != 0)
+        {
+            LOG_TEE("%s: llama_decode() failed\n", __func__);
+            return;
+        }
+
+        // assign the system KV cache to all parallel sequences
+        for (int32_t i = 1; i < params.n_parallel; ++i)
+        {
+            llama_kv_cache_seq_cp(ctx, 0, i, 0, n_tokens_system);
+        }
+        
+        LOG_TEE("system prompt updated\n");
+        update_system_prompt = false;
+    }
+
+    void notifySystemPromptChanged() {
+        // release all slots
+        for (llama_client_slot &slot : slots)
+        {
+            slot.release();
+        }
+        waitAllAreIdle();
+        // wait until system prompt load
+        update_system_prompt = true;
+        while(update_system_prompt) {
+            this_thread::sleep_for(chrono::milliseconds(5));
+        }
+        // system prompt loaded, continue
+    }
+
+    llama_client_slot* requestCompletion(json data) {
+        if(data.contains("system_prompt") &&
+            data.contains("anti_prompt") &&
+            data.contains("assistant_name")) {
+            system_prompt = data.value("system_prompt", "");
+            user_name = data.value("anti_prompt", "");
+            assistant_name = data.value("assistant_name", "");
+            params.antiprompt.clear();
+            params.antiprompt.push_back(user_name);
+            notifySystemPromptChanged();
+        }
+        int slot_id = data.value("slot_id", -1);
+        float temperature = data.value("temperature", 0.1f);
+        string prompt = data.value("prompt", "");
         for (llama_client_slot & slot : slots)
         {
             if (
                 slot_id == -1 && slot.available() ||
                 slot.id == slot_id)
             {
-                slot.start(prompt, temp_);
+                slot.start(prompt, temperature);
                 LOG_TEE("slot %i is processing\n", slot.id);
                 return &slot; // return a pointer to slot (thread safe?)
             }
@@ -238,17 +279,38 @@ struct server_parallel_context {
         return stop_pos;
     }
 
+    void waitAllAreIdle() {
+        bool wait = true;
+        while(wait) {
+            wait = false;
+            for (auto &slot : slots)
+            {
+                if (!slot.available())
+                {
+                    wait = true;
+                    break;
+                }
+            }
+        }
+    }
+
     bool updateSlots() {
+        // update the system prompt wait until all slots are idle state
+        if(update_system_prompt) {
+            updateSystemPrompt();
+        }
+
         batch.n_tokens = 0;
 
         // decode any currently ongoing sequences
         for (auto & slot : slots) {
             if (slot.state == PROCESSING && slot.command == RELEASE)
             {
+                LOG_TEE("slot %i released\n", slot.id);
                 llama_kv_cache_seq_rm(ctx, slot.id, n_tokens_system, n_ctx);
                 slot.state = IDLE;
-                LOG_TEE("slot %i is released\n", slot.id);
                 slot.command = NONE;
+                continue;
             }
 
             // no decode wait until the token had been send to client
@@ -267,16 +329,6 @@ struct server_parallel_context {
             slot.i_batch = batch.n_tokens;
 
             batch.n_tokens += 1;
-        }
-
-        if (batch.n_tokens == 0 && request_clean_kv) {
-            // all sequences have ended - clear the entire KV cache
-            for (int i = 0; i < params.n_parallel; ++i) {
-                llama_kv_cache_seq_rm(ctx, i, n_tokens_system, -1);
-            }
-
-            request_clean_kv = false;
-            LOG_TEE("%s: clearing the KV cache\n", __func__);
         }
 
         // assign workload to the slots
@@ -394,13 +446,12 @@ struct server_parallel_context {
                          stop_pos != std::string::npos)) {
                     //LOG_TEE("slot %i generated text:\n%s'------------------------------\n", slot.id, slot.generated_text.c_str());
                     slot.generated_text.clear();
-                    slot.command = RELEASE;
+                    slot.release();
                 }
-
                 slot.i_batch = -1;
             }
-            return true;
         }
+        return true;
     }
 };
 
@@ -666,7 +717,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back({lora_adapter, std::stof(argv[i])});
+            params.lora_adapter.push_back(make_tuple(lora_adapter, std::stof(argv[i])));
             params.use_mmap = false;
         }
         else if (arg == "--lora-base")
@@ -703,27 +754,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_predict = std::stoi(argv[i]);
-        } else if (arg == "-f" || arg == "--file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(system_prompt));
-            if (system_prompt.back() == '\n') {
-                system_prompt.pop_back();
-            }
-        } else if (arg == "-r" || arg == "--reverse-prompt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.antiprompt.push_back(argv[i]);
         }
         else
         {
@@ -765,25 +795,26 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // create slots
-    llama.initializeSlots();
-
-    // process system prompt
-    llama.loadSystemPrompt();
+    llama.initialize();
 
     Server svr;
 
     svr.Get("/", [&](const Request & /*req*/, Response &res)
-            { res.set_content(index_html, "text/html"); });
+            { res.set_content(index_html_, "text/html"); });
+        
+    svr.Get("/index.js", [&](const Request & /*req*/, Response &res)
+            { res.set_content(index_js_, "text/html"); });
 
+    svr.Get("/props", [&llama](const Request & /*req*/, Response &res)
+            {
+                json data = {
+                    { "user_name", llama.user_name.c_str() },
+                    { "assistant_name", llama.assistant_name.c_str() }
+                };
+                res.set_content(data.dump(), "application/json"); });
     svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
-        json data = json::parse(req.body);
-        int slot_id = data.value("slot_id", -1);
-        float temperature = data.value("temperature", 0.8f);
-        string prompt = data.value("prompt", "");
-        llama_client_slot* slot = llama.loadPrompt(slot_id, prompt, temperature);
-
+        llama_client_slot* slot = llama.requestCompletion(json::parse(req.body));
         // Verify if the slot exist
         if (slot) {
             res.set_chunked_content_provider("text/event-stream",
@@ -792,14 +823,13 @@ int main(int argc, char **argv)
                         sink.done();
                         return false;
                     }
-
                     if(slot->hasNewToken()) { // new token notification
                         stringstream ss;
-                        json res_d = {{"token", slot->sampled_token_str}};
+                        json res_d = {{ "content", slot->sampled_token_str }};
                         ss << "data: " << res_d.dump() << "\n\n";
                         string result = ss.str();
-                        if(!sink.write(result.c_str(), result.size())) { // user request release
-                            slot->command = RELEASE;
+                        if(!sink.write(result.c_str(), result.size())) {
+                            slot->release();
                             return false;
                         }
                     }
