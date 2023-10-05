@@ -18,6 +18,9 @@ In the context of LLMs, what is "RoPe" and what is it used for?
 In the context of LLMs, what is "LoRA" and what is it used for?
 In the context of LLMs, what are weights?
 In the context of LLMs, what are biases?
+In the context of LLMs, what are checkpoints?
+In the context of LLMs, what is "perplexity"?
+In the context of LLMs, what are models?
 In the context of machine-learning, what is "catastrophic forgetting"?
 In the context of machine-learning, what is "elastic weight consolidation (EWC)"?
 In the context of neural nets, what is a hidden layer?
