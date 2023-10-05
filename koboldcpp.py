@@ -376,10 +376,11 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
     server_version = "ConcedoLlamaForKoboldServer"
 
-    def __init__(self, addr, port, embedded_kailite):
+    def __init__(self, addr, port, embedded_kailite, embedded_kcpp_docs):
         self.addr = addr
         self.port = port
         self.embedded_kailite = embedded_kailite
+        self.embedded_kcpp_docs = embedded_kcpp_docs
 
     def __call__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -547,7 +548,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             response_body = (json.dumps({"values": []}).encode())
 
         elif self.path.endswith(('/api/v1/info/version', '/api/latest/info/version')):
-            response_body = (json.dumps({"result":"1.2.4"}).encode())
+            response_body = (json.dumps({"result":"1.2.5"}).encode())
 
         elif self.path.endswith(('/api/extra/true_max_context_length')): #do not advertise this to horde
             response_body = (json.dumps({"value": maxctx}).encode())
@@ -573,9 +574,17 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             response_body = (json.dumps({"object":"list","data":[{"id":"koboldcpp","object":"model","created":1,"owned_by":"koboldcpp","permission":[],"root":"koboldcpp"}]}).encode())
             force_json = True
 
+        elif self.path=="/api":
+            if self.embedded_kcpp_docs is None:
+                response_body = (f"KoboldCpp partial API reference can be found at the wiki: https://github.com/LostRuins/koboldcpp/wiki").encode()
+            else:
+                response_body = self.embedded_kcpp_docs
         elif self.path.endswith(('/api')) or self.path.endswith(('/api/v1')):
-            response_body = (json.dumps({"result":"KoboldCpp partial API reference can be found at https://link.concedo.workers.dev/koboldapi"}).encode())
-
+            self.path = "/api"
+            self.send_response(302)
+            self.send_header("Location", self.path)
+            self.end_headers()
+            return None
 
         if response_body is None:
             self.send_response(404)
@@ -721,7 +730,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', '*')
         self.send_header('Access-Control-Allow-Headers', '*')
-        if "/api" in self.path or force_json:
+        if ("/api" in self.path and self.path!="/api") or force_json:
             if self.path.endswith("/stream"):
                 self.send_header('Content-type', 'text/event-stream')
             self.send_header('Content-type', 'application/json')
@@ -730,7 +739,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         return super(ServerRequestHandler, self).end_headers()
 
 
-def RunServerMultiThreaded(addr, port, embedded_kailite = None):
+def RunServerMultiThreaded(addr, port, embedded_kailite = None, embedded_kcpp_docs = None):
     global exitcounter
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -746,7 +755,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None):
 
         def run(self):
             global exitcounter
-            handler = ServerRequestHandler(addr, port, embedded_kailite)
+            handler = ServerRequestHandler(addr, port, embedded_kailite, embedded_kcpp_docs)
             with http.server.HTTPServer((addr, port), handler, False) as self.httpd:
                 try:
                     self.httpd.socket = sock
@@ -1594,6 +1603,7 @@ def main(launch_args,start_server=True):
     global args
     args = launch_args
     embedded_kailite = None
+    embedded_kcpp_docs = None
     if args.config and len(args.config)==1:
         if isinstance(args.config[0], str) and os.path.exists(args.config[0]):
            loadconfigfile(args.config[0])
@@ -1703,6 +1713,13 @@ def main(launch_args,start_server=True):
     except:
         print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
+    try:
+        basepath = os.path.abspath(os.path.dirname(__file__))
+        with open(os.path.join(basepath, "kcpp_docs.embd"), mode='rb') as f:
+            embedded_kcpp_docs = f.read()
+    except:
+        print("Could not find Embedded KoboldCpp API docs.")
+
     if args.port_param!=defaultport:
         args.port = args.port_param
     print(f"Starting Kobold HTTP Server on port {args.port}")
@@ -1735,7 +1752,7 @@ def main(launch_args,start_server=True):
 
     if start_server:
         print(f"Please connect to custom endpoint at {epurl}")
-        asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite))
+        asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite, embedded_kcpp_docs))
     else:
         print(f"Server was not started, main function complete. Idling.")
 

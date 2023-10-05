@@ -8142,7 +8142,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
                 buf[0] = llama_token_to_byte(model->vocab, token);
                 return 1;
             } else {
-                GGML_ASSERT(false);
+                LLAMA_LOG_WARN("%s: Unknown Tokenization Error 1\n", __func__);
             }
             break;
         }
@@ -8158,12 +8158,12 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             } else if (llama_is_control_token(model->vocab, token)) {
                 ;
             } else {
-                GGML_ASSERT(false);
+                LLAMA_LOG_WARN("%s: Unknown Tokenization Error 2\n", __func__);
             }
             break;
         }
         default:
-            GGML_ASSERT(false);
+            LLAMA_LOG_WARN("%s: Unknown Tokenization Error 3\n", __func__);
         }
     }
     return 0;

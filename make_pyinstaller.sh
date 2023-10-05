@@ -2,6 +2,7 @@
 
 pyinstaller --noconfirm --onefile --clean --console --collect-all customtkinter --icon "./niko.ico" \
 --add-data "./klite.embd:." \
+--add-data "./kcpp_docs.embd:." \
 --add-data "./koboldcpp_default.so:." \
 --add-data "./koboldcpp_openblas.so:." \
 --add-data "./koboldcpp_failsafe.so:." \
