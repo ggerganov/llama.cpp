@@ -44,7 +44,7 @@ endif()
 
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
-option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
+option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
 
 # debug
@@ -58,15 +58,21 @@ option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"       
 option(LLAMA_SANITIZE_UNDEFINED         "llama: enable undefined sanitizer"                     OFF)
 
 # instruction set specific
-option(LLAMA_AVX                        "llama: enable AVX"                                     ON)
-option(LLAMA_AVX2                       "llama: enable AVX2"                                    ON)
-option(LLAMA_AVX512                     "llama: enable AVX512"                                  OFF)
-option(LLAMA_AVX512_VBMI                "llama: enable AVX512-VBMI"                             OFF)
-option(LLAMA_AVX512_VNNI                "llama: enable AVX512-VNNI"                             OFF)
-option(LLAMA_FMA                        "llama: enable FMA"                                     ON)
+if (LLAMA_NATIVE)
+    set(INS_ENB OFF)
+else()
+    set(INS_ENB ON)
+endif()
+
+option(LLAMA_AVX                             "llama: enable AVX"                                ${INS_ENB})
+option(LLAMA_AVX2                            "llama: enable AVX2"                               ${INS_ENB})
+option(LLAMA_AVX512                          "llama: enable AVX512"                             OFF)
+option(LLAMA_AVX512_VBMI                     "llama: enable AVX512-VBMI"                        OFF)
+option(LLAMA_AVX512_VNNI                     "llama: enable AVX512-VNNI"                        OFF)
+option(LLAMA_FMA                             "llama: enable FMA"                                ${INS_ENB})
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
-    option(LLAMA_F16C                   "llama: enable F16C"                                    ON)
+    option(LLAMA_F16C                        "llama: enable F16C"                               ${INS_ENB})
 endif()
 
 # 3rd party libs
@@ -504,9 +510,6 @@ if (NOT MSVC)
     if (LLAMA_GPROF)
         add_compile_options(-pg)
     endif()
-    if (LLAMA_NATIVE)
-        add_compile_options(-march=native)
-    endif()
 endif()
 
 if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
@@ -561,6 +564,9 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GE
             add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX>)
         endif()
     else()
+        if (LLAMA_NATIVE)
+            add_compile_options(-march=native)
+        endif()
         if (LLAMA_F16C)
             add_compile_options(-mf16c)
         endif()

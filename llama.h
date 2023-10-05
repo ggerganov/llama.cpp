@@ -42,7 +42,7 @@
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 1
+#define LLAMA_SESSION_VERSION 2
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
@@ -282,6 +282,9 @@ extern "C" {
     LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int llama_n_embd     (const struct llama_model * model);
 
+    // Get the model's RoPE frequency scaling factor
+    LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
+
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
 
@@ -330,12 +333,16 @@ extern "C" {
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
     // Remove all tokens data of cells in [c0, c1)
+    // c0 < 0 : [0,  c1]
+    // c1 < 0 : [c0, inf)
     LLAMA_API void llama_kv_cache_tokens_rm(
             struct llama_context * ctx,
                          int32_t   c0,
                          int32_t   c1);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
+    // p0 < 0 : [0,  p1]
+    // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
@@ -344,6 +351,8 @@ extern "C" {
 
     // Copy all tokens that belong to the specified sequence to another sequence
     // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
+    // p0 < 0 : [0,  p1]
+    // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_cp(
             struct llama_context * ctx,
                     llama_seq_id   seq_id_src,
@@ -358,6 +367,8 @@ extern "C" {
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly
+    // p0 < 0 : [0,  p1]
+    // p1 < 0 : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_shift(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
