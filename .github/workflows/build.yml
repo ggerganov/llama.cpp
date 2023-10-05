@@ -258,7 +258,7 @@ jobs:
 
     strategy:
       matrix:
-        destination: ['platform=macOS,name=Any Mac', 'platform=iOS,name=Any iOS Device', 'platform=tvOS,name=Any tvOS Device']
+        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
 
     steps:
       - name: Clone
