@@ -1,6 +1,8 @@
 // example of a C/C++ equivalent data structure to the python dict
 // there are two: std::map automatically sorts on key; std::unordered_map doesn't
 
+#include "llama.h"
+
 #include <iostream>
 #include <map>
 
