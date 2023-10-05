@@ -27,6 +27,8 @@ layout (push_constant) uniform parameter {
     uint nb02;
     uint nb11;
     uint nb12;
+    uint ne02;
+    uint ne12;
     int ne0;
     int ne1;
 } pcs;
@@ -36,8 +38,11 @@ void main() {
     const uint r1 = gl_WorkGroupID.y;
     const uint im = gl_WorkGroupID.z;
 
-    const uint x = (r0*pcs.nb01 + im*pcs.nb02) / 2 + pcs.inAOff; // Based from inA
-    const uint y = (r1*pcs.nb11 + im*pcs.nb12) / 4 + pcs.inBOff; // based from inB
+    uint bc_ab = pcs.ne12 > pcs.ne02 ? im / (pcs.ne12 / pcs.ne02) : im;
+    uint bc_ba = pcs.ne02 > pcs.ne12 ? im / (pcs.ne02 / pcs.ne12) : im;
+
+    const uint x = (r0*pcs.nb01 + bc_ab*pcs.nb02) / 2 + pcs.inAOff; // Based from inA
+    const uint y = (r1*pcs.nb11 + bc_ba*pcs.nb12) / 4 + pcs.inBOff; // based from inB
 
     float sumf = 0.0f;
     for (uint i = gl_SubgroupInvocationID.x; i < pcs.ne00; i += gl_SubgroupSize) {
