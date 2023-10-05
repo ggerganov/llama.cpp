@@ -1,9 +1,6 @@
 // example of a C/C++ equivalent data structure to the python dict
-// there are two: std::map automatically sorts on key; std::unordered_map doesn't
+// there are two: std::map automatically sorts on key; std::unordered_map does not
 
-#include "llama.h"
-
-#include <iostream>
 #include <map>
 
 int main() {
@@ -15,10 +12,10 @@ int main() {
 
 
     // Accessing elements in the map
-    std::cout << "Value of apple: " << dict["apple"] << std::endl;
+    printf("Value of apple: %d\n", dict["apple"]);
 
     for (const auto& pair : dict) {
-        std::cout << "Key: " << pair.first << ", Value: " << pair.second << std::endl;
+    printf("Key: %s, Value: $s\n", pair.first, pair.second);
     }
 
     return 0;
