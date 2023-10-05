@@ -205,7 +205,7 @@ struct server_parallel_context {
         {
             llama_kv_cache_seq_cp(ctx, 0, i, 0, n_tokens_system);
         }
-        
+
         LOG_TEE("system prompt updated\n");
         update_system_prompt = false;
     }
@@ -801,7 +801,7 @@ int main(int argc, char **argv)
 
     svr.Get("/", [&](const Request & /*req*/, Response &res)
             { res.set_content(index_html_, "text/html"); });
-        
+
     svr.Get("/index.js", [&](const Request & /*req*/, Response &res)
             { res.set_content(index_js_, "text/html"); });
 
@@ -812,6 +812,7 @@ int main(int argc, char **argv)
                     { "assistant_name", llama.assistant_name.c_str() }
                 };
                 res.set_content(data.dump(), "application/json"); });
+
     svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
         llama_client_slot* slot = llama.requestCompletion(json::parse(req.body));
