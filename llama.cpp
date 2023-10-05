@@ -4832,6 +4832,7 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_PERSIMMON:
             {
                 result = llm_build_persimmon(lctx, batch);
+            }
         case LLM_ARCH_REFACT:
             {
                 result = llm_build_refact(lctx, batch);
