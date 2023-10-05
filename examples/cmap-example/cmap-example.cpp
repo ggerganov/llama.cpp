@@ -5,6 +5,7 @@
 #include <list>
 #include <string>
 #include <bitset>
+#include <vector>
 
 int main() {
     std::map<std::string, int> dict;
@@ -91,10 +92,10 @@ int main() {
     // Now we try to use the appcode to select from the help available
     // app1 has only -h and -f so 0b00011; app2 has only -h and -n so 0b00101
 
-    int app1code = 0b01011;
-    int app2code = 0b10101;
+    int app1code = 0b0001011;
+    int app2code = 0b0010111;
 
-    printf("\nNow processing app with only -h, -t and -f and appcode %3d\n", app1code);
+    printf("\nNow processing app with only -h, -t and -f implemented and appcode %3d\n", app1code);
     if (app1code != 0) {
         for (const auto& kvp : bitdict) {
             if ((app1code & std::stoi(kvp.first)) != 0) {
@@ -108,7 +109,7 @@ int main() {
         printf("\n");
     }
 
-    printf("\nNow processing app with only -h, -m, -n and appcode %3d\n", app2code);
+    printf("\nNow processing app with only -h, -f, -m and -n implemented and appcode %3d\n", app2code);
     if (app2code != 0) {
         for (const auto& kvp : bitdict) {
             if ((app2code & std::stoi(kvp.first)) != 0) {
@@ -122,5 +123,22 @@ int main() {
         printf("\n");
     }
 
+    // This is more like the general way to do it
+    std::vector<int> appcodes = {2, 5, 11, 17, 23, 31};
+       for (size_t i = 0; i < appcodes.size(); ++i) {
+        int x = appcodes[i];
+        if (x != 0) {
+        for (const auto& kvp : bitdict) {
+            if ((x & std::stoi(kvp.first)) != 0) {
+                printf("Appcode %3d %s  ", x, kvp.first.c_str());
+                for (const auto& element : kvp.second) {
+                    printf(" %5s", element.c_str());
+                }
+                printf("\n");
+            }
+        }
+        printf("\n");
+        }
+    }
     return 0;
 }
