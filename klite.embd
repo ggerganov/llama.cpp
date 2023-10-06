@@ -5,8 +5,8 @@ Kobold Lite WebUI is a standalone WebUI for use with KoboldAI United, AI Horde, 
 It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
-Kobold Lite is under the AGPL v3.0 License for the purposes of koboldcpp. Please do not remove this line.
-Current version: 75
+Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
+Current version: 76
 -Concedo
 -->
 
@@ -9595,8 +9595,13 @@ Current version: 75
 		function applyStylizedCodeBlocks() {
 			let blocks = newbodystr.split(/(```[\s\S]*?\n[\s\S]*?```)/g);
 			for (var i = 0; i < blocks.length; i++) {
-				if (blocks[i].startsWith('```')) { blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g, `</p><pre style='min-width:80%;margin:0px 40px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>$1</pre><p>`); }
-				else { blocks[i] = blocks[i].replaceAll('```','`').replaceAll('``','`').replace(/`(.*?)`/g, `<code style='background-color:black'>$1</code>`); }
+				if (blocks[i].startsWith('```')) {
+					blocks[i] = blocks[i].replace(/```[\s\S]*?\n([\s\S]*?)```/g,
+					function (m,m2) {return `</p><pre style='min-width:80%;margin:0px 40px 0px 20px;background-color:${as.code_block_background};color:${as.code_block_foreground}'>${m2.replace(/[“”]/g, "\"")}</pre><p>`});
+				}
+				else {
+					blocks[i] = blocks[i].replaceAll('```', '`').replaceAll('``', '`').replace(/`(.*?)`/g, function (m,m2) {return `<code style='background-color:black'>${m2.replace(/[“”]/g, "\"")}</code>`;}); //remove fancy quotes too
+				}
 			}
 			return blocks.join('');
 		}
