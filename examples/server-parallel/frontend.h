@@ -61,6 +61,11 @@ const questions = [
   "How to get a job at google?",
   "What are you?",
   "When was born Abraham Lincoln?",
+  "What is a black hole?",
+  "How to prepare for an interview?",
+  "Will you destroy the humanity?",
+  "Who is smarter, you or I?",
+  "What is quantization in ML?"
 ];
 
 let user_name = "";

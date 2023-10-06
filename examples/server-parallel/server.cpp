@@ -499,7 +499,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
 
     // new arguments
-    printf("  -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
+    printf("  -np N, --parallel N   number of slots for process requests (default: %d)\n", params.n_parallel);
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("  -r ANTI_PROMPT, --reverse-prompt ANTI_PROMPT\n");
     printf("                        set a anti prompt, used as user name in prompt generation\n");
