@@ -1951,7 +1951,7 @@ def main(launch_args,start_server=True):
         def onready_subprocess():
             import subprocess
             print("Starting Post-Load subprocess...")
-            subprocess.Popen(args.onready[0], shell=True)
+            subprocess.run(args.onready[0], shell=True)
         timer_thread = threading.Timer(1, onready_subprocess) #1 second delay
         timer_thread.start()
 
