@@ -1,3 +1,7 @@
+// TODO: move to context params
+bool offload_k = true;
+bool offload_v = true;
+
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
@@ -1035,9 +1039,9 @@ struct llama_kv_cache {
 
     struct ggml_tensor * k = NULL;
     struct ggml_tensor * v = NULL;
-    std::vector<ggml_tensor*> k_l; // per layer
 
-    std::vector<ggml_tensor*> v_l;
+    std::vector<struct ggml_tensor *> k_l; // per layer
+    std::vector<struct ggml_tensor *> v_l;
 
     struct ggml_context * ctx = NULL;
 
@@ -1259,11 +1263,6 @@ static bool llama_kv_cache_init(
         return false;
     }
 
-    // cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-    // cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-    // ggml_set_name(cache.k, "cache_k");
-    // ggml_set_name(cache.v, "cache_v");
-
     cache.k_l.reserve(n_layer);
     cache.v_l.reserve(n_layer);
 
@@ -1278,13 +1277,14 @@ static bool llama_kv_cache_init(
         cache.v_l.push_back(v);
 #ifdef GGML_USE_CUBLAS
     if ((int)i >= i_gpu_start) {
-        ggml_cuda_assign_buffers_no_scratch(k);
-        LLAMA_LOG_INFO("%s: offloading k[%d] cache to GPU\n", __func__, i);
-        vram_kv_cache += ggml_nbytes(k);
-
-        ggml_cuda_assign_buffers_no_scratch(v);
-        LLAMA_LOG_INFO("%s: offloading v[%d] cache to GPU\n", __func__, i);
-        vram_kv_cache += ggml_nbytes(v);
+        if (offload_k) {
+            ggml_cuda_assign_buffers_no_scratch(k);
+            vram_kv_cache += ggml_nbytes(k);
+        }
+        if (offload_v) {
+            ggml_cuda_assign_buffers_no_scratch(v);
+            vram_kv_cache += ggml_nbytes(v);
+        }
     }
 #endif // GGML_USE_CUBLAS
     }
@@ -2659,10 +2659,10 @@ static struct ggml_cgraph * llm_build_llama(
     if (n_gpu_layers > n_layer) {
         offload_func_nr = ggml_cuda_assign_buffers_no_alloc;
     }
-    if (n_gpu_layers > 0) {
+    if (n_gpu_layers > 0 && offload_v) {
         offload_func_v  = ggml_cuda_assign_buffers_no_alloc;
     }
-    if (n_gpu_layers > 0) {
+    if (n_gpu_layers > 0 && offload_k) {
         offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
     }
 #endif // GGML_USE_CUBLAS
@@ -2676,69 +2676,45 @@ static struct ggml_cgraph * llm_build_llama(
     }
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-    struct ggml_tensor * KQ_mask_gpu = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+    ggml_set_name(KQ_mask, "KQ_mask");
+    ggml_allocr_alloc(lctx.alloc, KQ_mask);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        float * data = (float *) KQ_mask->data;
+        memset(data, 0, ggml_nbytes(KQ_mask));
+
+        for (int h = 0; h < 1; ++h) {
+            for (int j = 0; j < n_tokens; ++j) {
+                const llama_pos    pos    = batch.pos[j];
+                const llama_seq_id seq_id = batch.seq_id[j];
+
+                for (int i = 0; i < n_kv; ++i) {
+                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
+                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
+                    }
+                }
+            }
+        }
+    }
+
+    struct ggml_tensor * KQ_mask_gpu = ggml_view_tensor(ctx0, KQ_mask);
     offload_func_kq(KQ_mask_gpu);
     ggml_set_name(KQ_mask_gpu, "KQ_mask_gpu");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask_gpu);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask_gpu->data;
-        memset(data, 0, ggml_nbytes(KQ_mask_gpu));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
-
-    struct ggml_tensor * KQ_mask_cpu = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask_cpu, "KQ_mask_cpu");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask_cpu);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask_cpu->data;
-        memset(data, 0, ggml_nbytes(KQ_mask_cpu));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos_gpu = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    ggml_set_name(KQ_pos, "KQ_pos");
+    ggml_allocr_alloc(lctx.alloc, KQ_pos);
+    if (!ggml_allocr_is_measure(lctx.alloc)) {
+        int * data = (int *) KQ_pos->data;
+        for (int i = 0; i < n_tokens; ++i) {
+            data[i] = batch.pos[i];
+        }
+    }
+
+    struct ggml_tensor * KQ_pos_gpu = ggml_view_tensor(ctx0, KQ_pos);
     offload_func_kq(KQ_pos_gpu);
     ggml_set_name(KQ_pos_gpu, "KQ_pos_gpu");
-    ggml_allocr_alloc(lctx.alloc, KQ_pos_gpu);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos_gpu->data;
-        for (int i = 0; i < n_tokens; ++i) {
-            data[i] = batch.pos[i];
-        }
-    }
-    struct ggml_tensor * KQ_pos_cpu = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    ggml_set_name(KQ_pos_cpu, "KQ_pos_cpu");
-    ggml_allocr_alloc(lctx.alloc, KQ_pos_cpu);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos_cpu->data;
-        for (int i = 0; i < n_tokens; ++i) {
-            data[i] = batch.pos[i];
-        }
-    }
 
     // shift the entire K-cache if needed
     if (do_rope_shift) {
@@ -2776,17 +2752,20 @@ static struct ggml_cgraph * llm_build_llama(
         offload_func_v  = llama_nop;
         offload_func_kq = llama_nop;
 
-        struct ggml_tensor * KQ_mask = KQ_mask_cpu;
-        struct ggml_tensor * KQ_pos = KQ_pos_cpu;
-
+        struct ggml_tensor * KQ_mask_l = KQ_mask;
+        struct ggml_tensor * KQ_pos_l = KQ_pos;
 
 #ifdef GGML_USE_CUBLAS
         if (il >= i_gpu_start) {
-            KQ_mask = KQ_mask_gpu;
-            KQ_pos = KQ_pos_gpu;
-            offload_func    = ggml_cuda_assign_buffers_no_alloc;
-            offload_func_v  = ggml_cuda_assign_buffers_no_alloc;
-            offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
+            offload_func = ggml_cuda_assign_buffers_no_alloc;
+            if (offload_k) {
+                KQ_mask_l = KQ_mask_gpu;
+                KQ_pos_l = KQ_pos_gpu;
+                offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
+            }
+            if (offload_v) {
+                offload_func_v  = ggml_cuda_assign_buffers_no_alloc;
+            }
         }
 #endif // GGML_USE_CUBLAS
 
@@ -2815,11 +2794,11 @@ static struct ggml_cgraph * llm_build_llama(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos_l, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(Kcur);
             ggml_format_name(Kcur, "Kcur%d", il);
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos_l, n_embd_head, 0, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_format_name(Qcur, "Qcur%d", il);
 
@@ -2875,7 +2854,7 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
-            struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
+            struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask_l);
             offload_func_kq(KQ_masked);
             ggml_format_name(KQ_masked, "KQ_masked%d", il);
 
