@@ -215,8 +215,7 @@
                "MaxContextLengthSetting": {
                   "properties": {
                      "value": {
-                        "maximum": 2048,
-                        "minimum": 512,
+                        "minimum": 8,
                         "type": "integer"
                      }
                   },
@@ -228,7 +227,6 @@
                "MaxLengthSetting": {
                   "properties": {
                      "value": {
-                        "maximum": 512,
                         "minimum": 1,
                         "type": "integer"
                      }
