@@ -1,104 +1,104 @@
 -h, --helpshow this help message and exit
 -i, --interactive     run in interactive mode
---interactive-first   run in interactive mode and wait for input right away
+--interactive_first   run in interactive mode and wait for input right away
 -ins, --instructrun in instruction mode (use with Alpaca models)
---multiline-input     allows you to write or paste multiple lines without ending each in '\\'
--r PROMPT, --reverse-prompt PROMPT
+--multiline_input     allows you to write or paste multiple lines without ending each in '\\'
+-r PROMPT, --reverse_prompt PROMPT
     halt generation at PROMPT, return control in interactive mode
     (can be specified more than once for multiple prompts).
 --color   colorise output to distinguish prompt and user input from generations
 -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)
 -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
--tb N, --threads-batch N
+-tb N, --threads_batch N
     number of threads to use during batch and prompt processing (default: same as --threads)
 -p PROMPT, --prompt PROMPT
     prompt to start generation with (default: empty)
 -e, --escape    process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)
---prompt-cache FNAME  file to cache prompt state for faster startup (default: none)
---prompt-cache-all    if specified, saves user input and generations to cache as well.
+--prompt_cache FNAME  file to cache prompt state for faster startup (default: none)
+--prompt_cache_all    if specified, saves user input and generations to cache as well.
     not supported with --interactive or other interactive options
---prompt-cache-ro     if specified, uses the prompt cache but does not update it.
---random-prompt start with a randomized prompt.
---in-prefix-bos prefix BOS to user inputs, preceding the `--in-prefix` string
---in-prefix STRING    string to prefix user inputs with (default: empty)
---in-suffix STRING    string to suffix after user inputs with (default: empty)
+--prompt_cache_ro     if specified, uses the prompt cache but does not update it.
+--random_prompt start with a randomized prompt.
+--in_prefix_bos prefix BOS to user inputs, preceding the `--in_prefix` string
+--in_prefix STRING    string to prefix user inputs with (default: empty)
+--in_suffix STRING    string to suffix after user inputs with (default: empty)
 -f FNAME, --file FNAME
     prompt file to start generation.
--n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
--c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
--b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
---top-k N top-k sampling (default: %d, 0 = disabled)\n", params.top_k);
---top-p N top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
+-n N, --n_predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
+-c N, --ctx_size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
+-b N, --batch_size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+--top_k N top_k sampling (default: %d, 0 = disabled)\n", params.top_k);
+--top_p N top_p sampling (default: %.1f, 1.0 = disabled)\n", (double)params.top_p);
 --tfs N   tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)params.tfs_z);
 --typical N     locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)params.typical_p);
---repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
---repeat-penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
---presence-penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
---frequency-penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
+--repeat_last_n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", params.repeat_last_n);
+--repeat_penalty N    penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)\n", (double)params.repeat_penalty);
+--presence_penalty N  repeat alpha presence penalty (default: %.1f, 0.0 = disabled)\n", (double)params.presence_penalty);
+--frequency_penalty N repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)\n", (double)params.frequency_penalty);
 --mirostat N    use Mirostat sampling.
     Top K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.
     (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
---mirostat-lr N Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
---mirostat-ent NMirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
--l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS
+--mirostat_lr N Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
+--mirostat_ent NMirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
+-l TOKEN_ID(+/-)BIAS, --logit_bias TOKEN_ID(+/-)BIAS
     modifies the likelihood of token appearing in the completion,
-    i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',
-    or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'
---grammar GRAMMAR     BNF-like grammar to constrain generations (see samples in grammars/ dir)
---grammar-file FNAME  file to read grammar from
---cfg-negative-prompt PROMPT
+    i.e. `--logit_bias 15043+1` to increase likelihood of token ' Hello',
+    or `--logit_bias 15043_1` to decrease likelihood of token ' Hello'
+--grammar GRAMMAR     BNF_like grammar to constrain generations (see samples in grammars/ dir)
+--grammar_file FNAME  file to read grammar from
+--cfg_negative_prompt PROMPT
     negative prompt to use for guidance. (default: empty)
---cfg-negative-prompt-file FNAME
+--cfg_negative_prompt_file FNAME
     negative prompt file to use for guidance. (default: empty)
---cfg-scale N   strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
---rope-scale N  RoPE context linear scaling factor, inverse of --rope-freq-scale
---rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: loaded from model)
---rope-freq-scale N   RoPE frequency linear scaling factor (default: loaded from model)
---ignore-eos    ignore end of stream token and continue generating (implies --logit-bias 2-inf)
---no-penalize-nldo not penalize newline token
---memory-f32    use f32 instead of f16 for memory key+value (default: disabled)
+--cfg_scale N   strength of guidance (default: %f, 1.0 = disable)\n", params.cfg_scale);
+--rope_scale N  RoPE context linear scaling factor, inverse of --rope_freq_scale
+--rope_freq_base N    RoPE base frequency, used by NTK_aware scaling (default: loaded from model)
+--rope_freq_scale N   RoPE frequency linear scaling factor (default: loaded from model)
+--ignore_eos    ignore end of stream token and continue generating (implies --logit_bias 2_inf)
+--no_penalize_nldo not penalize newline token
+--memory_f32    use f32 instead of f16 for memory key+value (default: disabled)
     not recommended: doubles context memory required and no measurable increase in quality
 --temp N  temperature (default: %.1f)\n", (double)params.temp);
---logits-all    return logits for all tokens in the batch (default: disabled)
+--logits_all    return logits for all tokens in the batch (default: disabled)
 --hellaswag     compute HellaSwag score over random tasks from datafile supplied with -f
---hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
+--hellaswag_tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
 --keep N  number of tokens to keep from the initial prompt (default: %d, -1 = all)\n", params.n_keep);
 --draft N number of tokens to draft for speculative decoding (default: %d)\n", params.n_draft);
 --chunks Nmax number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
 -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
 -ns N, --sequences N  number of sequences to decode (default: %d)\n", params.n_sequences);
--cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)
+-cb, --cont_batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)
     if (llama_mlock_supported()) {
     --mlock   force system to keep model in RAM rather than swapping or compressing
     }
     if (llama_mmap_supported()) {
-    --no-mmap do not memory-map model (slower load but may reduce pageouts if not using mlock)
+    --no_mmap do not memory_map model (slower load but may reduce pageouts if not using mlock)
     }
 --numa    attempt optimizations that help on some NUMA systems
     if run without this previously, it is recommended to drop the system page cache before using this
     see https://github.com/ggerganov/llama.cpp/issues/1437
 #ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
--ngl N, --n-gpu-layers N
+-ngl N, --n_gpu_layers N
     number of layers to store in VRAM
--ngld N, --n-gpu-layers-draft N
+-ngld N, --n_gpu_layers_draft N
     number of layers to store in VRAM for the draft model
--ts SPLIT --tensor-split SPLIT
-    how to split tensors across multiple GPUs, comma-separated list of proportions, e.g. 3,1
--mg i, --main-gpu i   the GPU to use for scratch and small tensors
+-ts SPLIT --tensor_split SPLIT
+    how to split tensors across multiple GPUs, comma_separated list of proportions, e.g. 3,1
+-mg i, --main_gpu i   the GPU to use for scratch and small tensors
 #ifdef GGML_USE_CUBLAS
--nommq, --no-mul-mat-q
+-nommq, --no_mul_mat_q
     use " GGML_CUBLAS_NAME " instead of custom mul_mat_q " GGML_CUDA_NAME " kernels.
     Not recommended since this is both slower and uses more VRAM.
 #endif // GGML_USE_CUBLAS
 #endif
---verbose-promptprint prompt before generation
-    fprintf(stderr, "  --simple-io     use basic IO for better compatibility in subprocesses and limited consoles
---lora FNAME    apply LoRA adapter (implies --no-mmap)
---lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)
---lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter
+--verbose_promptprint prompt before generation
+    fprintf(stderr, "  --simple_io     use basic IO for better compatibility in subprocesses and limited consoles
+--lora FNAME    apply LoRA adapter (implies --no_mmap)
+--lora_scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no_mmap)
+--lora_base FNAME     optional model to use as a base for the layers modified by the LoRA adapter
 -m FNAME, --model FNAME
     model path (default: %s)\n", params.model.c_str());
--md FNAME, --model-draft FNAME
+-md FNAME, --model_draft FNAME
     draft model for speculative decoding (default: %s)\n", params.model.c_str());
 -ld LOGDIR, --logdir LOGDIR
     path under which to save YAML logs (no logging if unset)
