@@ -38,7 +38,12 @@ actor LlamaContext {
             print("Could not load model at \(path)")
             throw LlamaError.couldNotInitializeContext
         }
-        let ctx_params = llama_context_default_params()
+        var ctx_params = llama_context_default_params()
+        ctx_params.seed = 1234
+        ctx_params.n_ctx = 2048
+        ctx_params.n_threads = 8
+        ctx_params.n_threads_batch = 8
+        
         let context = llama_new_context_with_model(model, ctx_params)
         guard let context else {
             print("Could not load context!")
@@ -53,7 +58,7 @@ actor LlamaContext {
     }
     
     func completion_init(text: String) {
-        print("attempting to complete \(text)...")
+        print("attempting to complete \"\(text)\"")
         
         tokens_list = tokenize(text: text, add_bos: true)
         
@@ -73,7 +78,7 @@ actor LlamaContext {
         // batch = llama_batch_init(512, 0) // done in init()
         batch.n_tokens = Int32(tokens_list.count)
         
-        for i1 in 0...batch.n_tokens {
+        for i1 in 0...batch.n_tokens-1 {
             let i = Int(i1)
             batch.token[i] = tokens_list[i]
             batch.pos[i] = i1
@@ -140,7 +145,7 @@ actor LlamaContext {
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
         let n_tokens = text.count + (add_bos ? 1 : 0)
         let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-        let tokenCount = llama_tokenize(context, text, Int32(text.count), tokens, Int32(n_tokens), add_bos)
+        let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos)
         
         var swiftTokens: [llama_token] = []
         for i in 0..<tokenCount {
@@ -156,7 +161,7 @@ actor LlamaContext {
         let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
         result.initialize(repeating: Int8(0), count: 8)
         
-        let _ = llama_token_to_piece(context, token, result, 8)
+        let _ = llama_token_to_piece(model, token, result, 8)
         
         let resultStr = String(cString: result)
         
