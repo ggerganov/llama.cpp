@@ -10,10 +10,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift']
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -258,7 +258,7 @@ jobs:
 
     strategy:
       matrix:
-        destination: ['platform=macOS,name=Any Mac', 'platform=iOS,name=Any iOS Device', 'platform=tvOS,name=Any tvOS Device']
+        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
 
     steps:
       - name: Clone

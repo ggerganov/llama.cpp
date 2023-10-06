@@ -125,6 +125,27 @@ static void replace_all(std::string & s, const std::string & search, const std::
     }
     s = std::move(result);
 }
+
+static bool is_float_close(float a, float b, float abs_tol) {
+    // Check for non-negative tolerance
+    if (abs_tol < 0.0) {
+        throw std::invalid_argument("Tolerance must be non-negative");
+    }
+
+    // Exact equality check
+    if (a == b) {
+        return true;
+    }
+
+    // Check for infinities
+    if (std::isinf(a) || std::isinf(b)) {
+        return false;
+    }
+
+    // Regular comparison using the provided absolute tolerance
+    return std::fabs(b - a) <= abs_tol;
+}
+
 #ifdef GGML_USE_CPU_HBM
 #include <hbwmalloc.h>
 #endif
@@ -991,7 +1012,24 @@ struct llama_hparams {
     float rope_freq_scale_train;
 
     bool operator!=(const llama_hparams & other) const {
-        return static_cast<bool>(memcmp(this, &other, sizeof(llama_hparams))); // NOLINT
+        if (this->vocab_only != other.vocab_only) return true;
+        if (this->n_vocab != other.n_vocab) return true;
+        if (this->n_ctx_train != other.n_ctx_train) return true;
+        if (this->n_embd != other.n_embd) return true;
+        if (this->n_head != other.n_head) return true;
+        if (this->n_head_kv != other.n_head_kv) return true;
+        if (this->n_layer != other.n_layer) return true;
+        if (this->n_rot != other.n_rot) return true;
+        if (this->n_ff != other.n_ff) return true;
+
+        const float EPSILON = 1e-9;
+
+        if (!is_float_close(this->f_norm_eps, other.f_norm_eps, EPSILON)) return true;
+        if (!is_float_close(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
+
+        return false;
     }
 
     uint32_t n_gqa() const {
@@ -1070,6 +1108,9 @@ struct llama_kv_cell {
 struct llama_kv_cache {
     bool has_shift = false;
 
+    // Note: The value of head isn't only used to optimize searching
+    // for a free KV slot. llama_decode_internal also uses it, so it
+    // cannot be freely changed after a slot has been allocated.
     uint32_t head = 0;
     uint32_t size = 0;
 
@@ -1327,6 +1368,8 @@ static bool llama_kv_cache_init(
 
 // find an empty slot of size "n_tokens" in the cache
 // updates the cache head
+// Note: On success, it's important that cache.head points
+// to the first cell of the slot.
 static bool llama_kv_cache_find_slot(
            struct llama_kv_cache & cache,
         const struct llama_batch & batch) {
@@ -1342,8 +1385,8 @@ static bool llama_kv_cache_find_slot(
 
     while (true) {
         if (cache.head + n_tokens > n_ctx) {
+            n_tested += n_ctx - cache.head;
             cache.head = 0;
-            n_tested   += n_ctx - cache.head;
             continue;
         }
 
@@ -1394,6 +1437,9 @@ static void llama_kv_cache_tokens_rm(struct llama_kv_cache & cache, int32_t c0, 
         cache.cells[i].pos = -1;
         cache.cells[i].seq_id.clear();
     }
+
+    // Searching for a free slot can start here since we know it will be empty.
+    cache.head = uint32_t(c0);
 }
 
 static void llama_kv_cache_seq_rm(
@@ -1401,6 +1447,8 @@ static void llama_kv_cache_seq_rm(
                  llama_seq_id   seq_id,
                     llama_pos   p0,
                     llama_pos   p1) {
+    uint32_t new_head = cache.size;
+
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
 
@@ -1409,9 +1457,13 @@ static void llama_kv_cache_seq_rm(
             cache.cells[i].seq_id.erase(seq_id);
             if (cache.cells[i].seq_id.empty()) {
                 cache.cells[i].pos = -1;
+                if (new_head == cache.size) new_head = i;
             }
         }
     }
+
+    // If we freed up a slot, set head to it so searching can start there.
+    if (new_head != cache.size) cache.head = new_head;
 }
 
 static void llama_kv_cache_seq_cp(
@@ -1423,6 +1475,8 @@ static void llama_kv_cache_seq_cp(
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
 
+    cache.head = 0;
+
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (cache.cells[i].has_seq_id(seq_id_src) && cache.cells[i].pos >= p0 && cache.cells[i].pos < p1) {
             cache.cells[i].seq_id.insert(seq_id_dst);
@@ -1431,12 +1485,18 @@ static void llama_kv_cache_seq_cp(
 }
 
 static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id seq_id) {
+    uint32_t new_head = cache.size;
+
     for (uint32_t i = 0; i < cache.size; ++i) {
         if (!cache.cells[i].has_seq_id(seq_id)) {
             cache.cells[i].pos = -1;
             cache.cells[i].seq_id.clear();
+            if (new_head == cache.size) new_head = i;
         }
     }
+
+    // If we freed up a slot, set head to it so searching can start there.
+    if (new_head != cache.size) cache.head = new_head;
 }
 
 static void llama_kv_cache_seq_shift(
@@ -1445,6 +1505,8 @@ static void llama_kv_cache_seq_shift(
                     llama_pos   p0,
                     llama_pos   p1,
                     llama_pos   delta) {
+    uint32_t new_head = cache.size;
+
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
 
@@ -1454,12 +1516,17 @@ static void llama_kv_cache_seq_shift(
             if (cache.cells[i].pos < 0) {
                 cache.cells[i].pos = -1;
                 cache.cells[i].seq_id.clear();
+                if (new_head == cache.size) new_head = i;
             } else {
                 cache.has_shift = true;
                 cache.cells[i].delta = delta;
             }
         }
     }
+
+    // If we freed up a slot, set head to it so searching can start there.
+    // Otherwise we just start the next search from the beginning.
+    cache.head = new_head != cache.size ? new_head : 0;
 }
 
 //
@@ -4915,10 +4982,6 @@ static int llama_decode_internal(
         batch.seq_id = seq_id.data();
     }
 
-    // we always start to search for a free slot from the start of the cache
-    // TODO: better strategies can be implemented
-    kv_self.head = 0;
-
     if (!llama_kv_cache_find_slot(kv_self, batch)) {
         return 1;
     }
@@ -5004,8 +5067,12 @@ static int llama_decode_internal(
 #endif
 
     // update the kv ring buffer
-    lctx.kv_self.head      += n_tokens;
     lctx.kv_self.has_shift  = false;
+    lctx.kv_self.head      += n_tokens;
+    // Ensure kv cache head points to a valid index.
+    if (lctx.kv_self.head >= lctx.kv_self.size) {
+        lctx.kv_self.head = 0;
+    }
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -8642,14 +8709,14 @@ void llama_print_timings(struct llama_context * ctx) {
     const llama_timings timings = llama_get_timings(ctx);
 
     LLAMA_LOG_INFO("\n");
-    LLAMA_LOG_INFO("%s:        load time = %8.2f ms\n", __func__, timings.t_load_ms);
-    LLAMA_LOG_INFO("%s:      sample time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+    LLAMA_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, timings.t_load_ms);
+    LLAMA_LOG_INFO("%s:      sample time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, timings.t_sample_ms, timings.n_sample, timings.t_sample_ms / timings.n_sample, 1e3 / timings.t_sample_ms * timings.n_sample);
-    LLAMA_LOG_INFO("%s: prompt eval time = %8.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
+    LLAMA_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, timings.t_p_eval_ms, timings.n_p_eval, timings.t_p_eval_ms / timings.n_p_eval, 1e3 / timings.t_p_eval_ms * timings.n_p_eval);
-    LLAMA_LOG_INFO("%s:        eval time = %8.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+    LLAMA_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, timings.t_eval_ms, timings.n_eval, timings.t_eval_ms / timings.n_eval, 1e3 / timings.t_eval_ms * timings.n_eval);
-    LLAMA_LOG_INFO("%s:       total time = %8.2f ms\n", __func__, (timings.t_end_ms - timings.t_start_ms));
+    LLAMA_LOG_INFO("%s:       total time = %10.2f ms\n", __func__, (timings.t_end_ms - timings.t_start_ms));
 }
 
 void llama_reset_timings(struct llama_context * ctx) {
