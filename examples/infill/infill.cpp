@@ -234,9 +234,12 @@ int main(int argc, char ** argv) {
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
     inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+    if (add_bos) {
+        inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+    }
     inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
     embd_inp = inp_pfx;
     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
