@@ -811,6 +811,10 @@ int main(int argc, char **argv)
 
     Server svr;
 
+    svr.set_default_headers({{"Server", "llama.cpp"},
+                             {"Access-Control-Allow-Origin", "*"},
+                             {"Access-Control-Allow-Headers", "content-type"}});
+
     svr.Get("/", [&](const Request & /*req*/, Response &res)
             { res.set_content(index_html_, "text/html"); });
 
