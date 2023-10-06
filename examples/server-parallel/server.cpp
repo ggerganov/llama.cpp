@@ -1,6 +1,7 @@
 #include "frontend.h"
 #include "common.h"
 #include "llama.h"
+#include "build-info.h"
 
 #include "httplib.h"
 #include "json.hpp"
@@ -797,14 +798,29 @@ int main(int argc, char **argv)
     log_dump_cmdline(argc, argv);
 #endif // LOG_DISABLE_LOGS
 
+    if (params.seed == LLAMA_DEFAULT_SEED) {
+        params.seed = time(NULL);
+    }
+
+    LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
+
     llama_backend_init(params.numa);
 
     // load the target model
     params.logits_all = true;
     server_parallel_context llama;
 
+    LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
+    LOG_TEE("%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);
+
     if(!llama.loadModel(params)) {
         return 1;
+    }
+
+    // print system information
+    {
+        LOG_TEE("\n");
+        LOG_TEE("%s\n", get_system_info(params).c_str());
     }
 
     llama.initialize();
