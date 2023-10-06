@@ -1,6 +1,6 @@
 set(TARGET server-parallel)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(${TARGET} server.cpp ../server/json.hpp ../server/httplib.h)
+add_executable(${TARGET} server.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE
     SERVER_VERBOSE=$<BOOL:${LLAMA_SERVER_VERBOSE}>

@@ -2,8 +2,8 @@
 #include "common.h"
 #include "llama.h"
 
-#include "../server/httplib.h"
-#include "../server/json.hpp"
+#include "httplib.h"
+#include "json.hpp"
 
 #include <iostream>
 #include <sstream>

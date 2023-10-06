@@ -11,6 +11,8 @@ add_library(${TARGET} OBJECT
     grammar-parser.cpp
     train.h
     train.cpp
+	json.hpp
+	httplib.h
     )
 
 if (BUILD_SHARED_LIBS)
