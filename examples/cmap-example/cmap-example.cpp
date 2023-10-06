@@ -130,7 +130,7 @@ int main() {
         if (x != 0) {
         for (const auto& kvp : bitdict) {
             if ((x & std::stoi(kvp.first)) != 0) {
-                printf("Appcode %3d %s  ", x, kvp.first.c_str());
+                printf("appcode %3d %s  ", x, kvp.first.c_str());
                 for (const auto& element : kvp.second) {
                     printf(" %5s", element.c_str());
                 }
