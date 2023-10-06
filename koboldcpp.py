@@ -661,7 +661,15 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if self.path.endswith('/api/extra/abort'):
-            if requestsinqueue==0:
+            multiuserkey = ""
+            try:
+                tempbody = json.loads(body)
+                multiuserkey = tempbody.get('genkey', "")
+            except ValueError as e:
+                multiuserkey = ""
+                pass
+
+            if (multiuserkey!="" and multiuserkey==currentusergenkey) or requestsinqueue==0:
                 ag = handle.abort_generate()
                 time.sleep(0.3) #short delay before replying
                 self.send_response(200)
@@ -669,7 +677,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
                 print("\nGeneration Aborted")
             else:
-                 self.wfile.write(json.dumps({"success": "false"}).encode())
+                self.wfile.write(json.dumps({"success": "false"}).encode())
             return
 
         if self.path.endswith('/api/extra/generate/check'):

@@ -6704,6 +6704,9 @@ Current version: 77
 			headers: {
 				'Content-Type': 'application/json',
 			},
+			body: JSON.stringify({
+				"genkey": lastcheckgenkey
+			}),
 			})
 			.then((response) => response.json())
 			.then((data) => {})
@@ -7171,6 +7174,8 @@ Current version: 77
 			{
 				lastcheckgenkey = "KCPP"+(Math.floor(1000 + Math.random() * 9000)).toString();
 				submit_payload.params.genkey = lastcheckgenkey;
+			}else{
+				lastcheckgenkey = "";
 			}
 
 			//v2 api specific fields
