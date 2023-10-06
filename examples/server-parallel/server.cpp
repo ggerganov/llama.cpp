@@ -501,8 +501,8 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     // new arguments
     printf("  -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
-    printf("  -f FNAME, --file FNAME\n");
-    printf("                        load a system prompt from a file.\n");
+    printf("  -r ANTI_PROMPT, --reverse-prompt ANTI_PROMPT\n");
+    printf("                        set a anti prompt, used as user name in prompt generation\n");
     printf("\n");
 }
 
