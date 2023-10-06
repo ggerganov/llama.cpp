@@ -1,13 +1,15 @@
-#include <chrono>
+#include "frontend.h"
+#include "common.h"
+#include "llama.h"
+
 #include "../server/httplib.h"
 #include "../server/json.hpp"
+
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <vector>
-#include "frontend.h"
-#include "common.h"
-#include "llama.h"
+#include <chrono>
 
 using namespace httplib;
 using namespace std;
@@ -241,9 +243,7 @@ struct server_parallel_context {
         string prompt = data.value("prompt", "");
         for (llama_client_slot & slot : slots)
         {
-            if (
-                slot_id == -1 && slot.available() ||
-                slot.id == slot_id)
+            if ((slot_id == -1 && slot.available()) || slot.id == slot_id)
             {
                 slot.start(prompt, temperature);
                 LOG_TEE("slot %i is processing\n", slot.id);
@@ -428,8 +428,6 @@ struct server_parallel_context {
                 const std::string token_str = llama_token_to_piece(ctx, id);
                 slot.generated_text += token_str;
                 slot.sampled = id;
-
-                size_t pos = 0;
 
                 size_t stop_pos =
                         findStoppingStrings(slot.generated_text, token_str.size(), STOP_FULL);
@@ -740,20 +738,34 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         else if (arg == "--numa")
         {
             params.numa = true;
-        } else if (arg == "-cb" || arg == "--cont-batching") {
+        } else if (arg == "-cb" || arg == "--cont-batching")
+        {
             params.cont_batching = true;
-        } else if (arg == "-np" || arg == "--parallel") {
-            if (++i >= argc) {
+        }
+        else if (arg == "-np" || arg == "--parallel")
+        {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
             params.n_parallel = std::stoi(argv[i]);
-        } else if (arg == "-n" || arg == "--n-predict") {
-            if (++i >= argc) {
+        } else if (arg == "-n" || arg == "--n-predict")
+        {
+            if (++i >= argc)
+            {
                 invalid_param = true;
                 break;
             }
             params.n_predict = std::stoi(argv[i]);
+        } else if (arg == "-r" || arg == "--reverse-prompt")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.antiprompt.push_back(argv[i]);
         }
         else
         {
