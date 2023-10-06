@@ -167,6 +167,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 invalid_param = true;
                 break;
             }
+            // store the external file name in params
+            params.prompt_file = argv[i];
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
             if (params.prompt.back() == '\n') {
                 params.prompt.pop_back();
@@ -1020,10 +1022,11 @@ llama_token llama_sample_token(
             id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
         } else {
             // Temperature sampling
-            llama_sample_top_k      (ctx, &cur_p, top_k, 1);
-            llama_sample_tail_free  (ctx, &cur_p, tfs_z, 1);
-            llama_sample_typical    (ctx, &cur_p, typical_p, 1);
-            llama_sample_top_p      (ctx, &cur_p, top_p, 1);
+            size_t min_keep = std::max(1, params.n_probs);
+            llama_sample_top_k      (ctx, &cur_p, top_k, min_keep);
+            llama_sample_tail_free  (ctx, &cur_p, tfs_z, min_keep);
+            llama_sample_typical    (ctx, &cur_p, typical_p, min_keep);
+            llama_sample_top_p      (ctx, &cur_p, top_p, min_keep);
             llama_sample_temp(ctx, &cur_p, temp);
 
             {
