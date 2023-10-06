@@ -1316,7 +1316,7 @@ static bool llama_kv_cache_find_slot(
 
     while (true) {
         if (cache.head + n_tokens > n_ctx) {
-            n_tested += cache.size - cache.head;
+            n_tested += n_ctx - cache.head;
             cache.head = 0;
             continue;
         }
