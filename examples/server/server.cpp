@@ -344,9 +344,10 @@ struct llama_server_context
 
     void loadInfill()
     {
-        auto prefix_tokens = tokenize(params.input_prefix, true);  // always add BOS
-        auto suffix_tokens = tokenize(params.input_suffix, true);  // always add BOS
+        auto prefix_tokens = tokenize(params.input_prefix, false);
+        auto suffix_tokens = tokenize(params.input_suffix, false);
         prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(ctx));
+        prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(ctx)); // always add BOS
         prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(ctx));
         prefix_tokens.insert(prefix_tokens.end(), suffix_tokens.begin(), suffix_tokens.end());
         prefix_tokens.push_back(llama_token_middle(ctx));
