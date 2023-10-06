@@ -27,12 +27,13 @@ def find_arguments(directory):
                     content = file.read()
 
                     # Search for the expression "params." excluding prefixes and read the attribute without trailing detritus
-                    matches = re.findall(r'(?:^|\s)params\.(.*?)(?=[\). <,;}]|\Z)', content)
+                    # matches = re.findall(r'(?:^|\s)params\.(.*)(?=[\). <,;}]|\Z)', content)
+                    matches = set(re.findall(r'(?:^|\b)params\.([a-zA-Z_0-9]*)(?=[\). <,;}]|\Z)', content))
                     # Remove duplicates from matches list
-                    arguments_list = list(set([match.strip() for match in matches]))
+                    # arguments_list = list(set([match.strip() for match in matches]))
 
                     # Add the matches to the dictionary
-                    arguments[filepath] = arguments_list
+                    arguments[filepath] = matches
 
     return arguments
 
@@ -54,6 +55,12 @@ def find_parameters(file, sorted_result):
             parameters = []
             for line in lines:
                 for argument in arguments:
+                    # building pattern to avoid spurious matches
+                    pattern = r"(?:--{}\s)|(?:params\.{}[\s.,();])".format(argument, argument.split('n_')[-1])
+                    if re.search(pattern, line):
+                        parameters.append(line)
+            '''for line in lines:
+                for argument in arguments:
                     # need to try to avoid spurious matches
                     argument1 = "--" + argument + " "
                     if argument1 in line:
@@ -64,7 +71,7 @@ def find_parameters(file, sorted_result):
                         parameters.append(line)
                     argument3 = "params." + argument
                     if argument3 in line:
-                        parameters.append(line)
+                        parameters.append(line)'''
             all_parameters = set(parameters)            
             print(f"\n\nFilename: \033[32m{filename.split('/')[-1]}\033[0m\n\n    command-line arguments available and gpt-params functions implemented:\n")
             if not all_parameters:
