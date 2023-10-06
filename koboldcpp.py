@@ -366,6 +366,7 @@ showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
 session_kudos_earned = 0
+session_jobs = 0
 session_starttime = None
 exitcounter = 0
 totalgens = 0
@@ -1437,7 +1438,7 @@ def run_horde_worker(args, api_key, worker_name):
         print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
 
     def submit_completed_generation(url, jobid, sessionstart, submit_dict):
-        global exitcounter, session_kudos_earned
+        global exitcounter, session_kudos_earned, session_jobs
         reply = make_url_request(url, submit_dict)
         if not reply:
             exitcounter += 1
@@ -1445,6 +1446,7 @@ def run_horde_worker(args, api_key, worker_name):
         else:
             reward = reply["reward"]
             session_kudos_earned += reward
+            session_jobs += 1
             curtime = datetime.now()
             elapsedtime=curtime-sessionstart
             hrs = elapsedtime.seconds // 3600
@@ -1452,7 +1454,7 @@ def run_horde_worker(args, api_key, worker_name):
             secs = elapsedtime.seconds % 60
             elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
             earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
-            print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, EarnRate:{earnrate:.0f} kudos/hr]')
+            print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, Jobs:{session_jobs}, EarnRate:{earnrate:.0f} kudos/hr]')
 
     def make_url_request(url, data, method='POST'):
         try:
