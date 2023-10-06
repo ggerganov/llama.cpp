@@ -235,7 +235,12 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+    params.input_suffix.erase(0, params.input_suffix.find_first_not_of(" "));
     std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    const int space_token = 29871;
+    if (params.escape && inp_sfx.size() > 1 && inp_sfx[0] == space_token) {
+        inp_sfx.erase(inp_sfx.begin());
+    }
     inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
     if (add_bos) {
         inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
