@@ -448,7 +448,7 @@ struct llama_server_context
         n_past = common_part(embd, prompt_tokens);
 
         // since #3228 we now have to manually manage the KV cache
-        llama_kv_cache_seq_rm(ctx, 0, n_past, params.n_ctx);
+        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
 
         embd = prompt_tokens;
         if (n_past == num_prompt_tokens)
@@ -504,9 +504,11 @@ struct llama_server_context
                                            });
         }
 
+        bool tg = true;
         while (n_past < embd.size())
         {
             int n_eval = (int)embd.size() - n_past;
+            tg = n_eval == 1;
             if (n_eval > params.n_batch)
             {
                 n_eval = params.n_batch;
@@ -532,98 +534,20 @@ struct llama_server_context
             return result;
         }
 
-        // out of user input, sample next token
-        const float temp = params.temp;
-        const int32_t top_k = params.top_k <= 0 ? llama_n_vocab(model) : params.top_k;
-        const float top_p = params.top_p;
-        const float tfs_z = params.tfs_z;
-        const float typical_p = params.typical_p;
-        const int32_t repeat_last_n = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
-        const float repeat_penalty = params.repeat_penalty;
-        const float alpha_presence = params.presence_penalty;
-        const float alpha_frequency = params.frequency_penalty;
-        const int mirostat = params.mirostat;
-        const float mirostat_tau = params.mirostat_tau;
-        const float mirostat_eta = params.mirostat_eta;
-        const bool penalize_nl = params.penalize_nl;
-        const int32_t n_probs = params.n_probs;
-
         {
-            auto *logits = llama_get_logits(ctx);
-            auto n_vocab = llama_n_vocab(model);
-
-            // Apply params.logit_bias map
-            for (const auto &it : params.logit_bias)
-            {
-                logits[it.first] += it.second;
-            }
-
+            // out of user input, sample next token
             std::vector<llama_token_data> candidates;
-            candidates.reserve(n_vocab);
-            for (llama_token token_id = 0; token_id < n_vocab; token_id++)
+            candidates.reserve(llama_n_vocab(model));
+
+            result.tok = llama_sample_token(ctx, NULL, grammar, params, last_n_tokens, candidates);
+
+            llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+
+            const int32_t n_probs = params.n_probs;
+            if (params.temp <= 0 && n_probs > 0)
             {
-                candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
-            }
-
-            llama_token_data_array candidates_p = {candidates.data(), candidates.size(), false};
-
-            // Apply penalties
-            float nl_logit = logits[llama_token_nl(ctx)];
-            auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), repeat_last_n), n_ctx);
-            llama_sample_repetition_penalty(ctx, &candidates_p,
-                                            last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
-                                            last_n_repeat, repeat_penalty);
-            llama_sample_frequency_and_presence_penalties(ctx, &candidates_p,
-                                                          last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
-                                                          last_n_repeat, alpha_frequency, alpha_presence);
-            if (!penalize_nl)
-            {
-                logits[llama_token_nl(ctx)] = nl_logit;
-            }
-
-            if (grammar != nullptr) {
-                llama_sample_grammar(ctx, &candidates_p, grammar);
-            }
-
-            if (temp <= 0)
-            {
-                // Greedy sampling
-                result.tok = llama_sample_token_greedy(ctx, &candidates_p);
-                if (n_probs > 0)
-                {
-                    llama_sample_softmax(ctx, &candidates_p);
-                }
-            }
-            else
-            {
-                if (mirostat == 1)
-                {
-                    static float mirostat_mu = 2.0f * mirostat_tau;
-                    const int mirostat_m = 100;
-                    llama_sample_temp(ctx, &candidates_p, temp);
-                    result.tok = llama_sample_token_mirostat(ctx, &candidates_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
-                }
-                else if (mirostat == 2)
-                {
-                    static float mirostat_mu = 2.0f * mirostat_tau;
-                    llama_sample_temp(ctx, &candidates_p, temp);
-                    result.tok = llama_sample_token_mirostat_v2(ctx, &candidates_p, mirostat_tau, mirostat_eta, &mirostat_mu);
-                }
-                else
-                {
-                    // Temperature sampling
-                    size_t min_keep = std::max(1, n_probs);
-                    llama_sample_top_k(ctx, &candidates_p, top_k, min_keep);
-                    llama_sample_tail_free(ctx, &candidates_p, tfs_z, min_keep);
-                    llama_sample_typical(ctx, &candidates_p, typical_p, min_keep);
-                    llama_sample_top_p(ctx, &candidates_p, top_p, min_keep);
-                    llama_sample_temp(ctx, &candidates_p, temp);
-                    result.tok = llama_sample_token(ctx, &candidates_p);
-                }
-            }
-
-            if (grammar != nullptr) {
-                llama_grammar_accept_token(ctx, grammar, result.tok);
+                // For llama_sample_token_greedy we need to sort candidates
+                llama_sample_softmax(ctx, &candidates_p);
             }
 
             for (size_t i = 0; i < std::min(candidates_p.size, (size_t)n_probs); ++i)
@@ -633,7 +557,9 @@ struct llama_server_context
 
             last_n_tokens.erase(last_n_tokens.begin());
             last_n_tokens.push_back(result.tok);
-            num_tokens_predicted++;
+            if (tg) {
+                num_tokens_predicted++;
+            }
         }
 
         // add it to the context
@@ -1011,7 +937,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back({argv[i], 1.0f});
+            params.lora_adapter.push_back(std::make_tuple(argv[i], 1.0f));
             params.use_mmap = false;
         }
         else if (arg == "--lora-scaled")
@@ -1027,7 +953,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            params.lora_adapter.push_back({lora_adapter, std::stof(argv[i])});
+            params.lora_adapter.push_back(std::make_tuple(lora_adapter, std::stof(argv[i])));
             params.use_mmap = false;
         }
         else if (arg == "--lora-base")
@@ -1123,8 +1049,6 @@ static json format_embedding_response(llama_server_context &llama)
 static json format_timings(llama_server_context &llama)
 {
     const auto timings = llama_get_timings(llama.ctx);
-
-    assert(timings.n_eval == ptrdiff_t(llama.num_tokens_predicted));
 
     return json{
         {"prompt_n", timings.n_p_eval},

@@ -830,7 +830,9 @@ kernel void kernel_alibi_f32(
         constant  uint64_t & nb1,
         constant  uint64_t & nb2,
         constant  uint64_t & nb3,
-        constant      float & m0,
+        constant     float & m0,
+        constant     float & m1,
+        constant       int & n_heads_log2_floor,
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint3 tpitg[[thread_position_in_threadgroup]],
         uint3   ntg[[threads_per_threadgroup]]) {
@@ -846,7 +848,12 @@ kernel void kernel_alibi_f32(
     const int64_t i0 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0 - i1*ne0);
 
     device float * dst_data = (device float *) ((device char *) dst + i3*nb3 + i2*nb2 + i1*nb1 + i0*nb0);
-    float m_k = pow(m0, i2 + 1);
+    float m_k;
+    if (i2 < n_heads_log2_floor) {
+        m_k = pow(m0, i2 + 1);
+    } else {
+        m_k = pow(m1, 2 * (i2 - n_heads_log2_floor) + 1);
+    }
     for (int64_t i00 = tpitg.x; i00 < ne00; i00 += ntg.x) {
         device const float * src = (device float *)((device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
         dst_data[i00] = src[0] + m_k * (i00 - ne00 + 1);
