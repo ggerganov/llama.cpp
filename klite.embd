@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 76
+Current version: 77
 -Concedo
 -->
 
@@ -4700,6 +4700,22 @@ Current version: 76
 		}
 		get_workers((wdata) => {
 			worker_data_showonly = wdata;
+
+			//preprocess the showonly data for extra fields
+			for (var i = 0; i < worker_data_showonly.length; ++i) {
+				let elem = worker_data_showonly[i];
+				let tokenspersec = elem.performance.replace(" tokens per second", "");
+				if(tokenspersec.toLowerCase()=="no requests fulfilled yet")
+				{
+					tokenspersec = 0;
+				}
+				worker_data_showonly[i].tokenspersec = parseFloat(tokenspersec);
+				if(elem.models.length>0)
+				{
+					worker_data_showonly[i].defaultmodel = elem.models[0];
+				}
+			}
+
 			show_workers();
 		});
 	}
@@ -4772,6 +4788,31 @@ Current version: 76
 		const hours = Math.floor((seconds % (3600 * 24)) / 3600);
 		const minutes = Math.floor((seconds % 3600) / 60);
 		return days+"d "+hours+"h "+minutes+"m";
+	}
+
+	var sortworkersdisplayasc = true;
+	var lastsortworkerkey = "";
+	function sort_display_workers(sortkey)
+	{
+		sortworkersdisplayasc = !sortworkersdisplayasc;
+		if(lastsortworkerkey!=sortkey)
+		{
+			sortworkersdisplayasc = true;
+		}
+		lastsortworkerkey = sortkey;
+		worker_data_showonly.sort(function(a, b) {
+			if(sortworkersdisplayasc)
+			{
+				if(a[sortkey] < b[sortkey]) { return -1; }
+				if(a[sortkey] > b[sortkey]) { return 1; }
+				return 0;
+			}else{
+				if(a[sortkey] < b[sortkey]) { return 1; }
+				if(a[sortkey] > b[sortkey]) { return -1; }
+				return 0;
+			}
+		});
+		show_workers();
 	}
 
 	function show_workers() {
@@ -6937,10 +6978,19 @@ Current version: 76
 					pending_context_preinjection = "\n";
 				}
 
-				if(localsettings.allow_continue_chat && newgen.trim() == "")
+				if(localsettings.allow_continue_chat && newgen.trim() == "" && co!="")
 				{
-					//allow continuing a previous bot reply instead of starting a new row.
-					pending_context_preinjection = "";
+					//determine if the most recent speaker is ourself
+					let last_self = Math.max(truncated_context.lastIndexOf(me + ":"),truncated_context.lastIndexOf("\n"+me));
+					let last_oppo = truncated_context.lastIndexOf(co+":");
+
+					if (last_oppo > -1 && last_oppo > last_self) {
+						//allow continuing a previous bot reply instead of starting a new row.
+						pending_context_preinjection = "";
+					} else {
+						//start a new bot response
+						truncated_context += pending_context_preinjection;
+					}
 				}
 				else
 				{
@@ -10053,7 +10103,7 @@ Current version: 76
 										class="helptext">Randomness of sampling. High values can increase creativity but
 										may make text less sensible. Lower values will make text more predictable but
 										can become repetitious.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="temperature" value=0.5
 								oninput="
 						   document.getElementById('temperature_slide').value = this.value;">
 						</div>
@@ -10116,7 +10166,7 @@ Current version: 76
 							<div class="justifyleft settingsmall">Top p Sampling <span class="helpicon">?<span class="helptext">Used
 										to discard unlikely text in the sampling process. Lower values will make text
 										more predictable but can become repetitious. Set to 1 to deactivate it.</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="top_p" value=80 oninput="
 						   document.getElementById('top_p_slide').value = this.value;">
 						</div>
 						<div><input type="range" class="form-range airange" min="0" max="1" step="0.01" id="top_p_slide"
@@ -10135,7 +10185,7 @@ Current version: 76
 							<div class="justifyleft settingsmall">Repetition Penalty <span class="helpicon">?<span
 										class="helptext">Used to penalize words that were already generated or belong to
 										the context (Going over 1.2 breaks 6B models).</span></span></div>
-							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
+							<input inputmode="decimal" class="justifyright flex-push-right settingsmall" id="rep_pen" value=80
 								oninput="
 						   document.getElementById('rep_pen_slide').value = this.value;">
 						</div>
@@ -10261,13 +10311,13 @@ Current version: 76
 								  <th title="Tail-Free Sampling. 1 to Deactivate.">TFS</th>
 								</tr>
 								<tr>
-								<td><input class="" type="text" placeholder="0" value="0"
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="top_k"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="top_a"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="typ_s"></td>
-								<td><input class="" type="text" placeholder="0" value="0"
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="tfs_s"></td>
 								</tr>
 							  </table>
@@ -10569,7 +10619,7 @@ Current version: 76
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Model</th><th>Capabilities</th><th>Uptime</th><th>Kudos</th><th>Cluster</th></tr>
+			<tr><th><a class="color_blueurl" href="#" onclick="sort_display_workers('name')">Name</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('defaultmodel')">Model</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('tokenspersec')">Capabilities</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('uptime')">Uptime</a></th><th><a class="color_blueurl" href="#" onclick="sort_display_workers('kudos_rewards')">Kudos</a></th><th>Cluster</th></tr>
 			</thead>
 			<tbody id="workertable">
 			</tbody>
