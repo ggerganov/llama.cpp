@@ -4,14 +4,14 @@ This example demonstrates a simple HTTP API server and a simple web front end to
 
 Command line options:
 
--   `--threads N`, `-t N`: Set the number of threads to use during computation.
+-   `--threads N`, `-t N`: Set the number of threads to use during generation.
+-   `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 -   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 -   `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
 -   `-ts SPLIT, --tensor-split SPLIT`: When using multiple GPUs this option controls how large tensors should be split across all GPUs. `SPLIT` is a comma-separated list of non-negative values that assigns the proportion of data that each GPU should get in order. For example, "3,2" will assign 60% of the data to GPU 0 and 40% to GPU 1. By default the data is split in proportion to VRAM but this may not be optimal for performance. Requires cuBLAS.
--   `-lv, --low-vram`: Do not allocate a VRAM scratch buffer for holding temporary results. Reduces VRAM usage at the cost of performance, particularly prompt processing speed. Requires cuBLAS.
 -   `-b N`, `--batch-size N`: Set the batch size for prompt processing. Default: `512`.
 -   `--memory-f32`: Use 32-bit floats instead of 16-bit floats for memory key+value. Not recommended.
 -   `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
@@ -114,9 +114,9 @@ node index.js
 
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
 
-    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.9).
+    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).
 
-    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: 128, -1 = infinity).
+    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
 
     `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
     By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
@@ -156,6 +156,8 @@ node index.js
 
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+
 -   **POST** `/tokenize`: Tokenize a given text.
 
     *Options:*
@@ -175,6 +177,16 @@ node index.js
     *Options:*
 
     `content`: Set the text to process.
+
+    **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
+
+    *Options:*
+
+    `input_prefix`: Set the prefix of the code to infill.
+
+    `input_suffix`: Set the suffix of the code to infill.
+
+    It also accepts all the options of `/completion` except `stream` and `prompt`.
 
 ## More examples
 
