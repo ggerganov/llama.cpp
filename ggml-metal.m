@@ -109,6 +109,8 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(cpy_f32_f16);
     GGML_METAL_DECL_KERNEL(cpy_f32_f32);
     GGML_METAL_DECL_KERNEL(cpy_f16_f16);
+    GGML_METAL_DECL_KERNEL(concat);
+    GGML_METAL_DECL_KERNEL(sqr);
 
 #undef GGML_METAL_DECL_KERNEL
 };
@@ -300,6 +302,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(cpy_f32_f16);
         GGML_METAL_ADD_KERNEL(cpy_f32_f32);
         GGML_METAL_ADD_KERNEL(cpy_f16_f16);
+        GGML_METAL_ADD_KERNEL(concat);
+        GGML_METAL_ADD_KERNEL(sqr);
 
 #undef GGML_METAL_ADD_KERNEL
     }
@@ -375,6 +379,8 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(cpy_f32_f16);
     GGML_METAL_DEL_KERNEL(cpy_f32_f32);
     GGML_METAL_DEL_KERNEL(cpy_f16_f16);
+    GGML_METAL_DEL_KERNEL(concat);
+    GGML_METAL_DEL_KERNEL(sqr);
 
 #undef GGML_METAL_DEL_KERNEL
 
@@ -766,6 +772,43 @@ void ggml_metal_graph_compute(
                         {
                             // noop
                         } break;
+                    case GGML_OP_CONCAT:
+                        {
+
+                            int64_t nb = ne00;
+                            [encoder setComputePipelineState:ctx->pipeline_concat];
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
+                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
+                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:3];
+                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:4];
+                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:5];
+                            [encoder setBytes:&ne03 length:sizeof(ne03) atIndex:6];
+                            [encoder setBytes:&nb00 length:sizeof(nb00) atIndex:7];
+                            [encoder setBytes:&nb01 length:sizeof(nb01) atIndex:8];
+                            [encoder setBytes:&nb02 length:sizeof(nb02) atIndex:9];
+                            [encoder setBytes:&nb03 length:sizeof(nb03) atIndex:10];
+                            [encoder setBytes:&ne10 length:sizeof(ne10) atIndex:11];
+                            [encoder setBytes:&ne11 length:sizeof(ne11) atIndex:12];
+                            [encoder setBytes:&ne12 length:sizeof(ne12) atIndex:13];
+                            [encoder setBytes:&ne13 length:sizeof(ne13) atIndex:14];
+                            [encoder setBytes:&nb10 length:sizeof(nb10) atIndex:15];
+                            [encoder setBytes:&nb11 length:sizeof(nb11) atIndex:16];
+                            [encoder setBytes:&nb12 length:sizeof(nb12) atIndex:17];
+                            [encoder setBytes:&nb13 length:sizeof(nb13) atIndex:18];
+                            [encoder setBytes:&ne0  length:sizeof(ne0)  atIndex:19];
+                            [encoder setBytes:&ne1  length:sizeof(ne1)  atIndex:20];
+                            [encoder setBytes:&ne2  length:sizeof(ne2)  atIndex:21];
+                            [encoder setBytes:&ne3  length:sizeof(ne3)  atIndex:22];
+                            [encoder setBytes:&nb0  length:sizeof(nb0)  atIndex:23];
+                            [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:24];
+                            [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:25];
+                            [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:26];
+                            [encoder setBytes:&nb   length:sizeof(nb)   atIndex:27];
+
+                            const int nth = MIN(1024, ne0);
+                            [encoder dispatchThreadgroups:MTLSizeMake(ne1, ne2, ne3) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
+                        } break;
                     case GGML_OP_ADD:
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
@@ -902,6 +945,17 @@ void ggml_metal_graph_compute(
                                     GGML_METAL_LOG_WARN("%s: node %3d, op = %8s not implemented\n", __func__, i, ggml_op_name(dst->op));
                                     GGML_ASSERT(false);
                                 }
+                        } break;
+                    case GGML_OP_SQR:
+                        {
+                            GGML_ASSERT(ggml_is_contiguous(src0));
+
+                            [encoder setComputePipelineState:ctx->pipeline_sqr];
+                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_dst  offset:offs_dst atIndex:1];
+
+                            const int64_t n = ggml_nelements(dst);
+                            [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         } break;
                     case GGML_OP_SOFT_MAX:
                         {
