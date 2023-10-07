@@ -170,7 +170,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             // store the external file name in params
             params.prompt_file = argv[i];
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.prompt));
-            if (params.prompt.back() == '\n') {
+            if (!params.prompt.empty() && params.prompt.back() == '\n') {
                 params.prompt.pop_back();
             }
         } else if (arg == "-n" || arg == "--n-predict") {
@@ -295,7 +295,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.cfg_negative_prompt));
-            if (params.cfg_negative_prompt.back() == '\n') {
+            if (!params.cfg_negative_prompt.empty() && params.cfg_negative_prompt.back() == '\n') {
                 params.cfg_negative_prompt.pop_back();
             }
         } else if (arg == "--cfg-scale") {
