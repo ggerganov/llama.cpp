@@ -470,6 +470,22 @@ struct LLM_TN {
     } \
 }
 
+static std::map<llama_rope_scaling_type, std::string> LLAMA_ROPE_SCALING_TYPES = {
+    { LLAMA_ROPE_SCALING_NONE,   "none"   },
+    { LLAMA_ROPE_SCALING_LINEAR, "linear" },
+    { LLAMA_ROPE_SCALING_YARN,   "yarn"   },
+};
+
+static llama_rope_scaling_type llama_rope_scaling_type_from_string(const std::string & name) {
+    for (const auto & kv : LLAMA_ROPE_SCALING_TYPES) {
+        if (kv.second == name) {
+            return kv.first;
+        }
+    }
+
+    return LLAMA_ROPE_SCALING_UNSPECIFIED;
+}
+
 //
 // ggml helpers
 //
@@ -1711,9 +1727,9 @@ static void llm_load_hparams(llama_model_loader & ml, llama_model & model, const
     int8_t rope_scaling_type = params.rope_scaling_type;
 
     if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
-        uint8_t type = LLAMA_ROPE_SCALING_LINEAR;
-        GGUF_GET_KEY(ctx, type, gguf_get_val_u8, GGUF_TYPE_UINT8, false, kv(LLM_KV_ROPE_SCALING_TYPE));
-        rope_scaling_type = int8_t(type);
+        std::string type("linear");
+        GGUF_GET_KEY(ctx, type, gguf_get_val_str, GGUF_TYPE_UINT8, false, kv(LLM_KV_ROPE_SCALING_TYPE));
+        rope_scaling_type = int8_t(llama_rope_scaling_type_from_string(type));
     }
     GGML_ASSERT(rope_scaling_type >= 0 && rope_scaling_type <= LLAMA_ROPE_SCALING_MAX_VALUE);
 

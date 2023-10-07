@@ -410,10 +410,10 @@ class TokenType(IntEnum):
     UNUSED       = 5
     BYTE         = 6
 
-class RopeScalingType(IntEnum):
-    NONE   = 0
-    LINEAR = 1
-    YARN   = 2
+class RopeScalingType(Enum):
+    NONE   = 'none'
+    LINEAR = 'linear'
+    YARN   = 'yarn'
 
 #
 # implementation
@@ -769,7 +769,7 @@ class GGUFWriter:
         self.add_float32(KEY_ROPE_FREQ_BASE.format(arch=self.arch), value)
 
     def add_rope_scaling_type(self, value: RopeScalingType):
-        self.add_uint8(KEY_ROPE_SCALING_TYPE.format(arch=self.arch), int(value))
+        self.add_string(KEY_ROPE_SCALING_TYPE.format(arch=self.arch), value.value)
 
     def add_rope_scaling_factor(self, value: float):
         self.add_float32(KEY_ROPE_SCALING_FACTOR.format(arch=self.arch), value)
