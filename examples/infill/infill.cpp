@@ -233,12 +233,16 @@ int main(int argc, char ** argv) {
     const bool add_bos = llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM;
     LOG("add_bos: %d\n", add_bos);
 
+    bool suff_rm_leading_spc = params.escape;
+    if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+        params.input_suffix.erase(0, 1);
+        suff_rm_leading_spc = false;
+    }
     std::vector<llama_token> embd_inp;
     std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-    // params.input_suffix.erase(0, params.input_suffix.find_first_not_of(" "));
     std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
     const int space_token = 29871;
-    if (params.escape && inp_sfx.size() > 1 && inp_sfx[0] == space_token) {
+    if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
         inp_sfx.erase(inp_sfx.begin());
     }
     inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
