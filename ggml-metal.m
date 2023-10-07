@@ -994,7 +994,7 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(ne03 == ne13);
 
                             // find the break-even point where the matrix-matrix kernel becomes more efficient compared
-                            // to the matrix-vector kernel. the numbers below are measure on M2 Ultra
+                            // to the matrix-vector kernel. the numbers below are measured on M2 Ultra
                             // not sure if this translates across all chips
                             int ne11_mm_min = 1;
 
@@ -1015,12 +1015,13 @@ void ggml_metal_graph_compute(
 
                             // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                             // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
-                            if (!ggml_is_transposed(src0) &&
+                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] &&
+                                !ggml_is_transposed(src0) &&
                                 !ggml_is_transposed(src1) &&
                                 src1t == GGML_TYPE_F32 &&
-                                [ctx->device supportsFamily:MTLGPUFamilyApple7] &&
-                                ne00%32 == 0 &&
+                                ne00 % 32 == 0 &&
                                 ne11 > ne11_mm_min) {
+                                //printf("matrix: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
                                 switch (src0->type) {
                                     case GGML_TYPE_F32:  [encoder setComputePipelineState:ctx->pipeline_mul_mm_f32_f32];  break;
                                     case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_mul_mm_f16_f32];  break;
@@ -1049,11 +1050,12 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:12];
                                 [encoder setBytes:&gqa     length:sizeof(gqa)  atIndex:13];
                                 [encoder setThreadgroupMemoryLength:8192 atIndex:0];
-                                [encoder dispatchThreadgroups:MTLSizeMake( (ne11+31)/32, (ne01+63) / 64, ne12) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake( (ne11 + 31)/32, (ne01 + 63)/64, ne12) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                             } else {
                                 int nth0 = 32;
                                 int nth1 = 1;
                                 int nrows = 1;
+                                //printf("vector: ne00 = %6d, ne01 = %6d, ne02 = %6d, ne11 = %6d, ne12 = %6d\n", ne00, ne01, ne02, ne11, ne12);
 
                                 // use custom matrix x vector kernel
                                 switch (src0t) {
@@ -1175,7 +1177,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&gqa  length:sizeof(gqa)  atIndex:17];
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 || src0t == GGML_TYPE_Q8_0 ||
-                                    src0t == GGML_TYPE_Q2_K) {// || src0t == GGML_TYPE_Q4_K) {
+                                    src0t == GGML_TYPE_Q2_K) { // || src0t == GGML_TYPE_Q4_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q4_K) {

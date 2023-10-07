@@ -13,8 +13,8 @@ typedef struct {
 
 #define QK4_1 32
 typedef struct {
-    half d;          // delta
-    half m;          // min
+    half d;                 // delta
+    half m;                 // min
     uint8_t qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
 
@@ -2397,7 +2397,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         + nb10 * (BLOCK_SIZE_K / THREAD_PER_COL * (tiitg % THREAD_PER_COL)));
 
     for (int loop_k = 0; loop_k < ne00; loop_k += BLOCK_SIZE_K) {
-        //load data and store to threadgroup memory
+        // load data and store to threadgroup memory
         half4x4 temp_a;
         dequantize_func(x, il, temp_a);
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -2417,7 +2417,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        //load matrices from threadgroup memory and conduct outer products
+        // load matrices from threadgroup memory and conduct outer products
         threadgroup half  * lsma = (sa + THREAD_MAT_M * SG_MAT_SIZE * (sgitg % 2));
         threadgroup float * lsmb = (sb + THREAD_MAT_N * SG_MAT_SIZE * (sgitg / 2));
 
@@ -2444,25 +2444,25 @@ kernel void kernel_mul_mm(device const  uchar * src0,
     }
 
     if ((r0 + 1) * BLOCK_SIZE_M <= ne0 && (r1 + 1) * BLOCK_SIZE_N <= ne1) {
-        device float *C = dst + (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) \
-                              + (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * ne0 + im*ne1*ne0;
+        device float * C = dst + (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) \
+                               + (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * ne0 + im*ne1*ne0;
         for (int i = 0; i < 8; i++) {
             simdgroup_store(c_res[i], C + 8 * (i%4) + 8 * ne0 * (i/4), ne0);
         }
     } else {
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        threadgroup float *temp_str = ((threadgroup float *)shared_memory) \
+        threadgroup float * temp_str = ((threadgroup float *)shared_memory) \
                                       + 32 * (sgitg&1) + (16 * (sgitg>>1)) * BLOCK_SIZE_M;
         for (int i = 0; i < 8; i++) {
             simdgroup_store(c_res[i], temp_str + 8 * (i%4) + 8 * BLOCK_SIZE_M * (i/4), BLOCK_SIZE_M);
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        device float *C = dst + BLOCK_SIZE_M * r0 + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
-        if (sgitg==0) {
+        device float * C = dst + BLOCK_SIZE_M * r0 + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
+        if (sgitg == 0) {
             for (int i = 0; i < n_rows; i++) {
-                for (int j = tiitg; j< n_cols; j += BLOCK_SIZE_N) {
+                for (int j = tiitg; j < n_cols; j += BLOCK_SIZE_N) {
                     *(C + i + j * ne0) = *(temp_str + i + j * BLOCK_SIZE_M);
                 }
             }
