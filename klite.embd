@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 77
+Current version: 78
 -Concedo
 -->
 
@@ -1179,7 +1179,7 @@ Current version: 77
 		}
 		.scenariogrid
 		{
-			height: 330px;
+			height: 260px;
     		overflow-y: auto;
 			margin-top: 4px;
 			padding: 8px;
@@ -1192,7 +1192,7 @@ Current version: 77
 		{
 			padding: 4px 12px;
 			width: 100%;
-			height: 120px;
+			height: 160px;
 			color: #b7e2ff;
 			overflow-y: auto;
 		}
@@ -1837,7 +1837,7 @@ Current version: 77
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "KoboldGPT",
-			"gui_type":0,
+			"gui_type":1,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nKoboldGPT: Hello, I am KoboldGPT, your personal AI assistant. What would you like to know?",
@@ -2226,8 +2226,23 @@ Current version: 77
 			"memory": `[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.]\n`,
 			"authorsnote": "",
 			"worldinfo": []
+		},
+		{
+			"title":"Coding Assistant",
+			"author":"Concedo",
+			"desc":"Provides coding examples and instructions, and completes programming tasks.",
+			"opmode":4,
+			"gui_type":0,
+			"instruct_starttag": "\\n### Instruction:\\n",
+			"instruct_endtag": "\\n### Response:\\n",
+			"prefmodel1":instructmodels1,
+			"prefmodel2":instructmodels2,
+			"instruct_has_markdown":true,
+			"prompt":"",
+			"memory": instructstartplaceholder+"Answer any coding-related questions. Provide example code within markdown codeblocks."+instructendplaceholder+"Task Confirmed."+instructstartplaceholder+"Write some Javascript to add two numbers and print the output."+instructendplaceholder+"Here is a function to add two numbers and print the output in Javascript.\n\n```\nfunction AddTwoNumbers(a, b) {\n    return a + b;\n}\n\nconsole.log(AddTwoNumbers(2,3));  //prints the number 5\n```\n",
+			"authorsnote": "",
+			"worldinfo": []
 		}
-
 
 		];
 	</script>
@@ -2986,7 +3001,8 @@ Current version: 77
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
-		saved_palm_key: "",
+		saved_palm_key: "", //do not ever share this in save files!
+		saved_kai_addr: "", //do not ever share this in save files!
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -3114,6 +3130,7 @@ Current version: 77
 				return this.replace(new RegExp(str, 'g'), newStr);
 			};
 		}
+
 
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
@@ -3621,6 +3638,7 @@ Current version: 77
 			story.savedsettings.saved_oai_addr = "";
 			story.savedsettings.saved_claude_key = "";
 			story.savedsettings.saved_claude_addr = "";
+			story.savedsettings.saved_kai_addr = "";
 
 			if (!strip_images)
 			{
@@ -3740,6 +3758,7 @@ Current version: 77
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
 				let tmp_palm1 = localsettings.saved_palm_key;
+				let tmp_kai = localsettings.saved_kai_addr;
 				import_props_into_object(localsettings, story.savedsettings);
 				localsettings.my_api_key = tmpapikey1;
 				localsettings.home_cluster = tmphc;
@@ -3748,6 +3767,7 @@ Current version: 77
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
 				localsettings.saved_palm_key = tmp_palm1;
+				localsettings.saved_kai_addr = tmp_kai;
 			}
 
 			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
@@ -3866,6 +3886,7 @@ Current version: 77
 			loaded_storyobj.savedsettings.saved_oai_addr = "";
 			loaded_storyobj.savedsettings.saved_claude_key = "";
 			loaded_storyobj.savedsettings.saved_claude_addr = "";
+			loaded_storyobj.savedsettings.saved_kai_addr = "";
 
 			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
@@ -4057,6 +4078,7 @@ Current version: 77
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
+					let tmp_kai = localsettings.saved_kai_addr;
 					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
 					localsettings.my_api_key = tmpapikey1;
 					localsettings.home_cluster = tmphc;
@@ -4065,6 +4087,7 @@ Current version: 77
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
+					localsettings.saved_kai_addr = tmp_kai;
 
 					//backwards compat support for newlines
 					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
@@ -4323,23 +4346,23 @@ Current version: 77
 	function get_chubai_scenario()
 	{
 		inputBox("Enter chub.ai prompt URL","Import from chub.ai","","https://chub.ai/characters/Anonymous/example-character", ()=>{
-			let userinput = getInputBoxValue().toLowerCase().trim();
+
+			let userinput = getInputBoxValue().trim();
 			if(userinput=="")
 			{
 				//pass
 			}
 			else
 			{
-				if (userinput.includes("chub.ai/")) {
-					//is a url, extract the character name
-					userinput = userinput.replace("/characters/","/");
-					userinput = userinput.split("chub.ai/")[1];
-					userinput = userinput.split("#")[0];
-					userinput = userinput.split("?")[0];
+				if (userinput.match(/chub\.ai\//i)) {
+					// is a URL, extract the character name
+					userinput = userinput.replace(/\/characters\//i, '/');
+					userinput = userinput.split(/chub\.ai\//i)[1].split("#")[0].split("?")[0];
 				}
 				userinput = userinput.endsWith('/') ? userinput.slice(0, -1) : userinput;
 				if(userinput!="")
 				{
+					document.getElementById("scenariodesc").innerText = "Loading scenario from Chub...";
 					fetch("https://api.chub.ai/api/characters/download", {
 					method: 'POST',
 					headers: {
@@ -4352,7 +4375,14 @@ Current version: 77
 					}),
 					referrerPolicy: 'no-referrer',
 					})
-					.then(x => x.json())
+					.then(x => {
+						if(x.ok)
+						{
+							return x.json();
+						}else{
+							throw new Error('Cannot fetch chub scenario');
+						}
+					})
 					.then(data => {
 						console.log(data);
 						let botname = data.name?data.name:"Bot";
@@ -4376,7 +4406,42 @@ Current version: 77
 							"authorsnote": "",
 							"worldinfo": [],
 						};
-						preview_temp_scenario();
+
+						//try to obtain the full portrait image
+						fetch("https://api.chub.ai/api/characters/download", {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+						"format": "tavern",
+						"fullPath": userinput,
+						"version": "main"
+						}),
+						referrerPolicy: 'no-referrer',
+						})
+						.then(rb => {
+							if(rb.ok)
+							{
+								return rb.blob();
+							}else{
+								throw new Error('Cannot fetch tavern image');
+							}
+						})
+						.then(blob => {
+							preview_temp_scenario();
+							const objectURL = URL.createObjectURL(blob);
+							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+								temp_scenario.image = compressedImageURI;
+								temp_scenario.image_aspect = aspectratio;
+								preview_temp_scenario();
+							}, true);
+						})
+						.catch(error => {
+							preview_temp_scenario();
+							console.error("Error fetching tavern image:", error);
+						});
+
 					}).catch((error) => {
 						temp_scenario = null;
 						document.getElementById("scenariodesc").innerText = "Error: Selected scenario is invalid.";
@@ -4384,7 +4449,7 @@ Current version: 77
 					});
 				}else{
 					temp_scenario = null;
-					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid aetherroom.club URL or ID (e.g. https://aetherroom.club/1234 or just 1234)";
+					document.getElementById("scenariodesc").innerText = "Error: User input is invalid\n\n Please ensure you have input a valid Chub AI URL or ID.";
 				}
 			}
 		},false);
@@ -4399,11 +4464,16 @@ Current version: 77
 	function preview_temp_scenario()
 	{
 		let author = "";
+		let image = "";
 		if(temp_scenario.author && temp_scenario.author!="")
 		{
 			author = "<br><b>Author:</b> "+temp_scenario.author;
 		}
-		document.getElementById("scenariodesc").innerHTML = `<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
+		if (temp_scenario.image) {
+			temp_scenario.gui_type = 2; //upgrade to aesthetic if we have image
+			image = `<img id="tempscenarioimg" style="float:right; width:100px; height:${100/(temp_scenario.image_aspect?temp_scenario.image_aspect:1)}px; padding: 8px;" src="${encodeURI(temp_scenario.image)}"></img>`;
+		}
+		document.getElementById("scenariodesc").innerHTML = image+`<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
 		`<p><b>Mode:</b> `+(temp_scenario.opmode==1?"Story":(temp_scenario.opmode==2?"Adventure":(temp_scenario.opmode==3?"Chat":"Instruct"))) + author+`</p>`
 		+`<p>`+(temp_scenario.desc!=""?escapeHtml(temp_scenario.desc):"[No Description Given]") +`</p>`;
 	}
@@ -4435,6 +4505,11 @@ Current version: 77
 			{
 				current_memory = replace_placeholders_direct(current_memory);
 			}
+		}
+		if (temp_scenario.image && temp_scenario.image != "") {
+			aestheticInstructUISettings.AI_portrait = temp_scenario.image;
+			document.getElementById('portrait_ratio_AI').value = (temp_scenario.image_aspect?temp_scenario.image_aspect:1).toFixed(2);
+			refreshPreview(true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
 			current_wi = [];
@@ -4495,6 +4570,14 @@ Current version: 77
 			if (temp_scenario.gui_type===1) { localsettings.gui_type_instruct = 1; }
 			else if(temp_scenario.gui_type===2) { localsettings.gui_type_instruct = 2; }
 			else if(temp_scenario.gui_type===0) { localsettings.gui_type_instruct = 0; }
+
+			if (temp_scenario.instruct_has_markdown===true) {
+				localsettings.instruct_has_markdown = true;
+			}
+			else if(temp_scenario.instruct_has_markdown===false)
+			{
+				localsettings.instruct_has_markdown = false;
+			}
 
 			if (temp_scenario.instruct_starttag) { localsettings.instruct_starttag = temp_scenario.instruct_starttag; }
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
@@ -4855,11 +4938,12 @@ Current version: 77
 		if (parentcluster && userData && userData.worker_ids && userData.worker_ids.length > 0)
 		{
 			let urls = userData.worker_ids.map(x=>parentcluster.maintenance_endpoint + "/" + x);
-			Promise.all(urls.map(url => fetch(url)
-				.then(response => response.json())))
+			Promise.all(urls.map(url => fetch(url).then(response => response.json()).catch(error => error)))
 				.then(values => {
+					values = values.filter(n => (n.id && n.id!=""));
 					lastValidFoundUserWorkers = values;
-					console.log(values);
+					console.log(lastValidFoundUserWorkers);
+
 					document.getElementById("myownworkercontainer").classList.remove("hidden");
 
 					let str = "";
@@ -4869,7 +4953,7 @@ Current version: 77
 						let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
 						let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
 						let eleminfo = ((elem.info && elem.info!="")?elem.info:"");
-						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td></tr>";
+						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td><span "+style+">'" + elem.kudos_rewards.toFixed(0) + "</span><br>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td><td><button type=\"button\" class=\"btn btn-danger widelbtn\" onclick=\"delete_my_worker("+i+");\">X</button></td></tr>";
 					}
 					document.getElementById("myownworkertable").innerHTML = str;
 
@@ -4885,7 +4969,9 @@ Current version: 77
 				.catch(error =>
 				{
 					console.log("Error: " + error);
-					msgbox(error,"Error fetching my workers");
+					msgbox(error,"Error fetching some workers",false,false,()=>{
+						hide_msgbox();
+					});
 				});
 		}
 		else
@@ -5073,6 +5159,10 @@ Current version: 77
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
+			if(!localflag && localsettings.saved_kai_addr!="")
+			{
+				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
+			}
 		}
 		else if(epchoice==1)
 		{
@@ -5167,6 +5257,7 @@ Current version: 77
 
 							//good to go
 							custom_kobold_endpoint = tmpep;
+							localsettings.saved_kai_addr = custom_kobold_endpoint;
 							selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 							selected_workers = [];
 							if (perfdata == null) {
@@ -5527,6 +5618,7 @@ Current version: 77
 	function display_custom_endpoint()
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
+		customapi_dropdown();
 	}
 
 	function fetch_models(onDoneCallback)
@@ -5757,6 +5849,36 @@ Current version: 77
 		}
 	}
 
+	function delete_my_worker(index)
+	{
+		if(lastValidFoundUserWorkers && lastValidFoundUserWorkers.length>index)
+		{
+			let elem = lastValidFoundUserWorkers[index];
+			msgboxYesNo(`Are you sure you want to delete the worker <span class='color_orange'>`+elem.name+`</span> with the ID <span class='color_orange'>`+elem.id+`</span>?<br><br><b>This action is irreversible!</b>`,"Confirm Delete Worker",
+			()=>{
+				let newapikey = document.getElementById("apikey").value;
+				let parentcluster = find_text_horde(lastValidFoundCluster);
+				fetch(parentcluster.maintenance_endpoint + "/" + elem.id, {
+						method: 'DELETE',
+						headers: {
+							'Content-Type': 'application/json',
+							'apikey': newapikey,
+						}
+					})
+					.then((response) => response.json())
+					.then((data) => {
+						msgbox(JSON.stringify(data), "Delete My Worker");
+					})
+					.catch((error) => {
+						console.error('Error:', error);
+					});
+				hide_popups();
+			},()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+			},true);
+		}
+	}
+
 	function update_my_workers()
 	{
 		let newapikey = document.getElementById("apikey").value;
@@ -5776,6 +5898,10 @@ Current version: 77
 					if(desc.value.trim()!="" || (desc.value.trim()=="" && lastValidFoundUserWorkers[i].info!=null && lastValidFoundUserWorkers[i].info!=""))
 					{
 						wo.info = desc.value.trim();
+						if(wo.info=="")
+						{
+							wo.info = "  "; //todo: this is a hack to unset names
+						}
 					}
 					fetch(parentcluster.maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
 						method: 'PUT',
@@ -8570,7 +8696,6 @@ Current version: 77
 
 				fulltxt = replaceAll(fulltxt, `%SpcStg%`, `<hr class="hr_instruct"><span class="color_cyan"><img src="`+human_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
 				fulltxt = replaceAll(fulltxt, `%SpcEtg%`, `</span><hr class="hr_instruct"><img src="`+niko_square+`" style="height:38px;width:auto;padding:3px 6px 3px 3px;border-radius: 8%;"/>`);
-
 			}else{
 				fulltxt = replaceAll(fulltxt, get_instruct_starttag(true), `%SclStg%`+escapeHtml(get_instruct_starttag(true))+`%SpnEtg%`);
 				fulltxt = replaceAll(fulltxt, get_instruct_endtag(true), `%SclStg%`+escapeHtml(get_instruct_endtag(true))+`%SpnEtg%`);
@@ -10124,8 +10249,7 @@ Current version: 77
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Max Ctx. Tokens <span class="helpicon">?<span class="helptext">Max
-										number of tokens of context to submit to the AI for sampling. Make sure this is
-										higher than Amount to Generate.</span></span></div>
+										number of context tokens submitted to the AI. Must exceed Amount to Generate. Can be further increased by editing the textbox. Older models stop at 2048, newer ones can do 4096 or greater.</span></span></div>
 							<input inputmode="numeric" class="justifyright flex-push-right settingsmall" id="max_context_length"
 								value=1024 oninput="
 						   document.getElementById('max_context_length_slide').value = this.value;">
@@ -10645,7 +10769,7 @@ Current version: 77
 			<div class="workerTableDiv">
 			<table class="table text-center workerTable">
 			<thead class="sticky-top bg-white">
-			<tr><th>Name</th><th>Description</th><th>Uptime</th><th>Kudos</th><th>Status</th><th>Maintainence</th></tr>
+			<tr><th>Name</th><th>Description</th><th>Uptime</th><th>Kudos</th><th>Maint.</th><th>Del.</th></tr>
 			</thead>
 			<tbody id="myownworkertable">
 			</tbody>
