@@ -3923,8 +3923,6 @@ inline static void ggml_vec_gelu_quick_f32(const int n, float * y, const float *
 
 // Sigmoid Linear Unit (SiLU) function
 inline static float ggml_silu_f32(float x) {
-    if (x == -INFINITY) return 0.0f;
-
     return x/(1.0f + expf(-x));
 }
 
