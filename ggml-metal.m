@@ -81,18 +81,18 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(get_rows_q6_K);
     GGML_METAL_DECL_KERNEL(rms_norm);
     GGML_METAL_DECL_KERNEL(norm);
-    GGML_METAL_DECL_KERNEL(mul_mat_f32_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_1row);
-    GGML_METAL_DECL_KERNEL(mul_mat_f16_f32_l4);
-    GGML_METAL_DECL_KERNEL(mul_mat_q4_0_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q4_1_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q8_0_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q2_K_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q3_K_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q4_K_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q5_K_f32);
-    GGML_METAL_DECL_KERNEL(mul_mat_q6_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_f32_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_f16_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_f16_f32_1row);
+    GGML_METAL_DECL_KERNEL(mul_mv_f16_f32_l4);
+    GGML_METAL_DECL_KERNEL(mul_mv_q4_0_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q4_1_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q8_0_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q2_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q3_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q4_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q5_K_f32);
+    GGML_METAL_DECL_KERNEL(mul_mv_q6_K_f32);
     GGML_METAL_DECL_KERNEL(mul_mm_f32_f32);
     GGML_METAL_DECL_KERNEL(mul_mm_f16_f32);
     GGML_METAL_DECL_KERNEL(mul_mm_q4_0_f32);
@@ -262,18 +262,18 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(get_rows_q6_K);
         GGML_METAL_ADD_KERNEL(rms_norm);
         GGML_METAL_ADD_KERNEL(norm);
-        GGML_METAL_ADD_KERNEL(mul_mat_f32_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_1row);
-        GGML_METAL_ADD_KERNEL(mul_mat_f16_f32_l4);
-        GGML_METAL_ADD_KERNEL(mul_mat_q4_0_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q4_1_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q8_0_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q2_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q3_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q4_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q5_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mat_q6_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_f32_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_f16_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_f16_f32_1row);
+        GGML_METAL_ADD_KERNEL(mul_mv_f16_f32_l4);
+        GGML_METAL_ADD_KERNEL(mul_mv_q4_0_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q4_1_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q8_0_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q2_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q3_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q4_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q5_K_f32);
+        GGML_METAL_ADD_KERNEL(mul_mv_q6_K_f32);
         GGML_METAL_ADD_KERNEL(mul_mm_f32_f32);
         GGML_METAL_ADD_KERNEL(mul_mm_f16_f32);
         GGML_METAL_ADD_KERNEL(mul_mm_q4_0_f32);
@@ -339,18 +339,18 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(get_rows_q6_K);
     GGML_METAL_DEL_KERNEL(rms_norm);
     GGML_METAL_DEL_KERNEL(norm);
-    GGML_METAL_DEL_KERNEL(mul_mat_f32_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32_1row);
-    GGML_METAL_DEL_KERNEL(mul_mat_f16_f32_l4);
-    GGML_METAL_DEL_KERNEL(mul_mat_q4_0_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q4_1_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q8_0_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q2_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q3_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q4_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q5_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mat_q6_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_f32_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_f16_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_f16_f32_1row);
+    GGML_METAL_DEL_KERNEL(mul_mv_f16_f32_l4);
+    GGML_METAL_DEL_KERNEL(mul_mv_q4_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q4_1_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q8_0_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q2_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q3_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q4_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q5_K_f32);
+    GGML_METAL_DEL_KERNEL(mul_mv_q6_K_f32);
     GGML_METAL_DEL_KERNEL(mul_mm_f32_f32);
     GGML_METAL_DEL_KERNEL(mul_mm_f16_f32);
     GGML_METAL_DEL_KERNEL(mul_mm_q4_0_f32);
@@ -1059,7 +1059,7 @@ void ggml_metal_graph_compute(
                                 switch (src0t) {
                                     case GGML_TYPE_F32:
                                         {
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_f32_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_f32_f32];
                                             nrows = 4;
                                         } break;
                                     case GGML_TYPE_F16:
@@ -1067,12 +1067,12 @@ void ggml_metal_graph_compute(
                                             nth0 = 32;
                                             nth1 = 1;
                                             if (ne11 * ne12 < 4) {
-                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_1row];
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mv_f16_f32_1row];
                                             } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
-                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32_l4];
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mv_f16_f32_l4];
                                                 nrows = ne11;
                                             } else {
-                                                [encoder setComputePipelineState:ctx->pipeline_mul_mat_f16_f32];
+                                                [encoder setComputePipelineState:ctx->pipeline_mul_mv_f16_f32];
                                                 nrows = 4;
                                             }
                                         } break;
@@ -1083,7 +1083,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 8;
                                             nth1 = 8;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_0_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q4_0_f32];
                                         } break;
                                     case GGML_TYPE_Q4_1:
                                         {
@@ -1092,7 +1092,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 8;
                                             nth1 = 8;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_1_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q4_1_f32];
                                         } break;
                                     case GGML_TYPE_Q8_0:
                                         {
@@ -1101,7 +1101,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 8;
                                             nth1 = 8;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q8_0_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q8_0_f32];
                                         } break;
                                     case GGML_TYPE_Q2_K:
                                         {
@@ -1110,7 +1110,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 2;
                                             nth1 = 32;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q2_K_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q2_K_f32];
                                         } break;
                                     case GGML_TYPE_Q3_K:
                                         {
@@ -1119,7 +1119,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 2;
                                             nth1 = 32;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q3_K_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q3_K_f32];
                                         } break;
                                     case GGML_TYPE_Q4_K:
                                         {
@@ -1128,7 +1128,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 4; //1;
                                             nth1 = 8; //32;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q4_K_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q4_K_f32];
                                         } break;
                                     case GGML_TYPE_Q5_K:
                                         {
@@ -1137,7 +1137,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 2;
                                             nth1 = 32;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q5_K_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q5_K_f32];
                                         } break;
                                     case GGML_TYPE_Q6_K:
                                         {
@@ -1146,7 +1146,7 @@ void ggml_metal_graph_compute(
 
                                             nth0 = 2;
                                             nth1 = 32;
-                                            [encoder setComputePipelineState:ctx->pipeline_mul_mat_q6_K_f32];
+                                            [encoder setComputePipelineState:ctx->pipeline_mul_mv_q6_K_f32];
                                         } break;
                                     default:
                                         {
