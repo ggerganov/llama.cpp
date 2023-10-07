@@ -10,7 +10,10 @@ let platforms: [SupportedPlatform]? = [
     .tvOS(.v14)
 ]
 let exclude: [String] = []
-let additionalSources: [String] = ["ggml-metal.m", "ggml-metal.metal"]
+let resources: [Resource] = [
+    .process("ggml-metal.metal")
+]
+let additionalSources: [String] = ["ggml-metal.m"]
 let additionalSettings: [CSetting] = [
     .unsafeFlags(["-fno-objc-arc"]),
     .define("GGML_SWIFT"),
@@ -19,6 +22,7 @@ let additionalSettings: [CSetting] = [
 #else
 let platforms: [SupportedPlatform]? = nil
 let exclude: [String] = ["ggml-metal.metal"]
+let resources: [String] = []
 let additionalSources: [String] = []
 let additionalSettings: [CSetting] = []
 #endif
@@ -40,6 +44,7 @@ let package = Package(
                 "ggml-alloc.c",
                 "k_quants.c",
             ] + additionalSources,
+            resources: resources,
             publicHeadersPath: "spm-headers",
             cSettings: [
                 .unsafeFlags(["-Wno-shorten-64-to-32"]),
