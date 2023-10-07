@@ -1,63 +1,30 @@
 import argparse
-from llava.model import LlavaLlamaForCausalLM
-from transformers import AutoTokenizer
-from peft import PeftModel
+import glob
+import os
 import torch
 
-dtype = torch.bfloat16
 
 ap = argparse.ArgumentParser()
-ap.add_argument("-m", "--model", help="Path to LLaVA RLHF model")
-ap.add_argument("-o", "--output", help="Output directory to save the merged file")
+ap.add_argument("-m", "--model", help="Path to LLaVA v1.5 model")
 args = ap.parse_args()
 
-model_path = f"{args.model}/sft_model"
-lora_path = f"{args.model}/rlhf_lora_adapter_model"
-save_path = args.output
+# find the model part that includes the the multimodal projector weights
+path = sorted(glob.glob(f"{args.model}/pytorch_model*.bin"))[-1]
+checkpoint = torch.load(path)
 
-model = LlavaLlamaForCausalLM.from_pretrained(
-    model_path,
-    device_map={"": "cuda:0"},
-    torch_dtype=dtype,
-)
-model = PeftModel.from_pretrained(
-    model,
-    lora_path,
-)
+# get a list of mm tensor names
+mm_tensors = [k for k, v in checkpoint.items() if k.startswith("model.mm_projector")]
 
+# store these tensors in a new dictionary and torch.save them
+projector = {name: checkpoint[name] for name in mm_tensors}
+torch.save(projector, f"{args.model}/llava.projector")
 
-model = model.merge_and_unload()
+# remove these tensors from the checkpoint and save it again
+for name in mm_tensors:
+    del checkpoint[name]
 
-model.save_pretrained(save_path)
+torch.save(checkpoint, path)
 
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-tokenizer.save_pretrained(save_path)
-
-del model
-del tokenizer
-
-
-# Load the checkpoint
-checkpoint = torch.load(f"{save_path}/pytorch_model-00002-of-00002.bin")
-
-# Extract the tensors we want
-mm_projector_weight = checkpoint['model.mm_projector.weight']
-mm_projector_bias = checkpoint['model.mm_projector.bias']
-
-# Remove the tensors from the checkpoint
-del checkpoint['model.mm_projector.weight']
-del checkpoint['model.mm_projector.bias']
-
-# Create a dictionary with the original names as keys
-mm_projector = {
-    'model.mm_projector.weight': mm_projector_weight,
-    'model.mm_projector.bias': mm_projector_bias
-}
-
-# Save the combined dictionary using torch.save
-torch.save(mm_projector, "projector.pt")
-
-# Save the rest of the model with the same original name
-torch.save(checkpoint, "./llava-7b-rlhf-merged/pytorch_model-00002-of-00002.bin")
-
-Print("Operation complete!")
+print("Done!")
+print(f"Now you can convert {args.model} to a a regular LLaMA GGUF file.")
+print(f"Also, use {args.model}/llava.projector to prepare a llava-encoder.gguf file.")

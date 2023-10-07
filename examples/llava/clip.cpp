@@ -78,7 +78,7 @@ static std::string format(const char * fmt, ...) {
 #define TN_LN_POST "%s.post_ln.%s"
 #define TN_TEXT_PROJ "text_projection.weight"
 #define TN_VIS_PROJ "visual_projection.weight"
-#define TN_LLAVA_PROJ "llava_projector.%s"
+#define TN_LLAVA_PROJ "mm.%d.%s"
 
 //
 // utilities to get data from a gguf file
@@ -225,8 +225,10 @@ struct clip_vision_model {
     struct ggml_tensor * projection;
 
     // LLaVA projection
-    struct ggml_tensor * llava_proj_w;
-    struct ggml_tensor * llava_proj_b;
+    struct ggml_tensor * mm_0_w;
+    struct ggml_tensor * mm_0_b;
+    struct ggml_tensor * mm_2_w;
+    struct ggml_tensor * mm_2_b;
 };
 
 // Replacement for std::vector<uint8_t> that doesn't require zero-initialization.
@@ -283,11 +285,11 @@ size_t get_mem_req_by_size(struct clip_ctx * ctx) {
         return 96 * mb;
     case 589:                     // large, two-tower
     case 392:                     // large, vision-only
-    case 375:                     // large, LLaVA encoder
+    case 377:                     // large, LLaVA encoder
         if (vision_hparams->image_size == 224) { // input image size = 224
             return 1200 * mb;
         } else { // input image size = 336
-            return 1800 * mb;
+            return 2900 * mb;
         }
     case 909: // huge, two-tower
     case 520: // huge, vision-only
@@ -572,8 +574,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         vision_model.position_embeddings = get_tensor(new_clip->ctx, format(TN_POS_EMBD, "v"));
         vision_model.pre_ln_w = get_tensor(new_clip->ctx, format(TN_LN_PRE, "v", "weight"));
         vision_model.pre_ln_b = get_tensor(new_clip->ctx, format(TN_LN_PRE, "v", "bias"));if (new_clip->has_llava_projector) {
-            vision_model.llava_proj_w = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, "weight"));
-            vision_model.llava_proj_b = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, "bias"));
+            vision_model.mm_0_w = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 0, "weight"));
+            vision_model.mm_0_b = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 0, "bias"));
+            vision_model.mm_2_w = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 2, "weight"));
+            vision_model.mm_2_b = get_tensor(new_clip->ctx, format(TN_LLAVA_PROJ, 2, "bias"));
         } else {
             vision_model.post_ln_w = get_tensor(new_clip->ctx, format(TN_LN_POST, "v", "weight"));
             vision_model.post_ln_b = get_tensor(new_clip->ctx, format(TN_LN_POST, "v", "bias"));
@@ -1278,20 +1282,26 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
         embeddings = cur;
     }
 
-
     //ggml_set_scratch(ctx0, {0, 0, nullptr});
 
-    struct ggml_tensor * output = NULL;
     if (ctx->has_llava_projector) {
-        output = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
-        embeddings = ggml_mul_mat(ctx0, model.llava_proj_w, embeddings);
-        output = ggml_add(ctx0, ggml_repeat(ctx0, model.llava_proj_b, embeddings), embeddings);
-        output = ggml_reshape_2d(ctx0, output, output->ne[0], output->ne[1]);
+        embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
         struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
         for (int i = 0; i < num_patches; ++i) {
             ggml_set_i32_1d(patches, i, i+1);
         }
-        output = ggml_get_rows(ctx0, output, patches);
+        embeddings = ggml_get_rows(ctx0, embeddings, patches);
+        
+        // mm projection 0
+        embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
+        embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_0_b, embeddings), embeddings);
+
+        embeddings = ggml_gelu(ctx0, embeddings);
+        
+        embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
+        embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_2_b, embeddings), embeddings);
+
+        ggml_set_name(embeddings, "check");
     } else {
         // get the output of cls token, e.g., 0th index
         struct ggml_tensor * cls = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, batch_size);
@@ -1312,7 +1322,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
         embeddings = ggml_mul_mat(ctx0, model.projection, embeddings);
 
         // normalize output embeddings
-        output = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, projection_dim, batch_size);
+        struct ggml_tensor * output = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, projection_dim, batch_size);
 
         for (int b = 0; b < batch_size; b++) {
             struct ggml_tensor * embedding = ggml_get_rows(ctx0, embeddings, ggml_new_i32(ctx0, b));
@@ -1322,11 +1332,13 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
             }
             output = ggml_acc(ctx0, output, embedding, output->nb[1], output->nb[2], output->nb[3], b * ggml_nbytes(embedding));
         }
+
+        embeddings = output;
     }
-    ggml_set_name(output, "check");
+    //ggml_set_name(embeddings, "check");
 
     // run the computation
-    ggml_build_forward_expand(&gf, output);
+    ggml_build_forward_expand(&gf, embeddings);
 
     /*
     ggml_cplan cplan = ggml_graph_plan(&gf, n_threads);
@@ -1386,7 +1398,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
     printf("used_mem = %zu\n", ggml_used_mem(ctx0));
 #endif
 
-    memcpy(vec, ggml_get_data_f32(output), sizeof(float) * projection_dim * batch_size);
+    memcpy(vec, ggml_get_data_f32(embeddings), ggml_nbytes(embeddings));
 
     /*
     if (cplan.work_size != 0) {

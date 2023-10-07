@@ -39,6 +39,9 @@ def get_tensor_name(name: str) -> str:
     if "projection" in name:
         return name
 
+    if "mm_projector" in name:
+        return name.replace("model.mm_projector", "mm")
+
     return name.replace("text_model", "t").replace("vision_model", "v").replace("encoder.layers", "blk").replace("embeddings.", "").replace("_proj", "").replace("self_attn.", "attn_").replace("layer_norm", "ln").replace("layernorm", "ln").replace("mlp.fc1", "ffn_down").replace("mlp.fc2", "ffn_up").replace("embedding", "embd").replace("final", "post").replace("layrnorm", "ln")
 
 
@@ -75,7 +78,7 @@ ap.add_argument("--text-only", action="store_true", required=False,
                 help="Save a text-only model. It can't be used to encode images")
 ap.add_argument("--vision-only", action="store_true", required=False,
                 help="Save a vision-only model. It can't be used to encode texts")
-ap.add_argument("--llava-projector", help="Path to projector.pt file. If specified, save an image encoder for LLaVA models.")
+ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--image-mean", nargs=3, type=float, required=False, help="Override image mean values")
 ap.add_argument("--image-std", nargs=3, type=float, required=False, help="Override image std values")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
@@ -138,7 +141,7 @@ else:
 output_dir = args.output_dir if args.output_dir is not None else dir_model
 os.makedirs(output_dir, exist_ok=True)
 output_prefix = os.path.basename(output_dir).replace("ggml_", "")
-fname_out = os.path.join(output_dir, f"{output_prefix}_ggml-{fname_middle}model-{ftype_str[ftype]}.gguf")
+fname_out = os.path.join(output_dir, f"{fname_middle}model-{ftype_str[ftype]}.gguf")
 fout = GGUFWriter(path=fname_out, arch="clip")
 
 fout.add_bool("clip.has_text_encoder", has_text_encoder)
@@ -191,15 +194,19 @@ fout.add_bool("clip.use_gelu", use_gelu)
 if has_llava_projector:
     model.vision_model.encoder.layers.pop(-1)
     projector = torch.load(args.llava_projector)
-    weight = projector["model.mm_projector.weight"].cpu().squeeze().float().numpy().astype(np.float16)
-    bias = projector['model.mm_projector.bias'].cpu().squeeze().float().numpy().astype(np.float32)
-    fout.add_tensor("llava_projector.weight", weight)
-    fout.add_tensor("llava_projector.bias", bias)
+    for name, data in projector.items():
+        name = get_tensor_name(name)
+        if data.ndim == 2:
+            data = data.squeeze().numpy().astype(np.float16)
+        else:
+            data = data.squeeze().numpy().astype(np.float32)
+
+        fout.add_tensor(name, data)
+
     print("Projector tensors added\n")
 
-
-list_vars = model.state_dict()
-for name, data in list_vars.items():
+state_dict = model.state_dict()
+for name, data in state_dict.items():
     if should_skip_tensor(name, has_text_encoder, has_vision_encoder, has_llava_projector):
         # we don't need this
         print(f"skipping parameter: {name}")

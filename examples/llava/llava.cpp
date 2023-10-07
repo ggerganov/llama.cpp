@@ -7,12 +7,11 @@
 #include "llama.h"
 
 
-static bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int * n_past) {
+static bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch, int * n_past) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
-    int n_batch = N;                                         // params.n_batch;
-
-    for (int i = 0; i < (int) N; i += n_batch) {
-        int n_eval = (int) N - i;
+    
+    for (int i = 0; i < N; i += n_batch) {
+        int n_eval = N - i;
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
@@ -161,18 +160,18 @@ int main(int argc, char ** argv) {
     }
 
     if (params.prompt.empty()) {
-        params.prompt = "user: describe the image in detail.\nassistant:";
+        params.prompt = "describe the image in detail.";
     }
-
     
-    auto ctx_clip = clip_model_load(clip_path, 1);
+    
+    auto ctx_clip = clip_model_load(clip_path, 3);
     clip_image_u8 img;
     clip_image_f32 img_res;
     clip_image_load_from_file(img_path, &img);
     clip_image_preprocess(ctx_clip, &img, &img_res);
-    float * vec = (float *)malloc(4096 * 256 * sizeof(float));
+    float * vec = (float *)malloc(4096 * 576 * sizeof(float));
     clip_image_encode(ctx_clip, params.n_threads, &img_res, vec, false);
-clip_free(ctx_clip);
+    clip_free(ctx_clip);
     
     llama_backend_init(params.numa);
 
@@ -198,9 +197,10 @@ clip_free(ctx_clip);
     
     int n_past      = 0;
     int max_tgt_len = 256;
-    //eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
-    eval_image_embd(ctx_llama, vec, 256, &n_past);
-//eval_string(ctx_llama, "assistant:", params.n_batch, &n_past);
+    eval_string(ctx_llama, "user: ", params.n_batch, &n_past);
+    eval_image_embd(ctx_llama, vec, 576, params.n_batch, &n_past);
+    eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
+eval_string(ctx_llama, "\nassistant:", params.n_batch, &n_past);
 printf("n_past = %d\n", n_past);
     
     const char* tmp;
