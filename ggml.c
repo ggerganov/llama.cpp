@@ -4723,20 +4723,18 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
     
-    ctx = (struct ggml_context *)malloc(sizeof(struct ggml_context));
-    
     struct ggml_scratch empty_scratch = { 0, 0, NULL };
 
-    (*ctx).mem_size = mem_size;
-    (*ctx).mem_buffer = params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size);
-    (*ctx).mem_buffer_owned = params.mem_buffer ? false : true;
-    (*ctx).no_alloc = params.no_alloc;
-    (*ctx).no_alloc_save = params.no_alloc;
-    (*ctx).n_objects = 0;
-    (*ctx).objects_begin = NULL;
-    (*ctx).objects_end = NULL;
-    (*ctx).scratch = empty_scratch;
-    (*ctx).scratch_save = empty_scratch;
+    ctx->mem_size = mem_size;
+    ctx->mem_buffer = params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size);
+    ctx->mem_buffer_owned = params.mem_buffer ? false : true;
+    ctx->no_alloc = params.no_alloc;
+    ctx->no_alloc_save = params.no_alloc;
+    ctx->n_objects = 0;
+    ctx->objects_begin = NULL;
+    ctx->objects_end = NULL;
+    ctx->scratch = empty_scratch;
+    ctx->scratch_save = empty_scratch;
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
 
