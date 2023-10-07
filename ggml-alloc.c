@@ -291,21 +291,17 @@ void ggml_allocr_reset(struct ggml_allocr * alloc) {
 struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment) {
     struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
 
-    *alloc = (struct ggml_allocr){
-        /*.data          = */ data,
-        /*.size          = */ size,
-        /*.alignment     = */ alignment,
-        /*.n_free_blocks = */ 0,
-        /*.free_blocks   = */ {{0}},
-        /*.hash_table    = */ {{0}},
-        /*.max_size      = */ 0,
-        /*.measure       = */ false,
-        /*.parse_seq     = */ {0},
-        /*.parse_seq_len = */ 0,
-#ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ {0},
-#endif
-    };
+    (*alloc).data = data;
+    (*alloc).size = size;
+    (*alloc).alignment = alignment;
+    (*alloc).n_free_blocks = 0;
+    (*alloc).max_size = 0;
+    (*alloc).measure = false;
+    (*alloc).parse_seq_len = 0;
+    
+    memset((*alloc).free_blocks, 0, sizeof((*alloc).free_blocks));
+    memset((*alloc).hash_table, 0, sizeof((*alloc).hash_table));
+    memset((*alloc).parse_seq, 0, sizeof((*alloc).parse_seq));
 
     ggml_allocr_reset(alloc);
 
@@ -370,22 +366,22 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
     size_t size;
 
     alloc_measure_vmem(&base_addr, &size);
-
-    *alloc = (struct ggml_allocr){
-        /*.data          = */ base_addr,
-        /*.size          = */ size,
-        /*.alignment     = */ alignment,
-        /*.n_free_blocks = */ 0,
-        /*.free_blocks   = */ {{0}},
-        /*.hash_table    = */ {{0}},
-        /*.max_size      = */ 0,
-        /*.measure       = */ true,
-        /*.parse_seq     = */ {0},
-        /*.parse_seq_len = */ 0,
+    
+    (*alloc).data = base_addr;
+    (*alloc).size = size;
+    (*alloc).alignment = alignment;
+    (*alloc).n_free_blocks = 0;
+    (*alloc).max_size = 0;
+    (*alloc).measure = true;
+    (*alloc).parse_seq_len = 0;
+    
+    memset((*alloc).free_blocks, 0, sizeof((*alloc).free_blocks));
+    memset((*alloc).hash_table, 0, sizeof((*alloc).hash_table));
+    memset((*alloc).parse_seq, 0, sizeof((*alloc).parse_seq));
+    
 #ifdef GGML_ALLOCATOR_DEBUG
-        /*.allocated_tensors = */ {0},
+    (*alloc).allocated_tensors = {0};
 #endif
-    };
 
     ggml_allocr_reset(alloc);
 

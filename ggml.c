@@ -4722,19 +4722,21 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     }
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
+    
+    ctx = (struct ggml_context *)malloc(sizeof(struct ggml_context));
+    
+    struct ggml_scratch empty_scratch = { 0, 0, NULL };
 
-    *ctx = (struct ggml_context) {
-        /*.mem_size           =*/ mem_size,
-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
-        /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
-        /*.no_alloc           =*/ params.no_alloc,
-        /*.no_alloc_save      =*/ params.no_alloc,
-        /*.n_objects          =*/ 0,
-        /*.objects_begin      =*/ NULL,
-        /*.objects_end        =*/ NULL,
-        /*.scratch            =*/ { 0, 0, NULL, },
-        /*.scratch_save       =*/ { 0, 0, NULL, },
-    };
+    (*ctx).mem_size = mem_size;
+    (*ctx).mem_buffer = params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size);
+    (*ctx).mem_buffer_owned = params.mem_buffer ? false : true;
+    (*ctx).no_alloc = params.no_alloc;
+    (*ctx).no_alloc_save = params.no_alloc;
+    (*ctx).n_objects = 0;
+    (*ctx).objects_begin = NULL;
+    (*ctx).objects_end = NULL;
+    (*ctx).scratch = empty_scratch;
+    (*ctx).scratch_save = empty_scratch;
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
 
@@ -18078,19 +18080,18 @@ struct ggml_cgraph ggml_build_backward(struct ggml_context * ctx, struct ggml_cg
 struct ggml_cgraph * ggml_new_graph(struct ggml_context * ctx) {
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_GRAPH, GGML_GRAPH_SIZE);
     struct ggml_cgraph * cgraph = (struct ggml_cgraph *) ((char *) ctx->mem_buffer + obj->offs);
+    
+    (*cgraph).n_nodes = 0;
+    (*cgraph).n_leafs = 0;
+    (*cgraph).order = GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT;
+    (*cgraph).perf_runs = 0;
+    (*cgraph).perf_cycles = 0;
+    (*cgraph).perf_time_us = 0;
 
-    *cgraph = (struct ggml_cgraph) {
-        /*.n_nodes      =*/ 0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ { NULL },
-        /*.grads        =*/ { NULL },
-        /*.leafs        =*/ { NULL },
-        /*.hash_table   =*/ { NULL },
-        /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
-        /*.perf_runs    =*/ 0,
-        /*.perf_cycles  =*/ 0,
-        /*.perf_time_us =*/ 0,
-    };
+    memset((*cgraph).nodes, 0, sizeof((*cgraph).nodes));
+    memset((*cgraph).grads, 0, sizeof((*cgraph).grads));
+    memset((*cgraph).leafs, 0, sizeof((*cgraph).leafs));
+    memset((*cgraph).visited_hash_table, 0, sizeof((*cgraph).visited_hash_table));
 
     return cgraph;
 }
