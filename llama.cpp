@@ -1957,11 +1957,11 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: n_ff           = %u\n",     __func__, hparams.n_ff);
     LLAMA_LOG_INFO("%s: freq_base      = %.1f\n",   __func__, hparams.rope_freq_base);
     LLAMA_LOG_INFO("%s: freq_scale     = %g\n",     __func__, hparams.rope_freq_scale);
-    LLAMA_LOG_INFO("%s: YaRN scaling   = %g\n",     __func__, hparams.yarn_ext_factor);
+    LLAMA_LOG_INFO("%s: YaRN extension = %g\n",     __func__, hparams.yarn_ext_factor);
     LLAMA_LOG_INFO("%s: YaRN orig ctx  = %u\n",     __func__, hparams.n_yarn_orig_ctx);
-    LLAMA_LOG_INFO("%s: YaRN beta_fast = %f\n",     __func__, hparams.yarn_beta_fast);
-    LLAMA_LOG_INFO("%s: YaRN beta_slow = %f\n",     __func__, hparams.yarn_beta_slow);
-    LLAMA_LOG_INFO("%s: RoPE finetuned = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "no");
+    LLAMA_LOG_INFO("%s: YaRN beta_fast = %.1f\n",   __func__, hparams.yarn_beta_fast);
+    LLAMA_LOG_INFO("%s: YaRN beta_slow = %.1f\n",   __func__, hparams.yarn_beta_slow);
+    LLAMA_LOG_INFO("%s: RoPE finetuned = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "unknown");
     LLAMA_LOG_INFO("%s: model type     = %s\n",     __func__, llama_model_type_name(model.type));
     LLAMA_LOG_INFO("%s: model ftype    = %s\n",     __func__, llama_model_ftype_name(model.ftype).c_str());
     LLAMA_LOG_INFO("%s: model params   = %.2f B\n", __func__, ml.n_elements*1e-9);
