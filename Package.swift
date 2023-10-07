@@ -16,13 +16,12 @@ let resources: [Resource] = [
 let additionalSources: [String] = ["ggml-metal.m"]
 let additionalSettings: [CSetting] = [
     .unsafeFlags(["-fno-objc-arc"]),
-    .define("GGML_SWIFT"),
     .define("GGML_USE_METAL")
 ]
 #else
 let platforms: [SupportedPlatform]? = nil
 let exclude: [String] = ["ggml-metal.metal"]
-let resources: [String] = []
+let resources: [Resource] = []
 let additionalSources: [String] = []
 let additionalSettings: [CSetting] = []
 #endif
