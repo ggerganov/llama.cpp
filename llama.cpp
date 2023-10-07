@@ -7194,6 +7194,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     }
 
     std::ofstream fout(fname_out, std::ios::binary);
+    fout.exceptions(std::ofstream::failbit); // fail fast on write errors
 
     const size_t meta_size = gguf_get_meta_size(ctx_out);
 
