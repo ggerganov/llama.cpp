@@ -8405,6 +8405,10 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             ggml_graph_compute_helper(ctx->work_buffer, gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
+
+            // free our allocated graph
+            free(gf);
+            gf = NULL;
         }
 
         ctx->kv_self.head = kv_head;
