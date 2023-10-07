@@ -344,7 +344,7 @@ struct llama_server_context
 
     void loadInfill()
     {
-        bool suff_rm_leading_spc = params.escape;
+        bool suff_rm_leading_spc = true;
         if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
             params.input_suffix.erase(0, 1);
             suff_rm_leading_spc = false;
