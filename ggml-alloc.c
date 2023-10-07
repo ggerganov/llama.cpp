@@ -303,6 +303,10 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
     memset((*alloc).hash_table, 0, sizeof((*alloc).hash_table));
     memset((*alloc).parse_seq, 0, sizeof((*alloc).parse_seq));
 
+#ifdef GGML_ALLOCATOR_DEBUG
+    memset((*alloc).allocated_tensors, 0, sizeof((*alloc).allocated_tensors));
+#endif
+
     ggml_allocr_reset(alloc);
 
     return alloc;
@@ -380,7 +384,7 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
     memset((*alloc).parse_seq, 0, sizeof((*alloc).parse_seq));
     
 #ifdef GGML_ALLOCATOR_DEBUG
-    (*alloc).allocated_tensors = {0};
+    memset((*alloc).allocated_tensors, 0, sizeof((*alloc).allocated_tensors));
 #endif
 
     ggml_allocr_reset(alloc);
