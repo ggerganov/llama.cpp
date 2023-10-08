@@ -8960,7 +8960,7 @@ Current version: 78
 			}
 			else
 			{
-				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender);
+				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
 			}
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
@@ -9754,8 +9754,9 @@ Current version: 78
 		}
 	}
 
-	function render_enhanced_chat_instruct(input, classSuffixStr="") //class suffix string used to prevent defined styles from leaking into global scope
+	function render_enhanced_chat_instruct(input, isPreview) //class suffix string used to prevent defined styles from leaking into global scope
 	{
+		let classSuffixStr = isPreview ? "prv" : "";
 		const contextDict = { sysOpen: '<sys_context_koboldlite_internal>', youOpen: '<user_context_koboldlite_internal>', AIOpen: '<AI_context_koboldlite_internal>', closeTag: '<end_of_context_koboldlite_internal>' }
 		let you = get_instruct_starttag(); let bot = get_instruct_endtag(); // Instruct tags will be used to wrap text in styled bubbles.
 
@@ -9802,7 +9803,7 @@ Current version: 78
 		let noSystemPrompt = input.trim().startsWith(you.trim()) || input.trim().startsWith(bot.trim());
 		let newbodystr = noSystemPrompt ? input : style('sys') + input;					 // First, create the string we'll transform. Style system bubble if we should.
 		if (newbodystr.endsWith(bot)) { newbodystr = newbodystr.slice(0, -bot.length); } // Remove the last chat bubble if prompt ends with `end_sequence`.
-		newbodystr = transformInputToAestheticStyle(newbodystr); 						 // Transform input to aesthetic style, reduce any unnecessary spaces or newlines, and trim empty replies if they exist.
+		newbodystr = transformInputToAestheticStyle(newbodystr,isPreview); 						 // Transform input to aesthetic style, reduce any unnecessary spaces or newlines, and trim empty replies if they exist.
 		if (synchro_pending_stream != "") {
 			newbodystr += getStreamingText();
 		} 		 // Add the pending stream if it's needed. This will add any streamed text to a new bubble for the AI.
@@ -9833,7 +9834,8 @@ Current version: 78
 			let fontStyle = type=='action'?'italic':'normal';
 			let injectQuotes1 = type=='speech'?'“':'';
 			let injectQuotes2 = type=='speech'?'”':'';
-			let textCol = as[`${type}_tcolor_${role}`]; return `<span style='color: ${textCol}; font-style: ${fontStyle}; font-weight: normal'>${injectQuotes1}$1${injectQuotes2}</span>`;
+			let textCol = as[`${type}_tcolor_${role}`];
+			return `<span style='color: ${textCol}; font-style: ${fontStyle}; font-weight: normal'>${injectQuotes1}$1${injectQuotes2}</span>`;
 		}
 		function image(role) {
 			if (!as[`${role}_portrait`] || as.border_style == 'None' || role == 'sys') { return ''; }
@@ -9852,10 +9854,10 @@ Current version: 78
 			}
 			return blocks.join('');
 		}
-		function transformInputToAestheticStyle(bodyStr) { // Trim unnecessary empty space and new lines, and append * or " to each bubble if start/end sequence ends with * or ", to preserve styling.
+		function transformInputToAestheticStyle(bodyStr, isPreview) { // Trim unnecessary empty space and new lines, and append * or " to each bubble if start/end sequence ends with * or ", to preserve styling.
 			bodyStr = bodyStr.replaceAll(you + '\n', you).replaceAll(you + ' ', you).replaceAll(you, style('you') + `${you.endsWith('*') ? '*' : ''}` + `${you.endsWith('"') ? '"' : ''}`);
 			bodyStr = bodyStr.replaceAll(bot + '\n', bot).replaceAll(bot + ' ', bot).replaceAll(bot, style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}`);
-			if(gametext_arr.length==0)
+			if(gametext_arr.length==0 && !isPreview)
 			{
 				return bodyStr; //to allow html in the welcome text
 			}
@@ -9871,8 +9873,8 @@ Current version: 78
 	}
 
 	function updateTextPreview() {
-		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\nqqq\n<Some_\n-- multiline\n--- code here$\nqqq\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\nqqq\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\nqqq\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
-		preview = replaceAll(preview,'qqq', '```');
+		let preview = `You are Mikago, a prestigious bot that's a supervillain.\n\nRoleplay in first person, be prestigious, don't be a bot. This is a fantasy world.\n\nCode blocks should be wrapped in triple backticks, like so:\n\`\`\`\n<Some_\n-- multiline\n--- code here$\n\`\`\`\n[AI_REPLY]\n*takes my hat off to greet the squad* "Greetings, I am Mikago, the prestigious!" *bows to the crew*\n*clears my throat* "Now, I'm sure there are many questions, but all will be answered in due time." *deep breath*\n[USER_REPLY]\n*draws my sword* "Yes. You should know the code to calculate the factorial of a number."\nThe crew also draws their weapons and point them at you, not giving you any space.\n[AI_REPLY]\n*backs off* "Woah, easy there.." *makes some steps backwards, but then stops*\n"I would normally take this as an insult to my prestige, but I understand your caution.." *takes a deep breath*\n"Well, if it's to prove myself, here goes the python code to calculate the factorial of a number.."\n\nMikago opens a live-code-portal with his magic and writes the code that was requested.\n\`\`\`\ndef factorial(n):\n  if n == 0:\n    return 1\n  else:\n    return n * factorial(n-1)\n\`\`\`\n*looks at you, getting impatient* "Are we ok now.. or do you want me to write the code of a game next?"\n[USER_REPLY]\n*sheathes my sword and approaches for a hug* "Oh, Mikago, my old friend, it is really you!"`;
+
 		if(localsettings.opmode==3)
 		{
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', "{{userplaceholder}}");
@@ -9887,7 +9889,7 @@ Current version: 78
 			preview = replaceAll(preview,'\n[USER_REPLY]\n', get_instruct_starttag());
 			preview = replaceAll(preview,'\n[AI_REPLY]\n', get_instruct_endtag());
 		}
-		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,'prv');
+		document.getElementById('aesthetic_text_preview').innerHTML = render_enhanced_chat_instruct(preview,true);
 	}
 	</script>
 
