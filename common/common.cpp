@@ -621,6 +621,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return true;
 }
 
+// There were missing items from this list of helps so the wording needs checking (all inserted at the end, so reposition too):
+// --embedding, --beams, --ppl-stride, --ppl-output-type, memory-f32, no-mmap, mlock, use-color, nprobs
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
@@ -667,7 +669,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        (default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)\n", params.mirostat);
     printf("  --mirostat-lr N       Mirostat learning rate, parameter eta (default: %.1f)\n", (double)params.mirostat_eta);
     printf("  --mirostat-ent N      Mirostat target entropy, parameter tau (default: %.1f)\n", (double)params.mirostat_tau);
-    printf("  -l TOKEN_ID(+/-)BIAS, --logit-bias TOKEN_ID(+/-)BIAS\n");
+    printf("  -l T, --logit-bias T  T = TOKEN_ID(plus/minus)BIAS\n");
     printf("                        modifies the likelihood of token appearing in the completion,\n");
     printf("                        i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n");
     printf("                        or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'\n");
@@ -682,7 +684,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: loaded from model)\n");
     printf("  --rope-freq-scale N   RoPE frequency linear scaling factor (default: loaded from model)\n");
     printf("  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
-    printf("  --no-penalize-nl      do not penalize newline token\n");
+    printf("  --no-penalize-nl      do not penalize newline token (default is DO penalise nl token)\n");
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
     printf("  --temp N              temperature (default: %.1f)\n", (double)params.temp);
@@ -729,6 +731,15 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        draft model for speculative decoding (default: %s)\n", params.model.c_str());
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
+    printf("  --ppl-stride          stride for ppl calcs. 0 (default): the pre-existing approach will be used.\n");
+    printf("  --ppl-output-type     0 (default): ppl output as usual, 1: ppl output num_tokens, one per line\n");
+    printf("  --embedding           0 (default): get only sentence embedding\n");
+    printf("  --beams N             0 (default): if non-zero use beam search of given width N.\n");
+    printf("  --memory-f32          0 (default): if true (= 1) disable f16 memory.\n");   
+    printf("  --no-mmap             0 (default): if true use mmap for faster loads.\n");
+    printf("  --mlock               0 (default): if true keep model in memory.\n");  
+    printf("  --use-color           0 (default): use color to distinguish generations from inputs\n");
+    printf("  --nprobs N            if > 0 output the probabilities of the top N tokens\n"); 
     printf("\n");
 }
 
