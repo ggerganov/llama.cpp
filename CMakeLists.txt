@@ -663,6 +663,8 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
+            ggml-backend.c
+            ggml-backend.h
             ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
