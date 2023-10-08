@@ -361,7 +361,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.46"
+KcppVersion = "1.46.1"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -540,8 +540,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
         self.wfile.flush()
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.2)
         self.close_connection = True
+        await asyncio.sleep(0.1)
 
 
     async def handle_request(self, genparams, api_format, stream_flag):
