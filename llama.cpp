@@ -2047,7 +2047,7 @@ static void llm_load_hparams(
                 case 36: model.type = e_model::MODEL_8B; break;
                 default: model.type = e_model::MODEL_UNKNOWN;
             }
-        }
+        } break;
         case LLM_ARCH_REFACT:
             {
                 GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
@@ -4926,7 +4926,7 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_PERSIMMON:
             {
                 result = llm_build_persimmon(lctx, batch);
-            }
+            } break;
         case LLM_ARCH_REFACT:
             {
                 result = llm_build_refact(lctx, batch);
