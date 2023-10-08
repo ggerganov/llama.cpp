@@ -237,7 +237,7 @@ int main(int argc, char ** argv) {
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
-        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
     } else {
         LOG("use session tokens\n");
         embd_inp = session_tokens;
@@ -259,10 +259,10 @@ int main(int argc, char ** argv) {
     if (ctx_guidance) {
         LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(params.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
+        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos, true);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp));
 
         original_prompt_len = original_inp.size();
@@ -316,8 +316,8 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos, true);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false, true);
 
     LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx));
     LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx));
@@ -715,7 +715,7 @@ int main(int argc, char ** argv) {
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -780,7 +780,7 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer, false, true);
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp));
 
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
