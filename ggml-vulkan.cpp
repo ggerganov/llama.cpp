@@ -788,10 +788,7 @@ static void ggml_vk_generate_shaders() {
         stream.str("");
         stream.clear();
 
-        stream << dequant_head << shader_float_type;
-        if (vk_device.fp16) {
-            stream << shader_int8_ext;
-        }
+        stream << dequant_head << shader_int8_ext << shader_float_type;
 
         if (!ggml_vk_build_shader_type_defines(stream, (ggml_type)i, !vk_device.fp16)) {
             continue;
@@ -814,10 +811,7 @@ static void ggml_vk_generate_shaders() {
         stream.str("");
         stream.clear();
 
-        stream << mul_mat_vec_head << shader_float_type;
-        if (vk_device.fp16) {
-            stream << shader_int8_ext;
-        }
+        stream << mul_mat_vec_head << shader_int8_ext << shader_float_type;
 
         if (!ggml_vk_build_shader_type_defines(stream, (ggml_type)i, !vk_device.fp16)) {
             continue;
