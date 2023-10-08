@@ -125,6 +125,8 @@ int main(int argc, char ** argv) {
         grammar_tgt = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
     }
 
+    llama_sampling_state sampling_state = llama_sampling_state_init(params, grammar_tgt);
+
     const auto t_dec_start = ggml_time_us();
 
     while (true) {
@@ -134,7 +136,7 @@ int main(int argc, char ** argv) {
 
         while (true) {
             // sample from the target model
-            llama_token id = llama_sample_token(ctx_tgt, NULL, grammar_tgt, params, last_tokens, candidates, i_dft);
+            llama_token id = llama_sample_token(ctx_tgt, NULL, sampling_state, last_tokens, candidates, i_dft);
 
             // remember which tokens were sampled - used for repetition penalties during sampling
             last_tokens.erase(last_tokens.begin());
@@ -211,7 +213,13 @@ int main(int argc, char ** argv) {
             if (grammar_dft) {
                 llama_grammar_free(grammar_dft);
             }
-            grammar_dft = llama_grammar_copy(grammar_tgt);
+            // Note: Hardcoded to sequence id 0, if this ever supports parallel generation
+            //       that will need to change.
+            auto it = sampling_state.sequence_states.find(0);
+            GGML_ASSERT(it != sampling_state.sequence_states.end());
+            // This is necessary because each sequence id in sequence_states
+            // uses a copy of the original grammar.
+            grammar_dft = llama_grammar_copy(it->second.grammar);
 
             LOG("copied target grammar to draft grammar\n");
         }
