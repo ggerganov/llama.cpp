@@ -487,10 +487,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     async def send_oai_sse_event(self, data):
         self.wfile.write(f'data: {data}\r\n\r\n'.encode())
+        self.wfile.flush()
 
     async def send_kai_sse_event(self, data):
         self.wfile.write(f'event: message\n'.encode())
         self.wfile.write(f'data: {data}\n\n'.encode())
+        self.wfile.flush()
 
     async def handle_sse_stream(self, api_format):
         global friendlymodelname
