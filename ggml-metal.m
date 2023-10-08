@@ -274,16 +274,18 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(mul_mv_q4_K_f32);
         GGML_METAL_ADD_KERNEL(mul_mv_q5_K_f32);
         GGML_METAL_ADD_KERNEL(mul_mv_q6_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_f32_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_f16_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q4_0_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q8_0_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q4_1_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q2_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q3_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q4_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q5_K_f32);
-        GGML_METAL_ADD_KERNEL(mul_mm_q6_K_f32);
+        if ([ctx->device supportsFamily:MTLGPUFamilyApple7]) {
+            GGML_METAL_ADD_KERNEL(mul_mm_f32_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_f16_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q4_0_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q8_0_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q4_1_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q2_K_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q3_K_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q4_K_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q5_K_f32);
+            GGML_METAL_ADD_KERNEL(mul_mm_q6_K_f32);
+        }
         GGML_METAL_ADD_KERNEL(rope_f32);
         GGML_METAL_ADD_KERNEL(rope_f16);
         GGML_METAL_ADD_KERNEL(alibi_f32);
@@ -296,8 +298,22 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #undef GGML_METAL_ADD_KERNEL
     }
 
-    GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
 #if TARGET_OS_OSX
+    // print MTL GPU family:
+    GGML_METAL_LOG_INFO("%s: GPU name:   %s\n", __func__, [[ctx->device name] UTF8String]);
+    GGML_METAL_LOG_INFO("%s: GPU arch:   %s\n", __func__, [[ctx->device architecture].name UTF8String]);
+
+    // determine max supported GPU family
+    // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+    // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+    for (int i = MTLGPUFamilyApple9 + 10; i >= MTLGPUFamilyApple1; --i) {
+        if ([ctx->device supportsFamily:i]) {
+            GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyApple%d (%d)\n", __func__, i - MTLGPUFamilyApple1 + 1, i);
+            break;
+        }
+    }
+
+    GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
     if (ctx->device.maxTransferRate != 0) {
         GGML_METAL_LOG_INFO("%s: maxTransferRate               = %8.2f MB/s\n", __func__, ctx->device.maxTransferRate / 1024.0 / 1024.0);
@@ -351,16 +367,18 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(mul_mv_q4_K_f32);
     GGML_METAL_DEL_KERNEL(mul_mv_q5_K_f32);
     GGML_METAL_DEL_KERNEL(mul_mv_q6_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_f32_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_f16_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q4_0_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q8_0_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q4_1_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q2_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q3_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q4_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q5_K_f32);
-    GGML_METAL_DEL_KERNEL(mul_mm_q6_K_f32);
+    if ([ctx->device supportsFamily:MTLGPUFamilyApple7]) {
+        GGML_METAL_DEL_KERNEL(mul_mm_f32_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_f16_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q4_0_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q8_0_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q4_1_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q2_K_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q3_K_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q4_K_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q5_K_f32);
+        GGML_METAL_DEL_KERNEL(mul_mm_q6_K_f32);
+    }
     GGML_METAL_DEL_KERNEL(rope_f32);
     GGML_METAL_DEL_KERNEL(rope_f16);
     GGML_METAL_DEL_KERNEL(alibi_f32);
@@ -986,32 +1004,36 @@ void ggml_metal_graph_compute(
                         } break;
                     case GGML_OP_MUL_MAT:
                         {
-                            // TODO: needs to be updated after PR: https://github.com/ggerganov/ggml/pull/224
-
                             GGML_ASSERT(ne00 == ne10);
-                            // GGML_ASSERT(ne02 == ne12); // Should be checked on individual data types until broadcast is implemented everywhere
-                            uint gqa = ne12/ne02;
                             GGML_ASSERT(ne03 == ne13);
 
+                            const uint gqa = ne12/ne02;
+
                             // find the break-even point where the matrix-matrix kernel becomes more efficient compared
-                            // to the matrix-vector kernel. the numbers below are measured on M2 Ultra
-                            // not sure if this translates across all chips
+                            // to the matrix-vector kernel
                             int ne11_mm_min = 1;
 
-                            switch (src0t) {
-                                case GGML_TYPE_F16:  ne11_mm_min = 2;  break;
-                                case GGML_TYPE_Q8_0: ne11_mm_min = 7;  break;
-                                case GGML_TYPE_Q2_K: ne11_mm_min = 15; break;
-                                case GGML_TYPE_Q3_K: ne11_mm_min = 7;  break;
-                                case GGML_TYPE_Q4_0:
-                                case GGML_TYPE_Q4_1: ne11_mm_min = 15; break;
-                                case GGML_TYPE_Q4_K: ne11_mm_min = 11; break;
-                                case GGML_TYPE_Q5_0:                          // not tested yet
-                                case GGML_TYPE_Q5_1: ne11_mm_min = 13; break; // not tested yet
-                                case GGML_TYPE_Q5_K: ne11_mm_min = 7;  break;
-                                case GGML_TYPE_Q6_K: ne11_mm_min = 7;  break;
-                                default:             ne11_mm_min = 1;  break;
+#if 0
+                            // the numbers below are measured on M2 Ultra for 7B and 13B models
+                            // these numbers do not translate to other devices or model sizes
+                            // TODO: need to find a better approach
+                            if ([ctx->device.name isEqualToString:@"Apple M2 Ultra"]) {
+                                switch (src0t) {
+                                    case GGML_TYPE_F16:  ne11_mm_min = 2;  break;
+                                    case GGML_TYPE_Q8_0: ne11_mm_min = 7;  break;
+                                    case GGML_TYPE_Q2_K: ne11_mm_min = 15; break;
+                                    case GGML_TYPE_Q3_K: ne11_mm_min = 7;  break;
+                                    case GGML_TYPE_Q4_0:
+                                    case GGML_TYPE_Q4_1: ne11_mm_min = 15; break;
+                                    case GGML_TYPE_Q4_K: ne11_mm_min = 11; break;
+                                    case GGML_TYPE_Q5_0:                          // not tested yet
+                                    case GGML_TYPE_Q5_1: ne11_mm_min = 13; break; // not tested yet
+                                    case GGML_TYPE_Q5_K: ne11_mm_min = 7;  break;
+                                    case GGML_TYPE_Q6_K: ne11_mm_min = 7;  break;
+                                    default:             ne11_mm_min = 1;  break;
+                                }
                             }
+#endif
 
                             // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                             // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel

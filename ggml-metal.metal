@@ -2332,7 +2332,7 @@ kernel void kernel_get_rows(
 }
 
 #define BLOCK_SIZE_M 64 // 8 simdgroup matrices from matrix A
-#define BLOCK_SIZE_N 32 // 4 simdgroup matrices from matrix A
+#define BLOCK_SIZE_N 32 // 4 simdgroup matrices from matrix B
 #define BLOCK_SIZE_K 32
 #define THREAD_MAT_M 4 // each thread take 4 simdgroup matrices from matrix A
 #define THREAD_MAT_N 2 // each thread take 2 simdgroup matrices from matrix B
@@ -2459,7 +2459,8 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        device float * C = dst + BLOCK_SIZE_M * r0 + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
+
+        device float * C = dst + (BLOCK_SIZE_M * r0) + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
         if (sgitg == 0) {
             for (int i = 0; i < n_rows; i++) {
                 for (int j = tiitg; j < n_cols; j += BLOCK_SIZE_N) {
