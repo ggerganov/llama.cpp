@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
-import gguf
 import argparse
 import concurrent.futures
 import copy
@@ -17,52 +17,98 @@ import re
 import signal
 import struct
 import sys
+import time
 import zipfile
-import numpy as np
-
 from abc import ABCMeta, abstractmethod
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import (IO, TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Literal, Optional, Sequence, Tuple, TypeVar, Union)
-from sentencepiece import SentencePieceProcessor  # type: ignore
+from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
+
+import numpy as np
+from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+
+import os
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+import gguf
 
 if TYPE_CHECKING:
-    from typing_extensions import TypeAlias
+    from typing import TypeAlias
 
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
 
-NDArray: 'TypeAlias' = 'np.ndarray[Any, Any]'
+NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
-ARCH=gguf.MODEL_ARCH.LLAMA
-NAMES=gguf.MODEL_TENSOR_NAMES[ARCH]
+ARCH = gguf.MODEL_ARCH.LLAMA
 
+DEFAULT_CONCURRENCY = 8
 #
 # data types
 #
 
 @dataclass(frozen=True)
-class UnquantizedDataType:
+class DataType:
     name: str
+    dtype: np.dtype[Any]
+    valid_conversions: list[str]
 
-DT_F16  = UnquantizedDataType('F16')
-DT_F32  = UnquantizedDataType('F32')
-DT_I32  = UnquantizedDataType('I32')
-DT_BF16 = UnquantizedDataType('BF16')
+    def elements_to_bytes(self, n_elements: int) -> int:
+        return n_elements * self.dtype.itemsize
 
-DataType = Union[UnquantizedDataType]
+@dataclass(frozen=True)
+class UnquantizedDataType(DataType):
+    pass
 
-DATA_TYPE_TO_NUMPY: Dict[DataType, 'np.dtype[Any]'] = {
-    DT_BF16: np.dtype(np.uint16),
-    DT_F16:  np.dtype(np.float16),
-    DT_F32:  np.dtype(np.float32),
-    DT_I32:  np.dtype(np.int32),
-}
+DT_F16  = UnquantizedDataType('F16', dtype = np.dtype(np.float16), valid_conversions = ['F32', 'Q8_0'])
+DT_F32  = UnquantizedDataType('F32', dtype = np.dtype(np.float32), valid_conversions = ['F16', 'Q8_0'])
+DT_I32  = UnquantizedDataType('I32', dtype = np.dtype(np.int16), valid_conversions = [])
+DT_BF16 = UnquantizedDataType('BF16', dtype = np.dtype(np.uint16), valid_conversions = ['F32', 'F16', 'Q8_0'])
 
-NUMPY_TYPE_TO_DATA_TYPE: Dict['np.dtype[Any]', DataType] = \
-    {dtype: data_type for (data_type, dtype) in DATA_TYPE_TO_NUMPY.items()}
+@dataclass(frozen=True)
+class QuantizedDataType(DataType):
+    block_size: int
+    quantized_dtype: np.dtype[Any]
+    ggml_type: gguf.GGMLQuantizationType
 
-SAFETENSORS_DATA_TYPES: Dict[str, DataType] = {
+    def quantize(self, arr: NDArray) -> NDArray:
+        raise NotImplementedError(f'Quantization for {self.name} not implemented')
+
+    def elements_to_bytes(self, n_elements: int) -> int:
+        assert n_elements % self.block_size == 0, f'Invalid number of elements {n_elements} for {self.name} with block size {self.block_size}'
+        return self.quantized_dtype.itemsize * (n_elements // self.block_size)
+
+@dataclass(frozen=True)
+class Q8_0QuantizedDataType(QuantizedDataType):
+    # Mini Q8_0 quantization in Python!
+    def quantize(self, arr: NDArray) -> NDArray:
+        assert arr.size % self.block_size == 0 and arr.size != 0, f'Bad array size {arr.size}'
+        assert arr.dtype == np.float32, f'Bad array type {arr.dtype}'
+        n_blocks = arr.size // self.block_size
+        blocks = arr.reshape((n_blocks, self.block_size))
+        # Much faster implementation of block quantization contributed by @Cebtenzzre
+        def quantize_blocks_q8_0(blocks: NDArray) -> Iterable[tuple[Any, Any]]:
+            d = abs(blocks).max(axis = 1) / np.float32(127)
+            with np.errstate(divide = 'ignore'):
+                qs = (blocks / d[:, None]).round()
+            qs[d == 0] = 0
+            yield from zip(d, qs)
+        return np.fromiter(quantize_blocks_q8_0(blocks), count = n_blocks, dtype = self.quantized_dtype)
+
+DT_Q8_0 = Q8_0QuantizedDataType('Q8_0',
+    dtype = np.dtype(np.float32), valid_conversions = [],
+    ggml_type = gguf.GGMLQuantizationType.Q8_0, block_size = 32,
+    quantized_dtype = np.dtype([('d', '<f2'), ('qs', 'i1', (32,))]))
+
+# Quantized types skipped here because they may also map to np.float32
+NUMPY_TYPE_TO_DATA_TYPE: dict[np.dtype[Any], DataType] = {}
+for dt in (DT_BF16, DT_F16, DT_F32, DT_I32):
+    if dt.dtype in NUMPY_TYPE_TO_DATA_TYPE:
+        raise ValueError(f'Invalid duplicate data type {dt}')
+    NUMPY_TYPE_TO_DATA_TYPE[dt.dtype] = dt
+
+SAFETENSORS_DATA_TYPES: dict[str, DataType] = {
     'BF16': DT_BF16,
     'F16': DT_F16,
     'F32': DT_F32,
@@ -73,20 +119,22 @@ SAFETENSORS_DATA_TYPES: Dict[str, DataType] = {
 # TODO: rename to LLAMAFileType
 # TODO: move to `gguf.py`
 class GGMLFileType(enum.IntEnum):
-    AllF32    = 0
-    MostlyF16 = 1  # except 1d tensors
+    AllF32     = 0
+    MostlyF16  = 1  # except 1d tensors
+    MostlyQ8_0 = 7  # except 1d tensors
 
-    def type_for_tensor(self, name: str, tensor: 'LazyTensor') -> DataType:
-        if len(tensor.shape) == 1:
-            # 1D tensors are always F32.
-            return DT_F32
-        elif self == GGMLFileType.AllF32:
-            return DT_F32
-        elif self == GGMLFileType.MostlyF16:
-            return DT_F16
-        else:
+    def type_for_tensor(self, name: str, tensor: LazyTensor) -> DataType:
+        dt = GGML_FILE_TYPE_TO_DATA_TYPE.get(self)
+        if dt is None:
             raise ValueError(self)
+        # 1D tensors are always F32.
+        return dt if len(tensor.shape) > 1 else DT_F32
 
+GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
+    GGMLFileType.AllF32    : DT_F32,
+    GGMLFileType.MostlyF16 : DT_F16,
+    GGMLFileType.MostlyQ8_0: DT_Q8_0,
+}
 
 #
 # hparams loading
@@ -96,7 +144,6 @@ class GGMLFileType(enum.IntEnum):
 class Params:
     n_vocab:    int
     n_embd:     int
-    n_mult:     int
     n_layer:    int
     n_ctx:      int
     n_ff:       int
@@ -104,19 +151,16 @@ class Params:
     n_head_kv:  int
     f_norm_eps: float
 
-    ftype: Optional[GGMLFileType] = None
+    f_rope_freq_base: float | None = None
+    f_rope_scale: float | None = None
+
+    ftype: GGMLFileType | None = None
+
+    # path to the directory containing the model files
+    path_model: Path | None = None
 
     @staticmethod
-    def find_n_mult(n_ff: int, n_embd: int) -> int:
-        # hardcoded magic range
-        for n_mult in range(8192, 1, -1):
-            calc_ff = (((8*n_embd) // 3 + n_mult - 1) // n_mult)*n_mult
-            if calc_ff == n_ff:
-                return n_mult
-        raise Exception(f"failed to find n_mult for (n_ff={n_ff}, n_embd={n_embd}).")
-
-    @staticmethod
-    def guessed(model: 'LazyModel') -> 'Params':
+    def guessed(model: LazyModel) -> Params:
         # try transformer naming first
         n_vocab, n_embd = model["model.embed_tokens.weight"].shape if "model.embed_tokens.weight" in model else model["tok_embeddings.weight"].shape
 
@@ -142,7 +186,6 @@ class Params:
         return Params(
             n_vocab    = n_vocab,
             n_embd     = n_embd,
-            n_mult     = n_mult,
             n_layer    = n_layer,
             n_ctx      = -1,
             n_ff       = n_ff,
@@ -152,18 +195,23 @@ class Params:
         )
 
     @staticmethod
-    def loadHFTransformerJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+    def loadHFTransformerJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
-        n_vocab    = config["vocab_size"]
-        n_embd     = config["hidden_size"]
-        n_layer    = config["num_hidden_layers"]
-        n_ff       = config["intermediate_size"]
-        n_head     = config["num_attention_heads"]
-        n_head_kv  = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head
-        f_norm_eps = config["rms_norm_eps"]
+        n_vocab          = config["vocab_size"]
+        n_embd           = config["hidden_size"]
+        n_layer          = config["num_hidden_layers"]
+        n_ff             = config["intermediate_size"]
+        n_head           = config["num_attention_heads"]
+        n_head_kv        = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head
+        f_norm_eps       = config["rms_norm_eps"]
+        f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
 
-        n_mult = Params.find_n_mult(n_ff, n_embd)
+        rope_scaling = config.get("rope_scaling")
+        if isinstance(rope_scaling, dict) and rope_scaling.get("type") == "linear":
+            f_rope_scale = config["rope_scaling"].get("factor")
+        else:
+            f_rope_scale = None
 
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
@@ -174,32 +222,43 @@ class Params:
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
 
         return Params(
-            n_vocab    = n_vocab,
-            n_embd     = n_embd,
-            n_mult     = n_mult,
-            n_layer    = n_layer,
-            n_ctx      = n_ctx,
-            n_ff       = n_ff,
-            n_head     = n_head,
-            n_head_kv  = n_head_kv,
-            f_norm_eps = f_norm_eps,
+            n_vocab          = n_vocab,
+            n_embd           = n_embd,
+            n_layer          = n_layer,
+            n_ctx            = n_ctx,
+            n_ff             = n_ff,
+            n_head           = n_head,
+            n_head_kv        = n_head_kv,
+            f_norm_eps       = f_norm_eps,
+            f_rope_freq_base = f_rope_freq_base,
+            f_rope_scale     = f_rope_scale,
         )
 
     # LLaMA v2 70B params.json
-    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1
+    # {"dim": 8192, "multiple_of": 4096, "ffn_dim_multiplier": 1.3, "n_heads": 64, "n_kv_heads": 8, "n_layers": 80, "norm_eps": 1e-05, "vocab_size": -1}
     @staticmethod
-    def loadOriginalParamsJson(model: 'LazyModel', config_path: 'Path') -> 'Params':
+    def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
-        n_vocab    = config["vocab_size"]
-        n_embd     = config["dim"]
-        n_layer    = config["n_layers"]
-        n_mult     = config["multiple_of"]
-        n_ctx      = 2048 if config["norm_eps"] == 1e-06 else 4096 # hack to determine LLaMA v1 vs v2
-        n_ff       = -1
-        n_head     = config["n_heads"]
-        n_head_kv  = config["n_kv_heads"] if "n_kv_heads" in config else n_head
-        f_norm_eps = config["norm_eps"]
+        n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
+        n_embd           = config["dim"]
+        n_layer          = config["n_layers"]
+        n_ff             = -1
+        n_head           = config["n_heads"]
+        n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
+        f_norm_eps       = config["norm_eps"]
+        f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
+
+        # hack to determine LLaMA v1 vs v2 vs CodeLlama
+        if f_rope_freq_base == 1000000:
+            # CodeLlama
+            n_ctx = 16384
+        elif config["norm_eps"] == 1e-05:
+            # LLaMA v2
+            n_ctx = 4096
+        else:
+            # LLaMA v1
+            n_ctx = 2048
 
         if n_vocab == -1:
             n_vocab = model["tok_embeddings.weight"].shape[0]
@@ -208,19 +267,19 @@ class Params:
             n_ff = model["layers.0.feed_forward.w1.weight"].shape[0]
 
         return Params(
-            n_vocab    = n_vocab,
-            n_embd     = n_embd,
-            n_mult     = n_mult,
-            n_layer    = n_layer,
-            n_ctx      = n_ctx,
-            n_ff       = n_ff,
-            n_head     = n_head,
-            n_head_kv  = n_head_kv,
-            f_norm_eps = f_norm_eps,
+            n_vocab          = n_vocab,
+            n_embd           = n_embd,
+            n_layer          = n_layer,
+            n_ctx            = n_ctx,
+            n_ff             = n_ff,
+            n_head           = n_head,
+            n_head_kv        = n_head_kv,
+            f_norm_eps       = f_norm_eps,
+            f_rope_freq_base = f_rope_freq_base,
         )
 
     @staticmethod
-    def load(model_plus: 'ModelPlus') -> 'Params':
+    def load(model_plus: ModelPlus) -> Params:
         hf_config_path   = model_plus.paths[0].parent / "config.json"
         orig_config_path = model_plus.paths[0].parent / "params.json"
 
@@ -228,8 +287,12 @@ class Params:
             params = Params.loadHFTransformerJson(model_plus.model, hf_config_path)
         elif orig_config_path.exists():
             params = Params.loadOriginalParamsJson(model_plus.model, orig_config_path)
-        else:
+        elif model_plus.format != 'none':
             params = Params.guessed(model_plus.model)
+        else:
+            raise ValueError('Cannot guess params when model format is none')
+
+        params.path_model = model_plus.paths[0].parent
 
         return params
 
@@ -239,19 +302,31 @@ class Params:
 #
 
 class BpeVocab:
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
-        added_tokens: Dict[str, int]
+        added_tokens: dict[str, int]
         if fname_added_tokens is not None:
+            # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
-            added_tokens = {}
+            # Fall back to trying to find the added tokens in tokenizer.json
+            tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
+            if not tokenizer_json_file.is_file():
+                added_tokens = {}
+            else:
+                tokenizer_json = json.load(open(tokenizer_json_file, encoding="utf-8"))
+                added_tokens = dict(
+                    (item['content'], item['id'])
+                    for item in tokenizer_json.get('added_tokens', [])
+                    # Added tokens here can be duplicates of the main vocabulary.
+                    if item['content'] not in self.bpe_tokenizer )
 
         vocab_size: int = len(self.bpe_tokenizer)
         expected_ids    = list(range(vocab_size, vocab_size + len(added_tokens)))
         actual_ids      = sorted(added_tokens.values())
         if expected_ids != actual_ids:
-            raise Exception(f"Expected added token IDs to be sequential and start at {len(added_tokens)}; got {actual_ids}")
+            expected_end_id = vocab_size + len(actual_ids) - 1
+            raise Exception(f"Expected the {len(actual_ids)} added token ID(s) to be sequential in the range {vocab_size} - {expected_end_id}; got {actual_ids}")
 
         items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
         self.added_tokens_list    = [text for (text, idx) in items]
@@ -260,33 +335,31 @@ class BpeVocab:
         self.fname_tokenizer      = fname_tokenizer
         self.fname_added_tokens   = fname_added_tokens
 
-    def bpe_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+    def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
-        from transformers.models.gpt2 import tokenization_gpt2
-        byte_encoder = tokenization_gpt2.bytes_to_unicode()
-        byte_decoder = {v: k for k, v in byte_encoder.items()}
-        for i, item in enumerate(tokenizer):
-            text: bytes = item.encode("utf-8")
-            score: float = -i
-            yield text, score, gguf.TokenType.USER_DEFINED
+        from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
+        reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.items()}
 
-    def added_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+        for i, _ in enumerate(tokenizer):
+            yield reverse_vocab[i], 0.0, gguf.TokenType.NORMAL
+
+    def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             score = -1000.0
-            yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
+            yield text.encode("utf-8"), score, gguf.TokenType.CONTROL
 
-    def all_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+    def all_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         yield from self.bpe_tokens()
         yield from self.added_tokens()
 
     def __repr__(self) -> str:
-        return f"BpeVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<BpeVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
 
 class SentencePieceVocab:
-    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Optional[Path]) -> None:
+    def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
-        added_tokens: Dict[str, int]
+        added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
@@ -305,7 +378,7 @@ class SentencePieceVocab:
         self.fname_tokenizer = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
 
-    def sentencepiece_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+    def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
             piece = tokenizer.id_to_piece(i)
@@ -329,20 +402,19 @@ class SentencePieceVocab:
 
             yield text, score, toktype
 
-    def added_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+    def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
             score = -1000.0
             yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
 
-    def all_tokens(self) -> Iterable[Tuple[bytes, float, gguf.TokenType]]:
+    def all_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         yield from self.sentencepiece_tokens()
         yield from self.added_tokens()
 
     def __repr__(self) -> str:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
-Vocab = Union[BpeVocab, SentencePieceVocab]
-
+Vocab: TypeAlias = 'BpeVocab | SentencePieceVocab'
 
 #
 # data loading
@@ -352,7 +424,7 @@ Vocab = Union[BpeVocab, SentencePieceVocab]
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
     #print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
-        n_head //= n_head_kv
+        n_head = n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
                 .swapaxes(1, 2)
                 .reshape(weights.shape))
@@ -362,18 +434,18 @@ class Tensor(metaclass=ABCMeta):
     data_type: DataType
 
     @abstractmethod
-    def astype(self, data_type: DataType) -> 'Tensor': ...
+    def astype(self, data_type: DataType) -> Tensor: ...
     @abstractmethod
-    def permute(self, n_head: int, n_head_kv: int) -> 'Tensor': ...
+    def permute(self, n_head: int, n_head_kv: int) -> Tensor: ...
     @abstractmethod
-    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor': ...
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def part(self, n_part: int) -> 'UnquantizedTensor': ...
+    def part(self, n_part: int) -> UnquantizedTensor: ...
     @abstractmethod
-    def to_ggml(self) -> 'GGMLCompatibleTensor': ...
+    def to_ggml(self) -> GGMLCompatibleTensor: ...
 
 
-def bf16_to_fp32(bf16_arr: np.ndarray) -> np.ndarray:
+def bf16_to_fp32(bf16_arr: np.ndarray[Any, np.dtype[np.uint16]]) -> NDArray:
     assert bf16_arr.dtype == np.uint16, f"Input array should be of dtype uint16, but got {bf16_arr.dtype}"
     fp32_arr = bf16_arr.astype(np.uint32) << 16
     return fp32_arr.view(np.float32)
@@ -386,27 +458,27 @@ class UnquantizedTensor(Tensor):
         self.data_type = NUMPY_TYPE_TO_DATA_TYPE[ndarray.dtype]
 
     def astype(self, data_type: DataType) -> Tensor:
-        dtype = DATA_TYPE_TO_NUMPY[data_type]
+        dtype = data_type.dtype
         if self.data_type == DT_BF16:
             self.ndarray = bf16_to_fp32(self.ndarray)
         return UnquantizedTensor(self.ndarray.astype(dtype))
 
-    def to_ggml(self) -> 'UnquantizedTensor':
+    def to_ggml(self) -> UnquantizedTensor:
         return self
 
-    def permute_part(self, n_part: int, n_head: int) -> 'UnquantizedTensor':
+    def permute_part(self, n_part: int, n_head: int, n_head_kv: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
-        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head))
+        return UnquantizedTensor(permute(self.ndarray[r * n_part : r * n_part + r, ...], n_head, n_head_kv))
 
-    def part(self, n_part: int) -> 'UnquantizedTensor':
+    def part(self, n_part: int) -> UnquantizedTensor:
         r = self.ndarray.shape[0] // 3
         return UnquantizedTensor(self.ndarray[r * n_part : r * n_part + r, ...])
 
-    def permute(self, n_head: int, n_head_kv: int) -> 'UnquantizedTensor':
+    def permute(self, n_head: int, n_head_kv: int) -> UnquantizedTensor:
         return UnquantizedTensor(permute(self.ndarray, n_head, n_head_kv))
 
 
-def load_unquantized(lazy_tensor: 'LazyTensor', expected_dtype: Any = None, convert: bool = False) -> NDArray:
+def load_unquantized(lazy_tensor: LazyTensor, expected_dtype: Any = None, convert: bool = False) -> NDArray:
     tensor = lazy_tensor.load()
     assert isinstance(tensor, UnquantizedTensor)
 
@@ -422,38 +494,24 @@ def load_unquantized(lazy_tensor: 'LazyTensor', expected_dtype: Any = None, conv
     return tensor.ndarray
 
 
-GGMLCompatibleTensor = Union[UnquantizedTensor]
-
-
-class DeferredPermutedTensor(Tensor):
-    def __init__(self, base: Tensor, n_head: int, n_head_kv: int) -> None:
-        self.base = base
-        self.n_head = n_head
-        self.data_type = self.base.data_type
-
-    def astype(self, data_type: DataType) -> Tensor:
-        return self.base.astype(data_type).permute(self.n_head, self.n_head_kv)
-
-    def to_ggml(self) -> GGMLCompatibleTensor:
-        return self.base.to_ggml().permute(self.n_head, self.n_head_kv)
-
-    def permute(self, n_head: int, n_head_kv: int) -> Tensor:
-        raise Exception("shouldn't permute twice")
+GGMLCompatibleTensor = UnquantizedTensor
 
 
 @dataclass
 class LazyTensor:
     _load: Callable[[], Tensor]
-    shape: List[int]
+    shape: list[int]
     data_type: DataType
     description: str
 
     def load(self) -> Tensor:
         ret = self._load()
-        assert ret.data_type == self.data_type, (self.data_type, ret.data_type, self.description)
+        # Should be okay if it maps to the same numpy type?
+        assert ret.data_type == self.data_type or (self.data_type.dtype == ret.data_type.dtype), \
+                (self.data_type, ret.data_type, self.description)
         return ret
 
-    def astype(self, data_type: DataType) -> 'LazyTensor':
+    def astype(self, data_type: DataType) -> LazyTensor:
         self.validate_conversion_to(data_type)
 
         def load() -> Tensor:
@@ -461,28 +519,28 @@ class LazyTensor:
         return LazyTensor(load, self.shape, data_type, f'convert({data_type}) {self.description}')
 
     def validate_conversion_to(self, data_type: DataType) -> None:
-        if data_type == self.data_type:
-            return
+        if data_type != self.data_type and data_type.name not in self.data_type.valid_conversions:
+            raise ValueError(f'Cannot validate conversion from {self.data_type} to {data_type}.')
 
 
-LazyModel = Dict[str, LazyTensor]
+LazyModel: TypeAlias = 'dict[str, LazyTensor]'
 
 
 @dataclass
 class ModelPlus:
     model: LazyModel
-    paths: List[Path]  # Where this was read from.
-    format: Literal['ggml', 'torch', 'safetensors']
-    vocab: Optional[Vocab]  # For GGML models (which have vocab built in), the vocab.
+    paths: list[Path]  # Where this was read from.
+    format: Literal['ggml', 'torch', 'safetensors', 'none']
+    vocab: Vocab | None  # For GGML models (which have vocab built in), the vocab.
 
 
-def merge_sharded(models: List[LazyModel]) -> LazyModel:
+def merge_sharded(models: list[LazyModel]) -> LazyModel:
     # Original LLaMA models have each file contain one part of each tensor.
     # Use a dict instead of a set to preserve order.
     names = {name: None for model in models for name in model}
 
     def convert(name: str) -> LazyTensor:
-        lazy_tensors: List[LazyTensor] = [model[name] for model in models]
+        lazy_tensors: list[LazyTensor] = [model[name] for model in models]
         if len(lazy_tensors) == 1:
             # only one file; don't go through this procedure since there might
             # be quantized tensors
@@ -510,7 +568,7 @@ def merge_sharded(models: List[LazyModel]) -> LazyModel:
     return {name: convert(name) for name in names}
 
 
-def merge_multifile_models(models_plus: List[ModelPlus]) -> ModelPlus:
+def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
     formats = set(mp.format for mp in models_plus)
     assert len(formats) == 1, "different formats?"
     format = formats.pop()
@@ -538,12 +596,12 @@ def permute_lazy(lazy_tensor: LazyTensor, n_head: int, n_head_kv: int) -> LazyTe
         return lazy_tensor.load().permute(n_head, n_head_kv)
     return LazyTensor(load, lazy_tensor.shape, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
-def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int) -> LazyTensor:
+def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int, n_head_kv: int) -> LazyTensor:
     def load() -> Tensor:
-        return lazy_tensor.load().permute_part(n_part, n_head)
+        return lazy_tensor.load().permute_part(n_part, n_head, n_head_kv)
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
-    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}) ' + lazy_tensor.description)
+    return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
 def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
     def load() -> Tensor:
@@ -584,13 +642,11 @@ class LazyUnpickler(pickle.Unpickler):
         assert isinstance(pid[1], LazyStorageKind)
         data_type = pid[1].data_type
         filename_stem = pid[2]
-        filename = self.data_base_path + '/' + filename_stem
+        filename = f'{self.data_base_path}/{filename_stem}'
         info = self.zip_file.getinfo(filename)
 
         def load(offset: int, elm_count: int) -> NDArray:
-            dtype = DATA_TYPE_TO_NUMPY.get(data_type)
-            if dtype is None:
-                raise Exception("tensor stored in unsupported format")
+            dtype = data_type.dtype
             fp = self.zip_file.open(info)
             fp.seek(offset * dtype.itemsize)
             size = elm_count * dtype.itemsize
@@ -600,9 +656,8 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'storage data_type={data_type} path-in-zip={filename} path={self.zip_file.filename}'
         return LazyStorage(load=load, kind=pid[1], description=description)
 
-    # @staticmethod
+    @staticmethod
     def lazy_rebuild_tensor_v2(storage: Any, storage_offset: Any, size: Any, stride: Any,
-                               # pyright: ignore[reportSelfClsParameterName]
                                requires_grad: Any, backward_hooks: Any, metadata: Any = None) -> LazyTensor:
         assert isinstance(storage, LazyStorage)
 
@@ -612,13 +667,15 @@ class LazyUnpickler(pickle.Unpickler):
         description = f'pickled storage_offset={storage_offset} in {storage.description}'
         return LazyTensor(load, list(size), storage.kind.data_type, description)
 
-    # @staticmethod
+    @staticmethod
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
-    CLASSES: Dict[Any, Any] = {
-        ('torch._tensor', '_rebuild_from_type_v2'): rebuild_from_type_v2,
-        ('torch._utils', '_rebuild_tensor_v2'): lazy_rebuild_tensor_v2,
+    CLASSES: dict[tuple[str, str], Any] = {
+        # getattr used here as a workaround for mypy not being smart enough to detrmine
+        # the staticmethods have a __func__ attribute.
+        ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
+        ('torch._utils', '_rebuild_tensor_v2'): getattr(lazy_rebuild_tensor_v2, '__func__'),
         ('torch', 'BFloat16Storage'): LazyStorageKind(DT_BF16),
         ('torch', 'HalfStorage'): LazyStorageKind(DT_F16),
         ('torch', 'FloatStorage'): LazyStorageKind(DT_F32),
@@ -647,15 +704,15 @@ def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
 
 def lazy_load_safetensors_file(fp: IO[bytes], path: Path) -> ModelPlus:
     header_size, = struct.unpack('<Q', fp.read(8))
-    header: Dict[str, Dict[str, Any]] = json.loads(fp.read(header_size))
+    header: dict[str, dict[str, Any]] = json.loads(fp.read(header_size))
     # Use mmap for the actual data to avoid race conditions with the file offset.
     mapped = memoryview(mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ))
     byte_buf = mapped[8 + header_size:]
 
-    def convert(info: Dict[str, Any]) -> LazyTensor:
+    def convert(info: dict[str, Any]) -> LazyTensor:
         data_type = SAFETENSORS_DATA_TYPES[info['dtype']]
-        numpy_dtype = DATA_TYPE_TO_NUMPY[data_type]
-        shape: List[int] = info['shape']
+        numpy_dtype = data_type.dtype
+        shape: list[int] = info['shape']
         begin, end = info['data_offsets']
         assert 0 <= begin <= end <= len(byte_buf)
         assert end - begin == math.prod(shape) * numpy_dtype.itemsize
@@ -694,22 +751,39 @@ def lazy_load_file(path: Path) -> ModelPlus:
 In = TypeVar('In')
 Out = TypeVar('Out')
 
-def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int) -> Iterable[Out]:
+def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int, max_workers: int | None = None, use_processpool_executor: bool = False) -> Iterable[Out]:
     '''Parallel map, but with backpressure.  If the caller doesn't call `next`
     fast enough, this will stop calling `func` at some point rather than
     letting results pile up in memory.  Specifically, there is a max of one
     output value buffered per thread.'''
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures: List[concurrent.futures.Future[Out]] = []
-        items_rev = list(iterable)[::-1]
-        for i in range(min(concurrency, len(items_rev))):
-            futures.append(executor.submit(func, items_rev.pop()))
+    if concurrency < 2:
+        yield from map(func, iterable)
+        # Not reached.
+    iterable = iter(iterable)
+    executor_class: type[ThreadPoolExecutor] | type[ProcessPoolExecutor]
+    if use_processpool_executor:
+        executor_class = ProcessPoolExecutor
+    else:
+        executor_class = ThreadPoolExecutor
+    with executor_class(max_workers = max_workers) as executor:
+        futures: list[concurrent.futures.Future[Out]] = []
+        done = False
+        for _ in range(concurrency):
+            try:
+                futures.append(executor.submit(func, next(iterable)))
+            except StopIteration:
+                done = True
+                break
+
         while futures:
             result = futures.pop(0).result()
-            if items_rev:
-                futures.append(executor.submit(func, items_rev.pop()))
+            while not done and len(futures) < concurrency:
+                try:
+                    futures.append(executor.submit(func, next(iterable)))
+                except StopIteration:
+                    done = True
+                    break
             yield result
-
 
 def check_vocab_size(params: Params, vocab: Vocab) -> None:
     if params.n_vocab != vocab.vocab_size:
@@ -733,7 +807,15 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
     def add_meta_arch(self, params: Params) -> None:
-        self.gguf.add_name                ("LLaMA")
+        name = "LLaMA"
+
+        # TODO: better logic to determine model name
+        if params.n_ctx == 4096:
+            name = "LLaMA v2"
+        elif params.path_model is not None:
+            name = str(params.path_model.parent).split('/')[-1]
+
+        self.gguf.add_name                (name)
         self.gguf.add_context_length      (params.n_ctx)
         self.gguf.add_embedding_length    (params.n_embd)
         self.gguf.add_block_count         (params.n_layer)
@@ -743,32 +825,44 @@ class OutputFile:
         self.gguf.add_head_count_kv       (params.n_head_kv)
         self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
 
-        if params.ftype:
+        if params.f_rope_freq_base is not None:
+            self.gguf.add_rope_freq_base(params.f_rope_freq_base)
+
+        if params.f_rope_scale is not None:
+            self.gguf.add_rope_scale_linear(params.f_rope_scale)
+
+        if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
     def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
         scores = []
         toktypes = []
-        # NOTE: `all_tokens` returns the the base vocabulary and added tokens
-        # TODO: add special tokens?
+        # NOTE: `all_tokens` returns the base vocabulary and added tokens
         for text, score, toktype in vocab.all_tokens():
             tokens.append(text)
             scores.append(score)
             toktypes.append(toktype)
 
-        self.gguf.add_tokenizer_model("llama")
+        if isinstance(vocab, SentencePieceVocab):
+            self.gguf.add_tokenizer_model("llama")
+        elif isinstance(vocab, BpeVocab):
+            self.gguf.add_tokenizer_model("gpt2")
+        else:
+            raise ValueError(f'Unknown vocab type: Not BpeVocab or SentencePieceVocab')
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
 
+    def add_meta_special_vocab(self, svocab: gguf.SpecialVocab) -> None:
+        svocab.add_to_gguf(self.gguf)
+
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
-        n_elements = 1
-        for dim in tensor.shape:
-            n_elements *= dim
-        data_type = DATA_TYPE_TO_NUMPY[tensor.data_type]
-        data_nbytes = n_elements * data_type.itemsize
-        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes)
+        n_elements = int(np.prod(tensor.shape))
+        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
+        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
+        data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
+        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype = raw_dtype)
 
     def write_meta(self) -> None:
         self.gguf.write_header_to_file()
@@ -781,7 +875,7 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab) -> None:
+    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
@@ -789,12 +883,27 @@ class OutputFile:
         # meta data
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
+        of.add_meta_special_vocab(svocab)
+
         of.write_meta()
 
         of.close()
 
     @staticmethod
-    def write_all(fname_out: Path, params: Params, model: LazyModel, vocab: Vocab) -> None:
+    def do_item(item: tuple[str, LazyTensor]) -> tuple[DataType, NDArray]:
+        name, lazy_tensor = item
+        tensor = lazy_tensor.load().to_ggml()
+        return (lazy_tensor.data_type, tensor.ndarray)
+
+    @staticmethod
+    def maybe_do_quantize(item: tuple[DataType, NDArray]) -> NDArray:
+        dt, arr = item
+        if not isinstance(dt, QuantizedDataType):
+            return arr
+        return dt.quantize(arr)
+
+    @staticmethod
+    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out)
@@ -802,6 +911,7 @@ class OutputFile:
         # meta data
         of.add_meta_arch(params)
         of.add_meta_vocab(vocab)
+        of.add_meta_special_vocab(svocab)
 
         # tensor info
         for name, lazy_tensor in model.items():
@@ -810,27 +920,32 @@ class OutputFile:
         of.write_meta()
         of.write_tensor_info()
 
-        def do_item(item: Tuple[str, LazyTensor]) -> NDArray:
-            name, lazy_tensor = item
-            return lazy_tensor.load().to_ggml().ndarray
-
         # tensor data
-        ndarrays = bounded_parallel_map(do_item, model.items(), concurrency=8)
+        ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency = concurrency)
+        if ftype == GGMLFileType.MostlyQ8_0:
+            ndarrays = bounded_parallel_map(OutputFile.maybe_do_quantize, ndarrays_inner, concurrency = concurrency, max_workers = concurrency, use_processpool_executor = True)
+        else:
+            ndarrays = map(OutputFile.maybe_do_quantize, ndarrays_inner)
+
+        start = time.time()
         for i, ((name, lazy_tensor), ndarray) in enumerate(zip(model.items(), ndarrays)):
+            elapsed = time.time() - start
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
-            print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type}")
+            print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}")
             of.gguf.write_tensor_data(ndarray)
 
         of.close()
 
-def pick_output_type(model: LazyModel, output_type_str: Optional[str]) -> GGMLFileType:
-    wq_type = model[NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0)+".weight"].data_type
+def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
+    wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0)+".weight"].data_type
 
     if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
         return GGMLFileType.AllF32
     if output_type_str == "f16" or (output_type_str is None and wq_type in (DT_F16, DT_BF16)):
         return GGMLFileType.MostlyF16
+    if output_type_str == "q8_0":
+        return GGMLFileType.MostlyQ8_0
 
     name_to_type = {name: lazy_tensor.data_type for (name, lazy_tensor) in model.items()}
 
@@ -841,7 +956,8 @@ def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyM
             for (name, tensor) in model.items()}
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
-    tmap = gguf.get_tensor_name_map(ARCH, params.n_layer)
+    tmap = gguf.TensorNameMap(ARCH, params.n_layer)
+    should_skip: set[gguf.MODEL_TENSOR] = set(gguf.MODEL_TENSOR_SKIP.get(ARCH, []))
 
     tmp = model
 
@@ -857,37 +973,31 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
+            del tmp[f"model.layers.{i}.self_attn.W_pack.weight"]
         else:
             break
 
     out: LazyModel = {}
     for name, lazy_tensor in model.items():
-        name_new = name
-
-        if name in tmap:
-            name_new = tmap[name]
-        elif name.endswith(".weight") and name[:-7] in tmap:
-            name_new = tmap[name[:-7]] + ".weight"
-        elif name.endswith(".bias") and name[:-5] in tmap:
-            name_new = tmap[name[:-5]] + ".bias"
-        else:
+        tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
+        if name_new is None:
             raise Exception(f"Unexpected tensor name: {name}")
 
-        if gguf.should_skip_tensor_TMP(ARCH, params.n_layer, name_new):
+        if tensor_type in should_skip:
             print(f"skipping tensor {name_new}")
             continue
-        else:
-            print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type} | {lazy_tensor.shape}")
-            out[name_new] = lazy_tensor
+
+        print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
+        out[name_new] = lazy_tensor
 
     return out
 
-def nth_multifile_path(path: Path, n: int) -> Optional[Path]:
+def nth_multifile_path(path: Path, n: int) -> Path | None:
     '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
     the nth path in the model.
     '''
     # Support the following patterns:
-    patterns: List[Tuple[str, str]] = [
+    patterns: list[tuple[str, str]] = [
         # - x.00.pth, x.01.pth, etc.
         (r'\.[0-9]{2}\.pth$', f'.{n:02}.pth'),
         # - x-00001-of-00002.bin, x-00002-of-00002.bin, etc.
@@ -903,11 +1013,11 @@ def nth_multifile_path(path: Path, n: int) -> Optional[Path]:
     return None
 
 
-def find_multifile_paths(path: Path) -> List[Path]:
+def find_multifile_paths(path: Path) -> list[Path]:
     '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
     the whole list of paths in the model.
     '''
-    ret: List[Path] = []
+    ret: list[Path] = []
     for i in itertools.count():
         nth_path = nth_multifile_path(path, i)
         if nth_path is None:
@@ -938,7 +1048,7 @@ def load_some_model(path: Path) -> ModelPlus:
         path = files[0]
 
     paths = find_multifile_paths(path)
-    models_plus: List[ModelPlus] = []
+    models_plus: list[ModelPlus] = []
     for path in paths:
         print(f"Loading model file {path}")
         models_plus.append(lazy_load_file(path))
@@ -947,7 +1057,7 @@ def load_some_model(path: Path) -> ModelPlus:
     return model_plus
 
 
-def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, SentencePieceVocab]:
+def load_vocab(path: Path, vocabtype: str | None) -> Vocab:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
@@ -978,10 +1088,11 @@ def load_vocab(path: Path, vocabtype: Optional[str]) -> Union[BpeVocab, Sentence
         raise ValueError(f"Unsupported vocabulary type {vocabtype}")
 
 
-def default_outfile(model_paths: List[Path], file_type: GGMLFileType) -> Path:
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
     namestr = {
         GGMLFileType.AllF32:    "f32",
         GGMLFileType.MostlyF16: "f16",
+        GGMLFileType.MostlyQ8_0:"q8_0",
     }[file_type]
     ret = model_paths[0].parent / f"ggml-model-{namestr}.gguf"
     if ret in model_paths:
@@ -1000,24 +1111,33 @@ def do_dump_model(model_plus: ModelPlus) -> None:
         print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}")
 
 
-def main(args_in: Optional[List[str]] = None) -> None:
+def main(args_in: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
     parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outtype",     choices=["f32", "f16"], help="output format (default: based on input)")
+    parser.add_argument("--outtype",     choices=["f32", "f16", "q8_0"], help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
     parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
+    parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
     args = parser.parse_args(args_in)
 
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
+        return
 
-    model_plus = load_some_model(args.model)
+    if not args.vocab_only:
+        model_plus = load_some_model(args.model)
+    else:
+        model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
+
+    if args.dump:
+        do_dump_model(model_plus)
+        return
 
     params = Params.load(model_plus)
     if params.n_ctx == -1:
@@ -1032,39 +1152,41 @@ def main(args_in: Optional[List[str]] = None) -> None:
         params.ftype = {
             "f32": GGMLFileType.AllF32,
             "f16": GGMLFileType.MostlyF16,
+            "q8_0": GGMLFileType.MostlyQ8_0,
         }[args.outtype]
 
     print(f"params = {params}")
 
     vocab: Vocab
     if args.vocab_only:
-        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
         assert args.outfile, "need --outfile if using --vocab-only"
+        # FIXME: Try to respect vocab_dir somehow?
+        vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
+        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype == 'bpe')
         outfile = args.outfile
-        OutputFile.write_vocab_only(outfile, params, vocab)
+        OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
+        return
+
+    if model_plus.vocab is not None and args.vocab_dir is None:
+        vocab = model_plus.vocab
     else:
-        if args.dump:
-            do_dump_model(model_plus)
-            return
+        vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
+        vocab = load_vocab(vocab_dir, args.vocabtype)
+    # FIXME: Try to respect vocab_dir somehow?
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype == 'bpe')
 
-        if model_plus.vocab is not None and args.vocab_dir is None:
-            vocab = model_plus.vocab
-        else:
-            vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
-            vocab = load_vocab(vocab_dir, args.vocabtype)
+    model   = model_plus.model
+    model   = convert_model_names(model, params)
+    ftype   = pick_output_type(model, args.outtype)
+    model   = convert_to_output_type(model, ftype)
+    outfile = args.outfile or default_outfile(model_plus.paths, ftype)
 
-        model   = model_plus.model
-        model   = convert_model_names(model, params)
-        ftype   = pick_output_type(model, args.outtype)
-        model   = convert_to_output_type(model, ftype)
-        outfile = args.outfile or default_outfile(model_plus.paths, ftype)
+    params.ftype = ftype
+    print(f"Writing {outfile}, format {ftype}")
 
-        params.ftype = ftype
-        print(f"Writing {outfile}, format {ftype}")
-
-        OutputFile.write_all(outfile, params, model, vocab)
-        print(f"Wrote {outfile}")
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency)
+    print(f"Wrote {outfile}")
 
 
 if __name__ == '__main__':

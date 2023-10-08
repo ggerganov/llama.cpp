@@ -19,11 +19,14 @@
 
 #pragma once
 
+#include "ggml.h"
+
 #include <stddef.h>
 #include <stdbool.h>
 
 // max memory buffers that can be mapped to the device
 #define GGML_METAL_MAX_BUFFERS 16
+#define GGML_METAL_MAX_COMMAND_BUFFERS 32
 
 struct ggml_tensor;
 struct ggml_cgraph;
@@ -31,6 +34,8 @@ struct ggml_cgraph;
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data);
 
 struct ggml_metal_context;
 

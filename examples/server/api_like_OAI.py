@@ -31,8 +31,6 @@ def is_present(json, key):
         return False
     return True
 
-
-
 #convert chat to prompt
 def convert_chat(messages):
     prompt = "" + args.chat_prompt.replace("\\n", "\n")

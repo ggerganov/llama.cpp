@@ -12,7 +12,8 @@
 #include <vector>
 #include <algorithm>
 
-void dump(const llama_token_data_array * candidates) {
+
+static void dump(const llama_token_data_array * candidates) {
     for (size_t i = 0; i < candidates->size; i++) {
         printf("%d: %f (%f)\n", candidates->data[i].id, candidates->data[i].p, candidates->data[i].logit);
     }
@@ -21,9 +22,7 @@ void dump(const llama_token_data_array * candidates) {
 #define DUMP(__candidates) do { printf("%s:%d (%s)\n", __FILE__, __LINE__, __func__); dump((__candidates)); printf("-\n"); } while(0)
 
 
-void test_top_k(const std::vector<float> & probs,
-                const std::vector<float> & expected_probs,
-                int k) {
+static void test_top_k(const std::vector<float> & probs, const std::vector<float> & expected_probs, int k) {
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -45,10 +44,7 @@ void test_top_k(const std::vector<float> & probs,
 }
 
 
-void test_top_p(const std::vector<float> & probs,
-                const std::vector<float> & expected_probs,
-                float p) {
-
+static void test_top_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -70,9 +66,7 @@ void test_top_p(const std::vector<float> & probs,
 }
 
 
-void test_tfs(const std::vector<float> & probs,
-                const std::vector<float> & expected_probs,
-                float z) {
+static void test_tfs(const std::vector<float> & probs, const std::vector<float> & expected_probs, float z) {
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -93,9 +87,7 @@ void test_tfs(const std::vector<float> & probs,
 }
 
 
-void test_typical(const std::vector<float> & probs,
-                const std::vector<float> & expected_probs,
-                float p) {
+static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     size_t n_vocab = probs.size();
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -116,11 +108,10 @@ void test_typical(const std::vector<float> & probs,
 }
 
 
-void test_repetition_penalty(
-                const std::vector<float> & probs,
-                const std::vector<llama_token> & last_tokens,
-                const std::vector<float> & expected_probs,
-                float penalty) {
+static void test_repetition_penalty(
+    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & expected_probs, float penalty
+) {
     assert(probs.size() == expected_probs.size());
 
     size_t n_vocab = probs.size();
@@ -145,11 +136,10 @@ void test_repetition_penalty(
 }
 
 
-void test_frequency_presence_penalty(
-                const std::vector<float> & probs,
-                const std::vector<llama_token> & last_tokens,
-                const std::vector<float> & expected_probs,
-                float alpha_frequency, float alpha_presence) {
+static void test_frequency_presence_penalty(
+    const std::vector<float> & probs, const std::vector<llama_token> & last_tokens,
+    const std::vector<float> & expected_probs, float alpha_frequency, float alpha_presence
+) {
     assert(probs.size() == expected_probs.size());
 
     size_t n_vocab = probs.size();
