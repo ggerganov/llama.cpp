@@ -2011,7 +2011,7 @@ static void llm_load_hparams(
     GGUF_GET_KEY(ctx, hparams.rope_finetuned, gguf_get_val_bool, GGUF_TYPE_BOOL, false,
                  kv(LLM_KV_ROPE_SCALING_FINETUNED));
 
-    hparams.n_yarn_orig_ctx = 0;
+    hparams.n_yarn_orig_ctx = hparams.n_ctx_train;
     GGUF_GET_KEY(ctx, hparams.n_yarn_orig_ctx, gguf_get_val_u32, GGUF_TYPE_UINT32, false,
                  kv(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN));
 
