@@ -301,12 +301,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #if TARGET_OS_OSX
     // print MTL GPU family:
     GGML_METAL_LOG_INFO("%s: GPU name:   %s\n", __func__, [[ctx->device name] UTF8String]);
-    GGML_METAL_LOG_INFO("%s: GPU arch:   %s\n", __func__, [[ctx->device architecture].name UTF8String]);
 
     // determine max supported GPU family
     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-    for (int i = MTLGPUFamilyApple9 + 10; i >= MTLGPUFamilyApple1; --i) {
+    for (int i = MTLGPUFamilyApple1 + 20; i >= MTLGPUFamilyApple1; --i) {
         if ([ctx->device supportsFamily:i]) {
             GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyApple%d (%d)\n", __func__, i - MTLGPUFamilyApple1 + 1, i);
             break;
