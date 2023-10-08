@@ -9,7 +9,9 @@ llama_sampling_state::~llama_sampling_state() {
     }
 }
 
-llama_sampling_state llama_sampling_state_init(const struct gpt_params & params, llama_grammar * grammar) {
+llama_sampling_state llama_sampling_state_init(
+        const struct gpt_params & params,
+                  llama_grammar * grammar) {
   llama_sampling_state result;
 
   result.params = params.sampling_params;
@@ -17,8 +19,10 @@ llama_sampling_state llama_sampling_state_init(const struct gpt_params & params,
   return result;
 }
 
-// Creates the state if it doesn't exist, so this always return something.
-static llama_sampler_sequence_state & sampling_get_sequence_state(llama_sampling_state & state, const llama_seq_id seq) {
+// Note: Creates the state if it doesn't exist, so this always return something.
+llama_sampler_sequence_state & llama_sampling_get_sequence_state(
+              llama_sampling_state & state,
+        const llama_seq_id           seq) {
     const auto it = state.sequence_states.find(seq);
     if (it != state.sequence_states.end()) {
         return it->second;
@@ -30,7 +34,9 @@ static llama_sampler_sequence_state & sampling_get_sequence_state(llama_sampling
     return state.sequence_states.insert({seq, new_state}).first->second;
 }
 
-bool llama_sampling_state_reset(llama_sampling_state & state, const llama_seq_id seq) {
+bool llama_sampling_state_reset(
+              llama_sampling_state & state,
+        const llama_seq_id           seq) {
     const auto it = state.sequence_states.find(seq);
     if (it == state.sequence_states.end()) return false;
     if (it->second.grammar != NULL) {
@@ -109,7 +115,7 @@ llama_token llama_sample_token(
         }
     }
 
-    llama_sampler_sequence_state & seq_state = sampling_get_sequence_state(state, seq);
+    llama_sampler_sequence_state & seq_state = llama_sampling_get_sequence_state(state, seq);
 
     if (seq_state.grammar != NULL) {
         llama_sample_grammar(ctx, &cur_p, seq_state.grammar);
@@ -141,6 +147,7 @@ llama_token llama_sample_token(
 
                 for (int i = 0; i < n_top; i++) {
                     const llama_token id = cur_p.data[i].id;
+                    (void)id; // To avoid a warning that id is unused when logging is disabled.
                     LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx, id).c_str(), cur_p.data[i].p);
                 }
             }
@@ -150,7 +157,6 @@ llama_token llama_sample_token(
             LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx, id).c_str());
         }
     }
-    // printf("`%d`", candidates_p.size);
 
     if (seq_state.grammar != NULL) {
         llama_grammar_accept_token(ctx, seq_state.grammar, id);
