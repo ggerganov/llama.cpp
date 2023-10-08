@@ -21,6 +21,5 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.11.0
-      
       - name: Build Summary
         run: zig build --summary all -freference-trace
