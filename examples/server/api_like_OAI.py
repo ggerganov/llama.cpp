@@ -23,7 +23,13 @@ parser.add_argument("--port", type=int, help="Set the port to listen.(default: 8
 args = parser.parse_args()
 
 def is_present(json, key):
-    return key in json
+    try:
+        buf = json[key]
+    except KeyError:
+        return False
+    if json[key] == None:
+        return False
+    return True
 
 #convert chat to prompt
 def convert_chat(messages):
