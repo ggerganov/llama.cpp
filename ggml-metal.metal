@@ -13,8 +13,8 @@ typedef struct {
 
 #define QK4_1 32
 typedef struct {
-    half d;          // delta
-    half m;          // min
+    half d;                 // delta
+    half m;                 // min
     uint8_t qs[QK4_1 / 2];  // nibbles / quants
 } block_q4_1;
 
@@ -423,8 +423,8 @@ inline float block_q_n_dot_y(device const block_q4_1 * qb_curr, float sumy, thre
 }
 
 // putting them in the kernel cause a significant performance penalty
-#define N_DST 4 // each SIMD group works on 4 rows
-#define N_SIMDGROUP 2 // number of SIMD groups in a thread group
+#define N_DST 4        // each SIMD group works on 4 rows
+#define N_SIMDGROUP 2  // number of SIMD groups in a thread group
 #define N_SIMDWIDTH 32 // assuming SIMD group size is 32
 //Note: This is a template, but strictly speaking it only applies to
 //      quantizations where the block size is 32. It also does not
@@ -435,18 +435,23 @@ void mul_vec_q_n_f32(device const void * src0, device const float * src1, device
                     int64_t ne00, int64_t ne01, int64_t ne02, int64_t ne10, int64_t ne12, int64_t ne0, int64_t ne1, uint gqa,
                     uint3 tgpig, uint tiisg, uint sgitg) {
     const int nb = ne00/QK4_0;
+
     const int r0 = tgpig.x;
     const int r1 = tgpig.y;
     const int im = tgpig.z;
+
     const int first_row = (r0 * nsg + sgitg) * nr;
+
     const uint offset0 = first_row * nb + im/gqa*(nb*ne0);
+
     device const block_q_type * x = (device const block_q_type *) src0 + offset0;
     device const float        * y = (device const float        *) src1 + r1*ne10 + im*ne00*ne1;
-    float yl[16];       // src1 vector cache
-    float sumf[nr]={0.f};
 
-    const int ix = tiisg/2;
-    const int il = 8*(tiisg%2);
+    float yl[16]; // src1 vector cache
+    float sumf[nr] = {0.f};
+
+    const int ix = (tiisg/2);
+    const int il = (tiisg%2)*8;
 
     device const float * yb = y + ix * QK4_0 + il;
 
@@ -457,6 +462,7 @@ void mul_vec_q_n_f32(device const void * src0, device const float * src1, device
             sumy += yb[i] + yb[i+1];
             yl[i+0] = yb[i+ 0];
             yl[i+1] = yb[i+ 1]/256.f;
+
             sumy += yb[i+16] + yb[i+17];
             yl[i+8] = yb[i+16]/16.f;
             yl[i+9] = yb[i+17]/4096.f;
@@ -472,12 +478,12 @@ void mul_vec_q_n_f32(device const void * src0, device const float * src1, device
     for (int row = 0; row < nr; ++row) {
         const float tot = simd_sum(sumf[row]);
         if (tiisg == 0 && first_row + row < ne01) {
-            dst[r1*ne0 + im*ne0*ne1 + first_row + row] = tot;
+            dst[im*ne0*ne1 + r1*ne0 + first_row + row] = tot;
         }
     }
 }
 
-kernel void kernel_mul_mat_q4_0_f32(
+kernel void kernel_mul_mv_q4_0_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -490,12 +496,12 @@ kernel void kernel_mul_mat_q4_0_f32(
         constant   int64_t & ne1[[buffer(16)]],
         constant   uint    & gqa[[buffer(17)]],
         uint3 tgpig[[threadgroup_position_in_grid]],
-        uint tiisg[[thread_index_in_simdgroup]],
-        uint sgitg[[simdgroup_index_in_threadgroup]]) {
+        uint  tiisg[[thread_index_in_simdgroup]],
+        uint  sgitg[[simdgroup_index_in_threadgroup]]) {
     mul_vec_q_n_f32<block_q4_0, N_DST, N_SIMDGROUP, N_SIMDWIDTH>(src0,src1,dst,ne00,ne01,ne02,ne10,ne12,ne0,ne1,gqa,tgpig,tiisg,sgitg);
 }
 
-kernel void kernel_mul_mat_q4_1_f32(
+kernel void kernel_mul_mv_q4_1_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -515,7 +521,7 @@ kernel void kernel_mul_mat_q4_1_f32(
 
 #define NB_Q8_0 8
 
-kernel void kernel_mul_mat_q8_0_f32(
+kernel void kernel_mul_mv_q8_0_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -579,7 +585,7 @@ kernel void kernel_mul_mat_q8_0_f32(
 
 #define N_F32_F32 4
 
-kernel void kernel_mul_mat_f32_f32(
+kernel void kernel_mul_mv_f32_f32(
         device const  char * src0,
         device const  char * src1,
         device       float * dst,
@@ -650,7 +656,7 @@ kernel void kernel_mul_mat_f32_f32(
     }
 }
 
-kernel void kernel_mul_mat_f16_f32_1row(
+kernel void kernel_mul_mv_f16_f32_1row(
         device const  char * src0,
         device const  char * src1,
         device       float * dst,
@@ -669,7 +675,7 @@ kernel void kernel_mul_mat_f16_f32_1row(
         constant   int64_t & ne0,
         constant   int64_t & ne1,
         uint3 tgpig[[threadgroup_position_in_grid]],
-        uint tiisg[[thread_index_in_simdgroup]]) {
+        uint  tiisg[[thread_index_in_simdgroup]]) {
 
     const int64_t r0 = tgpig.x;
     const int64_t r1 = tgpig.y;
@@ -704,7 +710,7 @@ kernel void kernel_mul_mat_f16_f32_1row(
 
 #define N_F16_F32 4
 
-kernel void kernel_mul_mat_f16_f32(
+kernel void kernel_mul_mv_f16_f32(
         device const  char * src0,
         device const  char * src1,
         device       float * dst,
@@ -776,7 +782,7 @@ kernel void kernel_mul_mat_f16_f32(
 }
 
 // Assumes row size (ne00) is a multiple of 4
-kernel void kernel_mul_mat_f16_f32_l4(
+kernel void kernel_mul_mv_f16_f32_l4(
         device const  char * src0,
         device const  char * src1,
         device       float * dst,
@@ -1253,7 +1259,7 @@ static inline uchar4 get_scale_min_k4(int j, device const uint8_t * q) {
 
 //====================================== dot products =========================
 
-kernel void kernel_mul_mat_q2_K_f32(
+kernel void kernel_mul_mv_q2_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1397,7 +1403,7 @@ kernel void kernel_mul_mat_q2_K_f32(
 }
 
 #if QK_K == 256
-kernel void kernel_mul_mat_q3_K_f32(
+kernel void kernel_mul_mv_q3_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1549,7 +1555,7 @@ kernel void kernel_mul_mat_q3_K_f32(
     }
 }
 #else
-kernel void kernel_mul_mat_q3_K_f32(
+kernel void kernel_mul_mv_q3_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1620,7 +1626,7 @@ kernel void kernel_mul_mat_q3_K_f32(
 #endif
 
 #if QK_K == 256
-kernel void kernel_mul_mat_q4_K_f32(
+kernel void kernel_mul_mv_q4_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1726,7 +1732,7 @@ kernel void kernel_mul_mat_q4_K_f32(
     }
 }
 #else
-kernel void kernel_mul_mat_q4_K_f32(
+kernel void kernel_mul_mv_q4_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1815,7 +1821,7 @@ kernel void kernel_mul_mat_q4_K_f32(
 }
 #endif
 
-kernel void kernel_mul_mat_q5_K_f32(
+kernel void kernel_mul_mv_q5_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -1988,7 +1994,7 @@ kernel void kernel_mul_mat_q5_K_f32(
 
 }
 
-kernel void kernel_mul_mat_q6_K_f32(
+kernel void kernel_mul_mv_q6_K_f32(
         device const  void * src0,
         device const float * src1,
         device       float * dst,
@@ -2326,7 +2332,7 @@ kernel void kernel_get_rows(
 }
 
 #define BLOCK_SIZE_M 64 // 8 simdgroup matrices from matrix A
-#define BLOCK_SIZE_N 32 // 4 simdgroup matrices from matrix A
+#define BLOCK_SIZE_N 32 // 4 simdgroup matrices from matrix B
 #define BLOCK_SIZE_K 32
 #define THREAD_MAT_M 4 // each thread take 4 simdgroup matrices from matrix A
 #define THREAD_MAT_N 2 // each thread take 2 simdgroup matrices from matrix B
@@ -2363,9 +2369,11 @@ kernel void kernel_mul_mm(device const  uchar * src0,
     const uint r0 = tgpig.y;
     const uint r1 = tgpig.x;
     const uint im = tgpig.z;
+
     // if this block is of 64x32 shape or smaller
     short n_rows = (ne0 - r0 * BLOCK_SIZE_M < BLOCK_SIZE_M) ? (ne0 - r0 * BLOCK_SIZE_M) : BLOCK_SIZE_M;
     short n_cols = (ne1 - r1 * BLOCK_SIZE_N < BLOCK_SIZE_N) ? (ne1 - r1 * BLOCK_SIZE_N) : BLOCK_SIZE_N;
+
     // a thread shouldn't load data outside of the matrix
     short thread_row = ((short)tiitg/THREAD_PER_ROW) < n_rows ? ((short)tiitg/THREAD_PER_ROW) : n_rows - 1;
     short thread_col = ((short)tiitg/THREAD_PER_COL) < n_cols ? ((short)tiitg/THREAD_PER_COL) : n_cols - 1;
@@ -2389,26 +2397,30 @@ kernel void kernel_mul_mm(device const  uchar * src0,
         + nb10 * (BLOCK_SIZE_K / THREAD_PER_COL * (tiitg % THREAD_PER_COL)));
 
     for (int loop_k = 0; loop_k < ne00; loop_k += BLOCK_SIZE_K) {
-        //load data and store to threadgroup memory
+        // load data and store to threadgroup memory
         half4x4 temp_a;
         dequantize_func(x, il, temp_a);
         threadgroup_barrier(mem_flags::mem_threadgroup);
+
         #pragma unroll(16)
         for (int i = 0; i < 16; i++) {
             *(sa + SG_MAT_SIZE * ((tiitg / THREAD_PER_ROW / 8) \
-            + 16 * (tiitg % THREAD_PER_ROW) + 8 * (i / 8)) \
-            + (tiitg / THREAD_PER_ROW) % 8 + (i & 7) * 8) = temp_a[i/4][i%4];
+            +                     (tiitg % THREAD_PER_ROW) * 16 + (i / 8) * 8) \
+            +                     (tiitg / THREAD_PER_ROW) % 8  + (i & 7) * 8) = temp_a[i/4][i%4];
         }
-        *(threadgroup float2x4 *)(sb + (tiitg % THREAD_PER_COL) * 8 * 32 + 8 * (tiitg / THREAD_PER_COL)) \
-                = *((device float2x4 *)y);
+
+        *(threadgroup float2x4 *)(sb + (tiitg % THREAD_PER_COL) * 8 * 32 + 8 * (tiitg / THREAD_PER_COL)) = *((device float2x4 *)y);
+
         il = (il + 2 < nl) ? il + 2 : il % 2;
         x  = (il < 2) ? x + (2+nl-1)/nl : x;
         y += BLOCK_SIZE_K;
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        //load matrices from threadgroup memory and conduct outer products
+
+        // load matrices from threadgroup memory and conduct outer products
         threadgroup half  * lsma = (sa + THREAD_MAT_M * SG_MAT_SIZE * (sgitg % 2));
         threadgroup float * lsmb = (sb + THREAD_MAT_N * SG_MAT_SIZE * (sgitg / 2));
+
         #pragma unroll(4)
         for (int ik = 0; ik < BLOCK_SIZE_K / 8; ik++) {
             #pragma unroll(4)
@@ -2423,6 +2435,7 @@ kernel void kernel_mul_mm(device const  uchar * src0,
 
             lsma += BLOCK_SIZE_M / SG_MAT_ROW * SG_MAT_SIZE;
             lsmb += BLOCK_SIZE_N / SG_MAT_ROW * SG_MAT_SIZE;
+
             #pragma unroll(8)
             for (int i = 0; i < 8; i++){
                 simdgroup_multiply_accumulate(c_res[i], mb[i/4], ma[i%4], c_res[i]);
@@ -2431,25 +2444,26 @@ kernel void kernel_mul_mm(device const  uchar * src0,
     }
 
     if ((r0 + 1) * BLOCK_SIZE_M <= ne0 && (r1 + 1) * BLOCK_SIZE_N <= ne1) {
-        device float *C = dst + BLOCK_SIZE_M * r0 + 32 * (sgitg&1) \
-                          + (BLOCK_SIZE_N * r1 + 16 * (sgitg>>1)) * ne0 + im*ne1*ne0;
+        device float * C = dst + (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) \
+                               + (BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)) * ne0 + im*ne1*ne0;
         for (int i = 0; i < 8; i++) {
             simdgroup_store(c_res[i], C + 8 * (i%4) + 8 * ne0 * (i/4), ne0);
         }
     } else {
         // block is smaller than 64x32, we should avoid writing data outside of the matrix
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        threadgroup float *temp_str = ((threadgroup float *)shared_memory) \
+        threadgroup float * temp_str = ((threadgroup float *)shared_memory) \
                                       + 32 * (sgitg&1) + (16 * (sgitg>>1)) * BLOCK_SIZE_M;
         for (int i = 0; i < 8; i++) {
             simdgroup_store(c_res[i], temp_str + 8 * (i%4) + 8 * BLOCK_SIZE_M * (i/4), BLOCK_SIZE_M);
         }
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        device float *C = dst + BLOCK_SIZE_M * r0 + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
-        if (sgitg==0) {
+
+        device float * C = dst + (BLOCK_SIZE_M * r0) + (BLOCK_SIZE_N * r1) * ne0 + im*ne1*ne0;
+        if (sgitg == 0) {
             for (int i = 0; i < n_rows; i++) {
-                for (int j = tiitg; j< n_cols; j += BLOCK_SIZE_N) {
+                for (int j = tiitg; j < n_cols; j += BLOCK_SIZE_N) {
                     *(C + i + j * ne0) = *(temp_str + i + j * BLOCK_SIZE_M);
                 }
             }
