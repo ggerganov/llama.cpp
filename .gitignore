@@ -53,6 +53,7 @@ models-mnt
 /result
 /save-load-state
 /server
+/server-parallel
 /simple
 /batched
 /export-lora
