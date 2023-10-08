@@ -9,7 +9,7 @@
 
 static bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch, int * n_past) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
-    
+
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = N - i;
         if (n_eval > n_batch) {
@@ -144,16 +144,13 @@ const char * sample(struct llama_context * ctx_llama, gpt_params & params, int *
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (argc < 3) {
-        printf("usage: %s <path/to/llava-rlhf-qe_k.gguf> <path/to/llava-encoder-f16.gguf> [path/to/an/image.jpg] [a text prompt]\n", argv[0]);
+    if (argc < 4) {
+        printf("usage: %s <path/to/llava-v1.5/ggml-model-f16.gguf> <path/to/llava-v1.5/llava-encoder-f16.gguf> <path/to/an/image.jpg> [a text prompt]\n", argv[0]);
     }
 
           params.model     = argv[1];
     const char * clip_path = argv[2];
-    const char * img_path;
-    if (argc >= 4) {
-        img_path = argv[3];
-    }
+    const char * img_path = argv[3];
 
     if (argc >= 5) {
         params.prompt = argv[4];
@@ -162,9 +159,8 @@ int main(int argc, char ** argv) {
     if (params.prompt.empty()) {
         params.prompt = "describe the image in detail.";
     }
-    
-    
-    auto ctx_clip = clip_model_load(clip_path, 3);
+
+    auto ctx_clip = clip_model_load(clip_path, 1);
     clip_image_u8 img;
     clip_image_f32 img_res;
     clip_image_load_from_file(img_path, &img);
@@ -172,7 +168,7 @@ int main(int argc, char ** argv) {
     float * vec = (float *)malloc(4096 * 576 * sizeof(float));
     clip_image_encode(ctx_clip, params.n_threads, &img_res, vec, false);
     clip_free(ctx_clip);
-    
+
     llama_backend_init(params.numa);
 
     llama_model_params model_params = llama_model_default_params();
@@ -182,19 +178,19 @@ int main(int argc, char ** argv) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
         return 1;
     }
-    
+
     llama_context_params ctx_params                 = llama_context_default_params();
                          ctx_params.seed            = 1234;
                          ctx_params.n_ctx           = 2048;
                          ctx_params.n_threads       = params.n_threads;
                          ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     llama_context        * ctx_llama                = llama_new_context_with_model(model, ctx_params);
-    
+
     if (ctx_llama == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
         return 1;
     }
-    
+
     int n_past      = 0;
     int max_tgt_len = 256;
     eval_string(ctx_llama, "user: ", params.n_batch, &n_past);
@@ -202,7 +198,7 @@ int main(int argc, char ** argv) {
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
 eval_string(ctx_llama, "\nassistant:", params.n_batch, &n_past);
 printf("n_past = %d\n", n_past);
-    
+
     const char* tmp;
     for (int i=0; i<max_tgt_len; i++) {
         tmp = sample(ctx_llama, params, &n_past);

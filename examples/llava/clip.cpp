@@ -233,7 +233,6 @@ struct clip_ctx {
     struct gguf_context * ctx_gguf;
     //struct clip_buffer buf_compute;
 
-    
     // reusable buffer for `struct ggml_graph_plan.work_data`
     std::vector<uint8_t> work_buffer;
 
@@ -285,7 +284,6 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
 
-    
     struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size, image_size, 3, batch_size);
     ggml_allocr_alloc(ctx->alloc, inp_raw);
 
@@ -440,7 +438,7 @@ if (!ggml_allocr_is_measure(ctx->alloc)) {
 
     if (ctx->has_llava_projector) {
         embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
-        
+
         struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
         ggml_allocr_alloc(ctx->alloc, patches);
         if (!ggml_allocr_is_measure(ctx->alloc)) {
@@ -448,20 +446,20 @@ if (!ggml_allocr_is_measure(ctx->alloc)) {
                 ggml_set_i32_1d(patches, i, i+1);
             }
         }
-        
+
         embeddings = ggml_get_rows(ctx0, embeddings, patches);
-        
+
         // mm projection 0
         embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
         embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_0_b, embeddings), embeddings);
 
         embeddings = ggml_gelu(ctx0, embeddings);
-        
+
         embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
         embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_2_b, embeddings), embeddings);
 
         ggml_set_name(embeddings, "check");
-    } 
+    }
 
     // build the graph
     ggml_build_forward_expand(gf, embeddings);
@@ -680,7 +678,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     ggml_free(meta);
 
     new_clip->ctx_gguf = ctx;
-    
+
 // measure mem requirement and allocate
     {
         static const size_t tensor_alignment = 32;
@@ -919,7 +917,7 @@ struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];
     if (plan.work_size > 0) {
         free(plan.work_data);
     }
-    
+
     return true;
 }
 
