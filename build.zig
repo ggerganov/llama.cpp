@@ -46,7 +46,7 @@ const Maker = struct {
             .{
                 .BUILD_NUMBER = 0,
                 .BUILD_COMMIT = commit_hash.stdout[0 .. commit_hash.stdout.len - 1], // omit newline
-                .BUILD_COMPILER = zig_version,
+                .BUILD_COMPILER = builder.fmt("Zig {s}", .{zig_version}),
                 .BUILD_TARGET = try target.allocDescription(builder.allocator),
             },
         );
