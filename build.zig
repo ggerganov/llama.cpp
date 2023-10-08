@@ -36,14 +36,17 @@ const Maker = struct {
     }
 
     fn init(builder: *std.build.Builder) !Maker {
-        // const commit_hash = @embedFile(".git/refs/heads/master");
         const target = builder.standardTargetOptions(.{});
+        const zig_version = @import("builtin").zig_version_string;
+        const commit_hash = try std.ChildProcess.exec(
+            .{ .allocator = builder.allocator, .argv = &.{ "git", "rev-parse", "HEAD" } },
+        );
         const config_header = builder.addConfigHeader(
             .{ .style = .blank, .include_path = "build-info.h" },
             .{
                 .BUILD_NUMBER = 0,
-                .BUILD_COMMIT = "12345", // omit newline
-                .BUILD_COMPILER = "Zig 0.11.0",
+                .BUILD_COMMIT = commit_hash.stdout[0 .. commit_hash.stdout.len - 1], // omit newline
+                .BUILD_COMPILER = builder.fmt("Zig {s}", .{zig_version}),
                 .BUILD_TARGET = try target.allocDescription(builder.allocator),
             },
         );
@@ -67,12 +70,20 @@ const Maker = struct {
 
     fn obj(m: *const Maker, name: []const u8, src: []const u8) *Compile {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
+        if (o.target.getAbi() != .msvc)
+            o.defineCMacro("_GNU_SOURCE", null);
+        o.addConfigHeader(m.config_header);
         if (std.mem.endsWith(u8, src, ".c")) {
             o.addCSourceFiles(&.{src}, m.cflags.items);
             o.linkLibC();
         } else {
             o.addCSourceFiles(&.{src}, m.cxxflags.items);
-            o.linkLibCpp();
+            if (o.target.getAbi() == .msvc) {
+                o.linkLibC(); // need winsdk + crt
+            } else {
+                // linkLibCpp already add (libc++ + libunwind + libc)
+                o.linkLibCpp();
+            }
         }
         o.addConfigHeader(m.config_header);
         for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
@@ -86,8 +97,14 @@ const Maker = struct {
         for (deps) |d| e.addObject(d);
         for (m.objs.items) |o| e.addObject(o);
         for (m.include_dirs.items) |i| e.addIncludePath(.{ .path = i });
-        e.linkLibC();
-        e.linkLibCpp();
+
+        // https://github.com/ziglang/zig/issues/15448
+        if (e.target.getAbi() == .msvc) {
+            e.linkLibC(); // need winsdk + crt
+        } else {
+            // linkLibCpp already add (libc++ + libunwind + libc)
+            e.linkLibCpp();
+        }
         e.addConfigHeader(m.config_header);
         m.builder.installArtifact(e);
         e.want_lto = m.enable_lto;
@@ -109,7 +126,7 @@ pub fn build(b: *std.build.Builder) !void {
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
     const llama = make.obj("llama", "llama.cpp");
     const common = make.obj("common", "common/common.cpp");
-    const console = make.obj("common", "common/console.cpp");
+    const console = make.obj("console", "common/console.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
     const train = make.obj("train", "common/train.cpp");
 
