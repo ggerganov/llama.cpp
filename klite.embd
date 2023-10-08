@@ -3015,9 +3015,10 @@ Current version: 78
 		saved_oai_addr: "", //do not ever share this in save files!
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
-		saved_oai_jailbreak: "", //customized oai system prompt
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
+		saved_oai_jailbreak: "", //customized oai system prompt
+		saved_oai_custommodel: "", //customized oai custom model
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -5182,7 +5183,7 @@ Current version: 78
 		let dropdown = document.getElementById("custom_oai_model");
 		if(dropdown.selectedIndex==dropdown.options.length-1)
 		{
-			inputBox("Enter custom OpenAI model name","Custom Model Name","","", ()=>{
+			inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 				let coai = getInputBoxValue().trim();
 				if(coai!="")
 				{
@@ -5193,6 +5194,12 @@ Current version: 78
 					document.getElementById("custom_oai_model_option").innerText = "[Custom]";
 				}
 			},false);
+			document.getElementById("useoaichatcompl").classList.remove("hidden");
+			document.getElementById("useoaichatcompllabel").classList.remove("hidden");
+		}else{
+			document.getElementById("useoaichatcompl").checked = false;
+			document.getElementById("useoaichatcompl").classList.add("hidden");
+			document.getElementById("useoaichatcompllabel").classList.add("hidden");
 		}
 	}
 
@@ -5224,7 +5231,7 @@ Current version: 78
 					document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
 				}
 			}
-
+			custom_oai_model_change();
 			togglejailbreak();
 		}
 		else if(epchoice==2)
@@ -5473,6 +5480,7 @@ Current version: 78
 							document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
 						}
 						custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+						localsettings.saved_oai_custommodel = custom_oai_model;
 						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
 						selected_workers = [];
 						if (perfdata == null) {
@@ -7371,7 +7379,6 @@ Current version: 78
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
-		last_request_str = JSON.stringify(submit_payload);
 
 		startTimeTaken(); //timestamp start request
 
@@ -7455,7 +7462,7 @@ Current version: 78
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
 				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-
+				last_request_str = JSON.stringify(submit_payload);
 				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
 
 			}
@@ -7494,6 +7501,8 @@ Current version: 78
 				else {
 					oai_payload.prompt = submit_payload.prompt;
 				}
+
+				last_request_str = JSON.stringify(oai_payload);
 
 				fetch(targetep, {
 					method: 'POST',
@@ -7543,6 +7552,7 @@ Current version: 78
 				let targetep = cors_proxy + "?" + scale_submit_endpoint + custom_scale_ID;
 				let scale_payload = { "input": { "input": submit_payload.prompt } };
 
+				last_request_str = JSON.stringify(scale_payload);
 				fetch(targetep, {
 					method: 'POST',
 					headers: {
@@ -7606,6 +7616,8 @@ Current version: 78
 					}
 				}
 
+				last_request_str = JSON.stringify(claude_payload);
+
 				fetch(targetep, {
 					method: 'POST',
 					headers: {
@@ -7648,6 +7660,8 @@ Current version: 78
 				"topP": submit_payload.params.top_p,
 				"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 				"candidateCount":1};
+
+				last_request_str = JSON.stringify(payload);
 
 				fetch(targetep, {
 					method: 'POST',
@@ -7723,7 +7737,12 @@ Current version: 78
 			}
 
 			//horde supports unban tokens
-			submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+			if(submit_payload.params)
+			{
+				submit_payload.params.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+			}
+
+			last_request_str = JSON.stringify(submit_payload);
 
 			fetch(selectedhorde.submit_endpoint, {
 				method: 'POST', // or 'PUT'
@@ -10187,7 +10206,7 @@ Current version: 78
 				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
 				<div class="box-label" title="Adds extra text to improve AI response">Add System Message</div>
 				<input type="checkbox" id="useoaichatcompl">
-				<div class="box-label" title="">Use ChatCompletions API</div>
+				<div class="box-label" id="useoaichatcompllabel" title="">Use ChatCompletions API</div>
 				<input class="form-control hidden" type="text" id="jailbreakprompttext" placeholder="(Enter System Message)"
 				value="" onload="togglejailbreak()">
 			</div>
@@ -11104,7 +11123,7 @@ if ('serviceWorker' in navigator) {
 
 	//for local mode, we do not load any PWA service worker.
 	//this will prevent PWA functionality locally but will avoid the scary 404 errors
-	if(localflag)
+	if(!localflag)
 	{
 		console.log("Try to register service worker...");
 		try {
