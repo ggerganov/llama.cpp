@@ -5469,8 +5469,8 @@ static void scale_f32_cuda(const float * x, float * dst, const float scale, cons
 
 template<typename T>
 static void rope_cuda(
-    const T * x, T * dst, int ncols, int nrows, float freq_scale, float ext_factor, float attn_factor,
-    float theta_scale, const int32_t * pos, int p_delta_rows, rope_corr_dims corr_dims, cudaStream_t stream
+    const T * x, T * dst, int ncols, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
+    float theta_scale, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
