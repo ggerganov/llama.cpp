@@ -162,39 +162,15 @@ typedef void * thread_ret_t;
 
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
+//
+// end of logging block
+//
+
 #ifdef GGML_USE_ACCELERATE
 // uncomment to use vDSP for soft max computation
 // note: not sure if it is actually faster
 //#define GGML_SOFT_MAX_ACCELERATE
 #endif
-
-//
-// logging
-//
-
-#if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG(...)
-#endif
-
-#if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_5(...)
-#endif
-
-#if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_10(...)
-#endif
-
-#define GGML_PRINT(...) printf(__VA_ARGS__)
-
-//
-// end of logging block
-//
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define GGML_ALIGNED_MALLOC(size) _aligned_malloc(size, GGML_MEM_ALIGN)
@@ -4951,6 +4927,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     *result = (struct ggml_tensor) {
         /*.type         =*/ type,
         /*.backend      =*/ GGML_BACKEND_CPU,
+        /*.buffer       =*/ NULL,
         /*.n_dims       =*/ n_dims,
         /*.ne           =*/ { 1, 1, 1, 1 },
         /*.nb           =*/ { 0, 0, 0, 0 },
@@ -20203,6 +20180,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
+        // TODO: instead of passing &cancel here, use the return code of the linesearch
+        //       to determine if the optimization should be cancelled
+        //       this is a simple change, but not doing this atm, since I don't have a nice
+        //       way to test and don't want to break something with so many changes lined up
         ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
         if (cancel) {
             return GGML_OPT_CANCEL;
