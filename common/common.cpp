@@ -940,10 +940,11 @@ llama_token llama_sample_token(
                   struct llama_context * ctx,
                   struct llama_context * ctx_guidance,
                   struct llama_grammar * grammar,
-               const struct gpt_params & params,
+                  struct gpt_params    & params,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
-                                   int   idx) {
+        const                      int   idx,
+                          llama_seq_id   seq) {
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_vocab = llama_n_vocab(llama_get_model(ctx));
 
@@ -1011,15 +1012,23 @@ llama_token llama_sample_token(
         // Greedy sampling
         id = llama_sample_token_greedy(ctx, &cur_p);
     } else {
+        float * mirostat_mu = NULL;
+        if (mirostat > 0) {
+            seq = std::max(0, seq); // Deal with people passing -1 or something.
+            auto mu_it = params.sampler_state.find(seq);
+            if (mu_it == params.sampler_state.end()) {
+                const llama_sampler_state new_state = { 2.0f * mirostat_tau };
+                mu_it = params.sampler_state.insert({seq, new_state}).first;
+            }
+            mirostat_mu = &mu_it->second.mirostat_mu;
+        }
         if (mirostat == 1) {
-            static float mirostat_mu = 2.0f * mirostat_tau;
             const int mirostat_m = 100;
             llama_sample_temp(ctx, &cur_p, temp);
-            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &mirostat_mu);
+            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, mirostat_mu);
         } else if (mirostat == 2) {
-            static float mirostat_mu = 2.0f * mirostat_tau;
             llama_sample_temp(ctx, &cur_p, temp);
-            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &mirostat_mu);
+            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_mu);
         } else {
             // Temperature sampling
             size_t min_keep = std::max(1, params.n_probs);

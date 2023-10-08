@@ -33,6 +33,10 @@
 //
 int32_t get_num_physical_cores();
 
+typedef struct llama_sampler_state {
+    float mirostat_mu; // mirostat sampler state
+} llama_sampler_state;
+
 struct gpt_params {
     uint32_t seed                           = -1;   // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
@@ -53,6 +57,9 @@ struct gpt_params {
     int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 0.0f; // RoPE base frequency
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
+
+    // per sequence sampler state
+    std::unordered_map<llama_seq_id, llama_sampler_state> sampler_state;
 
     // sampling parameters
     int32_t top_k             = 40;    // <= 0 to use vocab size
@@ -186,6 +193,9 @@ std::string llama_detokenize_bpe(
 
 // this is a common sampling function used across the examples for convenience
 // it can serve as a starting point for implementing your own sampling function
+// Note: When using multiple sequences, it is the caller's responsibility to delete
+//       the item in params.sampler_state when a sequence ends and samplers that rely on
+//       state are being used.
 //
 // required:
 //  - ctx:    context to use for sampling
@@ -196,6 +206,7 @@ std::string llama_detokenize_bpe(
 //  - grammar:       grammar to use for sampling, ignore if NULL
 //  - last_tokens:   needed for repetition penalty, ignore if empty
 //  - idx:           sample from llama_get_logits_ith(ctx, idx)
+//  - seq:           sequence id to associate sampler state with (currently only used by mirostat)
 //
 // returns:
 //  - token:      sampled token
@@ -205,10 +216,11 @@ llama_token llama_sample_token(
                   struct llama_context * ctx,
                   struct llama_context * ctx_guidance,
                   struct llama_grammar * grammar,
-               const struct gpt_params & params,
+                  struct gpt_params    & params,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
-                                   int   idx = 0);
+        const                      int   idx = 0,
+                          llama_seq_id   seq = 0);
 
 //
 // YAML utils

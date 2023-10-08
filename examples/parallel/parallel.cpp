@@ -339,7 +339,7 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = llama_sample_token(ctx, NULL, NULL, params, client.tokens_prev, candidates, client.i_batch - i);
+                const llama_token id = llama_sample_token(ctx, NULL, NULL, params, client.tokens_prev, candidates, client.i_batch - i, client.seq_id);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -384,7 +384,7 @@ int main(int argc, char ** argv) {
 
                     n_total_prompt += client.n_prompt;
                     n_total_gen    += client.n_decoded;
-
+                    params.sampler_state.erase(client.seq_id);
                     client.seq_id = -1;
                 }
 
