@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <ctime>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
@@ -70,6 +71,26 @@ struct client {
     std::vector<llama_token> tokens_prev;
 };
 
+static void print_date_time() {
+    std::time_t current_time = std::time(nullptr);
+    std::tm* local_time = std::localtime(&current_time);
+    char buffer[80];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", local_time);
+
+    printf("\n\033[35mrun parameters as at %s\033[0m\n", buffer);
+}
+
+// Define a split string function to ...
+static std::vector<std::string> split_string(const std::string& input, char delimiter) {
+    std::vector<std::string> tokens;
+    std::istringstream stream(input);
+    std::string token;
+    while (std::getline(stream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 int main(int argc, char ** argv) {
     srand(1234);
 
@@ -103,6 +124,23 @@ int main(int argc, char ** argv) {
     // load the target model
     params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
+
+    // load the prompts from an external file if there are any
+    if (params.prompt.empty()) {
+        printf("\n\033[32mNo new questions so proceed with build-in defaults.\033[0m\n");
+    } else {
+        // Output each line of the input params.prompts vector and copy to k_prompts
+        int index = 0;
+        printf("\n\033[32mNow printing the external prompt file %s\033[0m\n\n", params.prompt_file.c_str());
+
+        std::vector<std::string> prompts = split_string(params.prompt, '\n');
+        for (const auto& prompt : prompts) {
+            k_prompts.resize(index + 1);
+            k_prompts[index] = prompt;
+            index++;
+            printf("%3d prompt: %s\n", index, prompt.c_str());
+        }
+    }
 
     fprintf(stderr, "\n\n");
     fflush(stderr);
@@ -233,7 +271,7 @@ int main(int argc, char ** argv) {
                     client.n_decoded = 0;
                     client.i_batch   = batch.n_tokens - 1;
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
+                    LOG_TEE("\033[31mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
 
                     g_seq_id += 1;
 
@@ -332,12 +370,12 @@ int main(int argc, char ** argv) {
                     }
 
                     // delete only the generated part of the sequence, i.e. keep the system prompt in the cache
-                    llama_kv_cache_seq_rm(ctx, client.id, n_tokens_system, n_ctx);
+                    llama_kv_cache_seq_rm(ctx, client.id, n_tokens_system, -1);
 
                     const auto t_main_end = ggml_time_us();
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \n\nInput:    %s\nResponse: %s\n\n",
-                            client.id, client.seq_id, client.n_prompt, client.n_decoded,
+                    LOG_TEE("\033[31mClient %3d, seq %3d/%3d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \nInput:    %s\n\033[35mResponse: %s\033[0m\n\n",
+                            client.id, client.seq_id, n_seq, client.n_prompt, client.n_decoded,
                             (t_main_end - client.t_start_prompt) / 1e6,
                             (double) (client.n_prompt + client.n_decoded) / (t_main_end - client.t_start_prompt) * 1e6,
                             n_cache_miss,
@@ -357,13 +395,21 @@ int main(int argc, char ** argv) {
 
     const auto t_main_end = ggml_time_us();
 
-    LOG_TEE("\n\n");
+    print_date_time();
+
+    LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
+    if (params.prompt_file.empty()) {
+        params.prompt_file = "used built-in defaults";
+    }
+    LOG_TEE("External prompt file: \033[32m%s\033[0m\n", params.prompt_file.c_str());
+    LOG_TEE("Model and path used:  \033[32m%s\033[0m\n\n", params.model.c_str());
+
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total speed (AVG):   %6s  speed: %5.2f t/s\n", "",             (double) (n_total_prompt + n_total_gen) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Cache misses:        %6d\n", n_cache_miss);
 
-    LOG_TEE("\n\n");
+    LOG_TEE("\n");
 
     llama_print_timings(ctx);
 
