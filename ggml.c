@@ -162,39 +162,15 @@ typedef void * thread_ret_t;
 
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
+//
+// end of logging block
+//
+
 #ifdef GGML_USE_ACCELERATE
 // uncomment to use vDSP for soft max computation
 // note: not sure if it is actually faster
 //#define GGML_SOFT_MAX_ACCELERATE
 #endif
-
-//
-// logging
-//
-
-#if (GGML_DEBUG >= 1)
-#define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG(...)
-#endif
-
-#if (GGML_DEBUG >= 5)
-#define GGML_PRINT_DEBUG_5(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_5(...)
-#endif
-
-#if (GGML_DEBUG >= 10)
-#define GGML_PRINT_DEBUG_10(...) printf(__VA_ARGS__)
-#else
-#define GGML_PRINT_DEBUG_10(...)
-#endif
-
-#define GGML_PRINT(...) printf(__VA_ARGS__)
-
-//
-// end of logging block
-//
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define GGML_ALIGNED_MALLOC(size) _aligned_malloc(size, GGML_MEM_ALIGN)
@@ -4951,6 +4927,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     *result = (struct ggml_tensor) {
         /*.type         =*/ type,
         /*.backend      =*/ GGML_BACKEND_CPU,
+        /*.buffer       =*/ NULL,
         /*.n_dims       =*/ n_dims,
         /*.ne           =*/ { 1, 1, 1, 1 },
         /*.nb           =*/ { 0, 0, 0, 0 },
@@ -11256,7 +11233,7 @@ static void ggml_compute_forward_silu_f32(
 
 #ifndef NDEBUG
         for (int k = 0; k < nc; k++) {
-            const float x = ((float *) ((char *) dst->data + i1*( dst->nb[1])))[k];
+            const float x = ((float *) ((char *) dst->data + i1*(dst->nb[1])))[k];
             UNUSED(x);
             assert(!isnan(x));
             assert(!isinf(x));
@@ -13089,17 +13066,17 @@ static void ggml_compute_forward_alibi_f32(
 
     assert(n_past >= 0);
 
-    const int ne0 = src0->ne[0]; // all_seq_len = n_past + ne1
-    const int ne1 = src0->ne[1]; // seq_len_without_past
-    const int ne2 = src0->ne[2]; // n_head -> this is k
-    //const int ne3 = src0->ne[3]; // 1 -> bsz
+    const int64_t ne0 = src0->ne[0]; // all_seq_len = n_past + ne1
+    const int64_t ne1 = src0->ne[1]; // seq_len_without_past
+    const int64_t ne2 = src0->ne[2]; // n_head -> this is k
+    //const int64_t ne3 = src0->ne[3]; // 1 -> bsz
 
-    const int n  = ggml_nrows(src0);
-    const int ne2_ne3 = n/ne1; // ne2*ne3
+    const int64_t n  = ggml_nrows(src0);
+    const int64_t ne2_ne3 = n/ne1; // ne2*ne3
 
-    const int nb0 = src0->nb[0];
-    const int nb1 = src0->nb[1];
-    const int nb2 = src0->nb[2];
+    const size_t nb0 = src0->nb[0];
+    const size_t nb1 = src0->nb[1];
+    const size_t nb2 = src0->nb[2];
     //const int nb3 = src0->nb[3];
 
     GGML_ASSERT(nb0 == sizeof(float));
@@ -13111,9 +13088,9 @@ static void ggml_compute_forward_alibi_f32(
     const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
     const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
 
-    for (int i = 0; i < ne0; i++) {
-        for (int j = 0; j < ne1; j++) {
-            for (int k = 0; k < ne2_ne3; k++) {
+    for (int64_t i = 0; i < ne0; i++) {
+        for (int64_t j = 0; j < ne1; j++) {
+            for (int64_t k = 0; k < ne2_ne3; k++) {
                 float * const src = (float *)((char *) src0->data + i*nb0 + j*nb1 + k*nb2);
                 float *      pdst = (float *)((char *)  dst->data + i*nb0 + j*nb1 + k*nb2);
 
@@ -13128,7 +13105,6 @@ static void ggml_compute_forward_alibi_f32(
                 }
 
                 pdst[0] = i * m_k + src[0];
-
             }
         }
     }
@@ -20203,6 +20179,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         ggml_vec_cpy_f32(nx, xp, x);
         ggml_vec_cpy_f32(nx, gp, g);
 
+        // TODO: instead of passing &cancel here, use the return code of the linesearch
+        //       to determine if the optimization should be cancelled
+        //       this is a simple change, but not doing this atm, since I don't have a nice
+        //       way to test and don't want to break something with so many changes lined up
         ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
         if (cancel) {
             return GGML_OPT_CANCEL;

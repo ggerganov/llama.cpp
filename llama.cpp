@@ -1325,7 +1325,11 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
+    // TODO: this should be:
+    //       cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*ggml_tensor_overhead());
+    //       change it and test that it works
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    memset(cache.buf.data, 0, cache.buf.size);
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
@@ -1730,7 +1734,7 @@ struct llama_model_loader {
         }
     }
 
-    struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, struct ggml_tensor * meta, ggml_backend backend) {
+    struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, struct ggml_tensor * meta, ggml_backend_type backend) {
         if (backend != GGML_BACKEND_CPU) {
             ggml_set_no_alloc(ctx, true);
         }
@@ -1748,7 +1752,7 @@ struct llama_model_loader {
         return tensor;
     }
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, ggml_backend backend) {
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, ggml_backend_type backend) {
         struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, name.c_str());
 
         if (cur == NULL) {
@@ -2299,8 +2303,8 @@ static void llm_load_tensors(
 
                     // output
                     {
-                        ggml_backend backend_norm;
-                        ggml_backend backend_output;
+                        ggml_backend_type backend_norm;
+                        ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
@@ -2335,8 +2339,8 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
-                        const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
+                        const ggml_backend_type backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend_type backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
 
@@ -2365,8 +2369,8 @@ static void llm_load_tensors(
                 {
                     model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
                     {
-                        ggml_backend backend_norm;
-                        ggml_backend backend_output;
+                        ggml_backend_type backend_norm;
+                        ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
@@ -2401,8 +2405,8 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
-                        const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
+                        const ggml_backend_type backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend_type backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
 
@@ -2435,8 +2439,8 @@ static void llm_load_tensors(
 
                     // output
                     {
-                        ggml_backend backend_norm;
-                        ggml_backend backend_output;
+                        ggml_backend_type backend_norm;
+                        ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
@@ -2473,8 +2477,8 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
-                        const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
+                        const ggml_backend_type backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend_type backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
 
@@ -2512,8 +2516,8 @@ static void llm_load_tensors(
 
                     // output
                     {
-                        ggml_backend backend_norm;
-                        ggml_backend backend_output;
+                        ggml_backend_type backend_norm;
+                        ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
@@ -2550,8 +2554,8 @@ static void llm_load_tensors(
                     model.layers.resize(n_layer);
 
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
-                        const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
+                        const ggml_backend_type backend       = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD; // NOLINT
+                        const ggml_backend_type backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT; // NOLINT
 
                         auto & layer = model.layers[i];
 
@@ -2589,8 +2593,8 @@ static void llm_load_tensors(
                     model.tok_embeddings = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"),  {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
                     {
-                        ggml_backend backend_norm;
-                        ggml_backend backend_output;
+                        ggml_backend_type backend_norm;
+                        ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
@@ -2624,8 +2628,8 @@ static void llm_load_tensors(
                     const int i_gpu_start = n_layer - n_gpu_layers;
                     model.layers.resize(n_layer);
                     for (uint32_t i = 0; i < n_layer; ++i) {
-                        const ggml_backend backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
-                        const ggml_backend backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT;
+                        const ggml_backend_type backend = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD;
+                        const ggml_backend_type backend_split = int(i) < i_gpu_start ? GGML_BACKEND_CPU : LLAMA_BACKEND_OFFLOAD_SPLIT;
                         auto & layer = model.layers[i];
                         layer.attn_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd}, backend);
                         layer.attn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM, "bias", i),   {n_embd}, backend);
