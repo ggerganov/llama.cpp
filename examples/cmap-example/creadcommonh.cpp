@@ -4,6 +4,7 @@
 #include <regex>
 #include <unordered_map>
 #include <vector>
+#include <numeric>
 
 std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> tokens;
@@ -25,7 +26,7 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
     }
 
     std::unordered_map<std::string, std::vector<std::string>> parameters;
-    parameters["logit_bias"] = {"logit_bias", "0", "//", "way", "to", "alter", "prob", "of", "word", "being", "chosen");
+    parameters["logit_bias"] = {"logit_bias", "0", "//", "way", "to", "alter", "prob", "of", "word", "being", "chosen"};
 
         bool inside = false;
     for (const std::string& line : lines) {
