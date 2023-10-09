@@ -1325,7 +1325,11 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
+    // TODO: this should be:
+    //       cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*ggml_tensor_overhead());
+    //       change it and test that it works
     cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    memset(cache.buf.data, 0, cache.buf.size);
 
     struct ggml_init_params params;
     params.mem_size   = cache.buf.size;
