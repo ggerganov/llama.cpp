@@ -35,15 +35,25 @@ int main(int argc, char ** argv) {
     // load and preprocess the image
     clip_image_u8 img;
     clip_image_f32 img_res;
-    clip_image_load_from_file(img_path, &img);
+    if (!clip_image_load_from_file(img_path, &img)) {
+        fprintf(stderr, "%s: is %s really an image file?\n", __func__, img_path);
 
-    clip_image_preprocess(ctx_clip, &img, &img_res, /*pad2square =*/ true);
+        clip_free(ctx_clip);
+        return 1;
+    }
+
+    if (!clip_image_preprocess(ctx_clip, &img, &img_res, /*pad2square =*/ true)) {
+        fprintf(stderr, "%s: unable to preprocess %s\n", __func__, img_path);
+
+        clip_free(ctx_clip);
+        return 1;
+    }
 
     int   n_img_pos    = clip_n_pos(ctx_clip);
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
 
     if (!image_embd) {
-        fprintf(stderr, "Unable to allocate memory for CLIP embeddings\n");
+        fprintf(stderr, "Unable to allocate memory for image embeddings\n");
 
         return 1;
     }
