@@ -8,7 +8,7 @@ import os
 import re
 import collections
 import re
-import read_common_h
+import readcommonh
 
 # update the source file - usually 'help_list.txt', so the default - in case the source file has been changed
 def update_file(file_from, file_to = "help_list.txt"):
@@ -177,8 +177,8 @@ def find_parameters(file, sorted_result):
                 # now do it the new way
                 print("\nNow we extract the original gpt_params definition from common.h with the defaults for implemented arguments:\n")
                 gpt_count = 0
-                for k,v in read_common_h.parameters.items():
-                    if not read_common_h.parameters.items():
+                for k,v in readcommonh.parameters.items():
+                    if not readcommonh.parameters.items():
                         print(f"    \033[032mNone\033[0m\n")
                     elif k in arguments:
                         # print(f"gpt_params: \033[33m{k:>20}\033[0m values: {v}")
@@ -190,9 +190,9 @@ def find_parameters(file, sorted_result):
                 print("\nSearching the other way round is more efficient:\n")
                 key_count = 0
                 for argument in set(arguments):
-                    if argument in read_common_h.parameters:
+                    if argument in readcommonh.parameters:
                         key_count += 1
-                        print(f"{key_count:>2} key: {argument:>25}; role: {concatenate(read_common_h.parameters[argument]):<60}; default: {read_common_h.parameters[argument][1]:<10}")
+                        print(f"{key_count:>2} key: {argument:>25}; role: {concatenate(readcommonh.parameters[argument]):<60}; default: {readcommonh.parameters[argument][1]:<10}")
                 if help_count == gpt_count and gpt_count == key_count:
                     print(f"\n\033[032mNo unresolved help-list incompatibilities with \033[33m{filename.split('/')[-1]}\033[0m")
                 else:
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     update_file("common/common.cpp", "help_list.txt")
 
     # get the parameters from the common.h file utiity we import
-    print(read_common_h.parameters)
+    print(readcommonh.parameters)
     # So now we've got the gpt_parameters in this parameters dict
 
     # First we alter all the hyphenated help words in help-file.txt to underscores
