@@ -1,4 +1,7 @@
-# search the specified directory for files that include argv[i] == '-f' or '--file' arguments
+# search the specified directory for files that include command-line arguments
+# these are almost always in the form params.argument; "logit_bias" is one exception
+# have yet to investigate fully what "lora_adapter" in server.cpp does since it is not apparently
+# accessible from the command-line arg/parameter sequence.
 
 import os
 import re
@@ -86,6 +89,8 @@ def title_print(filename):
     print(f"Filename: \033[32m{title}\033[0m")
     print("#"*(10+len(title))) 
 
+# list all the equivalences between declarations in common.h and common.cpp that defines the help
+# these are used to substitute the searched params.attributes (keys) with help attributes (values)
 def substitution_list(parameters):
     # store untrapped parameters as identicals in case we need to change them later
     sub_dict = {"n_threads": "threads",
