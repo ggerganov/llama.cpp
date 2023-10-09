@@ -35,7 +35,7 @@ int main(int argc, char ** argv) {
     clip_image_f32 img_res;
     clip_image_load_from_file(img_path, &img);
     clip_image_preprocess(ctx_clip, &img, &img_res);
-    
+
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for CLIP embeddings\n");
