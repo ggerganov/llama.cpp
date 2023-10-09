@@ -585,7 +585,7 @@ void main() {
     const int is = 0;
 #else
     const int l0 = 4 * v_in;                               // 0, 4, 8, ..., 28
-    const int is = in / 4;
+    const int is = v_in / 4;
 #endif
 
     const int ql_offset = 64*v_im + l0;
@@ -611,7 +611,7 @@ void main() {
                        + FLOAT_TYPE(y[y_idx +112]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 7]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 48]  >> 4) | ((x[ib0 + i].qh[qh_offset + 16] & 0xc0) >> 2)) - 32);
         tmp[16 * ix + tid] += sum;
 #else
-        FLOAT_TYPE sum = 0;
+        FLOAT_TYPE sum = FLOAT_TYPE(0.0);
         for (int l = 0; l < 4; ++l) {
             sum += FLOAT_TYPE(y[y_idx + l+ 0]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+ 0] & 0xF) | (((x[ib0 + i].qh[qh_offset + l] >> 0) & 3) << 4)) - 32)
                  + FLOAT_TYPE(y[y_idx + l+32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((x[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)

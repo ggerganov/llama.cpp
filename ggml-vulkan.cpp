@@ -7,9 +7,9 @@
 
 #ifdef VK_PROFILE
 #define PROFILE(name, block) do { \
-    auto begin = std::chrono::high_resolution_clock::now(); \
+    auto begin = std::chrono::steady_clock::now(); \
     block \
-    auto end = std::chrono::high_resolution_clock::now(); \
+    auto end = std::chrono::steady_clock::now(); \
     double time_taken = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0; \
     printf("%s: %lf ms\n", name, time_taken); \
 } while(0)
@@ -914,7 +914,7 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
 
     // Try to find a non-graphics compute queue and transfer-focused queues
     const uint32_t compute_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eCompute, vk::QueueFlagBits::eGraphics, -1, 1);
-    const uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eVideoDecodeKHR | vk::QueueFlagBits::eProtected | vk::QueueFlagBits::eOpticalFlowNV, compute_queue_family_index, 2);
+    const uint32_t transfer_queue_family_index = ggml_vk_find_queue_family_index(queue_family_props, vk::QueueFlagBits::eTransfer, vk::QueueFlagBits::eCompute | vk::QueueFlagBits::eGraphics, compute_queue_family_index, 2);
 
     uint32_t transfer_queue_count = VK_TRANSFER_QUEUE_COUNT;
 
