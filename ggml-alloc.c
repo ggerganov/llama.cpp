@@ -1,29 +1,11 @@
 #include "ggml-alloc.h"
+#include "ggml-backend.h"
 #include "ggml.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifdef __has_include
-    #if __has_include(<unistd.h>)
-        #include <unistd.h>
-        #if defined(_POSIX_MAPPED_FILES)
-            #include <sys/types.h>
-            #include <sys/mman.h>
-        #endif
-    #endif
-#endif
-
-#if defined(_WIN32)
-    #define WIN32_LEAN_AND_MEAN
-    #ifndef NOMINMAX
-        #define NOMINMAX
-    #endif
-    #include <windows.h>
-    #include <memoryapi.h>
-#endif
 
 
 #define UNUSED(x) (void)(x)
@@ -80,8 +62,9 @@ struct free_block {
 #define MAX_FREE_BLOCKS 256
 
 struct ggml_allocr {
+    struct ggml_backend_buffer * buffer;
+    bool buffer_owned;
     void * data;
-    size_t size;
     size_t alignment;
     int n_free_blocks;
     struct free_block free_blocks[MAX_FREE_BLOCKS];
@@ -119,16 +102,9 @@ static void remove_allocated_tensor(struct ggml_allocr * alloc, struct ggml_tens
 }
 #endif
 
-static size_t ggml_allocr_get_alloc_size(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
-    return ggml_nbytes(tensor);
-
-    UNUSED(alloc);
-}
-
 // check if a tensor is allocated by this buffer
 static bool ggml_allocr_is_own(struct ggml_allocr * alloc, const struct ggml_tensor * tensor) {
-    void * ptr = tensor->data;
-    return ptr >= alloc->data && (char *)ptr < (char *)alloc->data + alloc->max_size;
+    return tensor->buffer == alloc->buffer;
 }
 
 static bool ggml_is_view(struct ggml_tensor * t) {
@@ -136,11 +112,10 @@ static bool ggml_is_view(struct ggml_tensor * t) {
 }
 
 void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
-#ifdef GGML_ALLOCATOR_DEBUG
     GGML_ASSERT(!ggml_is_view(tensor)); // views generally get data pointer from one of their sources
     GGML_ASSERT(tensor->data == NULL); // avoid allocating tensor which already has memory allocated
-#endif
-    size_t size = ggml_allocr_get_alloc_size(alloc, tensor);
+
+    size_t size = ggml_backend_buffer_get_alloc_size(alloc->buffer, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
 
     AT_PRINTF("%s: allocating %s (%zu bytes) - ", __func__, tensor->name, size);
@@ -188,6 +163,8 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 
     tensor->data = addr;
     AT_PRINTF("%s: allocated data at %p\n", __func__, tensor->data);
+    tensor->buffer = alloc->buffer;
+    ggml_backend_buffer_init_tensor(alloc->buffer, tensor);
 
 #ifdef GGML_ALLOCATOR_DEBUG
     add_allocated_tensor(alloc, tensor);
@@ -208,19 +185,21 @@ void ggml_allocr_alloc(struct ggml_allocr * alloc, struct ggml_tensor * tensor) 
 
 // this is a very naive implementation, but for our case the number of free blocks should be very small
 static void ggml_allocr_free_tensor(struct ggml_allocr * alloc, struct ggml_tensor * tensor) {
-    void * ptr = tensor->data;
-
     if (ggml_allocr_is_own(alloc, tensor) == false) {
         // the tensor was not allocated in this buffer
         // this can happen because the graph allocator will try to free weights and other tensors from different buffers
         // the easiest way to deal with this is just to ignore it
+        AT_PRINTF("ignoring %s (their buffer: %p, our buffer: %p)\n", tensor->name, (void *)tensor->buffer, (void *)alloc->buffer);
         return;
     }
 
-    size_t size = ggml_allocr_get_alloc_size(alloc, tensor);
+    void * ptr = tensor->data;
+
+    size_t size = ggml_backend_buffer_get_alloc_size(alloc->buffer, tensor);
     size = aligned_offset(NULL, size, alloc->alignment);
     AT_PRINTF("%s: freeing %s at %p (%zu bytes) - n_free_blocks = %d\n", __func__, tensor->name, ptr, size, alloc->n_free_blocks);
-    AT_PRINTF("%s: alloc->data = %p alloc->data+alloc->size = %p alloc->data+alloc->max_size = %p\n", __func__, alloc->data, (char*)alloc->data + alloc->size, (char*)alloc->data + alloc->max_size);
+
+    ggml_backend_buffer_free_tensor(alloc->buffer, tensor);
 
 #ifdef GGML_ALLOCATOR_DEBUG
     remove_allocated_tensor(alloc, tensor);
@@ -285,15 +264,18 @@ void ggml_allocr_reset(struct ggml_allocr * alloc) {
     alloc->n_free_blocks = 1;
     size_t align_offset = aligned_offset(alloc->data, 0, alloc->alignment);
     alloc->free_blocks[0].addr = (char *)alloc->data + align_offset;
-    alloc->free_blocks[0].size = alloc->size - align_offset;
+    alloc->free_blocks[0].size = ggml_backend_buffer_get_size(alloc->buffer) - align_offset;
 }
 
 struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment) {
-    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
+    struct ggml_backend_buffer * buffer = ggml_backend_cpu_buffer_from_ptr(NULL, data, size);
+
+    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr));
 
     *alloc = (struct ggml_allocr){
-        /*.data          = */ data,
-        /*.size          = */ size,
+        /*.buffer        = */ buffer,
+        /*.buffer_owned  = */ true,
+        /*.base          = */ ggml_backend_buffer_get_base(buffer),
         /*.alignment     = */ alignment,
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},
@@ -312,74 +294,26 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
     return alloc;
 }
 
-// OS specific functions to allocate and free uncommitted virtual memory
-static void * alloc_vmem(size_t size) {
-#if defined(_WIN32)
-    return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
-#elif defined(_POSIX_MAPPED_FILES)
-    void * ptr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (ptr == MAP_FAILED) {
-        return NULL;
-    }
-    return ptr;
-#else
-    // use a fixed address for other platforms
-    uintptr_t base_addr = (uintptr_t)-size - 0x100;
-    return (void *)base_addr;
-#endif
-}
-
-static void free_vmem(void * base_addr, size_t size) {
-#if defined(_WIN32)
-    VirtualFree(base_addr, 0, MEM_RELEASE);
-    UNUSED(size);
-#elif defined(_POSIX_MAPPED_FILES)
-    munmap(base_addr, size);
-#else
-    // nothing to do
-    UNUSED(base_addr);
-    UNUSED(size);
-#endif
-}
-
-// allocate uncommitted virtual memory to measure the size of the graph
-static void alloc_measure_vmem(void ** base_addr, size_t * size) {
-    // 128GB for 64-bit, 1GB for 32-bit
-    *size = sizeof(void *) == 4 ? 1ULL<<30 : 1ULL<<37;
-    do {
-        *base_addr = alloc_vmem(*size);
-        if (*base_addr != NULL) {
-            AT_PRINTF("allocated %.2f GB of virtual memory for measure buffer at %p\n", *size / 1024.0 / 1024.0 / 1024.0, *base_addr);
-            return;
-        }
-        // try again with half the size
-        *size /= 2;
-    } while (*size > 0);
-
-    GGML_ASSERT(!"failed to allocate virtual memory for measure buffer");
-}
-
-static void free_measure_vmem(void * base_addr, size_t size) {
-    free_vmem(base_addr, size);
-}
-
 struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
-    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr) /* + n_free_blocks * sizeof(struct free_block) */);
+    struct ggml_allocr * alloc = ggml_allocr_new((void *)0x1000, (size_t)-0x1001, alignment);
+    alloc->measure = true;
 
-    void * base_addr;
-    size_t size;
+    return alloc;
+}
 
-    alloc_measure_vmem(&base_addr, &size);
+struct ggml_allocr * ggml_allocr_new_from_buffer(struct ggml_backend_buffer * buffer) {
+    struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr));
 
     *alloc = (struct ggml_allocr){
-        /*.data          = */ base_addr,
-        /*.size          = */ size,
-        /*.alignment     = */ alignment,
+        /*.buffer        = */ buffer,
+        /*.buffer_owned  = */ false,
+        /*.base          = */ ggml_backend_buffer_get_base(buffer),
+        /*.alignment     = */ ggml_backend_buffer_get_alignment(buffer),
         /*.n_free_blocks = */ 0,
         /*.free_blocks   = */ {{0}},
         /*.hash_table    = */ {{0}},
         /*.max_size      = */ 0,
-        /*.measure       = */ true,
+        /*.measure       = */ false,
         /*.parse_seq     = */ {0},
         /*.parse_seq_len = */ 0,
 #ifdef GGML_ALLOCATOR_DEBUG
@@ -393,8 +327,8 @@ struct ggml_allocr * ggml_allocr_new_measure(size_t alignment) {
 }
 
 void ggml_allocr_free(struct ggml_allocr * alloc) {
-    if (alloc->measure) {
-        free_measure_vmem(alloc->data, alloc->size);
+    if (alloc->buffer_owned) {
+        ggml_backend_buffer_free(alloc->buffer);
     }
     free(alloc);
 }
@@ -437,7 +371,6 @@ static bool ggml_op_can_inplace(enum ggml_op op) {
         case GGML_OP_ROPE:
         case GGML_OP_RMS_NORM:
         case GGML_OP_SOFT_MAX:
-        case GGML_OP_CONT:
             return true;
 
         default:
@@ -445,12 +378,23 @@ static bool ggml_op_can_inplace(enum ggml_op op) {
     }
 }
 
+static void init_view(struct ggml_allocr * alloc, struct ggml_tensor * view) {
+    assert(view->view_src != NULL && view->view_src->data != NULL);
+    view->backend = view->view_src->backend;
+    view->buffer  = view->view_src->buffer;
+    view->data    = (char *)view->view_src->data + view->view_offs;
+
+    // FIXME: the view should be initialized by the owning buffer, but currently this breaks the CUDA backend
+    // due to the ggml_tensor_extra_gpu ring buffer overwriting the KV cache extras
+    assert(ggml_allocr_is_measure(alloc) || view->buffer->backend == alloc->buffer->backend);
+    ggml_backend_buffer_init_tensor(alloc->buffer, view);
+}
+
 static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node) {
     struct hash_node * ht = alloc->hash_table;
     if (node->data == NULL) {
         if (ggml_is_view(node)) {
-            assert(node->view_src->data != NULL);
-            node->data = (char *)node->view_src->data + node->view_offs;
+            init_view(alloc, node);
         } else {
             // see if we can reuse a parent's buffer (inplace)
             if (ggml_op_can_inplace(node->op)) {
@@ -478,13 +422,17 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
                                 // adding a view_src pointer to the tensor would solve this and simplify the code dealing with views
                                 // for now, we only reuse the parent's data if the offset is zero (view_src->data == parent->data)
                                 AT_PRINTF("reusing view parent %s (%s) for %s\n", parent->name, view_src->name, node->name);
-                                node->data = parent->data;
+                                node->view_src = view_src;
+                                view_src_hn->n_views += 1;
+                                init_view(alloc, node);
                                 return;
                             }
                         }
                         else {
                             AT_PRINTF("reusing parent %s for %s\n", parent->name, node->name);
-                            node->data = parent->data;
+                            node->view_src = parent;
+                            p_hn->n_views += 1;
+                            init_view(alloc, node);
                             return;
                         }
                     }
@@ -495,7 +443,7 @@ static void allocate_node(struct ggml_allocr * alloc, struct ggml_tensor * node)
     }
 }
 
-static size_t ggml_allocr_alloc_graph_tensors_n(
+size_t ggml_allocr_alloc_graph_n(
     struct ggml_allocr * alloc,
     struct ggml_cgraph ** graphs, int n_graphs,
     struct ggml_tensor *** inputs, struct ggml_tensor *** outputs) {
@@ -513,6 +461,10 @@ static size_t ggml_allocr_alloc_graph_tensors_n(
             if (ggml_is_view(node)) {
                 struct ggml_tensor * view_src = node->view_src;
                 hash_get(ht, view_src)->n_views += 1;
+                if (node->buffer == NULL && node->data != NULL) {
+                    // view of a pre-allocated tensor, didn't call init_view() yet
+                    init_view(alloc, node);
+                }
             }
 
             for (int j = 0; j < GGML_MAX_SRC; j++) {
@@ -521,6 +473,9 @@ static size_t ggml_allocr_alloc_graph_tensors_n(
                     break;
                 }
                 hash_get(ht, parent)->n_children += 1;
+                if (ggml_is_view(parent) && parent->buffer == NULL && parent->data != NULL) {
+                    init_view(alloc, parent);
+                }
             }
         }
     }
@@ -631,7 +586,7 @@ static size_t ggml_allocr_alloc_graph_tensors_n(
 }
 
 size_t ggml_allocr_alloc_graph(struct ggml_allocr * alloc, struct ggml_cgraph * graph) {
-    return ggml_allocr_alloc_graph_tensors_n(alloc, &graph, 1, NULL, NULL);
+    return ggml_allocr_alloc_graph_n(alloc, &graph, 1, NULL, NULL);
 }
 
 size_t ggml_allocr_max_size(struct ggml_allocr * alloc) {

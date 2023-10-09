@@ -79,6 +79,7 @@ struct gpt_params {
     std::string model_draft       = "";                              // draft model for speculative decoding
     std::string model_alias       = "unknown"; // model alias
     std::string prompt            = "";
+    std::string prompt_file       = "";  // store the external prompt file name
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
@@ -120,6 +121,7 @@ struct gpt_params {
     bool use_mlock         = false; // use mlock to keep model in memory
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
+    bool infill            = false; // use infill mode
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
