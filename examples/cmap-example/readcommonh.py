@@ -25,7 +25,7 @@ for line in lines:
         if "float>" in parameters and parameters["float>"][1] == 'logit_bias':
             del parameters["float>"]
 
-    # this is a bit of a hack to terminate the harvest 
+    # this is a bit of a hack to terminate the harvest
     if len(non_whitespace_elements) > 2 and non_whitespace_elements[1] == "infill":
         inside = False
         break
