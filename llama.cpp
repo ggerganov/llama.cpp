@@ -2082,8 +2082,11 @@ static void llm_load_hparams(
 
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1B; break;
-                    case 36: model.type = e_model::MODEL_3B; break;
-                    case 42: model.type = e_model::MODEL_7B; break;
+                    case 30:
+                        switch (hparams.n_embd) {
+                            case 2560: model.type = e_model::MODEL_3B; break;
+                            case 4096: model.type = e_model::MODEL_7B; break;
+                        } break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
