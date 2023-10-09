@@ -124,11 +124,13 @@ with open(tokenizer_json_file, "r", encoding="utf-8") as f:
 
 print("gguf: get gpt2 tokenizer vocab")
 
-# MPT token embedding tensors have dimension 50432, but there are only 50254
+# MPT token embedding tensors have dimension 50432 (hparams["vocab_size"]),
+# but there are only 50254 (len(tokenizer_json["model"]["vocab"]))
 # tokens in the vocab, presumably to accomodate some "reserved" tokens;
-# this is causing problems down the line in llama.cpp, so we extend the vocab_size:
+# this is causing problems down the line in llama.cpp, so we pad the vocab
+# with dummy tokens:
 
-vocab_size = len(tokenizer_json["model"]["vocab"]) + 178
+vocab_size = hparams["vocab_size"]
 
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
