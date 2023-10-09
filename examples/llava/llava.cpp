@@ -10,7 +10,7 @@
 
 int main(int argc, char ** argv) {
     ggml_time_init();
-    
+
     gpt_params params;
 
     if (argc < 4) {
