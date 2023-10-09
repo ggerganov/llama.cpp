@@ -9,7 +9,6 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <pthread.h>
 #include <regex>
 #include <stdexcept>
 #include <thread>
@@ -779,70 +778,6 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
     }
 
     return true;
-}
-
-// Structure to hold the image data as an input to function to be executed for thread
-typedef struct {
-    const clip_image_u8 * input;
-    clip_image_f32 * resized;
-    const clip_ctx * ctx;
-} ImageData;
-
-// Function to preprocess a single image in a thread
-void * preprocess_image(void * arg) {
-    ImageData * imageData = static_cast<ImageData *>(arg);
-    const clip_image_u8 * input = imageData->input;
-    clip_image_f32 * resized = imageData->resized;
-    const clip_ctx * ctx = imageData->ctx;
-
-    // Call the original preprocess function on the image
-    clip_image_preprocess(ctx, input, resized);
-
-    pthread_exit(NULL);
-}
-
-// Function to batch-preprocess multiple images i
-void clip_image_batch_preprocess(const clip_ctx * ctx, const int n_threads, const clip_image_u8_batch * img_inputs,
-                                 clip_image_f32_batch * imgs_resized) {
-    imgs_resized->size = img_inputs->size;
-
-    int num_threads = std::min(n_threads, static_cast<int>(img_inputs->size));
-    int i, t;
-
-    // Divide the images among the threads
-    int images_per_thread = img_inputs->size / num_threads;
-
-    if (num_threads == 1) {
-        // Single-threaded case
-        for (i = 0; i < img_inputs->size; i++) {
-            clip_image_preprocess(ctx, &img_inputs->data[i], &imgs_resized->data[i]);
-        }
-    } else {
-        // Multi-threaded case
-
-        std::vector<pthread_t> threads(num_threads);
-        std::vector<ImageData> imageData(img_inputs->size);
-
-        for (t = 0; t < num_threads; t++) {
-            int start_index = t * images_per_thread;
-            int end_index = (t == num_threads - 1) ? img_inputs->size : start_index + images_per_thread;
-
-            // Create ImageData for each thread
-            for (i = start_index; i < end_index; i++) {
-                imageData[i].input = &img_inputs->data[i];
-                imageData[i].resized = &imgs_resized->data[i];
-                imageData[i].ctx = ctx;
-            }
-
-            // Create a thread for each batch of images
-            pthread_create(&threads[t], NULL, preprocess_image, static_cast<void *>(&imageData[start_index]));
-        }
-
-        // Wait for all threads to finish
-        for (t = 0; t < num_threads; t++) {
-            pthread_join(threads[t], NULL);
-        }
-    }
 }
 
 void clip_free(clip_ctx * ctx) {
