@@ -106,6 +106,7 @@ def substitution_list(parameters):
                 "n_keep" : "keep",
                 "n_probs" : "nprobs",
                 "path_prompt_cache" : "prompt_cache",
+                "prompt_file" : "prompt_file",
                 "input_prefix" : "in_prefix",
                 "input_suffix" : "in_suffix",
                 "input_prefix_bos" : "in_prefix_bos",

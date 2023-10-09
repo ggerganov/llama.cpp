@@ -748,6 +748,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --nprobs N            if > 0 output the probabilities of the top N tokens\n");
     printf("  --alias               model alias (default: 'unknown')\n");
     printf("  --infill              0 (defaut) use infill mode\n");
+    printf("  --prompt-file         name of external prompt file\n");
     printf("\n");
 }
 

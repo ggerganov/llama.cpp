@@ -104,3 +104,4 @@
  --nprobs N            if > 0 output the probabilities of the top N tokens\n"
  --alias               model alias (default: 'unknown')\n"
  --infill              0 (defaut) use infill mode\n"
+ --prompt_file         name of external prompt file\n"
