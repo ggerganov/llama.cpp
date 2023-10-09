@@ -24,7 +24,7 @@ int main() {
     }
 
     // Now try the helpdict idea
-    
+
     printf("Second kind of dictionary\n");
 
     // Create a list of strings
@@ -37,7 +37,7 @@ int main() {
     std::list<std::string>& fruitsList = helpdict["fruits"];
     fruitsList.push_back("grape");
     fruitsList.push_back("pineapple");
-   
+
     for (const auto& pair : helpdict) {
         printf("helpdict contains a list of %s\n", pair.first.c_str());
         for (const auto& element : pair.second) {

@@ -29,10 +29,10 @@ def update_file(file_from, file_to = "help_list.txt"):
 def replace_dashes_with_underscores(filename):
     with open(filename, 'r') as file:
         content = file.read()
-        
+
     # Match '-' surrounded by word characters on both sides and replace with '_'
     replaced_content = re.sub(r'(\w)-(\w)', r'\1_\2', content)
-    
+
     with open(filename, 'w') as file:
         file.write(replaced_content)
 
@@ -86,9 +86,9 @@ def concatenate(v):
 
 def title_print(filename):
     title = filename.split('/')[-1]
-    print("\n\n"+"#"*(10+len(title)))         
+    print("\n\n"+"#"*(10+len(title)))
     print(f"Filename: \033[32m{title}\033[0m")
-    print("#"*(10+len(title))) 
+    print("#"*(10+len(title)))
 
 # list all the equivalences between declarations in common.h and common.cpp that defines the help
 # these are used to substitute the searched params.attributes (keys) with help attributes (values)
@@ -130,7 +130,7 @@ def substitution_list(parameters):
     new_parameters = []
     for parameter in parameters:
         if parameter in sub_dict:
-            # we need both for future reference 
+            # we need both for future reference
             new_parameters.append(parameter)
             new_parameters.append(sub_dict[parameter])
         else:
@@ -154,7 +154,7 @@ def find_parameters(file, sorted_result):
                     # bit of a hack to exclude --attributes at the end of help comment lines
                     if re.search(pattern, line[:50]):
                         parameters.append(line)
-    
+
             all_parameters = set(parameters)
 
             title_print(filename)
@@ -162,8 +162,8 @@ def find_parameters(file, sorted_result):
 
             if not all_parameters:
                 print(f"    \033[032mNone\033[0m\n")
-            
-            # first do it the original way 
+
+            # first do it the original way
             else:
                 help_count = 0
                 for parameter in all_parameters:
@@ -186,7 +186,7 @@ def find_parameters(file, sorted_result):
                         concatenated_element = concatenate(v)
                         gpt_count += 1
                         print(f"{gpt_count:>2} gpt_param: \033[32m{k:>19}; \033[34mrole: \033[33m{concatenated_element:<60}\033[0m;  \033[34mdefault: \033[30m{v[1]:<10}\033[0m ")
-                
+
                 # searching the other way round is quicker:
                 print("\nSearching the other way round is more efficient:\n")
                 key_count = 0
@@ -203,7 +203,7 @@ def find_parameters(file, sorted_result):
 directory = '/Users/edsilm2/llama.cpp/examples'
 
 if __name__ == '__main__':
-   
+
    # update the source help file from C++ source (this works exactly as required)
     update_file("common/common.cpp", "help_list.txt")
 
