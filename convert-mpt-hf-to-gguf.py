@@ -111,24 +111,15 @@ tokens: list[bytearray] = []
 scores: list[float] = []
 toktypes: list[int] = []
 
-tokenizer_json_file = dir_model / 'tokenizer.json'
-if not tokenizer_json_file.is_file():
-    print(f'Error: Missing {tokenizer_json_file}', file = sys.stderr)
-    sys.exit(1)
-
 # gpt2 tokenizer
 gguf_writer.add_tokenizer_model("gpt2")
 
-with open(tokenizer_json_file, "r", encoding="utf-8") as f:
-    tokenizer_json = json.load(f)
-
 print("gguf: get gpt2 tokenizer vocab")
 
-# MPT token embedding tensors have dimension 50432 (hparams["vocab_size"]),
-# but there are only 50254 (len(tokenizer_json["model"]["vocab"]))
-# tokens in the vocab, presumably to accomodate some "reserved" tokens;
-# this is causing problems down the line in llama.cpp, so we pad the vocab
-# with dummy tokens:
+# MPT token embedding tensors have dimension 50432 (hparams["vocab_size"]), but
+# there are only 50254 (len(tokenizer.vocab)) tokens in the vocab, presumably to
+# accomodate some "reserved" tokens; this is causing problems down the line in
+# llama.cpp, so we pad the vocab with dummy tokens:
 
 vocab_size = hparams["vocab_size"]
 
