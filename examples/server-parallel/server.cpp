@@ -210,6 +210,16 @@ struct server_parallel_context {
         update_system_prompt = false;
     }
 
+    bool releaseSlot(int id) {
+        for(llama_client_slot &slot : slots) {
+            if(slot.id == id) {
+                slot.release();
+                return true;
+            }
+        }
+        return false;
+    }
+
     void notifySystemPromptChanged() {
         // release all slots
         for (llama_client_slot &slot : slots)
@@ -824,9 +834,12 @@ int main(int argc, char **argv)
 
     Server svr;
 
-    svr.set_default_headers({{"Server", "llama.cpp"},
-                             {"Access-Control-Allow-Origin", "*"},
-                             {"Access-Control-Allow-Headers", "content-type"}});
+    svr.Options("/(.*)",
+                      [&](const Request & /*req*/, Response &res) {
+                      res.set_header("Access-Control-Allow-Methods", "*");
+                      res.set_header("Access-Control-Allow-Headers", "content-type");
+                      res.set_header("Access-Control-Allow-Origin", "*");
+                      });
 
     svr.Get("/", [&](const Request & /*req*/, Response &res)
             { res.set_content(index_html_, "text/html"); });
@@ -836,14 +849,36 @@ int main(int argc, char **argv)
 
     svr.Get("/props", [&llama](const Request & /*req*/, Response &res)
             {
+                res.set_header("Access-Control-Allow-Origin", "*");
                 json data = {
                     { "user_name", llama.user_name.c_str() },
                     { "assistant_name", llama.assistant_name.c_str() }
                 };
                 res.set_content(data.dump(), "application/json"); });
 
+    svr.Get("/cancel", [&llama](const Request &  req/*req*/, Response &res) {
+                res.set_header("Access-Control-Allow-Origin", "*");
+                if(req.has_param("slot_id")) {
+                    int slot_id = std::stoi(req.get_param_value("slot_id"));
+                    string result = "done";
+                    if(!llama.releaseSlot(slot_id)) {
+                        result = "wrong slot ID";
+                    }
+                    json data = {
+                        { "status", result }
+                    };
+                    res.set_content(data.dump(), "application/json");
+                } else {
+                    json data = {
+                        { "error", "Missing parameter" }
+                    };
+                    res.set_content(data.dump(), "application/json");
+                }
+                 });
+
     svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
+                res.set_header("Access-Control-Allow-Origin", "*");
         llama_client_slot* slot = llama.requestCompletion(json::parse(req.body));
         // Verify if the slot exist
         if (slot) {
@@ -855,7 +890,9 @@ int main(int argc, char **argv)
                     }
                     if(slot->hasNewToken()) { // new token notification
                         stringstream ss;
-                        json res_d = {{ "content", slot->sampled_tokens.back() }};
+                        json res_d = {
+                            { "content", slot->sampled_tokens.back() },
+                            { "slot_id", slot->id }};
                         slot->sampled_tokens.pop_back();
                         ss << "data: " << res_d.dump() << "\n\n";
                         string result = ss.str();
