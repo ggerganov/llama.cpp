@@ -356,6 +356,8 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
+            ggml-backend.c
+            ggml-backend.h
             k_quants.h
             k_quants.c
             ${GGML_SOURCES_CUDA})
