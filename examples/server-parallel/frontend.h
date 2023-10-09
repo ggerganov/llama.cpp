@@ -131,7 +131,6 @@ function updateView() {
 
 async function call_llama(options) {
   try {
-    controller = new AbortController();
     const response = await fetch("/completion", {
       method: "POST",
       body: JSON.stringify(options),
