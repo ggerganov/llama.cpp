@@ -36,7 +36,7 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
     std::unordered_map<std::string, std::vector<std::string>> parameters;
     parameters["logit_bias"] = {"logit_bias", "0", "//", "way", "to", "alter", "prob", "of", "word", "being", "chosen"};
 
-        bool inside = false;
+    bool inside = false;
     for (const std::string& line : lines) {
         std::vector<std::string> nonWhitespaceElements = splitString(line, " ");
         std::cout << "nwe = \033[33m";
