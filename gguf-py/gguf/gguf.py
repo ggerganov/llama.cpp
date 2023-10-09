@@ -647,8 +647,6 @@ class GGUFWriter:
         self.add_architecture()
         self.use_temp_file = use_temp_file
         self.tensors = []
-        
-       
         print(f"This gguf file is for {self.endianess} only")
 
     def write_header_to_file(self):
@@ -727,7 +725,6 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.ARRAY)
 
-    
     def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True):
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
