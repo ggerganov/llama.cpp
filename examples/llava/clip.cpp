@@ -11,7 +11,6 @@
 #include <map>
 #include <regex>
 #include <stdexcept>
-#include <thread>
 #include <vector>
 
 #include "clip.h"
