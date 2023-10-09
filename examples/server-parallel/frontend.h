@@ -91,7 +91,7 @@ docReady(async () => {
   document.getElementById("message").value =
     questions[Math.floor(Math.random() * questions.length)];
     // to keep the same prompt format in all clients
-    const response = await fetch("http://localhost:8080/props");
+    const response = await fetch("/props");
     if (!response.ok) {
       alert(`HTTP error! Status: ${response.status}`);
     }
@@ -132,7 +132,7 @@ async function call_llama(options) {
   try {
     controller = new AbortController();
     signal = controller.signal;
-    const response = await fetch("http://localhost:8080/completion", {
+    const response = await fetch("/completion", {
       method: "POST",
       body: JSON.stringify(options),
       headers: {
@@ -207,7 +207,6 @@ function generatePrompt() {
       prompt += assistant_name + conversation[index].assistant;
     }
   }
-  console.log(prompt)
   return prompt;
 }
 
