@@ -146,32 +146,31 @@ int main() {
         printf("\n");
         }
     }
-    return 0;
-}
 
-std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) {
-    std::vector<std::string> tokens;
-    std::size_t start = 0, end = 0;
-    while ((end = str.find(delimiter, start)) != std::string::npos) {
-        tokens.push_back(str.substr(start, end - start));
-        start = end + delimiter.length();
+    std::vector<std::string> splitString(const std::string& str, const std::string& delimiter) {
+        std::vector<std::string> tokens;
+        std::size_t start = 0, end = 0;
+        while ((end = str.find(delimiter, start)) != std::string::npos) {
+            tokens.push_back(str.substr(start, end - start));
+            start = end + delimiter.length();
+        }
+        tokens.push_back(str.substr(start));
+        return tokens;
     }
-    tokens.push_back(str.substr(start));
-    return tokens;
-}
 
-std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
-    std::ifstream file("common/common.h");
-    std::string line;
-    std::vector<std::string> lines;
-    while (std::getline(file, line)) {
-        lines.push_back(line);
-    }
+    std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
+        std::ifstream file("common/common.h");
+        std::string line;
+        std::vector<std::string> lines;
+        while (std::getline(file, line)) {
+            lines.push_back(line);
+        }
 
     std::unordered_map<std::string, std::vector<std::string>> parameters;
     parameters["logit_bias"] = {"logit_bias", "0", "//", "way", "to", "alter", "probability", "of", "particular", "words");
 
     bool inside = false;
+
     for (const std::string& line : lines) {
         std::vector<std::string> nonWhitespaceElements = splitString(line, " ");
         std::cout << "nwe = \033[33m";
@@ -221,14 +220,13 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
 
         std::cout << std::string(10, ' ');
         std::cout << "parameter: \033[32m" << std::right << std::setw(40) << key << " \033[34mdefault: \033[30m"
-                  << std::right << std::setw(5) << value[1] << " \033[34mcomment: \033[33m"
-                  << std::left << std::setw(80) << concatenatedElement << "\033[0m" << std::endl;
+                << std::right << std::setw(5) << value[1] << " \033[34mcomment: \033[33m"
+                << std::left << std::setw(80) << concatenatedElement << "\033[0m" << std::endl;
+    }
+        return parameters;
     }
 
-    return parameters;
-}
-
-int main() {
     std::unordered_map<std::string, std::vector<std::string>> parameters = extractParameters();
+
     return 0;
 }
