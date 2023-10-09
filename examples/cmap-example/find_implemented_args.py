@@ -2,6 +2,7 @@
 # these are almost always in the form params.argument; "logit_bias" is one exception
 # have yet to investigate fully what "lora_adapter" in server.cpp does since it is not apparently
 # accessible from the command-line arg/parameter sequence.
+# there is also an issue with -ngl which does not appear in some help menus even when apparently implemented, e.g. in parallel.cpp
 
 import os
 import re
