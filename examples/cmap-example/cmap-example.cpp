@@ -39,11 +39,11 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
     bool inside = false;
     for (const std::string& line : lines) {
         std::vector<std::string> nonWhitespaceElements = splitString(line, " ");
-        std::cout << "nwe = \033[33m";
+        printf("nwe = \033[33m");
         for (const std::string& element : nonWhitespaceElements) {
-            std::cout << element << " ";
+            printf("%s ", element);
         }
-        std::cout << "\033[0m" << std::endl;
+        printf("\033[0m\n");
 
         if (!nonWhitespaceElements.empty() && nonWhitespaceElements[0] == "struct") {
             inside = true;
@@ -70,11 +70,11 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
     for (const auto& pair : parameters) {
         const std::string& key = pair.first;
         const std::vector<std::string>& value = pair.second;
-        std::cout << "key: " << std::left << std::setw(20) << key << "; values: ";
+        printf("key: %s; values: ", key);
         for (const std::string& element : value) {
-            std::cout << element << " ";
+            printf("%s ", element);
         }
-        std::cout << std::endl;
+        printf("\n");
 
         std::string concatenatedElement = "";
         for (std::size_t i = 0; i < value.size(); i++) {
@@ -84,10 +84,7 @@ std::unordered_map<std::string, std::vector<std::string>> extractParameters() {
             }
         }
 
-        std::cout << std::string(10, ' ');
-        std::cout << "parameter: \033[32m" << std::right << std::setw(40) << key << " \033[34mdefault: \033[30m"
-                  << std::right << std::setw(5) << value[1] << " \033[34mcomment: \033[33m"
-                  << std::left << std::setw(80) << concatenatedElement << "\033[0m" << std::endl;
+        printf("parameter: \033[32m key: \033[34m%s default: \033[30m%s \033[34mcomment: \033[33m%s\033[0m\n", key, value[1], concatenatedElement);
     }
 
     return parameters;
