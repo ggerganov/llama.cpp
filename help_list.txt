@@ -102,3 +102,5 @@
  --mlock               0 (default): if true keep model in memory.\n"
  --use_color           0 (default): use color to distinguish generations from inputs\n"
  --nprobs N            if > 0 output the probabilities of the top N tokens\n"
+ --alias               model alias (default: 'unknown')\n"
+ --infill              0 (defaut) use infill mode\n"

@@ -622,7 +622,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 }
 
 // There were missing items from this list of helps so the wording needs checking (all inserted at the end, so reposition too):
-// --embedding, --beams, --ppl-stride, --ppl-output-type, memory-f32, no-mmap, mlock, use-color, nprobs
+// --embedding, --beams, --ppl-stride, --ppl-output-type, --memory-f32, --no-mmap, --mlock, --use-color, --nprobs, --alias, --infill
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
@@ -735,11 +735,13 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --ppl-output-type     0 (default): ppl output as usual, 1: ppl output num_tokens, one per line\n");
     printf("  --embedding           0 (default): get only sentence embedding\n");
     printf("  --beams N             0 (default): if non-zero use beam search of given width N.\n");
-    printf("  --memory-f32          0 (default): if true (= 1) disable f16 memory.\n");   
+    printf("  --memory-f32          0 (default): if true (= 1) disable f16 memory.\n");
     printf("  --no-mmap             0 (default): if true use mmap for faster loads.\n");
-    printf("  --mlock               0 (default): if true keep model in memory.\n");  
+    printf("  --mlock               0 (default): if true keep model in memory.\n");
     printf("  --use-color           0 (default): use color to distinguish generations from inputs\n");
-    printf("  --nprobs N            if > 0 output the probabilities of the top N tokens\n"); 
+    printf("  --nprobs N            if > 0 output the probabilities of the top N tokens\n");
+    printf("  --alias               model alias (default: 'unknown')\n");
+    printf("  --infill              0 (defaut) use infill mode\n");
     printf("\n");
 }
 
