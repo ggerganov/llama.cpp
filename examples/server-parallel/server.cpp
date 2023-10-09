@@ -210,16 +210,6 @@ struct server_parallel_context {
         update_system_prompt = false;
     }
 
-    bool releaseSlot(int id) {
-        for(llama_client_slot &slot : slots) {
-            if(slot.id == id) {
-                slot.release();
-                return true;
-            }
-        }
-        return false;
-    }
-
     void notifySystemPromptChanged() {
         // release all slots
         for (llama_client_slot &slot : slots)
@@ -357,6 +347,7 @@ struct server_parallel_context {
                     std::vector<llama_token> tokens_prompt;
                     tokens_prompt = ::llama_tokenize(ctx, slot.prompt, false);
                     slot.n_tokens_predicted = 0;
+                    slot.sampled_tokens.clear();
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
                         batch.token [batch.n_tokens] = tokens_prompt[i];
@@ -856,34 +847,13 @@ int main(int argc, char **argv)
                 };
                 res.set_content(data.dump(), "application/json"); });
 
-    svr.Get("/cancel", [&llama](const Request &  req/*req*/, Response &res) {
-                res.set_header("Access-Control-Allow-Origin", "*");
-                if(req.has_param("slot_id")) {
-                    int slot_id = std::stoi(req.get_param_value("slot_id"));
-                    string result = "done";
-                    if(!llama.releaseSlot(slot_id)) {
-                        result = "wrong slot ID";
-                    }
-                    json data = {
-                        { "status", result }
-                    };
-                    res.set_content(data.dump(), "application/json");
-                } else {
-                    json data = {
-                        { "error", "Missing parameter" }
-                    };
-                    res.set_content(data.dump(), "application/json");
-                }
-                 });
-
     svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
                 res.set_header("Access-Control-Allow-Origin", "*");
         llama_client_slot* slot = llama.requestCompletion(json::parse(req.body));
         // Verify if the slot exist
         if (slot) {
-            res.set_chunked_content_provider("text/event-stream",
-                [slot](size_t /*offset*/, DataSink &sink) {
+            auto content_provider = [slot](size_t /*offset*/, DataSink &sink) {
                     if(slot->available()) { // slot has been released
                         sink.done();
                         return false;
@@ -902,7 +872,11 @@ int main(int argc, char **argv)
                         }
                     }
                     return true;
-                });
+                };
+            auto on_complete = [slot] (bool) {
+                slot->release();
+            };
+            res.set_chunked_content_provider("text/event-stream", content_provider, on_complete);
         } else {
             LOG_TEE("slot unavailable\n");
             res.status = 404;
