@@ -326,7 +326,7 @@ extern "C" {
         GGML_TYPE_COUNT,
     };
 
-    enum ggml_backend {
+    enum ggml_backend_type {
         GGML_BACKEND_CPU = 0,
         GGML_BACKEND_GPU = 10,
         GGML_BACKEND_GPU_SPLIT = 20,
@@ -401,9 +401,13 @@ extern "C" {
         GGML_OP_CLAMP,
         GGML_OP_CONV_1D,
         GGML_OP_CONV_2D,
+        GGML_OP_CONV_TRANSPOSE_1D,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
+
+        GGML_OP_CONV_1D_STAGE_0,  // internal
+        GGML_OP_CONV_1D_STAGE_1,  // internal
 
         GGML_OP_UPSCALE, // nearest interpolate
 
@@ -475,8 +479,10 @@ extern "C" {
 
     // n-dimensional tensor
     struct ggml_tensor {
-        enum ggml_type    type;
-        enum ggml_backend backend;
+        enum ggml_type         type;
+        enum ggml_backend_type backend;
+
+        struct ggml_backend_buffer * buffer;
 
         int     n_dims;
         int64_t ne[GGML_MAX_DIMS]; // number of elements
@@ -510,7 +516,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[4];
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -1354,7 +1360,7 @@ extern "C" {
 
     // alibi position embedding
     // in-place, returns view(a)
-    struct ggml_tensor * ggml_alibi(
+    GGML_API struct ggml_tensor * ggml_alibi(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past,
@@ -1363,7 +1369,7 @@ extern "C" {
 
     // clamp
     // in-place, returns view(a)
-    struct ggml_tensor * ggml_clamp(
+    GGML_API struct ggml_tensor * ggml_clamp(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             float                 min,
@@ -1385,6 +1391,14 @@ extern "C" {
             struct ggml_tensor  * b,
             int                   s,
             int                   d);
+
+    GGML_API struct ggml_tensor * ggml_conv_transpose_1d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int                   s0,
+            int                   p0,
+            int                   d0);
 
     GGML_API struct ggml_tensor * ggml_conv_2d(
             struct ggml_context * ctx,
@@ -1759,6 +1773,7 @@ extern "C" {
         GGML_OPT_NO_CONTEXT,
         GGML_OPT_INVALID_WOLFE,
         GGML_OPT_FAIL,
+        GGML_OPT_CANCEL,
 
         GGML_LINESEARCH_FAIL = -128,
         GGML_LINESEARCH_MINIMUM_STEP,
@@ -2089,7 +2104,7 @@ extern "C" {
         enum ggml_type    vec_dot_type;
     } ggml_type_traits_t;
 
-    ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
+    GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
 }

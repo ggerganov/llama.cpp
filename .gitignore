@@ -10,6 +10,7 @@
 *.gcno
 *.gcda
 *.dot
+*.metallib
 .DS_Store
 .build/
 .cache/
@@ -91,4 +92,5 @@ tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0-llama
 tests/test-tokenizer-0-falcon
-tests/test-tokenizer-1
+tests/test-tokenizer-1-llama
+tests/test-tokenizer-1-bpe

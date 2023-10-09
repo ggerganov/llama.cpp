@@ -114,9 +114,9 @@ node index.js
 
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
 
-    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.9).
+    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).
 
-    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: 128, -1 = infinity).
+    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
 
     `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
     By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
@@ -155,6 +155,8 @@ node index.js
     `ignore_eos`: Ignore end of stream token and continue generating (default: false).
 
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
+
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
