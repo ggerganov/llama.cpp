@@ -623,6 +623,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 
 // There were missing items from this list of helps so the wording needs checking (all inserted at the end, so reposition too):
 // --embedding, --beams, --ppl-stride, --ppl-output-type, --memory-f32, --no-mmap, --mlock, --use-color, --nprobs, --alias, --infill
+// some corresponding changes to the sequence of fprintf() code may be needed
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
