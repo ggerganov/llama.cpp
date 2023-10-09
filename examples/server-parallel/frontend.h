@@ -131,7 +131,6 @@ function updateView() {
 async function call_llama(options) {
   try {
     controller = new AbortController();
-    signal = controller.signal;
     const response = await fetch("/completion", {
       method: "POST",
       body: JSON.stringify(options),
@@ -139,7 +138,7 @@ async function call_llama(options) {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      signal: signal
+      signal: controller.signal
     });
     const reader = response.body.getReader();
     const decoder = new TextDecoder();

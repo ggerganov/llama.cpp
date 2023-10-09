@@ -310,6 +310,7 @@ struct server_parallel_context {
                 slot.command = NONE;
                 slot.n_prompt = 0;
                 slot.n_tokens_predicted = 0;
+                slot.sampled_tokens.clear();
                 continue;
             }
 
@@ -346,8 +347,6 @@ struct server_parallel_context {
                     // do not prepend BOS because we have a system prompt!
                     std::vector<llama_token> tokens_prompt;
                     tokens_prompt = ::llama_tokenize(ctx, slot.prompt, false);
-                    slot.n_tokens_predicted = 0;
-                    slot.sampled_tokens.clear();
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
                         batch.token [batch.n_tokens] = tokens_prompt[i];
