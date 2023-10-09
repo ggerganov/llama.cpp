@@ -9,6 +9,8 @@
 
 
 int main(int argc, char ** argv) {
+    ggml_time_init();
+    
     gpt_params params;
 
     if (argc < 4) {
@@ -30,24 +32,29 @@ int main(int argc, char ** argv) {
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
-    // load and preprocess the iamge
+    // load and preprocess the image
     clip_image_u8 img;
     clip_image_f32 img_res;
     clip_image_load_from_file(img_path, &img);
-    clip_image_preprocess(ctx_clip, &img, &img_res);
 
+    clip_image_preprocess(ctx_clip, &img, &img_res, /*pad2square =*/ true);
+
+    int   n_img_pos    = clip_n_pos(ctx_clip);
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
+
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for CLIP embeddings\n");
 
         return 1;
     }
 
+    const int64_t t_img_enc_start_us = ggml_time_us();
     if (!clip_image_encode(ctx_clip, params.n_threads, &img_res, image_embd)) {
         fprintf(stderr, "Unable to encode image\n");
 
         return 1;
     }
+    const int64_t t_img_enc_end_us = ggml_time_us();
 
     // we get the embeddings, free up the memory required for CLIP
     clip_free(ctx_clip);
@@ -80,7 +87,7 @@ int main(int argc, char ** argv) {
     int n_past      = 0;
     int max_tgt_len = 256;
     eval_string(ctx_llama, "user: ", params.n_batch, &n_past);
-    eval_image_embd(ctx_llama, image_embd, /*n_pos_image=*/ 576, params.n_batch, &n_past);
+    eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
 eval_string(ctx_llama, "\nassistant:", params.n_batch, &n_past);
 
@@ -94,6 +101,9 @@ eval_string(ctx_llama, "\nassistant:", params.n_batch, &n_past);
         fflush(stdout);
     }
     printf("\n");
+
+    const float img_enc_duration = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
+    printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, img_enc_duration, img_enc_duration / n_img_pos);
 
     llama_print_timings(ctx_llama);
 

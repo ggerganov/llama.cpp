@@ -711,14 +711,48 @@ bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
 
 // normalize: x = (x - mean) / std
 // TODO: implement bicubic interpolation instead of linear.
-bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32 * res) {
+bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32 * res, const bool pad2square) {
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return false;
     }
 
-    const int nx = img->nx;
-    const int ny = img->ny;
+    // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
+    // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
+
+    clip_image_u8 temp; // we will keep the input image data here temporarily
+    if (pad2square && img->nx != img->ny) {
+        int longer_side = std::max(img->nx, img->ny);
+        temp.nx = longer_side;
+        temp.ny = longer_side;
+        temp.size = 3 * longer_side * longer_side;
+        temp.data = new uint8_t[temp.size]();
+        uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
+
+        // fill with background color
+        for (int i = 0; i < temp.size; i++) {
+            temp.data[i] = bc[i % 3];
+        }
+
+        // copy from the input image
+        for (int y = 0; y < img->ny; y++) {
+            for (int x = 0; x < img->nx; x++) {
+                const int i = 3 * (y * img->nx + x);
+                const int j = 3 * (y * temp.nx + x);
+                temp.data[j] = img->data[i];
+                temp.data[j+1] = img->data[i+1];
+                temp.data[j+2] = img->data[i+2];
+            }
+        }
+    } else {
+        temp.nx   = img->nx;
+        temp.ny   = img->ny;
+        temp.size = img->size;
+        temp.data = img->data;
+    }
+
+    const int nx = temp.nx;
+    const int ny = temp.ny;
 
     const int nx2 = ctx->vision_model.hparams.image_size;
     const int ny2 = ctx->vision_model.hparams.image_size;
@@ -757,10 +791,10 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
                 const int j10 = 3 * (y1 * nx + x0) + c;
                 const int j11 = 3 * (y1 * nx + x1) + c;
 
-                const float v00 = img->data[j00];
-                const float v01 = img->data[j01];
-                const float v10 = img->data[j10];
-                const float v11 = img->data[j11];
+                const float v00 = temp.data[j00];
+                const float v01 = temp.data[j01];
+                const float v10 = temp.data[j10];
+                const float v11 = temp.data[j11];
 
                 const float v0 = v00 * (1.0f - dx) + v01 * dx;
                 const float v1 = v10 * (1.0f - dx) + v11 * dx;
@@ -1021,8 +1055,12 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     return true;
 }
 
-size_t clip_embd_nbytes(struct clip_ctx * ctx) {
+int clip_n_pos(struct clip_ctx * ctx) {
     auto & params = ctx->vision_model.hparams;
 
-    return (params.image_size / params.patch_size) * (params.image_size / params.patch_size) * 4096 * sizeof(float);
+    return (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
+}
+
+size_t clip_embd_nbytes(struct clip_ctx * ctx) {
+    return clip_n_pos(ctx) * 4096 * sizeof(float);
 }
