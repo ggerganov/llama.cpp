@@ -1902,4 +1902,10 @@ if __name__ == '__main__':
     parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them.", action='store_true')
     parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
 
+    # #deprecated hidden args. they do nothing. do not use
+    # parser.add_argument("--psutil_set_threads", action='store_true', help=argparse.SUPPRESS)
+    # parser.add_argument("--stream", action='store_true', help=argparse.SUPPRESS)
+    # parser.add_argument("--unbantokens", action='store_true', help=argparse.SUPPRESS)
+    # parser.add_argument("--usemirostat", action='store_true', help=argparse.SUPPRESS)
+
     main(parser.parse_args(),start_server=True)
