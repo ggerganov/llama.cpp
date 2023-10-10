@@ -184,6 +184,10 @@ def init_library():
         os.add_dll_directory(dir_path)
         os.add_dll_directory(abs_path)
         os.add_dll_directory(os.getcwd())
+        if libname == lib_hipblas and "HIP_PATH" in os.environ:
+            os.add_dll_directory(os.path.join(os.environ["HIP_PATH"], "bin"))
+            if args.debugmode == 1:
+                print(f"HIP/ROCm SDK at {os.environ['HIP_PATH']} included in .DLL load path")
     handle = ctypes.CDLL(os.path.join(dir_path, libname))
 
     handle.load_model.argtypes = [load_model_inputs]
