@@ -96,6 +96,9 @@ static std::string get_cpu_info() {
                 }
             }
         }
+        if (0 != fclose(f)) {
+            fprintf(stderr, "could not close reader of /proc/cpuinfo\n");
+        }
     }
 #endif
     // TODO: other platforms
