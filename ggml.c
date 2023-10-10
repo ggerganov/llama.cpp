@@ -13059,12 +13059,10 @@ static void ggml_compute_forward_alibi_f32(
         return;
     }
 
-    const int n_past = ((int32_t *) dst->op_params)[0]; UNUSED(n_past);
+    //const int n_past = ((int32_t *) dst->op_params)[0];
     const int n_head = ((int32_t *) dst->op_params)[1];
     float max_bias;
     memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
-
-    assert(n_past >= 0);
 
     const int64_t ne0 = src0->ne[0]; // all_seq_len = n_past + ne1
     const int64_t ne1 = src0->ne[1]; // seq_len_without_past
