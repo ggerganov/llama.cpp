@@ -1,10 +1,10 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.5
 
 import PackageDescription
 
 #if arch(arm) || arch(arm64)
 let platforms: [SupportedPlatform]? = [
-    .macOS(.v11),
+    .macOS(.v12),
     .iOS(.v14),
     .watchOS(.v4),
     .tvOS(.v14)
