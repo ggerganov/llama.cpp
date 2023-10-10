@@ -3214,6 +3214,11 @@ static struct ggml_cgraph * llm_build_llama(
             offload_func_kq(K);
             ggml_set_name(K, "K");
 
+            // re-quantize K
+            if (ggml_is_quantized(model.layers[il].wk->type)) {
+                K = ggml_cpy(ctx0, K, ggml_new_tensor_3d(ctx0, model.layers[il].wk->type, n_embd/n_head, n_past + N, n_head));
+            }
+
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             offload_func_kq(KQ);
@@ -3246,6 +3251,11 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_set_name(V, "V");
 
 #if 1
+            // re-quantize V
+            if (ggml_is_quantized(model.layers[il].wv->type) && ((n_past + N) % ggml_blck_size(model.layers[il].wv->type) == 0)) {
+                V = ggml_cpy(ctx0, V, ggml_new_tensor_3d(ctx0, model.layers[il].wv->type, n_past + N, n_embd/n_head, n_head));
+            }
+
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             offload_func_v(KQV);
             ggml_set_name(KQV, "KQV");
