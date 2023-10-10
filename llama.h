@@ -511,10 +511,11 @@ extern "C" {
     // Tokenization
     //
 
-    // Convert the provided text into tokens.
-    // The tokens pointer must be large enough to hold the resulting tokens.
-    // Returns the number of tokens on success, no more than n_max_tokens
-    // Returns a negative number on failure - the number of tokens that would have been returned
+    /// @details Convert the provided text into tokens.
+    /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
+    /// @return Returns the number of tokens on success, no more than n_max_tokens
+    /// @return Returns a negative number on failure - the number of tokens that would have been returned
+    /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
     LLAMA_API int llama_tokenize(
         const struct llama_model * model,
                       const char * text,
@@ -522,7 +523,7 @@ extern "C" {
                      llama_token * tokens,
                              int   n_max_tokens,
                             bool   add_bos,
-                            bool   allow_special_tokens);
+                            bool   special);
 
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.

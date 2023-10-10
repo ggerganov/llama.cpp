@@ -863,22 +863,22 @@ std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_bos,
-                        bool   allow_special_tokens) {
-    return llama_tokenize(llama_get_model(ctx), text, add_bos, allow_special_tokens);
+                        bool   special) {
+    return llama_tokenize(llama_get_model(ctx), text, add_bos, special);
 }
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_bos,
-                        bool   allow_special_tokens) {
+                        bool   special) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + add_bos;
     std::vector<llama_token> result(n_tokens);
-    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, allow_special_tokens);
+    n_tokens = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, allow_special_tokens);
+        int check = llama_tokenize(model, text.data(), text.length(), result.data(), result.size(), add_bos, special);
         GGML_ASSERT(check == -n_tokens);
     } else {
         result.resize(n_tokens);

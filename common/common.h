@@ -152,13 +152,13 @@ std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_bos,
-                        bool   allow_special_tokens = false);
+                        bool   special = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_bos,
-                        bool   allow_special_tokens = false);
+                        bool   special = false);
 
 // tokenizes a token into a piece
 // should work similar to Python's `tokenizer.id_to_piece`
