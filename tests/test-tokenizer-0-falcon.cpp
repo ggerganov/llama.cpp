@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
 
         fprintf(stderr, "%s : text size: %zu\n", __func__, text.size());
 
-        const std::vector<llama_token> res = llama_tokenize(ctx, text, true);
+        const std::vector<llama_token> res = llama_tokenize(ctx, text, false);
 
         fprintf(stderr, "%s : tokens: %zu\n", __func__, res.size());
 
