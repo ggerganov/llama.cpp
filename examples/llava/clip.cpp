@@ -1062,5 +1062,5 @@ int clip_n_pos(struct clip_ctx * ctx) {
 }
 
 size_t clip_embd_nbytes(struct clip_ctx * ctx) {
-    return clip_n_pos(ctx) * 4096 * sizeof(float);
+    return clip_n_pos(ctx) * ctx->vision_model.mm_2_b->ne[0] * sizeof(float);
 }
