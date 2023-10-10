@@ -2,6 +2,7 @@
 #include "common.h"
 #include "llama.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -320,6 +321,31 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     const int n_vocab = llama_n_vocab(llama_get_model(ctx));
     const int n_batch = params.n_batch;
 
+    llama_batch batch = llama_batch_get_one(NULL, 0, 0, 0);
+
+    const int32_t n_layers = 32; // model layer count
+    const int test_count = 6; // num perplexity chunks to run for each test
+    const size_t prune_target = 4; // prune this many of the worst results each pass
+    // end tunables
+
+    // 1 = attn, 2 = mlp, 3 = both
+    int32_t test_skip_type = 0; // but don't mess with this, it's set automatically.
+    std::vector<int32_t> layers;
+    layers.resize(n_layers + 1);
+    std::fill(layers.begin(), layers.end(), 0);
+    batch.run_layers = layers.data();
+    int32_t skip_layer = -1;
+    std::vector<int32_t> skips;
+    std::vector<int32_t> skip_types;
+    skip_types.resize(n_layers);
+    std::fill(skip_types.begin(), skip_types.end(), 0);
+    std::vector<std::tuple<int32_t, int32_t, double>> pass_results;
+    std::vector<int32_t> worsts;
+    worsts.resize(n_layers);
+    std::fill(worsts.begin(), worsts.end(), 0);
+    int32_t curr_best_layer = -1, curr_best_type = 0;
+    double curr_best_ppl = -1, ref_ppl = -1;
+
     int count = 0;
     double nll = 0.0;
     double nll2 = 0.0;
@@ -327,8 +353,88 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     fprintf(stderr, "%s: calculating perplexity over %d chunks, batch_size=%d\n", __func__, n_chunk, n_batch);
 
     std::vector<std::thread> workers(std::thread::hardware_concurrency() - 1);
+    static const char * label = "?AMB";
 
+    auto test_t_start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < n_chunk; ++i) {
+        if (i > 0 && i % test_count == 0) {
+            auto test_t_end = std::chrono::high_resolution_clock::now();
+            float test_t_total = std::chrono::duration<float>(test_t_end - test_t_start).count();
+
+            skip_layer = n_layers;
+            for (int32_t new_sl = 0; new_sl < n_layers; new_sl++) {
+                int32_t curr_skipped = (skip_types[new_sl] >> 2) | (skip_types[new_sl] & 3);
+                // printf("##%d, %d\n", new_sl, curr_skipped);
+                if (curr_skipped == 3) continue; // Already tested or perm skip.
+                skip_layer = new_sl;
+                test_skip_type = (curr_skipped & 1) != 0 ? 2 : 1;
+                break;
+            }
+            if (skip_layer >= n_layers) {
+                if (curr_best_layer == -1) break;
+                if (pass_results.size() >= prune_target * 2) {
+                    std::sort(pass_results.begin(), pass_results.end(),
+                        [](const std::tuple<int32_t, int32_t, double> & a, const std::tuple<int32_t, int32_t, double> & b) {
+                            return std::get<2>(a) > std::get<2>(b);
+                        }
+                    );
+                    const size_t num_prune = std::min(pass_results.size(), prune_target);
+                    for (size_t temp = 0; temp < num_prune; temp++) {
+                        int32_t lidx = std::get<0>(pass_results[temp]);
+                        if (lidx == curr_best_layer && std::get<1>(pass_results[temp]) == curr_best_type) continue;
+                        worsts[lidx] |= std::get<1>(pass_results[temp]);
+                        printf("\nPrune[%zu]: %d (%d) - %.2f\n", temp, lidx, std::get<1>(pass_results[temp]), std::get<2>(pass_results[temp]));
+                    }
+                }
+                pass_results.clear();
+                printf("\n\nADD SKIP %c%3d - ppl vs ref %.4f",
+                    int(label[curr_best_type]), curr_best_layer,
+                    curr_best_ppl - ref_ppl);
+                if (curr_best_ppl > ref_ppl * 1.75) break;
+                skip_types[curr_best_layer] += curr_best_type;
+                if (std::find(skips.begin(), skips.end(), curr_best_layer) == skips.end()) {
+                    skips.push_back(curr_best_layer);
+                }
+                curr_best_layer = -1;
+                curr_best_ppl = -1;
+                curr_best_type = 0;
+                skip_layer = n_layers;
+                for (int32_t new_sl = 0; new_sl < n_layers; new_sl++) {
+                    skip_types[new_sl] = (skip_types[new_sl] & 3) | (worsts[new_sl] << 2);
+                }
+                for (int32_t new_sl = 0; new_sl < n_layers; new_sl++) {
+                    int32_t curr_skipped = (skip_types[new_sl] >> 2) | (skip_types[new_sl] & 3);
+                    // printf("||%d, %d\n", new_sl, curr_skipped);
+                    if (curr_skipped == 3) continue; // Already tested or perm skip.
+                    skip_layer = new_sl;
+                    test_skip_type = (curr_skipped & 1) != 0 ? 2 : 1;
+                    break;
+                }
+                if (skip_layer == -1 || skip_layer == n_layers) break;
+            }
+
+            i = 0;
+            count = 0;
+            nll = 0;
+            nll2 = 0;
+            logit_history.clear();
+            prob_history.clear();
+
+            for (int32_t i = 0; i < n_layers; i++) {
+                layers[i] = (skip_types[i] & 3) | (i == skip_layer ? test_skip_type : 0);
+            }
+            layers[n_layers] = -1;
+            printf("\nTEST %c%3d + [", int(label[test_skip_type]), skip_layer);
+            for (const auto l : skips) {
+                printf("%c%d, ", int(label[skip_types[l] & 3]), l);
+            }
+            printf("] - len: %3zu, best:(%c%3d @ %.3f), last took %.2f sec\n",
+                skips.size() + 1,
+                int(label[curr_best_type]), curr_best_layer,
+                curr_best_ppl != -1 ? curr_best_ppl - ref_ppl : 0,
+                test_t_total);
+            test_t_start = std::chrono::high_resolution_clock::now();
+        }
         const int start =     i * n_ctx;
         const int end   = start + n_ctx;
 
@@ -353,7 +459,11 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 tokens[batch_start] = llama_token_bos(ctx);
             }
 
-            if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
+            batch.n_tokens = batch_size;
+            batch.token = tokens.data() + batch_start;
+            batch.all_pos_0 = j * n_batch;
+
+            if (llama_decode(ctx, batch)) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
             }
@@ -367,7 +477,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
         const auto t_end = std::chrono::high_resolution_clock::now();
 
-        if (i == 0) {
+        if (i == 0 && skip_layer < 0 && skips.empty()) {
             const float t_total = std::chrono::duration<float>(t_end - t_start).count();
             fprintf(stderr, "%s: %.2f seconds per pass - ETA ", __func__, t_total);
             int total_seconds = (int)(t_total * n_chunk);
@@ -396,8 +506,9 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
         count += n_ctx - first - 1;
 
         // perplexity is e^(average negative log-likelihood)
+        double ppl = std::exp(nll / count);
         if (params.ppl_output_type == 0) {
-            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+            printf("[%d]%.4lf,", i + 1, ppl);
         } else {
             double av = nll/count;
             double av2 = nll2/count - av*av;
@@ -405,6 +516,19 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
             printf("%8d  %.4lf  %4lf  %4lf\n", i*n_ctx, std::exp(nll / count), av, av2);
         }
         fflush(stdout);
+        if (skip_layer >= 0 && (i + 1 == test_count || (i > 1 && ppl > ref_ppl * 3))) {
+            i = test_count - 1;
+            skip_types[skip_layer] |= test_skip_type << 2;
+            if (curr_best_layer == -1 || ppl < curr_best_ppl) {
+                curr_best_layer = skip_layer;
+                curr_best_ppl = ppl;
+                curr_best_type = test_skip_type;
+            }
+            printf(" -- %.3f", ppl - ref_ppl);
+            pass_results.push_back({skip_layer, test_skip_type, ppl});
+        } else if (skip_layer < 0) {
+            ref_ppl = ppl;
+        }
     }
     printf("\n");
 

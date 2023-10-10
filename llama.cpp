@@ -3252,7 +3252,31 @@ static struct ggml_cgraph * llm_build_llama(
         }
     }
 
+    int32_t * run_layer = batch.run_layers;
+    bool run_attn = false, run_mlp = false;
+    cur = inpL;
+
     for (int il = 0; il < n_layer; ++il) {
+        run_attn = run_mlp = true;
+        if (run_layer != NULL) {
+            if (*run_layer >= 0) {
+                run_attn = (*run_layer & 1) == 0;
+                run_mlp  = (*run_layer & 2) == 0;
+                run_layer++;
+            } else {
+                run_layer = NULL;
+            }
+        } else if (ggml_allocr_is_measure(lctx.alloc) && il == n_layer - 1) {
+            // No idea why this is needed, but otherwise we run out of space
+            // when skipping attn or mlp (but not both) on the last layer
+            run_mlp = false;
+        } else if (ggml_allocr_is_measure(lctx.alloc) && il == n_layer - 2) {
+            // No idea why this is needed, but otherwise we run out of space
+            // when skipping attn or mlp (but not both) on the last layer
+            run_attn = false;
+        }
+        if (!run_attn && !run_mlp) continue;
+
         ggml_format_name(inpL, "layer_inp_%d", il);
 
         offload_func_t offload_func = llama_nop;
@@ -3263,10 +3287,11 @@ static struct ggml_cgraph * llm_build_llama(
         }
 #endif // GGML_USE_CUBLAS
 
-        struct ggml_tensor * inpSA = inpL;
+        struct ggml_tensor * inpFF = nullptr;
 
-        // norm
-        {
+        // self-attention
+        if (run_attn) {
+            // norm
             cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
             offload_func(cur);
             ggml_set_name(cur, "rms_norm_0");
@@ -3275,10 +3300,7 @@ static struct ggml_cgraph * llm_build_llama(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
-        }
 
-        // self-attention
-        {
             // compute Q and K and RoPE them
             struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
             offload_func_kq(tmpk);
@@ -3395,25 +3417,25 @@ static struct ggml_cgraph * llm_build_llama(
                     cur);
             offload_func(cur);
             ggml_set_name(cur, "result_wo");
+
+            inpFF = ggml_add(ctx0, cur, inpL);
+            offload_func(inpFF);
+            ggml_set_name(inpFF, "inpFF");
+        } else {
+            inpFF = inpL;
         }
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        offload_func(inpFF);
-        ggml_set_name(inpFF, "inpFF");
-
         // feed-forward network
-        {
+        if (run_mlp) {
             // norm
-            {
-                cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
-                offload_func(cur);
-                ggml_set_name(cur, "rms_norm_1");
+            cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
+            offload_func(cur);
+            ggml_set_name(cur, "rms_norm_1");
 
-                // cur = cur*ffn_norm(broadcasted)
-                cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                offload_func(cur);
-                ggml_set_name(cur, "ffn_norm");
-            }
+            // cur = cur*ffn_norm(broadcasted)
+            cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
+            offload_func(cur);
+            ggml_set_name(cur, "ffn_norm");
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
                     model.layers[il].w3,
@@ -3441,17 +3463,17 @@ static struct ggml_cgraph * llm_build_llama(
                     cur);
             offload_func(cur);
             ggml_set_name(cur, "result_w2");
-        }
 
-        cur = ggml_add(ctx0, cur, inpFF);
-        offload_func(cur);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+            cur = ggml_add(ctx0, cur, inpFF);
+            offload_func(cur);
+            ggml_set_name(cur, "inpFF_+_result_w2");
+        } else {
+            cur = inpFF;
+        }
 
         // input for next layer
         inpL = cur;
     }
-
-    cur = inpL;
 
     // norm
     {
@@ -9582,7 +9604,7 @@ int llama_eval_embd(
                              int   n_past) {
     llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
 
-    llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
+    llama_batch batch = { n_tokens, nullptr, nullptr, embd, nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
 
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
@@ -9604,6 +9626,7 @@ struct llama_batch llama_batch_get_one(
             llama_seq_id   seq_id) {
     return {
         /*n_tokens       =*/ n_tokens,
+        /*run_layers     =*/ nullptr,
         /*tokens         =*/ tokens,
         /*embd           =*/ nullptr,
         /*pos            =*/ nullptr,
@@ -9617,7 +9640,7 @@ struct llama_batch llama_batch_get_one(
 }
 
 struct llama_batch llama_batch_init(int32_t n_tokens, int32_t embd, int32_t n_seq_max) {
-    llama_batch batch = { 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
+    llama_batch batch = { 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
 
     if (embd) {
         batch.embd = (float *) malloc(sizeof(float) * n_tokens * embd);

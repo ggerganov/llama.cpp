@@ -132,6 +132,7 @@ extern "C" {
     //
     typedef struct llama_batch {
         int32_t n_tokens;
+        int32_t *run_layers; // end marked by negative value.
 
         llama_token  *  token;
         float        *  embd;
