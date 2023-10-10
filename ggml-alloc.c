@@ -271,6 +271,10 @@ struct ggml_allocr * ggml_allocr_new(void * data, size_t size, size_t alignment)
     struct ggml_backend_buffer * buffer = ggml_backend_cpu_buffer_from_ptr(NULL, data, size);
 
     struct ggml_allocr * alloc = (struct ggml_allocr *)malloc(sizeof(struct ggml_allocr));
+    if (NULL == alloc) {
+        fprintf(stderr, "could not retrieve memory for GGML allocator.\n");
+        exit(1);
+    }
 
     *alloc = (struct ggml_allocr){
         /*.buffer        = */ buffer,
