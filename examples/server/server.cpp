@@ -344,9 +344,20 @@ struct llama_server_context
 
     void loadInfill()
     {
-        auto prefix_tokens = tokenize(params.input_prefix, true);  // always add BOS
-        auto suffix_tokens = tokenize(params.input_suffix, true);  // always add BOS
+        bool suff_rm_leading_spc = true;
+        if (params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+            params.input_suffix.erase(0, 1);
+            suff_rm_leading_spc = false;
+        }
+
+        auto prefix_tokens = tokenize(params.input_prefix, false);
+        auto suffix_tokens = tokenize(params.input_suffix, false);
+        const int space_token = 29871;
+        if (suff_rm_leading_spc  && suffix_tokens[0] == space_token) {
+            suffix_tokens.erase(suffix_tokens.begin());
+        }
         prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(ctx));
+        prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(ctx)); // always add BOS
         prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(ctx));
         prefix_tokens.insert(prefix_tokens.end(), suffix_tokens.begin(), suffix_tokens.end());
         prefix_tokens.push_back(llama_token_middle(ctx));
