@@ -1,4 +1,4 @@
-// example of a C/C++ equivalent data structure to the python dict
+// example of a C/C++ equivalent data structure to the python dict in readcommonh.py
 
 #include <map>
 #include <list>
@@ -101,7 +101,7 @@ std::map<std::string, std::vector<std::string>> extract_parameters() {
         }
 
         // Terminate the harvest; TODO: not robust; need better terminator; this just a crude hack for now
-        if (nws_elements.size() > 2 && nws_elements[1] == "infill") {
+        if (nws_elements.size() > 2 && nws_elements[2] == "infill") {
             inside = false;
             break;
             }
