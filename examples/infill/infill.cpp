@@ -233,10 +233,22 @@ int main(int argc, char ** argv) {
     const bool add_bos = llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM;
     LOG("add_bos: %d\n", add_bos);
 
+    bool suff_rm_leading_spc = params.escape;
+    if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+        params.input_suffix.erase(0, 1);
+        suff_rm_leading_spc = false;
+    }
     std::vector<llama_token> embd_inp;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    const int space_token = 29871;
+    if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
+        inp_sfx.erase(inp_sfx.begin());
+    }
     inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+    if (add_bos) {
+        inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+    }
     inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
     embd_inp = inp_pfx;
     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
@@ -627,10 +639,27 @@ int main(int argc, char ** argv) {
                 buffer.clear();
                 // done taking input, reset color
                 console::set_display(console::reset);
+
+                if (params.escape) {
+                    //process escape sequences, for the initial prompt this is done in common.cpp when we load the params, but for the interactive mode we need to do it here
+                    process_escapes(params.input_prefix);
+                    process_escapes(params.input_suffix);
+                }
+                suff_rm_leading_spc = params.escape;
+                if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+                    params.input_suffix.erase(0, 1);
+                    suff_rm_leading_spc = false;
+                }
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
-                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+                if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
+                    inp_sfx.erase(inp_sfx.begin());
+                }
                 inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+                if (add_bos) {
+                    inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+                }
                 inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
                 embd_inp = inp_pfx;
                 embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
