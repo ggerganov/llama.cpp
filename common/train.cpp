@@ -46,6 +46,10 @@ struct random_normal_distribution * init_random_normal_distribution(
     int seed, float mean, float std, float min, float max
 ) {
     struct random_normal_distribution * rnd = (struct random_normal_distribution *) malloc(sizeof(struct random_normal_distribution));
+    if( NULL == rnd) {
+        fprintf(stderr, "could not allocate memory for normal distribution data\n");
+        exit(1);
+    }
     rnd->gen = std::mt19937(seed);
     rnd->rd = std::normal_distribution<float>{mean, std};
     rnd->min = min;
