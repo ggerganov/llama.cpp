@@ -96,6 +96,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
+- [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
 
 **Bindings:**
 
