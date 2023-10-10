@@ -47,7 +47,7 @@ let package = Package(
             resources: resources,
             publicHeadersPath: "spm-headers",
             cSettings: [
-                .unsafeFlags(["-Wno-shorten-64-to-32"]),
+                .unsafeFlags(["-Wno-shorten-64-to-32", "-O3", "-DNDEBUG"]),
                 .define("GGML_USE_K_QUANTS"),
                 .define("GGML_USE_ACCELERATE")
                 // NOTE: NEW_LAPACK will required iOS version 16.4+
