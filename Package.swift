@@ -41,6 +41,7 @@ let package = Package(
                 "ggml.c",
                 "llama.cpp",
                 "ggml-alloc.c",
+                "ggml-backend.c",
                 "k_quants.c",
             ] + additionalSources,
             resources: resources,
