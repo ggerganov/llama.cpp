@@ -80,10 +80,9 @@ int main(int argc, char ** argv) {
     }
 
     llama_context_params ctx_params                 = llama_context_default_params();
-                         ctx_params.seed            = 1234;
-                         ctx_params.n_ctx           = 2048;
-                         ctx_params.n_threads       = params.n_threads;
-                         ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_ctx           = 2048;
+    ctx_params.n_threads       = params.n_threads;
+    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     llama_context        * ctx_llama                = llama_new_context_with_model(model, ctx_params);
 
     if (ctx_llama == NULL) {
@@ -92,14 +91,14 @@ int main(int argc, char ** argv) {
     }
 
     // process the prompt
-    // llava chat format is "user: <image embeddings>\n<textual prompt>\nassistant:"
+    // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
 
     int n_past      = 0;
     int max_tgt_len = 256;
-    eval_string(ctx_llama, "user: ", params.n_batch, &n_past);
+    eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params.n_batch, &n_past);
     eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
-eval_string(ctx_llama, "\nassistant:", params.n_batch, &n_past);
+eval_string(ctx_llama, "\nASSISTANT:", params.n_batch, &n_past);
 
     // generate the response
 
