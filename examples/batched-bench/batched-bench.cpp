@@ -7,11 +7,34 @@
 #include <string>
 #include <vector>
 
+// mutates the input string
+static std::vector<int> parse_list(char * p) {
+    std::vector<int> ret;
+
+    char * q = p;
+
+    while (*p) {
+        if (*p == ',') {
+            *p = '\0';
+            ret.push_back(std::atoi(q));
+            q = p + 1;
+        }
+
+        ++p;
+    }
+
+    ret.push_back(std::atoi(q));
+
+    return ret;
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
+        printf("  <PP>, <TG> and PL are comma-separated lists of numbers without spaces\n\n");
+        printf("  example: %s ggml-model-f16.gguf 2048 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
         return 1 ;
     }
 
@@ -38,6 +61,18 @@ int main(int argc, char ** argv) {
 
     if (argc >= 5) {
         n_gpu_layers = std::atoi(argv[4]);
+    }
+
+    if (argc >= 6) {
+        n_pp = parse_list(argv[5]);
+    }
+
+    if (argc >= 7) {
+        n_tg = parse_list(argv[6]);
+    }
+
+    if (argc >= 8) {
+        n_pl = parse_list(argv[7]);
     }
 
     // init LLM
