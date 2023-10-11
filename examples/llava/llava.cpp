@@ -95,7 +95,7 @@ int main(int argc, char ** argv) {
     int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
     if (n_img_embd != n_llama_embd) {
         printf("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_img_embd, n_llama_embd);
-        
+
         llama_free(ctx_llama);
         llama_free_model(model);
         llama_backend_free();
