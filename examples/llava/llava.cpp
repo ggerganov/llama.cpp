@@ -7,30 +7,33 @@
 #include "common.h"
 #include "llama.h"
 
+static void show_additional_info(int argc, char ** argv) {
+    printf("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
+    printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
+}
 
 int main(int argc, char ** argv) {
     ggml_time_init();
 
     gpt_params params;
 
-    if (argc < 4) {
-        printf("usage: %s <path/to/llava-v1.5/ggml-model-q5_k.gguf> <path/to/llava-v1.5/mmproj-model-f16.gguf> <path/to/an/image.jpg> [a text prompt]\n", argv[0]);
+    if (!gpt_params_parse(argc, argv, params)) {
+        show_additional_info(argc, argv);
         return 1;
     }
 
-          params.model     = argv[1];
-    const char * clip_path = argv[2];
-    const char * img_path = argv[3];
-
-    if (argc >= 5) {
-        params.prompt = argv[4];
+    if (params.mmproj.empty() || params.image.empty()) {
+        gpt_print_usage(argc, argv, params);
+        show_additional_info(argc, argv);
+        return 1;
     }
+
+    const char * clip_path = params.mmproj.c_str();
+    const char * img_path = params.image.c_str();
 
     if (params.prompt.empty()) {
         params.prompt = "describe the image in detail.";
     }
-
-    params.temp = 0.1;
 
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
@@ -83,7 +86,7 @@ int main(int argc, char ** argv) {
     }
 
     llama_context_params ctx_params                 = llama_context_default_params();
-    ctx_params.n_ctx           = 2048;
+    ctx_params.n_ctx           = 2048; // we need a longer context size to process image embeddings
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     llama_context        * ctx_llama                = llama_new_context_with_model(model, ctx_params);

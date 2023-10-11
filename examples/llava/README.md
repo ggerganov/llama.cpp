@@ -2,17 +2,21 @@
 
 Currently this implementation supports [llava-v1.5](https://huggingface.co/liuhaotian/llava-v1.5-7b) variants.
 
-The pre-converted 7b model can be found [here](https://huggingface.co/mys/ggml_llava-v1.5-7b).
+The pre-converted [7b](https://huggingface.co/mys/ggml_llava-v1.5-7b)
+and [13b](https://huggingface.co/mys/ggml_llava-v1.5-13b)
+models are available.
 
 After API is confirmed, more models will be supported / uploaded.
 ## Usage
-The `llava` target is cmake-only for now (TODO: add to `make`) and built as a part of examples.
+Build with cmake or run `make llava` to build it.
 
-After building, run: `./bin/llava` to see the usage. For example:
+After building, run: `./llava` to see the usage. For example:
 
 ```sh
-./bin/llava path/to/llava-v1.5-7b/ggml-model-q5_k.gguf path/to/llava-v1.5-7b/mmproj-model-f16.gguf path/to/an/image.jpg
+./llava -m llava-v1.5-7b/ggml-model-q5_k.gguf --mmproj llava-v1.5-7b/mmproj-model-f16.gguf --image path/to/an/image.jpg
 ```
+
+**note**: A lower temperature like 0.1 is recommended for better quality. add `--temp 0.1` to the command to do so.
 
 ## Model conversion
 
@@ -45,12 +49,6 @@ python ./convert.py ../llava-v1.5-7b
 Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` directory.
 
 ## TODO
-
-These will be include in this pr:
-
-- [ ] Better command line interface.
-
-These will be another PR:
 
 - [ ] Support server mode.
 - [ ] Support non-CPU backend for the image encoding part.
