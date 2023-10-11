@@ -174,10 +174,8 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                ofs << tok << " ";
+                ofs << tok << " '" << llama_detokenize_spm(ctx, std::vector<int>{tok}) << "'" << std::endl;
             }
-
-            ofs << "\n";
         }
 
         fprintf(stderr, "%s : tokens written to '%s'\n", __func__, (fname_text + ".tokcpp").c_str());
