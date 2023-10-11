@@ -617,6 +617,11 @@ metal: examples/metal/metal.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif
 
+ifeq ($(UNAME_S),Darwin)
+swift: examples/batched.swift
+	(cd examples/batched.swift; make build)
+endif
+
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh $(CC) > $@.tmp
 	@if ! cmp -s $@.tmp $@; then \
@@ -637,7 +642,7 @@ benchmark-matmult: examples/benchmark/benchmark-matmult.cpp build-info.h ggml.o 
 run-benchmark-matmult: benchmark-matmult
 	./$@
 
-.PHONY: run-benchmark-matmult
+.PHONY: run-benchmark-matmult swift
 
 vdot: pocs/vdot/vdot.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
