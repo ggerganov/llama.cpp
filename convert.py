@@ -366,7 +366,7 @@ class SentencePieceVocab:
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
             added_tokens = {}
-        items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
+        items: list[tuple[str, int]] = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
 
         tokens_to_replace: dict[int, str] = {}
         new_tokens: dict[int, str] = {}
@@ -376,18 +376,20 @@ class SentencePieceVocab:
             else:
                 new_tokens[idx] = piece
 
-        expected_new_ids = list(range(vocab_size, vocab_size + len(new_tokens)))
-        actual_new_ids   = sorted(new_tokens.keys())
+        expected_new_ids: list[int] = list(range(vocab_size, vocab_size + len(new_tokens)))
+        actual_new_ids: list[int]   = sorted(new_tokens.keys())
 
         if expected_new_ids != actual_new_ids:
             raise Exception(f"Expected new token IDs {expected_new_ids} to be sequential; got {actual_new_ids}")
 
-        self.tokens_to_replace = tokens_to_replace
-        self.new_tokens_list = [new_tokens[id] for id in actual_new_ids]
-        self.vocab_size_base: int = vocab_size
-        self.vocab_size: int = self.vocab_size_base + len(self.new_tokens_list)
-        self.fname_tokenizer = fname_tokenizer
-        self.fname_added_tokens = fname_added_tokens
+        # Key is the original token ID, value is the replacement token piece.
+        self.tokens_to_replace          = tokens_to_replace
+        # Token pieces that were added to the base vocabulary.
+        self.new_tokens_list: list[str] = [new_tokens[id] for id in actual_new_ids]
+        self.vocab_size_base: int       = vocab_size
+        self.vocab_size: int            = self.vocab_size_base + len(self.new_tokens_list)
+        self.fname_tokenizer            = fname_tokenizer
+        self.fname_added_tokens         = fname_added_tokens
 
     def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
