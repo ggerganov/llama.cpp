@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# HF gptneox--> gguf conversion
+# HF stablelm --> gguf conversion
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def count_model_parts(dir_model: Path) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert a GPT-NeoX model to a GGML compatible file")
+    parser = argparse.ArgumentParser(description="Convert a stablelm model to a GGML compatible file")
     parser.add_argument(
         "--vocab-only", action="store_true",
         help="extract only the vocab",
@@ -77,7 +77,7 @@ print("gguf: loading model "+dir_model.name)
 with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
-if hparams["architectures"][0] != "GPTNeoXForCausalLM" and hparams["architectures"][0] != "StableLMEpochForCausalLM":
+if hparams["architectures"][0] != "StableLMEpochForCausalLM":
     print("Model architecture not supported: " + hparams["architectures"][0])
 
     sys.exit()
