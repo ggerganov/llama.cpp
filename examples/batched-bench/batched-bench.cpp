@@ -11,10 +11,11 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [IS_PP_SHARED] [NGL]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL]\n" , argv[0]);
         return 1 ;
     }
 
+    int n_kv_max     = 2048;
     int is_pp_shared = 0;
     int n_gpu_layers = 0;
 
@@ -23,18 +24,20 @@ int main(int argc, char ** argv) {
     std::vector<int> n_pl = { 1, 2, 4, 8, 16, 32, };
     //std::vector<int> n_pl = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 32, };
 
-    const int32_t n_ctx_max = 16*1024;
-
     if (argc >= 2) {
         params.model = argv[1];
     }
 
     if (argc >= 3) {
-        is_pp_shared = std::atoi(argv[2]);
+        n_kv_max = std::atoi(argv[2]);
     }
 
     if (argc >= 4) {
-        n_gpu_layers = std::atoi(argv[3]);
+        is_pp_shared = std::atoi(argv[3]);
+    }
+
+    if (argc >= 5) {
+        n_gpu_layers = std::atoi(argv[4]);
     }
 
     // init LLM
@@ -56,8 +59,8 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed  = 1234;
-    ctx_params.n_ctx = n_ctx_max;
+    ctx_params.seed    = 1234;
+    ctx_params.n_ctx   = n_kv_max;
     ctx_params.n_batch = 512;
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
@@ -69,7 +72,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_batch batch = llama_batch_init(n_ctx_max, 0);
+    llama_batch batch = llama_batch_init(n_kv_max, 0);
 
     // decode in batches of ctx_params.n_batch tokens
     auto decode_helper = [](llama_context * ctx, llama_batch & batch, int32_t n_batch) {
@@ -88,7 +91,7 @@ int main(int argc, char ** argv) {
 
             const int ret = llama_decode(ctx, batch_view);
             if (ret != 0) {
-                LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                LOG_TEE("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
                 return false;
             }
         }
@@ -117,7 +120,7 @@ int main(int argc, char ** argv) {
 
                 const int n_ctx_req = is_pp_shared ? pp + pl*tg : pl*(pp + tg);
 
-                if (n_ctx_req > n_ctx_max) {
+                if (n_ctx_req > n_kv_max) {
                     continue;
                 }
 
