@@ -1148,7 +1148,7 @@ void ggml_vk_mul_mat_mat_q4_x(const std::vector<uint32_t>& spirv,
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({unsigned(ne01),
+        s_algo->setWorkgroup({unsigned(ne01)/32,
                               unsigned(ne11),
                               unsigned(std::max(ne12, ne02)),
                               });

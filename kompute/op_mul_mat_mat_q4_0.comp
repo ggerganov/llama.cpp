@@ -14,7 +14,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_EXT_debug_printf : enable
 
-// layout(local_size_x = 8) in;
+layout(local_size_x = 32) in;
 
 layout(binding = 0) readonly buffer tensorInA { uint8_t inA[]; };
 layout(binding = 1) readonly buffer tensorInB { float inB[]; };
