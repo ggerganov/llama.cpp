@@ -32,15 +32,16 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] [MMQ] <PP> <TG> <PL>\n" , argv[0]);
         printf("  <PP>, <TG> and PL are comma-separated lists of numbers without spaces\n\n");
-        printf("  example: %s ggml-model-f16.gguf 2048 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
+        printf("  example: %s ggml-model-f16.gguf 2048 0 999 0 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
         return 1 ;
     }
 
     int n_kv_max     = 2048;
     int is_pp_shared = 0;
     int n_gpu_layers = 0;
+    int mmq          = 0;
 
     std::vector<int> n_pp = { 128, 256, 512, 1024, 2048, 3584, 7680, };
     std::vector<int> n_tg = { 128, 256, };
@@ -64,15 +65,19 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 6) {
-        n_pp = parse_list(argv[5]);
+        mmq = std::atoi(argv[5]);
     }
 
     if (argc >= 7) {
-        n_tg = parse_list(argv[6]);
+        n_pp = parse_list(argv[6]);
     }
 
     if (argc >= 8) {
-        n_pl = parse_list(argv[7]);
+        n_tg = parse_list(argv[7]);
+    }
+
+    if (argc >= 9) {
+        n_pl = parse_list(argv[8]);
     }
 
     // init LLM
@@ -94,9 +99,11 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed    = 1234;
-    ctx_params.n_ctx   = n_kv_max;
-    ctx_params.n_batch = 512;
+    ctx_params.seed      = 1234;
+    ctx_params.n_ctx     = n_kv_max;
+    ctx_params.n_batch   = 512;
+    ctx_params.mul_mat_q = mmq;
+
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
