@@ -1,0 +1,66 @@
+/**
+ * Copyright (c) 2023 Nomic, Inc. All rights reserved.
+ *
+ * This software is licensed under the terms of the Software for Open Models
+ * License (SOM), version 1.0, as detailed in the LICENSE_SOM.txt file. A copy
+ * of this license should accompany this software. Except as expressly granted
+ * in the SOM license, all rights are reserved by Nomic, Inc.
+ */
+
+#version 450
+
+#include "common.comp"
+
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_EXT_debug_printf : enable
+
+// layout(local_size_x = 8) in;
+
+layout(binding = 0) readonly buffer tensorInA { uint8_t inA[]; };
+layout(binding = 1) readonly buffer tensorInB { float inB[]; };
+layout(binding = 2) writeonly buffer tensorOut { float out_[]; };
+
+layout(push_constant) uniform parameter {
+  uint inAOff;
+  uint inBOff;
+  uint outOff;
+  int ne00;
+  int ne01;
+  int ne02;
+  int ne11;
+  int ne12;
+  uint nb01;
+  uint nb02;
+  uint nb11;
+  uint nb12;
+  uint nb1;
+  uint nb2;
+}
+pcs;
+
+#define ELS_PER_BLOCK 32
+#define QS_OFFSET 2 // d
+#define BLOCK_SIZE (ELS_PER_BLOCK + 2)
+
+void main() {
+  uvec3 gid = gl_GlobalInvocationID;
+
+  uint bc_ab = pcs.ne12 > pcs.ne02 ? gid.z / (pcs.ne12 / pcs.ne02) : gid.z;
+  uint bc_ba = pcs.ne02 > pcs.ne12 ? gid.z / (pcs.ne02 / pcs.ne12) : gid.z;
+
+
+  const uint x = (gid.x*pcs.nb01 + bc_ab*pcs.nb02) + pcs.inAOff; // Based from inA
+  const uint y = (gid.y*pcs.nb11 + bc_ba*pcs.nb12) / 4 + pcs.inBOff; // based from inB
+  float sum = 0.0f;
+  for (uint i = 0; i < pcs.ne00; i++) {
+      const uint block_number = i / ELS_PER_BLOCK;
+      const uint block_offset = block_number * BLOCK_SIZE;
+      const float d = u8BufToFloat16(inA, x + block_offset);
+      const uint position_in_block = i % ELS_PER_BLOCK;
+      const int q0 = int8_t(inA[x+block_offset+QS_OFFSET+position_in_block]);
+      const float dq0 = d * q0;
+      sum += (dq0 * float(inB[y+i]));
+  }
+
+  out_[gid.z*(pcs.nb2/4) + gid.y*(pcs.nb1/4) + gid.x + pcs.outOff] = sum;
+}
