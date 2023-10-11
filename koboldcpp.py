@@ -373,6 +373,7 @@ session_kudos_earned = 0
 session_jobs = 0
 session_starttime = None
 exitcounter = 0
+punishcounter = 0
 totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
 args = None #global args
@@ -787,7 +788,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if not sse_stream_flag:
                         self.send_response(200)
                         self.end_headers(force_json=force_json)
-                    self.wfile.write(json.dumps(gen).encode())
+                        self.wfile.write(json.dumps(gen).encode())
                 except:
                     print("Generate: The response could not be sent, maybe connection was terminated?")
                 return
@@ -812,10 +813,11 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', '*')
         if ("/api" in self.path and self.path!="/api") or force_json:
             if sse_stream_flag:
-                self.send_header('Content-type', 'text/event-stream')
-            self.send_header('Content-type', 'application/json')
+                self.send_header('Content-Type', 'text/event-stream')
+            else:
+                self.send_header('Content-Type', 'application/json')
         else:
-            self.send_header('Content-type', 'text/html')
+            self.send_header('Content-Type', 'text/html')
         return super(ServerRequestHandler, self).end_headers()
 
 
@@ -1140,7 +1142,7 @@ def show_new_gui():
     makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=2)
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170,filetypes=[("GGML Model Files", "*.gguf;*.bin;*.ggml")])
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170)
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
@@ -1207,7 +1209,7 @@ def show_new_gui():
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, filetypes=[("GGML Model Files", "*.gguf;*.bin;*.ggml")])
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1)
     makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
     makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
 
@@ -1469,7 +1471,7 @@ def show_gui_msgbox(title,message):
 def run_horde_worker(args, api_key, worker_name):
     import urllib.request
     from datetime import datetime
-    global friendlymodelname, maxhordectx, maxhordelen, exitcounter, modelbusy, session_starttime
+    global friendlymodelname, maxhordectx, maxhordelen, exitcounter, punishcounter, modelbusy, session_starttime
     epurl = f"http://localhost:{args.port}"
     if args.host!="":
         epurl = f"http://{args.host}:{args.port}"
@@ -1478,10 +1480,11 @@ def run_horde_worker(args, api_key, worker_name):
         print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
 
     def submit_completed_generation(url, jobid, sessionstart, submit_dict):
-        global exitcounter, session_kudos_earned, session_jobs
+        global exitcounter, punishcounter, session_kudos_earned, session_jobs
         reply = make_url_request(url, submit_dict)
         if not reply:
             exitcounter += 1
+            punishcounter += 1
             print_with_time(f"Error, Job submit failed.")
         else:
             reward = reply["reward"]
@@ -1530,16 +1533,22 @@ def run_horde_worker(args, api_key, worker_name):
     print(f"===\nEmbedded Horde Worker '{worker_name}' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:2:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
-    while exitcounter < 10:
+    while exitcounter < 35:
         time.sleep(3)
         readygo = make_url_request(f'{epurl}/api/v1/info/version', None,'GET')
         if readygo:
             print_with_time(f"Embedded Horde Worker '{worker_name}' is started.")
             break
 
-    while exitcounter < 10:
+    while exitcounter < 35:
         currentjob_attempts = 0
         current_generation = None
+
+        if punishcounter >= 10:
+            punishcounter = 0
+            print_with_time(f"Horde Worker Paused for 10 min - Too many errors. It will resume automatically.")
+            print_with_time(f"Caution: Too many failed jobs may lead to entering maintenance mode.")
+            time.sleep(600)
 
         #first, make sure we are not generating
         if modelbusy.locked():
@@ -1559,6 +1568,7 @@ def run_horde_worker(args, api_key, worker_name):
         pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
         if not pop:
             exitcounter += 1
+            punishcounter += 1
             print_with_time(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
             time.sleep(5)
             continue
@@ -1577,7 +1587,7 @@ def run_horde_worker(args, api_key, worker_name):
         print_with_time(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
 
         #do gen
-        while exitcounter < 10:
+        while exitcounter < 35:
             if not modelbusy.locked():
                 current_generation = make_url_request(f'{epurl}/api/v1/generate', current_payload)
                 if current_generation:
