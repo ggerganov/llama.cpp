@@ -102,6 +102,14 @@ int main(int argc, char ** argv) {
     // warm up
     {
         batch.n_tokens = 16;
+
+        for (int i = 0; i < batch.n_tokens; ++i) {
+            batch.token[i]  = 0;
+            batch.pos[i]    = i;
+            batch.seq_id[i] = 0;
+            batch.logits[i] = false;
+        }
+
         if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
             LOG_TEE("%s: llama_decode() failed\n", __func__);
             return 1;
