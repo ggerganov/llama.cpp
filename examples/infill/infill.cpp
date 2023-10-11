@@ -104,6 +104,7 @@ static void sigint_handler(int signo) {
 
 int main(int argc, char ** argv) {
     gpt_params params;
+    llama_sampling_params & sparams = params.sampling_params;
     g_params = &params;
 
     if (!gpt_params_parse(argc, argv, params)) {
@@ -206,7 +207,7 @@ int main(int argc, char ** argv) {
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
-    if (params.cfg_scale > 1.f) {
+    if (sparams.cfg_scale > 1.f) {
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
         ctx_guidance = llama_new_context_with_model(model, lparams);
     }
@@ -233,10 +234,22 @@ int main(int argc, char ** argv) {
     const bool add_bos = llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM;
     LOG("add_bos: %d\n", add_bos);
 
+    bool suff_rm_leading_spc = params.escape;
+    if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+        params.input_suffix.erase(0, 1);
+        suff_rm_leading_spc = false;
+    }
     std::vector<llama_token> embd_inp;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    const int space_token = 29871;
+    if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
+        inp_sfx.erase(inp_sfx.begin());
+    }
     inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+    if (add_bos) {
+        inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+    }
     inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
     embd_inp = inp_pfx;
     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
@@ -257,9 +270,9 @@ int main(int argc, char ** argv) {
     int guidance_offset = 0;
     int original_prompt_len = 0;
     if (ctx_guidance) {
-        LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(params.cfg_negative_prompt));
+        LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, params.cfg_negative_prompt, add_bos);
+        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, add_bos);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
 
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
@@ -300,7 +313,7 @@ int main(int argc, char ** argv) {
 
         if (ctx_guidance) {
             LOG_TEE("\n");
-            LOG_TEE("%s: negative prompt: '%s'\n", __func__, params.cfg_negative_prompt.c_str());
+            LOG_TEE("%s: negative prompt: '%s'\n", __func__, sparams.cfg_negative_prompt.c_str());
             LOG_TEE("%s: number of tokens in negative prompt = %zu\n", __func__, guidance_inp.size());
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
                 LOG_TEE("%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
@@ -346,7 +359,7 @@ int main(int argc, char ** argv) {
         }
     }
     LOG_TEE("sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
-            params.repeat_last_n, params.repeat_penalty, params.presence_penalty, params.frequency_penalty, params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp, params.mirostat, params.mirostat_eta, params.mirostat_tau);
+            sparams.repeat_last_n, sparams.repeat_penalty, sparams.presence_penalty, sparams.frequency_penalty, sparams.top_k, sparams.tfs_z, sparams.top_p, sparams.typical_p, sparams.temp, sparams.mirostat, sparams.mirostat_eta, sparams.mirostat_tau);
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
@@ -364,8 +377,8 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
 
         {
-            auto it = params.logit_bias.find(llama_token_eos(ctx));
-            if (it != params.logit_bias.end() && it->second == -INFINITY) {
+            auto it = sparams.logit_bias.find(llama_token_eos(ctx));
+            if (it != sparams.logit_bias.end() && it->second == -INFINITY) {
                 LOG_TEE("%s: warning: EOS token is disabled, which will cause most grammars to fail\n", __func__);
             }
         }
@@ -422,6 +435,7 @@ int main(int argc, char ** argv) {
 
     const int n_vocab = llama_n_vocab(model);
 
+    llama_sampling_context ctx_sampling = llama_sampling_context_init(params, grammar);
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
 
@@ -540,7 +554,7 @@ int main(int argc, char ** argv) {
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
 
-            const llama_token id = llama_sample_token(ctx, ctx_guidance, grammar, params, last_tokens, candidates);
+            const llama_token id = llama_sampling_sample(ctx, ctx_guidance, ctx_sampling, last_tokens, candidates);
 
             last_tokens.erase(last_tokens.begin());
             last_tokens.push_back(id);
@@ -627,10 +641,27 @@ int main(int argc, char ** argv) {
                 buffer.clear();
                 // done taking input, reset color
                 console::set_display(console::reset);
+
+                if (params.escape) {
+                    //process escape sequences, for the initial prompt this is done in common.cpp when we load the params, but for the interactive mode we need to do it here
+                    process_escapes(params.input_prefix);
+                    process_escapes(params.input_suffix);
+                }
+                suff_rm_leading_spc = params.escape;
+                if (suff_rm_leading_spc && params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+                    params.input_suffix.erase(0, 1);
+                    suff_rm_leading_spc = false;
+                }
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, add_bos);
-                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, add_bos);
+                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
+                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+                if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
+                    inp_sfx.erase(inp_sfx.begin());
+                }
                 inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+                if (add_bos) {
+                    inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+                }
                 inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
                 embd_inp = inp_pfx;
                 embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());

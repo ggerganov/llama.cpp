@@ -125,6 +125,8 @@ int main(int argc, char ** argv) {
     params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
+    llama_sampling_context ctx_sampling = llama_sampling_context_init(params, NULL);
+
     // load the prompts from an external file if there are any
     if (params.prompt.empty()) {
         printf("\n\033[32mNo new questions so proceed with build-in defaults.\033[0m\n");
@@ -167,7 +169,7 @@ int main(int argc, char ** argv) {
 
     // the max batch size is as large as the context to handle cases where we get very long input prompt from multiple
     // users. regardless of the size, the main loop will chunk the batch into a maximum of params.n_batch tokens at a time
-    llama_batch batch = llama_batch_init(params.n_ctx, 0);
+    llama_batch batch = llama_batch_init(n_ctx, 0);
 
     int32_t n_total_prompt = 0;
     int32_t n_total_gen    = 0;
@@ -339,7 +341,7 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = llama_sample_token(ctx, NULL, NULL, params, client.tokens_prev, candidates, client.i_batch - i);
+                const llama_token id = llama_sampling_sample(ctx, NULL, ctx_sampling, client.tokens_prev, candidates, client.i_batch - i, client.seq_id);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -384,7 +386,7 @@ int main(int argc, char ** argv) {
 
                     n_total_prompt += client.n_prompt;
                     n_total_gen    += client.n_decoded;
-
+                    llama_sampling_context_reset(ctx_sampling, client.seq_id);
                     client.seq_id = -1;
                 }
 
