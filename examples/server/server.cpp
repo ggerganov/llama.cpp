@@ -32,7 +32,7 @@ struct server_params
 {
     std::string hostname = "127.0.0.1";
     std::string public_path = "examples/server/public";
-    int32_t port = 8080;
+    int32_t port = 8040;
     int32_t read_timeout = 600;
     int32_t write_timeout = 600;
 };
@@ -329,8 +329,7 @@ struct llama_client_slot
 
     bool available() {
         return state == IDLE &&
-            command == NONE &&
-            !params.remember_generation;
+            command == NONE && !params.remember_generation;
     }
 
     bool isProcessing() {
@@ -811,7 +810,6 @@ struct llama_server_context
     }
 
     bool updateSlots() {
-
         // update the system prompt wait until all slots are idle state
         if(update_system_prompt) {
             updateSystemPrompt();
@@ -1704,7 +1702,7 @@ int main(int argc, char **argv)
                 };
                 res.set_content(data.dump(), "application/json"); });
 
-    svr.Post("/completion", [&](const Request &req, Response &res)
+    svr.Post("/completion", [&llama](const Request &req, Response &res)
              {
         //auto lock = llama.lock();
 
@@ -2053,16 +2051,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if(!params.embedding) {
-        std::thread t([&llama]()
-             {
-            bool running = true;
-            while (running)
-            {
-                running = llama.updateSlots();
-            } });
-    }
-
     // Set the base directory for serving static files
     svr.set_base_dir(sparams.public_path);
 
@@ -2073,12 +2061,17 @@ int main(int argc, char **argv)
                                           {"hostname", sparams.hostname},
                                           {"port", sparams.port},
                                       });
-
+    std::thread t([&llama]()
+             {
+            bool running = true;
+            while (running)
+            {
+                running = llama.updateSlots();
+            } });
     if (!svr.listen_after_bind())
     {
         return 1;
     }
     llama_backend_free();
-
     return 0;
 }
