@@ -307,7 +307,9 @@ bool ggml_vk_has_h2d_all(struct ggml_kompute_context * ctx) {
 void ggml_vk_free(struct ggml_kompute_context * ctx) {
     assert(ctx == s_kompute_context);
     s_kompute_context = nullptr;
-    delete ctx;
+    if (ctx != nullptr) {
+        delete ctx;
+    }
 }
 
 static
