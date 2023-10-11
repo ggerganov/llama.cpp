@@ -87,7 +87,7 @@ if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file = sys.stderr)
     sys.exit(1)
 
-endianess =gguf.GGUFEndian.LITTLE
+endianess = gguf.GGUFEndian.LITTLE
 if args.bigendian:
     endianess = gguf.GGUFEndian.BIG
 print(f"gguf: Conversion Endianess {endianess}")
