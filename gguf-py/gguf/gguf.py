@@ -7,7 +7,7 @@ import shutil
 import struct
 import sys
 import tempfile
-from enum import IntEnum, auto
+from enum import Enum, IntEnum, auto
 from io import BufferedWriter
 from pathlib import Path
 from typing import IO, Any, BinaryIO, Callable, Sequence
