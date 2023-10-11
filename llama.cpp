@@ -5802,19 +5802,34 @@ typedef enum FRAGMENT_BUFFER_VARIANT_TYPE{
 } FRAGMENT_BUFFER_VARIANT_TYPE;
 
 struct fragment_buffer_variant{
-    fragment_buffer_variant(llama_vocab::id token)
+    fragment_buffer_variant(llama_vocab::id _token)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN),
-        token(token){}
-    fragment_buffer_variant(std::string raw_text)
+        token(_token),
+        raw_text(_dummy),
+        offset(0),
+        length(0){}
+    fragment_buffer_variant(const std::string & _raw_text, int64_t _offset, int64_t _length)
     :
         type(FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT),
-        raw_text(raw_text){}
+        token((llama_vocab::id)-1),
+        raw_text(_raw_text),
+        offset(_offset),
+        length(_length){
+            GGML_ASSERT( _offset >= 0 );
+            GGML_ASSERT( _length >= 1 );
+            GGML_ASSERT( offset + length <= raw_text.length() );
+        }
 
-    FRAGMENT_BUFFER_VARIANT_TYPE type;
-    llama_vocab::id token;
-    std::string raw_text;
+    const FRAGMENT_BUFFER_VARIANT_TYPE type;
+    const llama_vocab::id token;
+    const std::string _dummy;
+    const std::string & raw_text;
+    const uint64_t offset;
+    const uint64_t length;
 };
+
+#define PRETOKENIZERDEBUG
 
 static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer)
 {
@@ -5834,12 +5849,16 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
             if( fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT )
             {
                 auto * raw_text = &(fragment.raw_text);
+                auto raw_text_base_offset = fragment.offset;
+                auto raw_text_base_length = fragment.length;
 
                 // loop over the text
                 while(true)
                 {
                     // find the first occurence of a given special token in this fragment
-                    auto match = raw_text->find( special_token );
+                    //  passing offset argument only limit the "search area" but match coordinates
+                    //  are still relative to the source full raw_text
+                    auto match = raw_text->find( special_token, raw_text_base_offset );
 
                     // no occurences found, stop processing this fragment for a given special token
                     if (match == std::string::npos)
@@ -5847,12 +5866,33 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                         break;
                     }
 
+                    // check if match is within bounds of offset <-> length
+                    if( match + special_token.length() > raw_text_base_offset + raw_text_base_length )
+                    {
+                        // match is out of bounds
+                        break;
+                    }
+
+#ifdef PRETOKENIZERDEBUG
+                    fprintf(stderr,"FF: (%ld %ld %ld) '%s'\n", raw_text->length(), raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+#endif
+
                     auto source = std::distance( buffer.begin(), it );
 
-                    if( match > 0 )
+                    // if match is further than base offset
+                    //  then we have some text to the left of it
+                    if( match > raw_text_base_offset )
                     {
                         // left
-                        buffer.emplace_after(it, raw_text->substr(0, match));
+                        //buffer.emplace_after(it, raw_text->substr(0, match));
+                        const int64_t left_reminder_offset = raw_text_base_offset + 0;
+                        const int64_t left_reminder_length = match - raw_text_base_offset;
+                        buffer.emplace_after(it, (*raw_text), left_reminder_offset, left_reminder_length);
+
+#ifdef PRETOKENIZERDEBUG
+                        fprintf(stderr,"FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
+#endif
+
                         it++;
                     }
 
@@ -5862,37 +5902,76 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     
 
                     // right
-                    if (match + special_token.length() < raw_text->length())
+                    if (match + special_token.length() < raw_text_base_offset + raw_text_base_length)
                     {
-                        buffer.emplace_after(it, raw_text->substr(match + special_token.length()));
+                        /*
+                                        |                            |
+                        -------------------------------------------------------------------------
+                                        .       |ttttt|              |
+                        */
+                        //buffer.emplace_after(it, raw_text->substr(match + special_token.length()));
+                        const int64_t right_reminder_offset = match + special_token.length();
+                        const int64_t right_reminder_length = raw_text_base_length - ( ( match - raw_text_base_offset ) + special_token.length() );
+                        buffer.emplace_after(it, (*raw_text), right_reminder_offset, right_reminder_length);
+
+#ifdef PRETOKENIZERDEBUG
+                        fprintf(stderr,"FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
+#endif
+
                         it++;
 
                         if (source == 0)
                         {
+                            // TODO? It might not be needed to store/restore the iterator like this
+                            //  but this gives me the peace of mind I'm not causing some
+                            //  accidental undefined behaviour.
+                            auto it_backup = std::distance( buffer.begin(), it );
+
                             buffer.erase_after(buffer.before_begin());
+
+                            it = std::next( buffer.begin(), it_backup-1 );
                         }
                         else
                         {
+                            auto it_backup = std::distance( buffer.begin(), it );
+
                             //auto prev = std::prev( buffer.begin(), -(source-1) );
                             auto prev = std::next( buffer.begin(), (source-1) );
                             buffer.erase_after(prev);
+
+                            it = std::next( buffer.begin(), it_backup-1 );
                         }
                         //it = std::prev( it, 1 );
 
                         // repeat for the right side
-                        raw_text = &((*it).raw_text);
+                        raw_text_base_offset = right_reminder_offset; //match + special_token.length();
+                        raw_text_base_length = right_reminder_length; //right_reminder_length - ( ( match + special_token.length() ) - raw_text_base_offset );
+                        //raw_text = &((*it).raw_text);
+
+#ifdef PRETOKENIZERDEBUG
+                        fprintf(stderr,"RR: (%ld %ld) '%s'\n", raw_text_base_offset, raw_text_base_length, raw_text->substr(raw_text_base_offset, raw_text_base_length).c_str());
+#endif
+
                     }
                     else
                     {
                         if (source == 0)
                         {
+                            auto it_backup = std::distance( buffer.begin(), it );
+
                             buffer.erase_after(buffer.before_begin());
+
+                            it = std::next( buffer.begin(), it_backup-1 );
                         }
                         else
                         {
+                            auto it_backup = std::distance( buffer.begin(), it );
+
                             //auto prev = std::prev( buffer.begin(), -(source) );
-                            auto prev = std::next( buffer.begin(), (source) );
+                            auto prev = std::next( buffer.begin(), (source-1) );
                             buffer.erase_after(prev);
+
+                            it = std::next( buffer.begin(), it_backup-1 );
                         }
                         //it = std::prev( it, 1 );
 
@@ -5924,7 +6003,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
     std::forward_list<fragment_buffer_variant> fragment_buffer;
 
-    fragment_buffer.emplace_front( raw_text );
+    fragment_buffer.emplace_front( raw_text, 0, raw_text.length() );
 
     if (special) {
         tokenizer_st_partition( vocab, fragment_buffer );
@@ -5938,7 +6017,16 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT)
                     {
                         // without adding this leading whitespace, we do not get the same results as the original tokenizer
-                        auto raw_text = " " + fragment.raw_text;
+
+                        // TODO: It's likely possible to get rid of this string copy entirely
+                        //  by modifying llm_tokenizer_x to operate with string offsets like pre-tokenizer
+                        //  and passing 'add space prefix' as bool argument
+                        //
+                        auto raw_text = " " + fragment.raw_text.substr(fragment.offset, fragment.length);
+
+#ifdef PRETOKENIZERDEBUG
+                        fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+#endif
 
                         llm_tokenizer_spm tokenizer(vocab);
                         llama_escape_whitespace(raw_text);
@@ -5956,6 +6044,12 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT)
                     {
+                        auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
+
+#ifdef PRETOKENIZERDEBUG
+                        fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
+#endif
+
                         llm_tokenizer_bpe tokenizer(vocab);
                         tokenizer.tokenize(raw_text, output);
                     }
