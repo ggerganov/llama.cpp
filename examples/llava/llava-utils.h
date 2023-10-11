@@ -55,19 +55,19 @@ bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch,
 
 llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
       // out of user input, sample next token
-    const float   temp      = params.temp;
-    const int32_t top_k     = params.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx_llama)) : params.top_k;
-    const float   top_p     = params.top_p;
-    const float   tfs_z     = params.tfs_z;
-    const float   typical_p = params.typical_p;
-      // const int32_t repeat_last_n   = params.repeat_last_n < 0 ? n_ctx : params.repeat_last_n;
-      // const float   repeat_penalty  = params.repeat_penalty;
-      // const float   alpha_presence  = params.presence_penalty;
-      // const float   alpha_frequency = params.frequency_penalty;
-    const int     mirostat     = params.mirostat;
-    const float   mirostat_tau = params.mirostat_tau;
-    const float   mirostat_eta = params.mirostat_eta;
-      // const bool    penalize_nl     = params.penalize_nl;
+    const float   temp      = params.sampling_params.temp;
+    const int32_t top_k     = params.sampling_params.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx_llama)) : params.sampling_params.top_k;
+    const float   top_p     = params.sampling_params.top_p;
+    const float   tfs_z     = params.sampling_params.tfs_z;
+    const float   typical_p = params.sampling_params.typical_p;
+      // const int32_t repeat_last_n   = params.sampling_params.repeat_last_n < 0 ? n_ctx : params.sampling_params.repeat_last_n;
+      // const float   repeat_penalty  = params.sampling_params.repeat_penalty;
+      // const float   alpha_presence  = params.sampling_params.presence_penalty;
+      // const float   alpha_frequency = params.sampling_params.frequency_penalty;
+    const int     mirostat     = params.sampling_params.mirostat;
+    const float   mirostat_tau = params.sampling_params.mirostat_tau;
+    const float   mirostat_eta = params.sampling_params.mirostat_eta;
+      // const bool    penalize_nl     = params.sampling_params.penalize_nl;
 
     llama_token id = 0;
     {
@@ -75,7 +75,7 @@ llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
         auto n_vocab = llama_n_vocab(llama_get_model(ctx_llama));
 
           // Apply params.logit_bias map
-        for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
+        for (auto it = params.sampling_params.logit_bias.begin(); it != params.sampling_params.logit_bias.end(); it++) {
             logits[it->first] += it->second;
         }
 

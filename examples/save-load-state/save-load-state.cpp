@@ -8,9 +8,10 @@
 
 int main(int argc, char ** argv) {
     gpt_params params;
+    llama_sampling_params & sparams = params.sampling_params;
     params.seed = 42;
     params.n_threads = 4;
-    params.repeat_last_n = 64;
+    sparams.repeat_last_n = 64;
     params.prompt = "The quick brown fox";
 
     if (!gpt_params_parse(argc, argv, params)) {
@@ -24,7 +25,7 @@ int main(int argc, char ** argv) {
     }
 
     auto n_past = 0;
-    auto last_n_tokens_data = std::vector<llama_token>(params.repeat_last_n, 0);
+    auto last_n_tokens_data = std::vector<llama_token>(sparams.repeat_last_n, 0);
 
     // init
     llama_model * model;
