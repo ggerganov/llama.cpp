@@ -200,7 +200,7 @@ struct llama_server_context
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
     gpt_params params;
-    llama_sampling_state sampling_state;
+    llama_sampling_context sampling_context;
     int n_ctx;
 
     grammar_parser::parse_state parsed_grammar;
@@ -255,7 +255,7 @@ struct llama_server_context
         if (grammar != nullptr) {
             llama_grammar_free(grammar);
             grammar = nullptr;
-            sampling_state = llama_sampling_state_init(params, NULL);
+            sampling_context = llama_sampling_context_init(params, NULL);
         }
     }
 
@@ -341,7 +341,7 @@ struct llama_server_context
             grammar = llama_grammar_init(
                 grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
         }
-        sampling_state = llama_sampling_state_init(params, grammar);
+        sampling_context = llama_sampling_context_init(params, grammar);
         return true;
     }
 
@@ -542,7 +542,7 @@ struct llama_server_context
             std::vector<llama_token_data> candidates;
             candidates.reserve(llama_n_vocab(model));
 
-            result.tok = llama_sample_token(ctx, NULL, sampling_state, last_n_tokens, candidates);
+            result.tok = llama_sampling_sample(ctx, NULL, sampling_context, last_n_tokens, candidates);
 
             llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
@@ -1210,7 +1210,7 @@ static void parse_options_completion(const json &body, llama_server_context &lla
         }
     }
 
-    llama.sampling_state = llama_sampling_state_init(llama.params, llama.grammar);
+    llama.sampling_context = llama_sampling_context_init(llama.params, llama.grammar);
 
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }

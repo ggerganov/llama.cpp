@@ -423,7 +423,7 @@ int main(int argc, char ** argv) {
 
     const int n_vocab = llama_n_vocab(model);
 
-    llama_sampling_state sampling_state = llama_sampling_state_init(params, grammar);
+    llama_sampling_context sampling_context = llama_sampling_context_init(params, grammar);
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
 
@@ -542,7 +542,7 @@ int main(int argc, char ** argv) {
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
 
-            const llama_token id = llama_sample_token(ctx, ctx_guidance, sampling_state, last_tokens, candidates);
+            const llama_token id = llama_sampling_sample(ctx, ctx_guidance, sampling_context, last_tokens, candidates);
 
             last_tokens.erase(last_tokens.begin());
             last_tokens.push_back(id);

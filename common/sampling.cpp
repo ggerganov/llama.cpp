@@ -1,7 +1,7 @@
 #include "sampling.h"
 
-llama_sampling_state::~llama_sampling_state() {
-    for (auto & it : sequence_states) {
+llama_sampling_context::~llama_sampling_context() {
+    for (auto & it : sequence_contexts) {
         if (it.second.grammar != NULL) {
             llama_grammar_free(it.second.grammar);
             it.second.grammar = NULL;
@@ -9,48 +9,48 @@ llama_sampling_state::~llama_sampling_state() {
     }
 }
 
-llama_sampling_state llama_sampling_state_init(
+llama_sampling_context llama_sampling_context_init(
         const struct gpt_params & params,
                   llama_grammar * grammar) {
-  llama_sampling_state result;
+  llama_sampling_context result;
 
   result.params = params.sampling_params;
   result.grammar = grammar;
   return result;
 }
 
-// Note: Creates the state if it doesn't exist, so this always return something.
-llama_sampler_sequence_state & llama_sampling_get_sequence_state(
-              llama_sampling_state & state,
-        const llama_seq_id           seq) {
-    const auto it = state.sequence_states.find(seq);
-    if (it != state.sequence_states.end()) {
+// Note: Creates the context if it doesn't exist, so this always return something.
+llama_sampler_sequence_context & llama_sampling_get_sequence_context(
+              llama_sampling_context & sampling_ctx,
+        const llama_seq_id             seq) {
+    const auto it = sampling_ctx.sequence_contexts.find(seq);
+    if (it != sampling_ctx.sequence_contexts.end()) {
         return it->second;
     }
-    llama_sampler_sequence_state new_state = {
-        2.0f * state.params.mirostat_tau,
-        state.grammar != NULL ? llama_grammar_copy(state.grammar) : NULL,
+    llama_sampler_sequence_context new_ctx = {
+        2.0f * sampling_ctx.params.mirostat_tau,
+        sampling_ctx.grammar != NULL ? llama_grammar_copy(sampling_ctx.grammar) : NULL,
     };
-    return state.sequence_states.insert({seq, new_state}).first->second;
+    return sampling_ctx.sequence_contexts.insert({seq, new_ctx}).first->second;
 }
 
-bool llama_sampling_state_reset(
-              llama_sampling_state & state,
-        const llama_seq_id           seq) {
-    const auto it = state.sequence_states.find(seq);
-    if (it == state.sequence_states.end()) return false;
+bool llama_sampling_context_reset(
+              llama_sampling_context & sampling_ctx,
+        const llama_seq_id             seq) {
+    const auto it = sampling_ctx.sequence_contexts.find(seq);
+    if (it == sampling_ctx.sequence_contexts.end()) return false;
     if (it->second.grammar != NULL) {
         llama_grammar_free(it->second.grammar);
         it->second.grammar = NULL;
     }
-    state.sequence_states.erase(it);
+    sampling_ctx.sequence_contexts.erase(it);
     return true;
 }
 
-llama_token llama_sample_token(
+llama_token llama_sampling_sample(
                   struct llama_context * ctx,
                   struct llama_context * ctx_guidance,
-                  struct llama_sampling_state & state,
+                  struct llama_sampling_context & sampling_ctx,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
         const                      int   idx,
@@ -58,7 +58,7 @@ llama_token llama_sample_token(
     const int n_ctx   = llama_n_ctx(ctx);
     const int n_vocab = llama_n_vocab(llama_get_model(ctx));
 
-    const llama_sampling_params & params = state.params;
+    const llama_sampling_params & params = sampling_ctx.params;
     const float   temp            = params.temp;
     const int32_t top_k           = params.top_k <= 0 ? n_vocab : params.top_k;
     const float   top_p           = params.top_p;
@@ -115,10 +115,10 @@ llama_token llama_sample_token(
         }
     }
 
-    llama_sampler_sequence_state & seq_state = llama_sampling_get_sequence_state(state, seq);
+    llama_sampler_sequence_context & seq_ctx = llama_sampling_get_sequence_context(sampling_ctx, seq);
 
-    if (seq_state.grammar != NULL) {
-        llama_sample_grammar(ctx, &cur_p, seq_state.grammar);
+    if (seq_ctx.grammar != NULL) {
+        llama_sample_grammar(ctx, &cur_p, seq_ctx.grammar);
     }
 
     if (temp <= 0) {
@@ -128,10 +128,10 @@ llama_token llama_sample_token(
         if (mirostat == 1) {
             const int mirostat_m = 100;
             llama_sample_temp(ctx, &cur_p, temp);
-            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &seq_state.mirostat_mu);
+            id = llama_sample_token_mirostat(ctx, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &seq_ctx.mirostat_mu);
         } else if (mirostat == 2) {
             llama_sample_temp(ctx, &cur_p, temp);
-            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &seq_state.mirostat_mu);
+            id = llama_sample_token_mirostat_v2(ctx, &cur_p, mirostat_tau, mirostat_eta, &seq_ctx.mirostat_mu);
         } else {
             // Temperature sampling
             size_t min_keep = std::max(1, params.n_probs);
@@ -158,8 +158,8 @@ llama_token llama_sample_token(
         }
     }
 
-    if (seq_state.grammar != NULL) {
-        llama_grammar_accept_token(ctx, seq_state.grammar, id);
+    if (seq_ctx.grammar != NULL) {
+        llama_grammar_accept_token(ctx, seq_ctx.grammar, id);
     }
 
     return id;

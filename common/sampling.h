@@ -34,64 +34,62 @@ typedef struct llama_sampling_params {
 
 } llama_sampling_params;
 
-// per-sequence sampler state
-typedef struct llama_sampler_sequence_state {
+// per-sequence sampler context
+typedef struct llama_sampler_sequence_context {
     float mirostat_mu; // mirostat sampler state
     llama_grammar * grammar;
-} llama_sampler_sequence_state;
+} llama_sampler_sequence_context;
 
-// general sampler state
-typedef struct llama_sampling_state {
-    ~llama_sampling_state();
+// general sampler context
+typedef struct llama_sampling_context {
+    ~llama_sampling_context();
 
     // parameters that will be used for sampling and when creating
-    // new llama_sampler_sequence_state instances
+    // new llama_sampler_sequence_context instances
     llama_sampling_params params;
 
-    // map of sequence ids to sampler states
-    std::unordered_map<llama_seq_id, llama_sampler_sequence_state> sequence_states;
+    // map of sequence ids to sampler contexts
+    std::unordered_map<llama_seq_id, llama_sampler_sequence_context> sequence_contexts;
 
-    // when non-NULL, new instances of llama_sampler_sequence_state
+    // when non-NULL, new instances of llama_sampler_sequence_context
     // will get a copy of the grammar here
     // note: only the pointer is stored here, it is not a copy of
     //       the grammar and shouldn't be freed
     llama_grammar * grammar;
-} llama_sampling_state;
+} llama_sampling_context;
 
 #include "common.h"
 
-// Create a new sampling state instance.
-llama_sampling_state llama_sampling_state_init(
+// Create a new sampling context instance.
+llama_sampling_context llama_sampling_context_init(
         const struct gpt_params & params,
                   llama_grammar * grammar = NULL);
 
-// Fetches the sampler state for the specified sequence id (defaults to 0).
-// If the state for that sequence id doesn't already exist, it will be created with
-// default values based on the parameters in the state argument.
-llama_sampler_sequence_state & llama_sampling_get_sequence_state(
-              llama_sampling_state & state,
-        const llama_seq_id           seq = 0);
+// Fetches the sampler context for the specified sequence id (defaults to 0).
+// If the context for that sequence id doesn't already exist, it will be created with
+// default values based on the parameters in the sampling_ctx argument.
+llama_sampler_sequence_context & llama_sampling_get_sequence_context(
+              llama_sampling_context & sampling_ctx,
+        const llama_seq_id             seq = 0);
 
-// Reset the sampler states for the supplied sequence id (defaults to 0).
+// Reset the sampler context for the supplied sequence id (defaults to 0).
 // This is necessary to reuse a sequence id or free memory used by sequences
 // that are no longer required.
-bool llama_sampling_state_reset(
-              llama_sampling_state & state,
-        const llama_seq_id           seq = 0);
+bool llama_sampling_context_reset(
+              llama_sampling_context & sampling_ctx,
+        const llama_seq_id             seq = 0);
 
 // this is a common sampling function used across the examples for convenience
 // it can serve as a starting point for implementing your own sampling function
-// Note: When using multiple sequences, it is the caller's responsibility to delete
-//       the item in params.sampler_state when a sequence ends and samplers that rely on
-//       state are being used.
+// Note: When using multiple sequences, it is the caller's responsibility to call
+//       llama_sampling_context_reset when a sequence ends
 //
 // required:
-//  - ctx:    context to use for sampling
-//  - params: sampling parameters
+//  - ctx:          context to use for sampling
+//  - sampling_ctx: sampling-specific context
 //
 // optional:
 //  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
-//  - grammar:       grammar to use for sampling, ignore if NULL
 //  - last_tokens:   needed for repetition penalty, ignore if empty
 //  - idx:           sample from llama_get_logits_ith(ctx, idx)
 //  - seq:           sequence id to associate sampler state with
@@ -100,10 +98,10 @@ bool llama_sampling_state_reset(
 //  - token:      sampled token
 //  - candidates: vector of candidate tokens
 //
-llama_token llama_sample_token(
+llama_token llama_sampling_sample(
                   struct llama_context * ctx,
                   struct llama_context * ctx_guidance,
-                  struct llama_sampling_state & state,
+                  struct llama_sampling_context & sampling_ctx,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
         const                      int   idx = 0,
