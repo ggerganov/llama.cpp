@@ -714,15 +714,16 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("usage: %s [options]\n", argv0);
     printf("\n");
     printf("options:\n");
-    printf("  -h, --help            show this help message and exit\n");
-    printf("  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    printf("  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    printf("  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    printf("  --rope-freq-base N    RoPE base frequency (default: loaded from model)\n");
-    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: loaded from model)\n");
-    printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    printf("  -h, --help                show this help message and exit\n");
+    printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
+    printf("  -t N,  --threads N        number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
+    printf("  -c N,  --ctx-size N       size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  --rope-freq-base N        RoPE base frequency (default: loaded from model)\n");
+    printf("  --rope-freq-scale N       RoPE frequency scaling factor (default: loaded from model)\n");
+    printf("  -b N,  --batch-size N     batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
+    printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_mlock_supported())
     {
         printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -866,6 +867,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_threads = std::stoi(argv[i]);
+        }
+        else if (arg == "--threads-batch" || arg == "-tb")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads_batch = std::stoi(argv[i]);
         }
         else if (arg == "-b" || arg == "--batch-size")
         {
