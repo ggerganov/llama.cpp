@@ -405,12 +405,16 @@ struct llama_server_context
         // compare the evaluated prompt with the new prompt
         n_past = common_part(embd, prompt_tokens);
         embd = prompt_tokens;
+
         if (n_past == num_prompt_tokens)
         {
             // we have to evaluate at least 1 token to generate logits.
             printf("we have to evaluate at least 1 token to generate logits\n");
             n_past--;
         }
+
+        // since #3228 we now have to manually manage the KV cache
+        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
 
         LOG_VERBOSE("prompt ingested", {
                                            {"n_past", n_past},
@@ -461,15 +465,15 @@ struct llama_server_context
         // compare the evaluated prompt with the new prompt
         n_past = common_part(embd, prompt_tokens);
 
-        // since #3228 we now have to manually manage the KV cache
-        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
-
         embd = prompt_tokens;
         if (n_past == num_prompt_tokens)
         {
             // we have to evaluate at least 1 token to generate logits.
             n_past--;
         }
+
+        // since #3228 we now have to manually manage the KV cache
+        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
 
         LOG_VERBOSE("prompt ingested", {
                                            {"n_past", n_past},
