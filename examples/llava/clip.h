@@ -25,7 +25,8 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity);
 void clip_free(struct clip_ctx * ctx);
 
 size_t clip_embd_nbytes(struct clip_ctx * ctx);
-int clip_n_pos(struct clip_ctx * ctx);
+int clip_n_patches(struct clip_ctx * ctx);
+int clip_n_mmproj_embd(struct clip_ctx * ctx);
 
 // RGB uint8 image
 struct clip_image_u8 {

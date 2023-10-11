@@ -49,7 +49,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    int   n_img_pos    = clip_n_pos(ctx_clip);
+    int   n_img_pos    = clip_n_patches(ctx_clip);
+    int   n_img_embd   = clip_n_mmproj_embd(ctx_clip);
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
 
     if (!image_embd) {
@@ -87,6 +88,19 @@ int main(int argc, char ** argv) {
 
     if (ctx_llama == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
+        return 1;
+    }
+
+    // make sure that the correct mmproj was used, i.e., compare apples to apples
+    int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
+    if (n_img_embd != n_llama_embd) {
+        printf("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_img_embd, n_llama_embd);
+        
+        llama_free(ctx_llama);
+        llama_free_model(model);
+        llama_backend_free();
+        free(image_embd);
+
         return 1;
     }
 

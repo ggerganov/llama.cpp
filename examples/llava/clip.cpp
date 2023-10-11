@@ -1055,12 +1055,16 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     return true;
 }
 
-int clip_n_pos(struct clip_ctx * ctx) {
+int clip_n_mmproj_embd(struct clip_ctx * ctx) {
+    return ctx->vision_model.mm_2_b->ne[0];
+}
+
+int clip_n_patches(struct clip_ctx * ctx) {
     auto & params = ctx->vision_model.hparams;
 
     return (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 }
 
 size_t clip_embd_nbytes(struct clip_ctx * ctx) {
-    return clip_n_pos(ctx) * ctx->vision_model.mm_2_b->ne[0] * sizeof(float);
+    return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }
