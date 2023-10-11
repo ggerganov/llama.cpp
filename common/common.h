@@ -4,6 +4,8 @@
 
 #include "llama.h"
 
+#include "sampling.h"
+
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
@@ -49,31 +51,12 @@ struct gpt_params {
     int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
     float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
-    int32_t n_probs                         = 0;    // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 0.0f; // RoPE base frequency
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
 
-    // sampling parameters
-    int32_t top_k             = 40;    // <= 0 to use vocab size
-    float   top_p             = 0.95f; // 1.0 = disabled
-    float   tfs_z             = 1.00f; // 1.0 = disabled
-    float   typical_p         = 1.00f; // 1.0 = disabled
-    float   temp              = 0.80f; // 1.0 = disabled
-    float   repeat_penalty    = 1.10f; // 1.0 = disabled
-    int32_t repeat_last_n     = 64;    // last n tokens to penalize (0 = disable penalty, -1 = context size)
-    float   frequency_penalty = 0.00f; // 0.0 = disabled
-    float   presence_penalty  = 0.00f; // 0.0 = disabled
-    int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
-    float   mirostat_tau      = 5.00f; // target entropy
-    float   mirostat_eta      = 0.10f; // learning rate
-
-    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
-
-    // Classifier-Free Guidance
-    // https://arxiv.org/abs/2306.17806
-    std::string cfg_negative_prompt;       // string to help guidance
-    float       cfg_scale         = 1.f;   // How strong is guidance
+    // // sampling parameters
+    struct llama_sampling_params sampling_params;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_draft       = "";                              // draft model for speculative decoding
@@ -115,7 +98,6 @@ struct gpt_params {
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
-    bool penalize_nl       = true;  // consider newlines as a repeatable token
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
@@ -179,36 +161,6 @@ std::string llama_detokenize_spm(
 std::string llama_detokenize_bpe(
                          llama_context * ctx,
         const std::vector<llama_token> & tokens);
-
-//
-// Sampling utils
-//
-
-// this is a common sampling function used across the examples for convenience
-// it can serve as a starting point for implementing your own sampling function
-//
-// required:
-//  - ctx:    context to use for sampling
-//  - params: sampling parameters
-//
-// optional:
-//  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
-//  - grammar:       grammar to use for sampling, ignore if NULL
-//  - last_tokens:   needed for repetition penalty, ignore if empty
-//  - idx:           sample from llama_get_logits_ith(ctx, idx)
-//
-// returns:
-//  - token:      sampled token
-//  - candidates: vector of candidate tokens
-//
-llama_token llama_sample_token(
-                  struct llama_context * ctx,
-                  struct llama_context * ctx_guidance,
-                  struct llama_grammar * grammar,
-               const struct gpt_params & params,
-        const std::vector<llama_token> & last_tokens,
-         std::vector<llama_token_data> & candidates,
-                                   int   idx = 0);
 
 //
 // YAML utils
