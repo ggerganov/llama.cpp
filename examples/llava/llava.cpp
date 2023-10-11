@@ -30,6 +30,8 @@ int main(int argc, char ** argv) {
         params.prompt = "describe the image in detail.";
     }
 
+    params.temp = 0.1;
+
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
     // load and preprocess the image
