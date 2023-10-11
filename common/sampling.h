@@ -67,16 +67,16 @@ llama_sampling_context llama_sampling_context_init(
 
 // Fetches the sampler context for the specified sequence id (defaults to 0).
 // If the context for that sequence id doesn't already exist, it will be created with
-// default values based on the parameters in the sampling_ctx argument.
+// default values based on the parameters in the ctx_sampling argument.
 llama_sampler_sequence_context & llama_sampling_get_sequence_context(
-              llama_sampling_context & sampling_ctx,
+              llama_sampling_context & ctx_sampling,
         const llama_seq_id             seq = 0);
 
 // Reset the sampler context for the supplied sequence id (defaults to 0).
 // This is necessary to reuse a sequence id or free memory used by sequences
 // that are no longer required.
 bool llama_sampling_context_reset(
-              llama_sampling_context & sampling_ctx,
+              llama_sampling_context & ctx_sampling,
         const llama_seq_id             seq = 0);
 
 // this is a common sampling function used across the examples for convenience
@@ -86,7 +86,7 @@ bool llama_sampling_context_reset(
 //
 // required:
 //  - ctx:          context to use for sampling
-//  - sampling_ctx: sampling-specific context
+//  - ctx_sampling: sampling-specific context
 //
 // optional:
 //  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
@@ -101,7 +101,7 @@ bool llama_sampling_context_reset(
 llama_token llama_sampling_sample(
                   struct llama_context * ctx,
                   struct llama_context * ctx_guidance,
-                  struct llama_sampling_context & sampling_ctx,
+                  struct llama_sampling_context & ctx_sampling,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
         const                      int   idx = 0,
