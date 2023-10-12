@@ -3502,6 +3502,17 @@ struct llm_build_baichuan_ctx : llm_build_llama_ctx {
             : llm_build_llama_ctx(lctx, batch)
     {}
 
+    struct ggml_tensor * build_kq_scale() {
+        // KQ_scale
+        ggml_tensor * tensor = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        ggml_set_name(tensor, "1/sqrt(n_embd_head)");
+        ggml_allocr_alloc(alloc, tensor);
+        if (!alloc_measure) {
+            ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
+        }
+        return tensor;
+    }
+
     std::tuple<ggml_tensor *, ggml_tensor *> build_attn_block_kcur_qcur(
                 const llama_layer & layer,
                 ggml_tensor * cur) {
