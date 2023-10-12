@@ -297,6 +297,9 @@ int main(int argc, char ** argv) {
             LOG_TEE("%s: session file matches %zu / %zu tokens of prompt\n",
                 __func__, n_matching_session_tokens, embd_inp.size());
         }
+
+        // remove any "future" tokens that we might have inherited from the previous session
+        llama_kv_cache_tokens_rm(ctx, n_matching_session_tokens, -1);
     }
 
     LOGLN(
@@ -545,9 +548,6 @@ int main(int argc, char ** argv) {
                 if (i > 0) {
                     embd.erase(embd.begin(), embd.begin() + i);
                 }
-
-                // remove any "future" tokens that we might have inherited from the session from the KV cache
-                llama_kv_cache_tokens_rm(ctx, n_past, -1);
             }
 
             // evaluate tokens in batches
