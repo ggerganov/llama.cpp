@@ -55,6 +55,7 @@ models-mnt
 /server
 /simple
 /batched
+/batched-bench
 /export-lora
 /finetune
 /speculative

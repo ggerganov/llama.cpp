@@ -326,7 +326,7 @@ extern "C" {
         GGML_TYPE_COUNT,
     };
 
-    enum ggml_backend {
+    enum ggml_backend_type {
         GGML_BACKEND_CPU = 0,
         GGML_BACKEND_GPU = 10,
         GGML_BACKEND_GPU_SPLIT = 20,
@@ -479,8 +479,10 @@ extern "C" {
 
     // n-dimensional tensor
     struct ggml_tensor {
-        enum ggml_type    type;
-        enum ggml_backend backend;
+        enum ggml_type         type;
+        enum ggml_backend_type backend;
+
+        struct ggml_backend_buffer * buffer;
 
         int     n_dims;
         int64_t ne[GGML_MAX_DIMS]; // number of elements
@@ -514,7 +516,7 @@ extern "C" {
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        char padding[4];
+        char padding[12];
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
@@ -1358,7 +1360,7 @@ extern "C" {
 
     // alibi position embedding
     // in-place, returns view(a)
-    struct ggml_tensor * ggml_alibi(
+    GGML_API struct ggml_tensor * ggml_alibi(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past,
@@ -1367,7 +1369,7 @@ extern "C" {
 
     // clamp
     // in-place, returns view(a)
-    struct ggml_tensor * ggml_clamp(
+    GGML_API struct ggml_tensor * ggml_clamp(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             float                 min,
@@ -2102,7 +2104,7 @@ extern "C" {
         enum ggml_type    vec_dot_type;
     } ggml_type_traits_t;
 
-    ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
+    GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
 }
