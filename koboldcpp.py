@@ -1035,6 +1035,7 @@ def show_new_gui():
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
     version_var =ctk.StringVar(value="0")
+    tensor_split_str_vars =ctk.StringVar(value="")
 
     smartcontext = ctk.IntVar()
     context_var = ctk.IntVar()
@@ -1097,11 +1098,15 @@ def show_new_gui():
             gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
+            tensor_split_label.grid(row=6, column=0, padx = 8, pady=1, stick="nw")
+            tensor_split_entry.grid(row=6, column=1, padx=8, pady=1, stick="nw")
         else:
             gpu_layers_label.grid_forget()
             gpu_layers_entry.grid_forget()
             quick_gpu_layers_label.grid_forget()
             quick_gpu_layers_entry.grid_forget()
+            tensor_split_label.grid_forget()
+            tensor_split_entry.grid_forget()
 
     # presets selector
     makelabel(quick_tab, "Presets:", 1)
@@ -1154,6 +1159,7 @@ def show_new_gui():
     gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4"], width=60, variable=gpu_choice_var, state="readonly")
     CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4", "All"], width=60, variable=gpu_choice_var, state="readonly")
     gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
+    tensor_split_entry,tensor_split_label = makelabelentry(hardware_tab, "Tensor Split:", tensor_split_str_vars, 6, 50)
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
     mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
 
@@ -1282,6 +1288,8 @@ def show_new_gui():
             args.noavx2 = True
             args.noblas = True
             args.nommap = True
+        if tensor_split_str_vars.get()!="":
+            args.tensor_split = [float(x) for x in tensor_split_str_vars.get().split(",")]
 
         args.blasthreads = None if blas_threads_var.get()=="" else int(blas_threads_var.get())
 
@@ -1346,6 +1354,8 @@ def show_new_gui():
                 runopts_var.set(openblas_option)
         if "gpulayers" in dict and dict["gpulayers"]:
             gpulayers_var.set(dict["gpulayers"])
+        if "tensor_split_str_var" in dict and dict["tensor_split_str_var"]:
+            tensor_split_str_vars.set(dict["tensor_split_str_var"])
         if "blasthreads" in dict and dict["blasthreads"]:
             blas_threads_var.set(str(dict["blasthreads"]))
         else:
