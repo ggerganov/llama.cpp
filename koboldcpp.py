@@ -752,6 +752,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             if self.path.endswith('/api/extra/generate/stream'):
                 api_format = 2
+                sse_stream_flag = True
 
             if self.path.endswith('/v1/completions'):
                 api_format = 3
