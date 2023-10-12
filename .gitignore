@@ -10,6 +10,7 @@
 *.gcno
 *.gcda
 *.dot
+*.bat
 *.metallib
 .DS_Store
 .build/
