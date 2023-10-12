@@ -1034,8 +1034,8 @@ def show_new_gui():
     mmq_var = ctk.IntVar(value=1)
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
-    version_var =ctk.StringVar(value="0")
-    tensor_split_str_vars =ctk.StringVar(value="")
+    version_var = ctk.StringVar(value="0")
+    tensor_split_str_vars = ctk.StringVar(value="")
 
     smartcontext = ctk.IntVar()
     context_var = ctk.IntVar()
@@ -1087,26 +1087,27 @@ def show_new_gui():
             quick_lowvram_box.grid(row=4, column=0, padx=8, pady=1,  stick="nw")
             mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
             quick_mmq_box.grid(row=4, column=1, padx=8, pady=1,  stick="nw")
+            tensor_split_label.grid(row=6, column=0, padx = 8, pady=1, stick="nw")
+            tensor_split_entry.grid(row=6, column=1, padx=8, pady=1, stick="nw")
         else:
             lowvram_box.grid_forget()
             quick_lowvram_box.grid_forget()
             mmq_box.grid_forget()
             quick_mmq_box.grid_forget()
+            tensor_split_label.grid_forget()
+            tensor_split_entry.grid_forget()
 
         if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
-            tensor_split_label.grid(row=6, column=0, padx = 8, pady=1, stick="nw")
-            tensor_split_entry.grid(row=6, column=1, padx=8, pady=1, stick="nw")
         else:
             gpu_layers_label.grid_forget()
             gpu_layers_entry.grid_forget()
             quick_gpu_layers_label.grid_forget()
             quick_gpu_layers_entry.grid_forget()
-            tensor_split_label.grid_forget()
-            tensor_split_entry.grid_forget()
+
 
     # presets selector
     makelabel(quick_tab, "Presets:", 1)
@@ -1159,7 +1160,7 @@ def show_new_gui():
     gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4"], width=60, variable=gpu_choice_var, state="readonly")
     CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4", "All"], width=60, variable=gpu_choice_var, state="readonly")
     gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
-    tensor_split_entry,tensor_split_label = makelabelentry(hardware_tab, "Tensor Split:", tensor_split_str_vars, 6, 50)
+    tensor_split_entry,tensor_split_label = makelabelentry(hardware_tab, "Tensor Split:", tensor_split_str_vars, 6, 80)
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
     mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
 
