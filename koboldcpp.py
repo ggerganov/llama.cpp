@@ -373,7 +373,8 @@ session_kudos_earned = 0
 session_jobs = 0
 session_starttime = None
 exitcounter = 0
-punishcounter = 0
+punishcounter = 0 #causes a timeout if too many errors
+rewardcounter = 0 #reduces error counts for successful jobs
 totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
 args = None #global args
@@ -1472,7 +1473,7 @@ def run_horde_worker(args, api_key, worker_name):
         print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
 
     def submit_completed_generation(url, jobid, sessionstart, submit_dict):
-        global exitcounter, punishcounter, session_kudos_earned, session_jobs
+        global exitcounter, punishcounter, session_kudos_earned, session_jobs, rewardcounter
         reply = make_url_request(url, submit_dict)
         if not reply:
             exitcounter += 1
@@ -1490,6 +1491,11 @@ def run_horde_worker(args, api_key, worker_name):
             elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
             earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
             print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, Jobs:{session_jobs}, EarnRate:{earnrate:.0f} kudos/hr]')
+            rewardcounter += 1
+            if rewardcounter > 50:
+                rewardcounter = 0
+                if exitcounter > 5:
+                    exitcounter -= 1
 
     def make_url_request(url, data, method='POST'):
         try:
