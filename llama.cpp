@@ -3028,7 +3028,7 @@ struct llm_build_ctx {
             , n_embd_gqa          (hparams.n_embd_gqa())
             , freq_base           (cparams.rope_freq_base)
             , freq_scale          (cparams.rope_freq_scale)
-            , norm_rms_eps        (hparams.f_norm_eps)
+            , norm_rms_eps        (hparams.f_norm_rms_eps)
 
             , n_gpu_layers        (model.n_gpu_layers)
 
@@ -3413,7 +3413,7 @@ static struct ggml_cgraph * llm_build_llama(
     for (int il = 0; il < bctx.n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
 
-        offload_func_t offload_func = llama_nop;
+        bctx.offload_func = llama_nop;
 
 #ifdef GGML_USE_CUBLAS
         if (il >= i_gpu_start) {
@@ -3425,25 +3425,24 @@ static struct ggml_cgraph * llm_build_llama(
 
         // norm
         cur = ggml_rms_norm(bctx.ctx0, inpL, bctx.norm_rms_eps);
-        offload_func(cur);
+        bctx.offload_func(cur);
         ggml_set_name(cur, "rms_norm_0");
 
-        bctx.offload_func = offload_func;
         cur = bctx.build_attn_block(il, cur);
 
         struct ggml_tensor * inpFF = ggml_add(bctx.ctx0, cur, inpSA);
-        offload_func(inpFF);
+        bctx.offload_func(inpFF);
         ggml_set_name(inpFF, "inpFF");
 
         // norm
         cur = ggml_rms_norm(bctx.ctx0, inpFF, bctx.norm_rms_eps);
-        offload_func(cur);
+        bctx.offload_func(cur);
         ggml_set_name(cur, "rms_norm_1");
 
         cur = bctx.build_ffn_block(il, cur);
 
         cur = ggml_add(bctx.ctx0, cur, inpFF);
-        offload_func(cur);
+        bctx.offload_func(cur);
         ggml_set_name(cur, "inpFF_+_result_w2");
 
         // input for next layer
