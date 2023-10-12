@@ -78,7 +78,6 @@ int main(int argc, char ** argv) {
     llama_backend_init(params.numa);
 
     llama_model_params model_params = llama_model_default_params();
-      // model_params.n_gpu_layers = 99; // offload all layers to the GPU
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
@@ -86,7 +85,7 @@ int main(int argc, char ** argv) {
     }
 
     llama_context_params ctx_params                 = llama_context_default_params();
-    ctx_params.n_ctx           = 2048; // we need a longer context size to process image embeddings
+    ctx_params.n_ctx           = params.n_ctx < 2048 ? 2048 : params.n_ctx; // we need a longer context size to process image embeddings
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     llama_context        * ctx_llama                = llama_new_context_with_model(model, ctx_params);
@@ -113,7 +112,6 @@ int main(int argc, char ** argv) {
     // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
 
     int n_past      = 0;
-    int max_tgt_len = 256;
     eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params.n_batch, &n_past);
     eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
@@ -122,7 +120,7 @@ eval_string(ctx_llama, "\nASSISTANT:", params.n_batch, &n_past);
     // generate the response
 
     const char* tmp;
-    for (int i=0; i<max_tgt_len; i++) {
+    for (int i=0; i < params.n_predict; i++) {
         tmp = sample(ctx_llama, params, &n_past);
         if (strcmp(tmp, "</s>")==0) break;
         printf("%s", tmp);
