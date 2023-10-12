@@ -279,7 +279,7 @@ In order to build llama.cpp you have three different options.
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
 To disable the Metal build at compile time use the `LLAMA_NO_METAL=1` flag or the `LLAMA_METAL=OFF` cmake option.
 
-When built with Metal support, you can explicitly disable GPU inference with the `--gpu-layers|-ngl 0` command-line
+When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
 argument.
 
 ### MPI Build
