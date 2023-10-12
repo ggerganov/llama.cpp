@@ -383,6 +383,12 @@ int main(int argc, char ** argv) {
         if (!params.antiprompt.empty()) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
+                if (params.verbose_prompt) {
+                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
+                    for (int i = 0; i < (int) tmp.size(); i++) {
+                        LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    }
+                }
             }
         }
 
@@ -392,10 +398,22 @@ int main(int argc, char ** argv) {
 
         if (!params.input_prefix.empty()) {
             LOG_TEE("Input prefix: '%s'\n", params.input_prefix.c_str());
+            if (params.verbose_prompt) {
+                auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true);
+                for (int i = 0; i < (int) tmp.size(); i++) {
+                    LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                }
+            }
         }
 
         if (!params.input_suffix.empty()) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
+            if (params.verbose_prompt) {
+                auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                for (int i = 0; i < (int) tmp.size(); i++) {
+                    LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                }
+            }
         }
     }
     LOG_TEE("sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
@@ -744,8 +762,7 @@ int main(int argc, char ** argv) {
                 std::string buffer;
                 if (!params.input_prefix.empty()) {
                     LOG("appending input prefix: '%s'\n", params.input_prefix.c_str());
-                    buffer += params.input_prefix;
-                    printf("%s", buffer.c_str());
+                    printf("%s", params.input_prefix.c_str());
                 }
 
                 // color user input only
@@ -767,7 +784,6 @@ int main(int argc, char ** argv) {
                     // append input suffix if any
                     if (!params.input_suffix.empty()) {
                         LOG("appending input suffix: '%s'\n", params.input_suffix.c_str());
-                        buffer += params.input_suffix;
                         printf("%s", params.input_suffix.c_str());
                     }
 
@@ -782,10 +798,14 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false, true);
+                    const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer, false, false);
+                    const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp));
 
+                    embd_inp.insert(embd_inp.end(), line_pfx.begin(), line_pfx.end());
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+                    embd_inp.insert(embd_inp.end(), line_sfx.begin(), line_sfx.end());
 
                     // instruct mode: insert response suffix
                     if (params.instruct) {
