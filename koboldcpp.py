@@ -695,7 +695,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 multiuserkey = ""
                 pass
 
-            if (multiuserkey!="" and multiuserkey==currentusergenkey) or requestsinqueue==0:
+            if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
                 ag = handle.abort_generate()
                 time.sleep(0.3) #short delay before replying
                 self.send_response(200)
@@ -717,7 +717,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 pass
 
             if totalgens>0:
-                if (multiuserkey!="" and multiuserkey==currentusergenkey) or requestsinqueue==0:
+                if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
                     pendtxt = handle.get_pending_output()
                     pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             self.send_response(200)
