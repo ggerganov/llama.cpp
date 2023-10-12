@@ -111,7 +111,8 @@ int main(int argc, char ** argv) {
     // process the prompt
     // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
 
-    int n_past      = 0;
+    int   n_past          = 0;
+    const int max_tgt_len = params.n_predict < 0 ? 256 : params.n_predict;
     eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params.n_batch, &n_past);
     eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
@@ -120,7 +121,7 @@ eval_string(ctx_llama, "\nASSISTANT:", params.n_batch, &n_past);
     // generate the response
 
     const char* tmp;
-    for (int i=0; i < params.n_predict; i++) {
+    for (int i=0; i < max_tgt_len; i++) {
         tmp = sample(ctx_llama, params, &n_past);
         if (strcmp(tmp, "</s>")==0) break;
         printf("%s", tmp);
