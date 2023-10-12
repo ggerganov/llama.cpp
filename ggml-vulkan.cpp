@@ -30,6 +30,7 @@
 #include "shaderop_mul_mat_mat_f32.h"
 #include "shaderop_mul_mat_mat_f16.h"
 #include "shaderop_mul_mat_mat_q4_0.h"
+#include "shaderop_mul_mat_mat_q4_1.h"
 #include "shaderop_mul_mat_mat_q8_0.h"
 #include "shaderop_mul_mat_mat_q6_k.h"
 #include "shaderop_getrows_f16.h"
@@ -1214,6 +1215,14 @@ void ggml_vk_mul_mat_mat_q4_0(Args&&... args) {
     ggml_vk_mul_mat_mat_q4_x(spirv, std::forward<Args>(args)...);
 }
 
+template <typename... Args>
+void ggml_vk_mul_mat_mat_q4_1(Args&&... args) {
+    const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_mat_q4_1_comp_spv,
+        kp::shader_data::op_mul_mat_mat_q4_1_comp_spv_len);
+
+    ggml_vk_mul_mat_mat_q4_x(spirv, std::forward<Args>(args)...);
+}
+
 void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_size, kp::Sequence& seq,
                           const std::shared_ptr<kp::Tensor>& inA,
                           const std::shared_ptr<kp::Tensor>& inB,
@@ -1651,6 +1660,16 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                                     break;
                                 case GGML_TYPE_Q4_0:
                                     ggml_vk_mul_mat_mat_q4_0(seq,
+                                        id_src0, id_src1, id_dst,
+                                        off_src0, off_src1, off_dst,
+                                        ne00, ne01, ne02,
+                                        nb01, nb02,
+                                        ne11, ne12,
+                                        nb11, nb12,
+                                        nb1, nb2);
+                                    break;
+                                case GGML_TYPE_Q4_1:
+                                    ggml_vk_mul_mat_mat_q4_1(seq,
                                         id_src0, id_src1, id_dst,
                                         off_src0, off_src1, off_dst,
                                         ne00, ne01, ne02,
