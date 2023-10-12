@@ -1,13 +1,13 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <vector>
-
 #include "clip.h"
 #include "llava-utils.h"
 #include "common.h"
 #include "llama.h"
 
-static void show_additional_info(int argc, char ** argv) {
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
+
+static void show_additional_info(int /*argc*/, char ** argv) {
     printf("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
@@ -40,6 +40,7 @@ int main(int argc, char ** argv) {
     // load and preprocess the image
     clip_image_u8 img;
     clip_image_f32 img_res;
+
     if (!clip_image_load_from_file(img_path, &img)) {
         fprintf(stderr, "%s: is %s really an image file?\n", __func__, img_path);
 
@@ -54,8 +55,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    int   n_img_pos    = clip_n_patches(ctx_clip);
-    int   n_img_embd   = clip_n_mmproj_embd(ctx_clip);
+    int n_img_pos  = clip_n_patches(ctx_clip);
+    int n_img_embd = clip_n_mmproj_embd(ctx_clip);
+
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
 
     if (!image_embd) {
@@ -84,11 +86,13 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_context_params ctx_params                 = llama_context_default_params();
+    llama_context_params ctx_params = llama_context_default_params();
+
     ctx_params.n_ctx           = params.n_ctx < 2048 ? 2048 : params.n_ctx; // we need a longer context size to process image embeddings
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-    llama_context        * ctx_llama                = llama_new_context_with_model(model, ctx_params);
+
+    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 
     if (ctx_llama == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
@@ -111,26 +115,35 @@ int main(int argc, char ** argv) {
     // process the prompt
     // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
 
-    int   n_past          = 0;
+    int n_past = 0;
+
     const int max_tgt_len = params.n_predict < 0 ? 256 : params.n_predict;
+
+    // GG: are we sure that the should be a trailing whitespace at the end of this string?
     eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params.n_batch, &n_past);
     eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
-eval_string(ctx_llama, "\nASSISTANT:", params.n_batch, &n_past);
+    eval_string(ctx_llama, "\nASSISTANT:",        params.n_batch, &n_past);
 
     // generate the response
 
-    const char* tmp;
-    for (int i=0; i < max_tgt_len; i++) {
-        tmp = sample(ctx_llama, params, &n_past);
-        if (strcmp(tmp, "</s>")==0) break;
+    printf("\n");
+
+    for (int i = 0; i < max_tgt_len; i++) {
+        const char * tmp = sample(ctx_llama, params, &n_past);
+        if (strcmp(tmp, "</s>") == 0) break;
+
         printf("%s", tmp);
         fflush(stdout);
     }
+
     printf("\n");
 
-    const float img_enc_duration = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
-    printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, img_enc_duration, img_enc_duration / n_img_pos);
+    {
+        const float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
+
+        printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / n_img_pos);
+    }
 
     llama_print_timings(ctx_llama);
 

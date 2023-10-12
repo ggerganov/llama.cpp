@@ -1,12 +1,15 @@
+#pragma once
+
 // this one and clip lib will be eventually merged to a single lib, let's keep it this way for now
-#include <stdio.h>
-#include <stdlib.h>
-#include <vector>
 
 #include "common.h"
 #include "llama.h"
 
-bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch, int * n_past) {
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
+
+inline bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch, int * n_past) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
 
     for (int i = 0; i < N; i += n_batch) {
@@ -24,7 +27,7 @@ bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch
     return true;
 }
 
-bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
+inline bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = (int) tokens.size() - i;
@@ -40,20 +43,21 @@ bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> toke
     return true;
 }
 
-bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
+inline bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
     std::vector<llama_token> tokens;
     tokens.push_back(id);
     return eval_tokens(ctx_llama, tokens, 1, n_past);
 }
 
-bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past){
+inline bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past){
     std::string              str2     = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
 
-llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
+// TODO: use common/sampling.h
+inline llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
       // out of user input, sample next token
     const float   temp      = params.sampling_params.temp;
     const int32_t top_k     = params.sampling_params.top_k <= 0 ? llama_n_vocab(llama_get_model(ctx_llama)) : params.sampling_params.top_k;
@@ -128,7 +132,7 @@ llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
     return id;
 }
 
-const char * sample(struct llama_context * ctx_llama, gpt_params & params, int * n_past) {
+inline const char * sample(struct llama_context * ctx_llama, gpt_params & params, int * n_past) {
     int id = sample_id(ctx_llama, params);
     static std::string ret;
     if (id == llama_token_eos(ctx_llama)) {

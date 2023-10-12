@@ -97,19 +97,19 @@ static int get_key_idx(const gguf_context * ctx, const char * key) {
     return i;
 }
 
-static const uint32_t get_u32(const gguf_context * ctx, std::string key) {
+static uint32_t get_u32(const gguf_context * ctx, const std::string & key) {
     const int i = get_key_idx(ctx, key.c_str());
 
     return gguf_get_val_u32(ctx, i);
 }
 
-static const float get_f32(const gguf_context * ctx, std::string key) {
+static float get_f32(const gguf_context * ctx, const std::string & key) {
     const int i = get_key_idx(ctx, key.c_str());
 
     return gguf_get_val_f32(ctx, i);
 }
 
-static struct ggml_tensor * get_tensor(struct ggml_context * ctx, std::string name) {
+static struct ggml_tensor * get_tensor(struct ggml_context * ctx, const std::string & name) {
     struct ggml_tensor * cur = ggml_get_tensor(ctx, name.c_str());
     if (!cur) {
         printf("unable to find tensor %s\n", name.c_str());
@@ -123,25 +123,18 @@ static std::string get_ftype(int ftype) {
     switch (ftype) {
     case 0:
         return "f32";
-        break;
     case 1:
         return "f16";
-        break;
     case 2:
         return "q4_0";
-        break;
     case 3:
         return "q4_1";
-        break;
     case 6:
         return "q5_0";
-        break;
     case 7:
         return "q5_1";
-        break;
     case 8:
         return "q8_0";
-        break;
     default:
         throw std::runtime_error(format("Unrecognized file type: %d\n", ftype));
     }
@@ -237,7 +230,6 @@ struct clip_ctx {
 };
 
 static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_image_f32_batch * imgs) {
-
     if (!ctx->has_vision_encoder) {
         printf("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -254,15 +246,15 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     const int n_head = hparams.n_head;
     const int d_head = hidden_size / n_head;
     const int n_layer = hparams.n_layer;
-    const int n_intermediate = hparams.n_intermediate;
-    const int projection_dim = hparams.projection_dim;
+    //const int n_intermediate = hparams.n_intermediate;
+    //const int projection_dim = hparams.projection_dim;
     const float eps = hparams.eps;
     int batch_size = imgs->size;
     if(ctx->has_llava_projector) {
         GGML_ASSERT(batch_size == 1);
     }
 
-    auto & buf_compute = ctx->buf_compute;
+    const auto & buf_compute = ctx->buf_compute;
 
     struct ggml_init_params params = {
         /*.mem_size =*/ buf_compute.size,
@@ -281,9 +273,9 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     if (!ggml_allocr_is_measure(ctx->alloc)) {
         float * data = (float *)ggml_get_data(inp_raw);
 
-        for (int b = 0; b < imgs->size; b++) {
-            const int nx = imgs->data[b].nx;
-            const int ny = imgs->data[b].ny;
+        for (size_t i = 0; i < imgs->size; i++) {
+            const int nx = imgs->data[i].nx;
+            const int ny = imgs->data[i].ny;
             GGML_ASSERT(nx == image_size && ny == image_size);
 
             const int n = nx * ny;
@@ -339,17 +331,17 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
                               ggml_repeat(ctx0, model.pre_ln_b, embeddings));
     }
 
-struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-ggml_allocr_alloc(ctx->alloc, KQ_scale);
-if (!ggml_allocr_is_measure(ctx->alloc)) {
+    struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+    ggml_allocr_alloc(ctx->alloc, KQ_scale);
+    if (!ggml_allocr_is_measure(ctx->alloc)) {
         ggml_set_f32(KQ_scale, 1.0f / sqrt((float)d_head));
-}
+    }
 
     // loop over layers
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
-        const size_t nb_q_w = model.layers[il].q_w->nb[0];
+        //const size_t nb_q_w = model.layers[il].q_w->nb[0];
 
         // layernorm1
         {
@@ -730,7 +722,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
         uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
 
         // fill with background color
-        for (int i = 0; i < temp.size; i++) {
+        for (size_t i = 0; i < temp.size; i++) {
             temp.data[i] = bc[i % 3];
         }
 
@@ -963,7 +955,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
                 if (conv_buf.size() < n_elms) {
                     conv_buf.resize(n_elms);
                 }
-                for (int j = 0; j < n_elms; ++j) {
+                for (size_t j = 0; j < n_elms; ++j) {
                     conv_buf[j] = ggml_fp16_to_fp32(((ggml_fp16_t *)cur->data)[j]);
                 }
                 f32_data = (float *)conv_buf.data();
@@ -981,28 +973,28 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
             std::vector<int64_t> hist_cur(1 << 4, 0);
 
             switch (new_type) {
-            case GGML_TYPE_Q4_0: {
-                new_size = ggml_quantize_q4_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-            } break;
-            case GGML_TYPE_Q4_1: {
-                new_size = ggml_quantize_q4_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-            } break;
-            case GGML_TYPE_Q5_0: {
-                new_size = ggml_quantize_q5_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-            } break;
-            case GGML_TYPE_Q5_1: {
-                new_size = ggml_quantize_q5_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-            } break;
-            case GGML_TYPE_Q8_0: {
-                new_size = ggml_quantize_q8_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
-            } break;
-            default: {
-                fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
-                return false;
-            }
+                case GGML_TYPE_Q4_0: {
+                    new_size = ggml_quantize_q4_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q4_1: {
+                    new_size = ggml_quantize_q4_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q5_0: {
+                    new_size = ggml_quantize_q5_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q5_1: {
+                    new_size = ggml_quantize_q5_1(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                case GGML_TYPE_Q8_0: {
+                    new_size = ggml_quantize_q8_0(f32_data, new_data, n_elms, cur->ne[0], hist_cur.data());
+                } break;
+                default: {
+                    fprintf(stderr, "%s: unsupported quantization type %d\n", __func__, new_type);
+                    return false;
+                }
             }
 
-            for (int j = 0; j < hist_cur.size(); ++j) {
+            for (size_t j = 0; j < hist_cur.size(); ++j) {
                 hist_all[j] += hist_cur[j];
             }
         } else {
@@ -1017,7 +1009,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         gguf_set_tensor_data(ctx_out, name.c_str(), new_data, new_size);
         fout.write((const char *)new_data, new_size);
         size_t pad = GGML_PAD(new_size, gguf_get_alignment(ctx_out)) - new_size;
-        for (int j = 0; j < pad; ++j) {
+        for (size_t j = 0; j < pad; ++j) {
             fout.put(0);
         }
 
