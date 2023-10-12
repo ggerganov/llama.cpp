@@ -9,6 +9,12 @@
 #include <string>
 #include <vector>
 
+struct seq_draft {
+    std::vector<llama_token> tokens;
+
+    struct llama_grammar * grammar = NULL;
+};
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -213,13 +219,8 @@ int main(int argc, char ** argv) {
             if (grammar_dft) {
                 llama_grammar_free(grammar_dft);
             }
-            // Note: Hardcoded to sequence id 0, if this ever supports parallel generation
-            //       that will need to change.
-            auto it = ctx_sampling.sequence_contexts.find(0);
-            GGML_ASSERT(it != ctx_sampling.sequence_contexts.end());
-            // This is necessary because each sequence id in sequence_contexts
-            // uses a copy of the original grammar.
-            grammar_dft = llama_grammar_copy(it->second.grammar);
+
+            grammar_dft = llama_grammar_copy(ctx_sampling.grammar);
 
             LOG("copied target grammar to draft grammar\n");
         }

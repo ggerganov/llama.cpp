@@ -34,27 +34,14 @@ typedef struct llama_sampling_params {
 
 } llama_sampling_params;
 
-// per-sequence sampler context
-typedef struct llama_sampler_sequence_context {
-    float mirostat_mu; // mirostat sampler state
-    llama_grammar * grammar;
-} llama_sampler_sequence_context;
-
 // general sampler context
 typedef struct llama_sampling_context {
-    ~llama_sampling_context();
-
-    // parameters that will be used for sampling and when creating
-    // new llama_sampler_sequence_context instances
+    // parameters that will be used for sampling
     llama_sampling_params params;
 
-    // map of sequence ids to sampler contexts
-    std::unordered_map<llama_seq_id, llama_sampler_sequence_context> sequence_contexts;
+    // mirostat sampler state
+    float mirostat_mu;
 
-    // when non-NULL, new instances of llama_sampler_sequence_context
-    // will get a copy of the grammar here
-    // note: only the pointer is stored here, it is not a copy of
-    //       the grammar and shouldn't be freed
     llama_grammar * grammar;
 } llama_sampling_context;
 
@@ -64,13 +51,6 @@ typedef struct llama_sampling_context {
 llama_sampling_context llama_sampling_context_init(
         const struct gpt_params & params,
                   llama_grammar * grammar = NULL);
-
-// Fetches the sampler context for the specified sequence id (defaults to 0).
-// If the context for that sequence id doesn't already exist, it will be created with
-// default values based on the parameters in the ctx_sampling argument.
-llama_sampler_sequence_context & llama_sampling_get_sequence_context(
-              llama_sampling_context & ctx_sampling,
-        const llama_seq_id             seq = 0);
 
 // Reset the sampler context for the supplied sequence id (defaults to 0).
 // This is necessary to reuse a sequence id or free memory used by sequences
@@ -104,5 +84,4 @@ llama_token llama_sampling_sample(
                   struct llama_sampling_context & ctx_sampling,
         const std::vector<llama_token> & last_tokens,
          std::vector<llama_token_data> & candidates,
-        const                      int   idx = 0,
-                          llama_seq_id   seq = 0);
+        const                      int   idx = 0);
