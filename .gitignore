@@ -10,6 +10,7 @@
 *.gcno
 *.gcda
 *.dot
+*.metallib
 .DS_Store
 .build/
 .cache/
@@ -54,6 +55,7 @@ models-mnt
 /server
 /simple
 /batched
+/batched-bench
 /export-lora
 /finetune
 /speculative

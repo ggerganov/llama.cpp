@@ -29,7 +29,7 @@
 
 // 2-bit quantization
 // weight is represented as x = a * q + b
-// 16 blocks of 16 elemenets each
+// 16 blocks of 16 elements each
 // Effectively 2.5625 bits per weight
 typedef struct {
     uint8_t scales[QK_K/16]; // scales and mins, quantized with 4 bits
@@ -41,7 +41,7 @@ static_assert(sizeof(block_q2_K) == 2*sizeof(ggml_fp16_t) + QK_K/16 + QK_K/4, "w
 
 // 3-bit quantization
 // weight is represented as x = a * q
-// 16 blocks of 16 elemenets each
+// 16 blocks of 16 elements each
 // Effectively 3.4375 bits per weight
 #ifdef GGML_QKK_64
 typedef struct {
@@ -62,7 +62,7 @@ static_assert(sizeof(block_q3_K) == sizeof(ggml_fp16_t) + QK_K / 4 + QK_K / 8 + 
 #endif
 
 // 4-bit quantization
-// 16 blocks of 32 elements each
+// 8 blocks of 32 elements each
 // weight is represented as x = a * q + b
 // Effectively 4.5 bits per weight
 #ifdef GGML_QKK_64
@@ -83,7 +83,7 @@ static_assert(sizeof(block_q4_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/
 #endif
 
 // 5-bit quantization
-// 16 blocks of 32 elements each
+// 8 blocks of 32 elements each
 // weight is represented as x = a * q + b
 // Effectively 5.5 bits per weight
 #ifdef GGML_QKK_64
@@ -107,7 +107,7 @@ static_assert(sizeof(block_q5_K) == 2*sizeof(ggml_fp16_t) + K_SCALE_SIZE + QK_K/
 
 // 6-bit quantization
 // weight is represented as x = a * q
-// 16 blocks of 16 elemenets each
+// 16 blocks of 16 elements each
 // Effectively 6.5625 bits per weight
 typedef struct {
     uint8_t ql[QK_K/2];      // quants, lower 4 bits
