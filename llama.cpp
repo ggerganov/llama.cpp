@@ -9147,7 +9147,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             const size_t elt_size = ggml_element_size(kv_self.k);
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
-            
+
             // create a temporary cgraph without initialising ggml objects, code inspired from `ggml.c:ggml_new_graph`
             struct ggml_cgraph * gf = (struct ggml_cgraph *) (malloc(sizeof(ggml_cgraph)));
 
