@@ -104,6 +104,10 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
+
+    // multimodal models (see examples/llava)
+    std::string mmproj = ""; // path to multimodal projector
+    std::string image = ""; // path to an image file
 };
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);

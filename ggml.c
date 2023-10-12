@@ -14428,7 +14428,7 @@ static void ggml_compute_forward_conv_2d_f16_f32(
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
-    GGML_TENSOR_BINARY_OP_LOCALS
+    GGML_TENSOR_BINARY_OP_LOCALS;
 
     const int ith = params->ith;
     const int nth = params->nth;
