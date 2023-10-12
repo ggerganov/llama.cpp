@@ -90,6 +90,7 @@ if not dir_model.is_dir():
 endianess = gguf.GGUFEndian.LITTLE
 if args.bigendian:
     endianess = gguf.GGUFEndian.BIG
+endianess_str = "Big Endian" if args.bigendian else "Little Endian"
 print(f"gguf: Conversion Endianess {endianess}")
 # possible tensor data types
 #   ftype == 0 -> float32

@@ -19,7 +19,7 @@ import numpy as np
 #
 
 GGUF_MAGIC             = 0x46554747
-GGUF_VERSION           = 2
+GGUF_VERSION           = 3
 GGUF_DEFAULT_ALIGNMENT = 32
 
 
@@ -621,7 +621,8 @@ class GGUFWriter:
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None = None
     tensors: list[tuple[np.ndarray[Any, Any], int]]
 
-    def get_pack_prefix(self):
+    @property
+    def pack_prefix(self):
         if self.endianess==GGUFEndian.LITTLE:
             return "<"
         else:
@@ -632,28 +633,29 @@ class GGUFWriter:
         self.arch = arch
         self.endianess = endianess
         self._simple_value_packing = {
-            GGUFValueType.UINT8:   f"{self.get_pack_prefix()}B",
-            GGUFValueType.INT8:    f"{self.get_pack_prefix()}b",
-            GGUFValueType.UINT16:  f"{self.get_pack_prefix()}H",
-            GGUFValueType.INT16:   f"{self.get_pack_prefix()}h",
-            GGUFValueType.UINT32:  f"{self.get_pack_prefix()}I",
-            GGUFValueType.INT32:   f"{self.get_pack_prefix()}i",
-            GGUFValueType.FLOAT32: f"{self.get_pack_prefix()}f",
-            GGUFValueType.UINT64:  f"{self.get_pack_prefix()}Q",
-            GGUFValueType.INT64:   f"{self.get_pack_prefix()}q",
-            GGUFValueType.FLOAT64: f"{self.get_pack_prefix()}d",
+            GGUFValueType.UINT8:   f"{self.pack_prefix}B",
+            GGUFValueType.INT8:    f"{self.pack_prefix}b",
+            GGUFValueType.UINT16:  f"{self.pack_prefix}H",
+            GGUFValueType.INT16:   f"{self.pack_prefix}h",
+            GGUFValueType.UINT32:  f"{self.pack_prefix}I",
+            GGUFValueType.INT32:   f"{self.pack_prefix}i",
+            GGUFValueType.FLOAT32: f"{self.pack_prefix}f",
+            GGUFValueType.UINT64:  f"{self.pack_prefix}Q",
+            GGUFValueType.INT64:   f"{self.pack_prefix}q",
+            GGUFValueType.FLOAT64: f"{self.pack_prefix}d",
             GGUFValueType.BOOL:    "?" ,
         }
         self.add_architecture()
         self.use_temp_file = use_temp_file
         self.tensors = []
-        print(f"This gguf file is for {self.endianess} only")
+        endianess_str = "Big Endian" if self.endianess == GGUFEndian.BIG else "Little Endian"
+        print(f"This gguf file is for {endianess_str} only")
 
     def write_header_to_file(self):
-        self.fout.write(struct.pack(f"{self.get_pack_prefix()}I", GGUF_MAGIC))
-        self.fout.write(struct.pack(f"{self.get_pack_prefix()}I", GGUF_VERSION))
-        self.fout.write(struct.pack(f"{self.get_pack_prefix()}Q", self.ti_data_count))
-        self.fout.write(struct.pack(f"{self.get_pack_prefix()}Q", self.kv_data_count))
+        self.fout.write(struct.pack(f"{self.pack_prefix}I", GGUF_MAGIC))
+        self.fout.write(struct.pack(f"{self.pack_prefix}I", GGUF_VERSION))
+        self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.ti_data_count))
+        self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.kv_data_count))
         self.flush()
 #        print("tensors " + str(self.ti_data_count) + " kv " + str(self.kv_data_count))
 
@@ -730,7 +732,7 @@ class GGUFWriter:
             vtype = GGUFValueType.get_type(val)
 
         if add_vtype:
-            self.kv_data += struct.pack(f"{self.get_pack_prefix()}I", vtype)
+            self.kv_data += struct.pack(f"{self.pack_prefix}I", vtype)
             self.kv_data_count += 1
 
         pack_fmt = self._simple_value_packing.get(vtype)
@@ -738,14 +740,14 @@ class GGUFWriter:
             self.kv_data += struct.pack(pack_fmt, val)
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
-            self.kv_data += struct.pack(f"{self.get_pack_prefix()}Q", len(encoded_val))
+            self.kv_data += struct.pack(f"{self.pack_prefix}Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and len(val) > 0:
             ltype = GGUFValueType.get_type(val[0])
             if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
                 raise ValueError("All items in a GGUF array should be of the same type")
-            self.kv_data += struct.pack(f"{self.get_pack_prefix()}I", ltype)
-            self.kv_data += struct.pack(f"{self.get_pack_prefix()}Q", len(val))
+            self.kv_data += struct.pack(f"{self.pack_prefix}I", ltype)
+            self.kv_data += struct.pack(f"{self.pack_prefix}Q", len(val))
             for item in val:
                 self.add_val(item, add_vtype=False)
         else:
@@ -759,18 +761,18 @@ class GGUFWriter:
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
-        self.ti_data += struct.pack(f"{self.get_pack_prefix()}Q", len(encoded_name))
+        self.ti_data += struct.pack(f"{self.pack_prefix}Q", len(encoded_name))
         self.ti_data += encoded_name
         n_dims = len(tensor_shape)
-        self.ti_data += struct.pack(f"{self.get_pack_prefix()}I", n_dims)
+        self.ti_data += struct.pack(f"{self.pack_prefix}I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack(f"{self.get_pack_prefix()}Q", tensor_shape[n_dims - 1 - i])
+            self.ti_data += struct.pack(f"{self.pack_prefix}Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         else:
             dtype = raw_dtype
-        self.ti_data += struct.pack(f"{self.get_pack_prefix()}I", dtype)
-        self.ti_data += struct.pack(f"{self.get_pack_prefix()}Q", self.offset_tensor)
+        self.ti_data += struct.pack(f"{self.pack_prefix}I", dtype)
+        self.ti_data += struct.pack(f"{self.pack_prefix}Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
