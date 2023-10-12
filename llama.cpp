@@ -9001,10 +9001,10 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
             const size_t elt_size = ggml_element_size(kv_self.k);
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
-            
+
             // create a temporary cgraph without initialising ggml objects, code inspired from `ggml.c:ggml_new_graph`
             struct ggml_cgraph * gf = (struct ggml_cgraph *) (malloc(sizeof(ggml_cgraph)));
-            
+
             (*gf).n_nodes = 0;
             (*gf).n_leafs = 0;
             (*gf).order = GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT;
@@ -9043,7 +9043,7 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
             // write them to file
             data_ctx->write(kout3d_data.data(), kout3d_data.size());
             data_ctx->write(vout3d_data.data(), vout3d_data.size());
-            
+
             // free our allocated graph
             free(gf);
             gf = NULL;
@@ -9150,7 +9150,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             
             // create a temporary cgraph without initialising ggml objects, code inspired from `ggml.c:ggml_new_graph`
             struct ggml_cgraph * gf = (struct ggml_cgraph *) (malloc(sizeof(ggml_cgraph)));
-            
+
             (*gf).n_nodes = 0;
             (*gf).n_leafs = 0;
             (*gf).order = GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT;
