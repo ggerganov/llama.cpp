@@ -136,6 +136,11 @@
       display: block;
     }
 
+    fieldset label.slim {
+      margin: 0 0.5em;
+      display: inline;
+    }
+
     header, footer {
       text-align: center;
     }
@@ -143,6 +148,14 @@
     footer {
       font-size: 80%;
       color: #888;
+    }
+
+    .mode-chat textarea[name=prompt] {
+      height: 4.5em;
+    }
+
+    .mode-completion textarea[name=prompt] {
+      height: 10em;
     }
 
 
@@ -187,7 +200,7 @@
       template: "{{prompt}}\n\n{{history}}\n{{char}}:",
       historyTemplate: "{{name}}: {{message}}",
       transcript: [],
-      type: "chat",
+      type: "chat",  // "chat" | "completion"
       char: "Llama",
       user: "User",
     })
@@ -365,13 +378,44 @@
       return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
     }
 
+    async function runLlama(prompt, llamaParams, char) {
+      const currentMessages = [];
+      const history = session.value.transcript;
+      if (controller.value) {
+        throw new Error("already running");
+      }
+      controller.value = new AbortController();
+      for await (const chunk of llama(prompt, llamaParams, {controller: controller.value})) {
+        const data = chunk.data;
+
+        if (data.stop) {
+          while (
+            currentMessages.length > 0 &&
+            currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
+            ) {
+            currentMessages.pop();
+          }
+          transcriptUpdate([...history, [char, currentMessages]])
+          console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
+        } else {
+          currentMessages.push(data);
+          transcriptUpdate([...history, [char, currentMessages]])
+        }
+
+        if (data.timings) {
+          llamaStats.value = data.timings;
+        }
+      }
+
+      controller.value = null;
+    }
+
     // send message to server
     const chat = async (msg) => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
-      controller.value = new AbortController();
 
       transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
 
@@ -391,54 +435,40 @@
         ).join("\n"),
       });
 
-      const currentMessages = [];
-      const history = session.value.transcript
-
-      const llamaParams = {
+      await runLlama(prompt, {
         ...params.value,
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
+      }, "{{char}}");
+    }
+
+    const runCompletion = async () => {
+      if (controller.value) {
+        console.log('already running...');
+        return;
       }
+      const {prompt} = session.value;
+      transcriptUpdate([...session.value.transcript, ["", prompt]]);
+      await runLlama(prompt, {
+        ...params.value,
+        stop: [],
+      }, "");
+    }
 
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
-        const data = chunk.data;
-
-        if (data.stop) {
-          while (
-            currentMessages.length > 0 &&
-            currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
-          ) {
-            currentMessages.pop();
-          }
-          transcriptUpdate([...history, ["{{char}}", currentMessages]])
-          console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
-        } else {
-          currentMessages.push(data);
-          transcriptUpdate([...history, ["{{char}}", currentMessages]])
-        }
-
-        if (data.timings) {
-          llamaStats.value = data.timings;
-        }
+    const stop = (e) => {
+      e.preventDefault();
+      if (controller.value) {
+        controller.value.abort();
+        controller.value = null;
       }
+    }
 
-      controller.value = null;
+    const reset = (e) => {
+      stop(e);
+      transcriptUpdate([]);
     }
 
     function MessageInput() {
       const message = useSignal("")
-
-      const stop = (e) => {
-        e.preventDefault();
-        if (controller.value) {
-          controller.value.abort();
-          controller.value = null;
-        }
-      }
-
-      const reset = (e) => {
-        stop(e);
-        transcriptUpdate([]);
-      }
 
       const submit = (e) => {
         stop(e);
@@ -474,6 +504,19 @@
       `
     }
 
+    function CompletionControls() {
+      const submit = (e) => {
+        stop(e);
+        runCompletion();
+      }
+      return html`
+        <div>
+          <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
+          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+          <button onclick=${reset}>Reset</button>
+        </div>`;
+    }
+
     const ChatLog = (props) => {
       const messages = session.value.transcript;
       const container = useRef(null)
@@ -497,7 +540,11 @@
             data;
           message = html`<${Markdownish} text=${template(text)} />`
         }
-        return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+        if(user) {
+          return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+        } else {
+          return html`<p key=${index}>${message}</p>`
+        }
       };
 
       return html`
@@ -574,18 +621,31 @@
         userTemplateAutosave()
       }, [session.value, params.value])
 
-      return html`
-        <form>
-          <fieldset>
-            <${UserTemplateResetButton}/>
-          </fieldset>
+      const GrammarControl = () => (
+        html`
+          <div>
+            <label for="template">Grammar</label>
+            <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+            <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
+          </div>
+          `
+      );
 
-          <fieldset>
-            <div>
-              <label for="prompt">Prompt</label>
-              <textarea type="text" name="prompt" value="${session.value.prompt}" rows=4 oninput=${updateSession}/>
-            </div>
-          </fieldset>
+      const PromptControlFieldSet = () => (
+        html`
+        <fieldset>
+          <div>
+            <label htmlFor="prompt">Prompt</label>
+            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
+          </div>
+        </fieldset>
+        `
+      );
+
+      const ChatConfigForm = () => (
+        html`
+          ${PromptControlFieldSet()}
 
           <fieldset class="two">
             <div>
@@ -609,14 +669,29 @@
               <label for="template">Chat history template</label>
               <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
             </div>
+            ${GrammarControl()}
+          </fieldset>
+      `
+    );
 
+      const CompletionConfigForm = () => (
+        html`
+          ${PromptControlFieldSet()}
+          <fieldset>${GrammarControl()}</fieldset>
+        `
+      );
+
+      return html`
+        <form>
+          <fieldset class="two">
+            <${UserTemplateResetButton}/>
             <div>
-              <label for="template">Grammar</label>
-              <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
-              <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-              <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
+              <label class="slim"><input type="radio" name="type" value="chat" checked=${session.value.type === "chat"} oninput=${updateSession} /> Chat</label>
+              <label class="slim"><input type="radio" name="type" value="completion" checked=${session.value.type === "completion"} oninput=${updateSession} /> Completion</label>
             </div>
           </fieldset>
+
+          ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">
             ${IntField({label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict})}
@@ -851,7 +926,7 @@
     function App(props) {
 
       return html`
-        <div>
+        <div class="mode-${session.value.type}">
           <header>
             <h1>llama.cpp</h1>
           </header>
@@ -861,7 +936,7 @@
           </main>
 
           <section id="write">
-            <${MessageInput} />
+            <${session.value.type === 'chat' ? MessageInput : CompletionControls} />
           </section>
 
           <footer>
