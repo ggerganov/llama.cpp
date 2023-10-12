@@ -2145,7 +2145,7 @@ static void llm_load_hparams(
                 GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
 
                 switch (hparams.n_layer) {
-                    case 32: model.type = e_model::MODEL_3B; fprintf(stdout, "Selected 3b model!"); break;
+                    case 32: model.type = e_model::MODEL_3B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                }
             } break;
@@ -2191,7 +2191,6 @@ static void llm_load_vocab(
         std::string tokenizer_name;
 
         GGUF_GET_KEY(ctx, tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, kv(LLM_KV_TOKENIZER_MODEL));
-
         if (tokenizer_name == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
@@ -5962,6 +5961,11 @@ static struct ggml_cgraph * llm_build_stablelm(
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
             offload_func(cur);
             ggml_set_name(cur, "attention_norm_0");
+
+            // add bias
+            cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
+            offload_func(cur);
+            ggml_set_name(cur, "attention_norm_0");
         }
 
         // self-attention
@@ -5975,11 +5979,11 @@ static struct ggml_cgraph * llm_build_stablelm(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
@@ -6098,6 +6102,12 @@ static struct ggml_cgraph * llm_build_stablelm(
 
                 // cur = cur*ffn_norm(broadcasted)
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
+                offload_func(cur);
+                ggml_set_name(cur, "ffn_norm");
+
+                // add bias
+                // cur = cur*ffn_norm(broadcasted)
+                cur = ggml_add(ctx0, cur, model.layers[il].ffn_norm_b);
                 offload_func(cur);
                 ggml_set_name(cur, "ffn_norm");
             }
