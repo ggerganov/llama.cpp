@@ -62,12 +62,6 @@ void main() {
       const int q1 = (inA[x+block_offset+QS_OFFSET+byte_position_in_block] >>   4) - 8;
       const float dq0 = d * q0;
       const float dq1 = d * q1;
-      // if (gid.x == 0 && gid.y == 0 && gid.z == 0 && i < 4 && j < 4) {
-      //   debugPrintfEXT("shp=%d,%d,%d gid=%d,%d,%d i=%d, d=%f, q0=%d, q1=%d, dqs=%f,%f\n",
-      //     pcs.ne01, pcs.ne11, pcs.ne12,
-      //     gid.x, gid.y, gid.z, i, d, q0, q1, dq0, dq1
-      //   );
-      // }
       sum += (dq0 * float(inB[y+i+j])) + \
              (dq1 * float(inB[y+i+j+(ELS_PER_BLOCK/2)]));
     }
