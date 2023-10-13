@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <vector>
 
+#include "base64.hpp"
+
 static void show_additional_info(int /*argc*/, char ** argv) {
     printf("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
@@ -35,24 +37,90 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     return true;
 }
 
+static const char* IMG_BASE64_TAG_BEGIN = "<img src=\"data:image/jpeg;base64,";
+static const char* IMG_BASE64_TAG_END = "\">";
+
+static void find_image_tag_in_prompt(const std::string& prompt, size_t& begin_out, size_t& end_out) {
+    begin_out = prompt.find(IMG_BASE64_TAG_BEGIN);
+    end_out = prompt.find(IMG_BASE64_TAG_END, (begin_out == std::string::npos) ? 0UL : begin_out);
+}
+
+static bool prompt_contains_image(const std::string& prompt) {
+    size_t begin, end;
+    find_image_tag_in_prompt(prompt, begin, end);
+    return (begin != std::string::npos);
+}
+
+// replaces the base64 image tag in the prompt with `replacement`
+static bool get_image_from_prompt(const std::string& prompt, clip_image_u8 * img) {    
+    size_t img_base64_str_start, img_base64_str_end;
+    find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
+    if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
+        fprintf(stderr, "%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
+        return false;
+    }
+
+    auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
+    auto base64_bytes_count = img_base64_str_end - base64_bytes_start;
+    auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count );
+    printf("base64_str: '%s'\n", base64_str.c_str());
+
+    auto required_bytes = base64::required_encode_size(base64_str.size());
+    auto img_bytes = std::vector<unsigned char>(required_bytes);
+    auto img_bytes_end = base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
+    auto img_bytes_len = img_bytes_end - img_bytes.begin();
+
+    auto img_loaded_ok = clip_image_load_from_bytes(img_bytes.data(), img_bytes_len, img);
+    if (!img_loaded_ok) {
+        fprintf(stderr, "%s: could not load image from base64 string.\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
+static std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
+    size_t begin, end;
+    find_image_tag_in_prompt(prompt, begin, end);
+    if (begin == std::string::npos || end == std::string::npos) {
+        return prompt;
+    }
+    auto pre = prompt.substr(0, begin);
+    auto post = prompt.substr(end+1);
+    return pre + replacement + post;
+}
+
 struct llava_context * llava_init(gpt_params * params) {
 
     const char * clip_path = params->mmproj.c_str();
     const char * img_path = params->image.c_str();
 
-    if (params->prompt.empty()) {
-        params->prompt = "describe the image in detail.";
+    auto prompt = params->prompt;
+    if (prompt.empty()) {
+        prompt = "describe the image in detail.";
     }
-
+    
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
     // load and preprocess the image
     clip_image_u8 img;
 
-    if (!clip_image_load_from_file(img_path, &img)) {
-        fprintf(stderr, "%s: is %s really an image file?\n", __func__, img_path);
-        clip_free(ctx_clip);
-        return NULL;
+    if (prompt_contains_image(prompt)) {
+        if (img_path) {
+            printf("using base64 encoded image instead of command line image path\n");
+        }
+        if (!get_image_from_prompt(prompt, &img)) {
+            fprintf(stderr, "%s: can't load image from prompt\n", __func__);
+            clip_free(ctx_clip);
+            return NULL;
+        }
+        prompt = remove_image_from_prompt(prompt);
+    } else {
+        if (!clip_image_load_from_file(img_path, &img)) {
+            fprintf(stderr, "%s: is %s really an image file?\n", __func__, img_path);
+            clip_free(ctx_clip);
+            return NULL;
+        }
     }
 
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
@@ -169,7 +237,7 @@ int main(int argc, char ** argv) {
         show_additional_info(argc, argv);
         return 1;
     }
-    if (params.mmproj.empty() || params.image.empty()) {
+    if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
         gpt_print_usage(argc, argv, params);
         show_additional_info(argc, argv);
         return 1;
