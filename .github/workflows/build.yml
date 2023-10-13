@@ -10,10 +10,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift']
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift']
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -275,6 +275,11 @@ jobs:
         id: xcodebuild
         run: |
           xcodebuild -scheme llama -destination "${{ matrix.destination }}"
+
+      - name: Build Swift Example
+        id: make_build_swift_example
+        run: |
+            make swift
 
   windows-latest-cmake:
     runs-on: windows-latest

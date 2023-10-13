@@ -422,8 +422,7 @@ endif()
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
         set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
-        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int
-            -Werror=implicit-function-declaration)
+        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration)
         set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
         set(host_cxx_flags "")
 
@@ -455,7 +454,8 @@ if (LLAMA_ALL_WARNINGS)
     set(c_flags   ${c_flags}   ${warning_flags})
     set(cxx_flags ${cxx_flags} ${warning_flags})
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
-                        "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags} ${host_cxx_flags}>")
+                        "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
+                        "$<$<COMPILE_LANGUAGE:CXX>:${host_cxx_flags}>")
 
 endif()
 
@@ -663,6 +663,8 @@ add_library(ggml OBJECT
             ggml.h
             ggml-alloc.c
             ggml-alloc.h
+            ggml-backend.c
+            ggml-backend.h
             ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
