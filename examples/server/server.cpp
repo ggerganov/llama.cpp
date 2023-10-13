@@ -78,8 +78,8 @@ enum slot_command {
 
 struct slot_params {
     bool stream = true;
-    uint32_t seed                           = -1;   // RNG seed
-    int32_t n_predict                       = -1;   // new tokens to predict
+    uint32_t seed                 = -1;   // RNG seed
+    int32_t n_predict             = -1;   // new tokens to predict
     std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     bool cache_prompt =           false;  // remember a the prompt to avoid reprocessing all prompt
     std::vector<std::string> antiprompt;
@@ -563,7 +563,7 @@ struct llama_server_context
     }
 
     void processSystemPromptData(json sys_props) {
-        system_prompt = sys_props.value("system_prompt", "");
+        system_prompt = sys_props.value("prompt", "");
         user_name = sys_props.value("anti_prompt", "");
         assistant_name = sys_props.value("assistant_name", "");
         notifySystemPromptChanged();
@@ -872,7 +872,7 @@ struct llama_server_context
             return true;
         }
 
-        // context shift
+        // context shift takes effect only when there is a single slot
         if(slots.size() == 1) {
             llama_client_slot slot = slots[0];
             if (slot.cache_tokens.size() >= (size_t)n_ctx)

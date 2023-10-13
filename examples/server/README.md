@@ -24,6 +24,8 @@ Command line options:
 -   `--port`: Set the port to listen. Default: `8080`.
 -   `--path`: path from which to serve static files (default examples/server/public)
 -   `--embedding`: Enable embedding extraction, Default: disabled.
+-   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
+-   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
 
 ## Build
 
@@ -157,6 +159,12 @@ node index.js
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+
+    `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
+
+    `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
+
+    `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications.
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
