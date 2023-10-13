@@ -101,7 +101,6 @@ export async function* llama(prompt, params = {}, config = {}) {
     if (e.name !== 'AbortError') {
       console.error("llama error: ", e);
     }
-    throw e;
   }
   finally {
     controller.abort();

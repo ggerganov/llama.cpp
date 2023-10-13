@@ -252,7 +252,6 @@ struct llama_client_slot
 
     void reset() {
         num_prompt_tokens = 0;
-        num_tokens_predicted = 0;
         generated_text = "";
         truncated = false;
         stopped_eos = false;
@@ -322,6 +321,7 @@ struct llama_client_slot
 
     void addTokenString(completion_token_output token) {
         if(command == RELEASE) {
+            num_tokens_predicted = 0;
             return;
         }
         context_tokens.push_back(token.tok);
@@ -338,6 +338,7 @@ struct llama_client_slot
     void clean_tokens() {
         sent_tokens = 0;
         generated_token_probs.clear();
+        num_tokens_predicted = 0;
     }
 };
 
@@ -1355,7 +1356,7 @@ static json format_partial_response(
     llama_server_context &llama, llama_client_slot* slot, const std::string &content, const std::vector<completion_token_output> &probs
 ) {
     json res = json{
-        {"content", content},
+        {"content", content },
         {"stop", false},
         { "slot_id", slot->id }
     };
@@ -1705,7 +1706,7 @@ int main(int argc, char **argv)
             res.set_content(data.dump(-1, ' ', false, json::error_handler_t::replace),
                             "application/json");
         } else {
-                const auto chunked_content_provider = [slot, &llama](size_t, DataSink & sink) {
+            const auto chunked_content_provider = [slot, &llama](size_t, DataSink & sink) {
                     size_t sent_token_probs_index = 0;
                     while(slot->isProcessing()) {
                         if(slot->hasNewToken()) { // new token notification
@@ -1758,8 +1759,8 @@ int main(int argc, char **argv)
                     return true;
             };
             auto on_complete = [slot, &llama] (bool) {
-                slot->clean_tokens();
                 slot->release();
+                slot->clean_tokens();
             };
             res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
         } });

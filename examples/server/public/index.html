@@ -220,7 +220,9 @@
       mirostat_tau: 5, // target entropy
       mirostat_eta: 0.1, // learning rate
       grammar: '',
-      n_probs: 0, // no completion_probabilities
+      n_probs: 0, // no completion_probabilities,
+      slot_id: -1,
+      cache_prompt: true
     })
 
     /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
@@ -385,6 +387,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
+      let slot_id = -1;
       for await (const chunk of llama(prompt, llamaParams, {controller: controller.value})) {
         const data = chunk.data;
 
@@ -396,9 +399,11 @@
             currentMessages.pop();
           }
           transcriptUpdate([...history, [char, currentMessages]])
+          params.value = {...params.value, slot_id}
           console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
         } else {
           currentMessages.push(data);
+          slot_id = data.slot_id;
           transcriptUpdate([...history, [char, currentMessages]])
         }
 
