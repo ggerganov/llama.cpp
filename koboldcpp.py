@@ -1290,7 +1290,11 @@ def show_new_gui():
             args.noblas = True
             args.nommap = True
         if tensor_split_str_vars.get()!="":
-            args.tensor_split = [float(x) for x in tensor_split_str_vars.get().split(",")]
+            tssv = tensor_split_str_vars.get()
+            if "," in tssv:
+                args.tensor_split = [float(x) for x in tssv.split(",")]
+            else:
+                args.tensor_split = [float(x) for x in tssv.split(" ")]
 
         args.blasthreads = None if blas_threads_var.get()=="" else int(blas_threads_var.get())
 
@@ -1355,8 +1359,9 @@ def show_new_gui():
                 runopts_var.set(openblas_option)
         if "gpulayers" in dict and dict["gpulayers"]:
             gpulayers_var.set(dict["gpulayers"])
-        if "tensor_split_str_var" in dict and dict["tensor_split_str_var"]:
-            tensor_split_str_vars.set(dict["tensor_split_str_var"])
+        if "tensor_split" in dict and dict["tensor_split"]:
+            tssep = ','.join(map(str, dict["tensor_split"]))
+            tensor_split_str_vars.set(tssep)
         if "blasthreads" in dict and dict["blasthreads"]:
             blas_threads_var.set(str(dict["blasthreads"]))
         else:
