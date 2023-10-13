@@ -989,26 +989,27 @@ void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
         nb1, nb2
     };
 
+    const uint32_t local_x = ggml_vk_current_device().subgroupSize;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
-        //std::cerr << "init f32 matmat shader" << std::endl;
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(),
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(),
         {inA, inB, out}, spirv,
         {unsigned(ne01),
          unsigned(ne11),
-         unsigned(ne12)},
-        {},
+         unsigned(std::max(ne12, ne02))
+         },
+        {local_x},
         {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01),
                               unsigned(ne11),
-                              unsigned(std::max(ne12, ne02))});
+                              unsigned(std::max(ne12, ne02)),
+                              });
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
     }
-    //seq.record<kp::OpTensorFill>({out});
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
@@ -1038,15 +1039,16 @@ void ggml_vk_mul_mat_mat_f16(kp::Sequence& seq,
         nb1, nb2
     };
 
+    const uint32_t local_x = ggml_vk_current_device().subgroupSize;
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(),
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(),
         {inA, inB, out}, spirv,
         {unsigned(ne01),
          unsigned(ne11),
          unsigned(std::max(ne12, ne02))
          },
-        {},
+        {local_x},
         {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
@@ -1141,7 +1143,7 @@ void ggml_vk_mul_mat_mat_q6_k(
     if (!komputeManager()->hasAlgorithm(__func__)) {
         s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(),
         {inA, inB, out}, spirv,
-        {unsigned(ne01)/32,
+        {unsigned(ne01)/256,
          unsigned(ne11),
          unsigned(std::max(ne12, ne02))
          },
@@ -1150,7 +1152,7 @@ void ggml_vk_mul_mat_mat_q6_k(
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({unsigned(ne01)/32,
+        s_algo->setWorkgroup({unsigned(ne01)/256,
                               unsigned(ne11),
                               unsigned(std::max(ne12, ne02)),
                               });
@@ -1192,7 +1194,7 @@ void ggml_vk_mul_mat_mat_q4_x(const std::vector<uint32_t>& spirv,
         {unsigned(ne01),
          unsigned(ne11),
          unsigned(std::max(ne12, ne02))},
-        {local_x, 4},
+        {local_x, 1},
         {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);

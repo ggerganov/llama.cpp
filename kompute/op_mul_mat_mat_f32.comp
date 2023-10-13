@@ -14,7 +14,8 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_EXT_debug_printf : enable
 
-// layout(local_size_x = 8) in;
+// device subgroup size
+layout (local_size_x_id = 0) in;
 
 layout(binding = 0) readonly buffer tensorInA { float inA[]; };
 layout(binding = 1) readonly buffer tensorInB { float inB[]; };
@@ -40,14 +41,20 @@ pcs;
 
 
 void main() {
-  uvec3 gid = gl_GlobalInvocationID;
+  uvec3 gid = gl_WorkGroupID;
 
-  const uint x = (gid.x*pcs.nb01 + gid.z/(pcs.ne12/pcs.ne02)*pcs.nb02) / 4 + pcs.inAOff; // Based from inA
-  const uint y = (gid.y*pcs.nb11 + gid.z/(pcs.ne02/pcs.ne12)*pcs.nb12) / 4 + pcs.inBOff; // based from inB
+  uint bc_ab = pcs.ne12 > pcs.ne02 ? gid.z / (pcs.ne12 / pcs.ne02) : gid.z;
+  uint bc_ba = pcs.ne02 > pcs.ne12 ? gid.z / (pcs.ne02 / pcs.ne12) : gid.z;
+
+  const uint x = (gid.x*pcs.nb01 + bc_ab*pcs.nb02) / 4 + pcs.inAOff; // Based from inA
+  const uint y = (gid.y*pcs.nb11 + bc_ba*pcs.nb12) / 4 + pcs.inBOff; // based from inB
   float sum = 0.0f;
-  for (uint i = 0; i < pcs.ne00; i ++) {
+  for (uint i = gl_SubgroupInvocationID.x; i < pcs.ne00; i += gl_SubgroupSize) {
       sum += float(inA[x+i]) * float(inB[y+i]);
   }
 
-  out_[gid.z*(pcs.nb2/4) + gid.y*(pcs.nb1/4) + gid.x + pcs.outOff] = sum;
+  const float all_sum = subgroupAdd(sum);
+  if (subgroupElect()) {
+    out_[gid.z*(pcs.nb2/4) + gid.y*(pcs.nb1/4) + gid.x + pcs.outOff] = all_sum;
+  }
 }
