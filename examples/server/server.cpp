@@ -223,11 +223,13 @@ struct llama_client_slot
     int32_t n_decoded = 0;
     int32_t i_batch   = -1;
     int32_t num_prompt_tokens = 0;
+    int32_t num_prompt_tokens_processed = 0;
+
     json prompt;
     std::string generated_text = "";
     int num_tokens_predicted = 0;
     llama_token sampled;
-    std::vector<llama_token> context_tokens;
+    std::vector<llama_token> cache_tokens;
     std::vector<llama_token> last_n_tokens;
     std::vector<completion_token_output> generated_token_probs;
     int sent_tokens = 0;
@@ -241,6 +243,11 @@ struct llama_client_slot
     int32_t multibyte_pending = 0;
     size_t sent_count = 0;
     bool infill = false;
+    int64_t t_start_process_prompt;
+    int64_t t_start_genereration;
+
+    double t_prompt_processing; // ms
+    double t_token_generation; // ms
 
     struct slot_params params;
     struct llama_sampling_params sparams;
@@ -324,13 +331,14 @@ struct llama_client_slot
             num_tokens_predicted = 0;
             return;
         }
-        context_tokens.push_back(token.tok);
+        cache_tokens.push_back(token.tok);
         generated_token_probs.push_back(token);
         num_tokens_predicted++;
     }
 
     void release() {
         if(state == PROCESSING) {
+            t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
             command = RELEASE;
         }
     }
@@ -668,7 +676,7 @@ struct llama_server_context
             slot.stopped_limit = true;
         }
 
-        if (!slot.context_tokens.empty() && result.tok == llama_token_eos(ctx)){
+        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(ctx)){
                 slot.stopped_eos = true;
                 LOG_VERBOSE("eos token found", {});
         }
@@ -710,7 +718,7 @@ struct llama_server_context
             {
                 slot.state = slot.params.cache_prompt ? SLEEPING : IDLE;
                 if(slot.state == SLEEPING) {
-                    LOG_TEE("slot %i has %i tokens in cache.\n", slot.id, slot.n_past);
+                    LOG_TEE("slot %i has %i tokens in cache.\n", slot.id, slot.cache_tokens.size());
                 } else {
                     LOG_TEE("slot %i released\n", slot.id);
                 }
@@ -745,6 +753,8 @@ struct llama_server_context
                 if ((slot.state == IDLE || slot.state == SLEEPING) && slot.command == LOAD_PROMPT) {
                     slot.state = PROCESSING;
                     slot.command = NONE;
+                    slot.t_start_process_prompt = ggml_time_us();
+                    slot.t_start_genereration = 0;
                     std::vector<llama_token> prompt_tokens;
                     if(slot.infill) {
                         bool suff_rm_leading_spc = true;
@@ -770,9 +780,9 @@ struct llama_server_context
 
                     slot.num_prompt_tokens = prompt_tokens.size();
 
-                    slot.n_past = slot.params.cache_prompt ? common_part(slot.context_tokens, prompt_tokens) : 0;
+                    slot.n_past = slot.params.cache_prompt ? common_part(slot.cache_tokens, prompt_tokens) : 0;
 
-                    slot.context_tokens = prompt_tokens;
+                    slot.cache_tokens = prompt_tokens;
 
                     if (slot.n_past == slot.num_prompt_tokens) {
                         // we have to evaluate at least 1 token to generate logits.
@@ -780,10 +790,13 @@ struct llama_server_context
                         slot.n_past--;
                     }
 
+
+                    slot.num_prompt_tokens_processed = slot.num_prompt_tokens - slot.n_past;
+
                     if(!slot.params.cache_prompt) {
                         std::fill(slot.last_n_tokens.begin(), slot.last_n_tokens.end(), 0);
                     } else {
-                        LOG_TEE("slot %i - cached: %i tokens | to eval: %i tokens\n", slot.id, slot.n_past, (slot.num_prompt_tokens - slot.n_past));
+                        LOG_TEE("slot %i - in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
                         //if input prompt is too big, truncate like normal
                         if (slot.num_prompt_tokens >= (size_t)n_ctx)
                         {
@@ -813,8 +826,8 @@ struct llama_server_context
 
                     LOG_VERBOSE("prompt ingested", {
                                                     {"n_past", slot.n_past},
-                                                    {"cached", tokens_to_str(ctx, slot.context_tokens.cbegin(), slot.context_tokens.cbegin() + slot.n_past)},
-                                                    {"to_eval", tokens_to_str(ctx, slot.context_tokens.cbegin() + slot.n_past, slot.context_tokens.cend())},
+                                                    {"cached", tokens_to_str(ctx, slot.cache_tokens.cbegin(), slot.cache_tokens.cbegin() + slot.n_past)},
+                                                    {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
                                                 });
                     for (; slot.n_past < prompt_tokens.size(); ++slot.n_past) {
                         batch.token [batch.n_tokens] = prompt_tokens[slot.n_past];
@@ -886,6 +899,12 @@ struct llama_server_context
 
                 completion_token_output result;
                 const llama_token id = llama_sampling_sample(ctx, NULL, slot.ctx_sampling, slot.last_n_tokens, candidates, slot.i_batch - i);
+
+                if (slot.n_decoded == 1) {
+                    slot.t_start_genereration = ggml_time_us();
+                    slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
+                }
+
                 llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
                 result.tok = id;
                 const int32_t n_probs = slot.sparams.n_probs;
@@ -1306,20 +1325,18 @@ static json format_embedding_response(llama_server_context &llama)
     };
 }
 
-static json format_timings(llama_server_context &llama)
+static json format_timings(llama_client_slot* slot)
 {
-    const auto timings = llama_get_timings(llama.ctx);
-
     return json{
-        {"prompt_n", timings.n_p_eval},
-        {"prompt_ms", timings.t_p_eval_ms},
-        {"prompt_per_token_ms", timings.t_p_eval_ms / timings.n_p_eval},
-        {"prompt_per_second", 1e3 / timings.t_p_eval_ms * timings.n_p_eval},
+        {"prompt_n", slot->num_prompt_tokens_processed},
+        {"prompt_ms", slot->t_prompt_processing},
+        {"prompt_per_token_ms",slot->t_prompt_processing / slot->num_prompt_tokens_processed},
+        {"prompt_per_second", 1e3 / slot->t_prompt_processing * slot->num_prompt_tokens_processed},
 
-        {"predicted_n", timings.n_eval},
-        {"predicted_ms", timings.t_eval_ms},
-        {"predicted_per_token_ms", timings.t_eval_ms / timings.n_eval},
-        {"predicted_per_second", 1e3 / timings.t_eval_ms * timings.n_eval},
+        {"predicted_n", slot->n_decoded},
+        {"predicted_ms", slot->t_token_generation},
+        {"predicted_per_token_ms",slot->t_token_generation / slot->n_decoded},
+        {"predicted_per_second", 1e3 / slot->t_token_generation * slot->n_decoded},
     };
 }
 
@@ -1331,7 +1348,7 @@ static json format_final_response(llama_server_context &llama, llama_client_slot
         {"slot_id", slot->id},
         {"stop", true},
         {"model", llama.params.model_alias},
-        {"tokens_predicted", slot->num_tokens_predicted},
+        {"tokens_predicted", slot->n_decoded},
         {"tokens_evaluated", slot->num_prompt_tokens},
         {"generation_settings", format_generation_settings(llama, slot)},
         {"prompt", slot->prompt},
@@ -1340,8 +1357,8 @@ static json format_final_response(llama_server_context &llama, llama_client_slot
         {"stopped_word", slot->stopped_word},
         {"stopped_limit", slot->stopped_limit},
         {"stopping_word", slot->stopping_word},
-        {"tokens_cached", slot->n_past}
-        // {"timings", format_timings(llama)},
+        {"tokens_cached", slot->n_past},
+        {"timings", format_timings(slot)}
     };
 
     if (slot->sparams.n_probs > 0)
