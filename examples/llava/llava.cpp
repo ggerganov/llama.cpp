@@ -12,6 +12,28 @@ static void show_additional_info(int /*argc*/, char ** argv) {
     printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
+static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_embd, int * n_img_pos, float * t_img_enc_ms) {
+    clip_image_f32 img_res;
+    if (!clip_image_preprocess(ctx_clip, img, &img_res, /*pad2square =*/ true)) {
+        fprintf(stderr, "%s: unable to preprocess image\n", __func__);
+
+        return false;
+    }
+
+    *n_img_pos = clip_n_patches(ctx_clip);
+    *n_img_embd = clip_n_mmproj_embd(ctx_clip);
+
+    const int64_t t_img_enc_start_us = ggml_time_us();
+    if (!clip_image_encode(ctx_clip, n_threads, &img_res, image_embd)) {
+        fprintf(stderr, "Unable to encode image\n");
+
+        return false;
+    }
+    const int64_t t_img_enc_end_us = ggml_time_us();
+    *t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
+    return true;
+}
+
 int main(int argc, char ** argv) {
     ggml_time_init();
 
@@ -39,40 +61,27 @@ int main(int argc, char ** argv) {
 
     // load and preprocess the image
     clip_image_u8 img;
-    clip_image_f32 img_res;
 
     if (!clip_image_load_from_file(img_path, &img)) {
         fprintf(stderr, "%s: is %s really an image file?\n", __func__, img_path);
-
         clip_free(ctx_clip);
         return 1;
     }
-
-    if (!clip_image_preprocess(ctx_clip, &img, &img_res, /*pad2square =*/ true)) {
-        fprintf(stderr, "%s: unable to preprocess %s\n", __func__, img_path);
-
-        clip_free(ctx_clip);
-        return 1;
-    }
-
-    int n_img_pos  = clip_n_patches(ctx_clip);
-    int n_img_embd = clip_n_mmproj_embd(ctx_clip);
 
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
-
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for image embeddings\n");
-
         return 1;
     }
 
-    const int64_t t_img_enc_start_us = ggml_time_us();
-    if (!clip_image_encode(ctx_clip, params.n_threads, &img_res, image_embd)) {
-        fprintf(stderr, "Unable to encode image\n");
-
+    int n_img_embd;
+    int n_img_pos;
+    float t_img_enc_ms;
+    if (!encode_image_with_clip(ctx_clip, params.n_threads, &img, image_embd, &n_img_embd, &n_img_pos, &t_img_enc_ms)) {
+        fprintf(stderr, "%s: cannot encode image, aborting\n", __func__);
+        clip_free(ctx_clip);
         return 1;
     }
-    const int64_t t_img_enc_end_us = ggml_time_us();
 
     // we get the embeddings, free up the memory required for CLIP
     clip_free(ctx_clip);
@@ -140,8 +149,6 @@ int main(int argc, char ** argv) {
     printf("\n");
 
     {
-        const float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
-
         printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / n_img_pos);
     }
 

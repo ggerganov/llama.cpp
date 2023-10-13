@@ -18,3 +18,6 @@ target_compile_features(${TARGET} PRIVATE cxx_std_11)
 if(TARGET BUILD_INFO)
     add_dependencies(${TARGET} BUILD_INFO)
 endif()
+
+unset(TARGET)
+llama_build_and_test_executable(test-llava.cpp)
