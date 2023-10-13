@@ -3,7 +3,7 @@
 #include "build-info.h"
 #include "grammar-parser.h"
 
-// #define SERVER_MULTIMODAL_SUPPORT
+#define SERVER_MULTIMODAL_SUPPORT
 
 #ifdef SERVER_MULTIMODAL_SUPPORT
 #include "../llava/clip.h"
@@ -746,10 +746,6 @@ struct llama_server_context
         }
         // add the token to slot queue and cache
         slot.addTokenString(result);
-        if (slot.sparams.n_probs > 0)
-        {
-            slot.generated_token_probs.push_back(result);
-        }
         if (slot.multibyte_pending > 0)
         {
             slot.multibyte_pending -= token_str.size();
@@ -1009,13 +1005,13 @@ struct llama_server_context
 #ifdef SERVER_MULTIMODAL_SUPPORT
                     std::vector<llama_token> preffix_tokens = ingest_image ? tokenize(slot.params.input_prefix, true) : prompt_tokens;
                     for (; slot.n_past < preffix_tokens.size(); ++slot.n_past) {
-                        printf(llama_token_to_piece(ctx, preffix_tokens[slot.n_past]).c_str());
                         batch.token [batch.n_tokens] = preffix_tokens[slot.n_past];
                         batch.pos   [batch.n_tokens] = slot.n_past + num_tokens_system;
                         batch.seq_id[batch.n_tokens] = slot.id;
                         batch.logits[batch.n_tokens] = false;
                         batch.n_tokens += 1;
                     }
+
                     if(ingest_image) {
                         // process preffix prompt
                         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
@@ -1035,8 +1031,6 @@ struct llama_server_context
                             }
                         }
 
-                        printf("\nEvaluated preffix prompt: %i\n", slot.n_past);
-
                         // process image
                         for (int i = 0; i < slot.image_tokens; i += n_batch) {
                             int n_eval = slot.image_tokens - i;
@@ -1050,13 +1044,11 @@ struct llama_server_context
                             }
                             slot.n_past += n_eval;
                         }
-                        printf("Evaluated image embedding: %i\n", slot.n_past);
 
                         // process suffix prompt
                         batch.n_tokens = 0;
                         std::vector<llama_token> suffix_tokens = tokenize(slot.params.input_suffix, true);
                         for (int i = 0; i < suffix_tokens.size(); ++i) {
-                            printf(llama_token_to_piece(ctx, suffix_tokens[i]).c_str());
                             batch.token [batch.n_tokens] = suffix_tokens[i];
                             batch.pos   [batch.n_tokens] = slot.n_past;
                             batch.seq_id[batch.n_tokens] = slot.id;
@@ -1064,7 +1056,6 @@ struct llama_server_context
                             slot.n_past += 1;
                             batch.n_tokens += 1;
                         }
-                        printf("\nEvaluated suffix prompt: %i\n", slot.n_past);
                     }
 #else
                     for (; slot.n_past < prompt_tokens.size(); ++slot.n_past) {
