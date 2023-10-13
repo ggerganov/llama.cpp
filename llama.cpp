@@ -5721,7 +5721,6 @@ static struct ggml_cgraph * llama_build_graph(
 //
 //   - lctx:      llama context
 //   - batch:     batch to evaluate
-//   - n_threads: number of threads to use
 //
 // return 0 on success
 // return positive int on warning
