@@ -14,7 +14,9 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_EXT_debug_printf : enable
 
-layout(local_size_x = 32) in;
+layout (local_size_x_id = 0) in;
+layout (local_size_y_id = 1) in;
+layout (constant_id = 1) const uint nsg = 2;
 
 layout(binding = 0) readonly buffer tensorInA { uint8_t inA[]; };
 layout(binding = 1) readonly buffer tensorInB { float inB[]; };
@@ -38,34 +40,38 @@ layout(push_constant) uniform parameter {
 }
 pcs;
 
-#define ELS_PER_BLOCK 32
-#define QS_OFFSET 2
-#define BLOCK_SIZE ((ELS_PER_BLOCK / 2) + QS_OFFSET)
+const uint els_per_block = 32;
+const uint qs_offset = 2;
+const uint block_size = (els_per_block / 2) + qs_offset;
+
 
 void main() {
-  uvec3 gid = gl_GlobalInvocationID;
+  uvec3 gid = gl_WorkGroupID;
+  uvec3 lid = gl_LocalInvocationID;
+  gid.y = gid.y * nsg + lid.y;
 
   uint bc_ab = pcs.ne12 > pcs.ne02 ? gid.z / (pcs.ne12 / pcs.ne02) : gid.z;
   uint bc_ba = pcs.ne02 > pcs.ne12 ? gid.z / (pcs.ne02 / pcs.ne12) : gid.z;
 
-
   const uint x = (gid.x*pcs.nb01 + bc_ab*pcs.nb02) + pcs.inAOff; // Based from inA
   const uint y = (gid.y*pcs.nb11 + bc_ba*pcs.nb12) / 4 + pcs.inBOff; // based from inB
   float sum = 0.0f;
-  for (uint i = 0; i < pcs.ne00; i+=ELS_PER_BLOCK) {
-    for (uint j = 0; j < ELS_PER_BLOCK / 2; j++) {
-      const uint block_number = i / ELS_PER_BLOCK;
-      const uint block_offset = block_number * BLOCK_SIZE;
+  for (uint i = gl_SubgroupInvocationID * 2; i < pcs.ne00; i+=gl_SubgroupSize * 2) {
+      const uint block_number = i / els_per_block;
+      const uint block_offset = block_number * block_size;
       const float d = u8BufToFloat16(inA, x + block_offset);
+      const uint j = (i % els_per_block) / 2;
       const uint byte_position_in_block = j;
-      const int q0 = (inA[x+block_offset+QS_OFFSET+byte_position_in_block] & 0x0F) - 8;
-      const int q1 = (inA[x+block_offset+QS_OFFSET+byte_position_in_block] >>   4) - 8;
+      const int q0 = (inA[x+block_offset+qs_offset+byte_position_in_block] & 0x0F) - 8;
+      const int q1 = (inA[x+block_offset+qs_offset+byte_position_in_block] >>   4) - 8;
       const float dq0 = d * q0;
       const float dq1 = d * q1;
-      sum += (dq0 * float(inB[y+i+j])) + \
-             (dq1 * float(inB[y+i+j+(ELS_PER_BLOCK/2)]));
-    }
+      const uint block_base = block_number * els_per_block;
+      sum += (dq0 * float(inB[y+block_base+j])) + \
+             (dq1 * float(inB[y+block_base+j+(els_per_block/2)]));
   }
 
-  out_[gid.z*(pcs.nb2/4) + gid.y*(pcs.nb1/4) + gid.x + pcs.outOff] = sum;
+  const float all_sum = subgroupAdd(sum);
+  if (subgroupElect())
+    out_[gid.z*(pcs.nb2/4) + gid.y*(pcs.nb1/4) + gid.x + pcs.outOff] = all_sum;
 }

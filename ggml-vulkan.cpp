@@ -1186,17 +1186,18 @@ void ggml_vk_mul_mat_mat_q4_x(const std::vector<uint32_t>& spirv,
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
     if (!komputeManager()->hasAlgorithm(__func__)) {
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(),
+        const uint32_t local_x = ggml_vk_current_device().subgroupSize;
+        s_algo = komputeManager()->algorithm<uint32_t, PushConstants>(__func__, s_kompute_context->pool.get(),
         {inA, inB, out}, spirv,
-        {unsigned(ne01)/32,
+        {unsigned(ne01),
          unsigned(ne11),
          unsigned(std::max(ne12, ne02))},
-        {},
+        {local_x, 4},
         {pushConsts});
     } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({inA, inB, out});
-        s_algo->setWorkgroup({unsigned(ne01)/32,
+        s_algo->setWorkgroup({unsigned(ne01),
                               unsigned(ne11),
                               unsigned(std::max(ne12, ne02)),
                               });
