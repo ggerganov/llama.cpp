@@ -276,6 +276,11 @@ jobs:
         run: |
           xcodebuild -scheme llama -destination "${{ matrix.destination }}"
 
+      - name: Build Swift Example
+        id: make_build_swift_example
+        run: |
+            make swift
+
   windows-latest-cmake:
     runs-on: windows-latest
 

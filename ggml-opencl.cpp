@@ -19,7 +19,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-#define CL_DMMV_BLOCK_SIZE 32
+#define CL_DMMV_LOCAL_SIZE 32
 
 #ifndef K_QUANTS_PER_ITERATION
 #define K_QUANTS_PER_ITERATION 1
@@ -338,7 +338,7 @@ __kernel void dequantize_mul_mat_vec_q2_K(__global const struct block_q2_K * xx,
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row;
+    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
 
     __global const struct block_q2_K * x = xx + ib0;
 
@@ -413,7 +413,7 @@ __kernel void dequantize_mul_mat_vec_q3_K(__global const struct block_q3_K * xx,
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row;
+    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
 
     __global const struct block_q3_K * x = xx + ib0;
 
@@ -489,7 +489,7 @@ __kernel void dequantize_mul_mat_vec_q4_K(__global const struct block_q4_K * xx,
 
     const int row = get_group_id(0);
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row;
+    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
 
     const int tid = get_local_id(0)/K_QUANTS_PER_ITERATION;  // 0...15
     const int ix  = get_local_id(0)%K_QUANTS_PER_ITERATION;
@@ -562,7 +562,7 @@ __kernel void dequantize_mul_mat_vec_q5_K(__global const struct block_q5_K * xx,
 
     const int row = get_group_id(0);
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row;
+    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
 
     const int tid = get_local_id(0)/2;  // 0...15
     const int ix  = get_local_id(0)%2;
@@ -641,7 +641,7 @@ __kernel void dequantize_mul_mat_vec_q6_K(__global const struct block_q6_K * xx,
     const int row = get_group_id(0);
 
     const int num_blocks_per_row = ncols / QK_K;
-    const int ib0 = row*num_blocks_per_row;
+    const int ib0 = row*num_blocks_per_row + get_global_offset(0);
 
     __global const struct block_q6_K * x = xx + ib0;
 
@@ -745,19 +745,21 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __global float* y) {
 
 std::string dequant_mul_mat_vec_template = MULTILINE_QUOTE(
 __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float* y, __global float* dst, const int ncols) {
-    const int block_size = get_local_size(0);
+    const int local_size = get_local_size(0);
     const int row = get_group_id(0);
     const int tid = get_local_id(0);
 
     const uint qk = QUANT_K;
     const uint qr = QUANT_R;
 
+    const int col_step = local_size * 2;
     const int y_offset = qr == 1 ? 1 : qk/2;
+
+    x += get_global_offset(0);
 
     tmp[tid] = 0;
 
-    for (int i = 0; i < ncols/block_size; i += 2) {
-        const int col = i*block_size + 2*tid;
+    for (int col = tid*2; col < ncols; col += col_step) {
         const int ib = (row*ncols + col)/qk; // block index
         const int iqs = (col%qk)/qr; // quant index
         const int iybs = col - col%qk; // y block start index
@@ -773,7 +775,7 @@ __kernel void KERNEL_NAME(__global X_TYPE* x, __local float* tmp, __global float
 
     // sum up partial sums and write back result
     barrier(CLK_LOCAL_MEM_FENCE);
-    for (int s=block_size/2; s>0; s>>=1) {
+    for (int s=local_size/2; s>0; s>>=1) {
         if (tid < s) {
             tmp[tid] += tmp[tid + s];
         }
@@ -1704,7 +1706,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     const int nb2  = dst->nb[2];
     const int nb3  = dst->nb[3];
     const ggml_type type = src0->type;
-    const bool mul_mat_vec = ne11 == 1;
+    const bool mul_mat_vec = ne11 == 1 && ne00%2 == 0;
 
     const int64_t r2 = ne12 / ne02;
     const int64_t r3 = ne13 / ne03;
@@ -1737,7 +1739,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     GGML_ASSERT(to_fp32_cl != nullptr);
 
     const size_t global_denom = ggml_cl_global_denom(type);
-    const size_t local = ggml_cl_local_size(type);
+    const size_t local = mul_mat_vec ? CL_DMMV_LOCAL_SIZE : ggml_cl_local_size(type);
 
     size_t ev_idx = 0;
     std::vector<cl_event> events;
@@ -1770,8 +1772,8 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, events.data() + ev_idx++));
 
                 // compute
-                const size_t global = ne01 * CL_DMMV_BLOCK_SIZE;
-                const size_t local = CL_DMMV_BLOCK_SIZE;
+                const size_t global = ne01 * local;
+                const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
                 const cl_int ncols = ne00;
                 events.emplace_back();
                 CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
@@ -1779,7 +1781,7 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
                 CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
                 CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
                 CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, NULL, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
+                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, &offset, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
             } else { // general dequantization kernel + CLBlast matrix matrix multiplication
                 // convert src0 to fp32 on device
                 const size_t global = x_ne / global_denom;

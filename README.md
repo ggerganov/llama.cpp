@@ -96,6 +96,8 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
+- [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+- [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 
 **Bindings:**
 
@@ -277,7 +279,7 @@ In order to build llama.cpp you have three different options.
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
 To disable the Metal build at compile time use the `LLAMA_NO_METAL=1` flag or the `LLAMA_METAL=OFF` cmake option.
 
-When built with Metal support, you can explicitly disable GPU inference with the `--gpu-layers|-ngl 0` command-line
+When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
 argument.
 
 ### MPI Build
