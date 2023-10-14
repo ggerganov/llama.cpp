@@ -3,7 +3,7 @@
 #include "build-info.h"
 #include "grammar-parser.h"
 
-// #define SERVER_MULTIMODAL_SUPPORT
+#define SERVER_MULTIMODAL_SUPPORT
 
 #ifdef SERVER_MULTIMODAL_SUPPORT
 #include "../llava/clip.h"
@@ -78,7 +78,7 @@ std::vector<uint8_t> base64_decode(std::string const& encoded_string) {
   int i = 0;
   int j = 0;
   int in_ = 0;
-  BYTE char_array_4[4], char_array_3[3];
+  unsigned char char_array_4[4], char_array_3[3];
   std::vector<uint8_t> ret;
   while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
     char_array_4[i++] = encoded_string[in_]; in_++;
@@ -884,9 +884,10 @@ struct llama_server_context
 
             // append prefix of next image
             batch.n_tokens = 0;
-            std::vector<llama_token> append_tokens = tokenize(
-                    image_idx >= slot.images.size() ? slot.params.input_suffix : // no more images, then process suffix prompt
-                    slot.images[image_idx].prefix_prompt, true); // has next image
+            const auto json_prompt = (image_idx >= slot.images.size()) ? 
+                slot.params.input_suffix : // no more images, then process suffix prompt
+                (json)(slot.images[image_idx].prefix_prompt);
+            std::vector<llama_token> append_tokens = tokenize(json_prompt, true); // has next image
             for (int i = 0; i < append_tokens.size(); ++i) {
                 batch.token [batch.n_tokens] = append_tokens[i];
                 batch.pos   [batch.n_tokens] = slot.n_past;
