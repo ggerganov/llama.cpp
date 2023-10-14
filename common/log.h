@@ -612,6 +612,43 @@ inline std::string log_var_to_string_impl(const std::vector<int> & var)
     }()                                                                      \
         .c_str()
 
+#define LOG_BATCH_TOSTR_PRETTY(ctx, batch)                                   \
+    [&batch, &ctx]()                                                         \
+    {                                                                        \
+        std::stringstream buf;                                               \
+        buf << "[ ";                                                         \
+                                                                             \
+        bool first = true;                                                   \
+        for (int i = 0; i < batch.n_tokens; ++i)                             \
+        {                                                                    \
+            if (!first)                                                      \
+                buf << ", ";                                                 \
+            else                                                             \
+                first = false;                                               \
+                                                                             \
+            auto detokenized = llama_token_to_piece(ctx, batch.token[i]);    \
+                                                                             \
+            detokenized.erase(                                               \
+                std::remove_if(                                              \
+                    detokenized.begin(),                                     \
+                    detokenized.end(),                                       \
+                    [](const unsigned char c) { return !std::isprint(c); }), \
+                detokenized.end());                                          \
+                                                                             \
+            buf                                                              \
+                << "\n" << std::to_string(i)                                 \
+                << ":token '" << detokenized << "'"                          \
+                << ":pos " << std::to_string(batch.pos[i])                   \
+                << ":n_seq_id  " << std::to_string(batch.n_seq_id[i])        \
+                << ":seq_id " << std::to_string(batch.seq_id[i][0])          \
+                << ":logits " << std::to_string(batch.logits[i]);            \
+        }                                                                    \
+        buf << " ]";                                                         \
+                                                                             \
+        return buf.str();                                                    \
+    }()                                                                      \
+        .c_str()
+
 #ifdef LOG_DISABLE_LOGS
 
 #undef LOG

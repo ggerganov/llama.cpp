@@ -120,7 +120,7 @@ int main(int argc, char ** argv) {
     const int max_tgt_len = params.n_predict < 0 ? 256 : params.n_predict;
 
     // GG: are we sure that the should be a trailing whitespace at the end of this string?
-    eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params.n_batch, &n_past);
+    eval_string(ctx_llama, "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:", params.n_batch, &n_past);
     eval_image_embd(ctx_llama, image_embd, n_img_pos, params.n_batch, &n_past);
     eval_string(ctx_llama, params.prompt.c_str(), params.n_batch, &n_past);
     eval_string(ctx_llama, "\nASSISTANT:",        params.n_batch, &n_past);
