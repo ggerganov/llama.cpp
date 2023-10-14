@@ -197,11 +197,6 @@ for part_name in part_names:
 
         gguf_writer.add_tensor(new_name, data)
 
-        # note: MPT output is tied to (same as) wte in original model;
-        # for easier implementation in llama.cpp it's duplicated in GGUF, though :/
-        if new_name == "token_embd.weight":
-            gguf_writer.add_tensor("output.weight", data)
-
 print("gguf: write header")
 gguf_writer.write_header_to_file()
 print("gguf: write metadata")

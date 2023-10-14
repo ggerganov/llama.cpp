@@ -1964,6 +1964,7 @@ extern "C" {
 
         // if not NULL, create a ggml_context and allocate the tensor data in it
         struct ggml_context ** ctx;
+        int extra_tensors;
     };
 
     GGML_API struct gguf_context * gguf_init_empty(void);
@@ -2006,6 +2007,7 @@ extern "C" {
     GGML_API int    gguf_get_n_tensors    (const struct gguf_context * ctx);
     GGML_API int    gguf_find_tensor      (const struct gguf_context * ctx, const char * name);
     GGML_API size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i);
+    GGML_API void   gguf_set_tensor_offset(const struct gguf_context * ctx, int i, size_t offset);
     GGML_API char * gguf_get_tensor_name  (const struct gguf_context * ctx, int i);
 
     // overrides existing values or adds a new one

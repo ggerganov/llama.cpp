@@ -1621,8 +1621,9 @@ struct llama_model_loader {
 
     llama_model_loader(const std::string & fname, bool use_mmap) : file(fname.c_str(), "rb") {
         struct gguf_init_params params = {
-            /*.no_alloc = */ true,
-            /*.ctx      = */ &ctx_meta,
+            /*.no_alloc      = */ true,
+            /*.ctx           = */ &ctx_meta,
+            /*.extra_tensors = */ 1,
         };
 
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
@@ -1911,6 +1912,25 @@ struct llama_model_loader {
 
             done_size += ggml_nbytes(cur);
         }
+    }
+
+    // must be called before calc_sizes
+    void clone_tensor(const char * src_name, const char * dst_name) {
+        int src_idx = gguf_find_tensor(ctx_gguf, src_name);
+        GGML_ASSERT(src_idx >= 0);
+
+        struct ggml_tensor * src = ggml_get_tensor(ctx_meta, src_name);
+        size_t src_offset = gguf_get_tensor_offset(ctx_gguf, src_idx);
+
+        struct ggml_tensor * cur = ggml_new_tensor(ctx_meta, src->type, src->n_dims, src->ne);
+        GGML_ASSERT(cur);
+
+        ggml_set_name(cur, dst_name);
+        gguf_add_tensor(ctx_gguf, cur);
+        gguf_set_tensor_offset(ctx_gguf, n_tensors, src_offset);
+        n_tensors++;
+        n_elements += ggml_nelements(cur);
+        n_bytes += ggml_nbytes(cur);
     }
 };
 
@@ -2303,6 +2323,11 @@ static void llm_load_tensors(
     auto & hparams = model.hparams;
 
     model.n_gpu_layers = n_gpu_layers;
+
+    // MPT output is tied to (same as) wte in original model
+    if (model.arch == LLM_ARCH_MPT) {
+        ml.clone_tensor("token_embd.weight", "output.weight");
+    }
 
     size_t ctx_size;
     size_t mmapped_size;

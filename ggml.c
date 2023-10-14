@@ -21167,10 +21167,11 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         // the ggml_tensor structs to the appropriate locations in the binary blob
 
         // compute the exact size needed for the new ggml_context
+        int n_tensors = ctx->header.n_tensors + params.extra_tensors;
         const size_t mem_size =
             params.no_alloc ?
-            (ctx->header.n_tensors    )*ggml_tensor_overhead() :
-            (ctx->header.n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
+            (n_tensors    )*ggml_tensor_overhead() :
+            (n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
 
         struct ggml_init_params pdata = {
             .mem_size   = mem_size,
@@ -21452,6 +21453,10 @@ int gguf_find_tensor(const struct gguf_context * ctx, const char * name) {
 
 size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i) {
     return ctx->infos[i].offset;
+}
+
+void gguf_set_tensor_offset(const struct gguf_context * ctx, int i, size_t offset) {
+    ctx->infos[i].offset = offset;
 }
 
 char * gguf_get_tensor_name(const struct gguf_context * ctx, int i) {
