@@ -194,6 +194,7 @@
 
     import { llama } from '/completion.js';
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    let selected_image = false;
 
     const session = signal({
       prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
@@ -222,6 +223,7 @@
       grammar: '',
       n_probs: 0, // no completion_probabilities,
       slot_id: -1,
+      image_data: [],
       cache_prompt: true
     })
 
@@ -424,7 +426,7 @@
 
       transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
 
-      const prompt = template(session.value.template, {
+      let prompt = template(session.value.template, {
         message: msg,
         history: session.value.transcript.flatMap(
           ([name, data]) =>
@@ -439,7 +441,9 @@
             )
         ).join("\n"),
       });
-
+      if(selected_image) {
+        prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: [img-10]${msg}\nASSISTANT:`;
+      }
       await runLlama(prompt, {
         ...params.value,
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
@@ -472,6 +476,24 @@
       transcriptUpdate([]);
     }
 
+    const uploadImage = (e) => {
+      e.preventDefault();
+      document.getElementById("fileInput").click();
+      document.getElementById("fileInput").addEventListener("change", function (event) {
+            const selectedFile = event.target.files[0];
+            if (selectedFile) {
+                const reader = new FileReader();
+                reader.onload = function () {
+                    const image_data = reader.result;
+                    params.value = {...params.value, image_data: [
+                      { data: image_data.replace('data:image/png;base64,', ''), id: 10 }] }
+                };
+                selected_image = true;
+                reader.readAsDataURL(selectedFile);
+            }
+        });
+    }
+
     function MessageInput() {
       const message = useSignal("")
 
@@ -502,6 +524,7 @@
           </div>
           <div class="right">
             <button type="submit" disabled=${generating.value}>Send</button>
+            <button onclick=${uploadImage} style="margin-left: 10px;margin-right: 10px;">Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>
@@ -957,7 +980,8 @@
 </head>
 
 <body>
-  <div id="container"></div>
+  <div id="container">
+    <input type="file" id="fileInput" accept="image/*" style="display: none;"></div>
   <div id="portal"></div>
 </body>
 
