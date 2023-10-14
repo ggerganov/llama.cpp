@@ -5,6 +5,8 @@
 #include "common.h"
 #include "llama.h"
 
+#include "base64.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
