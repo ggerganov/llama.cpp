@@ -10,7 +10,7 @@
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
-- ‼️ BPE tokenizer update: existing Falcon and Starcoder `.gguf` models will need to be reconverted
+- ‼️ BPE tokenizer update: existing Falcon and Starcoder `.gguf` models will need to be reconverted: [#3252](https://github.com/ggerganov/llama.cpp/pull/3252)
 - ‼️ Breaking change: `rope_freq_base` and `rope_freq_scale` must be set to zero to use the model default values: [#3401](https://github.com/ggerganov/llama.cpp/pull/3401)
 - Parallel decoding + continuous batching support added: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
   **Devs should become familiar with the new API**
@@ -91,8 +91,8 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
 - [X] [Pygmalion/Metharme](#using-pygmalion-7b--metharme-7b)
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
-- [X] [Baichuan 1&2](https://huggingface.co/models?search=baichuan-inc/Baichuan) + [derivations](https://huggingface.co/hiyouga/baichuan-7b-sft)
-- [X] [Aquila 1&2](https://huggingface.co/models?search=BAAI/Aquila)
+- [X] [Baichuan 1 & 2](https://huggingface.co/models?search=baichuan-inc/Baichuan) + [derivations](https://huggingface.co/hiyouga/baichuan-7b-sft)
+- [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
@@ -208,18 +208,19 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-#### **Quickstart:**
+### Quickstart
 You will find prebuilt Windows binaries on the release page.
 
-Simply download and extract the zip package of choice (e.g. `llama-b1380-bin-win-avx2-x64.zip`)
+Simply download and extract the latest zip package of choice: (e.g. `llama-b1380-bin-win-avx2-x64.zip`)
 
-From the unzipped folder, open a terminal/cmd window here and place a pre-converted .`gguf` model file. Test out the main example like so:
+From the unzipped folder, open a terminal/cmd window here and place a pre-converted `.gguf` model file. Test out the main example like so:
 
 ```
 .\main -m llama-2-7b.Q4_0.gguf -n 128
 ```
 
-#### **Build:**
+### Full Instructions
+
 Here are the end-to-end binary build and model conversion steps for the LLaMA-7B model.
 
 ### Get the Code
