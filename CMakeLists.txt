@@ -375,14 +375,12 @@ if (LLAMA_CLBLAST)
 endif()
 
 if (LLAMA_VULKAN)
-    find_package(Vulkan COMPONENTS shaderc_combined)
-    find_package(glslang)
-    find_package(SPIRV-Tools-opt)
+    find_package(Vulkan)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
 
         add_library(ggml-vulkan STATIC ggml-vulkan.cpp ggml-vulkan.h)
-        target_link_libraries(ggml-vulkan PUBLIC Vulkan::Vulkan Vulkan::shaderc_combined)
+        target_link_libraries(ggml-vulkan PUBLIC Vulkan::Vulkan)
 
         add_compile_definitions(GGML_USE_VULKAN)
 

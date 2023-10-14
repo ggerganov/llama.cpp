@@ -789,20 +789,20 @@ GGML_TYPE_Q8_K = 15
 
 
 type_names = {
-    GGML_TYPE_F32: "F32",
-    GGML_TYPE_F16: "F16",
-    GGML_TYPE_Q4_0: "Q4_0",
-    GGML_TYPE_Q4_1: "Q4_1",
-    GGML_TYPE_Q5_0: "Q5_0",
-    GGML_TYPE_Q5_1: "Q5_1",
-    GGML_TYPE_Q8_0: "Q8_0",
-    GGML_TYPE_Q8_1: "Q8_1",
-    GGML_TYPE_Q2_K: "Q2_K",
-    GGML_TYPE_Q3_K: "Q3_K",
-    GGML_TYPE_Q4_K: "Q4_K",
-    GGML_TYPE_Q5_K: "Q5_K",
-    GGML_TYPE_Q6_K: "Q6_K",
-    GGML_TYPE_Q8_K: "Q8_K",
+    GGML_TYPE_F32: "f32",
+    GGML_TYPE_F16: "f16",
+    GGML_TYPE_Q4_0: "q4_0",
+    GGML_TYPE_Q4_1: "q4_1",
+    GGML_TYPE_Q5_0: "q5_0",
+    GGML_TYPE_Q5_1: "q5_1",
+    GGML_TYPE_Q8_0: "q8_0",
+    GGML_TYPE_Q8_1: "q8_1",
+    GGML_TYPE_Q2_K: "q2_K",
+    GGML_TYPE_Q3_K: "q3_K",
+    GGML_TYPE_Q4_K: "q4_K",
+    GGML_TYPE_Q5_K: "q5_K",
+    GGML_TYPE_Q6_K: "q6_K",
+    GGML_TYPE_Q8_K: "q8_K",
 }
 
 K_QUANTS_PER_ITERATION = 1
@@ -851,113 +851,116 @@ async def main():
 
     os.makedirs("vk_shaders", exist_ok=True)
 
-    async with asyncio.TaskGroup() as tg:
-        for fp16 in (False, True):
-            # mulmat
-            if fp16:
-                shader_float_type = shader_f16
-                load_vec = "8"
-                vec_type_f16 = "f16mat2x4"
-                vec_type = "mat2x4"
+    for fp16 in (False, True):
+        # mulmat
+        if fp16:
+            shader_float_type = shader_f16
+            load_vec = "8"
+            vec_type_f16 = "f16mat2x4"
+            vec_type = "mat2x4"
+        else:
+            shader_float_type = shader_f32
+            load_vec = "4"
+            vec_type_f16 = "f16vec4"
+            vec_type = "vec4"
+
+        tasks = []
+
+        stream = []
+        stream.extend((mulmat_head, shader_float_type, mulmat_body));
+        tasks.append(string_to_spv_file("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        stream.clear();
+        stream.extend((mulmat_head, shader_float_type, mulmat_body));
+        tasks.append(string_to_spv_file("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+
+        tasks.append(string_to_spv_file("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+
+        tasks.append(string_to_spv_file("matmul_f16_f32_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_f32_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_f32_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+
+        # Build dequant shaders
+        tasks.append(string_to_spv_file("f32_to_f16", f32_to_f16_src, {}, fp16))
+
+        for i in range(0, VK_NUM_TYPES):
+            stream.clear();
+
+            stream.extend((dequant_head, shader_int8_ext, shader_float_type));
+
+            if i == GGML_TYPE_F16:
+                stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q4_0:
+                stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat if not fp16 else shader_q4_0_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q4_1:
+                stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat if not fp16 else shader_q4_1_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q5_0:
+                stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat if not fp16 else shader_q5_0_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q5_1:
+                stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q8_0:
+                stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q6_K:
+                stream.extend((shader_q6_K_defines, dequant_q6_K_body))
             else:
-                shader_float_type = shader_f32
-                load_vec = "4"
-                vec_type_f16 = "f16vec4"
-                vec_type = "vec4"
+                continue
 
-            stream = []
-            stream.extend((mulmat_head, shader_float_type, mulmat_body));
-            tg.create_task(string_to_spv_file("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+            tasks.append(string_to_spv_file(f"dequant_{type_names[i]}", "".join(stream), {"D_TYPE": "float16_t"}, fp16))
 
+        # mul mat vec
+        for i in range(0, VK_NUM_TYPES):
             stream.clear();
-            stream.extend((mulmat_head, shader_float_type, mulmat_body));
-            tg.create_task(string_to_spv_file("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+            stream.extend((mul_mat_vec_head, shader_int8_ext, shader_float_type))
 
-            tg.create_task(string_to_spv_file("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+            if i == GGML_TYPE_F16:
+                stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q4_0:
+                stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat if not fp16 else shader_q4_0_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q4_1:
+                stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat if not fp16 else shader_q4_1_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q5_0:
+                stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat if not fp16 else shader_q5_0_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q5_1:
+                stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q8_0:
+                stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q6_K:
+                stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
+            else:
+                continue
 
-            tg.create_task(string_to_spv_file("matmul_f16_f32_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_f32_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_f32_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-            tg.create_task(string_to_spv_file("matmul_f16_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+            tasks.append(string_to_spv_file(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
+            tasks.append(string_to_spv_file(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
 
-            # Build dequant shaders
-            tg.create_task(string_to_spv_file("f32_to_f16", f32_to_f16_src, {}, fp16))
+        # add
+        stream.clear();
 
-            for i in range(0, VK_NUM_TYPES):
-                stream.clear();
+        stream.extend((add_head, shader_float_type, add_body))
+        tasks.append(string_to_spv_file("add_f32", "".join(stream), {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-                stream.extend((dequant_head, shader_int8_ext, shader_float_type));
+        stream.clear();
+        stream.extend((add_head, shader_float_type, add_body))
+        tasks.append(string_to_spv_file("add_f16_f32_f16", "".join(stream), {"X_TYPE": "float16_t", "Y_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
 
-                if i == GGML_TYPE_F16:
-                    stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q4_0:
-                    stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat if not fp16 else shader_q4_0_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q4_1:
-                    stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat if not fp16 else shader_q4_1_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q5_0:
-                    stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat if not fp16 else shader_q5_0_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q5_1:
-                    stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q8_0:
-                    stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, dequant_body))
-                elif i == GGML_TYPE_Q6_K:
-                    stream.extend((shader_q6_K_defines, dequant_q6_K_body))
-                else:
-                    continue
+        # Static shaders
+        tasks.append(string_to_spv_file("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
+        tasks.append(string_to_spv_file("mul_f32", mul_f32_src, {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-                tg.create_task(string_to_spv_file(f"dequant_{type_names[i]}", "".join(stream), {"D_TYPE": "float16_t"}, fp16))
+        tasks.append(string_to_spv_file("scale_f32", scale_src, {"X_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-            # mul mat vec
-            for i in range(0, VK_NUM_TYPES):
-                stream.clear();
-                stream.extend((mul_mat_vec_head, shader_int8_ext, shader_float_type))
-
-                if i == GGML_TYPE_F16:
-                    stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q4_0:
-                    stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat if not fp16 else shader_q4_0_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q4_1:
-                    stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat if not fp16 else shader_q4_1_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q5_0:
-                    stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat if not fp16 else shader_q5_0_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q5_1:
-                    stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q8_0:
-                    stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, mul_mat_vec_body))
-                elif i == GGML_TYPE_Q6_K:
-                    stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
-                else:
-                    continue
-
-                tg.create_task(string_to_spv_file(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
-                tg.create_task(string_to_spv_file(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
-
-            # add
-            stream.clear();
-
-            stream.extend((add_head, shader_float_type, add_body))
-            tg.create_task(string_to_spv_file("add_f32", "".join(stream), {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
-
-            stream.clear();
-            stream.extend((add_head, shader_float_type, add_body))
-            tg.create_task(string_to_spv_file("add_f16_f32_f16", "".join(stream), {"X_TYPE": "float16_t", "Y_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
-
-            # Static shaders
-            tg.create_task(string_to_spv_file("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
-            tg.create_task(string_to_spv_file("mul_f32", mul_f32_src, {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
-
-            tg.create_task(string_to_spv_file("scale_f32", scale_src, {"X_TYPE": "float", "D_TYPE": "float"}, fp16))
+        await asyncio.gather(*tasks)
 
 
 asyncio.run(main())

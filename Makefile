@@ -430,7 +430,7 @@ endif # LLAMA_CLBLAST
 ifdef LLAMA_VULKAN
 	CFLAGS  += -DGGML_USE_VULKAN
 	CXXFLAGS  += -DGGML_USE_VULKAN
-	LDFLAGS += -lvulkan -lopenblas -lglslang -lSPIRV -lSPIRV-Tools-opt -lSPIRV-Tools -lshaderc_combined
+	LDFLAGS += -lvulkan
 	OBJS    += ggml-vulkan.o
 ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
