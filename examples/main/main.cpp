@@ -320,8 +320,14 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
+    std::string inp_pfx_str = "\n\n### Instruction:\n\n";
+    std::string inp_sfx_str = "\n\n### Response:\n\n";
+    if (params.escape) {
+        process_escapes(inp_pfx_str);
+        process_escapes(inp_sfx_str);
+    }
+    const auto inp_pfx = ::llama_tokenize(ctx, inp_pfx_str, add_bos);
+    const auto inp_sfx = ::llama_tokenize(ctx, inp_sfx_str,   false);
 
     LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx));
     LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx));
@@ -781,7 +787,9 @@ int main(int argc, char ** argv) {
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
-
+                    if (params.escape) {
+                        process_escapes(buffer);
+                    }
                     const auto line_inp = ::llama_tokenize(ctx, buffer, false);
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp));
 
