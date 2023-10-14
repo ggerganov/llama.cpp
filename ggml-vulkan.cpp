@@ -89,7 +89,7 @@ struct vk_pipeline {
 };
 
 struct vk_queue {
-    vk_queue() {};
+    vk_queue() {}
     vk_queue(const vk_queue& b) : queue_family_index(b.queue_family_index), queue(b.queue), pool(b.pool), cmd_buffer_idx(b.cmd_buffer_idx), cmd_buffers(b.cmd_buffers), semaphore_idx(b.semaphore_idx), semaphores(b.semaphores), stage_flags(b.stage_flags) {}
 
     vk_queue& operator=(const vk_queue& b) {
@@ -2372,7 +2372,6 @@ void ggml_vk_preallocate_buffers_graph(ggml_tensor * node){
     const bool qx_needs_dequant = use_src0 && !qvec_kernel && src0->type != GGML_TYPE_F16;
     const bool f16_f32_kernel = use_src1 && src1->type == GGML_TYPE_F32;
     const bool qy_needs_dequant = use_src1 && src1->type != GGML_TYPE_F16 && !f16_f32_kernel;
-    const bool dq = qx_needs_dequant || qy_needs_dequant;
 
     const int split_k = node->op == GGML_OP_MUL_MAT ? ggml_vk_guess_split_k(ne01, ne11, ne10) : 1;
     const uint32_t x_ne = ne00 * ne01;
@@ -2498,7 +2497,6 @@ void ggml_vk_build_graph(ggml_tensor * node){
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_build_graph(" << node << ")" << std::endl;
 #endif
-    ggml_vk_func_t func;
     const bool any_on_device = node->backend == GGML_BACKEND_GPU
         || (node->src[0] != nullptr && (node->src[0]->backend == GGML_BACKEND_GPU || node->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (node->src[1] != nullptr && node->src[1]->backend == GGML_BACKEND_GPU);
@@ -2542,7 +2540,6 @@ void ggml_vk_build_graph(ggml_tensor * node){
 }
 
 bool ggml_vk_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor){
-    ggml_vk_func_t func = nullptr;
     const bool any_on_device = tensor->backend == GGML_BACKEND_GPU
         || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
