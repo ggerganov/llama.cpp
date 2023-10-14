@@ -845,9 +845,11 @@ async def string_to_spv_file(name, code, defines, fp16):
         cmd.extend([f"-D{key}={value}" for key, value in defines.items()])
         code_with_lines = "\n".join([f"{i}: {line}" for i, line in enumerate(preprocessed_code.splitlines())])
         print(f"ERROR compiling {name}\n\n{code_with_lines}\n\n{error=}")
+        f.close()
         os.remove(f.name)
         sys.exit(proc.returncode)
 
+    f.close()
     os.remove(f.name)
 
 
