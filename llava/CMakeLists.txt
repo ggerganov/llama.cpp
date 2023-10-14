@@ -1,15 +1,7 @@
 set(TARGET llava)
 
-if (BUILD_SHARED_LIBS)
-    add_library(${TARGET} SHARED llava.cpp llava.h clip.cpp clip.h)
-    set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    set_target_properties(${TARGET} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    target_link_libraries(${TARGET} PUBLIC Threads::Threads common llama ggml ${LLAMA_EXTRA_LIBS})
-    install(TARGETS ${TARGET} LIBRARY)
-else()
-    add_library(${TARGET} llava.cpp llava.h clip.cpp clip.h)
-    target_link_libraries(${TARGET} PRIVATE common llama ggml ${CMAKE_THREAD_LIBS_INIT})
-endif()
+add_library(${TARGET} STATIC llava.cpp llava.h clip.cpp clip.h)
+target_link_libraries(${TARGET} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 
 target_include_directories(${TARGET} PUBLIC .)
 target_include_directories(${TARGET} PUBLIC ..)
