@@ -68,56 +68,21 @@ bool llava_build_img_embed(const llama_context * ctx_llama, clip_ctx * ctx_clip,
 }
 
 
-struct llava_context * llava_init(gpt_params * params) {
 
-    const char * clip_path = params->mmproj.c_str();
+bool llava_eval_image_embd(llama_context * ctx_llama, float * image_embd, int n_image_pos, int n_batch, int * n_past) {
+    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
 
-    auto prompt = params->prompt;
-    if (prompt.empty()) {
-        prompt = "describe the image in detail.";
+    for (int i = 0; i < n_image_pos; i += n_batch) {
+        int n_eval = n_image_pos - i;
+        if (n_eval > n_batch) {
+            n_eval = n_batch;
+        }
+        llama_batch batch = {int32_t(n_eval), nullptr, (image_embd+i*n_embd), nullptr, nullptr, nullptr, *n_past, 1, 0, };
+        if (llama_decode(ctx_llama, batch)) {
+            fprintf(stderr, "%s : failed to eval\n", __func__);
+            return false;
+        }
+        *n_past += n_eval;
     }
-    
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
-
-    llama_backend_init(params->numa);
-
-    llama_model_params model_params = llama_model_default_params();
-    llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
-    if (model == NULL) {
-        fprintf(stderr , "%s: error: unable to load model\n" , __func__);
-        return NULL;
-    }
-
-    llama_context_params ctx_params = llama_context_default_params();
-
-    ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
-    ctx_params.n_threads       = params->n_threads;
-    ctx_params.n_threads_batch = params->n_threads_batch == -1 ? params->n_threads : params->n_threads_batch;
-
-    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
-
-    if (ctx_llama == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
-        return NULL;
-    }
-
-    auto ctx_llava = (struct llava_context *)malloc(sizeof(llava_context));
-
-    ctx_llava->ctx_llama = ctx_llama;
-    ctx_llava->ctx_clip = ctx_clip;
-    ctx_llava->model = model;
-    return ctx_llava;
+    return true;
 }
-
-
-void llava_free(struct llava_context * ctx_llava) {
-    if (ctx_llava->ctx_clip) {
-        clip_free(ctx_llava->ctx_clip);
-        ctx_llava->ctx_clip = NULL;
-    }
-
-    llama_free(ctx_llava->ctx_llama);
-    llama_free_model(ctx_llava->model);
-    llama_backend_free();
-}
-

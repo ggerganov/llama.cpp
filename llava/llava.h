@@ -10,17 +10,13 @@ struct clip_ctx;
 extern "C" {
 #endif
 
-struct llava_context {
-    struct clip_ctx * ctx_clip = NULL;
-    struct llama_context * ctx_llama = NULL;
-    struct llama_model * model = NULL;
-};
-
-struct llava_context * llava_init(gpt_params * params);
-void llava_free(struct llava_context * ctx_llava);
-
-/** build a llava image embedding from the passed-in clip image `img`. result is returned as image_embd_out, size n_image_pos_out */
+/** using ctx_clip, build a llava image embedding from the passed-in image `img` (see clip.h for methods to load img). 
+ * result is returned as image_embd_out, size n_image_pos_out */
 LLAMA_API bool llava_build_img_embed(const struct llama_context * ctx_llama, struct clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_image_pos_out);
+
+/** write the image represented by image_embd (size n_image_pos) into the llama context with batch size n_batch, 
+ * starting at context pos n_past. on completion, n_past points to the next position in the context after the image embed. */
+LLAMA_API bool llava_eval_image_embd(struct llama_context * ctx_llama, float * image_embd, int n_image_pos, int n_batch, int * n_past);
 
 
 #ifdef __cplusplus

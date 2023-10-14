@@ -11,24 +11,6 @@
 #include <cstdlib>
 #include <vector>
 
-inline bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int n_batch, int * n_past) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
-
-    for (int i = 0; i < N; i += n_batch) {
-        int n_eval = N - i;
-        if (n_eval > n_batch) {
-            n_eval = n_batch;
-        }
-        llama_batch batch = {int32_t(n_eval), nullptr, (embd+i*n_embd), nullptr, nullptr, nullptr, *n_past, 1, 0, };
-        if (llama_decode(ctx_llama, batch)) {
-            fprintf(stderr, "%s : failed to eval\n", __func__);
-            return false;
-        }
-        *n_past += n_eval;
-    }
-    return true;
-}
-
 inline bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
     for (int i = 0; i < N; i += n_batch) {
@@ -37,7 +19,7 @@ inline bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
             n_eval = n_batch;
         }
         if (llama_decode(ctx_llama, llama_batch_get_one(&tokens[i], n_eval, *n_past, 0))) {
-            fprintf(stderr, "%s : failed to eval\n", __func__);
+            fprintf(stderr, "%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
         *n_past += n_eval;
@@ -194,6 +176,6 @@ inline std::string remove_image_from_prompt(const std::string& prompt, const cha
         return prompt;
     }
     auto pre = prompt.substr(0, begin);
-    auto post = prompt.substr(end+1);
+    auto post = prompt.substr(end + strlen(IMG_BASE64_TAG_END));
     return pre + replacement + post;
 }
