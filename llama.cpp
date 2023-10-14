@@ -5532,7 +5532,7 @@ static struct ggml_cgraph * llm_build_mpt(
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 wsize * n_embd_head * (n_head +     n_head_kv));
-            offload_func_kq(Kcur);
+            offload_func_v(tmpv);
 
             ggml_set_name(Qcur, "Qcur");
             ggml_set_name(Kcur, "Kcur");
