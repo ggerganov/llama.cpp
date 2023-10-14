@@ -679,8 +679,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 }
 
 clip_image_u8 * make_clip_image_u8() { return new clip_image_u8(); }
-
 clip_image_f32 * make_clip_image_f32() { return new clip_image_f32(); }
+
+void clip_image_u8_free(clip_image_u8 * img) { if (img->data) { delete[] img->data; } delete img; }
+void clip_image_f32_free(clip_image_f32 * img) { if (img->data) { delete[] img->data; } delete img; }
 
 static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
@@ -726,39 +728,40 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
     // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
 
-    clip_image_u8 temp; // we will keep the input image data here temporarily
+    clip_image_u8 * temp = make_clip_image_u8(); // we will keep the input image data here temporarily
     if (pad2square && img->nx != img->ny) {
         int longer_side = std::max(img->nx, img->ny);
-        temp.nx = longer_side;
-        temp.ny = longer_side;
-        temp.size = 3 * longer_side * longer_side;
-        temp.data = new uint8_t[temp.size]();
+        temp->nx = longer_side;
+        temp->ny = longer_side;
+        temp->size = 3 * longer_side * longer_side;
+        temp->data = new uint8_t[temp->size]();
         uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
 
         // fill with background color
-        for (size_t i = 0; i < temp.size; i++) {
-            temp.data[i] = bc[i % 3];
+        for (size_t i = 0; i < temp->size; i++) {
+            temp->data[i] = bc[i % 3];
         }
 
         // copy from the input image
         for (int y = 0; y < img->ny; y++) {
             for (int x = 0; x < img->nx; x++) {
                 const int i = 3 * (y * img->nx + x);
-                const int j = 3 * (y * temp.nx + x);
-                temp.data[j] = img->data[i];
-                temp.data[j+1] = img->data[i+1];
-                temp.data[j+2] = img->data[i+2];
+                const int j = 3 * (y * temp->nx + x);
+                temp->data[j] = img->data[i];
+                temp->data[j+1] = img->data[i+1];
+                temp->data[j+2] = img->data[i+2];
             }
         }
     } else {
-        temp.nx   = img->nx;
-        temp.ny   = img->ny;
-        temp.size = img->size;
-        temp.data = img->data;
+        temp->nx   = img->nx;
+        temp->ny   = img->ny;
+        temp->size = img->size;
+        temp->data = new uint8_t[temp->size]();
+        *temp->data = *img->data; // copy
     }
 
-    const int nx = temp.nx;
-    const int ny = temp.ny;
+    const int nx = temp->nx;
+    const int ny = temp->ny;
 
     const int nx2 = ctx->vision_model.hparams.image_size;
     const int ny2 = ctx->vision_model.hparams.image_size;
@@ -797,10 +800,10 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
                 const int j10 = 3 * (y1 * nx + x0) + c;
                 const int j11 = 3 * (y1 * nx + x1) + c;
 
-                const float v00 = temp.data[j00];
-                const float v01 = temp.data[j01];
-                const float v10 = temp.data[j10];
-                const float v11 = temp.data[j11];
+                const float v00 = temp->data[j00];
+                const float v01 = temp->data[j01];
+                const float v10 = temp->data[j10];
+                const float v11 = temp->data[j11];
 
                 const float v0 = v00 * (1.0f - dx) + v01 * dx;
                 const float v1 = v10 * (1.0f - dx) + v11 * dx;
@@ -815,6 +818,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
             }
         }
     }
+    clip_image_u8_free(temp);
 
     return true;
 }

@@ -11,10 +11,10 @@
 #include "base64.hpp"
 
 static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_image_embd, int * n_img_pos) {
-    clip_image_f32 img_res;
-    if (!clip_image_preprocess(ctx_clip, img, &img_res, /*pad2square =*/ true)) {
+    clip_image_f32 * img_res = make_clip_image_f32();
+    if (!clip_image_preprocess(ctx_clip, img, img_res, /*pad2square =*/ true)) {
         fprintf(stderr, "%s: unable to preprocess image\n", __func__);
-
+        clip_image_f32_free(img_res);
         return false;
     }
 
@@ -22,7 +22,9 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     *n_image_embd = clip_n_mmproj_embd(ctx_clip);
 
     const int64_t t_img_enc_start_us = ggml_time_us();
-    if (!clip_image_encode(ctx_clip, n_threads, &img_res, image_embd)) {
+    bool encoded = clip_image_encode(ctx_clip, n_threads, img_res, image_embd);
+    clip_image_f32_free(img_res);
+    if (!encoded) {
         fprintf(stderr, "Unable to encode image\n");
 
         return false;

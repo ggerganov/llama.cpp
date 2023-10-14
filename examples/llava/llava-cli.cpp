@@ -22,25 +22,26 @@ static void show_additional_info(int /*argc*/, char ** argv) {
 
 static bool load_image(llava_context * ctx_llava, gpt_params * params, float **image_embd, int * n_img_pos) {
     // load and preprocess the image
-    clip_image_u8 img;
+    clip_image_u8 * img = make_clip_image_u8();
     auto prompt = params->prompt;
     if (prompt_contains_image(prompt)) {
         if (!params->image.empty()) {
             printf("using base64 encoded image instead of command line image path\n");
         }
-        if (!clip_image_load_from_prompt(prompt, &img)) {
+        if (!clip_image_load_from_prompt(prompt, img)) {
             fprintf(stderr, "%s: can't load image from prompt\n", __func__);
             return false;
         }
         params->prompt = remove_image_from_prompt(prompt);
     } else {
-        if (!clip_image_load_from_file(params->image.c_str(), &img)) {
+        if (!clip_image_load_from_file(params->image.c_str(), img)) {
             fprintf(stderr, "%s: is %s really an image file?\n", __func__, params->image.c_str());
             return false;
         }
     }
-    bool image_embed_result = llava_build_img_embed(ctx_llava->ctx_llama, ctx_llava->ctx_clip, params->n_threads, &img, image_embd, n_img_pos);
+    bool image_embed_result = llava_build_img_embed(ctx_llava->ctx_llama, ctx_llava->ctx_clip, params->n_threads, img, image_embd, n_img_pos);
     if (!image_embed_result) {
+        clip_image_u8_free(img);
         fprintf(stderr, "%s: coulnd't embed the image\n", __func__);
         return false;
     }

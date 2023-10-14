@@ -33,7 +33,7 @@ int clip_n_mmproj_embd(struct clip_ctx * ctx);
 struct clip_image_u8 {
     int nx;
     int ny;
-    uint8_t * data;
+    uint8_t * data = NULL;
     size_t size;
 };
 
@@ -42,7 +42,7 @@ struct clip_image_u8 {
 struct clip_image_f32 {
     int nx;
     int ny;
-    float * data;
+    float * data = NULL;
     size_t size;
 };
 
@@ -58,8 +58,12 @@ struct clip_image_f32_batch {
 
 struct clip_image_u8 * make_clip_image_u8();
 struct clip_image_f32 * make_clip_image_f32();
+LLAMA_API void clip_image_u8_free(clip_image_u8 * img);
+LLAMA_API void clip_image_f32_free(clip_image_f32 * img);
 LLAMA_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
+/** interpret bytes as an image file with length bytes_length, and use the result to populate img */
 LLAMA_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img);
+
 bool clip_image_preprocess(const struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32 * res, const bool pad2square);
 bool clip_image_encode(const struct clip_ctx * ctx, const int n_threads, struct clip_image_f32 * img, float * vec);
 
