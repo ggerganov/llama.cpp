@@ -143,3 +143,55 @@ inline const char * sample(struct llama_context * ctx_llama, gpt_params & params
     eval_id(ctx_llama, id, n_past);
     return ret.c_str();
 }
+
+static const char* IMG_BASE64_TAG_BEGIN = "<img src=\"data:image/jpeg;base64,";
+static const char* IMG_BASE64_TAG_END = "\">";
+
+static void find_image_tag_in_prompt(const std::string& prompt, size_t& begin_out, size_t& end_out) {
+    begin_out = prompt.find(IMG_BASE64_TAG_BEGIN);
+    end_out = prompt.find(IMG_BASE64_TAG_END, (begin_out == std::string::npos) ? 0UL : begin_out);
+}
+
+static bool prompt_contains_image(const std::string& prompt) {
+    size_t begin, end;
+    find_image_tag_in_prompt(prompt, begin, end);
+    return (begin != std::string::npos);
+}
+
+// replaces the base64 image tag in the prompt with `replacement`
+static bool get_image_from_prompt(const std::string& prompt, clip_image_u8 * img) {    
+    size_t img_base64_str_start, img_base64_str_end;
+    find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
+    if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
+        fprintf(stderr, "%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
+        return false;
+    }
+
+    auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
+    auto base64_bytes_count = img_base64_str_end - base64_bytes_start;
+    auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count );
+
+    auto required_bytes = base64::required_encode_size(base64_str.size());
+    auto img_bytes = std::vector<unsigned char>(required_bytes);
+    auto img_bytes_end = base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
+    auto img_bytes_len = img_bytes_end - img_bytes.begin();
+
+    auto img_loaded_ok = clip_image_load_from_bytes(img_bytes.data(), img_bytes_len, img);
+    if (!img_loaded_ok) {
+        fprintf(stderr, "%s: could not load image from base64 string.\n", __func__);
+        return false;
+    }
+
+    return true;
+}
+
+static std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
+    size_t begin, end;
+    find_image_tag_in_prompt(prompt, begin, end);
+    if (begin == std::string::npos || end == std::string::npos) {
+        return prompt;
+    }
+    auto pre = prompt.substr(0, begin);
+    auto post = prompt.substr(end+1);
+    return pre + replacement + post;
+}
