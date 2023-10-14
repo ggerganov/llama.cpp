@@ -2,6 +2,7 @@
 #define CLIP_H
 
 #include "ggml.h"
+#include "llama.h"
 
 struct clip_ctx;
 
@@ -57,8 +58,8 @@ struct clip_image_f32_batch {
 
 struct clip_image_u8 * make_clip_image_u8();
 struct clip_image_f32 * make_clip_image_f32();
-bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
-bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img);
+LLAMA_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
+LLAMA_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img);
 bool clip_image_preprocess(const struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32 * res, const bool pad2square);
 bool clip_image_encode(const struct clip_ctx * ctx, const int n_threads, struct clip_image_f32 * img, float * vec);
 

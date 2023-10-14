@@ -10,7 +10,7 @@
 
 #include "base64.hpp"
 
-static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_embd, int * n_img_pos) {
+static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_image_embd, int * n_img_pos) {
     clip_image_f32 img_res;
     if (!clip_image_preprocess(ctx_clip, img, &img_res, /*pad2square =*/ true)) {
         fprintf(stderr, "%s: unable to preprocess image\n", __func__);
@@ -19,7 +19,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     }
 
     *n_img_pos = clip_n_patches(ctx_clip);
-    *n_img_embd = clip_n_mmproj_embd(ctx_clip);
+    *n_image_embd = clip_n_mmproj_embd(ctx_clip);
 
     const int64_t t_img_enc_start_us = ggml_time_us();
     if (!clip_image_encode(ctx_clip, n_threads, &img_res, image_embd)) {
@@ -37,7 +37,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
     return true;
 }
 
-bool llava_build_img_embed(const llama_context * ctx_llama, clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_image_pos_out) {
+bool llava_build_img_embed(const llama_context * ctx_llama, clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
 
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
     if (!image_embd) {
@@ -46,23 +46,23 @@ bool llava_build_img_embed(const llama_context * ctx_llama, clip_ctx * ctx_clip,
         return false;
     }
 
-    int n_image_pos;
-    int n_img_embd;
-    if (!encode_image_with_clip(ctx_clip, n_threads, img, image_embd, &n_img_embd, &n_image_pos)) {
+    int n_img_pos;
+    int n_image_embd;
+    if (!encode_image_with_clip(ctx_clip, n_threads, img, image_embd, &n_image_embd, &n_img_pos)) {
         fprintf(stderr, "%s: cannot encode image, aborting\n", __func__);
         free(image_embd);
         return false;
     }
     // make sure that the correct mmproj was used, i.e., compare apples to apples
     int n_llama_embd = llama_n_embd(llama_get_model(ctx_llama));
-    if (n_img_embd != n_llama_embd) {
-        printf("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_img_embd, n_llama_embd);
+    if (n_image_embd != n_llama_embd) {
+        printf("%s: embedding dim of the multimodal projector (%d) is not equal to that of LLaMA (%d). Make sure that you use the correct mmproj file.\n", __func__, n_image_embd, n_llama_embd);
         free(image_embd);
         return false;
     }
 
     *image_embd_out = image_embd;
-    *n_image_pos_out = n_image_pos;
+    *n_img_pos_out = n_img_pos;
 
     return true;
 }

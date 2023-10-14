@@ -13,7 +13,7 @@ static void show_additional_info(int /*argc*/, char ** argv) {
     printf("  note: a lower temperature value like 0.1 is recommended for better quality.\n");
 }
 
-static bool load_image(llava_context * ctx_llava, gpt_params * params, float **image_embd, int * n_image_pos) {
+static bool load_image(llava_context * ctx_llava, gpt_params * params, float **image_embd, int * n_img_pos) {
     // load and preprocess the image
     clip_image_u8 img;
     auto prompt = params->prompt;
@@ -32,7 +32,7 @@ static bool load_image(llava_context * ctx_llava, gpt_params * params, float **i
             return false;
         }
     }
-    bool image_embed_result = llava_build_img_embed(ctx_llava->ctx_llama, ctx_llava->ctx_clip, params->n_threads, &img, image_embd, n_image_pos);
+    bool image_embed_result = llava_build_img_embed(ctx_llava->ctx_llama, ctx_llava->ctx_clip, params->n_threads, &img, image_embd, n_img_pos);
     if (!image_embed_result) {
         fprintf(stderr, "%s: coulnd't embed the image\n", __func__);
         return false;
@@ -49,6 +49,7 @@ static void process_prompt(struct llava_context * ctx_llava, float * image_embd,
     // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
     // GG: are we sure that the should be a trailing whitespace at the end of this string?
     eval_string(ctx_llava->ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params->n_batch, &n_past);
+    printf("embedding image, n_img_pos is %d\n", n_img_pos);
     eval_image_embd(ctx_llava->ctx_llama, image_embd, n_img_pos, params->n_batch, &n_past);
     eval_string(ctx_llava->ctx_llama, prompt, params->n_batch, &n_past);
     eval_string(ctx_llava->ctx_llama, "\nASSISTANT:",        params->n_batch, &n_past);
