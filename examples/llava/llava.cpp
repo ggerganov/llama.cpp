@@ -79,7 +79,13 @@ int main(int argc, char ** argv) {
 
     llama_backend_init(params.numa);
 
-    llama_model_params model_params = llama_model_default_params();
+    llama_model_params model_params              = llama_model_default_params();
+                       model_params.n_gpu_layers = params.n_gpu_layers;
+                       model_params.main_gpu     = params.main_gpu;
+                       model_params.tensor_split = params.tensor_split;
+                       model_params.use_mmap     = params.use_mmap;
+                       model_params.use_mlock    = params.use_mlock;
+
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
