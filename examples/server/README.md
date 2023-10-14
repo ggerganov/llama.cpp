@@ -26,6 +26,8 @@ Command line options:
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 -   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
 -   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
+-   `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+-
 
 ## Build
 
@@ -164,7 +166,7 @@ node index.js
 
     `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
 
-    `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications.
+    `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
@@ -196,7 +198,31 @@ node index.js
 
     It also accepts all the options of `/completion` except `stream` and `prompt`.
 
+-   **GET** `/props`: Return the required assistant name and anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
+
 ## More examples
+
+### Change system prompt on runtime
+
+To use the server example to serve multiple chat-type clients while keeping the same system prompt, you can utilize the option `system_prompt` to achieve that. This only needs to be done once to establish it.
+
+`prompt`: Specify a context that you want all connecting clients to respect.
+
+`anti_prompt`: Specify the word you want to use to instruct the model to stop. This must be sent to each client through the `/props` endpoint.
+
+`assistant_name`: The bot's name is necessary for each customer to generate the prompt. This must be sent to each client through the `/props` endpoint.
+
+```json
+{
+    "system_prompt": {
+        "prompt": "Transcript of a never ending dialog, where the User interacts with an Assistant.\nThe Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.\nUser: Recommend a nice restaurant in the area.\nAssistant: I recommend the restaurant \"The Golden Duck\". It is a 5 star restaurant with a great view of the city. The food is delicious and the service is excellent. The prices are reasonable and the portions are generous. The restaurant is located at 123 Main Street, New York, NY 10001. The phone number is (212) 555-1234. The hours are Monday through Friday from 11:00 am to 10:00 pm. The restaurant is closed on Saturdays and Sundays.\nUser: Who is Richard Feynman?\nAssistant: Richard Feynman was an American physicist who is best known for his work in quantum mechanics and particle physics. He was awarded the Nobel Prize in Physics in 1965 for his contributions to the development of quantum electrodynamics. He was a popular lecturer and author, and he wrote several books, including \"Surely You're Joking, Mr. Feynman!\" and \"What Do You Care What Other People Think?\".\nUser:",
+        "anti_prompt": "User:",
+        "assistant_name": "Assistant:"
+    }
+}
+```
+
+**NOTE**: You can do this automatically when starting the server by simply creating a .json file with these options and using the CLI option `-spf FNAME` or `--system-prompt-file FNAME`.
 
 ### Interactive mode
 
