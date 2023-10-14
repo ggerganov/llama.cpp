@@ -32,7 +32,11 @@ static bool load_image(llava_context * ctx_llava, gpt_params * params, float **i
             return false;
         }
     }
-    llava_build_img_embed(ctx_llava, params->n_threads, &img, image_embd, n_image_pos);
+    bool image_embed_result = llava_build_img_embed(ctx_llava->ctx_llama, ctx_llava->ctx_clip, params->n_threads, &img, image_embd, n_image_pos);
+    if (!image_embed_result) {
+        fprintf(stderr, "%s: coulnd't embed the image\n", __func__);
+        return false;
+    }
 
     return true;
 }

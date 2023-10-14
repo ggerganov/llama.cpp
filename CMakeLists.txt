@@ -793,6 +793,7 @@ endif()
 #
 
 add_subdirectory(common)
+add_subdirectory(llava)
 
 if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
     include(CTest)
