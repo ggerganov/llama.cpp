@@ -306,7 +306,7 @@ static vk_pipeline ggml_vk_create_pipeline_from_file(const std::string& name, co
     std::cerr << "ggml_vk_create_pipeline_from_file(" << path << ", " << entrypoint << ", " << parameter_count << ", " << push_constant_size << ", (" << wg_denoms[0] << "," << wg_denoms[1] << "," << wg_denoms[2] << "), specialization_constants, " << align << ")" << std::endl;
 #endif
 
-    const std::string path = "vk_shaders/" + name + (vk_device.fp16 ? "" : "_f32") + ".comp";
+    const std::string path = "vk_shaders/" + name + (vk_device.fp16 ? "" : "_fp32") + ".comp";
 
     std::vector<char> matmul_shader_contents;
     if (std::ifstream shader_file{ path, std::ios::binary | std::ios::ate }) {
