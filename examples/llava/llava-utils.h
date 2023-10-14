@@ -149,19 +149,19 @@ inline const char * sample(struct llama_context * ctx_llama, gpt_params & params
 static const char* IMG_BASE64_TAG_BEGIN = "<img src=\"data:image/jpeg;base64,";
 static const char* IMG_BASE64_TAG_END = "\">";
 
-static void find_image_tag_in_prompt(const std::string& prompt, size_t& begin_out, size_t& end_out) {
+inline void find_image_tag_in_prompt(const std::string& prompt, size_t& begin_out, size_t& end_out) {
     begin_out = prompt.find(IMG_BASE64_TAG_BEGIN);
     end_out = prompt.find(IMG_BASE64_TAG_END, (begin_out == std::string::npos) ? 0UL : begin_out);
 }
 
-static bool prompt_contains_image(const std::string& prompt) {
+inline bool prompt_contains_image(const std::string& prompt) {
     size_t begin, end;
     find_image_tag_in_prompt(prompt, begin, end);
     return (begin != std::string::npos);
 }
 
 // replaces the base64 image tag in the prompt with `replacement`
-static bool get_image_from_prompt(const std::string& prompt, clip_image_u8 * img) {    
+inline bool clip_image_load_from_prompt(const std::string& prompt, clip_image_u8 * img) {    
     size_t img_base64_str_start, img_base64_str_end;
     find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
     if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
@@ -176,7 +176,7 @@ static bool get_image_from_prompt(const std::string& prompt, clip_image_u8 * img
     auto required_bytes = base64::required_encode_size(base64_str.size());
     auto img_bytes = std::vector<unsigned char>(required_bytes);
     auto img_bytes_end = base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
-    auto img_bytes_len = img_bytes_end - img_bytes.begin();
+    size_t img_bytes_len = img_bytes_end - img_bytes.begin();
 
     auto img_loaded_ok = clip_image_load_from_bytes(img_bytes.data(), img_bytes_len, img);
     if (!img_loaded_ok) {
@@ -187,7 +187,7 @@ static bool get_image_from_prompt(const std::string& prompt, clip_image_u8 * img
     return true;
 }
 
-static std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
+inline std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
     size_t begin, end;
     find_image_tag_in_prompt(prompt, begin, end);
     if (begin == std::string::npos || end == std::string::npos) {

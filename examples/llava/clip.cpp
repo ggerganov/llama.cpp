@@ -690,7 +690,7 @@ static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_
     memcpy(img->data, data, img->size);
 }
 
-bool clip_image_load_from_bytes(const unsigned char * bytes, int bytes_length, clip_image_u8 * img) {
+bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img) {
     int nx, ny, nc;
     auto data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
     if (!data) {
