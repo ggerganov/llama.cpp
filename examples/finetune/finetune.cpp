@@ -332,8 +332,8 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
 
         assert_shape_1d(layer.attention_norm, hparams.n_embd);
         assert_shape_2d(layer.wq,             hparams.n_embd, hparams.n_embd);
-        assert_shape_2d(layer.wk,             hparams.n_embd, hparams.n_embd);
-        assert_shape_2d(layer.wv,             hparams.n_embd, hparams.n_embd);
+        assert_shape_2d(layer.wk,             hparams.n_embd, hparams.n_embd_gqa());
+        assert_shape_2d(layer.wv,             hparams.n_embd, hparams.n_embd_gqa());
         assert_shape_2d(layer.wo,             hparams.n_embd, hparams.n_embd);
         assert_shape_1d(layer.ffn_norm,       hparams.n_embd);
         assert_shape_2d(layer.w1,             hparams.n_embd, hparams.n_ff);
@@ -529,13 +529,14 @@ static void init_lora(const struct my_llama_model * model, struct my_llama_lora 
     set_param_lora(lora);
 
     // measure data size
-    struct ggml_allocr * alloc = NULL;
-    alloc = ggml_allocr_new_measure(tensor_alignment);
-    alloc_lora(alloc, lora);
+    size_t size = 0;
+    for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+        size += GGML_PAD(ggml_nbytes(t), tensor_alignment);
+    }
 
     // allocate data
-    lora->data.resize(ggml_allocr_max_size(alloc) + tensor_alignment);
-    ggml_allocr_free(alloc);
+    struct ggml_allocr * alloc = NULL;
+    lora->data.resize(size + tensor_alignment);
     alloc = ggml_allocr_new(lora->data.data(), lora->data.size(), tensor_alignment);
     alloc_lora(alloc, lora);
     ggml_allocr_free(alloc);
@@ -626,7 +627,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, N);
-    {
+    ggml_allocr_alloc(alloc, KQ_pos);
+    if (!ggml_allocr_is_measure(alloc)) {
         int * data = (int *) KQ_pos->data;
         for (int i = 0; i < N; ++i) {
             data[i] = n_past + i;
@@ -786,6 +788,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
     ggml_allocr_alloc(alloc, t36->grad);
+    // KQ_pos
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
 
     // make sure base model tensors data cannot be used in viewable operations
     ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
@@ -1711,11 +1715,9 @@ int main(int argc, char ** argv) {
     struct ggml_tensor * target_probs  = ggml_new_tensor_3d(ctx_input, GGML_TYPE_F32, n_vocab,  n_tokens, n_batch);
 
     // measure required memory for input tensors
-    alloc = ggml_allocr_new_measure(tensor_alignment);
-    ggml_allocr_alloc(alloc, tokens_input);
-    ggml_allocr_alloc(alloc, target_probs);
-    size_t max_input_size = ggml_allocr_max_size(alloc) + tensor_alignment;
-    ggml_allocr_free(alloc);
+    size_t max_input_size = GGML_PAD(ggml_nbytes(tokens_input), tensor_alignment) +
+                            GGML_PAD(ggml_nbytes(target_probs), tensor_alignment) +
+                            tensor_alignment;
     printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
     // allocate input tensors
