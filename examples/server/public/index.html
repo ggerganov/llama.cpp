@@ -406,6 +406,10 @@
         } else {
           currentMessages.push(data);
           slot_id = data.slot_id;
+          if(selected_image && !data.multimodal) {
+            alert("The server was no compiled for multimodal or the model projector can't be loaded.");
+            return;
+          }
           transcriptUpdate([...history, [char, currentMessages]])
         }
 
@@ -524,7 +528,7 @@
           </div>
           <div class="right">
             <button type="submit" disabled=${generating.value}>Send</button>
-            <button onclick=${uploadImage} style="margin-left: 10px;margin-right: 10px;">Upload Image</button>
+            <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>

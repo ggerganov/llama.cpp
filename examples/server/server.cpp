@@ -1669,7 +1669,12 @@ static json format_partial_response(
     json res = json{
         {"content", content },
         {"stop", false},
-        { "slot_id", slot->id }
+        { "slot_id", slot->id },
+#ifdef SERVER_MULTIMODAL_SUPPORT
+        {"multimodal", llama.multimodal }
+#else
+        {"multimodal", false }
+#endif
     };
 
     if (slot->sparams.n_probs > 0)
