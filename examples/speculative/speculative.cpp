@@ -138,7 +138,7 @@ int main(int argc, char ** argv) {
 
             const auto & tokens = drafts[i].tokens;
 
-            LOG("draft %d: %s\n", i, LOG_TOKENS_TOSTR_PRETTY(ctx_dft, tokens));
+            LOG("draft %d: %s\n", i, LOG_TOKENS_TOSTR_PRETTY(ctx_dft, tokens).c_str());
         }
 
         int i_dft  = 0;

@@ -50,6 +50,7 @@ struct llama_sampling_context {
     // internal
     grammar_parser::parse_state parsed_grammar;
 
+    // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
 };
