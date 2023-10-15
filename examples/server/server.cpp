@@ -78,7 +78,7 @@ std::vector<uint8_t> base64_decode(std::string const& encoded_string) {
   int i = 0;
   int j = 0;
   int in_ = 0;
-  unsigned char char_array_4[4], char_array_3[3];
+  uint8_t char_array_4[4], char_array_3[3];
   std::vector<uint8_t> ret;
   while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
     char_array_4[i++] = encoded_string[in_]; in_++;
@@ -884,7 +884,7 @@ struct llama_server_context
 
             // append prefix of next image
             batch.n_tokens = 0;
-            const auto json_prompt = (image_idx >= slot.images.size()) ? 
+            const auto json_prompt = (image_idx >= slot.images.size()) ?
                 slot.params.input_suffix : // no more images, then process suffix prompt
                 (json)(slot.images[image_idx].prefix_prompt);
             std::vector<llama_token> append_tokens = tokenize(json_prompt, true); // has next image
@@ -1818,7 +1818,7 @@ static void parse_options_completion(const json &body, llama_client_slot* slot, 
             slot->images.push_back(img_sl);
         }
         // process prompt
-        // example: system prompt <img-102> user <img-103> describe <img-134> -> [{id: 102, prefix: 'system prompt '}, {id: 103, prefix: ' user '}, {id: 134, prefix: ' describe '}]}
+        // example: system prompt [img-102] user [img-103] describe [img-134] -> [{id: 102, prefix: 'system prompt '}, {id: 103, prefix: ' user '}, {id: 134, prefix: ' describe '}]}
         if(slot->images.size() > 0 && !slot->prompt.is_array()) {
             std::string prompt = slot->prompt.get<std::string>();
             size_t pos = 0, begin_prefix = 0;
