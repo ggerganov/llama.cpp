@@ -913,12 +913,12 @@ class OutputFile:
             scores.append(score)
             toktypes.append(toktype)
 
-        if isinstance(vocab, SentencePieceVocab):
+        if isinstance(vocab, SentencePieceVocab) or isinstance(vocab, HFVocab):
             self.gguf.add_tokenizer_model("llama")
         elif isinstance(vocab, BpeVocab):
             self.gguf.add_tokenizer_model("gpt2")
         else:
-            raise ValueError(f'Unknown vocab type: Not BpeVocab or SentencePieceVocab')
+            raise ValueError(f'Unknown vocab type: Not BpeVocab or SentencePieceVocab or HFVocab')
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
