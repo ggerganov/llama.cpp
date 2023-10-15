@@ -1102,25 +1102,51 @@ def load_some_model(path: Path) -> ModelPlus:
     return model_plus
 
 
+def vocab_check_and_append_path(path: Path, vocab_file: str) -> bool:
+    path2 = path / vocab_file
+    # Use `.parent` instead of /.. to handle the symlink case better.
+    path3 = path.parent / vocab_file
+    
+    if path2.exists():
+        path = path2
+    elif path3.exists():
+        path = path3
+    else:
+        path = None
+        
+    return path
+    
+    
+
 def load_vocab(path: Path, vocabtype: str | None) -> Vocab:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
-    if path.is_dir() and vocabtype != 'hf':
+    if path.is_dir():
+        find_candidates = []
+        
         vocab_file = "tokenizer.model"
-        if vocabtype == 'bpe':
+        if vocabtype == "bpe":
             vocab_file = "vocab.json"
-        path2 = path / vocab_file
-        # Use `.parent` instead of /.. to handle the symlink case better.
-        path3 = path.parent / vocab_file
-        if path2.exists():
-            path = path2
-        elif path3.exists():
-            path = path3
+
+        path_candidate = vocab_check_and_append_path(path, vocab_file)
+        find_candidates.append(vocab_file)
+        
+        if path_candidate is None:
+            vocab_file = "tokenizer.json"
+            hf_path = vocab_check_and_append_path(path, vocab_file)
+            find_candidates.append(vocab_file)
+            
+            if vocabtype == "spm" and hf_path is not None:
+                # A case where there is no tokenizer.model but there is a tokenizer.json and it needs to be loaded into HFVocab.
+                vocabtype = "hf"
+            else:
+                raise FileNotFoundError(
+                    f"Could not find {find_candidates} in {path} or its parent; "
+                    "if it's in another directory, pass the directory as --vocab-dir")
         else:
-            raise FileNotFoundError(
-                f"Could not find {vocab_file} in {path} or its parent; "
-                "if it's in another directory, pass the directory as --vocab-dir")
+            path = path_candidate
+            
 
     print(f"Loading vocab file '{path}', type '{vocabtype}'")
 
@@ -1209,7 +1235,7 @@ def main(args_in: list[str] | None = None) -> None:
         assert args.outfile, "need --outfile if using --vocab-only"
         # FIXME: Try to respect vocab_dir somehow?
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
-        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype in ('bpe', 'hf'))
+        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab))
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
@@ -1221,7 +1247,7 @@ def main(args_in: list[str] | None = None) -> None:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
         vocab = load_vocab(vocab_dir, args.vocabtype)
     # FIXME: Try to respect vocab_dir somehow?
-    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype in ('bpe', 'hf'))
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab))
 
     model   = model_plus.model
     model   = convert_model_names(model, params)
