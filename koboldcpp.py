@@ -679,7 +679,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers(content_type='application/json')
                 self.wfile.write(json.dumps({"value": count}).encode())
 
-            except ValueError as e:
+            except Exception as e:
                 utfprint("Count Tokens - Body Error: " + str(e))
                 self.send_response(400)
                 self.end_headers(content_type='application/json')
@@ -690,19 +690,22 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             multiuserkey = ""
             try:
                 tempbody = json.loads(body)
-                multiuserkey = tempbody.get('genkey', "")
-            except ValueError as e:
+                if isinstance(tempbody, dict):
+                    multiuserkey = tempbody.get('genkey', "")
+            except Exception as e:
                 multiuserkey = ""
                 pass
 
             if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
                 ag = handle.abort_generate()
-                time.sleep(0.3) #short delay before replying
+                time.sleep(0.1) #short delay before replying
                 self.send_response(200)
                 self.end_headers(content_type='application/json')
                 self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
                 print("\nGeneration Aborted")
             else:
+                self.send_response(200)
+                self.end_headers(content_type='application/json')
                 self.wfile.write(json.dumps({"success": "false"}).encode())
             return
 
@@ -711,8 +714,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             multiuserkey = ""
             try:
                 tempbody = json.loads(body)
-                multiuserkey = tempbody.get('genkey', "")
-            except ValueError as e:
+                if isinstance(tempbody, dict):
+                    multiuserkey = tempbody.get('genkey', "")
+            except Exception as e:
                 multiuserkey = ""
                 pass
 
@@ -765,7 +769,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 genparams = None
                 try:
                     genparams = json.loads(body)
-                except ValueError as e:
+                except Exception as e:
                     utfprint("Body Err: " + str(body))
                     return self.send_response(503)
 
@@ -1501,11 +1505,11 @@ def run_horde_worker(args, api_key, worker_name):
             session_jobs += 1
             curtime = datetime.now()
             elapsedtime=curtime-sessionstart
-            hrs = elapsedtime.seconds // 3600
+            hrs = int(elapsedtime.total_seconds()) // 3600
             mins = elapsedtime.seconds // 60 % 60
             secs = elapsedtime.seconds % 60
             elapsedtimestr = f"{hrs:03d}h:{mins:02d}m:{secs:02d}s"
-            earnrate = session_kudos_earned/(elapsedtime.seconds/3600)
+            earnrate = session_kudos_earned/(elapsedtime.total_seconds()/3600)
             print_with_time(f'Submitted {jobid} and earned {reward:.0f} kudos\n[Total:{session_kudos_earned:.0f} kudos, Time:{elapsedtimestr}, Jobs:{session_jobs}, EarnRate:{earnrate:.0f} kudos/hr]')
             rewardcounter += 1
             if rewardcounter > 50:
@@ -1554,15 +1558,16 @@ def run_horde_worker(args, api_key, worker_name):
             print_with_time(f"Embedded Horde Worker '{worker_name}' is started.")
             break
 
-    while exitcounter < 35:
+    while exitcounter < 40:
         currentjob_attempts = 0
         current_generation = None
 
-        if punishcounter >= 10:
+        if punishcounter >= 8:
             punishcounter = 0
-            print_with_time(f"Horde Worker Paused for 10 min - Too many errors. It will resume automatically.")
+            penaltymult = (1 + (exitcounter//10))
+            print_with_time(f"Horde Worker Paused for {penaltymult*10} min - Too many errors. It will resume automatically, but you should restart it.")
             print_with_time(f"Caution: Too many failed jobs may lead to entering maintenance mode.")
-            time.sleep(600)
+            time.sleep(600 * penaltymult)
 
         #first, make sure we are not generating
         if modelbusy.locked():
@@ -1583,8 +1588,8 @@ def run_horde_worker(args, api_key, worker_name):
         if not pop:
             exitcounter += 1
             punishcounter += 1
-            print_with_time(f"Failed to fetch job from {cluster}. Waiting 5 seconds...")
-            time.sleep(5)
+            print_with_time(f"Failed to fetch job from {cluster}. Waiting 10 seconds...")
+            time.sleep(10)
             continue
         if not pop["id"]:
             slp = (1 if sleepy_counter<10 else (2 if sleepy_counter<25 else 3))

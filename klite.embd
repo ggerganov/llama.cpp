@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 80
+Current version: 81
 -Concedo
 -->
 
@@ -47,6 +47,10 @@ Current version: 80
 			--img_paper:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAAB5QTFRF+OmvAAAA89Ze14Rw2cCY1k8/8eGhmEQ/+uqj87Jse3RL9AAAAAp0Uk5T/wD49//9of8rH/vnQeUAAAEOSURBVHicXdG9asMwFAXggx1COmoJ8VgNptkKcmqyGaKSB0i127RkLiTgNV2CVxMo9G177rVSm2ow0se5Vz/Gbdub6YBz2//w0sV59s0wbs5X806X1j4JFN4Bx45La9eE7OM1PANIBHKCuW7CAYgkkIWgEaWeYN5DjHA0AthIZF8ILAgrpBJJ21N1hyGCXXvGA2EJibxJQaVwgUQKlNIkj5AePNKyrWAJtYS952dH6AlpJaQViW3AXc/shlnZFoRHAhd6hpkjrLGEl7lShFKuphXgA0B23WtF+UmwCjy1VijUw70H4iPeH0KaIMl/DKZjIf/lWo/QCJjVSAMYUoSvCH80gjHdEZibCQjJJuYXZ+xAP6Rjil4AAAAASUVORK5CYII=");
 			--img_chat:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAADxQTFRFkcPmAAAAkcPmstXukL/ltNbueJGic4aTibLQkcPmvtzwpM7qmazZkcPm5vL5ps/ruNnw0uf1udD/////pH/0JgAAABR0Uk5T/wBl/xH0////Qrz8Bltj6diDAgFfSBG4AAAAzklEQVR4nL3TQQ6EIAwF0BYLSBFl9P53HUFhVKru5i/QpC+2CRWQOOpLIo9YAqQ9tJmqAJbqAFyBFuugK+hk0P0b9Mb05/MCjLUGwOZzexeBuQe9senjdmth2xbykEoFR89gJfQClHsD4eGyMlDAMmCkHYziPvixAhzjvlO+K9FxXShXAOKcB/VMJTPWegaYgP/gLwOVegVTqishO9i2+Bbw/h+Eth7g0LkOdog7AWoBnQDS5RvpuvGcZcjZ4JIWBuXkbvgAkMILWOdx6fEFbukIF0RE9j4AAAAASUVORK5CYII=");
 			--img_compass:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAA7AAAAOwBeShxvQAAADxQTFRF/7VV/+J5AAAA8/P11Ob1l8jt/39K+chs/9tn/8Bd/+J48eTO/9x0/9Zv99ugiHp0/5MKWVFO/6k53KWUcJJTdwAAABR0Uk5T/v8A//////8Zydn/klf///v/bf9A3eYXAAABMUlEQVR4nG2T2RaDIAwFUwEBWdz+/18LuSypNS8enTGQQGgZ4VKMW4kYHb9fnnxaaOC4fUZsxbmoxHFRx5/f2BJRkY4Dgts+f2F9AU0Q3Aol9Qyd56DUvisVMlw6Dt5D5wVDKArzusdaBfaXlZqCUrlyiksRnORKt6dioRRCSND5CK1Z8Au5vn5Y1yy4zkhBaSRYS9yh85YiURwF3CtHbhwpPHGN/FuAsN7gOjwF1bhpAtYg7tnO5Wdww8Z+nn+CapyFswtiibJN5sbIJaQQGjdyk7PMWr8RRisziU7zj0OwaBRaPTkU0ep5WPo3+mGN437wedxIYS2+n7vkvl4YvnLl3Qb0Z1TICRZcWvg2Q8B1A8dkJXqNtHTh3cCE9tHzT+zB5/Am/4aFUAe4OT66+fULsfQP1birKzkAAAAASUVORK5CYII=");
+			--img_save:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAADxQTFRFQlFtSVp52uHyws7lztbmjpmuUdjlu8TZeIminqi9WvH/rrjNVMbYxuT0Xm2HAAAAR1h3RVVyR1ZyR1h2eZplWQAAABR0Uk5T////////////////////ANT0HUjqAr+PAAAAgUlEQVR4nI3Q2RaDIAxF0RuCDNUWKP//ryXFWkUczmP2ghVAjkTklOQAvLT28R1CgMwbQCoC6oBIH4ocAOIR4BYoZtZboOHbKHlaQw3rTsFNNVObFjCP2gzmGvhZ47k/qOUdW7An4IdfDbAt+dLYgJbkR+zdq/YnYn+rhBxT2kPKH1FvCKEBnt/sAAAAAElFTkSuQmCC");
+			--img_load:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAADxQTFRF8MQZKbmZ8p0fAAAA8bIc8MIa8MQZq7NIKrmY7cQa0sIs8d2BebRn87wcLL+aJrmZ//8AdbhpAP//c69phZ/jMwAAABR0Uk5T//3/AP+y8v6kbP///xcZUAGrAUn40tQBAAAAp0lEQVR4nHWSiw6DIAwAy1peojLd///rKm3ZZOOiCXLpBRIhB2CCf+JeXUr1RAECATGQ+WN3TFUBKsJmJu0ijOCZo5m7EJzVRrE2c3ZBhoiXCXoYsYm4qejbUSbWo94HXCfZALXF0kVWQVAKP6Xo/hK0RHZcmVnAa+lzketYESBb6dvwPmxDqdX49TiWlIw/JeG6+ViCVsJZCWclnJVwVkLwfwau/+INBncEwpxiohQAAAAASUVORK5CYII=");
+			--img_delete:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAAnQAAAJ0Bj3LnbgAAADxQTFRF////AAAA////////////////////////////////////////////////////////////////////////npt1BAAAABR0Uk5T/wB3M/ryVkUE3GQ8bhvOlb+s6oPyVnGNAAAAt0lEQVR4nHWR2RaDIBBDGXZlVf//X8sMsQtt88BxuJpIUDTVrBLZhg1F0WutL/XUNUYfB/Dqh/Z/wA9AbLVIrIjMlySc6FyNHMC2gg2grqAC9BV0gIOHs4+z2y55B0DjvELJuUDFLYDzUsCfNAApKs/ustQFkFHP0C6PGkAmxz4j536HgdQYplWwUuEEAeF7xmkDgOGbSxyVo+EvEkCZzT0XZT7AmwpAXEEEWOutdANT7WvbVo6gB7iKBNvL+guBAAAAAElFTkSuQmCC");
+			--img_download:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAMAAADXqc3KAAAAAXNSR0IB2cksfwAAAAlwSFlzAAAOxAAADsQBlSsOGwAAADxQTFRFAAAA////////////+f783ffv/v//3ffv3ffv5Pnz8fz56vr16/r23ffv9v377/v4////3vfw5Pny3ffvbBfD6AAAABR0Uk5TAP+TRfsGWm8m6uDv0U/LfyiIepVDO0gQAAAAbElEQVR4nNWPuQ6AIBAFF+S+j///V0FjWJTEwsqpyEzxFoBXKGnQvwcuQw9B8kkLIRzrgbn2ROGQFwwFbYe3GgUfR4gejyRqzg1D0+2q2gszdb6ql9x2bH54AFW0Lmrxc1BSPvw2gQKZ+BQW7MaRAtfJQ2l0AAAAAElFTkSuQmCC");
 		}
 
 		body {
@@ -728,18 +732,33 @@ Current version: 80
 			margin-left: auto;
 		}
 
-		.formatcolumn {
-			width: 25%;
-			padding-left: 10px;
-			padding-right: 10px;
-			display: inline-block;
+
+
+		.btnicon-save
+		{
+			width: 16px;
+			height: 16px;
+			content:var(--img_save);
+		}
+		.btnicon-load
+		{
+			width: 16px;
+			height: 16px;
+			content:var(--img_load);
+		}
+		.btnicon-delete
+		{
+			width: 16px;
+			height: 16px;
+			content:var(--img_delete);
+		}
+		.btnicon-download
+		{
+			width: 16px;
+			height: 16px;
+			content:var(--img_download);
 		}
 
-		.formatcolumn>div:first-child {
-			margin-bottom: 5px;
-		}
-
-		.formatrow:only-child {}
 
 		.formatlabel {
 			color: #ffffff;
@@ -1793,14 +1812,15 @@ Current version: 80
 		const favivon_normal = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAEtQTFRFAAAA+XJ0l09PsVdXcTw842hqw2hmTi4vMCQlb2eUgWtl+tGpBAMDEw4NPCkoFw8PJBgXt5WBVkxW4Nvf7Lia3Z+MpJnAZ05HnJOTYIS/NAAAABl0Uk5TAv////v//vT9//3/Nna08qf+///////a/hkcROQAAAGUSURBVHiclZLRcoQgDEULBAKoIKjI/39pL4i7nbUPbcYZwJyES5Kvr3/YvIx1nn9zL4G4EwuTXX7xs4QFGEklOT6SBENERguhsWHFD2AVRhL8IEgawY8b5L4fYtg+TSl8+NMEu4G2P34Q67r6I+37dLyBfU/4PY/sInG2MR8vIHG01h9mHfq1hUUQtwYcLEcp+ltmwqutdy5HMwAfc8ExKtVSLEZZW13Jxb4Azq7UHFnFrtGItLliS1UDYOfctm3JhEtlEH5zzpZNDsC63AB1VysY3gqC3C2ytsNW6Q3IjCt91Qr9QK8MiFL4nUEpEyNLYmodxYo3RquVHWUmbbRu0QCbKWwNfil5zYeENrRRqtZrGEQYqdtW8FWHLl4bgZDLFLZdbS/UzP2AEGTufkt3xWSvwzJeh4GxHWD5qlgXOZ/n2ULuC/od4Pk8x9xhCekD0Bqd/DmXgbpEumRgrMPn1K6ecs4pJc/V0nE+x35KtfTJTJufpvPTD2DyNZ3e4wP3zDCHevg+yYvf09PfkHuK7/Vv9g2CjBTdqv3bFgAAAABJRU5ErkJggg==";
 		const compressed_scenario_db = ["XQAAAQCkKgAAAAAAAAA9iIqG1FTp3Td41VnWyuXTp3Lb95KmIEizGvJcmkqrV2FY5cKEeSxCwbqBRjHVjL7PUH9wCoW89dPxjDNZvgp6okMOelpy7_1P6GV-mfJV4jz42_DXqYfET4aYlAT13M95gkcA14f0NLvI_p6B9CyG8EbkhRxsk3uyf_KgTV5kwqzAcr5C4JQ_pJr77GnYCHQI8h6F765-lcqrvw1Xu1GHhcN3lj7s9PhMvLnmGPZbQMrTo5sqPJDzYO6lytxmNSHSXMICpN2kFJB6kqyL5lBxNAH3Au_F_JIC85GqwLXWEy8wZms5KmAdp1s3EA1yabPGqqF0G5RxBp3aXzm7h6QUJPy1qSr6JJAo4fi2gCPaLkdn2pKqNDR1Ww8FA6AVHOyMgCTmmrQxWVYgXY9TdhHKcRcrIsoHNXEeWSqMGJNQ8lzVfc26teZdBdPLhqcClG8wUThPtyobTMz8Fgom88nTv7VT-mZhwH9Nc4ghoCL8dMR0Skf-EYDZ0Uvz03_GTn5OB8yuX6FmsD1XQJv_CKBAUHeDKd7n_bC7WOnlAINHPX9Bh5TnwjeLYO-UAL2ClMJTFzR-k2cjVHGQnLB7hZ48L1nToRG1gSVN7dP3Zysw7riwIxnfG4MMNXtEbHyxrCvz2zRTUEqbHLrwIzdJRpJ5s5XfTlY1CPZkQCwxbA6rrUt27D6a-YDKavbg0hubpViPRYbnEDXr9gL-7in4f_K2cOZdQ26Q--hk0xzEtgBNFI6inHA2nA4LofUpWjl835qg6CUyz9EzQkw0cDgPVjYXehC9oC_3H0U2O9YC-Ah8VpdPdCHUFuaQr7oXgePUub_Be1XQyCA5TaqrJxVxUG2hZA4rOVJHZ_AahfiJN7z6QcVEp-8xf-wHcv1lpWjjNdXFWDqVQZkdOaKf63dtjP35SmC5eCw2_BNX_t-db_FCCAhm2Vn2WI3q4k00p4l_ocCrJIdRID6muBVZQXCzxcRf5m8kcGwrTB-XVS-XSSPZInaBxZjgimOl5bLwJvdMC-HNYtU-yUDjXvDjPraZ_7ZV_-knU1GbHf1BpI9-rNbl_3bbA7KbmL7Q_goV1Clvi6gLYgjbXGQMTFjQEoodZX3fK_bDhVsrA1fWMJMWwfY3ua-j8HNuyRDfhPBpbTK0Gvz5-GWbIRF3v4zwR9HzIjz2frY7luy3ApQ6QJw7K6ITvD80u5VLfpHYReVCLpgs-lvPStklgnGXj3j5vuaH9f-wFohB19vwzRnthvgdplXPQ9jMy3ieb80sELS0WiGD-E2L_HhNXUcpTdeBp3HQFK4QubJOiIeKuZDVR7PxvtwBj26m-pLXLzKc6WqQlt07TsRo_72SlAaZodyyFRXf8636HCAyEHcVEhR6uZ1lDu00BHvsyVe6BdG7zvjNdmLluA0qBJQ9FO3ipHezadlwCPnEBDQAAZRgHKUvRCJNOQH_jcqFLLtmDADXoLvcK8_lN0LEeisA4B1LH0X2x0Q6NqLgngh9M1y_cBEBaazMa_UIZwoL6eZGU0QhlpvysBi1wKDybNcF_uKrIxdQwn8L_QRFHtDn39-hw-GDs_6zbnRlwrBEwrMtAQfc62FLSzGUMAzww-aTGvUuQvP-D9m0r-eDbSATlSsrIYobVUDUdDWsMDUsjKfYOW_Rp0GMjk40BQxcdzjNjLCYaTEN5cMhsWyfTbhIHDP7-wfbvJG7Al7Z-nH2Pa-QXPte687xVanKT0d3Er07vOV9HoI09mtuhxE4g0VaLm4TMqxSMRBX3EB60W1U2sX9sHjAgmwfpUNXRNj03QeJe4cg0pndf-hhKkTsfNQMU_N6-Zt8IrM2xtzFfvKB4BpFyWmaYu_X7bGwgSZjzrBNE10fx001fMr2fmrVy_sj7mW7WhlWXa3N5eMe4pqkA4EawmGzhuIwAqZNmtvnL_N2nt4T4ZyqkAAyXMMKb60UJAXkqLjUisD1bnNt1qD9otg8mGNzQxlaY5Bfm7286vNmjyxGY4UVrn0RV0DSFFb5_NYEW5y5YYxiabWABr8k0ezTM8R_qQ7NxdUOj0qhBKOqGyzyuVgKNnB6-ZzpKVGbB7RYJXwfEtkKNuUc3UWmbwxcsCTuW4TOScqJUh4dA5vlgLjB3-Q79yEMRYB8n6jetkR4z25RkYRXvTxkHIVQd2qr8BchdUcmHsZvG_tXI0-bxx_f_TGyfgi8ol7L5SRfWfOtYHCXSVHOCwnDj7GN4rIrwt3qWRcPkdTMw1RguDZW0eTpCpZyCJH_z3xVfpVh5lgf7Nu4tH-CpFRrOaJc79K1lSuIZs8yvjh5dbYAH4rKQ28OOFRu2MmU7Ko8Of4CECcJMhohFtVW6nTCB48-Pl8owiGM5_2uBJOJRAsyu3fHHbKqKvZ-0kYmN9ypyTAxQjgDiCOE3J1txPiqRRRRSaFZgLPNacdyjGO2y2SpWwzYudx8tEq3tBDAPBCXwWqwefcG__iN5OMRgCIAvr-9qfl2iSaVR5LZ-kBluVoW27o0hIUtgdry03bmUN50ob4hwCz8xVoupcHjI3Cy0nLpgiGixjo4afafQPE_TXJf-NixlWN-cH2a4ZzU6Qc5KKzIciwnt6Hx-iRQzB_uK-pBDjC8boVXolOsFyaqWsoLgkghTo2qCFZuxP2GKzS9wQ5sBWxTMEPGryHxaylpXXmUjlBJ-j9p4vJN9YxjQEbyuTVYy0PxmtDbyh6g_n3Lr09ttCg40hqfWBhCT9P4-uFoAjozUciHQFBfI8t04dKZnobLbVq-f_HJGzUZu5zHRHsPI939tJxODDJxiflfHLwxXjQS2cq9Vj-kvn1pgXAN5unYh8Y7-nqepxc0KkO2v8mU-r8fYFmUFJdZu6HR23P2y7ndsozZEKdUAVay36pmW_gvVQuSA_jzLwXn3Ee2y-A7G-w96bTe82gJG95PsSOt2L6AcuF8mqWL_EVBjIZJMN63T__0UHh9VPDCRTUITwn35t7Z0aGYHnssPVAxXLh7y2LhCaIN0u6lnbiDlKAdKc1-4qYbr1sHORC8tjSG8cjWLkgBcNkFo7rqhKQSNtU1H44aT8ceG08a8cSpze8aC6dMVaz6DxEaFIZ-aRqfqO0QV6ty2-6hrcRVedypt1Twd7UEkXZM5Erjb-_8jq4RzshqXVzKEqPfIYpmtHqkmeJq8BLfc1GT9UGrmPpYO4-K8LM-u7aOpcxcagPn2S3McsWI3a8CWkU9t4g9WEPNH-5s8VqF-3rSmgi5kk40Y7HjEyA-6clhNhl9lbP6hIbf9TKHO9fWwzTz8NieUPNZZPgrBrULggzHXPrfJIxl8eLSrKuD8n2Pbumu2k4ljMV_WIq9qCJ1wPofdIoWHWiz7oV2snLve1CFPUCdAhLkHQ8KpO6xvSi6mKY9WsOhOLxKm92vsWLv-rfM2CW4XUja5arRpGynr7cF9CDuEGWIxkPjOF_5x8ZXg2x1TJcrgvLDO_S4u2zKl2tQGRW4NHU1zF9h_3SQkpbwWH5KOPisP6c8vb5rg_rZ5laFedxQQSpguSq5el9-ddzvlr4C8Q22eDQvwUEO_P6c6VZN5A2QWBGZsJoaZ4gZ8UArmGLxSihBj_5oOdDdUcbUOhGUIWrtYrs4PJKxpnHDFUZaYwIbtnLyAoORKYvq8LgAH0SP57KeeYkZzUGP1f0jkDzAmwV4ZHE0pnZhEo3XkXVuIHc6MXZ-RniZaS_vaoY3Bq6XHrKoWZdLiCoU6aqPc-ZpPnvXmnKHyLLs4e96M1wGKIyT28_VCR6EDRJPxbZ9Ig1kN8TIHCF3tE8y2It5hkz1-zNYT6uw3SDkFSdrV_DRiAVqUhxrQdUPhpD92zVgsWdJR0TZLU7CBLlOuBVwyfmtHMUBL6dIvYie47Kr47nOJ5i2ka8EZGZf-Y8aD6xv6hpBbybU_5oGfYLRG4MiNRhML4u90tQ3hBxBbGYK8sWOzui2UEx0ynB_a8jz8eEs7u_9ylTD1v1f-gC8JYQMNAZIm46pvl2s1X07B8Gf7Laj4aozcWqg8DgC_8aLypoTffyxjWw4Fpd8LWn1fRPsFOdeV0UrS7FNtUakvYq_qxphGu5mNuINIJIMJzgI3giGnyCbr2IrsJ1ITmEGnggLQYes1t3j44v1quvVwQXqHX6HhSnoJlN2IlT5DuZ2kx6-pb68nK62xVJaOS-wDeeJnQ8zzhqJACstuF7g-jidRoJmGc8yChHfCN8ZFOhT0poNQB-Jf5IUZ7aSCXmceYN4VUhmB_w-Db1XZUNHOJqGiTgcT1KzejzNpN49b0QUjcRJiOpEhJp_LzBUiRQSnweOSFrWlTs5Jf9p3wqN9zFYZ_3Xz6IR2klwyLQXc-LbBd1QFwkB17HTYMspUXjrSpJULdQ90OxzbSEafF4RKvgIL4sAU1pCMTa2bVrcUmY2MiECVIbwPNN0CjZeoEAd1dP5FFjlwGG7xUNRO1E20CqHZJ1oqeEur06ZXvPK1zy3SlF-_lKF6eRfNClzR2ERGYqf-zEQwwkPNiMNnURPcdt64pw4kcjTKBIkorum3ruuqJZMitcZx0YiANx7ssy8dMuVteEFFCQnmglgTCsEZTK_xzigPie_f8Q5p1vsJPje5Z2cugsaW-vOXbuOE471n6LuIyoII2dWq0m8H3_8pxlErkZ5E7OY--w3InCuSCv2ubxaZ9AbaNuuyGw49fI3zvRurTYespYO-Aj1FcjDrxqRB3bihJm_u3a56fwnoyOeE0071TY_AlVlq1RYauV4-7L-RAFJZo0wKnPZM9Hs7VB_cCwJ_oPe1y0XBF95agtAQdicj42KdstIlpjWtdGb4LpHgVQI_56G3As0H81-uj47VuBourA2hUay0BpHAvcwbNLyu8OcZB31I6dfy2797wGlrWwAN-Xt3M3CVW9SvIN_GMlg0RB75rUEtgPkR-VPRdPH_Jb19wVoFPPpwjP6cYzVW1U_iRymFKaNpMo4CWFN6t54wshlCVwkfZKbhSP14z74oMKxy-qqt-WKNhkOr1uh_sevNa57iHBnFlHzt_eaZoPNTsCmzqnC4boOlK9o5_hFn8hiw33R3NQC-RD-w1XEl8-hpdZYdCcnexwRYd9sH2LMHySL59Kp_09yIwAE_ukVMDa6Yd9OHrbSCycQNZSI_0fMnF5s9oWTXnsxecDpRKgSWJQIQPUb6dlOdGOT0-MnebivpKgbDxzx52Zr0EMS7aU5eJxEdO9rdiFda8kQk5IeBgr1QcqIFs_1UIp6oQneXgwTlpXXxLHs16ShDG1qkLmDZjb4vrb_Ha2YCBIqid6wVKjec-UwEwWyvfV4UAPFgiNRJN7TdQNRxbSZJ8XWeA2gor9PN5JkMS0l_qGKoke3sbWDsp-G_B0KUjwUBTtPsKRhdnc0JyV_akuZ8jxAmXDDydxOy_EqNMgrDGN_4FuSY7XNLy2OXXJG3bB9a_lxEzdVNPWzM0cijTQFLzIiAKAyWTfwPNagcvgLUAeHxlQ22E0V37-sFwkstvpJ-s8C2yqxQKcv4GfMZOfSYEaZAhiO_y8EXgFknGGwjLB7K3CgvGwBRWWcgx-eqXYs9rAygf_X2_7-rBG_7Rxj3GW957PwwzwZjZDkdRHik8sj0htIkDRAyHo2EsPwObKXK-W32JKUX3VSgiY8AzCUhUUIWwFVVLXEvB1jtU7G7wRaj5_z9QywvgoIqnOTmpm4TTRA0cCJkiYoJcl8BOIHoWuYznL89zWjWy_ZQDKaYAsHugQYXaKI_UaaLV4gVFjDNqZCgqjAFyMjG4qZR64jkaI71mefUaDLLwsqIiLpOWZi8BlvP0YcOVeTyo2mJbq3EXfjXyDvPuZuZ9SAjqwCdLr902yzLm4DdzYRyfPbpt8rGUu-Uw27Ix2oZRe_zj0G_3FdCw0"];
 
-		const storymodels1 = ["erebus","nerys","nerybus","janeway","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","spicyboros","mlewd","mxlewd"];
-		const storymodels2 = ["opt","vicuna","manticore","alpaca","mistral"];
-		const adventuremodels1 = ["nerys","nerybus","skein","adventure","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","spicyboros","mlewd","mxlewd"];
-		const adventuremodels2 = ["erebus","janeway","opt","vicuna","manticore","alpaca","mistral"];
-		const chatmodels1 = ["pygmalion-6","pygmalion-v8","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","pygmalion-2","spicyboros","mlewd","mxlewd"];
-		const chatmodels2 = ["pygmalion","janeway","nerys","erebus","nerybus","opt","vicuna","manticore","alpaca","mistral"];
-		const instructmodels1 = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd"];
-		const instructmodels2 = ["erebus","nerys","nerybus","janeway","opt","llama","mistral"];
+		const storymodels1 = ["erebus","nerys","nerybus","janeway","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","spicyboros","mlewd","mxlewd","mistral"];
+		const storymodels2 = ["opt","vicuna","manticore","alpaca"];
+		const adventuremodels1 = ["nerys","nerybus","skein","adventure","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","spicyboros","mlewd","mxlewd","mistral"];
+		const adventuremodels2 = ["erebus","janeway","opt","vicuna","manticore","alpaca"];
+		const chatmodels1 = ["pygmalion-6","pygmalion-v8","pygmalion-2","hermes","airoboros","chrono","llama","wizard","mantis","myth","xwin","spicyboros","mlewd","mxlewd","mistral"];
+		const chatmodels2 = ["pygmalion","janeway","nerys","erebus","nerybus","opt","vicuna","manticore","alpaca"];
+		const instructmodels1 = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd","mistral"];
+		const instructmodels2 = ["erebus","nerys","nerybus","janeway","opt","llama"];
+		const defaultmodels = ["gpt4all","supercot","hermes","airoboros","chrono","wizard","mantis","vicuna","manticore","alpaca","myth","xwin","spicyboros","mlewd","mxlewd","llama","mistral"];
 
 		const instructstartplaceholder = "\n{{[INPUT]}}\n";
 		const instructendplaceholder = "\n{{[OUTPUT]}}\n";
@@ -2736,12 +2756,15 @@ Current version: 80
 	}
 
 	//instead of a single fetch, optionally break it up into multiple repeated requests which update a local variable
-	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response = "",tokens_per_tick = 4096)
+	function kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response = "",tokens_per_tick = 4096)
 	{
 		//called recursively
 		if(synchro_streaming_tokens_left<=0)
 		{
-			synchro_polled_response = synchro_streaming_response;
+			if(pending_response_id=="" || pending_response_id==trackedgenid) //drop unrelated requests
+			{
+				synchro_polled_response = synchro_streaming_response;
+			}
 			synchro_pending_stream = "";
 		}
 		else
@@ -2825,14 +2848,25 @@ Current version: 80
 						synchro_streaming_tokens_left = 0;
 					}
 
-					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,synchro_streaming_response,tokens_per_tick);
+					kobold_api_stream(sub_endpt,submit_payload,synchro_streaming_tokens_left,trackedgenid,synchro_streaming_response,tokens_per_tick);
 				}
 				else {
 					//error occurred, maybe captcha failed
 					console.error("error occurred in v1 generation");
 					clear_poll_flags();
 					render_gametext();
-					msgbox("Error occurred during text generation: " + formatError(data));
+
+					msgbox("Error occurred during text generation: " + formatError(data),"Error Encountered",false,false,
+					()=>{
+						if(is_using_kcpp_with_streaming() && data.detail && data.detail.type=="service_unavailable")
+						{
+							//offer to abort
+							msgboxYesNo("Attempt to abort existing request?","Send Abort Command?",()=>{
+								lastcheckgenkey = "";
+								abort_generation();
+							},null);
+						}
+					});
 				}
 			})
 			.catch((error) => {
@@ -2937,7 +2971,7 @@ Current version: 80
 
 	function convertMarkdownTableToHtml(t){let hsep = /^[\s]*\|(?:[\s]*[-:]+[-:|\s]*)+\|[\s]*$/gm;let l=/^[\s]*\|(.*)\|[\s]*$/gm,r=t.split(/\r?\n|\r/),e="<table class='tablelines'>";for(let o of r){let hs=o.match(hsep);if(hs){continue;}let d=o.match(l);if(d){let i=d[0].split("|").map(t=>t.trim());e+=`<tr class='tablelines'><td class='tablelines'>${i.join("</td><td class='tablelines'>")}</td></tr>`}}return e+"</table>"}
 	//casualwriter casual-markdown, under MIT license
-	function simpleMarkdown(e){var r=function(e){return e.replace(/</g,"<").replace(/\>/g,">")},l=function(e,r){return"<pre><code>"+(r=(r=(r=(r=(r=r.replace(/</g,"&lt;").replace(/\>/g,"&gt;")).replace(/\t/g,"   ").replace(/\^\^\^(.+?)\^\^\^/g,"<mark>$1</mark>")).replace(/^\/\/(.*)/gm,"<rem>//$1</rem>").replace(/\s\/\/(.*)/gm," <rem>//$1</rem>")).replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim,"$1<b>$2</b>$3")).replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim,"$1<b>$2</b>$3"))+"</code></pre>"},c=function(e){return(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=e.replace(/^##### (.*?)\s*#*$/gm,"<h5>$1</h5>").replace(/^#### (.*?)\s*#*$/gm,"<h4>$1</h4>").replace(/^### (.*?)\s*#*$/gm,"<h3>$1</h3>").replace(/^## (.*?)\s*#*$/gm,"<h2>$1</h2>").replace(/^# (.*?)\s*#*$/gm,"<h1>$1</h1>").replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')).replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm,"<hr/>")).replace(/``(.*?)``/gm,function(e,l){return"<code>"+r(l).replace(/`/g,"`")+"</code>"})).replace(/`(.*?)`/gm,"<code>$1</code>")).replace(/^\>\> (.*$)/gm,"<blockquote><blockquote>$1</blockquote></blockquote>")).replace(/^\> (.*$)/gm,"<blockquote>$1</blockquote>")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n<br>")).replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')).replace(/!\[(.*?)\]\((.*?)\)/gm,'<img alt="$1" src="$2" />')).replace(/\[(.*?)\]\((.*?) "new"\)/gm,'<a href="$2" target=_new>$1</a>')).replace(/\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<a href="$2" title="$3">$1</a>')).replace(/<http(.*?)\>/gm,'<a href="http$1">http$1</a>')).replace(/\[(.*?)\]\(\)/gm,'<a href="$1">$1</a>')).replace(/\[(.*?)\]\((.*?)\)/gm,'<a href="$2">$1</a>')).replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/^\d\d?[ .](.*)([\n]?)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>").replace(/\n\s*\n/g,"\n<p>\n")).replace(/^ {4,10}(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/^\t(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/<\/code\><\/pre\>\n<pre\><code\>/g,"\n")).replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm,"$1")},a=0,n=0,p="";for(e=(e=e.replace(/\r\n/g,"\n").replace(/\n~~~/g,"\n```")).replace(/```([^`]+)```/g,l);(a=e.indexOf("<code>"))>=0;)n=e.indexOf("</code>",a),p+=c(e.substr(0,a))+e.substr(a+6,n>0?n-a-6:mdtext.length),e=e.substr(n+7);return p+c(e)}
+	function simpleMarkdown(e){var r=function(e){return e.replace(/</g,"<").replace(/\>/g,">")},l=function(e,r){return"<pre><code>"+(r=(r=(r=(r=(r=r.replace(/</g,"&lt;").replace(/\>/g,"&gt;")).replace(/\t/g,"   ").replace(/\^\^\^(.+?)\^\^\^/g,"<mark>$1</mark>")).replace(/^\/\/(.*)/gm,"<rem>//$1</rem>").replace(/\s\/\/(.*)/gm," <rem>//$1</rem>")).replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim,"$1<b>$2</b>$3")).replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim,"$1<b>$2</b>$3"))+"</code></pre>"},c=function(e){return(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=e.replace(/^##### (.*?)\s*#*$/gm,"<h5>$1</h5>").replace(/^#### (.*?)\s*#*$/gm,"<h4>$1</h4>").replace(/^### (.*?)\s*#*$/gm,"<h3>$1</h3>").replace(/^## (.*?)\s*#*$/gm,"<h2>$1</h2>").replace(/^# (.*?)\s*#*$/gm,"<h1>$1</h1>").replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')).replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm,"<hr/>")).replace(/``(.*?)``/gm,function(e,l){return"<code>"+r(l).replace(/`/g,"`")+"</code>"})).replace(/`(.*?)`/gm,"<code>$1</code>")).replace(/^\>\> (.*$)/gm,"<blockquote><blockquote>$1</blockquote></blockquote>")).replace(/^\> (.*$)/gm,"<blockquote>$1</blockquote>")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n<br>")).replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')).replace(/!\[(.*?)\]\((.*?)\)/gm,'<img alt="$1" src="$2" />')).replace(/\[(.*?)\]\((.*?) "new"\)/gm,'<a href="$2" target=_new>$1</a>')).replace(/\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<a href="$2" title="$3">$1</a>')).replace(/<http(.*?)\>/gm,'<a href="http$1">http$1</a>')).replace(/\[(.*?)\]\(\)/gm,'<a href="$1">$1</a>')).replace(/\[(.*?)\]\((.*?)\)/gm,'<a href="$2">$1</a>')).replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/\%SpcEtg\%(\d\d?)?[ .](.*)([\n]?)/gm,"\%SpcEtg\%\n$1. $2\n").replace(/^\d\d?[ .](.*)([\n]?)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>").replace(/\n\s*\n/g,"\n<p>\n")).replace(/^ {4,10}(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/^\t(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/<\/code\><\/pre\>\n<pre\><code\>/g,"\n")).replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm,"$1")},a=0,n=0,p="";for(e=(e=e.replace(/\r\n/g,"\n").replace(/\n~~~/g,"\n```")).replace(/```([^`]+)```/g,l);(a=e.indexOf("<code>"))>=0;)n=e.indexOf("</code>",a),p+=c(e.substr(0,a))+e.substr(a+6,n>0?n-a-6:mdtext.length),e=e.substr(n+7);return p+c(e)}
 
 	//LMZA-JS, under MIT license
 	var lz_c=function(){"use strict";function r(e,r){postMessage({action:Ur,cbn:r,result:e})}function t(e){var r=[];return r[e-1]=void 0,r}function n(e,r){return i(e[0]+r[0],e[1]+r[1])}function s(e,r){return f(~~Math.max(Math.min(e[1]/$r,2147483647),-2147483648)&~~Math.max(Math.min(r[1]/$r,2147483647),-2147483648),c(e)&c(r))}function o(e,r){var t,n;return e[0]==r[0]&&e[1]==r[1]?0:(t=0>e[1],n=0>r[1],t&&!n?-1:!t&&n?1:h(e,r)[1]<0?-1:1)}function i(e,r){var t,n;for(r%=0x10000000000000000,e%=0x10000000000000000,t=r%$r,n=Math.floor(e/$r)*$r,r=r-t+n,e=e-n+t;0>e;)e+=$r,r-=$r;for(;e>4294967295;)e-=$r,r+=$r;for(r%=0x10000000000000000;r>0x7fffffff00000000;)r-=0x10000000000000000;for(;-0x8000000000000000>r;)r+=0x10000000000000000;return[e,r]}function _(e,r){return e[0]==r[0]&&e[1]==r[1]}function a(e){return e>=0?[e,0]:[e+$r,-$r]}function c(e){return e[0]>=2147483648?~~Math.max(Math.min(e[0]-$r,2147483647),-2147483648):~~Math.max(Math.min(e[0],2147483647),-2147483648)}function f(e,r){var t,n;return t=e*$r,n=r,0>r&&(n+=$r),[n,t]}function u(e){return 30>=e?1<<e:u(30)*u(e-30)}function m(e,r){var t,n,s,o;if(r&=63,_(e,rt))return r?tt:e;if(0>e[1])throw Error("Neg");return o=u(r),n=e[1]*o%0x10000000000000000,s=e[0]*o,t=s-s%$r,n+=t,s-=t,n>=0x8000000000000000&&(n-=0x10000000000000000),[s,n]}function p(e,r){var t;return r&=63,t=u(r),i(Math.floor(e[0]/t),e[1]/t)}function d(e,r){var t;return r&=63,t=p(e,r),0>e[1]&&(t=n(t,m([2,0],63-r))),t}function h(e,r){return i(e[0]-r[0],e[1]-r[1])}function P(e,r){return e.dc=r,e.hc=0,e.Db=r.length,e}function l(e,r,t,n){return e.hc>=e.Db?-1:(n=Math.min(n,e.Db-e.hc),b(e.dc,e.hc,r,t,n),e.hc+=n,n)}function v(e){return e.dc=t(32),e.Db=0,e}function B(e){var r=e.dc;return r.length=e.Db,r}function k(e,r){e.dc[e.Db++]=r<<24>>24}function S(e,r,t,n){b(r,t,e.dc,e.Db,n),e.Db+=n}function M(e,r,t,n,s){var o;for(o=r;t>o;++o)n[s++]=e.charCodeAt(o)}function b(e,r,t,n,s){for(var o=0;s>o;++o)t[n+o]=e[r+o]}function E(e,r){fr(r,1<<e.s),r.j=e.f,ur(r,e.m),r.U=0,r.V=3,r.N=2,r.u=3}function g(r,t,n,s,i){var _,a;if(o(s,et)<0)throw Error("invalid length "+s);for(r.gc=s,_=U({}),E(i,_),_.Xb=void 0===lz_c.disableEndMark,mr(_,n),a=0;64>a;a+=8)k(n,255&c(p(s,a)));r.Ub=(_.L=0,_.Kb=t,_.Gb=0,Q(_),_.c.cc=n,or(_),$(_),X(_),_.P.fb=_.j+1-2,br(_.P,1<<_.N),_.f.fb=_.j+1-2,br(_.f,1<<_.N),void(_.x=tt),Z({},_))}function y(e,r,t){return e._b=v({}),g(e,P({},r),e._b,a(r.length),t),e}function R(e,r,n,s){var o;e.Rb=r,e.zb=n,o=r+n+s,(null==e.d||e.nb!=o)&&(e.d=null,e.nb=o,e.d=t(e.nb)),e.B=e.nb-n}function F(e,r){return e.d[e.e+e.v+r]}function L(e,r,t,n){var s,o;for(e.K&&e.v+r+n>e.q&&(n=e.q-(e.v+r)),++t,o=e.e+e.v+r,s=0;n>s&&e.d[o+s]==e.d[o+s-t];++s);return s}function z(e){return e.q-e.v}function C(e){var r,t,n;for(n=e.e+e.v-e.Rb,n>0&&--n,t=e.e+e.q-n,r=0;t>r;++r)e.d[r]=e.d[n+r];e.e-=n}function w(e){var r;++e.v,e.v>e.jb&&(r=e.e+e.v,r>e.B&&C(e),x(e))}function x(e){var r,t,n;if(!e.K)for(;;){if(n=-e.e+e.nb-e.q,!n)return;if(r=l(e.ac,e.d,e.e+e.q,n),-1==r)return e.jb=e.q,t=e.e+e.jb,t>e.B&&(e.jb=e.B-e.e),void(e.K=1);e.q+=r,e.q>=e.v+e.zb&&(e.jb=e.q-e.zb)}}function D(e,r){e.e+=r,e.jb-=r,e.v-=r,e.q-=r}function A(e,r,n,s,o){var i,_,a;1073741567>r&&(e.Vb=16+(s>>1),a=~~((r+n+s+o)/2)+256,R(e,r+n,s+o,a),e.bb=s,i=r+1,e.l!=i&&(e.E=t(2*(e.l=i))),_=65536,e.ab&&(_=r-1,_|=_>>1,_|=_>>2,_|=_>>4,_|=_>>8,_>>=1,_|=65535,_>16777216&&(_>>=1),e.Wb=_,++_,_+=e.F),_!=e.Ib&&(e.$=t(e.Ib=_)))}function I(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v,B,k,S,M;if(e.q>=e.v+e.bb)h=e.bb;else if(h=e.q-e.v,e.ib>h)return H(e),0;for(v=0,P=e.v>e.l?e.v-e.l:0,n=e.e+e.v,l=1,c=0,f=0,e.ab?(M=st[255&e.d[n]]^255&e.d[n+1],c=1023&M,M^=(255&e.d[n+2])<<8,f=65535&M,u=(M^st[255&e.d[n+3]]<<5)&e.Wb):u=255&e.d[n]^(255&e.d[n+1])<<8,s=e.$[e.F+u]||0,e.ab&&(o=e.$[c]||0,i=e.$[1024+f]||0,e.$[c]=e.v,e.$[1024+f]=e.v,o>P&&e.d[e.e+o]==e.d[n]&&(r[v++]=l=2,r[v++]=e.v-o-1),i>P&&e.d[e.e+i]==e.d[n]&&(i==o&&(v-=2),r[v++]=l=3,r[v++]=e.v-i-1,o=i),0!=v&&o==s&&(v-=2,l=1)),e.$[e.F+u]=e.v,k=(e.h<<1)+1,S=e.h<<1,p=d=e.s,0!=e.s&&s>P&&e.d[e.e+s+e.s]!=e.d[n+e.s]&&(r[v++]=l=e.s,r[v++]=e.v-s-1),t=e.Vb;;){if(P>=s||0==t--){e.E[k]=e.E[S]=0;break}if(a=e.v-s,_=(e.h>=a?e.h-a:e.h-a+e.l)<<1,B=e.e+s,m=d>p?p:d,e.d[B+m]==e.d[n+m]){for(;++m!=h&&e.d[B+m]==e.d[n+m];);if(m>l&&(r[v++]=l=m,r[v++]=a-1,m==h)){e.E[S]=e.E[_],e.E[k]=e.E[_+1];break}}(255&e.d[n+m])>(255&e.d[B+m])?(e.E[S]=s,S=_+1,s=e.E[S],d=m):(e.E[k]=s,k=_,s=e.E[k],p=m)}return H(e),v}function O(e){e.e=0,e.v=0,e.q=0,e.K=0,x(e),e.h=0,D(e,-1)}function H(e){var r;++e.h>=e.l&&(e.h=0),w(e),1073741823==e.v&&(r=e.v-e.l,N(e.E,2*e.l,r),N(e.$,e.Ib,r),D(e,r))}function N(e,r,t){var n,s;for(n=0;r>n;++n)s=e[n]||0,t>=s?s=0:s-=t,e[n]=s}function G(e,r){e.ab=r>2,e.ab?(e.s=0,e.ib=4,e.F=66560):(e.s=2,e.ib=3,e.F=0)}function T(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v;do{if(e.q>=e.v+e.bb)p=e.bb;else if(p=e.q-e.v,e.ib>p){H(e);continue}for(d=e.v>e.l?e.v-e.l:0,n=e.e+e.v,e.ab?(v=st[255&e.d[n]]^255&e.d[n+1],_=1023&v,e.$[_]=e.v,v^=(255&e.d[n+2])<<8,a=65535&v,e.$[1024+a]=e.v,c=(v^st[255&e.d[n+3]]<<5)&e.Wb):c=255&e.d[n]^(255&e.d[n+1])<<8,s=e.$[e.F+c],e.$[e.F+c]=e.v,P=(e.h<<1)+1,l=e.h<<1,u=m=e.s,t=e.Vb;;){if(d>=s||0==t--){e.E[P]=e.E[l]=0;break}if(i=e.v-s,o=(e.h>=i?e.h-i:e.h-i+e.l)<<1,h=e.e+s,f=m>u?u:m,e.d[h+f]==e.d[n+f]){for(;++f!=p&&e.d[h+f]==e.d[n+f];);if(f==p){e.E[l]=e.E[o],e.E[P]=e.E[o+1];break}}(255&e.d[n+f])>(255&e.d[h+f])?(e.E[l]=s,l=o+1,s=e.E[l],m=f):(e.E[P]=s,P=o,s=e.E[P],u=f)}H(e)}while(0!=--r)}function W(e){return e-=2,4>e?e:3}function Y(e){return 4>e?0:10>e?e-3:e-6}function Z(e,r){return e._=r,e.ic=null,e.bc=1,e}function V(e){if(!e.bc)throw Error("bad state");if(!e._)throw Error("No decoding");return j(e),e.bc}function j(e){J(e._,e._.tb,e._.Nb,e._.$b),e.Ob=e._.tb[0],e._.$b[0]&&(cr(e._),e.bc=0)}function K(e,r){var t,n,s,o;e.W=r,s=e.a[r].n,n=e.a[r].g;do e.a[r].p&&(Cr(e.a[s]),e.a[s].n=s-1,e.a[r].Sb&&(e.a[s-1].p=0,e.a[s-1].n=e.a[r].n2,e.a[s-1].g=e.a[r].g2)),o=s,t=n,n=e.a[o].g,s=e.a[o].n,e.a[o].g=t,e.a[o].n=r,r=o;while(r>0);return e.Z=e.a[0].g,e.m=e.a[0].n}function q(e){e.i=0,e.C=0;for(var r=0;4>r;++r)e.r[r]=0}function J(e,r,t,s){var i,f,u,m,p,d,P,l,v,B,k,S,M,b,E;if(r[0]=tt,t[0]=tt,s[0]=1,e.Kb&&(e.b.ac=e.Kb,O(e.b),e.L=1,e.Kb=null),!e.Gb){if(e.Gb=1,b=e.x,_(e.x,tt)){if(!z(e.b))return void er(e,c(e.x));_r(e),M=c(e.x)&e.u,Tr(e.c,e.z,(e.i<<4)+M,0),e.i=Y(e.i),u=F(e.b,-e.o),Rr(gr(e.y,c(e.x),e.C),e.c,u),e.C=u,--e.o,e.x=n(e.x,nt)}if(!z(e.b))return void er(e,c(e.x));for(;;){if(P=rr(e,c(e.x)),B=e.Z,M=c(e.x)&e.u,f=(e.i<<4)+M,1==P&&-1==B)Tr(e.c,e.z,f,0),u=F(e.b,-e.o),E=gr(e.y,c(e.x),e.C),7>e.i?Rr(E,e.c,u):(v=F(e.b,-e.r[0]-1-e.o),Fr(E,e.c,v,u)),e.C=u,e.i=Y(e.i);else{if(Tr(e.c,e.z,f,1),4>B){if(Tr(e.c,e.S,e.i,1),B?(Tr(e.c,e.Y,e.i,1),1==B?Tr(e.c,e.ob,e.i,0):(Tr(e.c,e.ob,e.i,1),Tr(e.c,e.Mb,e.i,B-2))):(Tr(e.c,e.Y,e.i,0),1==P?Tr(e.c,e.Q,f,0):Tr(e.c,e.Q,f,1)),1==P?e.i=7>e.i?9:11:(kr(e.f,e.c,P-2,M),e.i=7>e.i?8:11),m=e.r[B],0!=B){for(d=B;d>=1;--d)e.r[d]=e.r[d-1];e.r[0]=m}}else{for(Tr(e.c,e.S,e.i,0),e.i=7>e.i?7:10,kr(e.P,e.c,P-2,M),B-=4,S=dr(B),l=W(P),Dr(e.D[l],e.c,S),S>=4&&(p=(S>>1)-1,i=(2|1&S)<<p,k=B-i,14>S?Hr(e.sb,i-S-1,e.c,p,k):(Wr(e.c,k>>4,p-4),Ir(e.M,e.c,15&k),++e.rb)),m=B,d=3;d>=1;--d)e.r[d]=e.r[d-1];e.r[0]=m,++e.pb}e.C=F(e.b,P-1-e.o)}if(e.o-=P,e.x=n(e.x,a(P)),!e.o){if(e.pb>=128&&$(e),e.rb>=16&&X(e),r[0]=e.x,t[0]=Yr(e.c),!z(e.b))return void er(e,c(e.x));if(o(h(e.x,b),[4096,0])>=0)return e.Gb=0,void(s[0]=0)}}}}function Q(e){var r,t;e.b||(r={},t=4,e.J||(t=2),G(r,t),e.b=r),Er(e.y,e.U,e.V),(e.R!=e.gb||e.kb!=e.j)&&(A(e.b,e.R,4096,e.j,274),e.gb=e.R,e.kb=e.j)}function U(e){var r;for(e.r=t(4),e.a=[],e.c={},e.z=t(192),e.S=t(12),e.Y=t(12),e.ob=t(12),e.Mb=t(12),e.Q=t(192),e.D=[],e.sb=t(114),e.M=xr({},4),e.P=Sr({}),e.f=Sr({}),e.y={},e.k=[],e.H=[],e.X=[],e.Jb=t(16),e.t=t(4),e.G=t(4),e.tb=[tt],e.Nb=[tt],e.$b=[0],e.Eb=t(5),e.Pb=t(128),e.hb=0,e.J=1,e.A=0,e.kb=-1,e.Z=0,r=0;4096>r;++r)e.a[r]={};for(r=0;4>r;++r)e.D[r]=xr({},6);return e}function X(e){for(var r=0;16>r;++r)e.Jb[r]=Or(e.M,r);e.rb=0}function $(e){var r,t,n,s,o,i,_,a;for(s=4;128>s;++s)i=dr(s),n=(i>>1)-1,r=(2|1&i)<<n,e.Pb[s]=Nr(e.sb,r-i-1,n,s-r);for(o=0;4>o;++o){for(t=e.D[o],_=o<<6,i=0;e.yb>i;++i)e.H[_+i]=Ar(t,i);for(i=14;e.yb>i;++i)e.H[_+i]+=(i>>1)-1-4<<6;for(a=128*o,s=0;4>s;++s)e.X[a+s]=e.H[_+s];for(;128>s;++s)e.X[a+s]=e.H[_+dr(s)]+e.Pb[s]}e.pb=0}function er(e,r){ar(e),pr(e,r&e.u);for(var t=0;5>t;++t)Vr(e.c)}function rr(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v,B,k,S,M,b,E,g,y,R,C,w,x,D,A,I,O,H,N,G,T,W,Z,V,j,q,J,Q,U,X,$,er,rr,or;if(e.W!=e.m)return d=e.a[e.m].n-e.m,e.Z=e.a[e.m].g,e.m=e.a[e.m].n,d;if(e.m=e.W=0,e.I?(p=e.hb,e.I=0):p=_r(e),C=e.A,y=z(e.b)+1,2>y)return e.Z=-1,1;for(y>273&&(y=273),V=0,f=0;4>f;++f)e.t[f]=e.r[f],e.G[f]=L(e.b,-1,e.t[f],273),e.G[f]>e.G[V]&&(V=f);if(e.G[V]>=e.j)return e.Z=V,d=e.G[V],ir(e,d-1),d;if(p>=e.j)return e.Z=e.k[C-1]+4,ir(e,p-1),p;if(a=F(e.b,-1),v=F(e.b,-e.r[0]-1-1),2>p&&a!=v&&2>e.G[V])return e.Z=-1,1;if(e.a[0].Yb=e.i,H=r&e.u,e.a[1].w=it[e.z[(e.i<<4)+H]>>>2]+zr(gr(e.y,r,e.C),e.i>=7,v,a),Cr(e.a[1]),B=it[2048-e.z[(e.i<<4)+H]>>>2],Z=B+it[2048-e.S[e.i]>>>2],v==a&&(j=Z+sr(e,e.i,H),e.a[1].w>j&&(e.a[1].w=j,wr(e.a[1]))),m=p>=e.G[V]?p:e.G[V],2>m)return e.Z=e.a[1].g,1;e.a[1].n=0,e.a[0].Ab=e.t[0],e.a[0].xb=e.t[1],e.a[0].wb=e.t[2],e.a[0].Lb=e.t[3],u=m;do e.a[u--].w=268435455;while(u>=2);for(f=0;4>f;++f)if(W=e.G[f],!(2>W)){G=Z+nr(e,f,e.i,H);do o=G+Mr(e.f,W-2,H),A=e.a[W],A.w>o&&(A.w=o,A.n=0,A.g=f,A.p=0);while(--W>=2)}if(g=B+it[e.S[e.i]>>>2],u=e.G[0]>=2?e.G[0]+1:2,p>=u){for(w=0;u>e.k[w];)w+=2;for(;c=e.k[w+1],o=g+tr(e,c,u,H),A=e.a[u],A.w>o&&(A.w=o,A.n=0,A.g=c+4,A.p=0),u!=e.k[w]||(w+=2,w!=C);++u);}for(t=0;;){if(++t,t==m)return K(e,t);if(k=_r(e),C=e.A,k>=e.j)return e.hb=k,e.I=1,K(e,t);if(++r,O=e.a[t].n,e.a[t].p?(--O,e.a[t].Sb?(J=e.a[e.a[t].n2].Yb,J=4>e.a[t].g2?7>J?8:11:7>J?7:10):J=e.a[O].Yb,J=Y(J)):J=e.a[O].Yb,O==t-1?J=e.a[t].g?Y(J):7>J?9:11:(e.a[t].p&&e.a[t].Sb?(O=e.a[t].n2,I=e.a[t].g2,J=7>J?8:11):(I=e.a[t].g,J=4>I?7>J?8:11:7>J?7:10),D=e.a[O],4>I?I?1==I?(e.t[0]=D.xb,e.t[1]=D.Ab,e.t[2]=D.wb,e.t[3]=D.Lb):2==I?(e.t[0]=D.wb,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.Lb):(e.t[0]=D.Lb,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.wb):(e.t[0]=D.Ab,e.t[1]=D.xb,e.t[2]=D.wb,e.t[3]=D.Lb):(e.t[0]=I-4,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.wb)),e.a[t].Yb=J,e.a[t].Ab=e.t[0],e.a[t].xb=e.t[1],e.a[t].wb=e.t[2],e.a[t].Lb=e.t[3],_=e.a[t].w,a=F(e.b,-1),v=F(e.b,-e.t[0]-1-1),H=r&e.u,n=_+it[e.z[(J<<4)+H]>>>2]+zr(gr(e.y,r,F(e.b,-2)),J>=7,v,a),b=e.a[t+1],S=0,b.w>n&&(b.w=n,b.n=t,b.g=-1,b.p=0,S=1),B=_+it[2048-e.z[(J<<4)+H]>>>2],Z=B+it[2048-e.S[J]>>>2],v!=a||t>b.n&&!b.g||(j=Z+(it[e.Y[J]>>>2]+it[e.Q[(J<<4)+H]>>>2]),b.w>=j&&(b.w=j,b.n=t,b.g=0,b.p=0,S=1)),R=z(e.b)+1,R=R>4095-t?4095-t:R,y=R,!(2>y)){if(y>e.j&&(y=e.j),!S&&v!=a&&(U=Math.min(R-1,e.j),P=L(e.b,0,e.t[0],U),P>=2)){for(Q=Y(J),N=r+1&e.u,E=n+it[2048-e.z[(Q<<4)+N]>>>2]+it[2048-e.S[Q]>>>2],x=t+1+P;x>m;)e.a[++m].w=268435455;o=E+(X=Mr(e.f,P-2,N),X+nr(e,0,Q,N)),A=e.a[x],A.w>o&&(A.w=o,A.n=t+1,A.g=0,A.p=1,A.Sb=0)}for(q=2,T=0;4>T;++T)if(h=L(e.b,-1,e.t[T],y),!(2>h)){l=h;do{for(;t+h>m;)e.a[++m].w=268435455;o=Z+($=Mr(e.f,h-2,H),$+nr(e,T,J,H)),A=e.a[t+h],A.w>o&&(A.w=o,A.n=t,A.g=T,A.p=0)}while(--h>=2);if(h=l,T||(q=h+1),R>h&&(U=Math.min(R-1-h,e.j),P=L(e.b,h,e.t[T],U),P>=2)){for(Q=7>J?8:11,N=r+h&e.u,s=Z+(er=Mr(e.f,h-2,H),er+nr(e,T,J,H))+it[e.z[(Q<<4)+N]>>>2]+zr(gr(e.y,r+h,F(e.b,h-1-1)),1,F(e.b,h-1-(e.t[T]+1)),F(e.b,h-1)),Q=Y(Q),N=r+h+1&e.u,M=s+it[2048-e.z[(Q<<4)+N]>>>2],E=M+it[2048-e.S[Q]>>>2],x=h+1+P;t+x>m;)e.a[++m].w=268435455;o=E+(rr=Mr(e.f,P-2,N),rr+nr(e,0,Q,N)),A=e.a[t+x],A.w>o&&(A.w=o,A.n=t+h+1,A.g=0,A.p=1,A.Sb=1,A.n2=t,A.g2=T)}}if(k>y){for(k=y,C=0;k>e.k[C];C+=2);e.k[C]=k,C+=2}if(k>=q){for(g=B+it[e.S[J]>>>2];t+k>m;)e.a[++m].w=268435455;for(w=0;q>e.k[w];)w+=2;for(h=q;;++h)if(i=e.k[w+1],o=g+tr(e,i,h,H),A=e.a[t+h],A.w>o&&(A.w=o,A.n=t,A.g=i+4,A.p=0),h==e.k[w]){if(R>h&&(U=Math.min(R-1-h,e.j),P=L(e.b,h,i,U),P>=2)){for(Q=7>J?7:10,N=r+h&e.u,s=o+it[e.z[(Q<<4)+N]>>>2]+zr(gr(e.y,r+h,F(e.b,h-1-1)),1,F(e.b,h-(i+1)-1),F(e.b,h-1)),Q=Y(Q),N=r+h+1&e.u,M=s+it[2048-e.z[(Q<<4)+N]>>>2],E=M+it[2048-e.S[Q]>>>2],x=h+1+P;t+x>m;)e.a[++m].w=268435455;o=E+(or=Mr(e.f,P-2,N),or+nr(e,0,Q,N)),A=e.a[t+x],A.w>o&&(A.w=o,A.n=t+h+1,A.g=0,A.p=1,A.Sb=1,A.n2=t,A.g2=i+4)}if(w+=2,w==C)break}}}}}function tr(e,r,t,n){var s,o=W(t);return s=128>r?e.X[128*o+r]:e.H[(o<<6)+hr(r)]+e.Jb[15&r],s+Mr(e.P,t-2,n)}function nr(e,r,t,n){var s;return r?(s=it[2048-e.Y[t]>>>2],1==r?s+=it[e.ob[t]>>>2]:(s+=it[2048-e.ob[t]>>>2],s+=jr(e.Mb[t],r-2))):(s=it[e.Y[t]>>>2],s+=it[2048-e.Q[(t<<4)+n]>>>2]),s}function sr(e,r,t){return it[e.Y[r]>>>2]+it[e.Q[(r<<4)+t]>>>2]}function or(e){q(e),Zr(e.c),Gr(e.z),Gr(e.Q),Gr(e.S),Gr(e.Y),Gr(e.ob),Gr(e.Mb),Gr(e.sb),yr(e.y);for(var r=0;4>r;++r)Gr(e.D[r].db);vr(e.P,1<<e.N),vr(e.f,1<<e.N),Gr(e.M.db),e.I=0,e.W=0,e.m=0,e.o=0}function ir(e,r){r>0&&(T(e.b,r),e.o+=r)}function _r(e){var r=0;return e.A=I(e.b,e.k),e.A>0&&(r=e.k[e.A-2],r==e.j&&(r+=L(e.b,r-1,e.k[e.A-1],273-r))),++e.o,r}function ar(e){e.b&&e.L&&(e.b.ac=null,e.L=0)}function cr(e){ar(e),e.c.cc=null}function fr(e,r){e.R=r;for(var t=0;r>1<<t;++t);e.yb=2*t}function ur(e,r){var t=e.J;e.J=r,e.b&&t!=e.J&&(e.gb=-1,e.b=null)}function mr(e,r){e.Eb[0]=9*(5*e.N+e.U)+e.V<<24>>24;for(var t=0;4>t;++t)e.Eb[1+t]=e.R>>8*t<<24>>24;S(r,e.Eb,0,5)}function pr(e,r){if(e.Xb){Tr(e.c,e.z,(e.i<<4)+r,1),Tr(e.c,e.S,e.i,0),e.i=7>e.i?7:10,kr(e.P,e.c,0,r);var t=W(2);Dr(e.D[t],e.c,63),Wr(e.c,67108863,26),Ir(e.M,e.c,15)}}function dr(e){return 2048>e?ot[e]:2097152>e?ot[e>>10]+20:ot[e>>20]+40}function hr(e){return 131072>e?ot[e>>6]+12:134217728>e?ot[e>>16]+32:ot[e>>26]+52}function Pr(e,r,t,n){8>t?(Tr(r,e.T,0,0),Dr(e.ub[n],r,t)):(t-=8,Tr(r,e.T,0,1),8>t?(Tr(r,e.T,1,0),Dr(e.vb[n],r,t)):(Tr(r,e.T,1,1),Dr(e.Bb,r,t-8)))}function lr(e){e.T=t(2),e.ub=t(16),e.vb=t(16),e.Bb=xr({},8);for(var r=0;16>r;++r)e.ub[r]=xr({},3),e.vb[r]=xr({},3);return e}function vr(e,r){Gr(e.T);for(var t=0;r>t;++t)Gr(e.ub[t].db),Gr(e.vb[t].db);Gr(e.Bb.db)}function Br(e,r,t,n,s){var o,i,_,a,c;for(o=it[e.T[0]>>>2],i=it[2048-e.T[0]>>>2],_=i+it[e.T[1]>>>2],a=i+it[2048-e.T[1]>>>2],c=0,c=0;8>c;++c){if(c>=t)return;n[s+c]=o+Ar(e.ub[r],c)}for(;16>c;++c){if(c>=t)return;n[s+c]=_+Ar(e.vb[r],c-8)}for(;t>c;++c)n[s+c]=a+Ar(e.Bb,c-8-8)}function kr(e,r,t,n){Pr(e,r,t,n),0==--e.Hb[n]&&(Br(e,n,e.fb,e.Tb,272*n),e.Hb[n]=e.fb)}function Sr(e){return lr(e),e.Tb=[],e.Hb=[],e}function Mr(e,r,t){return e.Tb[272*t+r]}function br(e,r){for(var t=0;r>t;++t)Br(e,t,e.fb,e.Tb,272*t),e.Hb[t]=e.fb}function Er(e,r,n){var s,o;if(null==e.Cb||e.O!=n||e.qb!=r)for(e.qb=r,e.ec=(1<<r)-1,e.O=n,o=1<<e.O+e.qb,e.Cb=t(o),s=0;o>s;++s)e.Cb[s]=Lr({})}function gr(e,r,t){return e.Cb[((r&e.ec)<<e.O)+((255&t)>>>8-e.O)]}function yr(e){var r,t=1<<e.O+e.qb;for(r=0;t>r;++r)Gr(e.Cb[r].eb)}function Rr(e,r,t){var n,s,o=1;for(s=7;s>=0;--s)n=t>>s&1,Tr(r,e.eb,o,n),o=o<<1|n}function Fr(e,r,t,n){var s,o,i,_,a=1,c=1;for(o=7;o>=0;--o)s=n>>o&1,_=c,a&&(i=t>>o&1,_+=1+i<<8,a=i==s),Tr(r,e.eb,_,s),c=c<<1|s}function Lr(e){return e.eb=t(768),e}function zr(e,r,t,n){var s,o,i=1,_=7,a=0;if(r)for(;_>=0;--_)if(o=t>>_&1,s=n>>_&1,a+=jr(e.eb[(1+o<<8)+i],s),i=i<<1|s,o!=s){--_;break}for(;_>=0;--_)s=n>>_&1,a+=jr(e.eb[i],s),i=i<<1|s;return a}function Cr(e){e.g=-1,e.p=0}function wr(e){e.g=0,e.p=0}function xr(e,r){return e.cb=r,e.db=t(1<<r),e}function Dr(e,r,t){var n,s,o=1;for(s=e.cb;0!=s;)--s,n=t>>>s&1,Tr(r,e.db,o,n),o=o<<1|n}function Ar(e,r){var t,n,s=1,o=0;for(n=e.cb;0!=n;)--n,t=r>>>n&1,o+=jr(e.db[s],t),s=(s<<1)+t;return o}function Ir(e,r,t){var n,s,o=1;for(s=0;e.cb>s;++s)n=1&t,Tr(r,e.db,o,n),o=o<<1|n,t>>=1}function Or(e,r){var t,n,s=1,o=0;for(n=e.cb;0!=n;--n)t=1&r,r>>>=1,o+=jr(e.db[s],t),s=s<<1|t;return o}function Hr(e,r,t,n,s){var o,i,_=1;for(i=0;n>i;++i)o=1&s,Tr(t,e,r+_,o),_=_<<1|o,s>>=1}function Nr(e,r,t,n){var s,o,i=1,_=0;for(o=t;0!=o;--o)s=1&n,n>>>=1,_+=it[(2047&(e[r+i]-s^-s))>>>2],i=i<<1|s;return _}function Gr(e){for(var r=e.length-1;r>=0;--r)e[r]=1024}function Tr(e,r,t,o){var i,_=r[t];i=(e.lb>>>11)*_,o?(e.Qb=n(e.Qb,s(a(i),[4294967295,0])),e.lb-=i,r[t]=_-(_>>>5)<<16>>16):(e.lb=i,r[t]=_+(2048-_>>>5)<<16>>16),-16777216&e.lb||(e.lb<<=8,Vr(e))}function Wr(e,r,t){for(var s=t-1;s>=0;--s)e.lb>>>=1,1==(r>>>s&1)&&(e.Qb=n(e.Qb,a(e.lb))),-16777216&e.lb||(e.lb<<=8,Vr(e))}function Yr(e){return n(n(a(e.mb),e.Fb),[4,0])}function Zr(e){e.Fb=tt,e.Qb=tt,e.lb=-1,e.mb=1,e.fc=0}function Vr(e){var r,t=c(d(e.Qb,32));if(0!=t||o(e.Qb,[4278190080,0])<0){e.Fb=n(e.Fb,a(e.mb)),r=e.fc;do k(e.cc,r+t),r=255;while(0!=--e.mb);e.fc=c(e.Qb)>>>24}++e.mb,e.Qb=m(s(e.Qb,[16777215,0]),8)}function jr(e,r){return it[(2047&(e-r^-r))>>>2]}function Kr(e){var r,t,n,s=[],o=0,i=e.length;if("object"==typeof e)return e;for(M(e,0,i,s,0),n=0;i>n;++n)r=s[n],r>=1&&127>=r?++o:o+=!r||r>=128&&2047>=r?2:3;for(t=[],o=0,n=0;i>n;++n)r=s[n],r>=1&&127>=r?t[o++]=r<<24>>24:!r||r>=128&&2047>=r?(t[o++]=(192|r>>6&31)<<24>>24,t[o++]=(128|63&r)<<24>>24):(t[o++]=(224|r>>12&15)<<24>>24,t[o++]=(128|r>>6&63)<<24>>24,t[o++]=(128|63&r)<<24>>24);return t}function qr(e){return e[1]+e[0]}function Jr(e,t,n,s){function o(){try{for(var e,r=(new Date).getTime();V(a.c.Ub);)if(i=qr(a.c.Ub.Ob)/qr(a.c.gc),(new Date).getTime()-r>200)return s(i),Xr(o,0),0;s(1),e=B(a.c._b),Xr(n.bind(null,e),0)}catch(t){n(null,t)}}var i,_,a={},c=void 0===n&&void 0===s;if("function"!=typeof n&&(_=n,n=s=0),s=s||function(e){return void 0!==_?r(e,_):void 0},n=n||function(e,r){return void 0!==_?postMessage({action:Qr,cbn:_,result:e,error:r}):void 0},c){for(a.c=y({},Kr(e),_t(t));V(a.c.Ub););return B(a.c._b)}try{a.c=y({},Kr(e),_t(t)),s(0)}catch(f){return n(null,f)}Xr(o,0)}var Qr=1,Ur=3,Xr="function"==typeof setImmediate?setImmediate:setTimeout,$r=4294967296,et=[4294967295,-$r],rt=[0,-0x8000000000000000],tt=[0,0],nt=[1,0],st=function(){var e,r,t,n=[];for(e=0;256>e;++e){for(t=e,r=0;8>r;++r)0!=(1&t)?t=t>>>1^-306674912:t>>>=1;n[e]=t}return n}(),ot=function(){var e,r,t,n=2,s=[0,1];for(t=2;22>t;++t)for(r=1<<(t>>1)-1,e=0;r>e;++e,++n)s[n]=t<<24>>24;return s}(),it=function(){var e,r,t,n,s=[];for(r=8;r>=0;--r)for(n=1<<9-r-1,e=1<<9-r,t=n;e>t;++t)s[t]=(r<<6)+(e-t<<6>>>9-r-1);return s}(),_t=function(){var e=[{s:16,f:64,m:0},{s:20,f:64,m:0},{s:19,f:64,m:1},{s:20,f:64,m:1},{s:21,f:128,m:1},{s:22,f:128,m:1},{s:23,f:128,m:1},{s:24,f:255,m:1},{s:25,f:255,m:1}];return function(r){return e[r-1]||e[6]}}();return"undefined"==typeof onmessage||"undefined"!=typeof window&&void 0!==window.document||!function(){onmessage=function(r){r&&r.Zb&&r.Zb.action==Qr&&lz_c.compress(r.Zb.Zb,r.Zb.jc,r.Zb.cbn)}}(),{compress:Jr}}();this.LZMA=this.LZMA_WORKER=lz_c;
@@ -3083,7 +3117,6 @@ Current version: 80
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
-	var loaded_storyobj = generate_base_storyobj(); //for loading json story files from disk
 	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -3091,20 +3124,19 @@ Current version: 80
 	//key is ID, body is {done:false,queue:10,result:""}
 	var stablemodels = []; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
-	var custom_oai_endpoint = default_oai_base;
+	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
 	var custom_oai_model = "";
 	var custom_scale_key = "";
 	var custom_palm_key = "";
 	var custom_scale_ID = "";
-	var custom_claude_endpoint = default_claude_base;
+	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
-	var pending_found_story = null;
 	var filter_enabled = true;
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var temp_scenario = null;
@@ -3121,10 +3153,10 @@ Current version: 80
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
-		saved_oai_addr: "", //do not ever share this in save files!
+		saved_oai_addr: default_oai_base, //do not ever share this in save files!
 		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
-		saved_claude_addr: "", //do not ever share this in save files!
+		saved_claude_addr: default_claude_base, //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
@@ -3133,6 +3165,7 @@ Current version: 80
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
+		compressnewlines: false, //compress multiple newlines
 		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban
 		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
@@ -3165,6 +3198,7 @@ Current version: 80
 		export_settings: true, //affects if settings are included with the story and sharelinks
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
+		entersubmit: true, //enter sends the prompt
 
 		max_context_length: 1024,
 		max_length: 100,
@@ -3337,7 +3371,7 @@ Current version: 80
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
 				if (loadedsettings && loadedsettings.persist_session) {
-					import_share_story(loadedstorycompressed); //use the same compressed format as shared stories and import it
+					import_compressed_story(loadedstorycompressed,true); //use the same compressed format as shared stories and import it
 					import_props_into_object(localsettings,loadedsettings);
 					console.log("Loaded local settings and story");
 				}
@@ -3438,18 +3472,8 @@ Current version: 80
 			let files = draggedData.files;
 
 			console.log(files);
-			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
 			if (files.length > 0 && files[0] != null && files[0].name && files[0].name != "") {
-				if (safe_to_overwrite) {
-					load_selected_file(files[0]);
-				} else {
-					msgboxYesNo("Overwrite existing story?", "Open File", () => {
-						hide_popups();
-						load_selected_file(files[0]);
-					}, () => {
-						hide_popups();
-					});
-				}
+				load_selected_file(files[0]);
 			}
 		}
 
@@ -3546,8 +3570,7 @@ Current version: 80
 					document.getElementById("connectstatus").innerHTML = "Connected to KoboldAI Horde";
 					document.getElementById("connectstatus").classList.remove("color_orange");
 					document.getElementById("connectstatus").classList.add("color_green");
-					render_gametext();
-
+					render_gametext(false);
 
 					//read the url params, and autoload a shared story if found
 					const foundStory = urlParams.get('s');
@@ -3561,10 +3584,9 @@ Current version: 80
 					if (foundStory && foundStory != "") {
 						let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
 						if (localsettings.persist_session && !safe_to_overwrite) {
-							pending_found_story = foundStory;
-							prompt_overwrite();
+							import_compressed_story_prompt_overwrite(foundStory);
 						} else {
-							import_share_story(foundStory);
+							import_compressed_story(foundStory,false);
 						}
 						//purge url params
 						window.history.replaceState(null, null, window.location.pathname);
@@ -3597,7 +3619,7 @@ Current version: 80
 					document.getElementById("connectstatus").innerHTML = "Offline Mode";
 					document.getElementById("connectstatus").classList.add("color_orange");
 					document.getElementById("connectstatus").classList.remove("color_green");
-					render_gametext();
+					render_gametext(false);
 				}
 			});
 		}
@@ -3782,60 +3804,12 @@ Current version: 80
 		return pickedcluster;
 	}
 
-	function generate_compressed_story(strip_images=false) {
+	function generate_compressed_story(save_images,export_settings,export_aesthetic_settings) {
 		//encode the current story into a sharable url
 		//a tiny json format which gets compressed by LZMA then b64url
 
-		let export_arr = gametext_arr;
-		if(strip_images)
-		{
-			export_arr = [];
-			for (let i = 0; i < gametext_arr.length; ++i) {
-				export_arr.push(gametext_arr[i].replace(/\[<\|p\|.+?\|p\|>\]/g, "").replace(/\[<\|d\|.+?\|d\|>\]/g, ""));
-			}
-		}
-
-		var story = {
-			ga: export_arr,
-			md: [],
-		}
-		for (var i = 0; i < selected_models.length; ++i) {
-			story.md.push(cyrb_hash(selected_models[i].name));
-		}
-		if (current_memory != "") {
-			story.cm = current_memory
-		}
-		if (current_anote != "") {
-			story.ca = current_anote;
-			story.ct = current_anotetemplate;
-		}
-		if(extrastopseq!="")
-		{
-			story.ess = extrastopseq;
-		}
-		if (current_wi != null && current_wi.length > 0) {
-			story.cwi = current_wi;
-		}
-
-		//handle exporting settings
-		if (localsettings.export_settings) {
-			story.savedsettings = JSON.parse(JSON.stringify(localsettings));
-			//redact some values
-			story.savedsettings.my_api_key = "0000000000";
-			story.savedsettings.home_cluster = text_hordes[0].baseurl;
-			story.savedsettings.saved_oai_key = "";
-			story.savedsettings.saved_openrouter_key = "";
-			story.savedsettings.saved_oai_addr = "";
-			story.savedsettings.saved_claude_key = "";
-			story.savedsettings.saved_claude_addr = "";
-			story.savedsettings.saved_kai_addr = "";
-
-			if (!strip_images)
-			{
-				story.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
-			}
-		}
-		var storyjson = JSON.stringify(story);
+		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
+		let storyjson = JSON.stringify(story);
 		console.log("Exporting story: ", story);
 
 		//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
@@ -3843,7 +3817,7 @@ Current version: 80
 		return cstoryjson;
 	}
 	function export_share_story() {
-		let cstoryjson = generate_compressed_story(true);
+		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 		console.log("Export Len: " + cstoryjson.length);
 
 		if (cstoryjson.length >= 4800) {
@@ -3865,108 +3839,89 @@ Current version: 80
 		// Copy the text inside the text field
 		navigator.clipboard.writeText(copyText.innerText);
 	}
-	function import_share_story(cstoryjson) {
-		console.log("Importing shared story...");
-		var fail = false;
-		var story = null;
-		try {
-			//var storyjson = LZString.decompressFromEncodedURIComponent(cstoryjson);
-			var storyjson = lz_d.decompress(b64_to_buf(cstoryjson));
 
+	function decompress_story(cstoryjson)
+	{
+		var story = null;
+		try
+		{
+			var storyjson = lz_d.decompress(b64_to_buf(cstoryjson));
 			if (storyjson == null || storyjson == "") {
-				fail = true;
+				return null;
 			} else {
+				console.log("Decompressed story: " + storyjson);
 				story = JSON.parse(storyjson);
 			}
 		} catch (e) {
-			fail = true;
+			return null;
 		}
+		return story;
+	}
 
-		if (story != null && !fail) {
+	//attempts to load story from compressed json, in KAI format
+	function import_compressed_story(cstoryjson,force_load_settngs) {
+		console.log("Importing shared story...");
 
-			console.log("Importing story: " + storyjson);
+		var story = decompress_story(cstoryjson);
+		if (story != null) {
 
 			//fetch the model list
-			fetch_models((mdls) => {
-				//can we find the model that's used? if yes load it, otherwise load the first one
-				if (mdls.length == 0 && !localflag) {
-					msgbox("No models available. Unable to load.");
-				}
-				else
-				{
-					if(!localflag)
-					{
-						selected_models = [];
-						for (var i = 0; i < mdls.length; ++i) {
-							if (story.md.includes(cyrb_hash(mdls[i].name))) {
-								selected_models.push(mdls[i]);
-							}
-						}
-
-						if (selected_models.length == 0) //no matching models, just assign one
-						{
-							selected_models.push(mdls[0]);
-						}
-
-						const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
-
-						if (!allMatched1) {
-							//if conflicted, get the most numerous cluster (mode)
-							let pickedcluster = get_most_common_cluster(selected_models);
-							selected_models = selected_models.filter(item => item.cluster === pickedcluster);
-						}
-						render_gametext();
-					}
-				}
-			});
-
-			restart_new_game();
-
-			gametext_arr = story.ga;
-			migrate_old_images_in_gametext();
-			if (story.ca && story.ca != "") {
-				current_anote = story.ca;
-				current_anotetemplate = story.ct;
-			}
-			if (story.cm && story.cm != "") {
-				current_memory = story.cm;
-			}
-			if (story.cwi && story.cwi.length > 0) {
-				current_wi = story.cwi;
-			}
-			if(story.ess && story.ess!="")
+			if (selected_models.length == 0)
 			{
-				extrastopseq = story.ess;
+				fetch_models((mdls) => {
+					//can we find the model that's used? if yes load it, otherwise load the first one
+					if (mdls.length == 0 && !localflag) {
+						msgbox("No models available. Unable to load.");
+					}
+					else {
+						if (!localflag) {
+							selected_models = [];
+
+							//if ALL of the previously selected models still exist, use them
+							if (story.savedsettings && story.savedsettings.modelhashes && story.savedsettings.modelhashes.length > 0) {
+								for (var i = 0; i < mdls.length; ++i) {
+									if (story.savedsettings.modelhashes.includes(cyrb_hash(mdls[i].name))) {
+										selected_models.push(mdls[i]);
+									}
+								}
+								if (selected_models.length == 0 || selected_models.length != story.savedsettings.modelhashes.length) {
+									selected_models = []; //need to reset
+								}
+							}
+
+							//otherwise, switch to the default list
+							if(selected_models.length==0)
+							{
+								for (var i = 0; i < mdls.length; ++i) {
+									for (var j = 0; j < defaultmodels.length; ++j) {
+										if (mdls[i].name.trim().toLowerCase().includes(defaultmodels[j].trim().toLowerCase()) ||
+											defaultmodels[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
+											selected_models.push(mdls[i]);
+										}
+									}
+								}
+							}
+
+							if (selected_models.length == 0) //no matching models, just assign one
+							{
+								selected_models.push(mdls[0]);
+							}
+
+							const allMatched1 = selected_models.every(item => item.cluster === selected_models[0].cluster);
+
+							if (!allMatched1) {
+								//if conflicted, get the most numerous cluster (mode)
+								let pickedcluster = get_most_common_cluster(selected_models);
+								selected_models = selected_models.filter(item => item.cluster === pickedcluster);
+							}
+							render_gametext();
+						}
+
+					}
+				});
 			}
 
-			//handle importing settings
-			if (story.savedsettings && story.savedsettings != "") {
-				let tmpapikey1 = localsettings.my_api_key;
-				let tmphc = localsettings.home_cluster;
-				let tmp_oai1 = localsettings.saved_oai_key;
-				let tmp_oai2 = localsettings.saved_oai_addr;
-				let tmp_or1 = localsettings.saved_openrouter_key;
-				let tmp_claude1 = localsettings.saved_claude_key;
-				let tmp_claude2 = localsettings.saved_claude_addr;
-				let tmp_palm1 = localsettings.saved_palm_key;
-				let tmp_kai = localsettings.saved_kai_addr;
-				import_props_into_object(localsettings, story.savedsettings);
-				localsettings.my_api_key = tmpapikey1;
-				localsettings.home_cluster = tmphc;
-				localsettings.saved_oai_key = tmp_oai1;
-				localsettings.saved_oai_addr = tmp_oai2;
-				localsettings.saved_openrouter_key = tmp_or1;
-				localsettings.saved_claude_key = tmp_claude1;
-				localsettings.saved_claude_addr = tmp_claude2;
-				localsettings.saved_palm_key = tmp_palm1;
-				localsettings.saved_kai_addr = tmp_kai;
-			}
-
-			if (story.savedaestheticsettings && story.savedaestheticsettings != "") {
-				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
-			}
-
-			render_gametext();
+			kai_json_load(story, force_load_settngs);
 
 		} else {
 			msgbox("Could not import from URL. Is it valid?");
@@ -3986,7 +3941,7 @@ Current version: 80
 			"actions_metadata": {},
 			"worldinfo": [],
 			"wifolders_d": {},
-			"wifolders_l": []
+			"wifolders_l": [],
 		};
 		return gs;
 	}
@@ -3997,11 +3952,12 @@ Current version: 80
 	}
 
 	var tempfileurl = null;
-	let newfilename = "";
+	var tempfileobj = generate_base_storyobj();
+	var newfilename = "";
 	function savenowfn()
 	{
 		var a = document.getElementById("tempfile");
-		var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/json' });
+		var file = new Blob([JSON.stringify(tempfileobj)], { type: 'application/json' });
 		console.log("Normal save handling")
 		if (tempfileurl) {
 			window.URL.revokeObjectURL(tempfileurl);
@@ -4013,8 +3969,43 @@ Current version: 80
 		setTimeout(function(){a.click()},20);
 	}
 
-	function save_file_button() //for triggering an optional popup
+	function save_file_button(use_existing_save=false) //for triggering an optional popup. if use save is true, assume temp obj is set
 	{
+		const save_file = function()
+		{
+			if(!use_existing_save)
+			{
+				tempfileobj = generate_savefile(localsettings.save_images, localsettings.export_settings, localsettings.export_settings);
+			}
+			newfilename = last_known_filename;
+
+			window.URL = window.URL || window.webkitURL;
+			var userAgent = window.navigator.userAgent;
+
+			if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
+				let ststr = JSON.stringify(tempfileobj);
+				var file = new Blob([ststr], { type: 'application/octet-stream' });
+				var file2 = new Blob([ststr], { type: 'application/json' });
+				console.log("Special save handling for iphones")
+				// iPad or iPhone needs an extra download
+				var reader = new FileReader();
+				var reader2 = new FileReader();
+				let datblob = window.URL.createObjectURL(file2);
+				reader.onload = function (e) {
+					reader2.readAsDataURL(file2);
+					reader2.onload = function (e) {
+						msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button>
+						<br><h5>Apple devices are known to have issues saving. If the above button does not work, try opening or right-click / long press one of the below links, and select (Save As)</h5><h4><li><a href=` + reader.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">Raw File Data</a></li><li><a href=` + reader2.result + ` class='color_blueurl' target='_blank' download="`+newfilename+`">JSON File Data</a></li><li><a href=` + datblob + ` class='color_blueurl' download="`+newfilename+`">JSON URL Blob</a></li></h4>`, "Save Story", true)
+					}
+				}
+				reader.readAsDataURL(file);
+			}
+			else
+			{
+				savenowfn();
+			}
+		}
+
 		if(localsettings.prompt_for_savename)
 		{
 			inputBox("Enter a Filename","Save File",last_known_filename,"Input Filename", ()=>{
@@ -4034,17 +4025,13 @@ Current version: 80
 			save_file();
 		}
 	}
-	function save_file() {
-		//determine if oldui file or newui file format, but we always save to oldui format
-		let is_oldui = (loaded_storyobj.file_version == null);
 
-		if (!is_oldui) {
-			// was formerly saved in newui format, regenerate a basic oldui file
-			loaded_storyobj = generate_base_storyobj();
-		}
+	function generate_savefile(save_images,export_settings,export_aesthetic_settings) //takes the current loaded story and generates a new savefile json object
+	{
+		let new_save_storyobj = generate_base_storyobj();
 
 		let export_arr = gametext_arr;
-		if(!localsettings.save_images)
+		if(!save_images)
 		{
 			export_arr = [];
 			for (let i = 0; i < gametext_arr.length; ++i) {
@@ -4052,69 +4039,52 @@ Current version: 80
 			}
 		}
 
-
-		loaded_storyobj.prompt = "";
-		loaded_storyobj.actions = [];
-		loaded_storyobj.actions_metadata = {};
 		if (export_arr.length > 0) {
-			loaded_storyobj.prompt = export_arr[0];
+			new_save_storyobj.prompt = export_arr[0];
 		}
 		for (var i = 1; i < export_arr.length; ++i) {
-			loaded_storyobj.actions.push(export_arr[i]);
+			new_save_storyobj.actions.push(export_arr[i]);
 			let key = (i - 1).toString();
-			loaded_storyobj.actions_metadata[key] = {
+			new_save_storyobj.actions_metadata[key] = {
 				"Selected Text": export_arr[i],
 				"Alternative Text": []
 			};
 		}
-		loaded_storyobj.anotetemplate = current_anotetemplate;
-		loaded_storyobj.authorsnote = current_anote;
-		loaded_storyobj.memory = current_memory;
-		loaded_storyobj.worldinfo = current_wi;
+		new_save_storyobj.anotetemplate = current_anotetemplate;
+		new_save_storyobj.authorsnote = current_anote;
+		new_save_storyobj.memory = current_memory;
+		new_save_storyobj.worldinfo = current_wi;
 
 		//extra unofficial fields
-		loaded_storyobj.extrastopseq = extrastopseq;
+		new_save_storyobj.extrastopseq = extrastopseq;
 
-		if (localsettings.export_settings) {
-			loaded_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
+		if (export_settings) {
+			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
 			//redact some values
-			loaded_storyobj.savedsettings.my_api_key = "0000000000";
-			loaded_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
-			loaded_storyobj.savedsettings.saved_oai_key = "";
-			loaded_storyobj.savedsettings.saved_oai_addr = "";
-			loaded_storyobj.savedsettings.saved_claude_key = "";
-			loaded_storyobj.savedsettings.saved_claude_addr = "";
-			loaded_storyobj.savedsettings.saved_kai_addr = "";
-			loaded_storyobj.savedsettings.saved_openrouter_key = "";
+			new_save_storyobj.savedsettings.my_api_key = "0000000000";
+			new_save_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
+			new_save_storyobj.savedsettings.saved_oai_key = "";
+			new_save_storyobj.savedsettings.saved_oai_addr = "";
+			new_save_storyobj.savedsettings.saved_claude_key = "";
+			new_save_storyobj.savedsettings.saved_claude_addr = "";
+			new_save_storyobj.savedsettings.saved_kai_addr = "";
+			new_save_storyobj.savedsettings.saved_openrouter_key = "";
 
-			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
-		}else{
-			loaded_storyobj.savedsettings = null;
-			loaded_storyobj.savedaestheticsettings = null;
-		}
+			new_save_storyobj.savedsettings.modelhashes = [];
 
-
-		window.URL = window.URL || window.webkitURL;
-
-		var userAgent = window.navigator.userAgent;
-		newfilename = last_known_filename;
-
-		if (userAgent.match(/AppleWebKit/) && (userAgent.match(/iPad/i) || userAgent.match(/iPhone/i))) {
-			var file = new Blob([JSON.stringify(loaded_storyobj)], { type: 'application/octet-stream' });
-			console.log("Special save handling for iphones")
-			// iPad or iPhone needs an extra download
-			var reader = new FileReader();
-			reader.onload = function (e) {
-				msgbox(`<button type="button" class="btn btn-primary" id="ios_save" onclick="savenowfn()">Click to Save</button><br><h4>If that does not work, right-click or long press <a href=` + reader.result + ` target='_blank' download="`+newfilename+`">this link</a>, and select (Save As)</h4>`, "Save Story", true)
+			if(export_aesthetic_settings)
+			{
+				new_save_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
+				for (var i = 0; i < selected_models.length; ++i) {
+					new_save_storyobj.savedsettings.modelhashes.push(cyrb_hash(selected_models[i].name));
+				}
 			}
-			reader.readAsDataURL(file);
-		}
-		else
-		{
-			savenowfn();
+		}else{
+			new_save_storyobj.savedsettings = null;
+			new_save_storyobj.savedaestheticsettings = null;
 		}
 
-
+		return new_save_storyobj;
 	}
 
 	function load_file(event) {
@@ -4132,6 +4102,7 @@ Current version: 80
 		}
 	};
 
+	//attempt to load a file from disk. could be any format, even images
 	function load_selected_file(selectedFile)
 	{
 		var selectedFilename = "";
@@ -4159,11 +4130,15 @@ Current version: 80
 						//check for ooba text generation fields (character)
 						load_ooba_obj(new_loaded_storyobj);
 					}
+					else if(new_loaded_storyobj.md && new_loaded_storyobj.savedsettings) //add some compat loading for sharefiles
+					{
+						kai_json_load(new_loaded_storyobj,false);
+					}
 					else {
 						msgbox("Could not load selected json file. Does not appear to be a KoboldAI story or compatible format.");
 					}
 				} else {
-					kai_json_load(new_loaded_storyobj);
+					kai_json_load(new_loaded_storyobj,false);
 					if (selectedFilename && selectedFilename != "") {
 						last_known_filename = selectedFilename;
 					}
@@ -4203,7 +4178,7 @@ Current version: 80
 							}
 
 							if (result != null) {
-								kai_json_load(result);
+								kai_json_load(result,false);
 							}
 							else {
 								if (selectedFilename.endsWith(".txt")) {
@@ -4212,11 +4187,8 @@ Current version: 80
 											//raw text import
 											restart_new_game();
 											gametext_arr.push(text);
-											hide_popups();
 											render_gametext();
-										}, () => {
-											hide_popups();
-										}, true)
+										}, null, true)
 								} else {
 									msgbox("Could not load selected file. Is it valid?");
 								}
@@ -4232,108 +4204,81 @@ Current version: 80
 		reader.readAsText(selectedFile);
 	}
 
-	function kai_json_load(new_loaded_storyobj)
+	function kai_json_load(storyobj, force_load_settngs)
 	{
 		//determine if oldui file or newui file format
 		restart_new_game();
-		loaded_storyobj = new_loaded_storyobj;
-		let is_oldui = (loaded_storyobj.file_version == null);
-		console.log("Is oldui: " + is_oldui);
-		if (is_oldui) {
-			//v1 load
-			if(loaded_storyobj.prompt!="")
+
+		let is_oldui = (storyobj.file_version == null);
+		let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
+		console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
+
+		if (is_sharefile) {
+			//handle old shareformat
+			gametext_arr = storyobj.ga;
+			if(gametext_arr==null)
 			{
-				gametext_arr.push(loaded_storyobj.prompt);
+				gametext_arr = [];
 			}
-			for (var i = 0; i < loaded_storyobj.actions.length; ++i) {
-				gametext_arr.push(loaded_storyobj.actions[i]);
+			if (storyobj.ca && storyobj.ca != "") {
+				current_anote = storyobj.ca;
+				current_anotetemplate = storyobj.ct;
+			}
+			if (storyobj.cm && storyobj.cm != "") {
+				current_memory = storyobj.cm;
+			}
+			if (storyobj.cwi && storyobj.cwi.length > 0) {
+				current_wi = storyobj.cwi;
+			}
+			if (storyobj.ess && storyobj.ess != "") {
+				extrastopseq = storyobj.ess;
+			}
+		} else if (is_oldui) {
+			//v1 load
+			if (storyobj.prompt != "") {
+				gametext_arr.push(storyobj.prompt);
+			}
+			for (var i = 0; i < storyobj.actions.length; ++i) {
+				gametext_arr.push(storyobj.actions[i]);
 			}
 
-			//port over old images to the new format
-			migrate_old_images_in_gametext();
-
-			if (loaded_storyobj.anotetemplate) {
-				current_anotetemplate = loaded_storyobj.anotetemplate;
+			if (storyobj.anotetemplate) {
+				current_anotetemplate = storyobj.anotetemplate;
 			}
-			if (loaded_storyobj.authorsnote) {
-				current_anote = loaded_storyobj.authorsnote;
+			if (storyobj.authorsnote) {
+				current_anote = storyobj.authorsnote;
 			}
-			if (loaded_storyobj.memory) {
-				current_memory = loaded_storyobj.memory;
+			if (storyobj.memory) {
+				current_memory = storyobj.memory;
 			}
-			if (loaded_storyobj.worldinfo) {
-				current_wi = loaded_storyobj.worldinfo;
+			if (storyobj.worldinfo) {
+				current_wi = storyobj.worldinfo;
 			}
-			if (loaded_storyobj.extrastopseq) {
-				extrastopseq = loaded_storyobj.extrastopseq;
-			}
-			if (loaded_storyobj.savedsettings && loaded_storyobj.savedsettings != "") {
-				//prompt to import settings
-				msgboxYesNo("This story includes custom settings. Do you want to import them?", "Import Story Settings", () => {
-					let tmpapikey1 = localsettings.my_api_key;
-					let tmphc = localsettings.home_cluster;
-					let tmp_oai1 = localsettings.saved_oai_key;
-					let tmp_oai2 = localsettings.saved_oai_addr;
-					let tmp_or1 = localsettings.saved_openrouter_key;
-					let tmp_claude1 = localsettings.saved_claude_key;
-					let tmp_claude2 = localsettings.saved_claude_addr;
-					let tmp_palm1 = localsettings.saved_palm_key;
-					let tmp_kai = localsettings.saved_kai_addr;
-					import_props_into_object(localsettings, loaded_storyobj.savedsettings);
-					localsettings.my_api_key = tmpapikey1;
-					localsettings.home_cluster = tmphc;
-					localsettings.saved_oai_key = tmp_oai1;
-					localsettings.saved_oai_addr = tmp_oai2;
-					localsettings.saved_openrouter_key = tmp_or1;
-					localsettings.saved_claude_key = tmp_claude1;
-					localsettings.saved_claude_addr = tmp_claude2;
-					localsettings.saved_palm_key = tmp_palm1;
-					localsettings.saved_kai_addr = tmp_kai;
-
-					//backwards compat support for newlines
-					if(localsettings.instruct_has_newlines==true || (loaded_storyobj.savedsettings != null && loaded_storyobj.savedsettings.instruct_has_newlines==null&&loaded_storyobj.savedsettings.instruct_has_markdown==null))
-					{
-						localsettings.instruct_has_newlines = false;
-						if(!localsettings.instruct_starttag.includes("\\n"))
-						{
-							localsettings.instruct_starttag = "\\n"+localsettings.instruct_starttag+"\\n";
-						}
-						if(!localsettings.instruct_endtag.includes("\\n"))
-						{
-							localsettings.instruct_endtag = "\\n"+localsettings.instruct_endtag+"\\n";
-						}
-					}
-
-					if (loaded_storyobj.savedaestheticsettings && loaded_storyobj.savedaestheticsettings != "") {
-						import_props_into_object(aestheticInstructUISettings,loaded_storyobj.savedaestheticsettings);
-					}
-
-					hide_popups();
-					render_gametext();
-				}, hide_popups);
+			if (storyobj.extrastopseq) {
+				extrastopseq = storyobj.extrastopseq;
 			}
 		} else {
 			//v2 load
-			if(loaded_storyobj.prompt!="")
+			if(storyobj.prompt!="")
 			{
-				gametext_arr.push(loaded_storyobj.prompt);
+				gametext_arr.push(storyobj.prompt);
 			}
-			for (var key in loaded_storyobj.actions.actions) {
-				var itm = loaded_storyobj.actions.actions[key];
+			for (var key in storyobj.actions.actions) {
+				var itm = storyobj.actions.actions[key];
 				gametext_arr.push(itm["Selected Text"]);
 			}
-			if (loaded_storyobj.authornotetemplate) {
-				current_anotetemplate = loaded_storyobj.authornotetemplate;
+			if (storyobj.authornotetemplate) {
+				current_anotetemplate = storyobj.authornotetemplate;
 			}
-			if (loaded_storyobj.authornote) {
-				current_anote = loaded_storyobj.authornote;
+			if (storyobj.authornote) {
+				current_anote = storyobj.authornote;
 			}
-			if (loaded_storyobj.memory) {
-				current_memory = loaded_storyobj.memory;
+			if (storyobj.memory) {
+				current_memory = storyobj.memory;
 			}
-			if (loaded_storyobj.worldinfo_v2 != null && loaded_storyobj.worldinfo_v2.entries != null) {
-				for (var key in loaded_storyobj.worldinfo_v2.entries) {
-					var itm = loaded_storyobj.worldinfo_v2.entries[key];
+			if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
+				for (var key in storyobj.worldinfo_v2.entries) {
+					var itm = storyobj.worldinfo_v2.entries[key];
 					if (itm.key.length > 0 && itm.content != null) {
 						let nwi = {
 							"key": itm.key[0],
@@ -4348,9 +4293,69 @@ Current version: 80
 					}
 				}
 			}
+		}
+
+		const import_settings = function()
+		{
+			let tmpapikey1 = localsettings.my_api_key;
+			let tmphc = localsettings.home_cluster;
+			let tmp_oai1 = localsettings.saved_oai_key;
+			let tmp_oai2 = localsettings.saved_oai_addr;
+			let tmp_or1 = localsettings.saved_openrouter_key;
+			let tmp_claude1 = localsettings.saved_claude_key;
+			let tmp_claude2 = localsettings.saved_claude_addr;
+			let tmp_palm1 = localsettings.saved_palm_key;
+			let tmp_kai = localsettings.saved_kai_addr;
+			import_props_into_object(localsettings, storyobj.savedsettings);
+			localsettings.my_api_key = tmpapikey1;
+			localsettings.home_cluster = tmphc;
+			localsettings.saved_oai_key = tmp_oai1;
+			localsettings.saved_oai_addr = tmp_oai2;
+			localsettings.saved_openrouter_key = tmp_or1;
+			localsettings.saved_claude_key = tmp_claude1;
+			localsettings.saved_claude_addr = tmp_claude2;
+			localsettings.saved_palm_key = tmp_palm1;
+			localsettings.saved_kai_addr = tmp_kai;
+
+			//backwards compat support for newlines
+			if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
+				localsettings.instruct_has_newlines = false;
+				if (!localsettings.instruct_starttag.includes("\\n")) {
+					localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
+				}
+				if (!localsettings.instruct_endtag.includes("\\n")) {
+					localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
+				}
+			}
+
+			if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
+				import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
+			}
+
+			//old versions dont have this flag
+			if(localsettings.entersubmit===true || localsettings.entersubmit===false)
+			{
+				document.getElementById("entersubmit").checked = localsettings.entersubmit;
+			}
 
 		}
-		render_gametext();
+
+		//port over old images to the new format
+		migrate_old_images_in_gametext();
+
+		//prompt to import settings
+		if(force_load_settngs)
+		{
+			import_settings();
+			render_gametext();
+		}
+		else if (storyobj.savedsettings && storyobj.savedsettings != "") {
+			import_settings();
+			render_gametext();
+		} else {
+			render_gametext();
+		}
+
 	}
 
 	function load_agnai_wi(obj,chatopponent,myname)
@@ -5184,9 +5189,7 @@ Current version: 80
 				.catch(error =>
 				{
 					console.log("Error: " + error);
-					msgbox(error,"Error fetching some workers",false,false,()=>{
-						hide_msgbox();
-					});
+					msgbox(error,"Error fetching some workers",false,false);
 				});
 		}
 		else
@@ -5261,12 +5264,12 @@ Current version: 80
 		},false,true);
 	}
 
-	var msgboxOnDone = hide_popups;
+	var msgboxOnDone = hide_msgbox;
 	function hide_msgbox() {
 		//hide msgbox ONLY
 		document.getElementById("msgboxcontainer").classList.add("hidden");
 	}
-	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false, onDoneFn=hide_popups) {
+	function msgbox(text, title="Error Encountered", isHtml=false, noBtn=false, onDoneFn=null) {
 		if (!text) { text = ""; }
 		if(isHtml)
 		{
@@ -5283,13 +5286,14 @@ Current version: 80
 		}else{
 			document.getElementById("msgboxbtnok").classList.remove("hidden");
 		}
-		msgboxOnDone = onDoneFn;
+		msgboxOnDone = ()=>{hide_msgbox(); if(onDoneFn){onDoneFn();}}
 		console.log("Msgbox: " + text);
 	}
 
 	var onYesFn = null;
 	var onNoFn = null;
-	function msgboxYesNo(text,title,onYes,onNo, isHtml=false)
+	var msgboxYesNoChecked = false;
+	function msgboxYesNo(text,title,onYes,onNo,isHtml=false,checkboxText="")
 	{
 		if (!text) { text = ""; }
 		document.getElementById("yesnocontainer").classList.remove("hidden");
@@ -5300,8 +5304,26 @@ Current version: 80
 		}else{
 			document.getElementById("yesnocontainertext").innerText = text;
 		}
-		onYesFn = onYes;
-		onNoFn = onNo;
+		if(checkboxText=="")
+		{
+			document.getElementById("yesnocontainercheckboxdiv").classList.add("hidden");
+		}
+		else
+		{
+			document.getElementById("yesnocontainercheckboxdiv").classList.remove("hidden");
+			document.getElementById("yesnocontainercheckboxtext").innerText = checkboxText;
+			document.getElementById("yesnocontainercheckbox").checked = true;
+		}
+		onYesFn = ()=>{
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			msgboxYesNoChecked = document.getElementById("yesnocontainercheckbox").checked;
+			if(onYes!=null){onYes();}
+		};
+		onNoFn = ()=>{
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			msgboxYesNoChecked = document.getElementById("yesnocontainercheckbox").checked;
+			if(onNo!=null){onNo();}
+		};
 	}
 
 	var onInputboxOk = null;
@@ -5435,9 +5457,7 @@ Current version: 80
 			}
 			else
 			{
-				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false,()=>{
-					hide_msgbox();
-				});
+				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false);
 			}
 		})
 		.catch(error => {
@@ -5459,7 +5479,7 @@ Current version: 80
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
-			if(!localflag && localsettings.saved_kai_addr!="")
+			if(!localflag)
 			{
 				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
 			}
@@ -5473,25 +5493,16 @@ Current version: 80
 				document.getElementById("openrouterdesc").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("custom_oai_endpoint").classList.add("hidden");
-				if(localsettings.saved_openrouter_key!="")
-				{
-					document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
-				}
+				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
 			}
 			else
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
 				document.getElementById("openrouterdesc").classList.add("hidden");
-				document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
 				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
-				if(localsettings.saved_oai_key!="")
-				{
-					document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
-					if(localsettings.saved_oai_addr!="")
-					{
-						document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
-					}
-				}
+				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+				document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr?localsettings.saved_oai_addr:default_oai_base);
+
 			}
 
 			togglejailbreak();
@@ -5503,23 +5514,14 @@ Current version: 80
 		else if(epchoice==3)
 		{
 			document.getElementById("claudecustom").classList.remove("hidden");
-			document.getElementById("custom_claude_endpoint").value = custom_claude_endpoint;
-			if(localsettings.saved_claude_key!="")
-			{
-				document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
-				if(localsettings.saved_claude_addr!="")
-				{
-					document.getElementById("custom_claude_endpoint").value = localsettings.saved_claude_addr;
-				}
-			}
+			document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
+			document.getElementById("custom_claude_endpoint").value = (localsettings.saved_claude_addr?localsettings.saved_claude_addr:default_claude_base);
+
 		}
 		else if(epchoice==4)
 		{
 			document.getElementById("palmcustom").classList.remove("hidden");
-			if(localsettings.saved_palm_key!="")
-			{
-				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
-			}
+			document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
 		}
 	}
 
@@ -5941,9 +5943,10 @@ Current version: 80
 				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
 				</div>
 				<div style="text-align: right; align-self: center; width: 180px;">
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Load</button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Del</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
 				</div></div>`;
 			filetable += entry;
 		}
@@ -5959,7 +5962,7 @@ Current version: 80
 		{
 			savename = testslot;
 		}
-		let newcompressedstory = generate_compressed_story();
+		let newcompressedstory = generate_compressed_story(true,true,true);
 
 		const slotwrite = function()
 		{
@@ -5978,11 +5981,8 @@ Current version: 80
 		if(testslot)
 		{
 			msgboxYesNo("Overwrite existing story in Browser Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
-				document.getElementById("yesnocontainer").classList.add("hidden");
 				slotwrite();
-			},()=>{
-				document.getElementById("yesnocontainer").classList.add("hidden");
-			});
+			},null);
 		}else{
 			slotwrite();
 		}
@@ -5994,14 +5994,26 @@ Current version: 80
 		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
 		if(loadedstorycompressed)
 		{
-			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-			if (!safe_to_overwrite) {
-				pending_found_story = loadedstorycompressed;
-				hide_popups();
-				prompt_overwrite();
-			} else {
-				import_share_story(loadedstorycompressed);
-				hide_popups();
+			hide_popups();
+			import_compressed_story(loadedstorycompressed,false);
+		}else{
+			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+		}
+	}
+	function download_from_slot(slot)
+	{
+		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
+		if(loadedstorycompressed)
+		{
+			tempfileobj = decompress_story(loadedstorycompressed);
+			if(tempfileobj)
+			{
+				save_file_button(true);
+			}
+			else
+			{
+				tempfileobj = generate_base_storyobj();
+				msgbox("Story could not be downloaded. Try loading it first.","Browser Storage Load Failed");
 			}
 		}else{
 			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
@@ -6013,10 +6025,8 @@ Current version: 80
 		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
 			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", "");
 			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", "");
-			document.getElementById("yesnocontainer").classList.add("hidden");
 			display_saveloadcontainer();
 		},()=>{
-			document.getElementById("yesnocontainer").classList.add("hidden");
 			display_saveloadcontainer();
 		});
 	}
@@ -6274,7 +6284,6 @@ Current version: 80
 					});
 				hide_popups();
 			},()=>{
-				document.getElementById("yesnocontainer").classList.add("hidden");
 			},true);
 		}
 	}
@@ -6457,6 +6466,7 @@ Current version: 80
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
+		document.getElementById("compressnewlines").checked = localsettings.compressnewlines;
 		document.getElementById("eos_ban_mode").value = localsettings.eos_ban_mode;
 		document.getElementById("persist_session").checked = localsettings.persist_session;
 		document.getElementById("opmode").value = localsettings.opmode;
@@ -6665,6 +6675,7 @@ Current version: 80
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
+		localsettings.compressnewlines = (document.getElementById("compressnewlines").checked ? true : false);
 		localsettings.eos_ban_mode = document.getElementById("eos_ban_mode").value;
 		localsettings.persist_session = (document.getElementById("persist_session").checked ? true : false);
 		if(document.getElementById("opmode").value==3)
@@ -6875,16 +6886,13 @@ Current version: 80
 
 	}
 
-
-	function prompt_overwrite() {
-		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Warning",confirm_overwrite,hide_popups);
-	}
-	function confirm_overwrite() {
-		if (pending_found_story && pending_found_story != "") {
-			import_share_story(pending_found_story);
-			pending_found_story = null;
-		}
-		hide_popups();
+	//triggers when loading from slot, or when loading from url share
+	function import_compressed_story_prompt_overwrite(compressed_story) {
+		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Story Warning",()=>{
+			if (compressed_story && compressed_story != "") {
+				import_compressed_story(compressed_story,false);
+			}
+		},null,false);
 	}
 
 	function display_newgame() {
@@ -6973,11 +6981,8 @@ Current version: 80
 			if(temp_automem_store.trim()!="")
 			{
 				msgboxYesNo("This will modify existing memory. Proceed?","Confirm Modify",()=>{
-					document.getElementById("yesnocontainer").classList.add("hidden");
 					onOk();
-				},()=>{
-					document.getElementById("yesnocontainer").classList.add("hidden");
-				});
+				},null);
 			}
 			else
 			{
@@ -7052,8 +7057,8 @@ Current version: 80
 		current_anote = "";
 		current_wi = [];
 		pending_context_preinjection = "";
+		extrastopseq = "";
 		current_anotetemplate = "[Author's note: <|>]";
-		loaded_storyobj = generate_base_storyobj();
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
 		image_db = {};
@@ -7065,12 +7070,31 @@ Current version: 80
 		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
+	function reset_all_settings()
+	{
+		msgboxYesNo("Reset ALL settings to their defaults? This will also reset your aesthetic UI and your current story!","Confirm Reset All Settings",()=>{
+			localsettings = JSON.parse(JSON.stringify(defaultsettings));
+			let ns = new AestheticInstructUISettings();
+			aestheticInstructUISettings = deepCopyAestheticSettings(ns);
+			refreshPreview(false);
+			restart_new_game();
+			display_settings();
+			confirm_settings();
+		},null);
+
+	}
+
 	function btn_editmode()
 	{
 		document.getElementById("allowediting").checked = true;
 		toggle_editable();
 	}
 
+	function toggle_entersends()
+	{
+		localsettings.entersubmit = (document.getElementById("entersubmit").checked ? true : false);
+		render_gametext();
+	}
 	function toggle_editable() {
 		if (gametext_arr.length == 0)
 		{
@@ -7725,7 +7749,7 @@ Current version: 80
 		if (is_using_custom_ep()) {
 			console.log("submit custom api");
 
-			pending_response_id = "submit-v1-dummy-id"; //dummy id
+			pending_response_id = "submit-v1-dummy-id-"+(Math.floor(1000 + Math.random() * 9000)).toString(); //dummy id, autogenerated
 			poll_ticks_passed = 0;
 			poll_in_progress = false;
 			synchro_polled_response = null;
@@ -7807,7 +7831,8 @@ Current version: 80
 					kobold_api_stream_sse(sub_endpt, submit_payload);
 				} else {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
-					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
+					let trackedgenid = pending_response_id; //if it changes, stop streaming
+					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, trackedgenid, "", streamchunk);
 				}
 			}
 			else if (custom_oai_key != "")//handle for OAI
@@ -8326,6 +8351,8 @@ Current version: 80
 		//trim trailing whitespace, and multiple newlines
 		if (localsettings.trimwhitespace) {
 			gentxt = gentxt.replace(/[\t\r\n ]+$/, '');
+		}
+		if (localsettings.compressnewlines) {
 			gentxt = gentxt.replace(/[\r\n]+/g, '\n');
 		}
 
@@ -8875,20 +8902,14 @@ Current version: 80
 				//rather than dump it all into one history, let's split it into paragraphs
 				let fullmergedstory = gametext_elem.innerText;
 
+				//if it ends with a single newline, remove it to avoid ghost newlines
+				if (fullmergedstory.endsWith("\n") && !fullmergedstory.endsWith("\n\n")) {
+					fullmergedstory = fullmergedstory.slice(0, -1);
+				}
+
 				let newestChunk = "";
 				if(editedChunks.length>1) //split by chunk lengths in reverse order, we only want the newest
 				{
-					// for(let c=editedChunks.length-1;c>=0;--c)
-					// {
-					// 	let cl = editedChunks[c].length;
-					// 	if(c==0)
-					// 	{
-					// 		cl = Math.max(cl,fullmergedstory.length); //for first element, fill remainder
-					// 	}
-					// 	var endpart = fullmergedstory.slice(-cl);
-					// 	fullmergedstory = fullmergedstory.slice(0,-cl);
-					// 	gametext_arr.unshift(endpart);
-					// }
 
 					let cl = editedChunks[editedChunks.length-1].length;
 					if(cl>0)
@@ -8923,7 +8944,6 @@ Current version: 80
 						gametext_arr.push(newestChunk);
 					}
 				}
-
 
 				render_gametext();
 				console.log("Merged edit field. Parts:" + gametext_arr.length);
@@ -9043,6 +9063,7 @@ Current version: 80
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
+		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 
 		//adventure mode has a toggle to choose action mode
 		if(localsettings.opmode==2)
@@ -9116,14 +9137,15 @@ Current version: 80
 
 			//kick out of edit mode
 			if (document.getElementById("allowediting").checked) {
-				document.getElementById("allowediting").checked = false;
+				document.getElementById("allowediting").checked = inEditMode = false;
 				toggle_editable();
 			}
 
 		}
 		else {
+
 			let fulltxt = "";
-			if (document.getElementById("allowediting").checked) {
+			if (inEditMode) {
 				fulltxt = concat_gametext(false, "", "%SpnStg%", "%SpnEtg%",true);
 			} else {
 				fulltxt = concat_gametext(false, "", "", "",true);
@@ -9131,7 +9153,7 @@ Current version: 80
 			}
 
 
-			if(localsettings.opmode==4 && !document.getElementById("allowediting").checked)
+			if(localsettings.opmode==4 && !inEditMode)
 			{
 				//accept all newline formats for backwards compatibility
 				fulltxt = replaceAll(fulltxt, "\n\n"+get_instruct_starttag(true)+"\n\n", `%SpcStg%`);
@@ -9341,7 +9363,7 @@ Current version: 80
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
 		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
-		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
+
 		if (!inEditMode && isStyleApplicable)
 		{
 			let textToRender = (gametext_arr.length == 0 ? document.getElementById("gametext").innerHTML : concat_gametext(false, "", "", "", true));
@@ -9563,7 +9585,7 @@ Current version: 80
 		//autosave
 		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
-			let compressedstory = generate_compressed_story();
+			let compressedstory = generate_compressed_story(true,true,true);
 			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 		}
 		console.log("autosave done");
@@ -10084,10 +10106,7 @@ Current version: 80
 				setElementColor(`${role}-bubble-colorselector`, aestheticInstructUISettings[`bubbleColor_${role}`], true);
 			}
 		}
-		if(aestheticInstructUISettings.code_block_background=="rgb(0, 0, 0)")
-		{
-			console.log("oof");
-		}
+
 		setElementColor('code-block-background-colorselector', aestheticInstructUISettings.code_block_background, false);
 		setElementColor('code-block-foreground-colorselector', aestheticInstructUISettings.code_block_foreground, false);
 
@@ -10378,10 +10397,9 @@ Current version: 80
 				<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 			</div>
 			<div class="box flex flex-push-right">
-				<input type="checkbox" id="entersubmit" checked>
+				<input type="checkbox" id="entersubmit" onclick="toggle_entersends()" checked>
 				<div class="box-label"><label class="unstyled" for="entersubmit">Enter Sends</label></div>
-				<input type="checkbox" id="allowediting"
-					onclick="toggle_editable()">
+				<input type="checkbox" id="allowediting"  onclick="toggle_editable()">
 				<div class="box-label"><label class="unstyled" for="allowediting">Allow Editing</label></div>
 			</div>
 		</div>
@@ -10677,10 +10695,7 @@ Current version: 80
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
 				Unsaved data will be lost.<br><br>
-
-					<div class="" title="If disabled, brings you back to the start page"><span style=" vertical-align: middle;">Keep AI Selected? </span> <input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked></div>
-
-
+				<div class="" title="If disabled, brings you back to the start page"><span style=" vertical-align: middle;">Keep AI Selected? </span> <input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked></div>
 				<br>
 			</div>
 			<div class="popupfooter">
@@ -11041,6 +11056,7 @@ Current version: 80
 							<div class="justifyleft settingsmall"  title="Play a sound when generation is complete">Beep on Done </div>
 						   <input type="checkbox" id="beep_on" style="margin:0px 0 0;">
 						</div>
+						<button id="resetallsettings" type="button" class="btn btn-primary bg_red" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="reset_all_settings()">Reset ALL Settings</button>
 					</div>
 
 					<div class="settingitem">
@@ -11083,8 +11099,13 @@ Current version: 80
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="">Trim Whitespace <span class="helpicon">?<span
-								class="helptext">Compresses double newlines and removes trailing whitespace in AI output.</span></span></div>
+								class="helptext">Removes trailing whitespace in AI output.</span></span></div>
 						   <input type="checkbox" id="trimwhitespace" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall" title="">Compress Newlines <span class="helpicon">?<span
+								class="helptext">Compresses multiple newlines into one newline in AI output.</span></span></div>
+						   <input type="checkbox" id="compressnewlines" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="">EOS Token Ban <span class="helpicon">?<span
@@ -11106,7 +11127,7 @@ Current version: 80
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session </div>
-						   <input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
+							<input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Save File Incl. Settings </div>
@@ -11316,8 +11337,8 @@ Current version: 80
 				<div class="popuptitletext" id="yesnocontainertitle"></div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
-
 			</div>
+			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
 				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
