@@ -465,7 +465,6 @@ class HFVocab:
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
         byte_encoder = bytes_to_unicode()
         byte_decoder = {v: k for k, v in byte_encoder.items()}
-        print(len(byte_decoder), byte_decoder)
         
         for i in range(tokenizer.vocab_size):
             text = reverse_vocab[i].encode("utf-8")
