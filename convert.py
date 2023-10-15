@@ -414,6 +414,7 @@ class SentencePieceVocab:
     def __repr__(self) -> str:
         return f"<SentencePieceVocab with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
 
+
 class HFVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
