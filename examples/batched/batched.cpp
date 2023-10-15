@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {
     ctx_params.seed  = 1234;
     ctx_params.n_ctx = n_kv_req;
     ctx_params.n_batch = std::max(n_len, n_parallel);
-    ctx_params.n_threads = params.n_threads;
+    ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
