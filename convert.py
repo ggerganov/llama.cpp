@@ -1108,7 +1108,7 @@ def load_vocab(path: Path, vocabtype: str | None) -> Vocab:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
-    if path.is_dir():
+    if path.is_dir() and vocabtype != 'hf':
         vocab_file = "tokenizer.model"
         if vocabtype == 'bpe':
             vocab_file = "vocab.json"
