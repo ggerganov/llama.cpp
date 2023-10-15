@@ -21,9 +21,10 @@ struct clip_vision_hparams {
     float eps;
 };
 
-struct clip_ctx * clip_model_load(const char * fname, const int verbosity);
-
-void clip_free(struct clip_ctx * ctx);
+/** load mmproj model */
+LLAMA_API struct clip_ctx * clip_model_load(const char * fname, const int verbosity);
+/** free mmproj model */
+LLAMA_API void clip_free(struct clip_ctx * ctx);
 
 size_t clip_embd_nbytes(const struct clip_ctx * ctx);
 int clip_n_patches(const struct clip_ctx * ctx);
