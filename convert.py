@@ -27,6 +27,7 @@ from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Litera
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+from transformers import AutoTokenizer
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
