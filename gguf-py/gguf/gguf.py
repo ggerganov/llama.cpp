@@ -652,7 +652,7 @@ class GGUFWriter:
         print(f"This gguf file is for {endianess_str} only")
 
     def write_header_to_file(self):
-        self.fout.write(struct.pack(f"{self.pack_prefix}I", GGUF_MAGIC))
+        self.fout.write(struct.pack("<I", GGUF_MAGIC))
         self.fout.write(struct.pack(f"{self.pack_prefix}I", GGUF_VERSION))
         self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.ti_data_count))
         self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.kv_data_count))

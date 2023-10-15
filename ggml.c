@@ -20916,13 +20916,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         gguf_fread_el(file, &magic, sizeof(magic), &offset);
 
         if (magic != GGUF_MAGIC) {
-            if (magic == GGUF_WRONG_ENIAN_MAGIC)
-            {
-                fprintf(stderr, "Endianess of the GGUF file and platform do not match.%s: invalid magic number %08x.\n", __func__, magic);
-            }
-            else {
-                fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
-            }
+            fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
             fclose(file);
             return NULL;
         }

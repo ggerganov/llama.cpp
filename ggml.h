@@ -231,8 +231,18 @@
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
 
-#define GGUF_MAGIC   0x46554747 // "GGUF"
-#define GGUF_WRONG_ENIAN_MAGIC 0x47475546 
+#if defined(__linux__) 
+    #include <endian.h>
+    #if BYTE_ORDER == LITTLE_ENDIAN
+        #define GGUF_MAGIC 0x46554747
+    #elif BYTE_ORDER == BIG_ENDIAN
+        #define GGUF_MAGIC 0x47475546
+    #endif
+#else
+    // Use little endian magic uint_32 value
+    #define GGUF_MAGIC 0x46554747
+#endif
+
 #define GGUF_VERSION 3
 
 #define GGUF_DEFAULT_ALIGNMENT 32
