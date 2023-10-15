@@ -1,8 +1,7 @@
 #include "sampling.h"
 
 struct llama_sampling_context * llama_sampling_init(const struct gpt_params & params) {
-    struct llama_sampling_context * result =
-        (struct llama_sampling_context *) malloc(sizeof(struct llama_sampling_context));
+    struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params = params.sampling_params;
     result->grammar = nullptr;
@@ -34,7 +33,7 @@ void llama_sampling_free(struct llama_sampling_context * ctx) {
         llama_grammar_free(ctx->grammar);
     }
 
-    free(ctx);
+    delete ctx;
 }
 
 void llama_sampling_reset(llama_sampling_context * ctx) {
