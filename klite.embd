@@ -6,13 +6,14 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 78
+Current version: 80
 -Concedo
 -->
 
 <script>
 	const urlParams = new URLSearchParams(window.location.search);
 	const localflag = true;
+	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
 </script>
 
 <head>
@@ -644,6 +645,21 @@ Current version: 78
 			width: 200px;
 		}
 
+		#outerbodybg
+		{
+			z-index:-1;
+			position: absolute;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			left: 0;
+		}
+		#outerbody
+		{
+			z-index:-2;
+			position:relative;
+		}
+
 		body.connected .dropdown-menu,
 		.dropdown-menu.always-available {
 			background-color: #337ab7;
@@ -1021,7 +1037,6 @@ Current version: 78
 			align-items: center;
 		}
 
-
 		.popuptitlebar {
 			padding: 10px;
 			background-color: #757575;
@@ -1143,6 +1158,30 @@ Current version: 78
 		.tablelines
 		{
 			border: 1px solid;
+		}
+
+
+		.saveloadpopup {
+			width: 660px;
+			background-color: #262626;
+			margin-top: 90px;
+		}
+		@media (max-width: 768px) {
+			.saveloadpopup {
+				width: 100%;
+				background-color: #262626;
+				margin-top: 80px;
+			}
+		}
+		.saveloadgrid
+		{
+			height: auto;
+    		overflow-y: auto;
+			margin-top: 4px;
+			padding: 6px;
+			display: grid;
+			gap: 6px;
+			/* grid-auto-rows: 56px; */
 		}
 
 
@@ -2805,6 +2844,74 @@ Current version: 78
 		}
 	}
 
+	function kobold_api_stream_sse(sub_endpt,submit_payload)
+	{
+		synchro_pending_stream = "";
+		fetch(sub_endpt, {method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify(submit_payload)})
+		.then(resp => {
+			resp.body
+			.pipeThrough(new TextDecoderStream())
+			.pipeThrough(new TransformStream({
+				start(ctrl) {
+					ctrl.buf = '';
+				},
+				transform(chunk, ctrl) {
+					ctrl.buf += chunk;
+					let evs = [];
+					let m;
+					while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
+						evs.push({event: m[1], data: JSON.parse(m[2])});
+						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
+					}
+					if (evs.length) {
+						ctrl.enqueue(evs);
+					}
+				}
+			}))
+			.pipeTo(new WritableStream({
+				write(chunk) {
+					let was_empty = (synchro_pending_stream=="");
+					//cut stream if aborted
+					if(pending_response_id && pending_response_id != "-1" && pending_response_id != "")
+					{
+						for (let event of chunk) {
+							if (event.event === 'message') {
+								synchro_pending_stream += event.data.token;
+							}
+						}
+					}
+					if(was_empty && synchro_pending_stream!="")
+					{
+						render_gametext(false);
+					}
+					else
+					{
+						update_pending_stream_displays();
+					}
+				},
+				close() { //end of stream
+					synchro_polled_response = synchro_pending_stream;
+					synchro_pending_stream = "";
+					poll_pending_response();
+				},
+				abort(e) {
+					console.error('Error:', error);
+					clear_poll_flags();
+					render_gametext();
+					msgbox("Error while submitting prompt: " + error);
+				},
+			}));
+		})
+		.catch((error) => {
+			console.error('Error:', error);
+			clear_poll_flags();
+			render_gametext();
+			msgbox("Error while submitting prompt: " + error);
+		});
+	}
+
 	function playbeep() {
     	var sound = new Audio("data:audio/wav;base64,UklGRkwBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YScBAAB8gIN8fICAgIB8gHmAjXVkhptyXYqbcmiKjXKAim5ymIpWcqmKU3Klhl18kXl5jXlkjZ5oVpelZFaUm2trioN1ioZkeaKDU3msgFN8nnxog4Nyg5FrZJubXWGem2FnlIpufIZyfJR8XYOleVaDonlhg5F1eYZ5dZGNYXWbimhrm4Nrg3KDjWt/hm6UkUmDvV1TrINdkXxol4Boinx1nmtWr5RChqVheZdkeZtucop1io1WgLNhWql/XZd/YZSNZH+GeY1yZKKNUIaeZHmYZ3WbeWuGg4B/a4Oba2uXgGuNf2iKjWt5ioB/eXWNg2t/jXJ8inJ5kXxug4N8fHl/hnl1hnx5hn91g4Z1fIN8fHx8f4B5gIB8gH98fIN8fH+AfHx8fH98fIB/AA==");
 		sound.play();
@@ -2916,6 +3023,7 @@ Current version: 78
 	const stablehorde_model_endpoint = stablehorde_url + "/api/v2/status/models";
 
 	const kobold_custom_gen_endpoint = "/api/v1/generate";
+	const kobold_custom_gen_stream_endpoint = "/api/extra/generate/stream";
 	const kobold_custom_mdl_endpoint = "/api/v1/model";
 	const kobold_custom_version_endpoint = "/api/v1/info/version";
 	const kobold_custom_maxctxlen_endpoint = "/api/v1/config/max_context_length";
@@ -2934,12 +3042,12 @@ Current version: 78
 
 	const claude_submit_endpoint = "/complete";
 
+	const default_openrouter_base = "https://openrouter.ai/api/v1";
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 
 	//support for quick news updates
-	const news_endpoint = "https://news.concedo.workers.dev"
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
 	//if cors is restricted, fall back to our cors proxy
@@ -2998,6 +3106,7 @@ Current version: 78
 	var waiting_for_autosummary = false;
 	var pending_found_story = null;
 	var filter_enabled = true;
+	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
 	var last_known_filename = "saved_story.json";
@@ -3013,6 +3122,7 @@ Current version: 78
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
 		saved_oai_addr: "", //do not ever share this in save files!
+		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: "", //do not ever share this in save files!
 		saved_palm_key: "", //do not ever share this in save files!
@@ -3024,7 +3134,7 @@ Current version: 78
 		trimsentences: true, //trim to last punctuation
 		trimwhitespace: false, //trim trailing whitespace
 		eos_ban_mode: 0, //allow the EOS token when using locally 0=auto,1=unban,2=ban
-		opmode: 1, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
+		opmode: 4, //what mode are we in? 1=story, 2=adventure, 3=chat, 4=instruct
 		adventure_is_action: false, //in adventure mode, determine story or action
 		adventure_context_mod: true, //extra injection for adventure mode
 		chatname: "You", //name to use in chat
@@ -3038,7 +3148,7 @@ Current version: 78
 		beep_on: false,
 		image_styles: "",
 		grammar:"",
-		tokenstreaming: (localflag?true:false),
+		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
 		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -3112,9 +3222,8 @@ Current version: 78
 		{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"genamt":80,"top_k":0,"top_p":0.5,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"genamt":80,"top_k":0,"top_p":1,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"TavernAI","description":"Preset used in TavernAI.","temp":0.79,"genamt":80,"top_k":0,"top_p":0.9,"top_a":0,"typical":1,"tfs":0.95,"rep_pen":1.19,"rep_pen_range":1024,"rep_pen_slope":0.9,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":80,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":80,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":1.5,"genamt":80,"top_k":85,"top_p":0.24,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Best Guess 6B","description":"A subtle change with alternative context settings.","temp":0.8,"genamt":80,"top_k":100,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":3.4,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"genamt":80,"top_k":0,"top_p":0.98,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"genamt":80,"top_k":100,"top_p":1,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"genamt":80,"top_k":0,"top_p":0.95,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"genamt":80,"top_k":12,"top_p":1,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"genamt":80,"top_k":0,"top_p":1,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]},{"preset":"Default 20B","description":"Good starting settings for NeoX 20B.","temp":0.6,"genamt":80,"top_k":0,"top_p":0.9,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.04,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]}
 	];
 
-	//attempt to load settings
-	function init() {
-
+	function polyfills()
+	{
 		//polyfill for forEach
 		if (window.NodeList && !NodeList.prototype.forEach) {
 			NodeList.prototype.forEach = function (callback, thisArg) {
@@ -3147,6 +3256,38 @@ Current version: 78
 			};
 		}
 
+		//polyfill for padstart
+		if (!String.prototype.padStart) {
+			String.prototype.padStart = function padStart(targetLength,padString) {
+				targetLength = targetLength>>0; //truncate if number or convert non-number to 0;
+				padString = String((typeof padString !== 'undefined' ? padString : ' '));
+				if (this.length > targetLength) {
+					return String(this);
+				}
+				else {
+					targetLength = targetLength-this.length;
+					if (targetLength > padString.length) {
+						padString += padString.repeat(targetLength/padString.length); //append to original to ensure we are longer than needed
+					}
+					return padString.slice(0,targetLength) + String(this);
+				}
+			};
+		}
+
+		try {
+			// Test if lookahead is supported, enhance italics regex if so
+			let improved_italics = new RegExp("\\*(?!\\s)(.+?)(?<!\\s)\\*","g");
+			italics_regex = improved_italics;
+		} catch (e) {
+			console.log('Lookaheads are not supported in this environment.');
+		}
+
+	}
+
+	//attempt to load settings
+	function init() {
+
+		polyfills();
 
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
@@ -3190,8 +3331,8 @@ Current version: 78
 
 		console.log("Init started");
 		try {
-			let loadedsettingsjson = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_settings");
-			let loadedstorycompressed = localStorage.getItem((localflag?"e_":"")+"kaihordewebui_story");
+			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
+			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3216,7 +3357,7 @@ Current version: 78
 		const tokenstreaming = urlParams.get('streaming');
 		if(tokenstreaming)
 		{
-			localsettings.tokenstreaming = true;
+			localsettings.tokenstreammode = 1;
 		}
 
 		//toggle genimg btn
@@ -3247,7 +3388,7 @@ Current version: 78
 		//fetch for news updates, for local mode, we don't fetch any news info. They can find updates themselves.
 		if(!localflag)
 		{
-			fetch(localflag?news_endpoint:horde_news_endpoint)
+			fetch(horde_news_endpoint)
 			.then(x => x.json())
 			.then(data => {
 				if(data && data!="" && data.newstitle && data.newstext && data.newstitle!="" && data.newstext!="")
@@ -3287,6 +3428,7 @@ Current version: 78
 	{
 		const dropZone = document.getElementById('gamescreen');
 		const dropZone2 = document.getElementById('chat_msg_body');
+		const dropZone3 = document.getElementById('outerbodybg');
 
 		const onDropFn = function(e){
 			e.preventDefault();
@@ -3327,6 +3469,14 @@ Current version: 78
 			},
 			false
 		);
+		dropZone3.addEventListener(
+			"dragover",
+			(e) => {
+				e.preventDefault();
+				e.stopPropagation();
+			},
+			false
+		);
 		dropZone.addEventListener(
 			"drop",
 			(e) => {
@@ -3335,6 +3485,13 @@ Current version: 78
 			false
 		);
 		dropZone2.addEventListener(
+			"drop",
+			(e) => {
+				onDropFn(e);
+			},
+			false
+		);
+		dropZone3.addEventListener(
 			"drop",
 			(e) => {
 				onDropFn(e);
@@ -3425,6 +3582,8 @@ Current version: 78
 					} else if (foundChub && foundChub != "") {
 						display_scenarios();
 						get_chubai_scenario(foundChub);
+						//purge url params
+						window.history.replaceState(null, null, window.location.pathname);
 					}
 					else {
 						if (popup_aiselect) {
@@ -3550,6 +3709,11 @@ Current version: 78
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
 	}
+	function is_using_kcpp_with_sse() //need 1.39 for multibyte fix
+	{
+		let browsersupported = (self.TransformStream!=null && self.TextDecoderStream!=null && self.WritableStream!=null);
+		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.39") > 0);
+	}
 	function is_using_kcpp_with_mirostat()
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
@@ -3559,10 +3723,14 @@ Current version: 78
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
 	}
 
-	//0 is none, 1 is pseudostreaming, 2 is true streaming
+	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
 	function determine_streaming_type()
 	{
-		let streamtype = (localsettings.tokenstreaming ? 1 : 0);
+		if(localsettings.tokenstreammode==2 && is_using_kcpp_with_sse())
+		{
+			return 3;
+		}
+		let streamtype = (localsettings.tokenstreammode>0 ? 1 : 0);
 		let pstreamamount = urlParams.get('streamamount');
 		if(streamtype==1 && is_using_kcpp_with_streaming() && (pstreamamount == null || pstreamamount <= 0))
 		{
@@ -3599,7 +3767,7 @@ Current version: 78
 
 	function is_using_web_lite()
 	{
-		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("kaihordewebui.github.io"));
+		return (window.location.hostname.includes("koboldai.net") || window.location.hostname.includes("lostruins.github.io"));
 	}
 
 	function get_most_common_cluster(arr)
@@ -3656,6 +3824,7 @@ Current version: 78
 			story.savedsettings.my_api_key = "0000000000";
 			story.savedsettings.home_cluster = text_hordes[0].baseurl;
 			story.savedsettings.saved_oai_key = "";
+			story.savedsettings.saved_openrouter_key = "";
 			story.savedsettings.saved_oai_addr = "";
 			story.savedsettings.saved_claude_key = "";
 			story.savedsettings.saved_claude_addr = "";
@@ -3667,7 +3836,7 @@ Current version: 78
 			}
 		}
 		var storyjson = JSON.stringify(story);
-		console.log("Exporting story: " + storyjson);
+		console.log("Exporting story: ", story);
 
 		//var cstoryjson = LZString.compressToEncodedURIComponent(storyjson);
 		var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
@@ -3776,6 +3945,7 @@ Current version: 78
 				let tmphc = localsettings.home_cluster;
 				let tmp_oai1 = localsettings.saved_oai_key;
 				let tmp_oai2 = localsettings.saved_oai_addr;
+				let tmp_or1 = localsettings.saved_openrouter_key;
 				let tmp_claude1 = localsettings.saved_claude_key;
 				let tmp_claude2 = localsettings.saved_claude_addr;
 				let tmp_palm1 = localsettings.saved_palm_key;
@@ -3785,6 +3955,7 @@ Current version: 78
 				localsettings.home_cluster = tmphc;
 				localsettings.saved_oai_key = tmp_oai1;
 				localsettings.saved_oai_addr = tmp_oai2;
+				localsettings.saved_openrouter_key = tmp_or1;
 				localsettings.saved_claude_key = tmp_claude1;
 				localsettings.saved_claude_addr = tmp_claude2;
 				localsettings.saved_palm_key = tmp_palm1;
@@ -3795,6 +3966,7 @@ Current version: 78
 				import_props_into_object(aestheticInstructUISettings,story.savedaestheticsettings);
 			}
 
+			render_gametext();
 
 		} else {
 			msgbox("Could not import from URL. Is it valid?");
@@ -3817,6 +3989,11 @@ Current version: 78
 			"wifolders_l": []
 		};
 		return gs;
+	}
+
+	function load_file_button()
+	{
+		document.getElementById('loadfileinput').click();
 	}
 
 	var tempfileurl = null;
@@ -3908,6 +4085,7 @@ Current version: 78
 			loaded_storyobj.savedsettings.saved_claude_key = "";
 			loaded_storyobj.savedsettings.saved_claude_addr = "";
 			loaded_storyobj.savedsettings.saved_kai_addr = "";
+			loaded_storyobj.savedsettings.saved_openrouter_key = "";
 
 			loaded_storyobj.savedaestheticsettings = JSON.parse(JSON.stringify(aestheticInstructUISettings, null, 2));
 		}else{
@@ -4096,6 +4274,7 @@ Current version: 78
 					let tmphc = localsettings.home_cluster;
 					let tmp_oai1 = localsettings.saved_oai_key;
 					let tmp_oai2 = localsettings.saved_oai_addr;
+					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
 					let tmp_palm1 = localsettings.saved_palm_key;
@@ -4105,6 +4284,7 @@ Current version: 78
 					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
+					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
 					localsettings.saved_palm_key = tmp_palm1;
@@ -4234,6 +4414,7 @@ Current version: 78
 		let scenario = obj.scenario?obj.scenario:"";
 		let examplemsg = obj.mes_example?obj.mes_example:"";
 		let greeting = obj.first_mes?obj.first_mes:"";
+		let sysprompt = obj.system_prompt?obj.system_prompt:"";
 
 		//post process
 		if(scenario!="")
@@ -4244,7 +4425,11 @@ Current version: 78
 		{
 			examplemsg = "\n"+examplemsg;
 		}
-		let combinedmem = memory + scenario + examplemsg;
+		if(sysprompt!="")
+		{
+			sysprompt = sysprompt+"\n";
+		}
+		let combinedmem = sysprompt + memory + scenario + examplemsg;
 		let agnaidatafieldsempty = scenario + examplemsg + (obj.personality?obj.personality:"") + greeting;
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
@@ -4261,7 +4446,7 @@ Current version: 78
 			localsettings.chatname = myname;
 			localsettings.chatopponent = chatopponent;
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
-			current_memory = combinedmem + "\n<START>";
+			current_memory = combinedmem + "\n***";
 			localsettings.opmode = 3;
 			localsettings.gui_type_chat = 2;
 			//handle character book
@@ -4297,7 +4482,7 @@ Current version: 78
 		localsettings.chatname = myname;
 		localsettings.chatopponent = chatopponent;
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
-		current_memory = memory + scenario + examplemsg + "\n<START>";
+		current_memory = memory + scenario + examplemsg + "\n***";
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
 		render_gametext();
@@ -4409,11 +4594,11 @@ Current version: 78
 						let cdef = data.definition?data.definition.replace("END_OF_DIALOG","").trim():"";
 						let cdesc = data.description?data.description:"";
 						let greeting = data.greeting?data.greeting:"";
-						let previewtxt = replaceAll(cdesc,"{{char}}",botname,true);
+						let previewtxt = (data.title ? data.title + '\n\n' : '') + replaceAll(cdesc,"{{char}}",botname,true);
 						previewtxt = replaceAll(previewtxt,"{{user}}","You",true);
 						temp_scenario =
 						{
-							"title":data.title?data.title:"",
+							"title":data.name?data.name:"",
 							"desc": previewtxt,
 							"opmode":3,
 							"chatname": "You",
@@ -4505,7 +4690,7 @@ Current version: 78
 		}
 		document.getElementById("scenariodesc").innerHTML = image+`<p><b><u>`+escapeHtml(temp_scenario.title)+`</u></b></p>`+
 		`<p><b>Mode:</b> `+(temp_scenario.opmode==1?"Story":(temp_scenario.opmode==2?"Adventure":(temp_scenario.opmode==3?"Chat":"Instruct"))) + author+`</p>`
-		+`<p>`+(temp_scenario.desc!=""?escapeHtml(temp_scenario.desc):"[No Description Given]") +`</p>`;
+		+`<p>`+(temp_scenario.desc!=""?escapeHtml(temp_scenario.desc).replace(/\n/g, '<br>'):"[No Description Given]") +`</p>`;
 	}
 	function complete_load_scenario()
 	{
@@ -4803,7 +4988,7 @@ Current version: 78
 
 	function show_last_req()
 	{
-		msgbox(last_request_str,"Last Request Context",false);
+		msgbox(last_request_str,"Last Request Sent",false);
 	}
 
 	var worker_data_showonly = []; //only for table display, dont mix
@@ -4983,7 +5168,7 @@ Current version: 78
 						let brokenstyle = (elem.maintenance_mode ? "style=\"color:#ee4444;\"" : "");
 						let workerNameHtml = escapeHtml(elem.name.substring(0, 32));
 						let eleminfo = ((elem.info && elem.info!="")?elem.info:"");
-						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td><span "+style+">'" + elem.kudos_rewards.toFixed(0) + "</span><br>"+(elem.online?"Online":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td><td><button type=\"button\" class=\"btn btn-danger widelbtn\" onclick=\"delete_my_worker("+i+");\">X</button></td></tr>";
+						str += "<tr><td>" + workerNameHtml + "</td><td><input class='' style='color:#000000;' id='mwc_desc_"+i+"' placeholder='Worker Description' value='"+eleminfo+"''></td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td><span "+style+">" + elem.kudos_rewards.toFixed(0) + "</span><br>"+(elem.online?"<span class='color_green'>Online</span>":"Offline")+"</td><td><input type='checkbox' id='mwc_maint_"+i+"' "+(elem.maintenance_mode?"checked":"")+"></td><td><button type=\"button\" class=\"btn btn-danger widelbtn\" onclick=\"delete_my_worker("+i+");\">X</button></td></tr>";
 					}
 					document.getElementById("myownworkertable").innerHTML = str;
 
@@ -5006,7 +5191,7 @@ Current version: 78
 		}
 		else
 		{
-			msgbox("Unable to find my horde workers.","No valid workers found");
+			msgbox("Unable to find any horde workers.","No valid workers found");
 		}
 	}
 
@@ -5018,6 +5203,7 @@ Current version: 78
 	function is_popup_open()
 	{
 		return !(
+			document.getElementById("saveloadcontainer").classList.contains("hidden") &&
 			document.getElementById("loadmodelcontainer").classList.contains("hidden") &&
 			document.getElementById("newgamecontainer").classList.contains("hidden") &&
 			document.getElementById("yesnocontainer").classList.contains("hidden") &&
@@ -5034,6 +5220,7 @@ Current version: 78
 		);
 	}
 	function hide_popups() {
+		document.getElementById("saveloadcontainer").classList.add("hidden");
 		document.getElementById("loadmodelcontainer").classList.add("hidden");
 		document.getElementById("newgamecontainer").classList.add("hidden");
 		document.getElementById("yesnocontainer").classList.add("hidden");
@@ -5178,29 +5365,87 @@ Current version: 78
 		}
 	}
 
-	function custom_oai_model_change()
+	function select_custom_oai_model()
+	{
+		inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
+			let coai = getInputBoxValue().trim();
+			let dropdown = document.getElementById("custom_oai_model");
+			if(coai!="")
+			{
+				document.getElementById("custom_oai_model_option").value = coai;
+				document.getElementById("custom_oai_model_option").innerText = coai;
+				document.getElementById("custom_oai_model_option").style.display = "";
+				dropdown.selectedIndex = dropdown.options.length - 1;
+			}
+			oai_model_change();
+		},false);
+	}
+	function oai_model_change()
 	{
 		let dropdown = document.getElementById("custom_oai_model");
+		let non_completions = (dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
+		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
 		if(dropdown.selectedIndex==dropdown.options.length-1)
 		{
-			inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
-				let coai = getInputBoxValue().trim();
-				if(coai!="")
-				{
-					document.getElementById("custom_oai_model_option").value = coai;
-					document.getElementById("custom_oai_model_option").innerText = coai;
-				}else{
-					document.getElementById("custom_oai_model_option").value = "custom";
-					document.getElementById("custom_oai_model_option").innerText = "[Custom]";
-				}
-			},false);
-			document.getElementById("useoaichatcompl").classList.remove("hidden");
-			document.getElementById("useoaichatcompllabel").classList.remove("hidden");
-		}else{
-			document.getElementById("useoaichatcompl").checked = false;
-			document.getElementById("useoaichatcompl").classList.add("hidden");
-			document.getElementById("useoaichatcompllabel").classList.add("hidden");
+			document.getElementById("useoaichatcompl").checked = true;
+		} else {
+			document.getElementById("useoaichatcompl").checked = !non_completions;
 		}
+	}
+	function oai_fetch_models()
+	{
+		let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
+		let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
+		if (document.getElementById("oaiaddversion").checked)
+		{
+			if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
+				desired_oai_ep = desired_oai_ep + "/v1";
+			}
+		}
+
+		fetch((desired_oai_ep + oai_models_endpoint), {
+			method: 'GET',
+			headers: {
+				'Authorization': 'Bearer '+desired_oai_key,
+				'x-api-key': desired_oai_key,
+			},
+			referrerPolicy: 'no-referrer',
+		})
+		.then((response) => response.json())
+		.then((data) => {
+			console.log(data);
+			if (!data.error && data.data && data.data.length > 0)
+			{
+				let dropdown = document.getElementById("custom_oai_model");
+				var lastOption = dropdown.lastElementChild;
+				for (var i = dropdown.options.length - 1; i >= 0; i--) {
+					var option = dropdown.options[i];
+					dropdown.remove(option);
+				}
+				for(var i = 0; i < data.data.length; i++) {
+					var opt = data.data[i];
+					var el = document.createElement("option");
+					el.textContent = opt.id;
+					el.value = opt.id;
+					dropdown.appendChild(el);
+				}
+				dropdown.appendChild(lastOption);
+				dropdown.selectedIndex = 0;
+				oai_model_change();
+			}
+			else
+			{
+				msgbox(JSON.stringify(data.error.message),"Error Encountered",false,false,()=>{
+					hide_msgbox();
+				});
+			}
+		})
+		.catch(error => {
+			console.log("Error: " + error);
+			msgbox("Error: " + error,"Error Encountered",false,false,()=>{
+				hide_msgbox();
+			});
+		});
 	}
 
 	function customapi_dropdown()
@@ -5219,19 +5464,36 @@ Current version: 78
 				document.getElementById("customendpoint").value = localsettings.saved_kai_addr;
 			}
 		}
-		else if(epchoice==1)
+		else if(epchoice==1 || epchoice==5)
 		{
 			document.getElementById("oaicustom").classList.remove("hidden");
-			document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
-			if(custom_oai_key=="" && localsettings.saved_oai_key!="")
+			if(epchoice==5)
 			{
-				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
-				if(localsettings.saved_oai_addr!="")
+				document.getElementById("oaidesc").classList.add("hidden");
+				document.getElementById("openrouterdesc").classList.remove("hidden");
+				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
+				document.getElementById("custom_oai_endpoint").classList.add("hidden");
+				if(localsettings.saved_openrouter_key!="")
 				{
-					document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
+					document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
 				}
 			}
-			custom_oai_model_change();
+			else
+			{
+				document.getElementById("oaidesc").classList.remove("hidden");
+				document.getElementById("openrouterdesc").classList.add("hidden");
+				document.getElementById("custom_oai_endpoint").value = custom_oai_endpoint;
+				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
+				if(localsettings.saved_oai_key!="")
+				{
+					document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
+					if(localsettings.saved_oai_addr!="")
+					{
+						document.getElementById("custom_oai_endpoint").value = localsettings.saved_oai_addr;
+					}
+				}
+			}
+
 			togglejailbreak();
 		}
 		else if(epchoice==2)
@@ -5242,7 +5504,7 @@ Current version: 78
 		{
 			document.getElementById("claudecustom").classList.remove("hidden");
 			document.getElementById("custom_claude_endpoint").value = custom_claude_endpoint;
-			if(custom_claude_key=="" && localsettings.saved_claude_key!="")
+			if(localsettings.saved_claude_key!="")
 			{
 				document.getElementById("custom_claude_key").value = localsettings.saved_claude_key;
 				if(localsettings.saved_claude_addr!="")
@@ -5254,7 +5516,7 @@ Current version: 78
 		else if(epchoice==4)
 		{
 			document.getElementById("palmcustom").classList.remove("hidden");
-			if(custom_palm_key=="" && localsettings.saved_palm_key!="")
+			if(localsettings.saved_palm_key!="")
 			{
 				document.getElementById("custom_palm_key").value = localsettings.saved_palm_key;
 			}
@@ -5432,7 +5694,7 @@ Current version: 78
 					});
 			}
 		}
-		else if(epchoice==1) //connect to OAI Endpoint
+		else if(epchoice==1 || epchoice==5) //connect to OAI / OpenRouter Endpoint
 		{
 			let desired_oai_key = document.getElementById("custom_oai_key").value.trim();
 			let desired_oai_ep = document.getElementById("custom_oai_endpoint").value.trim();
@@ -5448,7 +5710,7 @@ Current version: 78
 			}
 			if (document.getElementById("oaiaddversion").checked)
 			{
-				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v")) {
+				if(desired_oai_ep!="" && desired_oai_ep.length > 4 && !desired_oai_ep.slice(-4).toLowerCase().includes("/v") && !desired_oai_ep.toLowerCase().includes("/v1/")) {
 					desired_oai_ep = desired_oai_ep + "/v1";
 				}
 			}
@@ -5456,61 +5718,39 @@ Current version: 78
 			{
 				hide_popups();
 
-				fetch((desired_oai_ep + oai_models_endpoint), {
-					method: 'GET',
-					headers: {
-						'Authorization': 'Bearer '+desired_oai_key,
-						'x-api-key': desired_oai_key,
-					},
-					referrerPolicy: 'no-referrer',
-				})
-				.then((response) => response.json())
-				.then((data) => {
-					console.log(data);
-					if (!data.error && data.data && data.data.length > 0)
-					{
-						//good to go
-						custom_oai_endpoint = desired_oai_ep;
-						custom_oai_key = desired_oai_key;
-						localsettings.saved_oai_key = custom_oai_key;
-						localsettings.saved_oai_addr = custom_oai_endpoint;
-						localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
-						if(localsettings.saved_oai_jailbreak=="")
-						{
-							document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
-						}
-						custom_oai_model = document.getElementById("custom_oai_model").value.trim();
-						localsettings.saved_oai_custommodel = custom_oai_model;
-						selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
-						selected_workers = [];
-						if (perfdata == null) {
-							//generate some fake perf data if horde is offline and using custom endpoint
-							perfdata = {
-								"queued_requests": 0,
-								"queued_tokens": 0,
-								"past_minute_tokens": 0,
-								"worker_count": 0
-							};
-							document.body.classList.add("connected");
-							document.getElementById("connectstatus").classList.remove("color_orange");
-							document.getElementById("connectstatus").classList.add("color_green");
-						}
-						document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
-						render_gametext();
-					}
-					else
-					{
-						custom_oai_endpoint = default_oai_base;
-						custom_oai_key = "";
-						msgbox(JSON.stringify(data.error.message));
-					}
-				})
-				.catch(error => {
-				console.log("Error: " + error);
-				custom_oai_endpoint = default_oai_base;
-				custom_oai_key = "";
-				msgbox("Error: " + error);
-				});
+				//good to go
+				custom_oai_endpoint = desired_oai_ep;
+				custom_oai_key = desired_oai_key;
+				if(epchoice==1)
+				{
+					localsettings.saved_oai_key = custom_oai_key;
+					localsettings.saved_oai_addr = custom_oai_endpoint;
+				}else{
+					localsettings.saved_openrouter_key = custom_oai_key;
+				}
+				localsettings.saved_oai_jailbreak = document.getElementById("jailbreakprompttext").value;
+				if(localsettings.saved_oai_jailbreak=="")
+				{
+					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
+				}
+				custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+				localsettings.saved_oai_custommodel = custom_oai_model;
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
+				selected_workers = [];
+				if (perfdata == null) {
+					//generate some fake perf data if horde is offline and using custom endpoint
+					perfdata = {
+						"queued_requests": 0,
+						"queued_tokens": 0,
+						"past_minute_tokens": 0,
+						"worker_count": 0
+					};
+					document.body.classList.add("connected");
+					document.getElementById("connectstatus").classList.remove("color_orange");
+					document.getElementById("connectstatus").classList.add("color_green");
+				}
+				document.getElementById("connectstatus").innerHTML = "Connected to OAI Endpoint";
+				render_gametext();
 			}
 		}
 		else if(epchoice==2) //connect to Scale Endpoint
@@ -5675,6 +5915,110 @@ Current version: 78
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
 		customapi_dropdown();
+	}
+
+	function display_saveloadcontainer()
+	{
+		document.getElementById("saveloadcontainer").classList.remove("hidden");
+
+		let filetable = ``;
+
+		let entry = `<div style="display:flex">
+				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localsave" class="btn btn-primary" onclick="hide_popups();save_file_button()">`+"💾<br>Download File"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
+				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
+				</div>
+				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
+				</div>`;
+		filetable += entry;
+
+		for(let i=0;i<4;++i)
+		{
+			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
+			entry = `<div style="display:flex; height:46px;">
+				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
+				</div>
+				<div style="text-align: right; align-self: center; width: 180px;">
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)">Save</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Load</button>
+				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`>Del</button>
+				</div></div>`;
+			filetable += entry;
+		}
+		document.getElementById("saveloadentries").innerHTML = filetable;
+	}
+	function save_to_slot(slot)
+	{
+		let defaultsavename = (localsettings.opmode==1?"Untitled Story":(localsettings.opmode==2?"Untitled Adventure":(localsettings.opmode==3?"Untitled Chat":"Untitled Instruct")));
+		let savename = defaultsavename + " " + new Date().toLocaleString();
+		let slotnumshown = (slot+1);
+		let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_meta");
+		if(testslot)
+		{
+			savename = testslot;
+		}
+		let newcompressedstory = generate_compressed_story();
+
+		const slotwrite = function()
+		{
+			inputBox("Enter a label for this Browser Storage Slot data","Enter a label",savename,defaultsavename,()=>{
+				let userinput = getInputBoxValue();
+				if(userinput.trim()=="")
+				{
+					userinput = defaultsavename;
+				}
+				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", newcompressedstory);
+				localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", userinput);
+				display_saveloadcontainer();
+			});
+		}
+
+		if(testslot)
+		{
+			msgboxYesNo("Overwrite existing story in Browser Storage Slot "+slotnumshown+"?","Overwrite Storage Slot "+slotnumshown,()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+				slotwrite();
+			},()=>{
+				document.getElementById("yesnocontainer").classList.add("hidden");
+			});
+		}else{
+			slotwrite();
+		}
+
+
+	}
+	function load_from_slot(slot)
+	{
+		let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "slot_"+slot+"_data");
+		if(loadedstorycompressed)
+		{
+			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+			if (!safe_to_overwrite) {
+				pending_found_story = loadedstorycompressed;
+				hide_popups();
+				prompt_overwrite();
+			} else {
+				import_share_story(loadedstorycompressed);
+				hide_popups();
+			}
+		}else{
+			msgbox("Unable to load story from browser storage","Browser Storage Load Failed");
+		}
+	}
+	function delete_from_slot(slot)
+	{
+		let slotnumshown = (slot+1);
+		msgboxYesNo("Delete story in Browser Storage Slot "+slotnumshown+"?","Delete Storage Slot "+slotnumshown,()=>{
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_data", "");
+			localStorage.setItem(STORAGE_PREFIX + "slot_"+slot+"_meta", "");
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			display_saveloadcontainer();
+		},()=>{
+			document.getElementById("yesnocontainer").classList.add("hidden");
+			display_saveloadcontainer();
+		});
 	}
 
 	function fetch_models(onDoneCallback)
@@ -5954,10 +6298,6 @@ Current version: 78
 					if(desc.value.trim()!="" || (desc.value.trim()=="" && lastValidFoundUserWorkers[i].info!=null && lastValidFoundUserWorkers[i].info!=""))
 					{
 						wo.info = desc.value.trim();
-						if(wo.info=="")
-						{
-							wo.info = "  "; //todo: this is a hack to unset names
-						}
 					}
 					fetch(parentcluster.maintenance_endpoint + "/" + lastValidFoundUserWorkers[i].id, {
 						method: 'PUT',
@@ -6210,7 +6550,7 @@ Current version: 78
 			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
 		}
 		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
-		document.getElementById("tokenstreaming").checked = localsettings.tokenstreaming;
+		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
@@ -6372,7 +6712,7 @@ Current version: 78
 
 		localsettings.image_styles = pendingstyle;
 		localsettings.grammar = pendinggrammar;
-		localsettings.tokenstreaming = (document.getElementById("tokenstreaming").checked ? true : false);
+		localsettings.tokenstreammode = document.getElementById("tokenstreammode").value;
 		localsettings.img_autogen = (document.getElementById("img_autogen").checked ? true : false);
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
@@ -6722,7 +7062,7 @@ Current version: 78
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
-		render_gametext();
+		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
 	function btn_editmode()
@@ -7461,10 +7801,14 @@ Current version: 78
 					let pstreamamount = urlParams.get('streamamount');
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
-				let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
 				last_request_str = JSON.stringify(submit_payload);
-				kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
-
+				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
+					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
+					kobold_api_stream_sse(sub_endpt, submit_payload);
+				} else {
+					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, "", streamchunk);
+				}
 			}
 			else if (custom_oai_key != "")//handle for OAI
 			{
@@ -7484,7 +7828,7 @@ Current version: 78
 					"logit_bias": { "50256": -100 },
 				}
 
-				if (document.getElementById("useoaichatcompl").checked || custom_oai_model == "gpt-3.5-turbo" || custom_oai_model == "gpt-3.5-turbo-16k" || custom_oai_model == "gpt-4" || custom_oai_model == "gpt-4-32k") {
+				if (document.getElementById("useoaichatcompl").checked) {
 					targetep = (custom_oai_endpoint + oai_submit_endpoint_turbo);
 					if (document.getElementById("jailbreakprompt") && document.getElementById("jailbreakprompt").checked && document.getElementById("jailbreakprompttext").value!="") {
 						oai_payload.messages = [
@@ -7503,14 +7847,19 @@ Current version: 78
 				}
 
 				last_request_str = JSON.stringify(oai_payload);
-
+				let oaiheaders = {
+					'Content-Type': 'application/json',
+					'Authorization': 'Bearer ' + custom_oai_key
+				};
+				if(targetep.toLowerCase().includes("openrouter.ai"))
+				{
+					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
+				}else{
+					oaiheaders["x-api-key"] = custom_oai_key;
+				}
 				fetch(targetep, {
 					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'x-api-key': custom_oai_key,
-						'Authorization': 'Bearer ' + custom_oai_key,
-					},
+					headers: oaiheaders,
 					body: JSON.stringify(oai_payload),
 					referrerPolicy: 'no-referrer',
 				})
@@ -8017,6 +8366,20 @@ Current version: 78
 			else if (foundOppoNameWithNL > 0) //split by oppo name
 			{
 				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
+				//patch for cases where a random extra line from a second chatter is injected between
+				if(!localsettings.multiline_replies)
+				{
+					let ml_check = splitresponse[0];
+					//test for other chatopponents
+					var moreopponents = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
+					var foundmoreopponent = ml_check.match(moreopponents);
+					if(foundmoreopponent != null && foundmoreopponent.length > 0)
+					{
+						//too many chat users. split to first newline and stop.
+						splitresponse = ml_check.split("\n");
+					}
+				}
+
 			}
 			else //if no name found
 			{
@@ -8099,7 +8462,10 @@ Current version: 78
 	function poll_image_db() {
 		//every time this runs, we loop through our image cache for unfinished images and poll for a response
 		//console.log("polling for pending images: " + JSON.stringify(image_db));
-		console.log("polling for pending images " + Object.keys(image_db).length);
+		let imagecount = Object.keys(image_db).length;
+		if (!imagecount) return;
+
+		console.log("polling for pending images " + imagecount);
 		for (let key in image_db) {
 			let img = image_db[key];
 			if (img.done == false) {
@@ -8176,8 +8542,8 @@ Current version: 78
 			//console.log(gametext_arr);
 			render_gametext();
 		}
-
 	}
+
 	function compressImage(inputDataUri, onDone, isJpeg=true) {
 		let img = document.createElement('img');
 		let wantedWidth = 256;
@@ -8274,12 +8640,13 @@ Current version: 78
 				if (is_using_custom_ep()) {
 					//v1 api only needs to check if data was received and stored into local object
 					poll_in_progress = true;
-					if (synchro_polled_response == null) {
+					if (synchro_polled_response == null)
+					{
 						//still waiting, do nothing until next poll
 						console.log("v1 still awaiting reply");
-						let truestreaming = (determine_streaming_type()==2);
+						let polledstreaming = (determine_streaming_type()==2);
 						//only check once every 2 ticks if remote
-						if (truestreaming && (localflag?true:(poll_ticks_passed%2==0)))
+						if (polledstreaming && (localflag?true:(poll_ticks_passed%2==0)))
 						{
 							//get in-progress results
 							fetch(custom_kobold_endpoint + koboldcpp_check_endpoint, {
@@ -8296,8 +8663,16 @@ Current version: 78
 									//makes sure a delayed response doesnt arrive late and mess up
 									if (data && data.results != null && data.results.length > 0 && data.results[0].text) {
 										if (pending_response_id && pending_response_id != "") {
+											let was_empty = (synchro_pending_stream=="");
 											synchro_pending_stream = data.results[0].text;
-											render_gametext();
+											if(was_empty && synchro_pending_stream!="")
+											{
+												render_gametext(false); // don't autosave while streaming
+											}
+											else
+											{
+												update_pending_stream_displays();
+											}
 										}
 									}
 									poll_in_progress = false;
@@ -8309,7 +8684,9 @@ Current version: 78
 						}else{
 							poll_in_progress = false;
 						}
-					} else {
+					}
+					if (synchro_polled_response != null)
+					{
 						console.log("v1 handle recv reply");
 						pending_response_id = "";
 						poll_in_progress = false;
@@ -8433,9 +8810,6 @@ Current version: 78
 						});
 				}
 			}
-		}
-		else {
-			console.log("Nothing to update: " + pending_response_id);
 		}
 	}
 
@@ -8645,7 +9019,27 @@ Current version: 78
 		}
 	}
 
-	function render_gametext(partialrefresh = false)
+	function update_pending_stream_displays()
+	{
+		//lightweight function to only update pending streamed text
+		var elements = document.querySelectorAll(".pending_text");
+
+		if(elements && elements.length>0)
+		{
+			elements.forEach(function (element) {
+				element.innerHTML = escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream);
+			});
+		} else {
+			render_gametext(false);
+		}
+
+		if (localsettings.autoscroll) {
+			document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
+			document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
+		}
+	}
+
+	function render_gametext(save = true)
 	{
 
 		document.getElementById("gametext").contentEditable = (document.getElementById("allowediting").checked && pending_response_id=="");
@@ -8778,6 +9172,11 @@ Current version: 78
 
 			if(localsettings.opmode==3)
 			{
+				if(!document.getElementById("allowediting").checked && !fulltxt.startsWith("\n"))
+				{
+					fulltxt = "\n"+fulltxt;
+				}
+
 				//for chat mode, highlight our name in blue and opponent in red
 				let m_name = "\n" + localsettings.chatname + ": ";
 
@@ -8808,7 +9207,7 @@ Current version: 78
 			//streaming display
 			if(synchro_pending_stream!="")
 			{
-				fulltxt += "<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
+				fulltxt += "<span class=\"color_yellow pending_text\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>";
 			}
 
 			//handle images
@@ -8851,10 +9250,8 @@ Current version: 78
 			}
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
-			document.getElementById("topbtn_save").classList.remove("hidden");
-			document.getElementById("topbtn_load").classList.remove("hidden");
+			document.getElementById("topbtn_save_load").classList.remove("hidden");
 			document.getElementById("topbtn_settings").classList.add("hidden");
-			document.getElementById("topbtn_share").classList.add("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
 			document.getElementById("topbtn_quickplay").classList.add("hidden");
 		} else {
@@ -8870,18 +9267,14 @@ Current version: 78
 
 			if (selected_models.length == 0) {
 				document.getElementById("topbtn_newgame").classList.add("hidden");
-				document.getElementById("topbtn_save").classList.add("hidden");
-				document.getElementById("topbtn_load").classList.add("hidden");
+				document.getElementById("topbtn_save_load").classList.add("hidden");
 				document.getElementById("topbtn_settings").classList.add("hidden");
-				document.getElementById("topbtn_share").classList.add("hidden");
 				document.getElementById("topbtn_scenarios").classList.add("hidden");
 				document.getElementById("topbtn_quickplay").classList.remove("hidden");
 			} else {
 				document.getElementById("topbtn_newgame").classList.remove("hidden");
-				document.getElementById("topbtn_save").classList.remove("hidden");
-				document.getElementById("topbtn_load").classList.remove("hidden");
+				document.getElementById("topbtn_save_load").classList.remove("hidden");
 				document.getElementById("topbtn_settings").classList.remove("hidden");
-				document.getElementById("topbtn_share").classList.remove("hidden");
 				document.getElementById("topbtn_scenarios").classList.remove("hidden");
 				document.getElementById("topbtn_quickplay").classList.add("hidden");
 			}
@@ -8981,15 +9374,14 @@ Current version: 78
 
 		document.getElementById("btnautogenmem").disabled = document.getElementById("btnsend").disabled;
 
-		if (localsettings.persist_session) {
+		if (localsettings.persist_session && save) {
 			autosave();
 		}
-		if (partialrefresh == false) {
-			if (localsettings.autoscroll) {
-				document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
-				document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
-			}
+		if (localsettings.autoscroll) {
+			document.getElementById("gametext").scrollTop = document.getElementById("gametext").scrollHeight;
+			document.getElementById("chat_msg_body").scrollTop = document.getElementById("chat_msg_body").scrollHeight;
 		}
+
 
 		idle_timer = 0;
 		document.getElementById("token-budget").innerText = last_token_budget;
@@ -9103,9 +9495,8 @@ Current version: 78
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
+				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 
-				//italics matching for messages
-				curr.msg = curr.msg.replace(/\*(\S[^*]+\S)\*/g,"<em style='opacity:0.7'>$1</em>");
 			}
 
 			if(curr.myturn)
@@ -9127,7 +9518,7 @@ Current version: 78
 		}
 		if(synchro_pending_stream!="")
 		{
-			newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+"<span class=\"color_yellow\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div></div></div>`;
+			newbodystr += `<div class="incoming_msg"><div class="chat_received_msg"><div class="chat_received_withd_msg"><p>`+"<span class=\"color_yellow pending_text\">" + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + "</span>"+`</p></div></div></div>`;
 		}
 
 		chatbody.innerHTML = newbodystr;
@@ -9170,10 +9561,10 @@ Current version: 78
 
 	function autosave() {
 		//autosave
-		localStorage.setItem((localflag?"e_":"")+"kaihordewebui_settings", JSON.stringify(localsettings));
+		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 		if (localsettings.persist_session) {
 			let compressedstory = generate_compressed_story();
-			localStorage.setItem((localflag?"e_":"")+"kaihordewebui_story", compressedstory);
+			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
 		}
 		console.log("autosave done");
 	}
@@ -9763,12 +10154,16 @@ Current version: 78
 		let as = aestheticInstructUISettings;								// ..and use this as shortcut to avoid typing it each time.
 		if(localsettings.opmode==3)
 		{
+			if(!input.startsWith("\n"))
+			{
+				input = "\n"+input;
+			}
 			//replace all possible instances with placeholders
 			var mynameregex = new RegExp("\n(" + localsettings.chatname + ")\: ", "gi");
 			var mynameregex2 = new RegExp("(" + localsettings.chatname + ")\: ", "gi");
 			var mynameregex3 = new RegExp("\n(" + localsettings.chatname + ") ", "gi");
 			var othernamesregex = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
-			var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
+			//var othernamesregex2 = new RegExp("(?!" + localsettings.chatname + ").+?\: ", "gi");
 			input = input.replaceAll(mynameregex, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex2, '{{userplaceholder}}');
 			input = input.replaceAll(mynameregex3, '{{userplaceholder}}');
@@ -9778,14 +10173,14 @@ Current version: 78
 				input = input.replaceAll(othernamesregex, function(match) {
 					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
 				});
-				input = input.replaceAll(othernamesregex2, function(match) {
-					return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
-				});
+				// input = input.replaceAll(othernamesregex2, function(match) {
+				// 	return "{{botplaceholder}}<p class='aui_nametag'>" + match.substring(0,match.length-2).trim() + "</p>";
+				// });
 			}
 			else
 			{
 				input = input.replaceAll(othernamesregex, "{{botplaceholder}}");
-				input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
+				//input = input.replaceAll(othernamesregex2, "{{botplaceholder}}");
 			}
 
 			you = "{{userplaceholder}}";
@@ -9814,7 +10209,7 @@ Current version: 78
 				let styleRole = aestheticInstructUISettings.use_uniform_colors ? 'uniform' : role;					// Uniform role is preferred if it's active on the settings.
 				newbodystr = newbodystr.replace(new RegExp(`${contextDict[`${role}Open`]}([^]*?)${contextDict.closeTag}`, 'g'), (match, p) => {
 					let replacedText = match.replace(/<[^>]*>/g, (htmlPart) => { internalHTMLparts.push(htmlPart); return `<internal_html_${internalHTMLparts.length - 1}>`; });
-					replacedText = replacedText.replace(/\*(\S[^*]+\S)\*/g, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
+					replacedText = replacedText.replace(italics_regex, wrapperSpan(styleRole, 'action')); 		// Apply the actions style to *actions*.
 					replacedText = replacedText.replace(/“(.*?)”/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					replacedText = replacedText.replace(/&quot;(.*?)&quot;/g, wrapperSpan(styleRole, 'speech')); 	// Apply the speech style to "speech".
 					return replacedText;
@@ -9868,7 +10263,7 @@ Current version: 78
 		}
 		function getStreamingText() {
 			let isChatBotReply = (localsettings.opmode==3 && pending_context_preinjection.startsWith("\n") && pending_context_preinjection.endsWith(":"));
-			return `${(input.endsWith(bot) || isChatBotReply) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream);
+			return `${(input.endsWith(bot) || isChatBotReply) ? style('AI') + `${bot.endsWith('*') ? '*' : ''}` + `${bot.endsWith('"') ? '"' : ''}` : ''}` + `<span class='pending_text'>`+ escapeHtml(pending_context_preinjection) + escapeHtml(synchro_pending_stream) + `</span`;
 		}
 	}
 
@@ -9895,9 +10290,10 @@ Current version: 78
 
 </head>
 
-<body class="">
+<body id="outerbody" class="">
 
 	<div class="container maincontainer">
+		<div id="outerbodybg"></div>
 		<div class="" id="topmenu">
 			<div id="menuitems">
 				<div class="navcontainer">
@@ -9933,16 +10329,10 @@ Current version: 78
 									<a class="nav-link" href="#" onclick="display_scenarios()">Quick Start</a>
 								</li>
 
-								<li class="nav-item hidden" id="topbtn_save">
+								<li class="nav-item hidden" id="topbtn_save_load">
 									<a id="tempfile" href="#" style="display:none;"></a>
-									<a class="nav-link" href="#" onclick="save_file_button()">Save</a>
-								</li>
-
-								<li class="nav-item hidden" id="topbtn_load">
-									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)"
-										style="display:none;">
-									<a class="nav-link" href="#"
-										onclick="document.getElementById('loadfileinput').click()">Load</a>
+									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)" style="display:none;">
+									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
 								</li>
 
 								<li class="nav-item hidden" id="topbtn_settings">
@@ -9950,10 +10340,6 @@ Current version: 78
 										onclick="display_settings()">Settings</a>
 								</li>
 
-								<li class="nav-item hidden" id="topbtn_share">
-									<a class="nav-link" href="#" id="btn_share"
-										onclick="export_share_story()">Share</a>
-								</li>
 							</ul>
 						</div>
 					</nav>
@@ -9982,23 +10368,23 @@ Current version: 78
 			<div id="curtain" class="layer-top hidden"></div>
 		</div>
 
-			<div class="flex" id="actionmenu">
-				<div id="actionmenuitems">
-					<button type="button" class="btn btn-primary" id="btn_actmem" onclick="btn_memory()">Memory</button>
-					<button type="button" class="btn btn-primary" id="btn_actwi" onclick="backup_wi();btn_wi()">W Info</button>
-					<button type="button" class="btn btn-primary" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
-					<button type="button" class="btn btn-primary" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
-					<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
-					<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
-				</div>
-				<div class="box flex flex-push-right">
-					<input type="checkbox" id="entersubmit" checked>
-					<div class="box-label"><label class="unstyled" for="entersubmit">Enter Sends</label></div>
-					<input type="checkbox" id="allowediting"
-						onclick="toggle_editable()">
-					<div class="box-label"><label class="unstyled" for="allowediting">Allow Editing</label></div>
-				</div>
+		<div class="flex" id="actionmenu">
+			<div id="actionmenuitems">
+				<button type="button" class="btn btn-primary" id="btn_actmem" onclick="btn_memory()">Memory</button>
+				<button type="button" class="btn btn-primary" id="btn_actwi" onclick="backup_wi();btn_wi()">W Info</button>
+				<button type="button" class="btn btn-primary" id="btn_actundo" onpointerdown="btn_back_longpress_start()" onpointerleave="btn_back_longpress_end()" onpointerup="btn_back_longpress_end()" onclick="btn_back()">Back</button>
+				<button type="button" class="btn btn-primary" id="btn_actredo" onpointerdown="btn_redo_longpress_start()" onpointerleave="btn_redo_longpress_end()" onpointerup="btn_redo_longpress_end()" onclick="btn_redo()">Redo</button>
+				<button type="button" class="btn btn-primary" id="btn_actretry" onclick="btn_retry()">Retry</button>
+				<button type="button" class="btn btn-primary bg_green" id="btn_genimg" onpointerdown="btn_addimg_longpress_start()" onpointerleave="btn_addimg_longpress_end()" onpointerup="btn_addimg_longpress_end()" onclick="manual_gen_image()">Add Img</button>
 			</div>
+			<div class="box flex flex-push-right">
+				<input type="checkbox" id="entersubmit" checked>
+				<div class="box-label"><label class="unstyled" for="entersubmit">Enter Sends</label></div>
+				<input type="checkbox" id="allowediting"
+					onclick="toggle_editable()">
+				<div class="box-label"><label class="unstyled" for="allowediting">Allow Editing</label></div>
+			</div>
+		</div>
 		<div class="">
 			<div id="inputrow" class="">
 				<div id="inputrowmode" style="padding-right: 4px;">
@@ -10050,57 +10436,74 @@ Current version: 78
 
 			<div class="lastreq" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		  </div>
-		</div>
+	</div>
 
+	<div class="popupcontainer flex hidden" id="quickstartcontainer">
+		<div class="popupbg flex"></div>
+		<div class="scenariopopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Quick Start - Select A Scenario</div>
+			</div>
 
+			<div style="overflow: auto;">
 
-		<div class="popupcontainer flex hidden" id="quickstartcontainer">
-			<div class="popupbg flex"></div>
-			<div class="scenariopopup">
-				<div class="popuptitlebar">
-					<div class="popuptitletext">Quick Start - Select A Scenario</div>
+				<div class="scenariosearch">
+				<input class="scenariosearchbox1 form-control" type="text" placeholder="Quick Search" value=""
+					id="scenariosearch" oninput="scenario_search()">
+					<select class="scenariosearchbox2 form-control" id="scenariosearchdropdown" onchange="scenario_search()">
+						<option value="0">All</option>
+						<option value="1">Story</option>
+						<option value="2">Adventure</option>
+						<option value="3">Chat</option>
+						<option value="4">Instruct</option>
+					</select>
+				</div>
+				<div id="scenarioautopickbox" class="justifyleft anotelabel" style="padding-left: 8px;">
+					Automatically select AI model <span class="helpicon">?
+						<span class="helptext">This option picks a suitable AI model based on the selected scenario. If no text model is currently selected, an appropriate one will be automatically picked for you.</span>
+					</span>
+					<input type="checkbox" id="scenarioautopickai" onchange="togglescenarioallownsfw()" checked>
+					<span id="scenarioallownsfwbox"><br>
+						Allow NSFW Models <span class="helpicon">?
+							<span class="helptext">If disabled, NSFW only models like Erebus will never be selected</span>
+						</span>
+						<input type="checkbox" id="scenarioallownsfw" checked>
+					</span>
 				</div>
 
-				<div style="overflow: auto;">
+				<div id="scenariogrid" class="justifyleft anotelabel scenariogrid">
+				</div>
+				<div id="scenariodesc" class="scenariodesc">
+				</div>
 
-					<div class="scenariosearch">
-					<input class="scenariosearchbox1 form-control" type="text" placeholder="Quick Search" value=""
-						id="scenariosearch" oninput="scenario_search()">
-						<select class="scenariosearchbox2 form-control" id="scenariosearchdropdown" onchange="scenario_search()">
-							<option value="0">All</option>
-							<option value="1">Story</option>
-							<option value="2">Adventure</option>
-							<option value="3">Chat</option>
-							<option value="4">Instruct</option>
-						</select>
-					</div>
-					<div id="scenarioautopickbox" class="justifyleft anotelabel" style="padding-left: 8px;">
-						Automatically select AI model <span class="helpicon">?
-							<span class="helptext">This option picks a suitable AI model based on the selected scenario. If no text model is currently selected, an appropriate one will be automatically picked for you.</span>
-						</span>
-						<input type="checkbox" id="scenarioautopickai" onchange="togglescenarioallownsfw()" checked>
-						<span id="scenarioallownsfwbox"><br>
-							Allow NSFW Models <span class="helpicon">?
-								<span class="helptext">If disabled, NSFW only models like Erebus will never be selected</span>
-							</span>
-							<input type="checkbox" id="scenarioallownsfw" checked>
-						</span>
-					</div>
-
-					<div id="scenariogrid" class="justifyleft anotelabel scenariogrid">
-					</div>
-					<div id="scenariodesc" class="scenariodesc">
-					</div>
-
-					<div class="popupfooter">
-						<button type="button" class="btn btn-primary" id=""
-							onclick="confirm_scenario_verify()">Ok</button>
-						<button type="button" class="btn btn-primary" id=""
-							onclick="hide_popups()">Cancel</button>
-					</div>
+				<div class="popupfooter">
+					<button type="button" class="btn btn-primary" id=""
+						onclick="confirm_scenario_verify()">Ok</button>
+					<button type="button" class="btn btn-primary" id=""
+						onclick="hide_popups()">Cancel</button>
 				</div>
 			</div>
 		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="saveloadcontainer">
+		<div class="popupbg flex"></div>
+		<div class="saveloadpopup">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Save File / Load File / Export File</div>
+			</div>
+
+			<div style="overflow: auto;">
+				<div id="saveloadentries" class="justifyleft anotelabel saveloadgrid">
+				</div>
+				<div class="justifyleft anotelabel"><p style="padding:6px;font-size: 10px;" class="color_red">Caution: Storage Slots are saved to a tempoary cache and can be deleted by your browser. To avoid losing data, use the download file button.</p></div>
+				<div class="popupfooter">
+					<button type="button" class="btn btn-primary" id=""
+						onclick="hide_popups()">Back</button>
+				</div>
+			</div>
+		</div>
+	</div>
 
 	<div class="popupcontainer flex hidden" id="loadmodelcontainer">
 		<div class="popupbg flex"></div>
@@ -10170,6 +10573,7 @@ Current version: 78
 				<option value="2">Spellbook By Scale API</option>
 				<option value="3">Claude By Anthropic API</option>
 				<option value="4">PaLM By Google API</option>
+				<option value="5">OpenRouter API</option>
 			</select>
 			</div>
 			<div id="koboldcustom" class="aidgpopuplistheader anotelabel">
@@ -10184,25 +10588,34 @@ Current version: 78
 
 			</div>
 			<div id="oaicustom" class="aidgpopuplistheader anotelabel hidden">
+				<span id="oaidesc">
 				Entering your OpenAI API key will allow you to use KoboldAI Lite with their API.<br><br>
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenAI API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
-
 				<span class="color_green" style="font-weight: bold;">Please input OpenAI API URL and Key.</span><br><br>
+				</span>
+				<span id="openrouterdesc" class="hidden">
+				Entering your OpenRouter API key will allow you to use KoboldAI Lite with their API.<br><br>
+				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature. Your API key is used directly with the OpenRouter API and is not transmitted to us.<br>Only Temperature, Top-P and Repetition Penalty samplers are used.<br><br>
+				<span class="color_green" style="font-weight: bold;">Please input OpenRouter Key.</span><br><br>
+				</span>
+
 				<input class="form-control" type="text" id="custom_oai_endpoint" placeholder="OpenAI API URL" value="">
 				<input class="form-control" type="password" id="custom_oai_key" placeholder="OpenAI API Key" value="" onfocus="focus_api_keys()" onblur="blur_api_keys()"><br>
 				Model Choice:<br>
-				<select style="padding:4px;" class="form-control" id="custom_oai_model" onchange="custom_oai_model_change()">
-					<option value="text-davinci-003" selected="selected">text-davinci-003</option>
+				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control" id="custom_oai_model" onchange="oai_model_change()">
+					<option value="gpt-3.5-turbo-instruct" selected="selected">gpt-3.5-turbo-instruct</option>
+					<option value="text-davinci-003">text-davinci-003</option>
 					<option value="text-davinci-002">text-davinci-002</option>
 					<option value="text-davinci-001">text-davinci-001</option>
-					<option value="gpt-3.5-turbo-instruct">gpt-3.5-turbo-instruct</option>
 					<option value="davinci">davinci</option>
 					<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
 					<option value="gpt-3.5-turbo-16k">gpt-3.5-turbo-16k</option>
 					<option value="gpt-4">gpt-4</option>
 					<option value="gpt-4-32k">gpt-4-32k</option>
-					<option id="custom_oai_model_option" value="custom">[Custom]</option>
+					<option style="display:none;" id="custom_oai_model_option" value="custom">[Custom]</option>
 				</select>
+				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
+				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
 				<input type="checkbox" id="oaiaddversion" onchange="" checked>
 				<div class="box-label" title="Add endpoint version">Add Endpoint Version</div>
 				<input type="checkbox" id="jailbreakprompt" onchange="togglejailbreak()">
@@ -10634,7 +11047,11 @@ Current version: 78
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall" id="tokenstreaminglabel" title="">Token Streaming <span class="helpicon">?<span
 								class="helptext">Attempts to use token streaming if supported. Not available on Horde.</span></span></div>
-						   <input type="checkbox" id="tokenstreaming" style="margin:0px 0px 0px auto;">
+						   <select style="padding:1px; height:auto; width: 34px; appearance: none; font-size: 7pt; margin:0px 0px 0px auto;" class="form-control" id="tokenstreammode">
+								<option value="0">Off</option>
+								<option value="1">On</option>
+								<option value="2">SSE</option>
+							</select>
 						</div>
 
 						<div id="idlesection" class="settinglabel">
@@ -10646,6 +11063,7 @@ Current version: 78
 								<option value="3">3x</option>
 								<option value="5">5x</option>
 								<option value="8">8x</option>
+								<option value="10">10x</option>
 							</select>
 							<select style="padding:1px; height:auto; width: 27px; appearance: none; font-size: 7pt;" class="form-control" id="idle_duration">
 								<option value="15">15s</option>
@@ -10687,7 +11105,7 @@ Current version: 78
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Persist Autosave Session </div>
+							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session </div>
 						   <input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
