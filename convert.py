@@ -359,13 +359,13 @@ class BpeVocab:
 class SentencePieceVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
-        vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
-
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
             added_tokens = {}
+
+        vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens: dict[int, str] = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
         expected_new_ids: list[int] = list(range(vocab_size, vocab_size + len(new_tokens)))
