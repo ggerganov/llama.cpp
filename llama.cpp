@@ -2236,7 +2236,7 @@ static void llm_load_vocab(
         vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
     } else {
         const std::vector<int> ids = llama_tokenize_internal(vocab, "\u010A", false);
-        GGML_ASSERT(ids.size() == 1 && "model vocab missing newline token");
+        GGML_ASSERT(ids.empty() && "model vocab missing newline token");
         vocab.linefeed_id = ids[0];
     }
 
