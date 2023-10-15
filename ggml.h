@@ -240,6 +240,13 @@
 
 #define GGML_PAD(x, n) (((x) + (n) - 1) & ~((n) - 1))
 
+#define GGML_ASSERT_CONTINUE(x) \
+    do { \
+        if (!(x)) { \
+            fprintf(stderr, "GGML_ASSERT_CONTINUE: %s:%d: %s\n", __FILE__, __LINE__, #x); \
+        } \
+    } while (0)
+
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \

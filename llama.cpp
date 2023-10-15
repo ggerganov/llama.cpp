@@ -2188,7 +2188,7 @@ static void llm_load_vocab(
 
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+                GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
 
                 std::string first;
                 std::string second;
@@ -2223,7 +2223,7 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT(codepoints_from_utf8(word).size() > 0);
+        GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
 
         vocab.token_to_id[word] = i;
 
@@ -2232,7 +2232,7 @@ static void llm_load_vocab(
         token_data.score = scores ? scores[i] : 0.0f;
         token_data.type  = toktypes ? (llama_token_type) toktypes[i] : LLAMA_TOKEN_TYPE_NORMAL;
     }
-    GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
+    GGML_ASSERT_CONTINUE(vocab.id_to_token.size() == vocab.token_to_id.size());
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
@@ -5983,11 +5983,11 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         return strtol(buf.c_str(), NULL, 16);
     }
     case LLAMA_VOCAB_TYPE_BPE: {
-        GGML_ASSERT(false);
+        GGML_ASSERT_CONTINUE(false);
         return unicode_to_bytes_bpe(token_data.text);
     }
     default:
-        GGML_ASSERT(false);
+        GGML_ASSERT_CONTINUE(false);
     }
 }
 
@@ -6003,7 +6003,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
         return vocab.token_to_id.at(bytes_to_unicode_bpe(ch));
     }
     default:
-        GGML_ASSERT(false);
+        GGML_ASSERT_CONTINUE(false);
     }
 }
 
@@ -9494,7 +9494,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             } else if (llama_is_control_token(model->vocab, token)) {
                 ;
             } else {
-                GGML_ASSERT(false);
+                GGML_ASSERT_CONTINUE(false);
             }
             break;
         }
