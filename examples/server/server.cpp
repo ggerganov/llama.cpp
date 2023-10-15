@@ -3,7 +3,7 @@
 #include "build-info.h"
 #include "grammar-parser.h"
 
-#define SERVER_MULTIMODAL_SUPPORT
+// #define SERVER_MULTIMODAL_SUPPORT
 
 #ifdef SERVER_MULTIMODAL_SUPPORT
 #include "../llava/clip.h"
