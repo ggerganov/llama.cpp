@@ -106,10 +106,11 @@ int main(int argc, char ** argv) {
     batch.n_tokens = tokens_list.size();
 
     for (int32_t i = 0; i < batch.n_tokens; i++) {
-        batch.token[i]  = tokens_list[i];
-        batch.pos[i]    = i;
-        batch.seq_id[i] = 0;
-        batch.logits[i] = false;
+        batch.token[i]     = tokens_list[i];
+        batch.pos[i]       = i;
+        batch.n_seq_id[i]  = 1;
+        batch.seq_id[i][0] = 0;
+        batch.logits[i]    = false;
     }
 
     // llama_decode will output logits only for the last token of the prompt
