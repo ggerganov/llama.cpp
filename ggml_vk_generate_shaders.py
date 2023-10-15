@@ -90,6 +90,32 @@ struct block_q8_0
 #define A_TYPE block_q8_0
 """
 
+# K-quants
+shader_q2_K_defines = """
+#define QUANT_K 256
+
+struct block_q2_K
+{
+    uint8_t scales[QUANT_K/16];
+    uint8_t qs[QUANT_K/4];
+    f16vec2 d;
+};
+
+#define A_TYPE block_q2_K
+"""
+shader_q3_K_defines = """
+#define QUANT_K 256
+
+struct block_q3_K
+{
+    uint8_t hmask[QUANT_K/8];
+    uint8_t qs[QUANT_K/4];
+    uint8_t scales[12];
+    float16_t d;
+};
+
+#define A_TYPE block_q3_K
+"""
 shader_q6_K_defines = """
 #define QUANT_K 256
 
@@ -410,7 +436,6 @@ dequant_head = """#version 450
 
 #extension GL_EXT_control_flow_attributes : require
 #extension GL_EXT_shader_16bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 """
 
 dequant_body = """
@@ -436,7 +461,7 @@ void main() {
 
     if (row * QUANT_K >= p.K || col >= p.M) {
         return;
-   }
+    }
 
     const int stride_a = p.stride_a / QUANT_K;
 
@@ -450,11 +475,99 @@ void main() {
 
         y[col * p.stride_b + row*QUANT_K + iqs + 0       ] = D_TYPE(v.x);
         y[col * p.stride_b + row*QUANT_K + iqs + y_offset] = D_TYPE(v.y);
-   }
+    }
 }
 """
 
 # K-quants
+dequant_q2_K_body = """
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE x[];};
+layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int K;
+    int stride_a;
+    int stride_b;
+} p;
+
+void main() {
+    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
+        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+        if (i >= p.M * p.K / QUANT_K) {
+            return;
+        }
+
+        const int tid = int(gl_LocalInvocationID.x);
+        const int ip = tid / 32;
+        const int il = tid - 32 * ip;
+        const int is = 8 * ip + il / 16;
+
+        const int y_idx = i * QUANT_K + 128 * ip + il;
+
+        const int ql_idx = 32 * ip + il;
+        const uint8_t qs = x[i].qs[32 * ip + il];
+
+        FLOAT_TYPE dall = FLOAT_TYPE(x[i].d.x);
+        FLOAT_TYPE dmin = FLOAT_TYPE(x[i].d.y);
+        y[y_idx +  0] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+0] & 0xF) * ((qs >> 0) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+0] >> 4));
+        y[y_idx + 32] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+2] & 0xF) * ((qs >> 2) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+2] >> 4));
+        y[y_idx + 64] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+4] & 0xF) * ((qs >> 4) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+4] >> 4));
+        y[y_idx + 96] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+6] & 0xF) * ((qs >> 6) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+6] >> 4));
+    }
+}
+"""
+dequant_q3_K_body = """
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE x[];};
+layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int K;
+    int stride_a;
+    int stride_b;
+} p;
+
+void main() {
+    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
+        const int i = int(gl_WorkGroupID.x * 256 + wgy);
+        if (i >= p.M * p.K / QUANT_K) {
+            return;
+        }
+
+        const int r = int(gl_LocalInvocationID.x) / 4;
+        const int tid = r / 2;
+        const int is0 = r % 2;
+        const int l0 = 16 * is0 + 4 * (int(gl_LocalInvocationID.x) % 4);
+        const int n = tid / 4;
+        const int j = tid - 4*n;
+
+        const uint8_t m = uint8_t(1 << (4*n + j));
+        const int is = 8*n + 2*j + is0;
+        const int shift = 2*j;
+
+        const int8_t us = int8_t(is <  4 ? (x[i].scales[is-0] & 0xF) | (((x[i].scales[is+8] >> 0) & 3) << 4) :
+                                 is <  8 ? (x[i].scales[is-0] & 0xF) | (((x[i].scales[is+4] >> 2) & 3) << 4) :
+                                 is < 12 ? (x[i].scales[is-8] >>  4) | (((x[i].scales[is+0] >> 4) & 3) << 4) :
+                                           (x[i].scales[is-8] >>  4) | (((x[i].scales[is-4] >> 6) & 3) << 4));
+        const FLOAT_TYPE d_all = FLOAT_TYPE(x[i].d);
+        const FLOAT_TYPE dl    = d_all * FLOAT_TYPE(us - 32);
+
+        const int y_idx = i * QUANT_K + 128 * n + 32 * j;
+        const int qs_idx = 32*n;
+
+        for (int l = l0; l < l0 + 4; ++l) {
+            y[y_idx + l] = D_TYPE(dl * FLOAT_TYPE(int8_t((x[i].qs[qs_idx + l] >> shift) & 3) - (((x[i].hmask[l] & m) != 0) ? 0 : 4)));
+        }
+    }
+}
+"""
 dequant_q6_K_body = """
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -470,11 +583,11 @@ layout (push_constant) uniform parameter
 } p;
 
 void main() {
-    for (int wgy = 0; wgy < 256; wgy++) {
+    [[unroll]] for (int wgy = 0; wgy < 256; wgy++) {
         const int i = int(gl_WorkGroupID.x * 256 + wgy);
         if (i >= p.M * p.K / QUANT_K) {
             return;
-       }
+        }
         const int tid = int(gl_LocalInvocationID.x);
         const int ip = tid / 32;
         const int il = tid - 32 * ip;
@@ -491,7 +604,7 @@ void main() {
         y[y_idx + 32] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 2] * (int8_t((x[i].ql[ql_idx + 32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32)));
         y[y_idx + 64] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 4] * (int8_t((x[i].ql[ql_idx +  0] >>  4) | (((qh >> 4) & 3) << 4)) - 32)));
         y[y_idx + 96] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 6] * (int8_t((x[i].ql[ql_idx + 32] >>  4) | (((qh >> 6) & 3) << 4)) - 32)));
-   }
+    }
 }
 """
 
@@ -553,6 +666,154 @@ void main() {
 }
 """
 
+# K-quants
+mul_mat_vec_q2_K_body = """
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE x[];};
+layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
+
+layout (push_constant) uniform parameter
+{
+    int ncols;
+} p;
+
+shared FLOAT_TYPE tmp[32];
+
+void main() {
+    const int row = int(gl_WorkGroupID.x);
+
+    const int num_blocks_per_row = p.ncols / QUANT_K;
+    const int ib0 = row*num_blocks_per_row;
+
+    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+
+    const int step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+
+    const int v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const int v_in = tid - step*v_im;                      // 0...15 or 0...7
+
+    const int l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
+    const int q_offset = 32*v_im + l0;
+    const int s_offset = 8*v_im;
+    const int y_offset = 128*v_im + l0;
+
+    tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
+
+    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const int y_idx = i * QUANT_K + y_offset;
+
+        const FLOAT_TYPE dall = FLOAT_TYPE(x[ib0 + i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(x[ib0 + i].d.y);
+
+        FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
+        FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
+        for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
+            sum1 += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 0] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 0) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 1] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 0) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 2) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 3] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 2) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 4] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 4) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 5] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 4) & 3)
+                  + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 6] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 6) & 3)
+                  + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 7] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 6) & 3);
+            sum2 += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 0] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 1] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 2] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 3] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 4] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 5] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 6] >> 4) & 0xF)
+                  + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 7] >> 4) & 0xF);
+        }
+        tmp[16 * ix + tid] += dall * sum1 - dmin * sum2;
+    }
+
+    // sum up partial sums and write back result
+    barrier();
+    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+       }
+        barrier();
+   }
+    if (tid == 0) {
+        dst[row] = D_TYPE(tmp[0]);
+   }
+}
+"""
+mul_mat_vec_q3_K_body = """
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE x[];};
+layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
+
+layout (push_constant) uniform parameter
+{
+    int ncols;
+} p;
+
+shared FLOAT_TYPE tmp[32];
+
+void main() {
+    const int row = int(gl_WorkGroupID.x);
+
+    const int num_blocks_per_row = p.ncols / QUANT_K;
+    const int ib0 = row*num_blocks_per_row;
+
+    const int tid = int(gl_LocalInvocationID.x)/K_QUANTS_PER_ITERATION;  // 0...31 or 0...16
+    const int ix  = int(gl_LocalInvocationID.x)%K_QUANTS_PER_ITERATION;  // 0 or 0, 1
+
+    const int step = 16/K_QUANTS_PER_ITERATION;            // 16 or 8
+
+    const int v_im = tid/step;                             // 0 or 1. 0 computes 0..., 1 computes 128...
+    const int v_in = tid - step*v_im;                      // 0...15 or 0...7
+
+    const uint8_t m = uint8_t(1 << (4 * v_im));
+
+    const int l0 = K_QUANTS_PER_ITERATION*v_in;            // 0...15
+    const int q_offset = 32*v_im + l0;
+    const int y_offset = 128*v_im + l0;
+
+    tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
+
+    const uint s_shift = 4 * v_im;
+
+    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+        const int y_idx = i * QUANT_K + y_offset;
+
+        const FLOAT_TYPE d = FLOAT_TYPE(x[ib0 + i].d);
+
+        FLOAT_TYPE sum = FLOAT_TYPE(0.0);
+        for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
+            sum += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[0] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 8] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ]     ) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[2] >> s_shift) & 0xF) | ((x[ib0 + i].scales[10] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 2) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[4] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 8] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 4) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[6] >> s_shift) & 0xF) | ((x[ib0 + i].scales[10] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 6) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 3)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[1] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 9] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16]     ) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[3] >> s_shift) & 0xF) | ((x[ib0 + i].scales[11] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 2) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[5] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 9] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 4) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[7] >> s_shift) & 0xF) | ((x[ib0 + i].scales[11] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 6) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 3)) != 0) ? 0 : 4));
+        }
+        tmp[16 * ix + tid] += d * sum;
+    }
+
+    // sum up partial sums and write back result
+    barrier();
+    [[unroll]] for (int s = 16; s > 0; s >>= 1) {
+        if (tid < s) {
+            tmp[tid] += tmp[tid + s];
+       }
+        barrier();
+   }
+    if (tid == 0) {
+        dst[row] = D_TYPE(tmp[0]);
+   }
+}
+"""
 mul_mat_vec_q6_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
@@ -596,7 +857,7 @@ void main() {
 
     tmp[16 * ix + tid] = FLOAT_TYPE(0.0); // partial sum for thread in warp
 
-    for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
+    [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
         const int y_idx    = i * QUANT_K + y_offset;
 
         const FLOAT_TYPE d = FLOAT_TYPE(x[ib0 + i].d);
@@ -618,10 +879,10 @@ void main() {
                  + FLOAT_TYPE(y[y_idx + l+32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((x[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)
                  + FLOAT_TYPE(y[y_idx + l+64]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+ 0]  >> 4) | (((x[ib0 + i].qh[qh_offset + l] >> 4) & 3) << 4)) - 32)
                  + FLOAT_TYPE(y[y_idx + l+96]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+32]  >> 4) | (((x[ib0 + i].qh[qh_offset + l] >> 6) & 3) << 4)) - 32);
-       }
+        }
         tmp[16 * ix + tid] += sum;
 #endif
-   }
+    }
 
     // sum up partial sums and write back result
     barrier();
@@ -843,8 +1104,8 @@ async def string_to_spv_file(name, code, defines, fp16):
         preprocessed_code = stdout.decode()
 
         cmd.extend([f"-D{key}={value}" for key, value in defines.items()])
-        code_with_lines = "\n".join([f"{i}: {line}" for i, line in enumerate(preprocessed_code.splitlines())])
-        print(f"ERROR compiling {name}\n\n{code_with_lines}\n\n{error=}")
+        code_with_lines = "\n".join([f"{i + 1}: {line}" for i, line in enumerate(preprocessed_code.splitlines())])
+        print(f"ERROR compiling {name}\n\n{code_with_lines}\n\n{error}")
         f.close()
         os.remove(f.name)
         sys.exit(proc.returncode)
@@ -919,6 +1180,10 @@ async def main():
                 stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, dequant_body))
             elif i == GGML_TYPE_Q8_0:
                 stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, dequant_body))
+            elif i == GGML_TYPE_Q2_K:
+                stream.extend((shader_q2_K_defines, dequant_q2_K_body))
+            elif i == GGML_TYPE_Q3_K:
+                stream.extend((shader_q3_K_defines, dequant_q3_K_body))
             elif i == GGML_TYPE_Q6_K:
                 stream.extend((shader_q6_K_defines, dequant_q6_K_body))
             else:
@@ -943,6 +1208,10 @@ async def main():
                 stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, mul_mat_vec_body))
             elif i == GGML_TYPE_Q8_0:
                 stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, mul_mat_vec_body))
+            elif i == GGML_TYPE_Q2_K:
+                stream.extend((shader_q2_K_defines, mul_mat_vec_q2_K_body))
+            elif i == GGML_TYPE_Q3_K:
+                stream.extend((shader_q3_K_defines, mul_mat_vec_q3_K_body))
             elif i == GGML_TYPE_Q6_K:
                 stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
             else:
