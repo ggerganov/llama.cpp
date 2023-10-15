@@ -735,19 +735,37 @@ struct llama_mmap {
         }
 
         if (prefetch > 0) {
+            #ifdef __USE_XOPEN2K
             // Advise the kernel to preload the mapped memory
             if (posix_madvise(addr, std::min(file->size, prefetch), POSIX_MADV_WILLNEED)) {
                 fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }
+            #else
+            // Advise the kernel to preload the mapped memory
+            if (madvise(addr, std::min(file->size, prefetch), MADV_WILLNEED)) {
+                fprintf(stderr, "warning: madvise(.., MADV_WILLNEED) failed: %s\n",
+                        strerror(errno));
+            }
+            #endif
+
         }
         if (numa) {
+            #ifdef __USE_XOPEN2K
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
             if (posix_madvise(addr, file->size, POSIX_MADV_RANDOM)) {
                 fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
+            #else
+            // advise the kernel not to use readahead
+            // (because the next page might not belong on the same node)
+            if (madvise(addr, file->size, MADV_RANDOM)) {
+                fprintf(stderr, "warning: madvise(.., MADV_RANDOM) failed: %s\n",
+                        strerror(errno));
+            }
+            #endif
         }
     }
 
