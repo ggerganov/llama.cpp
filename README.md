@@ -208,19 +208,6 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-### Quickstart
-You will find prebuilt Windows binaries on the release page.
-
-Simply download and extract the latest zip package of choice: (e.g. `llama-b1380-bin-win-avx2-x64.zip`)
-
-From the unzipped folder, open a terminal/cmd window here and place a pre-converted `.gguf` model file. Test out the main example like so:
-
-```
-.\main -m llama-2-7b.Q4_0.gguf -n 128
-```
-
-### Full Instructions
-
 Here are the end-to-end binary build and model conversion steps for the LLaMA-7B model.
 
 ### Get the Code
@@ -587,6 +574,18 @@ python3 convert.py models/7B/
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
+
+### Running on Windows with prebuilt binaries
+
+You will find prebuilt Windows binaries on the release page.
+
+Simply download and extract the latest zip package of choice: (e.g. `llama-b1380-bin-win-avx2-x64.zip`)
+
+From the unzipped folder, open a terminal/cmd window here and place a pre-converted `.gguf` model file. Test out the main example like so:
+
+```
+.\main -m llama-2-7b.Q4_0.gguf -n 128
+```
 
 ### Memory/Disk Requirements
 
