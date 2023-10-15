@@ -38,7 +38,7 @@ int main(int argc, char ** argv) {
     }
 
     // max number of parallel drafting sequences (i.e. tree branches)
-    int n_seq_dft = 8;
+    const int n_seq_dft = params.n_parallel;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
