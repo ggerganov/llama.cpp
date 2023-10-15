@@ -118,7 +118,7 @@ static void server_log(const char *level, const char *function, int line,
     }
 
     const std::string str = log.dump(-1, ' ', false, json::error_handler_t::replace);
-    printf("%.*s\n\n", (int)str.size(), str.data());
+    printf("%.*s\n", (int)str.size(), str.data());
     fflush(stdout);
 }
 
@@ -460,7 +460,7 @@ struct llama_server_context
             num_prompt_tokens = prompt_tokens.size();
         }
 
-	// Initialize last_n_tokens
+        // Initialize last_n_tokens
         const size_t ps = num_prompt_tokens;
         std::fill(last_n_tokens.begin(), last_n_tokens.end() - ps, 0);
         std::copy(prompt_tokens.begin(), prompt_tokens.end(), last_n_tokens.end() - ps);
