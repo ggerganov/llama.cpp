@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "llama.h"
+#include "llava.h"
 
 #include "base64.hpp"
 
@@ -143,12 +144,12 @@ inline bool prompt_contains_image(const std::string& prompt) {
 }
 
 // replaces the base64 image tag in the prompt with `replacement`
-inline bool clip_image_load_from_prompt(const std::string& prompt, clip_image_u8 * img) {    
+inline llava_image_embed * llava_image_embed_make_with_prompt_base64(struct clip_ctx * ctx_clip, int n_threads, const std::string& prompt) {    
     size_t img_base64_str_start, img_base64_str_end;
     find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
     if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
         fprintf(stderr, "%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
-        return false;
+        return NULL;
     }
 
     auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
@@ -157,16 +158,15 @@ inline bool clip_image_load_from_prompt(const std::string& prompt, clip_image_u8
 
     auto required_bytes = base64::required_encode_size(base64_str.size());
     auto img_bytes = std::vector<unsigned char>(required_bytes);
-    auto img_bytes_end = base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
-    size_t img_bytes_len = img_bytes_end - img_bytes.begin();
+    base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
 
-    auto img_loaded_ok = clip_image_load_from_bytes(img_bytes.data(), img_bytes_len, img);
-    if (!img_loaded_ok) {
+    auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
+    if (!embed) {
         fprintf(stderr, "%s: could not load image from base64 string.\n", __func__);
-        return false;
+        return NULL;
     }
 
-    return true;
+    return embed;
 }
 
 inline std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {

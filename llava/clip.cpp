@@ -678,7 +678,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-clip_image_u8 * make_clip_image_u8() { return new clip_image_u8(); }
+clip_image_u8 * make_clip_image_u8() { 
+    auto img = new clip_image_u8();
+    return img;
+}
 clip_image_f32 * make_clip_image_f32() { return new clip_image_f32(); }
 
 void clip_image_u8_free(clip_image_u8 * img) { if (img->data) { delete[] img->data; } delete img; }
@@ -690,18 +693,6 @@ static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_
     img->size = nx * ny * 3;
     img->data = new uint8_t[img->size]();
     memcpy(img->data, data, img->size);
-}
-
-bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img) {
-    int nx, ny, nc;
-    auto data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
-    if (!data) {
-        fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
-        return false;
-    }
-    build_clip_img_from_data(data, nx, ny, img);
-    stbi_image_free(data);
-    return true;
 }
 
 bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
@@ -716,6 +707,17 @@ bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
     return true;
 }
 
+bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img) {
+    int nx, ny, nc;
+    auto data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
+    if (!data) {
+        fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
+        return false;
+    }
+    build_clip_img_from_data(data, nx, ny, img);
+    stbi_image_free(data);
+    return true;
+}
 
 // normalize: x = (x - mean) / std
 // TODO: implement bicubic interpolation instead of linear.
@@ -1065,16 +1067,16 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     return true;
 }
 
-int clip_n_mmproj_embd(struct clip_ctx * ctx) {
+int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     return ctx->vision_model.mm_2_b->ne[0];
 }
 
-int clip_n_patches(struct clip_ctx * ctx) {
+int clip_n_patches(const struct clip_ctx * ctx) {
     auto & params = ctx->vision_model.hparams;
 
     return (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 }
 
-size_t clip_embd_nbytes(struct clip_ctx * ctx) {
+size_t clip_embd_nbytes(const struct clip_ctx * ctx) {
     return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }

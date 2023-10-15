@@ -25,9 +25,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity);
 
 void clip_free(struct clip_ctx * ctx);
 
-size_t clip_embd_nbytes(struct clip_ctx * ctx);
-int clip_n_patches(struct clip_ctx * ctx);
-int clip_n_mmproj_embd(struct clip_ctx * ctx);
+size_t clip_embd_nbytes(const struct clip_ctx * ctx);
+int clip_n_patches(const struct clip_ctx * ctx);
+int clip_n_mmproj_embd(const struct clip_ctx * ctx);
 
 // RGB uint8 image
 struct clip_image_u8 {
@@ -62,7 +62,7 @@ LLAMA_API void clip_image_u8_free(clip_image_u8 * img);
 LLAMA_API void clip_image_f32_free(clip_image_f32 * img);
 LLAMA_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8 * img);
 /** interpret bytes as an image file with length bytes_length, and use the result to populate img */
-LLAMA_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, clip_image_u8 * img);
+LLAMA_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img);
 
 bool clip_image_preprocess(const struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32 * res, const bool pad2square);
 bool clip_image_encode(const struct clip_ctx * ctx, const int n_threads, struct clip_image_f32 * img, float * vec);
