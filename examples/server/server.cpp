@@ -285,7 +285,7 @@ struct llama_client_slot
     int32_t n_past = 0;
     int32_t n_decoded = 0;
     int32_t i_batch   = -1;
-    int32_t num_prompt_tokens = 0;
+    size_t num_prompt_tokens = 0;
     int32_t num_prompt_tokens_processed = 0;
     int32_t n_remaining = -1;
 
@@ -346,6 +346,15 @@ struct llama_client_slot
             ctx_sampling.params = sparams;
             ctx_sampling.grammar = NULL;
         }
+
+#ifdef SERVER_MULTIMODAL_SUPPORT
+        for(slot_image img : images) {
+            free(img.image_embedding);
+            delete[] img.img_data.data;
+            img.prefix_prompt = "";
+        }
+        images.clear();
+#endif
 
         // llama_set_rng_seed(ctx, params.seed); in batched the seed matter???????
     }
@@ -893,7 +902,7 @@ struct llama_server_context
             const auto json_prompt = (image_idx >= slot.images.size()) ?
                 slot.params.input_suffix : // no more images, then process suffix prompt
                 (json)(slot.images[image_idx].prefix_prompt);
-            std::vector<llama_token> append_tokens = tokenize(json_prompt, true); // has next image
+            std::vector<llama_token> append_tokens = tokenize(json_prompt, false); // has next image
             for (int i = 0; i < append_tokens.size(); ++i) {
                 batch.token [batch.n_tokens] = append_tokens[i];
                 batch.pos   [batch.n_tokens] = slot.n_past;
@@ -1810,7 +1819,6 @@ static void parse_options_completion(const json &body, llama_client_slot* slot, 
     const auto &images_data = body.find("image_data");
     if (images_data != body.end() && images_data->is_array())
     {
-        slot->images.clear();
         for (const auto &img : *images_data)
         {
             slot_image img_sl;
@@ -1821,10 +1829,10 @@ static void parse_options_completion(const json &body, llama_client_slot* slot, 
             data_b64.clear();
             auto data = stbi_load_from_memory(image_buffer.data(), image_buffer.size(), &width, &height, &channels, 3);
             if(!data) {
-                LOG_TEE("slot %i - failed to load image\n", slot->id);
+                LOG_TEE("slot %i - failed to load image id= %i\n", slot->id, img_sl.id);
                 return;
             }
-            LOG_TEE("slot %i - RGB image %i loaded (%i x %i)\n", slot->id, img_sl.id, width, height);
+            LOG_TEE("slot %i - image id= %i loaded (%i x %i)\n", slot->id, img_sl.id, width, height);
             img_sl.img_data.nx = width;
             img_sl.img_data.ny = height;
             img_sl.img_data.size = width * height * 3;
