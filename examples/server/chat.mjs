@@ -86,7 +86,7 @@ async function chat_completion(question) {
             n_predict: 256,
             cache_prompt: no_cached_prompt === "false",
             slot_id: slot_id,
-            stop: ["### Human:"], // stop completion after generating this
+            stop: ["\n### Human:"], // stop completion after generating this
             grammar,
             stream: true,
         })
