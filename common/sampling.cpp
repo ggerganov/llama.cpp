@@ -69,7 +69,7 @@ void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * ds
 llama_token llama_sampling_sample(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
-                  struct llama_context * ctx_guidance,
+                  struct llama_context * ctx_cfg,
                   const int idx) {
     const int n_ctx   = llama_n_ctx(ctx_main);
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
@@ -110,8 +110,8 @@ llama_token llama_sampling_sample(
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
 
-    if (ctx_guidance) {
-        llama_sample_classifier_free_guidance(ctx_main, &cur_p, ctx_guidance, params.cfg_scale);
+    if (ctx_cfg) {
+        llama_sample_classifier_free_guidance(ctx_main, &cur_p, ctx_cfg, params.cfg_scale);
     }
 
     // apply penalties

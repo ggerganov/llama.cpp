@@ -80,7 +80,7 @@ void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * ds
 //  - ctx_sampling: sampling-specific context
 //
 // optional:
-// - ctx_guidance:  context to use for guidance
+//  - ctx_cfg:      context to use for classifier-free guidance
 //  - idx:          sample from llama_get_logits_ith(ctx, idx)
 //
 // returns:
@@ -90,7 +90,7 @@ void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * ds
 llama_token llama_sampling_sample(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,
-        struct llama_context * ctx_guidance,
+        struct llama_context * ctx_cfg,
         int idx = 0);
 
 void llama_sampling_accept(
