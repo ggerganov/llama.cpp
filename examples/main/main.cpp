@@ -518,7 +518,6 @@ int main(int argc, char ** argv) {
 
             // evaluate tokens in batches
             // embd is typically prepared beforehand to fit within a batch, but not always
-
             if (ctx_guidance) {
                 int input_size = 0;
                 llama_token * input_buf = NULL;

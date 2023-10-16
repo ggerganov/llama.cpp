@@ -183,14 +183,8 @@ int main(int argc, char ** argv) {
     {
         LOG_TEE("%s: Evaluating the system prompt ...\n", __func__);
 
-        batch.n_tokens = n_tokens_system;
-
-        for (int32_t i = 0; i < batch.n_tokens; ++i) {
-            batch.token[i]     = tokens_system[i];
-            batch.pos[i]       = i;
-            batch.n_seq_id[i]  = 1;
-            batch.seq_id[i][0] = 0;
-            batch.logits[i]    = false;
+        for (int32_t i = 0; i < n_tokens_system; ++i) {
+            llama_batch_add(batch, tokens_system[i], i, { 0 }, false);
         }
 
         if (llama_decode(ctx, batch) != 0) {
@@ -209,7 +203,7 @@ int main(int argc, char ** argv) {
     LOG_TEE("Processing requests ...\n\n");
 
     while (true) {
-        batch.n_tokens = 0;
+        llama_batch_clear(batch);
 
         // decode any currently ongoing sequences
         for (auto & client : clients) {
@@ -217,16 +211,11 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
-            batch.token   [batch.n_tokens]    = client.sampled;
-            batch.pos     [batch.n_tokens]    = n_tokens_system + client.n_prompt + client.n_decoded;
-            batch.n_seq_id[batch.n_tokens]    = 1;
-            batch.seq_id  [batch.n_tokens][0] = client.id;
-            batch.logits  [batch.n_tokens]    = true;
-
-            client.n_decoded += 1;
             client.i_batch = batch.n_tokens;
 
-            batch.n_tokens += 1;
+            llama_batch_add(batch, client.sampled, n_tokens_system + client.n_prompt + client.n_decoded, { client.id }, true);
+
+            client.n_decoded += 1;
         }
 
         if (batch.n_tokens == 0) {
@@ -258,12 +247,7 @@ int main(int argc, char ** argv) {
                     tokens_prompt = ::llama_tokenize(ctx, client.prompt, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
-                        batch.token   [batch.n_tokens]    = tokens_prompt[i];
-                        batch.pos     [batch.n_tokens]    = i + n_tokens_system;
-                        batch.n_seq_id[batch.n_tokens]    = 1;
-                        batch.seq_id  [batch.n_tokens][0] = client.id;
-                        batch.logits  [batch.n_tokens]    = false;
-                        batch.n_tokens += 1;
+                        llama_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id }, false);
                     }
 
                     // extract the logits only for the last token

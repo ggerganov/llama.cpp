@@ -67,6 +67,9 @@ void llama_sampling_free(struct llama_sampling_context * ctx);
 // - reset grammar
 void llama_sampling_reset(llama_sampling_context * ctx);
 
+// Copy the sampler context
+void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);
+
 // this is a common sampling function used across the examples for convenience
 // it can serve as a starting point for implementing your own sampling function
 // Note: When using multiple sequences, it is the caller's responsibility to call

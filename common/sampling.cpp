@@ -53,6 +53,19 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
     ctx->cur.clear();
 }
 
+void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst) {
+    if (dst->grammar) {
+        llama_grammar_free(dst->grammar);
+        dst->grammar = nullptr;
+    }
+
+    if (src->grammar) {
+        dst->grammar = llama_grammar_copy(src->grammar);
+    }
+
+    dst->prev = src->prev;
+}
+
 llama_token llama_sampling_sample(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
