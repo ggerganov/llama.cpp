@@ -97,6 +97,7 @@ int main(int argc, char ** argv) {
     ctx_params.n_ctx           = params.n_ctx < 2048 ? 2048 : params.n_ctx; // we need a longer context size to process image embeddings
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.seed            = params.seed;
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 
