@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 set(LOGGER_SOURCES Logger.cpp)
 
-add_library(kp_logger ${LOGGER_SOURCES})
+add_library(kp_logger STATIC ${LOGGER_SOURCES})
 
 # Define log levels in code
 add_compile_definitions(KOMPUTE_LOG_LEVEL_TRACE=0)
