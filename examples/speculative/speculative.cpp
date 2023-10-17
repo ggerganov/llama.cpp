@@ -336,7 +336,7 @@ int main(int argc, char ** argv) {
                     llama_batch_add(batch_tgt, id, n_past_tgt + i + 1, { s }, true);
 
                     // no need to evaluate the last drafted token, since we won't use the result
-                    if (batch_tgt.n_tokens == n_draft) {
+                    if (batch_tgt.n_tokens > n_draft) {
                         drafts[s].drafting = false;
                         continue;
                     }
@@ -358,10 +358,13 @@ int main(int argc, char ** argv) {
             ++n_past_cur;
             ++n_drafted;
 
-            if (batch_tgt.n_tokens >= n_draft) {
+            if (batch_tgt.n_tokens > n_draft) {
                 break;
             }
         }
+
+        // account for the last drafted token that we didn't evaluate
+        ++n_drafted;
 
         // evaluate the target model on the drafted tokens
         {
