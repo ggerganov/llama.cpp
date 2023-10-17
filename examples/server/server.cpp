@@ -3,12 +3,8 @@
 #include "build-info.h"
 #include "grammar-parser.h"
 
-//#define SERVER_MULTIMODAL_SUPPORT
-
-#ifdef SERVER_MULTIMODAL_SUPPORT
 #include "../llava/clip.h"
 #include "stb_image.h"
-#endif
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -63,7 +59,6 @@ static bool server_verbose = false;
 #define LOG_WARNING(MSG, ...) server_log("WARNING", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
 static const std::string base64_chars =
              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
              "abcdefghijklmnopqrstuvwxyz"
@@ -112,7 +107,6 @@ std::vector<uint8_t> base64_decode(std::string const& encoded_string) {
 
   return ret;
 }
-#endif
 
 // parallel
 enum slot_state
@@ -267,7 +261,6 @@ static json probs_vector_to_json(const llama_context *ctx, const std::vector<com
     return out;
 }
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
 struct slot_image {
     clip_image_u8 img_data;
     bool request_encode_image = false;
@@ -276,7 +269,6 @@ struct slot_image {
     int id;
     std::string prefix_prompt = ""; // before of this image
 };
-#endif
 
 struct llama_client_slot
 {
@@ -322,9 +314,8 @@ struct llama_client_slot
     grammar_parser::parse_state parsed_grammar;
     llama_grammar *grammar = nullptr;
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
+    // multimodal
     std::vector<slot_image> images;
-#endif
 
     void reset() {
         num_prompt_tokens = 0;
@@ -347,15 +338,12 @@ struct llama_client_slot
             ctx_sampling.grammar = NULL;
         }
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
         for(slot_image img : images) {
             free(img.image_embedding);
             delete[] img.img_data.data;
             img.prefix_prompt = "";
         }
         images.clear();
-#endif
-
         // llama_set_rng_seed(ctx, params.seed); in batched the seed matter???????
     }
 
@@ -452,11 +440,9 @@ struct llama_server_context
     std::string user_name = ""; // this should be the anti prompt
     std::string assistant_name = ""; // this is for generate the prompt
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
     bool multimodal = false;
     clip_ctx *clp_ctx = nullptr;
     int n_embd;
-#endif
 
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
@@ -490,7 +476,6 @@ struct llama_server_context
     bool loadModel(const gpt_params &params_)
     {
         params = params_;
-#ifdef SERVER_MULTIMODAL_SUPPORT
         if(!params.mmproj.empty()) {
             multimodal = true;
             LOG_TEE("Multi Modal Mode Enabled");
@@ -504,7 +489,6 @@ struct llama_server_context
                 params.n_ctx = 2048;
             }
         }
-#endif
         std::tie(model, ctx) = llama_init_from_gpt_params(params);
         if (model == nullptr)
         {
@@ -512,7 +496,6 @@ struct llama_server_context
             return false;
         }
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
         if(multimodal) {
             int n_img_embd = clip_n_mmproj_embd(clp_ctx);
             n_embd = llama_n_embd(model);
@@ -523,7 +506,6 @@ struct llama_server_context
                 return false;
             }
         }
-#endif
         n_ctx = llama_n_ctx(ctx);
         n_vocab = llama_n_vocab(model);
         candidates.reserve(n_vocab);
@@ -829,7 +811,6 @@ struct llama_server_context
         return slot.has_next_token; // continue
     }
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
     bool processImages(llama_client_slot &slot) {
         for(slot_image &img : slot.images) {
             if(!img.request_encode_image) {
@@ -914,7 +895,6 @@ struct llama_server_context
         }
         return true;
     }
-#endif
 
     bool updateSlots() {
         // update the system prompt wait until all slots are idle state
@@ -1088,7 +1068,6 @@ struct llama_server_context
                                                     {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
                                                 });
 
-#ifdef SERVER_MULTIMODAL_SUPPORT
                     bool ingest_images = processImages(slot); // has images?
 
                     // process the prefix of first image
@@ -1105,15 +1084,7 @@ struct llama_server_context
                         LOG_TEE("failed processing images\n");
                         return false;
                     }
-#else
-                    for (; slot.n_past < prompt_tokens.size(); ++slot.n_past) {
-                        batch.token [batch.n_tokens] = prompt_tokens[slot.n_past];
-                        batch.pos   [batch.n_tokens] = slot.n_past + num_tokens_system;
-                        batch.seq_id[batch.n_tokens] = slot.id;
-                        batch.logits[batch.n_tokens] = false;
-                        batch.n_tokens += 1;
-                    }
-#endif
+
                     // extract the logits only for the last token
                     if (batch.n_tokens > 0) {
                         batch.logits[batch.n_tokens - 1] = true;
@@ -1277,9 +1248,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("    -spf FNAME, --system-prompt-file FNAME\n");
     printf("                        Set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
-#ifdef SERVER_MULTIMODAL_SUPPORT
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA.\n");
-#endif
     printf("\n");
 }
 
@@ -1570,7 +1539,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             );
             llama.processSystemPromptData(json::parse(systm_content));
         }
-#ifdef SERVER_MULTIMODAL_SUPPORT
         else if(arg == "--mmproj") {
             if (++i >= argc)
             {
@@ -1579,7 +1547,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.mmproj = argv[i];
         }
-#endif
         else
         {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
@@ -1697,11 +1664,7 @@ static json format_partial_response(
         {"content", content },
         {"stop", false},
         { "slot_id", slot->id },
-#ifdef SERVER_MULTIMODAL_SUPPORT
         {"multimodal", llama.multimodal }
-#else
-        {"multimodal", false }
-#endif
     };
 
     if (slot->sparams.n_probs > 0)
@@ -1810,8 +1773,8 @@ static void parse_options_completion(const json &body, llama_client_slot* slot, 
             }
         }
     }
+
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama, slot));
-#ifdef SERVER_MULTIMODAL_SUPPORT
     if(!llama.multimodal) {
         return;
     }
@@ -1882,7 +1845,6 @@ static void parse_options_completion(const json &body, llama_client_slot* slot, 
             slot->params.cache_prompt = false; // multimodal doesn't support cache prompt
         }
     }
-#endif
 }
 
 static void parse_options_infill(const json &body, llama_server_context &llama, llama_client_slot *slot)
