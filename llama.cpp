@@ -2250,7 +2250,7 @@ static void llm_load_vocab(
             { LLM_KV_TOKENIZER_PAD_ID, vocab.special_pad_id },
         };
         for (const auto & it : special_token_types) {
-            const std::string key = kv(std::get<0>(it));
+            const std::string & key = kv(std::get<0>(it));
             int32_t & id = std::get<1>(it), old_id = id;
 
             GGUF_GET_KEY(ctx, id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, key);
