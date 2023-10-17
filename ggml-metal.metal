@@ -2199,13 +2199,15 @@ void dequantize_f16(device const half4x4 * src, short il, thread type4x4 & reg) 
 template <typename type4x4>
 void dequantize_q4_0(device const block_q4_0 *xb, short il, thread type4x4 & reg) {
     device const uint16_t * qs = ((device const uint16_t *)xb + 1);
-    const float d = xb->d;
+    const float d1 = il ? (xb->d / 16.h) : xb->d;
+    const float d2 = d1 / 256.f;
     const float md = -8.h * xb->d;
-    const ushort mask = il ? 0x00F0 : 0x000F;
+    const ushort mask0 = il ? 0x00F0 : 0x000F;
+    const ushort mask1 = mask0 << 8;
 
     for (int i=0;i<8;i++) {
-        reg[i/2][2*(i%2)+0] = d * ((qs[i] & mask) >> (il ? 4 : 0)) + md;
-        reg[i/2][2*(i%2)+1] = d * (((qs[i] >> 8) & mask) >> (il ? 4 : 0)) + md;
+        reg[i/2][2*(i%2)+0] = d1 * (qs[i] & mask0) + md;
+        reg[i/2][2*(i%2)+1] = d2 * (qs[i] & mask1) + md;
     }
 }
 
@@ -2235,13 +2237,13 @@ void dequantize_q5_0(device const block_q5_0 *xb, short il, thread type4x4 & reg
 
     const int x_mv = (il ? 4 : 0);
 
-    const int qh_mv = (il ? 12 : 0);
-    const int qh_bk = (il ? 0 : 4);
+    const int gh_mv = (il ? 12 : 0);
+    const int gh_bk = (il ? 0 : 4);
 
     for (int i = 0; i < 8; i++) {
         // extract the 5-th bits for x0 and x1
-        const uint8_t xh_0 = ((qh >> (qh_mv + 2*i  )) << qh_bk) & 0x10;
-        const uint8_t xh_1 = ((qh >> (qh_mv + 2*i+1)) << qh_bk) & 0x10;
+        const uint8_t xh_0 = ((qh >> (gh_mv + 2*i  )) << gh_bk) & 0x10;
+        const uint8_t xh_1 = ((qh >> (gh_mv + 2*i+1)) << gh_bk) & 0x10;
 
         // combine the 4-bits from qs with the 5th bit
         const int32_t x0 = (((qs[i] & mask) >> x_mv) | xh_0);
