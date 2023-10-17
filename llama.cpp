@@ -2327,13 +2327,13 @@ static void llm_load_vocab(
         }
 
         if (special_tokens_definition_mismatch || special_tokens_count_from_verification != special_tokens_count_by_type) {
-            fprintf(stderr, "%s: warning: Mismatch in special tokens definition ( %u/%zu vs %u/%zu ).\n",
+            LLAMA_LOG_WARN("%s: mismatch in special tokens definition ( %u/%zu vs %u/%zu ).\n",
                 __func__,
                 special_tokens_count_from_verification, vocab.id_to_token.size(),
                 special_tokens_count_by_type, vocab.id_to_token.size()
             );
         } else {
-            fprintf(stderr, "%s: Special tokens definition check successful ( %u/%zu ).\n",
+            LLAMA_LOG_INFO("%s: special tokens definition check successful ( %u/%zu ).\n",
                 __func__,
                 special_tokens_count_from_verification, vocab.id_to_token.size()
             );
