@@ -93,6 +93,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
 - [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
+- [X] [Aquila2-7B](https://huggingface.co/BAAI/Aquila2-7B) / [AquilaChat2-7B](https://huggingface.co/BAAI/AquilaChat2-7B) / [AquilaChat2-34B](https://huggingface.co/BAAI/AquilaChat2-34B) / [Aquila2-34B](https://huggingface.co/BAAI/Aquila2-34B)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
