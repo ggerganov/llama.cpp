@@ -516,6 +516,7 @@ extern "C" {
     /// @return Returns the number of tokens on success, no more than n_max_tokens
     /// @return Returns a negative number on failure - the number of tokens that would have been returned
     /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
+    ///                Does not insert a leading space.
     LLAMA_API int llama_tokenize(
         const struct llama_model * model,
                       const char * text,
