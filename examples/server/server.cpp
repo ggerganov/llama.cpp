@@ -922,8 +922,8 @@ struct llama_server_context
                 const int n_left    = slot.n_past - params.n_keep - 1;
                 const int n_discard = n_left / 2;
 
-                llama_kv_cache_seq_rm   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
-                llama_kv_cache_seq_shift(ctx, 0, params.n_keep + 1 + n_discard, slot.n_past, -n_discard);
+                llama_kv_cache_seq_rm   (ctx, slot.id, params.n_keep + 1            , params.n_keep + n_discard + 1);
+                llama_kv_cache_seq_shift(ctx, slot.id, params.n_keep + 1 + n_discard, slot.n_past, -n_discard);
 
                 for (size_t i = params.n_keep + 1 + n_discard; i < slot.cache_tokens.size(); i++)
                 {
