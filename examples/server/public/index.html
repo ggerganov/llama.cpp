@@ -195,6 +195,7 @@
     import { llama } from '/completion.js';
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
     let selected_image = false;
+    var slot_id = -1;
 
     const session = signal({
       prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
@@ -222,7 +223,6 @@
       mirostat_eta: 0.1, // learning rate
       grammar: '',
       n_probs: 0, // no completion_probabilities,
-      slot_id: -1,
       image_data: [],
       cache_prompt: true
     })
@@ -389,7 +389,6 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      let slot_id = -1;
       for await (const chunk of llama(prompt, llamaParams, {controller: controller.value})) {
         const data = chunk.data;
 
@@ -401,7 +400,6 @@
             currentMessages.pop();
           }
           transcriptUpdate([...history, [char, currentMessages]])
-          params.value = {...params.value, slot_id}
           console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
         } else {
           currentMessages.push(data);
@@ -450,6 +448,7 @@
       }
       await runLlama(prompt, {
         ...params.value,
+        slot_id: slot_id,
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
       }, "{{char}}");
     }
