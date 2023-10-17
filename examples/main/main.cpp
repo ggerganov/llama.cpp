@@ -238,7 +238,7 @@ int main(int argc, char ** argv) {
 
     if (params.interactive_first || params.instruct || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
-        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
     } else {
         LOG("use session tokens\n");
         embd_inp = session_tokens;
@@ -260,10 +260,10 @@ int main(int argc, char ** argv) {
     if (ctx_guidance) {
         LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, add_bos);
+        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, add_bos, true);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp));
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp));
 
         original_prompt_len = original_inp.size();
@@ -320,8 +320,8 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", add_bos, true);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false,   true);
 
     LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx));
     LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx));
@@ -383,6 +383,12 @@ int main(int argc, char ** argv) {
         if (!params.antiprompt.empty()) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
+                if (params.verbose_prompt) {
+                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
+                    for (int i = 0; i < (int) tmp.size(); i++) {
+                        LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                    }
+                }
             }
         }
 
@@ -392,10 +398,22 @@ int main(int argc, char ** argv) {
 
         if (!params.input_prefix.empty()) {
             LOG_TEE("Input prefix: '%s'\n", params.input_prefix.c_str());
+            if (params.verbose_prompt) {
+                auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true);
+                for (int i = 0; i < (int) tmp.size(); i++) {
+                    LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                }
+            }
         }
 
         if (!params.input_suffix.empty()) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
+            if (params.verbose_prompt) {
+                auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                for (int i = 0; i < (int) tmp.size(); i++) {
+                    LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
+                }
+            }
         }
     }
     LOG_TEE("sampling: repeat_last_n = %d, repeat_penalty = %f, presence_penalty = %f, frequency_penalty = %f, top_k = %d, tfs_z = %f, top_p = %f, typical_p = %f, temp = %f, mirostat = %d, mirostat_lr = %f, mirostat_ent = %f\n",
@@ -717,7 +735,7 @@ int main(int argc, char ** argv) {
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false);
+                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, true);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -744,8 +762,7 @@ int main(int argc, char ** argv) {
                 std::string buffer;
                 if (!params.input_prefix.empty()) {
                     LOG("appending input prefix: '%s'\n", params.input_prefix.c_str());
-                    buffer += params.input_prefix;
-                    printf("%s", buffer.c_str());
+                    printf("%s", params.input_prefix.c_str());
                 }
 
                 // color user input only
@@ -767,7 +784,6 @@ int main(int argc, char ** argv) {
                     // append input suffix if any
                     if (!params.input_suffix.empty()) {
                         LOG("appending input suffix: '%s'\n", params.input_suffix.c_str());
-                        buffer += params.input_suffix;
                         printf("%s", params.input_suffix.c_str());
                     }
 
@@ -782,10 +798,14 @@ int main(int argc, char ** argv) {
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer, false, false);
+                    const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp));
 
+                    embd_inp.insert(embd_inp.end(), line_pfx.begin(), line_pfx.end());
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
+                    embd_inp.insert(embd_inp.end(), line_sfx.begin(), line_sfx.end());
 
                     // instruct mode: insert response suffix
                     if (params.instruct) {
