@@ -2242,19 +2242,22 @@ static void llm_load_vocab(
 
     // special tokens
     {
-        const std::vector<std::tuple<enum llm_kv, int32_t &>> special_token_types = {
+        const std::vector<std::pair<enum llm_kv, int32_t &>> special_token_types = {
             { LLM_KV_TOKENIZER_BOS_ID, vocab.special_bos_id },
             { LLM_KV_TOKENIZER_EOS_ID, vocab.special_eos_id },
             { LLM_KV_TOKENIZER_UNK_ID, vocab.special_unk_id },
             { LLM_KV_TOKENIZER_SEP_ID, vocab.special_sep_id },
             { LLM_KV_TOKENIZER_PAD_ID, vocab.special_pad_id },
         };
-        for (const auto & it : special_token_types ) {
+        for (const auto & it : special_token_types) {
             const std::string key = kv(std::get<0>(it));
             int32_t & id = std::get<1>(it), old_id = id;
 
             GGUF_GET_KEY(ctx, id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, key);
-            if (id != -1 && (id < 0 || size_t(id) >= vocab.id_to_token.size())) {
+            // Must be >= -1 and < vocab size. Since the key is unsigned, -1
+            // can only come from the default value, so there's no point in
+            // validating that.
+            if (size_t(id + 1) > vocab.id_to_token.size()) {
                 LLAMA_LOG_WARN("%s: bad special token: '%s' = %d, using default id %d\n",
                     __func__, key.c_str(), id, old_id);
                 id = old_id;
@@ -6101,7 +6104,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
 }
 
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
-    const char * hex = "0123456789ABCDEF";
+    static const char * hex = "0123456789ABCDEF";
     switch (llama_vocab_get_type(vocab)) {
     case LLAMA_VOCAB_TYPE_SPM: {
         const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
