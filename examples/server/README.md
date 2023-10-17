@@ -114,8 +114,6 @@ node index.js
 
     *Options:*
 
-     `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. If the prompt is a string or an array with the first element given as a string, a `bos` token is inserted in the front like `main` does.
-
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
@@ -124,7 +122,7 @@ node index.js
 
     `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
 
-    `n_keep`: Specify the number of tokens from the prompt to retain when context size is exceeded and tokens need to be discarded.
+    `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
     By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
 
     `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
@@ -161,42 +159,6 @@ node index.js
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
-
-    *Result JSON:*
-
-    Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
-
-    `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
-
-    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
-
-    `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
-
-    `model`: The path to the model loaded with `-m`
-
-    `prompt`: The provided `prompt`
-
-    `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
-
-    `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
-
-    `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
-
-    `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
-
-    `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
-
-    `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
-
-    `tokens_evaluated`: Number of tokens evaluated in total from the prompt
-
-    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
-
-    `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
-
-    `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
-
-    `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
