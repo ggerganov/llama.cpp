@@ -1159,10 +1159,13 @@ def main(args_in: list[str] | None = None) -> None:
 
     vocab: Vocab
     if args.vocab_only:
-        assert args.outfile, "need --outfile if using --vocab-only"
+        if not args.outfile:
+            raise ValueError("need --outfile if using --vocab-only")
         # FIXME: Try to respect vocab_dir somehow?
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
-        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype == 'bpe')
+        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
+            load_merges = args.vocabtype == 'bpe',
+            n_vocab = vocab.vocab_size)
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
@@ -1174,7 +1177,9 @@ def main(args_in: list[str] | None = None) -> None:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
         vocab = load_vocab(vocab_dir, args.vocabtype)
     # FIXME: Try to respect vocab_dir somehow?
-    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = args.vocabtype == 'bpe')
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
+        load_merges = args.vocabtype == 'bpe',
+        n_vocab = vocab.vocab_size)
 
     model   = model_plus.model
     model   = convert_model_names(model, params)
