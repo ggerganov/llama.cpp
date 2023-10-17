@@ -164,7 +164,7 @@ node index.js
 
     `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 
-    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options) 
+    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
 
     `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
 
@@ -186,7 +186,7 @@ node index.js
 
     `tokens_evaluated`: Number of tokens evaluated in total from the prompt
 
-    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)  
+    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
