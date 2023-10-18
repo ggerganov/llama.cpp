@@ -14,21 +14,11 @@ from typing import Any
 import numpy as np
 import torch
 from transformers import AutoTokenizer  # type: ignore[import]
+from safetensors import safe_open
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
-
-
-def count_model_parts(dir_model: Path) -> int:
-    num_parts = 0
-    for filename in os.listdir(dir_model):
-        if filename.startswith("pytorch_model-"):
-            num_parts += 1
-
-    if num_parts > 0:
-        print("gguf: found " + str(num_parts) + " model parts")
-    return num_parts
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,8 +72,6 @@ if hparams["architectures"][0] != "StableLMEpochForCausalLM":
 
     sys.exit()
 
-# get number of model parts
-num_parts = count_model_parts(dir_model)
 
 ARCH=gguf.MODEL_ARCH.STABLELM
 gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
@@ -145,58 +133,53 @@ print(tensor_map)
 # tensor info
 print("gguf: get tensor metadata")
 
-if num_parts == 0:
-    part_names = iter(("pytorch_model.bin",))
-else:
-    part_names = (
-        f"pytorch_model-{n:05}-of-{num_parts:05}.bin" for n in range(1, num_parts + 1)
-    )
+part_names = iter(("model.safetensors",))
 
 for part_name in part_names:
     if args.vocab_only:
         break
     print("gguf: loading model part '" + part_name + "'")
-    model_part = torch.load(f"{dir_model}/{part_name}", map_location="cpu")
+    ctx = safe_open(dir_model / part_name, framework="pt", device="cpu")
+    with ctx as model_part:
+        for name in model_part.keys():
+            data = model_part.get_tensor(name)
 
-    for name in model_part.keys():
-        data = model_part[name]
+            # we don't need these
+            if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
+                continue
 
-        # we don't need these
-        if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
-            continue
+            old_dtype = data.dtype
 
-        old_dtype = data.dtype
+            # convert any unsupported data types to float32
+            if data.dtype != torch.float16 and data.dtype != torch.float32:
+                data = data.to(torch.float32)
 
-        # convert any unsupported data types to float32
-        if data.dtype != torch.float16 and data.dtype != torch.float32:
-            data = data.to(torch.float32)
+            data = data.squeeze().numpy()
 
-        data = data.squeeze().numpy()
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            if new_name is None:
+                print("Can not map tensor '" + name + "'")
+                sys.exit()
 
-        # map tensor names
-        new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
-        if new_name is None:
-            print("Can not map tensor '" + name + "'")
-            sys.exit()
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
 
-        n_dims = len(data.shape)
-        data_dtype = data.dtype
+            # if f32 desired, convert any float16 to float32
+            if ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
 
-        # if f32 desired, convert any float16 to float32
-        if ftype == 0 and data_dtype == np.float16:
-            data = data.astype(np.float32)
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
 
-        # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-        if ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-            data = data.astype(np.float32)
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
 
-        # if f16 desired, convert any float32 2-dim weight tensors to float16
-        if ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-            data = data.astype(np.float16)
+            print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
-        print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
-
-        gguf_writer.add_tensor(new_name, data)
+            gguf_writer.add_tensor(new_name, data)
 
 
 print("gguf: write header")
