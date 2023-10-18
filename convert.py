@@ -27,7 +27,6 @@ from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Litera
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
-from transformers import AutoTokenizer
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
@@ -417,6 +416,14 @@ class SentencePieceVocab:
 
 class HFVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
+        try:
+            from transformers import AutoTokenizer
+        except ModuleNotFoundError:
+            raise ImportError(
+                "To use HFVocab, please install the `transformers` package. "
+                "You can install it with `pip install transformers`."
+            )
+
         self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
         
         added_tokens: dict[str, int]
@@ -438,7 +445,6 @@ class HFVocab:
         self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
-
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
