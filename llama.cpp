@@ -2333,13 +2333,13 @@ static void llm_load_vocab(
         }
 
         if (special_tokens_definition_mismatch || special_tokens_count_from_verification != special_tokens_count_by_type) {
-            fprintf(stderr, "%s: warning: Mismatch in special tokens definition ( %u/%zu vs %u/%zu ).\n",
+            LLAMA_LOG_WARN("%s: mismatch in special tokens definition ( %u/%zu vs %u/%zu ).\n",
                 __func__,
                 special_tokens_count_from_verification, vocab.id_to_token.size(),
                 special_tokens_count_by_type, vocab.id_to_token.size()
             );
         } else {
-            fprintf(stderr, "%s: Special tokens definition check successful ( %u/%zu ).\n",
+            LLAMA_LOG_INFO("%s: special tokens definition check successful ( %u/%zu ).\n",
                 __func__,
                 special_tokens_count_from_verification, vocab.id_to_token.size()
             );
@@ -5918,6 +5918,13 @@ static int llama_decode_internal(
 
     ggml_allocr_alloc_graph(lctx.alloc, gf);
 
+    struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
+
+    GGML_ASSERT(strcmp(res->name,        "result_output") == 0);
+    GGML_ASSERT(strcmp(embeddings->name, "result_norm")   == 0);
+
+
 #ifdef GGML_USE_CUBLAS
     for (int i = 0; i < gf->n_leafs; i++) {
         ggml_tensor * node = gf->leafs[i];
@@ -5935,6 +5942,12 @@ static int llama_decode_internal(
     }
 
     ggml_cuda_set_mul_mat_q(cparams.mul_mat_q);
+
+    // HACK: ggml-alloc may change the tensor backend when reusing a parent, so force output to be on the CPU here if needed
+    if (!lctx.embedding.empty()) {
+        embeddings->backend = GGML_BACKEND_CPU;
+    }
+    res->backend = GGML_BACKEND_CPU;
 #endif
 
     // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
@@ -5958,12 +5971,6 @@ static int llama_decode_internal(
     if (ggml_cpu_has_cublas() && full_offload_supported && fully_offloaded) {
         n_threads = 1;
     }
-
-    struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
-    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
-
-    GGML_ASSERT(strcmp(res->name,        "result_output") == 0);
-    GGML_ASSERT(strcmp(embeddings->name, "result_norm")   == 0);
 
 #if GGML_USE_MPI
     const int64_t n_layer = hparams.n_layer;
