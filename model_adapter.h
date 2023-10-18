@@ -54,6 +54,7 @@ enum FileFormat
 struct FileFormatExtraMeta
 {
     int n_ctx_train = 2048;
+    int fileversion = 0;
 };
 
 enum ModelLoadResult

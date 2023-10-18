@@ -288,6 +288,8 @@ void print_tok_vec(std::vector<float> &embd)
             if (keyidx != -1) {
                 fileformatmeta->n_ctx_train = gguf_get_val_u32(ctx, keyidx);
             }
+            int filever = gguf_get_version(ctx);
+            fileformatmeta->fileversion = filever;
         }
         gguf_free(ctx);
     }

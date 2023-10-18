@@ -2136,6 +2136,7 @@ static void llm_load_hparams(
 // TODO: This should probably be in llama.h
 static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, std::string raw_text, bool bos, bool special = false);
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
+static bool OldBPETokenizerMode = false;
 
 static void llm_load_vocab(
         llama_model_loader & ml,
@@ -2191,7 +2192,10 @@ static void llm_load_vocab(
 
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
-                GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+                if (!OldBPETokenizerMode)
+                {
+                    GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+                }
 
                 std::string first;
                 std::string second;
@@ -2226,7 +2230,10 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+        if (!OldBPETokenizerMode)
+        {
+            GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+        }
 
         vocab.token_to_id[word] = i;
 
@@ -6295,6 +6302,225 @@ struct llm_bigram_bpe {
     size_t size;
 };
 
+
+///// legacy functions for Falcon compatibility //////
+static llama_token llama_byte_to_token_old(const llama_vocab & vocab, uint8_t ch);
+
+static uint8_t llama_token_to_byte_old(const llama_vocab & vocab, llama_token id) {
+    GGML_ASSERT(llama_is_byte_token(vocab, id));
+    const auto& token_data = vocab.id_to_token.at(id);
+    auto buf = token_data.text.substr(3, 2);
+    return strtol(buf.c_str(), NULL, 16);
+}
+
+static llama_token llama_byte_to_token_old(const llama_vocab & vocab, uint8_t ch) {
+    char buf[7];
+    int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
+    GGML_ASSERT(0 <= result && result < 7);
+    return vocab.token_to_id.at(buf);
+}
+
+int llama_token_to_piece_old(const struct llama_model * model, llama_token token, char * buf, int length) {
+    if (0 <= token && token < llama_n_vocab(model)) {
+        if (llama_is_normal_token(model->vocab, token)) {
+            std::string result = model->vocab.id_to_token[token].text;
+            if (llama_vocab_get_type(model->vocab) == LLAMA_VOCAB_TYPE_SPM) {
+                llama_unescape_whitespace(result);
+            }
+            if (length < (int) result.length()) {
+                return -result.length();
+            }
+            memcpy(buf, result.c_str(), result.length());
+            return result.length();
+        } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
+            if (length < 3) {
+                return -3;
+            }
+            buf[0] = '\xe2';
+            buf[1] = '\x96';
+            buf[2] = '\x85';
+            return 3;
+        } else if (llama_is_control_token(model->vocab, token)) {
+            // do nothing
+        } else if (llama_is_byte_token(model->vocab, token)) {
+            if (length < 1) {
+                return -1;
+            }
+            buf[0] = llama_token_to_byte_old(model->vocab, token);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+struct llm_tokenizer_bpe_old {
+    llm_tokenizer_bpe_old(const llama_vocab & vocab): vocab(vocab) {}
+
+    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+        int final_prev_index = -1;
+        auto word_collection = bpe_gpt2_preprocess_old(text);
+
+        symbols_final.clear();
+
+        for (auto & word : word_collection) {
+            work_queue = llm_bigram_bpe::queue();
+            symbols.clear();
+
+            int index = 0;
+            size_t offset = 0;
+
+            while (offset < word.size()) {
+                llm_symbol sym;
+                size_t char_len = std::min(word.size() - offset, (size_t) ::utf8_len(word[offset]));
+                sym.text = word.c_str() + offset;
+                sym.n = 1;
+                sym.n = char_len;
+                offset += sym.n;
+                sym.prev = index - 1;
+                sym.next = offset == word.size() ? -1 : index + 1;
+                index++;
+                symbols.emplace_back(sym);
+            }
+            for (size_t i = 1; i < symbols.size(); ++i) {
+                add_new_bigram(i - 1, i);
+            }
+
+            // build token(s)
+            while (!work_queue.empty()) {
+                auto bigram = work_queue.top();
+                work_queue.pop();
+
+                auto & left_symbol = symbols[bigram.left];
+                auto & right_symbol = symbols[bigram.right];
+
+                if (left_symbol.n == 0 || right_symbol.n == 0) {
+                    continue;
+                }
+                std::string left_token = std::string(left_symbol.text, left_symbol.n);
+                std::string right_token = std::string(right_symbol.text, right_symbol.n);
+                if (left_token + right_token != bigram.text) {
+                    continue;  // Skip this bigram if it's outdated
+                }
+
+                // merge the right sym into the left one
+                left_symbol.n += right_symbol.n;
+                right_symbol.n = 0;
+
+                // remove the right sym from the chain
+                left_symbol.next = right_symbol.next;
+                if (right_symbol.next >= 0) {
+                    symbols[right_symbol.next].prev = bigram.left;
+                }
+
+                add_new_bigram(left_symbol.prev, bigram.left);  // left side of current symbol
+                add_new_bigram(bigram.left, left_symbol.next);  // right side of current symbol
+            }
+
+            // add the fnished tokens to the final list keeping correct order for next and prev
+            for (auto & sym : symbols) {
+                if (sym.n > 0) {
+                    sym.prev = final_prev_index;
+                    sym.next = -1;
+                    if (final_prev_index != -1) {
+                        symbols_final[final_prev_index].next = symbols_final.size();
+                    }
+                    symbols_final.emplace_back(sym);
+                    final_prev_index = symbols_final.size() - 1;
+                }
+            }
+        }
+
+        symbols = symbols_final;
+
+        if (!symbols.empty()) {
+            for (int i = 0; i != -1; i = symbols[i].next) {
+                auto & symbol = symbols[i];
+                if (symbol.n == 0) {
+                    continue;
+                }
+
+                const std::string str = std::string(symbol.text, symbol.n);
+                const auto token = vocab.token_to_id.find(str);
+
+                if (token == vocab.token_to_id.end()) {
+                    for (auto j = str.begin(); j != str.end(); ++j) {
+                        std::string byte_str(1, *j);
+                        auto token_multibyte = vocab.token_to_id.find(byte_str);
+                        if (token_multibyte == vocab.token_to_id.end()) {
+                            try {
+                                llama_token token_byte = llama_byte_to_token_old(vocab, *j);
+                                output.push_back(token_byte);
+                            } catch (const std::out_of_range & err) {
+                                fprintf(stderr,"ERROR: byte not found in vocab: '%s'\n", byte_str.c_str());
+                            }
+                        } else {
+                            output.push_back((*token_multibyte).second);
+                        }
+                    }
+                } else {
+                    output.push_back((*token).second);
+                }
+            }
+        }
+    }
+
+private:
+    void add_new_bigram(int left, int right) {
+        if (left == -1 || right == -1) {
+            return;
+        }
+
+        std::string left_token  = std::string(symbols[left].text,  symbols[left].n);
+        std::string right_token = std::string(symbols[right].text, symbols[right].n);
+
+        int rank_found = -1;
+
+        rank_found = vocab.find_bpe_rank(left_token, right_token);
+
+        if (rank_found < 0) {
+            return;
+        }
+
+        llm_bigram_bpe bigram;
+
+        bigram.left  = left;
+        bigram.right = right;
+        bigram.text  = left_token + right_token;
+        bigram.size  = left_token.size() + right_token.size();
+        bigram.rank  = rank_found;
+
+        work_queue.push(bigram);
+    }
+
+    // probably not 100% correct
+    static std::vector<std::string> bpe_gpt2_preprocess_old(const std::string & text) {
+        std::vector<std::string> words;
+
+        // ref: https://github.com/openai/gpt-2/blob/a74da5d99abaaba920de8131d64da2862a8f213b/src/encoder.py#L53
+        const std::string pattern = R"('s|'t|'re|'ve|'m|'ll|'d| ?[[:alpha:]]+| ?[[:digit:]]+| ?[^\s[:alpha:][:digit:]]+|\s+(?!\S)|\s+)";
+        const std::regex re(pattern);
+
+        auto words_begin = std::sregex_iterator(text.begin(), text.end(), re);
+        auto words_end = std::sregex_iterator();
+        auto n_words = std::distance(words_begin, words_end);
+        words.reserve(n_words);
+        for (auto it = words_begin; it != words_end; ++it) {
+            words.push_back(it->str());
+        }
+        return words;
+
+    }
+
+    const llama_vocab & vocab;
+
+    std::vector<llm_symbol> symbols;
+    std::vector<llm_symbol> symbols_final;
+
+    llm_bigram_bpe::queue work_queue;
+};
+
+///// end legacy functions for Falcon //////
+
 struct llm_tokenizer_bpe {
     llm_tokenizer_bpe(const llama_vocab & vocab): vocab(vocab) {}
 
@@ -6765,8 +6991,17 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 #ifdef PRETOKENIZERDEBUG
                         fprintf(stderr,"TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
-                        llm_tokenizer_bpe tokenizer(vocab);
-                        tokenizer.tokenize(raw_text, output);
+                        if(OldBPETokenizerMode)
+                        {
+                            llm_tokenizer_bpe_old tokenizer(vocab);
+                            tokenizer.tokenize(raw_text, output);
+                        }
+                        else
+                        {
+                            llm_tokenizer_bpe tokenizer(vocab);
+                            tokenizer.tokenize(raw_text, output);
+                        }
+
                     }
                     else // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                     {
@@ -9723,6 +9958,11 @@ static std::string llama_decode_text(const std::string & text) {
 
 // does not write null-terminator to buf
 int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length) {
+    if(OldBPETokenizerMode)
+    {
+        return llama_token_to_piece_old(model, token, buf, length);
+    }
+
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
