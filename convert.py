@@ -418,11 +418,11 @@ class HFVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
         try:
             from transformers import AutoTokenizer
-        except ModuleNotFoundError:
+        except ImportError as e:
             raise ImportError(
                 "To use HFVocab, please install the `transformers` package. "
                 "You can install it with `pip install transformers`."
-            )
+            ) from e
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
         
@@ -445,6 +445,7 @@ class HFVocab:
         self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
+
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
