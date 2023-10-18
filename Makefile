@@ -545,7 +545,7 @@ llama.o: llama.cpp ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h l
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 COMMON_H_DEPS = common/common.h common/sampling.h build-info.h common/log.h
-COMMON_DEPS   = $(COMMON_H_DEPS) common.o sampling.o
+COMMON_DEPS   = $(COMMON_H_DEPS) common.o sampling.o grammar-parser.o
 
 common.o: common/common.cpp $(COMMON_H_DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
