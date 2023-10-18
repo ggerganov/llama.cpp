@@ -159,7 +159,7 @@ static void TokenizeString(const std::string & str_to_tokenize, std::vector<int>
         }
         else
         {
-            output_tokens = ::llama_tokenize(llama_ctx_v4, str_to_tokenize, true);
+            output_tokens = ::llama_tokenize(llama_ctx_v4, str_to_tokenize, true, true);
         }
     }
     else

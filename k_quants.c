@@ -462,12 +462,9 @@ void quantize_row_q2_K(const float * restrict x, void * restrict vy, int k) {
 }
 
 size_t ggml_quantize_q2_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
-    const int nb = k / QK_K;
+    (void)hist; // TODO: collect histograms
 
-    // TODO - collect histograms - although, at a second thought, I don't really care about them
-    (void)hist;
-
-    for (int j = 0; j < nb; j += k) {
+    for (int j = 0; j < n; j += k) {
         block_q2_K * restrict y = (block_q2_K *)dst + j/QK_K;
         quantize_row_q2_K_reference(src + j, y, k);
     }
@@ -678,12 +675,9 @@ void quantize_row_q3_K(const float * restrict x, void * restrict vy, int k) {
 }
 
 size_t ggml_quantize_q3_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
-    const int nb = k / QK_K;
+    (void)hist; // TODO: collect histograms
 
-    // TODO - collect histograms - although, at a second thought, I don't really care about them
-    (void)hist;
-
-    for (int j = 0; j < nb; j += k) {
+    for (int j = 0; j < n; j += k) {
         block_q3_K * restrict y = (block_q3_K *)dst + j/QK_K;
         quantize_row_q3_K_reference(src + j, y, k);
     }
@@ -846,9 +840,9 @@ void quantize_row_q4_K(const float * restrict x, void * restrict vy, int k) {
 
 size_t ggml_quantize_q4_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
     (void)hist; // TODO: collect histograms
-    for (int j = 0; j < nb; j += k) {
+
+    for (int j = 0; j < n; j += k) {
         block_q4_K * restrict y = (block_q4_K *)dst + j/QK_K;
         quantize_row_q4_K_reference(src + j, y, k);
     }
@@ -1052,9 +1046,9 @@ void quantize_row_q5_K(const float * restrict x, void * restrict vy, int k) {
 
 size_t ggml_quantize_q5_K(const float * restrict src, void * restrict dst, int n, int k, int64_t * restrict hist) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
-    (void)hist;
-    for (int j = 0; j < nb; j += k) {
+    (void)hist; // TODO: collect histograms
+
+    for (int j = 0; j < n; j += k) {
         block_q5_K * restrict y = (block_q5_K *)dst + j/QK_K;
         quantize_row_q5_K_reference(src + j, y, k);
     }
@@ -1200,11 +1194,9 @@ void quantize_row_q6_K(const float * restrict x, void * restrict vy, int k) {
 
 size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    (void)hist; // TODO: collect histograms
 
-    (void)hist; // TODO
-
-    for (int j = 0; j < nb; j += k) {
+    for (int j = 0; j < n; j += k) {
         block_q6_K * restrict y = (block_q6_K *)dst + j/QK_K;
         quantize_row_q6_K_reference(src + j, y, k);
     }
