@@ -871,7 +871,7 @@ struct llama_server_context
         return slot.has_next_token; // continue
     }
 
-    bool processImages(llama_client_slot &slot) const
+    bool process_images(llama_client_slot &slot) const
     {
         for (slot_image &img : slot.images)
         {
@@ -969,6 +969,7 @@ struct llama_server_context
                 slot.n_past += 1;
             }
         }
+
         return true;
     }
 
@@ -1160,7 +1161,7 @@ struct llama_server_context
                                                     {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
                                                 });
 
-                    const bool has_images = processImages(slot); // has images?
+                    const bool has_images = process_images(slot); // has images?
 
                     // process the prefix of first image
                     std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, true) : prompt_tokens;
