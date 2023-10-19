@@ -9665,17 +9665,17 @@ Current version: 82
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
 				render_enhanced_chat(textToRender);
-				if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
-					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
-					document.getElementById("cht_inp").classList.add("shorter");
-				} else {
-					document.getElementById("chat_btnmode_chat").classList.add("hidden");
-					document.getElementById("cht_inp").classList.remove("shorter");
-				}
 			}
 			else
 			{
 				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
+			}
+			if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+				document.getElementById("cht_inp").classList.add("shorter");
+			} else {
+				document.getElementById("chat_btnmode_chat").classList.add("hidden");
+				document.getElementById("cht_inp").classList.remove("shorter");
 			}
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
