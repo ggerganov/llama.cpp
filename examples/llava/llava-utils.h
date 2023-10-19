@@ -17,7 +17,7 @@ inline bool eval_image_embd(llama_context * ctx_llama, float * embd, int N, int 
         if (n_eval > n_batch) {
             n_eval = n_batch;
         }
-        llama_batch batch = {int32_t(n_eval), nullptr, (embd+i*n_embd), nullptr, nullptr, nullptr, *n_past, 1, 0, };
+        llama_batch batch = {int32_t(n_eval), nullptr, (embd+i*n_embd), nullptr, nullptr, nullptr, nullptr, *n_past, 1, 0, };
         if (llama_decode(ctx_llama, batch)) {
             fprintf(stderr, "%s : failed to eval\n", __func__);
             return false;
@@ -49,9 +49,9 @@ inline bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
     return eval_tokens(ctx_llama, tokens, 1, n_past);
 }
 
-inline bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past){
+inline bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
-    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, true);
+    std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
     return true;
 }
