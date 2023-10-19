@@ -707,7 +707,7 @@ struct llama_server_context
 
         // wait until system prompt load
         need_update_system_prompt = true;
-        while(need_update_system_prompt) {
+        while (need_update_system_prompt) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
         // system prompt loaded, continue
@@ -748,6 +748,7 @@ struct llama_server_context
                                         const stop_type type, llama_client_slot &slot)
     {
         size_t stop_pos = std::string::npos;
+
         for (const std::string &word : slot.params.antiprompt)
         {
             size_t pos;
@@ -774,6 +775,7 @@ struct llama_server_context
 
             }
         }
+
         return stop_pos;
     }
 
@@ -798,8 +800,7 @@ struct llama_server_context
             pos = std::min(slot.sent_count, slot.generated_text.size());
         } else {
             is_stop_full = false;
-            stop_pos = find_stopping_strings(str_test, token_str.size(),
-                STOP_PARTIAL, slot);
+            stop_pos = find_stopping_strings(str_test, token_str.size(), STOP_PARTIAL, slot);
         }
 
         // check if there is any token to predict
@@ -2113,14 +2114,14 @@ int main(int argc, char **argv)
 
                 llama_client_slot* slot = llama.get_slot(json_value(data, "slot_id", -1));
 
-                if(slot == nullptr) {
+                if (slot == nullptr) {
                     LOG_TEE("slot unavailable\n");
                     res.status = 404;
                     res.set_content("slot_error", "text/plain");
                     return;
                 }
 
-                if(data.contains("system_prompt")) {
+                if (data.contains("system_prompt")) {
                     llama.process_system_prompt_data(data["system_prompt"]);
                 }
 
@@ -2286,8 +2287,7 @@ int main(int argc, char **argv)
 
                     const json data = format_final_response(llama, slot, completion_text, probs);
                     slot_print_timings(slot);
-                    res.set_content(data.dump(-1, ' ', false, json::error_handler_t::replace),
-                            "application/json");
+                    res.set_content(data.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
                 }
                 else
                 {
@@ -2342,9 +2342,11 @@ int main(int argc, char **argv)
                             "data: " +
                             data.dump(-1, ' ', false, json::error_handler_t::replace) +
                             "\n\n";
+
                         LOG_VERBOSE("data stream", {
                             { "to_send", str }
                         });
+
                         if (!sink.write(str.data(), str.size()))
                         {
                             slot->release();
