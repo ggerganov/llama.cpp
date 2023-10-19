@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 81
+Current version: 82
 -Concedo
 -->
 
@@ -216,7 +216,7 @@ Current version: 81
 		}
 
 		#inputrow.show_mode {
-			grid-template-columns: 50px auto 64px;
+			grid-template-columns: 50px auto 74px;
 		}
 
 		#inputrow {
@@ -224,7 +224,7 @@ Current version: 81
 			padding: 0px;
 			width: 100%;
 			display: grid;
-			grid-template-columns: 0% auto 62px;
+			grid-template-columns: 0% auto 72px;
 		}
 		.input_action
 		{
@@ -233,6 +233,10 @@ Current version: 81
 		.input_story
 		{
 			content:var(--img_paper);
+		}
+		.input_chat
+		{
+			content:var(--img_chat);
 		}
 
 		#inputrowmode {
@@ -259,7 +263,7 @@ Current version: 81
 			resize: vertical;
 		}
 
-		#btnmode {
+		#btnmode_chat, #btnmode_adventure {
 			width: 100%;
 			height: 100%;
 			overflow: auto;
@@ -582,6 +586,9 @@ Current version: 81
 		.bg_green:hover {
 			background-color: #058105;
 		}
+		.bg_green:active:focus {
+			background-color: #105e10;
+		}
 		.bg_green:focus {
 			background-color: #058105;
 		}
@@ -597,6 +604,9 @@ Current version: 81
 		.bg_red:hover {
 			background-color: #da0000;
 		}
+		.bg_red:active:focus {
+			background-color: #970606;
+		}
 		.bg_red:focus {
 			background-color: #da0000;
 		}
@@ -604,6 +614,24 @@ Current version: 81
 			background-color: #8a8a8a;
 		}
 		.bg_red:disabled:hover {
+			background-color: #8a8a8a;
+		}
+		.bg_orange {
+			background-color: #cc7e09;
+		}
+		.bg_orange:hover {
+			background-color: #db8e1a;
+		}
+		.bg_orange:active:focus {
+			background-color: #ac8314;
+		}
+		.bg_orange:focus {
+			background-color: #b37b15;
+		}
+		.bg_orange:disabled {
+			background-color: #8a8a8a;
+		}
+		.bg_orange:disabled:hover {
 			background-color: #8a8a8a;
 		}
 
@@ -1645,10 +1673,31 @@ Current version: 81
 		padding-left: 10px;
 		padding-right: 10px;
 	}
+	.cht_inp.shorter
+	{
+		width: calc(100% - 114px);
+	}
 
 	.cht_inp_hold_outer {
 		border-top: 1px solid #c4c4c4;
 		position: relative;
+	}
+
+	.chat_btnmode_chat {
+		background: #143574 none repeat scroll 0 0;
+		border:none;
+		border-radius: 50%;
+		color: #fff;
+		cursor: pointer;
+		font-size: 15px;
+		height: 33px;
+		position: relative;
+		top: 11px;
+		width: 33px;
+		background-size: 50% !important;
+		background-repeat: no-repeat !important;
+ 		background-position: center !important;
+		background-image: var(--img_chat) !important;
 	}
 
 	.chat_msg_send_btn {
@@ -2029,7 +2078,6 @@ Current version: 81
 			"chatname": "You",
 			"chatopponent": "Bob||$||Alice||$||Mike||$||Lisa",
 			"gui_type":1,
-			"multiline_replies":false,
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nBob: So, did anyone want to order a pizza?\nMike: Yeah, I'm starving.",
@@ -2971,7 +3019,11 @@ Current version: 81
 
 	function convertMarkdownTableToHtml(t){let hsep = /^[\s]*\|(?:[\s]*[-:]+[-:|\s]*)+\|[\s]*$/gm;let l=/^[\s]*\|(.*)\|[\s]*$/gm,r=t.split(/\r?\n|\r/),e="<table class='tablelines'>";for(let o of r){let hs=o.match(hsep);if(hs){continue;}let d=o.match(l);if(d){let i=d[0].split("|").map(t=>t.trim());e+=`<tr class='tablelines'><td class='tablelines'>${i.join("</td><td class='tablelines'>")}</td></tr>`}}return e+"</table>"}
 	//casualwriter casual-markdown, under MIT license
-	function simpleMarkdown(e){var r=function(e){return e.replace(/</g,"<").replace(/\>/g,">")},l=function(e,r){return"<pre><code>"+(r=(r=(r=(r=(r=r.replace(/</g,"&lt;").replace(/\>/g,"&gt;")).replace(/\t/g,"   ").replace(/\^\^\^(.+?)\^\^\^/g,"<mark>$1</mark>")).replace(/^\/\/(.*)/gm,"<rem>//$1</rem>").replace(/\s\/\/(.*)/gm," <rem>//$1</rem>")).replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim,"$1<b>$2</b>$3")).replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim,"$1<b>$2</b>$3"))+"</code></pre>"},c=function(e){return(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=e.replace(/^##### (.*?)\s*#*$/gm,"<h5>$1</h5>").replace(/^#### (.*?)\s*#*$/gm,"<h4>$1</h4>").replace(/^### (.*?)\s*#*$/gm,"<h3>$1</h3>").replace(/^## (.*?)\s*#*$/gm,"<h2>$1</h2>").replace(/^# (.*?)\s*#*$/gm,"<h1>$1</h1>").replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')).replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm,"<hr/>")).replace(/``(.*?)``/gm,function(e,l){return"<code>"+r(l).replace(/`/g,"`")+"</code>"})).replace(/`(.*?)`/gm,"<code>$1</code>")).replace(/^\>\> (.*$)/gm,"<blockquote><blockquote>$1</blockquote></blockquote>")).replace(/^\> (.*$)/gm,"<blockquote>$1</blockquote>")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n<br>")).replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')).replace(/!\[(.*?)\]\((.*?)\)/gm,'<img alt="$1" src="$2" />')).replace(/\[(.*?)\]\((.*?) "new"\)/gm,'<a href="$2" target=_new>$1</a>')).replace(/\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<a href="$2" title="$3">$1</a>')).replace(/<http(.*?)\>/gm,'<a href="http$1">http$1</a>')).replace(/\[(.*?)\]\(\)/gm,'<a href="$1">$1</a>')).replace(/\[(.*?)\]\((.*?)\)/gm,'<a href="$2">$1</a>')).replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/\%SpcEtg\%(\d\d?)?[ .](.*)([\n]?)/gm,"\%SpcEtg\%\n$1. $2\n").replace(/^\d\d?[ .](.*)([\n]?)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>").replace(/\n\s*\n/g,"\n<p>\n")).replace(/^ {4,10}(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/^\t(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/<\/code\><\/pre\>\n<pre\><code\>/g,"\n")).replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm,"$1")},a=0,n=0,p="";for(e=(e=e.replace(/\r\n/g,"\n").replace(/\n~~~/g,"\n```")).replace(/```([^`]+)```/g,l);(a=e.indexOf("<code>"))>=0;)n=e.indexOf("</code>",a),p+=c(e.substr(0,a))+e.substr(a+6,n>0?n-a-6:mdtext.length),e=e.substr(n+7);return p+c(e)}
+	function simpleMarkdown(e){var r=function(e){return e.replace(/</g,"<").replace(/\>/g,">")},l=function(e,r){return"<pre><code>"+(r=(r=(r=(r=(r=r.replace(/</g,"&lt;").replace(/\>/g,"&gt;")).replace(/\t/g,"   ").replace(/\^\^\^(.+?)\^\^\^/g,"<mark>$1</mark>")).replace(/^\/\/(.*)/gm,"<rem>//$1</rem>").replace(/\s\/\/(.*)/gm," <rem>//$1</rem>")).replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim,"$1<b>$2</b>$3")).replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim,"$1<b>$2</b>$3"))+"</code></pre>"},c=function(e){return(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=e.replace(/^###### (.*?)\s*#*$/gm,"<h6>$1</h6>").replace(/^##### (.*?)\s*#*$/gm,"<h5>$1</h5>").replace(/^#### (.*?)\s*#*$/gm,"<h4>$1</h4>").replace(/^### (.*?)\s*#*$/gm,"<h3>$1</h3>").replace(/^## (.*?)\s*#*$/gm,"<h2>$1</h2>").replace(/^# (.*?)\s*#*$/gm,"<h1>$1</h1>")
+	.replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')).replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm,"<hr/>")).replace(/``(.*?)``/gm,function(e,l){return"<code>"+r(l).replace(/`/g,"`")+"</code>"})).replace(/`(.*?)`/gm,"<code>$1</code>")).replace(/^\>\> (.*$)/gm,"<blockquote><blockquote>$1</blockquote></blockquote>")).replace(/^\> (.*$)/gm,"<blockquote>$1</blockquote>")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n<br>")).replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')).replace(/!\[(.*?)\]\((.*?)\)/gm,'<img alt="$1" src="$2" />')).replace(/\[(.*?)\]\((.*?) "new"\)/gm,'<a href="$2" target=_new>$1</a>')).replace(/\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<a href="$2" title="$3">$1</a>')).replace(/<http(.*?)\>/gm,'<a href="http$1">http$1</a>')).replace(/\[(.*?)\]\(\)/gm,'<a href="$1">$1</a>')).replace(/\[(.*?)\]\((.*?)\)/gm,'<a href="$2">$1</a>'))
+	.replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/\%SpcEtg\%(\d\d?)[ .](.*)([\n]?)/gm,"\%SpcEtg\%\n$1.$2\n").replace(/^\d\d?[ .](.*)([\n]??)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>")
+	//.replace(/\n\s*\n/g,"\n<p>\n")
+	).replace(/^ {4,10}(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/^\t(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/<\/code\><\/pre\>\n<pre\><code\>/g,"\n")).replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm,"$1")},a=0,n=0,p="";for(e=(e=e.replace(/\r\n/g,"\n").replace(/\n~~~/g,"\n```")).replace(/```([^`]+)```/g,l);(a=e.indexOf("<code>"))>=0;)n=e.indexOf("</code>",a),p+=c(e.substr(0,a))+e.substr(a+6,n>0?n-a-6:mdtext.length),e=e.substr(n+7);return p+c(e)}
 
 	//LMZA-JS, under MIT license
 	var lz_c=function(){"use strict";function r(e,r){postMessage({action:Ur,cbn:r,result:e})}function t(e){var r=[];return r[e-1]=void 0,r}function n(e,r){return i(e[0]+r[0],e[1]+r[1])}function s(e,r){return f(~~Math.max(Math.min(e[1]/$r,2147483647),-2147483648)&~~Math.max(Math.min(r[1]/$r,2147483647),-2147483648),c(e)&c(r))}function o(e,r){var t,n;return e[0]==r[0]&&e[1]==r[1]?0:(t=0>e[1],n=0>r[1],t&&!n?-1:!t&&n?1:h(e,r)[1]<0?-1:1)}function i(e,r){var t,n;for(r%=0x10000000000000000,e%=0x10000000000000000,t=r%$r,n=Math.floor(e/$r)*$r,r=r-t+n,e=e-n+t;0>e;)e+=$r,r-=$r;for(;e>4294967295;)e-=$r,r+=$r;for(r%=0x10000000000000000;r>0x7fffffff00000000;)r-=0x10000000000000000;for(;-0x8000000000000000>r;)r+=0x10000000000000000;return[e,r]}function _(e,r){return e[0]==r[0]&&e[1]==r[1]}function a(e){return e>=0?[e,0]:[e+$r,-$r]}function c(e){return e[0]>=2147483648?~~Math.max(Math.min(e[0]-$r,2147483647),-2147483648):~~Math.max(Math.min(e[0],2147483647),-2147483648)}function f(e,r){var t,n;return t=e*$r,n=r,0>r&&(n+=$r),[n,t]}function u(e){return 30>=e?1<<e:u(30)*u(e-30)}function m(e,r){var t,n,s,o;if(r&=63,_(e,rt))return r?tt:e;if(0>e[1])throw Error("Neg");return o=u(r),n=e[1]*o%0x10000000000000000,s=e[0]*o,t=s-s%$r,n+=t,s-=t,n>=0x8000000000000000&&(n-=0x10000000000000000),[s,n]}function p(e,r){var t;return r&=63,t=u(r),i(Math.floor(e[0]/t),e[1]/t)}function d(e,r){var t;return r&=63,t=p(e,r),0>e[1]&&(t=n(t,m([2,0],63-r))),t}function h(e,r){return i(e[0]-r[0],e[1]-r[1])}function P(e,r){return e.dc=r,e.hc=0,e.Db=r.length,e}function l(e,r,t,n){return e.hc>=e.Db?-1:(n=Math.min(n,e.Db-e.hc),b(e.dc,e.hc,r,t,n),e.hc+=n,n)}function v(e){return e.dc=t(32),e.Db=0,e}function B(e){var r=e.dc;return r.length=e.Db,r}function k(e,r){e.dc[e.Db++]=r<<24>>24}function S(e,r,t,n){b(r,t,e.dc,e.Db,n),e.Db+=n}function M(e,r,t,n,s){var o;for(o=r;t>o;++o)n[s++]=e.charCodeAt(o)}function b(e,r,t,n,s){for(var o=0;s>o;++o)t[n+o]=e[r+o]}function E(e,r){fr(r,1<<e.s),r.j=e.f,ur(r,e.m),r.U=0,r.V=3,r.N=2,r.u=3}function g(r,t,n,s,i){var _,a;if(o(s,et)<0)throw Error("invalid length "+s);for(r.gc=s,_=U({}),E(i,_),_.Xb=void 0===lz_c.disableEndMark,mr(_,n),a=0;64>a;a+=8)k(n,255&c(p(s,a)));r.Ub=(_.L=0,_.Kb=t,_.Gb=0,Q(_),_.c.cc=n,or(_),$(_),X(_),_.P.fb=_.j+1-2,br(_.P,1<<_.N),_.f.fb=_.j+1-2,br(_.f,1<<_.N),void(_.x=tt),Z({},_))}function y(e,r,t){return e._b=v({}),g(e,P({},r),e._b,a(r.length),t),e}function R(e,r,n,s){var o;e.Rb=r,e.zb=n,o=r+n+s,(null==e.d||e.nb!=o)&&(e.d=null,e.nb=o,e.d=t(e.nb)),e.B=e.nb-n}function F(e,r){return e.d[e.e+e.v+r]}function L(e,r,t,n){var s,o;for(e.K&&e.v+r+n>e.q&&(n=e.q-(e.v+r)),++t,o=e.e+e.v+r,s=0;n>s&&e.d[o+s]==e.d[o+s-t];++s);return s}function z(e){return e.q-e.v}function C(e){var r,t,n;for(n=e.e+e.v-e.Rb,n>0&&--n,t=e.e+e.q-n,r=0;t>r;++r)e.d[r]=e.d[n+r];e.e-=n}function w(e){var r;++e.v,e.v>e.jb&&(r=e.e+e.v,r>e.B&&C(e),x(e))}function x(e){var r,t,n;if(!e.K)for(;;){if(n=-e.e+e.nb-e.q,!n)return;if(r=l(e.ac,e.d,e.e+e.q,n),-1==r)return e.jb=e.q,t=e.e+e.jb,t>e.B&&(e.jb=e.B-e.e),void(e.K=1);e.q+=r,e.q>=e.v+e.zb&&(e.jb=e.q-e.zb)}}function D(e,r){e.e+=r,e.jb-=r,e.v-=r,e.q-=r}function A(e,r,n,s,o){var i,_,a;1073741567>r&&(e.Vb=16+(s>>1),a=~~((r+n+s+o)/2)+256,R(e,r+n,s+o,a),e.bb=s,i=r+1,e.l!=i&&(e.E=t(2*(e.l=i))),_=65536,e.ab&&(_=r-1,_|=_>>1,_|=_>>2,_|=_>>4,_|=_>>8,_>>=1,_|=65535,_>16777216&&(_>>=1),e.Wb=_,++_,_+=e.F),_!=e.Ib&&(e.$=t(e.Ib=_)))}function I(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v,B,k,S,M;if(e.q>=e.v+e.bb)h=e.bb;else if(h=e.q-e.v,e.ib>h)return H(e),0;for(v=0,P=e.v>e.l?e.v-e.l:0,n=e.e+e.v,l=1,c=0,f=0,e.ab?(M=st[255&e.d[n]]^255&e.d[n+1],c=1023&M,M^=(255&e.d[n+2])<<8,f=65535&M,u=(M^st[255&e.d[n+3]]<<5)&e.Wb):u=255&e.d[n]^(255&e.d[n+1])<<8,s=e.$[e.F+u]||0,e.ab&&(o=e.$[c]||0,i=e.$[1024+f]||0,e.$[c]=e.v,e.$[1024+f]=e.v,o>P&&e.d[e.e+o]==e.d[n]&&(r[v++]=l=2,r[v++]=e.v-o-1),i>P&&e.d[e.e+i]==e.d[n]&&(i==o&&(v-=2),r[v++]=l=3,r[v++]=e.v-i-1,o=i),0!=v&&o==s&&(v-=2,l=1)),e.$[e.F+u]=e.v,k=(e.h<<1)+1,S=e.h<<1,p=d=e.s,0!=e.s&&s>P&&e.d[e.e+s+e.s]!=e.d[n+e.s]&&(r[v++]=l=e.s,r[v++]=e.v-s-1),t=e.Vb;;){if(P>=s||0==t--){e.E[k]=e.E[S]=0;break}if(a=e.v-s,_=(e.h>=a?e.h-a:e.h-a+e.l)<<1,B=e.e+s,m=d>p?p:d,e.d[B+m]==e.d[n+m]){for(;++m!=h&&e.d[B+m]==e.d[n+m];);if(m>l&&(r[v++]=l=m,r[v++]=a-1,m==h)){e.E[S]=e.E[_],e.E[k]=e.E[_+1];break}}(255&e.d[n+m])>(255&e.d[B+m])?(e.E[S]=s,S=_+1,s=e.E[S],d=m):(e.E[k]=s,k=_,s=e.E[k],p=m)}return H(e),v}function O(e){e.e=0,e.v=0,e.q=0,e.K=0,x(e),e.h=0,D(e,-1)}function H(e){var r;++e.h>=e.l&&(e.h=0),w(e),1073741823==e.v&&(r=e.v-e.l,N(e.E,2*e.l,r),N(e.$,e.Ib,r),D(e,r))}function N(e,r,t){var n,s;for(n=0;r>n;++n)s=e[n]||0,t>=s?s=0:s-=t,e[n]=s}function G(e,r){e.ab=r>2,e.ab?(e.s=0,e.ib=4,e.F=66560):(e.s=2,e.ib=3,e.F=0)}function T(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v;do{if(e.q>=e.v+e.bb)p=e.bb;else if(p=e.q-e.v,e.ib>p){H(e);continue}for(d=e.v>e.l?e.v-e.l:0,n=e.e+e.v,e.ab?(v=st[255&e.d[n]]^255&e.d[n+1],_=1023&v,e.$[_]=e.v,v^=(255&e.d[n+2])<<8,a=65535&v,e.$[1024+a]=e.v,c=(v^st[255&e.d[n+3]]<<5)&e.Wb):c=255&e.d[n]^(255&e.d[n+1])<<8,s=e.$[e.F+c],e.$[e.F+c]=e.v,P=(e.h<<1)+1,l=e.h<<1,u=m=e.s,t=e.Vb;;){if(d>=s||0==t--){e.E[P]=e.E[l]=0;break}if(i=e.v-s,o=(e.h>=i?e.h-i:e.h-i+e.l)<<1,h=e.e+s,f=m>u?u:m,e.d[h+f]==e.d[n+f]){for(;++f!=p&&e.d[h+f]==e.d[n+f];);if(f==p){e.E[l]=e.E[o],e.E[P]=e.E[o+1];break}}(255&e.d[n+f])>(255&e.d[h+f])?(e.E[l]=s,l=o+1,s=e.E[l],m=f):(e.E[P]=s,P=o,s=e.E[P],u=f)}H(e)}while(0!=--r)}function W(e){return e-=2,4>e?e:3}function Y(e){return 4>e?0:10>e?e-3:e-6}function Z(e,r){return e._=r,e.ic=null,e.bc=1,e}function V(e){if(!e.bc)throw Error("bad state");if(!e._)throw Error("No decoding");return j(e),e.bc}function j(e){J(e._,e._.tb,e._.Nb,e._.$b),e.Ob=e._.tb[0],e._.$b[0]&&(cr(e._),e.bc=0)}function K(e,r){var t,n,s,o;e.W=r,s=e.a[r].n,n=e.a[r].g;do e.a[r].p&&(Cr(e.a[s]),e.a[s].n=s-1,e.a[r].Sb&&(e.a[s-1].p=0,e.a[s-1].n=e.a[r].n2,e.a[s-1].g=e.a[r].g2)),o=s,t=n,n=e.a[o].g,s=e.a[o].n,e.a[o].g=t,e.a[o].n=r,r=o;while(r>0);return e.Z=e.a[0].g,e.m=e.a[0].n}function q(e){e.i=0,e.C=0;for(var r=0;4>r;++r)e.r[r]=0}function J(e,r,t,s){var i,f,u,m,p,d,P,l,v,B,k,S,M,b,E;if(r[0]=tt,t[0]=tt,s[0]=1,e.Kb&&(e.b.ac=e.Kb,O(e.b),e.L=1,e.Kb=null),!e.Gb){if(e.Gb=1,b=e.x,_(e.x,tt)){if(!z(e.b))return void er(e,c(e.x));_r(e),M=c(e.x)&e.u,Tr(e.c,e.z,(e.i<<4)+M,0),e.i=Y(e.i),u=F(e.b,-e.o),Rr(gr(e.y,c(e.x),e.C),e.c,u),e.C=u,--e.o,e.x=n(e.x,nt)}if(!z(e.b))return void er(e,c(e.x));for(;;){if(P=rr(e,c(e.x)),B=e.Z,M=c(e.x)&e.u,f=(e.i<<4)+M,1==P&&-1==B)Tr(e.c,e.z,f,0),u=F(e.b,-e.o),E=gr(e.y,c(e.x),e.C),7>e.i?Rr(E,e.c,u):(v=F(e.b,-e.r[0]-1-e.o),Fr(E,e.c,v,u)),e.C=u,e.i=Y(e.i);else{if(Tr(e.c,e.z,f,1),4>B){if(Tr(e.c,e.S,e.i,1),B?(Tr(e.c,e.Y,e.i,1),1==B?Tr(e.c,e.ob,e.i,0):(Tr(e.c,e.ob,e.i,1),Tr(e.c,e.Mb,e.i,B-2))):(Tr(e.c,e.Y,e.i,0),1==P?Tr(e.c,e.Q,f,0):Tr(e.c,e.Q,f,1)),1==P?e.i=7>e.i?9:11:(kr(e.f,e.c,P-2,M),e.i=7>e.i?8:11),m=e.r[B],0!=B){for(d=B;d>=1;--d)e.r[d]=e.r[d-1];e.r[0]=m}}else{for(Tr(e.c,e.S,e.i,0),e.i=7>e.i?7:10,kr(e.P,e.c,P-2,M),B-=4,S=dr(B),l=W(P),Dr(e.D[l],e.c,S),S>=4&&(p=(S>>1)-1,i=(2|1&S)<<p,k=B-i,14>S?Hr(e.sb,i-S-1,e.c,p,k):(Wr(e.c,k>>4,p-4),Ir(e.M,e.c,15&k),++e.rb)),m=B,d=3;d>=1;--d)e.r[d]=e.r[d-1];e.r[0]=m,++e.pb}e.C=F(e.b,P-1-e.o)}if(e.o-=P,e.x=n(e.x,a(P)),!e.o){if(e.pb>=128&&$(e),e.rb>=16&&X(e),r[0]=e.x,t[0]=Yr(e.c),!z(e.b))return void er(e,c(e.x));if(o(h(e.x,b),[4096,0])>=0)return e.Gb=0,void(s[0]=0)}}}}function Q(e){var r,t;e.b||(r={},t=4,e.J||(t=2),G(r,t),e.b=r),Er(e.y,e.U,e.V),(e.R!=e.gb||e.kb!=e.j)&&(A(e.b,e.R,4096,e.j,274),e.gb=e.R,e.kb=e.j)}function U(e){var r;for(e.r=t(4),e.a=[],e.c={},e.z=t(192),e.S=t(12),e.Y=t(12),e.ob=t(12),e.Mb=t(12),e.Q=t(192),e.D=[],e.sb=t(114),e.M=xr({},4),e.P=Sr({}),e.f=Sr({}),e.y={},e.k=[],e.H=[],e.X=[],e.Jb=t(16),e.t=t(4),e.G=t(4),e.tb=[tt],e.Nb=[tt],e.$b=[0],e.Eb=t(5),e.Pb=t(128),e.hb=0,e.J=1,e.A=0,e.kb=-1,e.Z=0,r=0;4096>r;++r)e.a[r]={};for(r=0;4>r;++r)e.D[r]=xr({},6);return e}function X(e){for(var r=0;16>r;++r)e.Jb[r]=Or(e.M,r);e.rb=0}function $(e){var r,t,n,s,o,i,_,a;for(s=4;128>s;++s)i=dr(s),n=(i>>1)-1,r=(2|1&i)<<n,e.Pb[s]=Nr(e.sb,r-i-1,n,s-r);for(o=0;4>o;++o){for(t=e.D[o],_=o<<6,i=0;e.yb>i;++i)e.H[_+i]=Ar(t,i);for(i=14;e.yb>i;++i)e.H[_+i]+=(i>>1)-1-4<<6;for(a=128*o,s=0;4>s;++s)e.X[a+s]=e.H[_+s];for(;128>s;++s)e.X[a+s]=e.H[_+dr(s)]+e.Pb[s]}e.pb=0}function er(e,r){ar(e),pr(e,r&e.u);for(var t=0;5>t;++t)Vr(e.c)}function rr(e,r){var t,n,s,o,i,_,a,c,f,u,m,p,d,h,P,l,v,B,k,S,M,b,E,g,y,R,C,w,x,D,A,I,O,H,N,G,T,W,Z,V,j,q,J,Q,U,X,$,er,rr,or;if(e.W!=e.m)return d=e.a[e.m].n-e.m,e.Z=e.a[e.m].g,e.m=e.a[e.m].n,d;if(e.m=e.W=0,e.I?(p=e.hb,e.I=0):p=_r(e),C=e.A,y=z(e.b)+1,2>y)return e.Z=-1,1;for(y>273&&(y=273),V=0,f=0;4>f;++f)e.t[f]=e.r[f],e.G[f]=L(e.b,-1,e.t[f],273),e.G[f]>e.G[V]&&(V=f);if(e.G[V]>=e.j)return e.Z=V,d=e.G[V],ir(e,d-1),d;if(p>=e.j)return e.Z=e.k[C-1]+4,ir(e,p-1),p;if(a=F(e.b,-1),v=F(e.b,-e.r[0]-1-1),2>p&&a!=v&&2>e.G[V])return e.Z=-1,1;if(e.a[0].Yb=e.i,H=r&e.u,e.a[1].w=it[e.z[(e.i<<4)+H]>>>2]+zr(gr(e.y,r,e.C),e.i>=7,v,a),Cr(e.a[1]),B=it[2048-e.z[(e.i<<4)+H]>>>2],Z=B+it[2048-e.S[e.i]>>>2],v==a&&(j=Z+sr(e,e.i,H),e.a[1].w>j&&(e.a[1].w=j,wr(e.a[1]))),m=p>=e.G[V]?p:e.G[V],2>m)return e.Z=e.a[1].g,1;e.a[1].n=0,e.a[0].Ab=e.t[0],e.a[0].xb=e.t[1],e.a[0].wb=e.t[2],e.a[0].Lb=e.t[3],u=m;do e.a[u--].w=268435455;while(u>=2);for(f=0;4>f;++f)if(W=e.G[f],!(2>W)){G=Z+nr(e,f,e.i,H);do o=G+Mr(e.f,W-2,H),A=e.a[W],A.w>o&&(A.w=o,A.n=0,A.g=f,A.p=0);while(--W>=2)}if(g=B+it[e.S[e.i]>>>2],u=e.G[0]>=2?e.G[0]+1:2,p>=u){for(w=0;u>e.k[w];)w+=2;for(;c=e.k[w+1],o=g+tr(e,c,u,H),A=e.a[u],A.w>o&&(A.w=o,A.n=0,A.g=c+4,A.p=0),u!=e.k[w]||(w+=2,w!=C);++u);}for(t=0;;){if(++t,t==m)return K(e,t);if(k=_r(e),C=e.A,k>=e.j)return e.hb=k,e.I=1,K(e,t);if(++r,O=e.a[t].n,e.a[t].p?(--O,e.a[t].Sb?(J=e.a[e.a[t].n2].Yb,J=4>e.a[t].g2?7>J?8:11:7>J?7:10):J=e.a[O].Yb,J=Y(J)):J=e.a[O].Yb,O==t-1?J=e.a[t].g?Y(J):7>J?9:11:(e.a[t].p&&e.a[t].Sb?(O=e.a[t].n2,I=e.a[t].g2,J=7>J?8:11):(I=e.a[t].g,J=4>I?7>J?8:11:7>J?7:10),D=e.a[O],4>I?I?1==I?(e.t[0]=D.xb,e.t[1]=D.Ab,e.t[2]=D.wb,e.t[3]=D.Lb):2==I?(e.t[0]=D.wb,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.Lb):(e.t[0]=D.Lb,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.wb):(e.t[0]=D.Ab,e.t[1]=D.xb,e.t[2]=D.wb,e.t[3]=D.Lb):(e.t[0]=I-4,e.t[1]=D.Ab,e.t[2]=D.xb,e.t[3]=D.wb)),e.a[t].Yb=J,e.a[t].Ab=e.t[0],e.a[t].xb=e.t[1],e.a[t].wb=e.t[2],e.a[t].Lb=e.t[3],_=e.a[t].w,a=F(e.b,-1),v=F(e.b,-e.t[0]-1-1),H=r&e.u,n=_+it[e.z[(J<<4)+H]>>>2]+zr(gr(e.y,r,F(e.b,-2)),J>=7,v,a),b=e.a[t+1],S=0,b.w>n&&(b.w=n,b.n=t,b.g=-1,b.p=0,S=1),B=_+it[2048-e.z[(J<<4)+H]>>>2],Z=B+it[2048-e.S[J]>>>2],v!=a||t>b.n&&!b.g||(j=Z+(it[e.Y[J]>>>2]+it[e.Q[(J<<4)+H]>>>2]),b.w>=j&&(b.w=j,b.n=t,b.g=0,b.p=0,S=1)),R=z(e.b)+1,R=R>4095-t?4095-t:R,y=R,!(2>y)){if(y>e.j&&(y=e.j),!S&&v!=a&&(U=Math.min(R-1,e.j),P=L(e.b,0,e.t[0],U),P>=2)){for(Q=Y(J),N=r+1&e.u,E=n+it[2048-e.z[(Q<<4)+N]>>>2]+it[2048-e.S[Q]>>>2],x=t+1+P;x>m;)e.a[++m].w=268435455;o=E+(X=Mr(e.f,P-2,N),X+nr(e,0,Q,N)),A=e.a[x],A.w>o&&(A.w=o,A.n=t+1,A.g=0,A.p=1,A.Sb=0)}for(q=2,T=0;4>T;++T)if(h=L(e.b,-1,e.t[T],y),!(2>h)){l=h;do{for(;t+h>m;)e.a[++m].w=268435455;o=Z+($=Mr(e.f,h-2,H),$+nr(e,T,J,H)),A=e.a[t+h],A.w>o&&(A.w=o,A.n=t,A.g=T,A.p=0)}while(--h>=2);if(h=l,T||(q=h+1),R>h&&(U=Math.min(R-1-h,e.j),P=L(e.b,h,e.t[T],U),P>=2)){for(Q=7>J?8:11,N=r+h&e.u,s=Z+(er=Mr(e.f,h-2,H),er+nr(e,T,J,H))+it[e.z[(Q<<4)+N]>>>2]+zr(gr(e.y,r+h,F(e.b,h-1-1)),1,F(e.b,h-1-(e.t[T]+1)),F(e.b,h-1)),Q=Y(Q),N=r+h+1&e.u,M=s+it[2048-e.z[(Q<<4)+N]>>>2],E=M+it[2048-e.S[Q]>>>2],x=h+1+P;t+x>m;)e.a[++m].w=268435455;o=E+(rr=Mr(e.f,P-2,N),rr+nr(e,0,Q,N)),A=e.a[t+x],A.w>o&&(A.w=o,A.n=t+h+1,A.g=0,A.p=1,A.Sb=1,A.n2=t,A.g2=T)}}if(k>y){for(k=y,C=0;k>e.k[C];C+=2);e.k[C]=k,C+=2}if(k>=q){for(g=B+it[e.S[J]>>>2];t+k>m;)e.a[++m].w=268435455;for(w=0;q>e.k[w];)w+=2;for(h=q;;++h)if(i=e.k[w+1],o=g+tr(e,i,h,H),A=e.a[t+h],A.w>o&&(A.w=o,A.n=t,A.g=i+4,A.p=0),h==e.k[w]){if(R>h&&(U=Math.min(R-1-h,e.j),P=L(e.b,h,i,U),P>=2)){for(Q=7>J?7:10,N=r+h&e.u,s=o+it[e.z[(Q<<4)+N]>>>2]+zr(gr(e.y,r+h,F(e.b,h-1-1)),1,F(e.b,h-(i+1)-1),F(e.b,h-1)),Q=Y(Q),N=r+h+1&e.u,M=s+it[2048-e.z[(Q<<4)+N]>>>2],E=M+it[2048-e.S[Q]>>>2],x=h+1+P;t+x>m;)e.a[++m].w=268435455;o=E+(or=Mr(e.f,P-2,N),or+nr(e,0,Q,N)),A=e.a[t+x],A.w>o&&(A.w=o,A.n=t+h+1,A.g=0,A.p=1,A.Sb=1,A.n2=t,A.g2=i+4)}if(w+=2,w==C)break}}}}}function tr(e,r,t,n){var s,o=W(t);return s=128>r?e.X[128*o+r]:e.H[(o<<6)+hr(r)]+e.Jb[15&r],s+Mr(e.P,t-2,n)}function nr(e,r,t,n){var s;return r?(s=it[2048-e.Y[t]>>>2],1==r?s+=it[e.ob[t]>>>2]:(s+=it[2048-e.ob[t]>>>2],s+=jr(e.Mb[t],r-2))):(s=it[e.Y[t]>>>2],s+=it[2048-e.Q[(t<<4)+n]>>>2]),s}function sr(e,r,t){return it[e.Y[r]>>>2]+it[e.Q[(r<<4)+t]>>>2]}function or(e){q(e),Zr(e.c),Gr(e.z),Gr(e.Q),Gr(e.S),Gr(e.Y),Gr(e.ob),Gr(e.Mb),Gr(e.sb),yr(e.y);for(var r=0;4>r;++r)Gr(e.D[r].db);vr(e.P,1<<e.N),vr(e.f,1<<e.N),Gr(e.M.db),e.I=0,e.W=0,e.m=0,e.o=0}function ir(e,r){r>0&&(T(e.b,r),e.o+=r)}function _r(e){var r=0;return e.A=I(e.b,e.k),e.A>0&&(r=e.k[e.A-2],r==e.j&&(r+=L(e.b,r-1,e.k[e.A-1],273-r))),++e.o,r}function ar(e){e.b&&e.L&&(e.b.ac=null,e.L=0)}function cr(e){ar(e),e.c.cc=null}function fr(e,r){e.R=r;for(var t=0;r>1<<t;++t);e.yb=2*t}function ur(e,r){var t=e.J;e.J=r,e.b&&t!=e.J&&(e.gb=-1,e.b=null)}function mr(e,r){e.Eb[0]=9*(5*e.N+e.U)+e.V<<24>>24;for(var t=0;4>t;++t)e.Eb[1+t]=e.R>>8*t<<24>>24;S(r,e.Eb,0,5)}function pr(e,r){if(e.Xb){Tr(e.c,e.z,(e.i<<4)+r,1),Tr(e.c,e.S,e.i,0),e.i=7>e.i?7:10,kr(e.P,e.c,0,r);var t=W(2);Dr(e.D[t],e.c,63),Wr(e.c,67108863,26),Ir(e.M,e.c,15)}}function dr(e){return 2048>e?ot[e]:2097152>e?ot[e>>10]+20:ot[e>>20]+40}function hr(e){return 131072>e?ot[e>>6]+12:134217728>e?ot[e>>16]+32:ot[e>>26]+52}function Pr(e,r,t,n){8>t?(Tr(r,e.T,0,0),Dr(e.ub[n],r,t)):(t-=8,Tr(r,e.T,0,1),8>t?(Tr(r,e.T,1,0),Dr(e.vb[n],r,t)):(Tr(r,e.T,1,1),Dr(e.Bb,r,t-8)))}function lr(e){e.T=t(2),e.ub=t(16),e.vb=t(16),e.Bb=xr({},8);for(var r=0;16>r;++r)e.ub[r]=xr({},3),e.vb[r]=xr({},3);return e}function vr(e,r){Gr(e.T);for(var t=0;r>t;++t)Gr(e.ub[t].db),Gr(e.vb[t].db);Gr(e.Bb.db)}function Br(e,r,t,n,s){var o,i,_,a,c;for(o=it[e.T[0]>>>2],i=it[2048-e.T[0]>>>2],_=i+it[e.T[1]>>>2],a=i+it[2048-e.T[1]>>>2],c=0,c=0;8>c;++c){if(c>=t)return;n[s+c]=o+Ar(e.ub[r],c)}for(;16>c;++c){if(c>=t)return;n[s+c]=_+Ar(e.vb[r],c-8)}for(;t>c;++c)n[s+c]=a+Ar(e.Bb,c-8-8)}function kr(e,r,t,n){Pr(e,r,t,n),0==--e.Hb[n]&&(Br(e,n,e.fb,e.Tb,272*n),e.Hb[n]=e.fb)}function Sr(e){return lr(e),e.Tb=[],e.Hb=[],e}function Mr(e,r,t){return e.Tb[272*t+r]}function br(e,r){for(var t=0;r>t;++t)Br(e,t,e.fb,e.Tb,272*t),e.Hb[t]=e.fb}function Er(e,r,n){var s,o;if(null==e.Cb||e.O!=n||e.qb!=r)for(e.qb=r,e.ec=(1<<r)-1,e.O=n,o=1<<e.O+e.qb,e.Cb=t(o),s=0;o>s;++s)e.Cb[s]=Lr({})}function gr(e,r,t){return e.Cb[((r&e.ec)<<e.O)+((255&t)>>>8-e.O)]}function yr(e){var r,t=1<<e.O+e.qb;for(r=0;t>r;++r)Gr(e.Cb[r].eb)}function Rr(e,r,t){var n,s,o=1;for(s=7;s>=0;--s)n=t>>s&1,Tr(r,e.eb,o,n),o=o<<1|n}function Fr(e,r,t,n){var s,o,i,_,a=1,c=1;for(o=7;o>=0;--o)s=n>>o&1,_=c,a&&(i=t>>o&1,_+=1+i<<8,a=i==s),Tr(r,e.eb,_,s),c=c<<1|s}function Lr(e){return e.eb=t(768),e}function zr(e,r,t,n){var s,o,i=1,_=7,a=0;if(r)for(;_>=0;--_)if(o=t>>_&1,s=n>>_&1,a+=jr(e.eb[(1+o<<8)+i],s),i=i<<1|s,o!=s){--_;break}for(;_>=0;--_)s=n>>_&1,a+=jr(e.eb[i],s),i=i<<1|s;return a}function Cr(e){e.g=-1,e.p=0}function wr(e){e.g=0,e.p=0}function xr(e,r){return e.cb=r,e.db=t(1<<r),e}function Dr(e,r,t){var n,s,o=1;for(s=e.cb;0!=s;)--s,n=t>>>s&1,Tr(r,e.db,o,n),o=o<<1|n}function Ar(e,r){var t,n,s=1,o=0;for(n=e.cb;0!=n;)--n,t=r>>>n&1,o+=jr(e.db[s],t),s=(s<<1)+t;return o}function Ir(e,r,t){var n,s,o=1;for(s=0;e.cb>s;++s)n=1&t,Tr(r,e.db,o,n),o=o<<1|n,t>>=1}function Or(e,r){var t,n,s=1,o=0;for(n=e.cb;0!=n;--n)t=1&r,r>>>=1,o+=jr(e.db[s],t),s=s<<1|t;return o}function Hr(e,r,t,n,s){var o,i,_=1;for(i=0;n>i;++i)o=1&s,Tr(t,e,r+_,o),_=_<<1|o,s>>=1}function Nr(e,r,t,n){var s,o,i=1,_=0;for(o=t;0!=o;--o)s=1&n,n>>>=1,_+=it[(2047&(e[r+i]-s^-s))>>>2],i=i<<1|s;return _}function Gr(e){for(var r=e.length-1;r>=0;--r)e[r]=1024}function Tr(e,r,t,o){var i,_=r[t];i=(e.lb>>>11)*_,o?(e.Qb=n(e.Qb,s(a(i),[4294967295,0])),e.lb-=i,r[t]=_-(_>>>5)<<16>>16):(e.lb=i,r[t]=_+(2048-_>>>5)<<16>>16),-16777216&e.lb||(e.lb<<=8,Vr(e))}function Wr(e,r,t){for(var s=t-1;s>=0;--s)e.lb>>>=1,1==(r>>>s&1)&&(e.Qb=n(e.Qb,a(e.lb))),-16777216&e.lb||(e.lb<<=8,Vr(e))}function Yr(e){return n(n(a(e.mb),e.Fb),[4,0])}function Zr(e){e.Fb=tt,e.Qb=tt,e.lb=-1,e.mb=1,e.fc=0}function Vr(e){var r,t=c(d(e.Qb,32));if(0!=t||o(e.Qb,[4278190080,0])<0){e.Fb=n(e.Fb,a(e.mb)),r=e.fc;do k(e.cc,r+t),r=255;while(0!=--e.mb);e.fc=c(e.Qb)>>>24}++e.mb,e.Qb=m(s(e.Qb,[16777215,0]),8)}function jr(e,r){return it[(2047&(e-r^-r))>>>2]}function Kr(e){var r,t,n,s=[],o=0,i=e.length;if("object"==typeof e)return e;for(M(e,0,i,s,0),n=0;i>n;++n)r=s[n],r>=1&&127>=r?++o:o+=!r||r>=128&&2047>=r?2:3;for(t=[],o=0,n=0;i>n;++n)r=s[n],r>=1&&127>=r?t[o++]=r<<24>>24:!r||r>=128&&2047>=r?(t[o++]=(192|r>>6&31)<<24>>24,t[o++]=(128|63&r)<<24>>24):(t[o++]=(224|r>>12&15)<<24>>24,t[o++]=(128|r>>6&63)<<24>>24,t[o++]=(128|63&r)<<24>>24);return t}function qr(e){return e[1]+e[0]}function Jr(e,t,n,s){function o(){try{for(var e,r=(new Date).getTime();V(a.c.Ub);)if(i=qr(a.c.Ub.Ob)/qr(a.c.gc),(new Date).getTime()-r>200)return s(i),Xr(o,0),0;s(1),e=B(a.c._b),Xr(n.bind(null,e),0)}catch(t){n(null,t)}}var i,_,a={},c=void 0===n&&void 0===s;if("function"!=typeof n&&(_=n,n=s=0),s=s||function(e){return void 0!==_?r(e,_):void 0},n=n||function(e,r){return void 0!==_?postMessage({action:Qr,cbn:_,result:e,error:r}):void 0},c){for(a.c=y({},Kr(e),_t(t));V(a.c.Ub););return B(a.c._b)}try{a.c=y({},Kr(e),_t(t)),s(0)}catch(f){return n(null,f)}Xr(o,0)}var Qr=1,Ur=3,Xr="function"==typeof setImmediate?setImmediate:setTimeout,$r=4294967296,et=[4294967295,-$r],rt=[0,-0x8000000000000000],tt=[0,0],nt=[1,0],st=function(){var e,r,t,n=[];for(e=0;256>e;++e){for(t=e,r=0;8>r;++r)0!=(1&t)?t=t>>>1^-306674912:t>>>=1;n[e]=t}return n}(),ot=function(){var e,r,t,n=2,s=[0,1];for(t=2;22>t;++t)for(r=1<<(t>>1)-1,e=0;r>e;++e,++n)s[n]=t<<24>>24;return s}(),it=function(){var e,r,t,n,s=[];for(r=8;r>=0;--r)for(n=1<<9-r-1,e=1<<9-r,t=n;e>t;++t)s[t]=(r<<6)+(e-t<<6>>>9-r-1);return s}(),_t=function(){var e=[{s:16,f:64,m:0},{s:20,f:64,m:0},{s:19,f:64,m:1},{s:20,f:64,m:1},{s:21,f:128,m:1},{s:22,f:128,m:1},{s:23,f:128,m:1},{s:24,f:255,m:1},{s:25,f:255,m:1}];return function(r){return e[r-1]||e[6]}}();return"undefined"==typeof onmessage||"undefined"!=typeof window&&void 0!==window.document||!function(){onmessage=function(r){r&&r.Zb&&r.Zb.action==Qr&&lz_c.compress(r.Zb.Zb,r.Zb.jc,r.Zb.cbn)}}(),{compress:Jr}}();this.LZMA=this.LZMA_WORKER=lz_c;
@@ -3012,7 +3064,7 @@ Current version: 81
 
 	//here is my shit integration of KAI Horde's API. You're welcome. -Concedo.
 	const default_client_agent = "KoboldAiLite:17";
-	const stablehorde_url = "https://stablehorde.net";
+	const stablehorde_url = "https://aihorde.net";
 	const poll_interval_base_text = 500;
 	const poll_interval_base_img = 3800;
 	const poll_interval_background = 1000;
@@ -3081,6 +3133,10 @@ Current version: 81
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
 
+	const a1111_models_endpoint = "/sdapi/v1/sd-models";
+    const a1111_options_endpoint = "/sdapi/v1/options";
+    const a1111_txt2img_endpoint = "/sdapi/v1/txt2img";
+
 	//support for quick news updates
 	const horde_news_endpoint = "https://hordenews.concedo.workers.dev"
 
@@ -3133,6 +3189,7 @@ Current version: 81
 	var custom_claude_endpoint = "";
 	var custom_claude_key = "";
 	var custom_claude_model = "";
+	var a1111_base_url = "http://localhost:7860";
 	var uses_cors_proxy = false; //we start off attempting a direct connection. switch to proxy if that fails
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
@@ -3174,7 +3231,7 @@ Current version: 81
 		chatopponent: defaultchatopponent,
 		instruct_starttag: "\\n### Instruction:\\n",
 		instruct_endtag: "\\n### Response:\\n",
-		instruct_has_markdown: false,
+		instruct_has_markdown: true,
 		placeholder_tags: true,
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
@@ -3182,7 +3239,8 @@ Current version: 81
 		image_styles: "",
 		grammar:"",
 		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
-		generate_images: (localflag?"":"stable_diffusion"), //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
+		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111
+		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
 		save_images: true,
@@ -3201,7 +3259,7 @@ Current version: 81
 		entersubmit: true, //enter sends the prompt
 
 		max_context_length: 1024,
-		max_length: 100,
+		max_length: 120,
 		auto_ctxlen: true,
 		auto_genamt: true,
 		rep_pen: 1.1,
@@ -3395,12 +3453,12 @@ Current version: 81
 		}
 
 		//toggle genimg btn
-		if (localsettings.generate_images) {
-			document.getElementById("btn_genimg").classList.remove("hidden");
-			document.getElementById("btn_genimg2").classList.remove("hidden");
-		} else {
+		if (localsettings.generate_images_mode==0) {
 			document.getElementById("btn_genimg").classList.add("hidden");
 			document.getElementById("btn_genimg2").classList.add("hidden");
+		} else {
+			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
 
 		//invert colors
@@ -3664,25 +3722,156 @@ Current version: 81
 		}
 	}
 
-	function get_cursor_position() {
-			let editor = document.getElementById("gametext");
+	var a1111_is_connected = false;
+	function connect_to_a1111(silent=false)
+    {
+		console.log("Attempt A1111 Connection...");
+		//establish initial connection to a1111 api
+		fetch(a1111_base_url + a1111_models_endpoint)
+		.then(x => x.json())
+		.then(modelsdata => {
 
-			let position = 0;
-			const isSupported = typeof window.getSelection !== "undefined";
-			if (isSupported) {
-				const selection = window.getSelection();
-				if (selection.rangeCount !== 0) {
-					const range = window.getSelection().getRangeAt(0);
-					const preCaretRange = range.cloneRange();
-					preCaretRange.selectNodeContents(editor);
-					//preCaretRange.setStart(range.startContainer, 0);
-					preCaretRange.setEnd(range.endContainer, range.endOffset);
-					position = preCaretRange.toString().length;
+		console.log("Reading Settings...");
+		fetch(a1111_base_url + a1111_options_endpoint)
+		.then(y => y.json())
+		.then(optionsdata => {
+			console.log(optionsdata);
+			if (optionsdata.samples_format == null || modelsdata.length == 0) {
+				msgbox("Invalid data received or no models found. Is A1111 running at the url " + a1111_base_url + " ?");
+			} else {
+				let a1111_current_loaded_model = optionsdata.sd_model_checkpoint;
+				console.log("Current model loaded: " + a1111_current_loaded_model);
+
+				//repopulate our model list
+				let dropdown = document.getElementById("generate_images_local_model");
+				let selectionhtml = ``;
+				for (var i = 0; i < modelsdata.length; ++i) {
+					selectionhtml += `<option value="` + modelsdata[i].title + `" `+(a1111_current_loaded_model==modelsdata[i].title?"selected":"")+`>`+modelsdata[i].title+`</option>`;
 				}
+				dropdown.innerHTML = selectionhtml;
+				a1111_is_connected = true;
 			}
-			return position;
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+			}
+			a1111_is_connected = false;
+		});
+		}).catch((error) => {
+			if(!silent)
+			{
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+			}
+			a1111_is_connected = false;
+		});
+	}
 
+	function generate_a1111_image(req_payload, onImagesDone)
+	{
+		//split the prompt
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0];
+		let negprompt = (splits.length > 1 ? splits[1] : "");
+		let parsedseed = Math.floor(Math.random() * 99999999);
+		let sampler = req_payload.params.sampler_name;
+		let tiling = false;
+
+		//first, if we're using the wrong model, switch the model
+		//now we added override settings, but still want switch model to prevent weights from constantly reloading
+		let desired_model = req_payload.models[0];
+		let a1111_t2i_payload = {
+			"prompt": prompt,
+			"seed": parsedseed,
+			"sampler_name": "Euler a",
+			"batch_size": 1,
+			"n_iter": 1,
+			"steps": req_payload.params.steps,
+			"cfg_scale": req_payload.params.cfg_scale,
+			"width": req_payload.params.width,
+			"height": req_payload.params.height,
+			"negative_prompt": negprompt,
+			"do_not_save_samples": true, //no idea if these work, but just try
+			"do_not_save_grid": true,
+			"enable_hr": false,
+			"eta": 0,
+			"s_churn": 0,
+			"s_tmax": 0,
+			"s_tmin": 0,
+			"s_noise": 1,
+			"override_settings": {
+				"sd_model_checkpoint": desired_model,
+				"eta_noise_seed_delta": 0.0,
+				"CLIP_stop_at_last_layers": 1.0,
+				"eta_ddim": 0.0,
+				"eta_ancestral": 1.0,
+				"ddim_discretize": "uniform",
+				"img2img_fix_steps": false,
+				"enable_emphasis": true,
+				"use_old_emphasis_implementation": false,
+				"sd_hypernetwork": "None",
+				"inpainting_mask_weight": 1.0,
+				"initial_noise_multiplier": 1.0,
+				"comma_padding_backtrack": 20.0
+			}
 		}
+
+		//remove all null fields
+		a1111_t2i_payload = Object.fromEntries(Object.entries(a1111_t2i_payload).filter(([_, v]) => v != null));
+
+		let gen_endpoint = a1111_base_url + a1111_txt2img_endpoint;
+		console.log(a1111_t2i_payload);
+		fetch(gen_endpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(a1111_t2i_payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			if(resp.images && resp.images.length>0)
+			{
+				onImagesDone(resp.images[0]);
+			}
+
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			onImagesDone(null);
+		});
+
+	}
+
+	function set_a1111_endpoint()
+	{
+		inputBox("Enter Automatic1111 API endpoint","A1111 Endpoint Selection",a1111_base_url,"Input A1111 API URL", ()=>{
+			let userinput = getInputBoxValue();
+			if (userinput != null && userinput.trim()!="") {
+				a1111_base_url = userinput.trim();
+				connect_to_a1111(false);
+			}
+		},false);
+	}
+
+	function get_cursor_position() {
+		let editor = document.getElementById("gametext");
+
+		let position = 0;
+		const isSupported = typeof window.getSelection !== "undefined";
+		if (isSupported) {
+			const selection = window.getSelection();
+			if (selection.rangeCount !== 0) {
+				const range = window.getSelection().getRangeAt(0);
+				const preCaretRange = range.cloneRange();
+				preCaretRange.selectNodeContents(editor);
+				//preCaretRange.setStart(range.startContainer, 0);
+				preCaretRange.setEnd(range.endContainer, range.endOffset);
+				position = preCaretRange.toString().length;
+			}
+		}
+		return position;
+	}
 
 	function selectElementContents(el) {
 		var range = document.createRange();
@@ -4454,6 +4643,7 @@ Current version: 81
 			current_memory = combinedmem + "\n***";
 			localsettings.opmode = 3;
 			localsettings.gui_type_chat = 2;
+			localsettings.multiline_replies = true;
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
@@ -5237,6 +5427,7 @@ Current version: 81
 		document.getElementById("customendpointcontainer").classList.add("hidden");
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
+		document.getElementById("groupselectcontainer").classList.add("hidden");
 	}
 
 	function explain_horde()
@@ -5930,7 +6121,7 @@ Current version: 81
 				<button type="button" style="font-size:13px;margin:2px;width:33%" name="localload" class="btn btn-primary" onclick="hide_popups();load_file_button()">`+"📁<br>Open File"+`</button>
 				<button type="button" style="font-size:13px;margin:2px;width:34%" name="shareurl" class="btn btn-primary" onclick="hide_popups();export_share_story()">`+"🌐<br>Share"+`</button>
 				</div>
-				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<div style="font-size:12px; margin-top:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				<span style="font-weight:bold;text-decoration: underline;">Temporary Browser Storage</span>
 				</div>`;
 		filetable += entry;
@@ -5939,10 +6130,10 @@ Current version: 81
 		{
 			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
 			entry = `<div style="display:flex; height:46px;">
-				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 180px);">
+				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
 				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
 				</div>
-				<div style="text-align: right; align-self: center; width: 180px;">
+				<div style="text-align: right; align-self: center; width: 184px;">
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
 				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
@@ -6341,7 +6532,9 @@ Current version: 81
 		}
 		desired_new_home_cluster = null;
 		let newapikey = document.getElementById("apikey").value;
+
 		if (newapikey != null && newapikey.trim() != "") {
+			document.getElementById("showownworkerslink").classList.add("hidden");
 			document.getElementById("kudos_bal").innerHTML = "Checking...<br>&nbsp;";
 
 			let fupayload = {
@@ -6351,7 +6544,6 @@ Current version: 81
 				},
 			};
 			let fu_zip = finduser_endpoints.map(a => [a, fupayload]);
-
 			multifetch(fu_zip, (resArr, errArr) => {
 				if (resArr && resArr.length > 0) {
 					lastValidFoundUserData = null;
@@ -6382,9 +6574,12 @@ Current version: 81
 							{
 								document.getElementById("kudos_bal").innerHTML = clustertag + uname + "<br>"+
 								"<a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>";
+							}else{
+								document.getElementById("showownworkerslink").classList.remove("hidden");
 							}
 						} else {
 							document.getElementById("kudos_bal").innerHTML = clustertag + unameurl + "<br>Kudos Balance: " + kuds;
+							document.getElementById("showownworkerslink").classList.remove("hidden");
 						}
 
 					}
@@ -6504,7 +6699,11 @@ Current version: 81
 		{
 			document.getElementById("tokenstreaminglabel").classList.add("color_red");
 		}
-		document.getElementById("generate_images").value = localsettings.generate_images;
+		document.getElementById("generate_images_model").value = localsettings.generate_images_model;
+		if(document.getElementById("generate_images_mode").value == 0 || document.getElementById("generate_images_mode").value != localsettings.generate_images_mode) {
+			document.getElementById("generate_images_mode").value = localsettings.generate_images_mode;
+			toggle_generate_images_mode(true);
+		}
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
@@ -6589,22 +6788,22 @@ Current version: 81
 	}
 
 	function validate_sd_model() {
-		var inputmodel = document.getElementById("generate_images").value;
+		var inputmodel = document.getElementById("generate_images_model").value;
 		let matched = false;
 		for (var i = 0; i < stablemodels.length; ++i) {
 			var matcher = stablemodels[i].name + " (" + stablemodels[i].count + ")";
 			if (inputmodel == matcher || inputmodel == stablemodels[i].name) {
-				document.getElementById("generate_images").value = stablemodels[i].name;
+				document.getElementById("generate_images_model").value = stablemodels[i].name;
 				matched = true;
 				break;
 			}
 		}
 		if (!matched && inputmodel != "*") {
-			document.getElementById("generate_images").value = "";
+			document.getElementById("generate_images_model").value = defaultsettings.generate_images_model;
 		}
 	}
 	function clear_sd_model() {
-		document.getElementById("generate_images").value = "";
+		document.getElementById("generate_images_model").value = "";
 		if(!image_models_fetched)
 		{
 			//doing it this way will be more buggy,
@@ -6693,13 +6892,19 @@ Current version: 81
 		localsettings.adventure_context_mod = (document.getElementById("adventure_context_mod").checked ? true : false);
 		localsettings.instruct_has_markdown = (document.getElementById("instruct_has_markdown").checked ? true : false);
 		localsettings.placeholder_tags = (document.getElementById("placeholder_tags").checked ? true : false);
-		localsettings.generate_images = document.getElementById("generate_images").value;
+		localsettings.generate_images_model = document.getElementById("generate_images_model").value;
+		localsettings.generate_images_mode = document.getElementById("generate_images_mode").value;
 		localsettings.opmode = document.getElementById("opmode").value;
 		localsettings.chatname = document.getElementById("chatname").value;
 		if (localsettings.chatname == null || localsettings.chatname == "") {
 			localsettings.chatname = "You";
 		}
-		localsettings.chatopponent = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
+		let newopps = replaceAll(document.getElementById("chatopponent").value,"\n","||$||");
+		if(localsettings.chatopponent!=newopps)
+		{
+			groupchat_removals = [];
+		}
+		localsettings.chatopponent = newopps;
 		localsettings.instruct_starttag = document.getElementById("instruct_starttag").value;
 		if (localsettings.instruct_starttag == null || localsettings.instruct_starttag == "") {
 			localsettings.instruct_starttag = "\\n### Instruction:\\n";
@@ -6728,12 +6933,12 @@ Current version: 81
 		localsettings.save_images = (document.getElementById("save_images").checked ? true : false);
 		localsettings.prompt_for_savename = (document.getElementById("prompt_for_savename").checked ? true : false);
 		localsettings.img_allownsfw = (document.getElementById("img_allownsfw").checked ? true : false);
-		if (localsettings.generate_images) {
-			document.getElementById("btn_genimg").classList.remove("hidden");
-			document.getElementById("btn_genimg2").classList.remove("hidden");
-		} else {
+		if (localsettings.generate_images_mode==0) {
 			document.getElementById("btn_genimg").classList.add("hidden");
 			document.getElementById("btn_genimg2").classList.add("hidden");
+		} else {
+			document.getElementById("btn_genimg").classList.remove("hidden");
+			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
 
 		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
@@ -6767,10 +6972,8 @@ Current version: 81
 		localsettings.miro_eta = cleannum(localsettings.miro_eta, 0, 10);
 		toggle_invert_colors();
 
-		autosave(); //need to always autosave, so that we can switch back to non persistent sessions
-
 		hide_popups();
-		render_gametext();
+		render_gametext(); //need to always autosave, so that we can switch back to non persistent sessions
 	}
 
 	function toggle_instruct_tag_format()
@@ -6830,6 +7033,21 @@ Current version: 81
 		textarea.rows = numberOfLineBreaks+1;
 	}
 
+	function toggle_generate_images_mode(silent=false)
+	{
+		if(document.getElementById("generate_images_mode").value==0)
+		{
+			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		}else if(document.getElementById("generate_images_mode").value==1){
+			document.getElementById("generate_images_model").classList.remove("hidden");
+			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+		}else{
+			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
+			connect_to_a1111(silent);
+		}
+	}
 
 	function toggle_uistyle()
 	{
@@ -6930,8 +7148,18 @@ Current version: 81
 			waiting_for_autosummary = true;
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.35)-100;
 			let truncated_context = concat_gametext(true, "");
+
+			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
+			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
+			if (truncated_memory != null && truncated_memory != "") {
+				truncated_memory += "\n";
+			}
+
 			truncated_context = end_trim_to_sentence(truncated_context,true);
 			truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+			let augmented_len = truncated_memory.length + truncated_context.length;
+			let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
+			truncated_context = truncated_memory + truncated_context.substring(excess_len);
 
 			let long_story = (truncated_context.length>1800?true:false);
 			truncated_context += "\n### Instruction:Summarize the above text in a single paragraph of up to "+(long_story?"ten":"five")+" detailed sentences.\n### Response:";
@@ -7067,6 +7295,7 @@ Current version: 81
 		prev_hl_chunk = null;
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
+		groupchat_removals = [];
 		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -7114,7 +7343,7 @@ Current version: 81
 				gametext_arr.pop();
 			}
 		}
-		render_gametext();
+		render_gametext(false);
 	}
 
 	function replace_placeholders_direct(inputtxt)
@@ -7464,6 +7693,7 @@ Current version: 81
 				{
 					let coarr = co.split("||$||");
 					coarr = coarr.filter(x=>(x&&x!=""));
+					coarr = coarr.filter(x=>(!groupchat_removals.includes(x)));
 					coarr = coarr.map(x=>x.trim());
 					co = coarr[Math.floor(Math.random()*coarr.length)];
 
@@ -7551,7 +7781,7 @@ Current version: 81
 
 
 			//determine if a new generated image is needed, chatmode is excluded, instruct is excluded
-			if (localsettings.generate_images != "" && localsettings.opmode != 3 && localsettings.opmode != 4 && localsettings.img_autogen) {
+			if (localsettings.generate_images_mode != 0 && localsettings.opmode != 3 && localsettings.opmode != 4 && localsettings.img_autogen) {
 				//if adventure mode, generate every action
 				if (localsettings.opmode == 2) {
 					if (newgen.startsWith("\n\n\> ")) {
@@ -7776,7 +8006,7 @@ Current version: 81
 						submit_payload.stop_sequence = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
 
 						//for multichat, everyone else becomes a stopper token
-						if (localsettings.chatopponent.includes("||$||")) {
+						if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
 							let coarr = localsettings.chatopponent.split("||$||");
 							coarr = coarr.filter(x => (x && x != ""));
 							coarr = coarr.map(x => x.trim());
@@ -8190,18 +8420,17 @@ Current version: 81
 			sentence = localsettings.image_styles + " " + sentence;
 		}
 
-		if (filter_enabled) {
+		if (filter_enabled && localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
 
 		console.log("Generating image for: " + sentence);
 		let modelused = [];
-		if (localsettings.generate_images == "*") {
+		if (localsettings.generate_images_model == "*") {
 			modelused = [];
 		} else {
-			modelused = [localsettings.generate_images];
+			modelused = [localsettings.generate_images_model];
 		}
-
 
 		let genimg_payload = {
 			"prompt": (sentence + " ### disfigured, ugly, deformed, poorly, censor, censored, blurry, lowres, fused, malformed, watermark, misshapen, duplicated, grainy, distorted, signature"),
@@ -8224,15 +8453,17 @@ Current version: 81
 			"r2": false
 		}
 
-		fetch(stablehorde_submit_endpoint, {
-			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-				'Client-Agent': default_client_agent,
-				'apikey': localsettings.my_api_key,
-			},
-			body: JSON.stringify(genimg_payload),
-		})
+		if(localsettings.generate_images_mode==1)
+		{
+			fetch(stablehorde_submit_endpoint, {
+				method: 'POST', // or 'PUT'
+				headers: {
+					'Content-Type': 'application/json',
+					'Client-Agent': default_client_agent,
+					'apikey': localsettings.my_api_key,
+				},
+				body: JSON.stringify(genimg_payload),
+			})
 			.then((response) => response.json())
 			.then((data) => {
 				console.log('genimg result:', data);
@@ -8252,6 +8483,24 @@ Current version: 81
 				console.error('Error:', error);
 				msgbox("Image generation error: " + error);
 			});
+		} else {
+			let desired_model = document.getElementById("generate_images_local_model").value;
+			genimg_payload.models = [desired_model];
+			generate_a1111_image(genimg_payload,(outputimg)=>{
+				if(outputimg)
+				{
+					//console.log(outputimg);
+					let origImg = "data:image/jpeg;base64," + outputimg;
+					compressImage(origImg, (newDataUri) => {
+						let nimgtag = "[<|d|"+ newDataUri + "|d|>]";
+						gametext_arr.push(nimgtag);
+						render_gametext();
+					}, true);
+				}else{
+					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+				}
+			});
+		}
 	}
 
 	function click_image(target)
@@ -8375,6 +8624,7 @@ Current version: 81
 			let oppomatchwithNL = "\n" + localsettings.chatopponent + "\: ";
 			let foundOppoName = gentxt.indexOf(oppomatch);
 			let foundOppoNameWithNL = gentxt.indexOf(oppomatchwithNL);
+			let is_groupchat = (localsettings.chatopponent!=""&&localsettings.chatopponent.includes("||$||"));
 			if(localsettings.chatopponent!="" && foundOppoName==0)
 			{
 				gentxt = gentxt.substring(oppomatch.length);
@@ -8382,35 +8632,43 @@ Current version: 81
 			let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
 			let foundMyName2 = gentxt.indexOf("\n" + localsettings.chatname + " ");
 			let splitresponse = [];
-			if (foundMyName != -1)
+
+			let prune_multiliners = function(input_arr)
 			{
-				splitresponse = gentxt.split(localsettings.chatname + "\:");
-			}
-			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
-			{
-				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
-			}
-			else if (foundOppoNameWithNL > 0) //split by oppo name
-			{
-				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
 				//patch for cases where a random extra line from a second chatter is injected between
-				if(!localsettings.multiline_replies)
+				if(!localsettings.multiline_replies || is_groupchat)
 				{
-					let ml_check = splitresponse[0];
+					let ml_check = input_arr[0];
 					//test for other chatopponents
 					var moreopponents = new RegExp("\n(?!" + localsettings.chatname + ").+?\: ", "gi");
 					var foundmoreopponent = ml_check.match(moreopponents);
 					if(foundmoreopponent != null && foundmoreopponent.length > 0)
 					{
 						//too many chat users. split to first newline and stop.
-						splitresponse = ml_check.split("\n");
+						return ml_check.split("\n");
 					}
 				}
+				return input_arr;
+			}
 
+			if (foundMyName != -1)
+			{
+				splitresponse = gentxt.split(localsettings.chatname + "\:");
+				splitresponse = prune_multiliners(splitresponse);
+			}
+			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
+			{
+				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
+				splitresponse = prune_multiliners(splitresponse);
+			}
+			else if (foundOppoNameWithNL > 0) //split by oppo name
+			{
+				splitresponse = gentxt.split("\n" + localsettings.chatopponent + "\: ");
+				splitresponse = prune_multiliners(splitresponse);
 			}
 			else //if no name found
 			{
-				if(localsettings.multiline_replies)
+				if(localsettings.multiline_replies && !is_groupchat)
 				{
 					//already force trimmed to sentence, so just include whole thing
 					splitresponse.push(gentxt);
@@ -9059,6 +9317,56 @@ Current version: 81
 		}
 	}
 
+	function update_submit_button(full_update)
+	{
+		if (perfdata == null) {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				document.getElementById("btnsend").innerHTML = "Offline";
+			}
+		}
+		else if (selected_models.length == 0 && selected_workers.length == 0) {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
+			}
+		}
+		else if (pending_response_id == "") {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = false;
+				document.getElementById("btnsend").classList.remove("wait");
+				document.getElementById("btnsend").classList.add("btn-primary");
+			}
+			if (gametext_arr.length > 0 && document.getElementById("input_text").value == "" && document.getElementById("cht_inp").value == "") {
+				document.getElementById("btnsend").innerHTML = "Generate<br>More";
+			}
+			else {
+				document.getElementById("btnsend").innerHTML = "Submit";
+			}
+		}
+		else {
+			if(full_update)
+			{
+				document.getElementById("btnsend").disabled = true;
+				document.getElementById("btnsend").classList.add("wait");
+				document.getElementById("btnsend").classList.remove("btn-primary");
+				let oldspinnerhtml = document.getElementById("btnsend").innerHTML;
+				let newspinnerhtml = "<div class=\"outerloader\"><div id=\"outerloadernum\" class=\"outerloadernum\"></div><div id=\"maintxtloader\" class=\"innerloader\"></div></div>";
+				if (oldspinnerhtml != newspinnerhtml) {
+					//prevent resetting animation
+					document.getElementById("btnsend").innerHTML = newspinnerhtml;
+				}
+			}
+		}
+	}
+
 	function render_gametext(save = true)
 	{
 
@@ -9066,6 +9374,10 @@ Current version: 81
 		let inEditMode = (document.getElementById("allowediting").checked ? true : false);
 
 		//adventure mode has a toggle to choose action mode
+		document.getElementById("adventure_mode_img").classList.remove("input_story");
+		document.getElementById("adventure_mode_img").classList.remove("input_action");
+		document.getElementById("btnmode_chat").classList.add("hidden");
+		document.getElementById("btnmode_adventure").classList.add("hidden");
 		if(localsettings.opmode==2)
 		{
 			document.getElementById("inputrow").classList.add("show_mode");
@@ -9073,16 +9385,20 @@ Current version: 81
 			{
 				document.getElementById("adventure_mode_txt").innerText = "Action";
 				document.getElementById("adventure_mode_img").classList.add("input_action");
-				document.getElementById("adventure_mode_img").classList.remove("input_story");
 			}else{
 				document.getElementById("adventure_mode_txt").innerText = "Story";
-				document.getElementById("adventure_mode_img").classList.remove("input_action");
 				document.getElementById("adventure_mode_img").classList.add("input_story");
 			}
-			document.getElementById("btnmode").classList.remove("hidden");
-		}else{
+			document.getElementById("btnmode_adventure").classList.remove("hidden");
+		}
+		else if(localsettings.opmode==3 && localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||"))
+		{
+			document.getElementById("inputrow").classList.add("show_mode");
+			document.getElementById("btnmode_chat").classList.remove("hidden");
+		}
+		else
+		{
 			document.getElementById("inputrow").classList.remove("show_mode");
-			document.getElementById("btnmode").classList.add("hidden");
 		}
 
 		if (gametext_arr.length == 0 && synchro_pending_stream=="" && pending_response_id=="") {
@@ -9323,43 +9639,20 @@ Current version: 81
 		}
 
 		if (perfdata == null) {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			document.getElementById("btnsend").innerHTML = "Offline";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (selected_models.length == 0 && selected_workers.length == 0) {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
-
 			let perfinfo = "There are <span class=\"color_orange\">" + perfdata.worker_count + "</span> total <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> in the KoboldAI Horde, and <span class=\"color_orange\">" + perfdata.queued_requests + "</span> request(s) in queues.<br>A total of <span class=\"color_orange\">" + perfdata.past_minute_tokens + "</span> tokens were generated in the last minute.<br><br>";
-
 			document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br><br>" + perfinfo + "<a href=\"#\" class=\"color_blueurl\" onclick=\"display_models()\">Please select an AI model to use!</a><br>";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else if (pending_response_id == "") {
-			document.getElementById("btnsend").disabled = false;
-			document.getElementById("btnsend").classList.remove("wait");
-			document.getElementById("btnsend").classList.add("btn-primary");
-			document.getElementById("btnsend").innerHTML = "Submit";
 			document.getElementById("fvico").href = favivon_normal;
 		}
 		else {
-			document.getElementById("btnsend").disabled = true;
-			document.getElementById("btnsend").classList.add("wait");
-			document.getElementById("btnsend").classList.remove("btn-primary");
-			let oldspinnerhtml = document.getElementById("btnsend").innerHTML;
-			let newspinnerhtml = "<div class=\"outerloader\"><div id=\"outerloadernum\" class=\"outerloadernum\"></div><div id=\"maintxtloader\" class=\"innerloader\"></div></div>";
-			if(oldspinnerhtml!=newspinnerhtml)
-			{
-				//prevent resetting animation
-				document.getElementById("btnsend").innerHTML = newspinnerhtml;
-			}
 			document.getElementById("fvico").href = favicon_busy;
 		}
+		update_submit_button(true); //full update for submit button, otherwise just text when not generating
 
 		// Render onto enhanced chat interface if selected. Currently only applicable to Chat & Instruct modes.
 		let isStyleApplicable = ((localsettings.opmode==3 && localsettings.gui_type_chat!=0) || (localsettings.opmode==4 && localsettings.gui_type_instruct!=0));
@@ -9372,6 +9665,13 @@ Current version: 81
 			if(localsettings.opmode==3 && localsettings.gui_type_chat==1)
 			{
 				render_enhanced_chat(textToRender);
+				if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+					document.getElementById("chat_btnmode_chat").classList.remove("hidden");
+					document.getElementById("cht_inp").classList.add("shorter");
+				} else {
+					document.getElementById("chat_btnmode_chat").classList.add("hidden");
+					document.getElementById("cht_inp").classList.remove("shorter");
+				}
 			}
 			else
 			{
@@ -9840,6 +10140,52 @@ Current version: 81
 			redo_arr = [];
 			document.getElementById("input_text").value = boxtextstash;
 		}
+	}
+
+	var groupchat_removals = []; //list of names removed from groupchat
+	function show_groupchat_select()
+	{
+		document.getElementById("groupselectcontainer").classList.remove("hidden");
+		let gs = `<table style="width:90%; margin:8px auto;">`;
+		if(localsettings.chatopponent!="")
+		{
+			let grouplist = localsettings.chatopponent.split("||$||");
+			for(let i=0;i<grouplist.length;++i)
+			{
+				let show = !groupchat_removals.includes(grouplist[i]);
+				gs += `<tr><td><span style="vertical-align: middle;">`+grouplist[i]+`</span></td><td><input type="checkbox" id="groupselectitem_`+i+`" style=" vertical-align: top;" `+(show?"checked":"")+`></td></tr>`;
+			}
+		}
+		gs += `</table>`;
+		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function confirm_groupchat_select()
+	{
+		groupchat_removals = [];
+		if(localsettings.chatopponent!="")
+		{
+			let grouplist = localsettings.chatopponent.split("||$||");
+			for(let i=0;i<grouplist.length;++i)
+			{
+				let sel = document.getElementById("groupselectitem_"+i);
+				if(sel && !sel.checked)
+				{
+					groupchat_removals.push(grouplist[i]);
+				}
+			}
+			hide_popups();
+			if(groupchat_removals.length==grouplist.length)
+			{
+				msgbox("You need to select at least one group chat participant!");
+				groupchat_removals = [];
+			}
+		}
+		else
+		{
+			hide_popups();
+		}
+
+
 	}
 
 	function toggleNavWithoutBootstrapJS() {
@@ -10406,18 +10752,23 @@ Current version: 81
 		<div class="">
 			<div id="inputrow" class="">
 				<div id="inputrowmode" style="padding-right: 4px;">
-					<button type="button" class="btn btn-primary btn-secondary" id="btnmode" onclick="btn_adventure_mode()">
+					<button type="button" class="btn btn-primary btn-secondary" style="line-height: 1.4;" id="btnmode_adventure" onclick="btn_adventure_mode()">
 						<img id="adventure_mode_img" class="input_story">
-						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b></button>
+						<br><b id="adventure_mode_txt" style="font-size: 10px;">Story</b>
+					</button>
+					<button type="button" class="btn btn-primary btn-secondary" style="line-height: 1;" id="btnmode_chat" onclick="show_groupchat_select()">
+						<img class="input_chat">
+						<br><b style="font-size: 10px;">Group<br>Chat</b>
+					</button>
 				</div>
 				<div id="inputrowleft" class="tokens-in-box">
-					<textarea class="form-control" id="input_text" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
+					<textarea class="form-control" id="input_text" oninput="update_submit_button()" onkeypress="return handle_typing(event)" placeholder="Enter text here"></textarea>
 					<span id="token-budget" class="token-budget"></span>
 				</div>
 				<div id="inputrowright" style="padding-right: 2px;">
 					<button type="button" class="btn btn-secondary wait" id="btnsend" disabled
 						onclick="submit_generation()">Not<br>Conn.</button>
-						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b>[ABORT]</b></a>
+						<a href="#" id="abortgen" class="hidden bg_black" style="text-align: center;color: #ffaaaa;" onclick="abort_generation()"><b style="display: block;">[ABORT]</b></a>
 				</div>
 			</div>
 		</div>
@@ -10444,7 +10795,8 @@ Current version: 81
 
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
-				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" onkeypress="return chat_handle_typing(event)"/>
+				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
+				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" oninput="update_submit_button()" onkeypress="return chat_handle_typing(event)"/>
 
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
@@ -10532,10 +10884,12 @@ Current version: 81
 
 			<div id="loadmodellistcontent" style="overflow: auto;">
 				<div class="justifyleft anotelabel">
-					Your Kobold Horde API Key <span class="helpicon">?
+					<span style="float:left; text-align: left;">
+					Your AI Horde API Key <span class="helpicon">?
 						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
 							https://horde.koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
+					<br><a href="#" id="showownworkerslink" class="color_blueurl hidden" onclick="show_my_own_workers()">[Manager My Workers]</a></span>
 					<span class="color_green" style="float:right; text-align: right;" id="kudos_bal">
 						Need a Key?<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>
 					</span>
@@ -10546,9 +10900,8 @@ Current version: 81
 
 
 				<div class="justifyleft anotelabel">
-					Select Kobold Horde AI Model <span class="helpicon">?
-						<span class="helptext">These are the models currently provided by KoboldAI Horde
-							volunteers.</span>
+					Select AI Horde Model <span class="helpicon">?
+						<span class="helptext">These are the models currently provided by AI Horde volunteers.</span>
 					</span>
 					<span style="float:right;">
 					<a href="#" class="color_green" onclick="get_and_show_workers()">[See Current Volunteers] </a>
@@ -10557,12 +10910,16 @@ Current version: 81
 				</div>
 
 				<div class="justifyleft anotelabel">
-					Manually Select Worker <span class="helpicon">?
+					Select By Worker <span class="helpicon">?
 						<span class="helptext">This option explicitly assigns worker IDs, fixed based on the current workers available at model selection time.</span>
 					</span>
 					<input type="checkbox" id="manualworker" onclick="display_models()">
+
 					<span style="float:right;">
-						<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
+						<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="modelquicksearch" oninput="model_quick_search()">
+					</span>
+					<span style="float:right;">
+						<button type="button" style="padding:2px 3px;margin:2px;font-size:11px;" class="bg_orange btn btn-primary" id="btn_cust_endpoint" onclick="display_custom_endpoint()">Use Custom Endpoint</button>
 					</span>
 				</div>
 
@@ -10837,10 +11194,10 @@ Current version: 81
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Format <span class="helpicon">?<span class="helptext">Story Mode is best for novel style writing. Adventure Mode is best for Interactive Fiction RPGs. Chat Mode is best for chat conversations with the AI. Instruct mode is for giving the AI ChatGPT styled tasks.</span></span></div>
 							<select class="form-control" id="opmode" style="height:24px;padding:0;margin:0px 0 0;" onchange="toggle_opmode()">
+								<option value="4">Instruct Mode</option>
 								<option value="1">Story Mode</option>
 								<option value="2">Adventure Mode</option>
 								<option value="3">Chat Mode</option>
-								<option value="4">Instruct Mode</option>
 							</select>
 
 						<div id="uipicker" class="settinglabel" style="padding-top: 3px;">
@@ -11018,12 +11375,24 @@ Current version: 81
 				<div id="settingsmenuadvanced2" class="settingsmenu hidden" style="padding-top: 0px;" onchange="">
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use Stable Horde to insert AI generated images into your story.</span></span></div>
+							<div class="justifyleft settingsmall">Generate Images <span class="helpicon">?<span class="helptext">Use the AI Horde or a local A1111 instance to insert AI generated images into your story.</span></span></div>
 						</div>
-							<input list="sdmodels" class="form-control mdlpicker" id="generate_images" style="font-size: 12px;height:24px;padding:2px;margin:0px 0 0;" placeholder="[Disabled]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
+							<select class="form-control" id="generate_images_mode" style="height:20px;padding:0;margin:0px 0 0;" onchange="toggle_generate_images_mode()">
+								<option value="0">[Disabled]</option>
+								<option value="1">AI Horde</option>
+								<option value="2">Local A1111</option>
+							</select>
+							<input list="sdmodels" class="form-control mdlpicker hidden" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
 								<option value="stable_diffusion">
-							  </datalist>
+							</datalist>
+							<div id="generate_images_local_model_container" class="settinglabel hidden">
+							<select class="form-control" id="generate_images_local_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
+								<option value="">[None]</option>
+							</select>
+							<button type="button" class="btn btn-primary" onclick="set_a1111_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
+							</div>
+
 							<div id="genimgopt" class="">
 								<table>
 								<tr><td>
@@ -11049,7 +11418,7 @@ Current version: 81
 					<div class="settingitem">
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
-							<select class="form-control" id="ttsselect" style="height:24px;padding:0;margin:0px 0 0;">
+							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;">
 							</select>
 						</div>
 						<div class="settinglabel">
@@ -11232,7 +11601,7 @@ Current version: 81
 
 			</div>
 			<div style="float:right;">
-				<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
+				<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 			</div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall" title="Controls whether the world info keys are matched in a case-sensitive way.">Case Sensitive Keys </div>
@@ -11252,7 +11621,7 @@ Current version: 81
 		<div class="workerpopup">
 			<div class="popuptitlebar">
 				<div><span style="float:right;">
-					<input class="settinglabel miniinput" style="margin: 3px; width: 100px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
+					<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="workerlistquicksearch" oninput="worker_list_quick_search()">
 				</span></div>
 				<div class="popuptitletext" id="worktitlecount">Worker List</div>
 			</div>
@@ -11330,52 +11699,21 @@ Current version: 81
 		</div>
 	</div>
 
-	<div class="popupcontainer flex hidden" id="yesnocontainer">
+	<div class="popupcontainer flex hidden" id="groupselectcontainer">
 		<div class="popupbg flex"></div>
 		<div class="nspopup fixsize">
 			<div class="popuptitlebar">
-				<div class="popuptitletext" id="yesnocontainertitle"></div>
+				<div class="popuptitletext">Group Chat Selector</div>
 			</div>
-			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
-			</div>
-			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
-				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="inputboxcontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsize">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="inputboxcontainertitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel" id="inputboxcontainertext">
-
-			</div>
-			<input class="form-control" type="text" placeholder="" value=""
-			id="inputboxcontainerinput">
-			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
-
-			<div class="popupfooter">
-				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
-			</div>
-		</div>
-	</div>
-
-	<div class="popupcontainer flex hidden" id="msgboxcontainer">
-		<div class="popupbg flex"></div>
-		<div class="nspopup flexsizesmall moderate">
-			<div class="popuptitlebar">
-				<div class="popuptitletext" id="msgboxtitle"></div>
-			</div>
-			<div class="aidgpopuplistheader anotelabel msgboxtxt" id="msgboxtxt">
-
+			<div class="aidgpopuplistheader anotelabel">
+				Selected participants will reply randomly, unless you address them directly by name.<br><br>
+				Unselected participants will not reply in group chats.<br>
+				<div id="groupselectitems">
+				</div>
 			</div>
 			<div class="popupfooter">
-				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="msgboxOnDone()">OK</button>
+				<button type="button" class="btn btn-primary" onclick="confirm_groupchat_select()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -11554,6 +11892,58 @@ Current version: 81
 			</div>
 		</div>
 	</div>
+
+	<div class="popupcontainer flex hidden" id="yesnocontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="yesnocontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="yesnocontainertext">
+			</div>
+			<div class="aidgpopuplistheader anotelabel hidden" id="yesnocontainercheckboxdiv"><span style="vertical-align: middle; margin:4px" id="yesnocontainercheckboxtext"></span><input type="checkbox" id="yesnocontainercheckbox" style=" vertical-align: top;" checked></div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onYesFn()">Yes</button>
+				<button type="button" class="btn btn-primary" onclick="onNoFn()">No</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="inputboxcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="inputboxcontainertitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel" id="inputboxcontainertext">
+
+			</div>
+			<input class="form-control" type="text" placeholder="" value=""
+			id="inputboxcontainerinput">
+			<textarea class="form-control hidden" style="line-height:1.1" id="inputboxcontainerinputarea" placeholder="" rows="5"></textarea>
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="onInputboxOk()">OK</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="msgboxcontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup flexsizesmall moderate">
+			<div class="popuptitlebar">
+				<div class="popuptitletext" id="msgboxtitle"></div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel msgboxtxt" id="msgboxtxt">
+
+			</div>
+			<div class="popupfooter">
+				<button id="msgboxbtnok" type="button" class="btn btn-primary" onclick="msgboxOnDone()">OK</button>
+			</div>
+		</div>
+	</div>
+
+
 </body>
 
 <script>

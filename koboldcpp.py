@@ -360,7 +360,7 @@ def bring_terminal_to_foreground():
 #################################################################
 friendlymodelname = "concedo/koboldcpp"  # local kobold api apparently needs a hardcoded known HF model name
 maxctx = 2048
-maxhordectx = 1024
+maxhordectx = 2048
 maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
