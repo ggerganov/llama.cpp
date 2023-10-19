@@ -963,7 +963,6 @@ struct llama_server_context
             {
                 llama_batch_add(batch, append_tokens[i], slot.n_past, { slot.id }, true);
                 slot.n_past += 1;
-                batch.n_tokens += 1;
             }
         }
         return true;
