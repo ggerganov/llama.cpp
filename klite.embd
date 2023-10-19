@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 82
+Current version: 83
 -Concedo
 -->
 
@@ -3267,7 +3267,7 @@ Current version: 82
 		rep_pen_slope: 0.7,
 		temperature: 0.7,
 		top_p: 0.92,
-		top_k: 0,
+		top_k: 100,
 		top_a: 0,
 		typ_s: 1,
 		tfs_s: 1,
@@ -10889,7 +10889,7 @@ Current version: 82
 						<span class="helptext">You need an API key to use KoboldAI Horde to generate text. Get one at
 							https://horde.koboldai.net/register or use the anonymous key 0000000000.</span>
 					</span>
-					<br><a href="#" id="showownworkerslink" class="color_blueurl hidden" onclick="show_my_own_workers()">[Manager My Workers]</a></span>
+					<br><a href="#" id="showownworkerslink" class="color_blueurl hidden" onclick="show_my_own_workers()">[Manage My Workers]</a></span>
 					<span class="color_green" style="float:right; text-align: right;" id="kudos_bal">
 						Need a Key?<br><a class='color_blueurl' href='https://horde.koboldai.net/register'>(Register New User)</a>
 					</span>
