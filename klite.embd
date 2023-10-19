@@ -8624,7 +8624,6 @@ Current version: 83
 			let oppomatchwithNL = "\n" + localsettings.chatopponent + "\: ";
 			let foundOppoName = gentxt.indexOf(oppomatch);
 			let foundOppoNameWithNL = gentxt.indexOf(oppomatchwithNL);
-			let is_groupchat = (localsettings.chatopponent!=""&&localsettings.chatopponent.includes("||$||"));
 			if(localsettings.chatopponent!="" && foundOppoName==0)
 			{
 				gentxt = gentxt.substring(oppomatch.length);
@@ -8636,7 +8635,7 @@ Current version: 83
 			let prune_multiliners = function(input_arr)
 			{
 				//patch for cases where a random extra line from a second chatter is injected between
-				if(!localsettings.multiline_replies || is_groupchat)
+				if(!localsettings.multiline_replies)
 				{
 					let ml_check = input_arr[0];
 					//test for other chatopponents
@@ -8668,7 +8667,7 @@ Current version: 83
 			}
 			else //if no name found
 			{
-				if(localsettings.multiline_replies && !is_groupchat)
+				if(localsettings.multiline_replies)
 				{
 					//already force trimmed to sentence, so just include whole thing
 					splitresponse.push(gentxt);
