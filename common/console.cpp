@@ -111,7 +111,16 @@ namespace console {
             }
         }
 
-        setlocale(LC_ALL, "");
+        auto locale = setlocale(LC_ALL, "");
+        auto lang = getenv("LANG");
+        
+        if (locale == nullptr) {
+            if (lang != nullptr) {
+                setlocale(LC_ALL, lang);
+            } else{
+                setlocale(LC_ALL, "C.UTF-8");
+            }
+        }
 #endif
     }
 
