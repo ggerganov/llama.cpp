@@ -128,7 +128,6 @@ special_vocab.add_to_gguf(gguf_writer)
 # TENSORS
 
 tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
-print(tensor_map)
 
 # tensor info
 print("gguf: get tensor metadata")
