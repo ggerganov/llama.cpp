@@ -3266,14 +3266,11 @@ static struct ggml_cgraph * llm_build_llama(
             } else {
                 run_layer = NULL;
             }
-        } else if (ggml_allocr_is_measure(lctx.alloc) && il == n_layer - 1) {
-            // No idea why this is needed, but otherwise we run out of space
-            // when skipping attn or mlp (but not both) on the last layer
-            run_mlp = false;
-        } else if (ggml_allocr_is_measure(lctx.alloc) && il == n_layer - 2) {
-            // No idea why this is needed, but otherwise we run out of space
-            // when skipping attn or mlp (but not both) on the last layer
-            run_attn = false;
+        } else if (ggml_allocr_is_measure(lctx.alloc)) {
+            if (il == 0 || il == n_layer - 1) run_mlp = false;
+            else if (il == 1 || il == n_layer - 2) run_attn = false;
+            else if (il & 1) run_mlp = false;
+            else run_attn = false;
         }
         if (!run_attn && !run_mlp) continue;
 
