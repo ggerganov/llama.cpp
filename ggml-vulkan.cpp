@@ -665,6 +665,7 @@ static inline bool ggml_vk_build_shader(ggml_type type) {
     case GGML_TYPE_Q8_0:
     case GGML_TYPE_Q2_K:
     case GGML_TYPE_Q3_K:
+    case GGML_TYPE_Q4_K:
     case GGML_TYPE_Q6_K:
         return true;
     default:
@@ -960,6 +961,7 @@ static inline vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q6_K:
             break;
         default:
@@ -982,6 +984,7 @@ static inline vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bo
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q6_K:
             break;
         default:
