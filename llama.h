@@ -560,19 +560,13 @@ extern "C" {
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
-    LLAMA_API void llama_sample_repetition_penalty(
-            struct llama_context * ctx,
-          llama_token_data_array * candidates,
-               const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                          float    penalty);
-
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
-    LLAMA_API void llama_sample_frequency_and_presence_penalties(
+    LLAMA_API void llama_sample_repetition_penalties(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
                const llama_token * last_tokens,
                           size_t   last_tokens_size,
+                           float   repeat_penalty,
                            float   alpha_frequency,
                            float   alpha_presence);
 
