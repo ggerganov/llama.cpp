@@ -41,6 +41,8 @@ tests = [
         "   Hello",
         "    Hello",
         "    Hello\n    Hello",
+        "\n =",
+        "' era",
     ]
 
 for text in tests:
@@ -69,15 +71,14 @@ fname_tok = args.fname_tok
 if fname_tok:
     print('tokenizing file: ', fname_tok)
     fname_out = fname_tok + '.tok'
-    with open(fname_tok, 'r') as f:
+    with open(fname_tok, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         s = ''.join(lines)
         res = tokenizer.encode(s)
         # write to file
-        with open(fname_out, 'w') as f:
+        with open(fname_out, 'w', encoding='utf-8') as f:
             for x in res:
-                f.write(str(x) + ' ')
-            f.write('\n')
+                f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
         print('len(res): ', len(res))
         print('len(lines): ', len(lines))
     print('results written to: ', fname_out)
