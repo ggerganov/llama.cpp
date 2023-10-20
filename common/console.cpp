@@ -113,10 +113,10 @@ namespace console {
         }
 
         auto locale = setlocale(LC_ALL, "");
-        auto lang = getenv("LANG");
 
-        if (locale == nullptr) {
-            if (lang != nullptr && strcmp(lang, "C") && strcasestr(lang, "utf-8")) {
+        if (locale == nullptr || !strcmp(locale, "C") || strcasestr(locale, "utf-8") == nullptr) {
+            auto lang = getenv("LANG");
+            if (lang != nullptr && strcmp(lang, "C") && strcasestr(lang, "utf-8") != nullptr) {
                 setlocale(LC_ALL, lang);
             } else{
                 setlocale(LC_ALL, "C.UTF-8");
