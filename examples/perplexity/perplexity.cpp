@@ -405,7 +405,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                                 std::get<1>(pass_results[temp]), std::get<2>(pass_results[temp]));
                         if (anti_mode) {
                             skip_types[lidx] |= std::get<1>(pass_results[temp]);
-                            skips.push_back(std::get<1>(pass_results[temp]) == 1 ? lidx : -lidx);
+                            skips.push_back(std::get<1>(pass_results[temp]) == 1 ? lidx : lidx + n_layers);
                         }
                         if (++pruned >= num_prune) break;
                     }
