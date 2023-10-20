@@ -2978,6 +2978,11 @@ Current version: 83
 					synchro_polled_response = synchro_pending_stream;
 					synchro_pending_stream = "";
 					poll_pending_response();
+					//handle gen failures
+					if(resp.status==503)
+					{
+						msgbox("Error while submitting prompt: Server appears to be busy.");
+					}
 				},
 				abort(e) {
 					console.error('Error:', error);
@@ -6756,17 +6761,23 @@ Current version: 83
 		toggle_opmode();
 
 		//sd models display
-		let sdmodelshtml = "";
-		for (var i = 0; i < stablemodels.length; ++i) {
-			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
-		}
-		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
+		update_horde_sdmodels();
+
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
+	}
+
+	function update_horde_sdmodels()
+	{
+		let sdmodelshtml = "";
+		for (var i = 0; i < stablemodels.length; ++i) {
+			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
+		}
+		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
 	}
 
 	function toggle_preset() {
@@ -6806,12 +6817,6 @@ Current version: 83
 	}
 	function clear_sd_model() {
 		document.getElementById("generate_images_model").value = "";
-		if(!image_models_fetched)
-		{
-			//doing it this way will be more buggy,
-			//but since some anons are paranoid about privacy then whatever, only fetch it manually
-			fetch_image_models(display_settings);
-		}
 	}
 
 	function validate_samplers(savesetting = false) {
@@ -7044,6 +7049,14 @@ Current version: 83
 		}else if(document.getElementById("generate_images_mode").value==1){
 			document.getElementById("generate_images_model").classList.remove("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
+			if(!image_models_fetched)
+			{
+				//doing it this way will be more buggy,
+				//but since some anons are paranoid about privacy then whatever, only fetch it manually
+				fetch_image_models(()=>{
+					update_horde_sdmodels();
+				});
+			}
 		}else{
 			document.getElementById("generate_images_model").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
