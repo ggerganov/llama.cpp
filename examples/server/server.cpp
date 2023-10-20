@@ -614,13 +614,16 @@ struct llama_server_context
 
         // create slots
         all_slots_are_idle = true;
-        if(max_ctx_per_slot == -1) {
+        if (max_ctx_per_slot == -1)
+        {
             max_ctx_per_slot = n_ctx / params.n_parallel; // split context
         }
-        if(max_ctx_per_slot * params.n_parallel > n_ctx) {
+        if (max_ctx_per_slot * params.n_parallel > n_ctx)
+        {
             printf("Error: The max context per slot is more greater than model context size");
             return;
         }
+
         LOG_TEE("Available slots:\n");
         for (int i = 0; i < params.n_parallel; i++)
         {
@@ -628,6 +631,7 @@ struct llama_server_context
             slot.id = i;
             slot.max_context_size = max_ctx_per_slot;
             slot.reset();
+
             LOG_TEE(" -> Slot %i - max context: %i\n", slot.id, max_ctx_per_slot);
             slots.push_back(slot);
         }
@@ -788,7 +792,7 @@ struct llama_server_context
             }
         }
 
-        if(multimodal)
+        if (multimodal)
         {
             const auto &images_data = data.find("image_data");
             if (images_data != data.end() && images_data->is_array())
@@ -1068,10 +1072,10 @@ struct llama_server_context
             slot.has_next_token = false;
         }
 
-        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(ctx)){
-                slot.stopped_eos = true;
-                slot.has_next_token = false;
-                LOG_VERBOSE("eos token found", {});
+        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(ctx)) {
+            slot.stopped_eos = true;
+            slot.has_next_token = false;
+            LOG_VERBOSE("eos token found", {});
         }
 
         LOG_VERBOSE("next token", {
@@ -1277,22 +1281,25 @@ struct llama_server_context
     }
 
     task_result next_result(int task_id) {
-        while(true) {
+        while (true) {
             std::this_thread::sleep_for(std::chrono::microseconds(5));
             std::lock_guard<std::mutex> lock(mutex_results);
-            if(queue_results.empty()) {
+
+            if (queue_results.empty()) {
                 continue;
             }
 
-            for(int i = 0; i < queue_results.size(); i++) {
-                if(queue_results[i].id == task_id) {
+            for (int i = 0; i < (int) queue_results.size(); i++) {
+                if (queue_results[i].id == task_id) {
                     task_result res = queue_results[i];
                     queue_results.erase(queue_results.begin() + i);
                     return res;
                 }
             }
         }
-        return task_result{-1, false, false, {}};
+
+        // never reached
+        //return task_result{-1, false, false, {}};
     }
 
     // for multiple images processing
@@ -1373,48 +1380,48 @@ struct llama_server_context
 
     void process_tasks() {
         std::lock_guard<std::mutex> lock(mutex_tasks);
-        while(!queue_tasks.empty()) {
+        while (!queue_tasks.empty()) {
             task_server task = queue_tasks.front();
             queue_tasks.erase(queue_tasks.begin());
             switch (task.type)
             {
-            case COMPLETION_TASK: { // perform completion task
-                llama_client_slot* slot = get_slot(json_value(task.data, "slot_id", -1));
-                if (slot == nullptr) {
-                    LOG_TEE("slot unavailable\n");
-                    // send error result
-                    send_error(task.id, "slot unavaliable");
-                    return;
-                }
+                case COMPLETION_TASK: {
+                    llama_client_slot* slot = get_slot(json_value(task.data, "slot_id", -1));
+                    if (slot == nullptr) {
+                        LOG_TEE("slot unavailable\n");
+                        // send error result
+                        send_error(task.id, "slot unavaliable");
+                        return;
+                    }
 
-                if (task.data.contains("system_prompt")) {
-                    process_system_prompt_data(task.data["system_prompt"]);
-                }
+                    if (task.data.contains("system_prompt")) {
+                        process_system_prompt_data(task.data["system_prompt"]);
+                    }
 
-                slot->reset();
+                    slot->reset();
 
-                slot->infill = task.infill_mode;
-                slot->task_id = task.id;
+                    slot->infill = task.infill_mode;
+                    slot->task_id = task.id;
 
-                if (!launch_slot_with_data(slot, task.data))
-                {
-                    // send error result
-                    send_error(task.id, "internal_error");
-                    break;
-                }
-            }
-            case CANCEL_TASK: { // release slot linked with the task id
-                for(auto & slot : slots) {
-                    if(slot.task_id == task.target_id) {
-                        slot.release();
+                    if (!launch_slot_with_data(slot, task.data))
+                    {
+                        // send error result
+                        send_error(task.id, "internal_error");
                         break;
                     }
                 }
-            }
-                break;
+                case CANCEL_TASK: { // release slot linked with the task id
+                    for (auto & slot : slots) {
+                        if (slot.task_id == task.target_id) {
+                            slot.release();
+                            break;
+                        }
+                    }
+                }
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
             }
         }
     }
@@ -1426,6 +1433,7 @@ struct llama_server_context
         // update the system prompt wait until all slots are idle state
         if (need_update_system_prompt)
         {
+            LOG_TEE("updating system prompt\n");
             update_system_prompt();
         }
 
@@ -1435,6 +1443,7 @@ struct llama_server_context
         {
             if (system_prompt.empty() && clean_kv_cache)
             {
+                LOG_TEE("all slots are idle and system prompt is empty, clear the KV cache\n");
                 kv_cache_clear();
             }
             // avoid 100% usage of cpu all time
@@ -1449,6 +1458,7 @@ struct llama_server_context
                 const int n_left    = slot.n_past - slot.params.n_keep - 1;
                 const int n_discard = n_left / 2;
 
+                LOG_TEE("slot %d: context shift - n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.params.n_keep, n_left, n_discard);
                 llama_kv_cache_seq_rm   (ctx, slot.id, slot.params.n_keep + 1            , slot.params.n_keep + n_discard + 1);
                 llama_kv_cache_seq_shift(ctx, slot.id, slot.params.n_keep + 1 + n_discard, slot.n_past, -n_discard);
 
@@ -1463,7 +1473,7 @@ struct llama_server_context
 
                 slot.truncated = true;
 
-                LOG_VERBOSE("input truncated", {
+                LOG_VERBOSE("context shift", {
                                                 {"n_ctx", n_ctx},
                                                 {"n_keep", params.n_keep},
                                                 {"n_left", n_left},
@@ -1478,7 +1488,7 @@ struct llama_server_context
             if (slot.state == PROCESSING && slot.command == RELEASE)
             {
                 slot.state = slot.params.cache_prompt ? SLEEPING : IDLE;
-                if(slot.state == SLEEPING) {
+                if (slot.state == SLEEPING) {
                     LOG_TEE("slot %i has %i tokens in cache.\n", slot.id, (int) slot.cache_tokens.size());
                 }
                 else
@@ -1504,6 +1514,7 @@ struct llama_server_context
             slot.n_decoded += 1;
             slot.n_past += 1;
         }
+
         // process in chunks of params.n_batch
         int32_t n_batch = params.n_batch;
 
@@ -1547,7 +1558,7 @@ struct llama_server_context
 
                     slot.num_prompt_tokens = prompt_tokens.size();
 
-                    if(!slot.params.cache_prompt)
+                    if (!slot.params.cache_prompt)
                     {
                         std::fill(slot.ctx_sampling->prev.begin(), slot.ctx_sampling->prev.end(), 0);
                         slot.n_past = 0;
@@ -1586,9 +1597,10 @@ struct llama_server_context
                         std::copy(prompt_tokens.begin(), prompt_tokens.end(), slot.ctx_sampling->prev.end() - ps);
                         slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens - slot.n_past;
-                        LOG_TEE("slot %i - in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
+                        LOG_TEE("slot %d : in cache: %i tokens | to process: %i tokens\n", slot.id, slot.n_past, slot.num_prompt_tokens_processed);
                     }
 
+                    LOG_TEE("slot %d : kv cache rm - [%d, end)\n", slot.id, num_tokens_system + slot.n_past);
                     llama_kv_cache_seq_rm(ctx, slot.id, num_tokens_system + slot.n_past, -1);
 
                     slot.cache_tokens = prompt_tokens;
@@ -1596,7 +1608,7 @@ struct llama_server_context
                     if (slot.n_past == (int) slot.num_prompt_tokens)
                     {
                         // we have to evaluate at least 1 token to generate logits.
-                        printf("we have to evaluate at least 1 token to generate logits\n");
+                        LOG_TEE("slot %d : we have to evaluate at least 1 token to generate logits\n", slot.id);
                         slot.n_past--;
                     }
 
@@ -1606,7 +1618,7 @@ struct llama_server_context
                                                     {"to_eval", tokens_to_str(ctx, slot.cache_tokens.cbegin() + slot.n_past, slot.cache_tokens.cend())},
                                                 });
 
-                    const bool has_images = process_images(slot); // has images?
+                    const bool has_images = process_images(slot);
 
                     // process the prefix of first image
                     std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, true) : prompt_tokens;
@@ -1664,7 +1676,7 @@ struct llama_server_context
                     return false;
                 }
 
-                LOG("%s : failed to decode the batch, retrying with n_batch = %d\n", __func__, n_batch / 2);
+                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
 
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
@@ -1705,7 +1717,7 @@ struct llama_server_context
                 const int32_t n_probs = slot.sparams.n_probs;
                 if (slot.sparams.temp <= 0 && n_probs > 0)
                 {
-                    // For llama_sample_token_greedy we need to sort candidates
+                    // for llama_sample_token_greedy we need to sort candidates
                     llama_sample_softmax(ctx, &cur_p);
                 }
 
