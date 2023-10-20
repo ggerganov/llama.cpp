@@ -631,7 +631,9 @@ struct llama_server_context
             LOG_TEE(" -> Slot %i - max context: %i\n", slot.id, max_ctx_per_slot);
             slots.push_back(slot);
         }
-        batch = llama_batch_init(n_ctx, 0, 1);
+
+        batch = llama_batch_init(n_ctx, 0, params.n_parallel);
+
         // empty system prompt
         system_prompt = "";
         num_tokens_system = 0;
