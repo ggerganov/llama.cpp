@@ -13537,7 +13537,7 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[n_dims]     = GGML_FP32_TO_FP16(x2*cos_block_theta - x3*sin_block_theta);
                         dst_data[n_dims/2*3] = GGML_FP32_TO_FP16(x2*sin_block_theta + x3*cos_block_theta);
                     }
-                } if (!is_neox) {
+                } else if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         const float cos_theta = cosf(theta);
                         const float sin_theta = sinf(theta);
@@ -19170,6 +19170,7 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
                             if (idx == -1) {
                                 fprintf(stderr, "%s: failed to find tensor, arg = %d, node = %d\n", __func__, j, i);
+                                fclose(fout);
                                 return;
                             }
 
