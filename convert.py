@@ -803,8 +803,8 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path) -> None:
-        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
+    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
+        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
         name = "LLaMA"
@@ -875,10 +875,10 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab) -> None:
+    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
         check_vocab_size(params, vocab)
 
-        of = OutputFile(fname_out)
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -903,10 +903,10 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY) -> None:
+    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY, endianess=gguf.GGUFEndian.LITTLE) -> None:
         check_vocab_size(params, vocab)
 
-        of = OutputFile(fname_out)
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -1123,8 +1123,9 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
-    args = parser.parse_args(args_in)
+    parser.add_argument("--bigendian",   action="store_true",    help="model is executed on big endian machine")
 
+    args = parser.parse_args(args_in)
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
@@ -1138,6 +1139,9 @@ def main(args_in: list[str] | None = None) -> None:
     if args.dump:
         do_dump_model(model_plus)
         return
+    endianess = gguf.GGUFEndian.LITTLE
+    if args.bigendian:
+        endianess = gguf.GGUFEndian.BIG
 
     params = Params.load(model_plus)
     if params.n_ctx == -1:
@@ -1185,7 +1189,7 @@ def main(args_in: list[str] | None = None) -> None:
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
 
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency)
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency, endianess=endianess)
     print(f"Wrote {outfile}")
 
 

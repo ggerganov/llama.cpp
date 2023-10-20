@@ -4,7 +4,9 @@
 
 #undef NDEBUG
 #include <cassert>
+#if !defined(__riscv) && !defined(__s390__)
 #include <immintrin.h>
+#endif
 #include <cmath>
 #include <cstdint>
 #include <cstring>
