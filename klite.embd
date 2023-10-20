@@ -2927,7 +2927,7 @@ Current version: 83
 		}
 	}
 
-	function kobold_api_stream_sse(sub_endpt,submit_payload,trackedgenid)
+	function kobold_api_stream_sse(sub_endpt,submit_payload)
 	{
 		synchro_pending_stream = "";
 		fetch(sub_endpt, {method: 'POST',
@@ -2941,17 +2941,15 @@ Current version: 83
 					ctrl.buf = '';
 				},
 				transform(chunk, ctrl) {
-					if (pending_response_id == trackedgenid) {
-						ctrl.buf += chunk;
-						let evs = [];
-						let m;
-						while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
-							evs.push({ event: m[1], data: JSON.parse(m[2]) });
-							ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
-						}
-						if (evs.length) {
-							ctrl.enqueue(evs);
-						}
+					ctrl.buf += chunk;
+					let evs = [];
+					let m;
+					while ((m = /^event: (.*)\ndata: (.*)\n\n/.exec(ctrl.buf)) !== null) {
+						evs.push({event: m[1], data: JSON.parse(m[2])});
+						ctrl.buf = ctrl.buf.substring(m.index + m[0].length);
+					}
+					if (evs.length) {
+						ctrl.enqueue(evs);
 					}
 				}
 			}))
@@ -8073,12 +8071,12 @@ Current version: 83
 					streamchunk = ((pstreamamount != null && pstreamamount > 0) ? pstreamamount:8); //8 tokens per stream tick by default
 				}
 				last_request_str = JSON.stringify(submit_payload);
-				let trackedgenid = pending_response_id; //if it changes, stop streaming
 				if (localsettings.tokenstreammode==2 && is_using_kcpp_with_sse()) {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_stream_endpoint);
-					kobold_api_stream_sse(sub_endpt, submit_payload, trackedgenid);
+					kobold_api_stream_sse(sub_endpt, submit_payload);
 				} else {
 					let sub_endpt = apply_proxy_url(custom_kobold_endpoint + kobold_custom_gen_endpoint);
+					let trackedgenid = pending_response_id; //if it changes, stop streaming
 					kobold_api_stream(sub_endpt, submit_payload, submit_payload.max_length, trackedgenid, "", streamchunk);
 				}
 			}
