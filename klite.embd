@@ -3175,7 +3175,7 @@ Current version: 83
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
 	var wi_searchdepth = 0; //search everything
-	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context.
+	var generateimagesinterval = 650; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
 	var completed_imgs_meta = {}; //stores temp info on completed images like alt text
@@ -3792,7 +3792,7 @@ Current version: 83
 			"cfg_scale": req_payload.params.cfg_scale,
 			"width": req_payload.params.width,
 			"height": req_payload.params.height,
-			"negative_prompt": negprompt,
+			"negative_prompt": negprompt.trim(),
 			"do_not_save_samples": true, //no idea if these work, but just try
 			"do_not_save_grid": true,
 			"enable_hr": false,
@@ -7785,22 +7785,16 @@ Current version: 83
 			//determine if a new generated image is needed, chatmode is excluded, instruct is excluded
 			if (localsettings.generate_images_mode != 0 && localsettings.opmode != 3 && localsettings.opmode != 4 && localsettings.img_autogen) {
 				//if adventure mode, generate every action
-				if (localsettings.opmode == 2) {
-					if (newgen.startsWith("\n\n\> ")) {
-						var sentence = truncated_context.substring(tclen - 200, tclen);
-						sentence = start_trim_to_sentence(sentence);
-						generate_new_image(sentence);
-					}
-				}
-				else {
-					//story mode, generate every few hundred chars
+				if (localsettings.opmode == 2 && newgen.startsWith("\n\n\> ") || localsettings.opmode != 2) {
+					//generate every few hundred chars
 					var tclen = truncated_context.length;
 					if (tclen > nextgeneratedimagemilestone) {
 						nextgeneratedimagemilestone = tclen + generateimagesinterval; //set next milestone and trigger generation, using the last 300 characters advanced to the nearest sentence.
 						var sentence = truncated_context.substring(tclen - 300, tclen);
 						sentence = start_trim_to_sentence(sentence);
-						sentence = end_trim_to_sentence(sentence,true);
+						sentence = end_trim_to_sentence(sentence, true);
 						generate_new_image(sentence);
+
 					}
 				}
 			}
@@ -8441,7 +8435,7 @@ Current version: 83
 		}
 
 		let genimg_payload = {
-			"prompt": (sentence + " ### disfigured, ugly, deformed, poorly, censor, censored, blurry, lowres, fused, malformed, watermark, misshapen, duplicated, grainy, distorted, signature"),
+			"prompt": (sentence + " ### ugly, deformed, poorly, censor, blurry, lowres, malformed, watermark, duplicated, grainy, distorted, signature"),
 			"params": {
 				"cfg_scale": 7,
 				"sampler_name": "k_euler_a",
@@ -8479,7 +8473,7 @@ Current version: 83
 					//for now, append the new image directly into the gtarr
 					let nimgtag = "[<|p|" + data.id + "|p|>]";
 					gametext_arr.push(nimgtag);
-					image_db[data.id] = { done: false, queue: "Starting", result: "", alt:sentence };
+					image_db[data.id] = { done: false, queue: "Starting", result: "", alt:sentence, local:false };
 					console.log("New image queued " + nimgtag);
 				}
 				else {
@@ -8494,17 +8488,21 @@ Current version: 83
 		} else {
 			let desired_model = document.getElementById("generate_images_local_model").value;
 			genimg_payload.models = [desired_model];
+			let imgid = "A111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
+			let nimgtag = "[<|p|" + imgid + "|p|>]";
+			gametext_arr.push(nimgtag);
+			image_db[imgid] = { done: false, queue: "Generating", result: "", alt:sentence, local:true };
 			generate_a1111_image(genimg_payload,(outputimg)=>{
 				if(outputimg)
 				{
 					//console.log(outputimg);
 					let origImg = "data:image/jpeg;base64," + outputimg;
 					compressImage(origImg, (newDataUri) => {
-						let nimgtag = "[<|d|"+ newDataUri + "|d|>]";
-						gametext_arr.push(nimgtag);
-						render_gametext();
+						image_db[imgid].done = true;
+						image_db[imgid].result = newDataUri;
 					}, true);
 				}else{
+					image_db[imgid].queue = "Failed";
 					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
 				}
 			});
@@ -8760,7 +8758,7 @@ Current version: 83
 		console.log("polling for pending images " + imagecount);
 		for (let key in image_db) {
 			let img = image_db[key];
-			if (img.done == false) {
+			if (img.done == false && !img.local) {
 				//call check
 				fetch(stablehorde_poll_endpoint + "/" + key)
 					.then(x => x.json())
@@ -8811,6 +8809,7 @@ Current version: 83
 
 		//now we loop through the image cache and swap completed images into the gametext
 		let hasChangedImage = false;
+		let needToSave = false;
 		for (var i = 0; i < gametext_arr.length; ++i) {
 			//if there's no image in this segment, continue
 			if (/\[<\|p\|.+?\|p\|>\]/.test(gametext_arr[i])) {
@@ -8820,6 +8819,7 @@ Current version: 83
 					if (gametext_arr[i].includes(matchstr)) {
 						hasChangedImage = true; //set here to update timers
 						if (img.done == true && img.result != "") {
+							needToSave = true;
 							let newstr = "[<|d|" + img.result + "|d|>]";
 							console.log("Replacing with Image: " + matchstr);
 							gametext_arr[i] = gametext_arr[i].replace(matchstr, newstr);
@@ -8832,7 +8832,7 @@ Current version: 83
 		}
 		if (hasChangedImage && document.activeElement != document.getElementById("gametext")) {
 			//console.log(gametext_arr);
-			render_gametext();
+			render_gametext(needToSave);
 		}
 	}
 
