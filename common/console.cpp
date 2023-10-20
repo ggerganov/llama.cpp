@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <termios.h>
+#include <string.h>
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -115,7 +116,7 @@ namespace console {
         auto lang = getenv("LANG");
 
         if (locale == nullptr) {
-            if (lang != nullptr) {
+            if (lang != nullptr && strcmp(lang, "C") && strcasestr(lang, "utf-8")) {
                 setlocale(LC_ALL, lang);
             } else{
                 setlocale(LC_ALL, "C.UTF-8");
