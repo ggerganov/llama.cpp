@@ -23,7 +23,6 @@
 
 #include <cstddef>
 #include <thread>
-#include <atomic>
 #include <mutex>
 #include <chrono>
 
@@ -551,7 +550,7 @@ struct llama_server_context
     int max_ctx_per_slot = -1;
     bool clean_kv_cache = true;
 
-    std::atomic<int> id_gen;
+    int id_gen;
 
     std::vector<task_server> queue_tasks;
     std::vector<task_result> queue_results;
@@ -611,7 +610,8 @@ struct llama_server_context
     }
 
     void initialize() {
-        id_gen.store(0); // reset ids to 0
+        id_gen = 0;
+
         // create slots
         all_slots_are_idle = true;
         if(max_ctx_per_slot == -1) {
@@ -1268,8 +1268,7 @@ struct llama_server_context
     int request_completion(json data, bool infill) {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
-        task.id = id_gen.load();
-        id_gen.fetch_add(1); // increment id generator
+        task.id = id_gen++;
         task.data = data;
         task.infill_mode = infill;
         task.type = COMPLETION_TASK;
@@ -1366,8 +1365,7 @@ struct llama_server_context
     void request_cancel(int task_id) {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
-        task.id = id_gen.load();
-        id_gen.fetch_add(1); // increment id generator
+        task.id = id_gen++;
         task.type = CANCEL_TASK;
         task.target_id = task_id;
         queue_tasks.push_back(task);
