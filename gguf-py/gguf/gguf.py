@@ -804,6 +804,8 @@ class GGUFWriter:
             fp.write(bytes([0] * pad))
 
     def write_tensor_data(self, tensor: np.ndarray[Any, Any]):
+        if self.endianess==GGUFEndian.BIG:
+            tensor.byteswap(inplace=True)
         self.write_padding(self.fout, self.fout.tell())
         tensor.tofile(self.fout)
         self.write_padding(self.fout, tensor.nbytes)
