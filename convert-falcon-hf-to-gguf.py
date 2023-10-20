@@ -78,7 +78,7 @@ print("gguf: loading model "+dir_model.name)
 with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
-if hparams["architectures"][0] != "FalconForCausalLM":
+if hparams["architectures"][0] not in ("RWForCausalLM", "FalconForCausalLM"):
     print("Model architecture not supported: " + hparams["architectures"][0])
 
     sys.exit(1)
@@ -97,7 +97,17 @@ gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
 
 print("gguf: get model metadata")
 
-block_count = hparams["num_hidden_layers"]
+block_count = hparams.get("num_hidden_layers")
+if block_count is None:
+    block_count = hparams["n_layer"]  # old name
+
+n_head = hparams.get("num_attention_heads")
+if n_head is None:
+    n_head = hparams["n_head"]  # old name
+
+n_head_kv = hparams.get("num_kv_heads")
+if n_head_kv is None:
+    n_head_kv = hparams.get("n_head_kv", 1)  # old name
 
 gguf_writer.add_name("Falcon")
 gguf_writer.add_context_length(2048) # not in config.json
@@ -105,11 +115,8 @@ gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
 gguf_writer.add_embedding_length(hparams["hidden_size"])
 gguf_writer.add_feed_forward_length(4 * hparams["hidden_size"])
 gguf_writer.add_block_count(block_count)
-gguf_writer.add_head_count(hparams["num_attention_heads"])
-if "num_kv_heads" in hparams:
-    gguf_writer.add_head_count_kv(hparams["num_kv_heads"])
-else:
-    gguf_writer.add_head_count_kv(1)
+gguf_writer.add_head_count(n_head)
+gguf_writer.add_head_count_kv(n_head_kv)
 gguf_writer.add_layer_norm_eps(hparams["layer_norm_epsilon"])
 gguf_writer.add_file_type(ftype)
 
@@ -151,10 +158,6 @@ special_vocab.add_to_gguf(gguf_writer)
 # TENSORS
 
 tensor_map = gguf.get_tensor_name_map(ARCH,block_count)
-
-# params for qkv transform
-n_head    = hparams["num_attention_heads"]
-n_head_kv = hparams["num_kv_heads"] if "num_kv_heads" in hparams else 1
 
 head_dim = hparams["hidden_size"] // n_head
 
