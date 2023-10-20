@@ -1,9 +1,9 @@
 #include "sampling.h"
 
-struct llama_sampling_context * llama_sampling_init(const struct gpt_params & params) {
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
-    result->params = params.sampling_params;
+    result->params = params;
     result->grammar = nullptr;
 
     // if there is a grammar, parse it
@@ -23,7 +23,7 @@ struct llama_sampling_context * llama_sampling_init(const struct gpt_params & pa
                 grammar_rules.size(), result->parsed_grammar.symbol_ids.at("root"));
     }
 
-    result->prev.resize(params.n_ctx);
+    result->prev.resize(params.n_prev);
 
     return result;
 }

@@ -22,6 +22,7 @@ typedef struct llama_sampling_params {
     int32_t mirostat          = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   mirostat_tau      = 5.00f; // target entropy
     float   mirostat_eta      = 0.10f; // learning rate
+    int32_t n_prev            = 256;   // number of previous tokens to remember
 
     bool    penalize_nl       = true;  // consider newlines as a repeatable token
 
@@ -33,6 +34,8 @@ typedef struct llama_sampling_params {
     float       cfg_scale     = 1.f;   // How strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
+    std::string grammar = "";  // optional BNF-like grammar to constrain sampling
 
 } llama_sampling_params;
 
@@ -58,7 +61,7 @@ struct llama_sampling_context {
 #include "common.h"
 
 // Create a new sampling context instance.
-struct llama_sampling_context * llama_sampling_init(const struct gpt_params & params);
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 

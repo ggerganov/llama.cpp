@@ -108,7 +108,7 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
-    llama_sampling_params & sparams = params.sampling_params;
+    llama_sampling_params & sparams = params.sparams;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("main", "log"));
@@ -459,7 +459,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd;
     std::vector<llama_token> embd_guidance;
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params);
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
 
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict

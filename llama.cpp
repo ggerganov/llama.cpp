@@ -1042,21 +1042,21 @@ struct llama_hparams {
     float f_max_alibi_bias;
 
     bool operator!=(const llama_hparams & other) const {
-        if (this->vocab_only != other.vocab_only) return true;
-        if (this->n_vocab != other.n_vocab) return true;
+        if (this->vocab_only  != other.vocab_only)  return true;
+        if (this->n_vocab     != other.n_vocab)     return true;
         if (this->n_ctx_train != other.n_ctx_train) return true;
-        if (this->n_embd != other.n_embd) return true;
-        if (this->n_head != other.n_head) return true;
-        if (this->n_head_kv != other.n_head_kv) return true;
-        if (this->n_layer != other.n_layer) return true;
-        if (this->n_rot != other.n_rot) return true;
-        if (this->n_ff != other.n_ff) return true;
+        if (this->n_embd      != other.n_embd)      return true;
+        if (this->n_head      != other.n_head)      return true;
+        if (this->n_head_kv   != other.n_head_kv)   return true;
+        if (this->n_layer     != other.n_layer)     return true;
+        if (this->n_rot       != other.n_rot)       return true;
+        if (this->n_ff        != other.n_ff)        return true;
 
         const float EPSILON = 1e-9;
 
-        if (!is_float_close(this->f_norm_eps, other.f_norm_eps, EPSILON)) return true;
-        if (!is_float_close(this->f_norm_rms_eps, other.f_norm_rms_eps, EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_base_train, other.rope_freq_base_train, EPSILON)) return true;
+        if (!is_float_close(this->f_norm_eps,            other.f_norm_eps,            EPSILON)) return true;
+        if (!is_float_close(this->f_norm_rms_eps,        other.f_norm_rms_eps,        EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
         if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
 
         return false;
@@ -1195,11 +1195,11 @@ struct llama_vocab {
     id special_sep_id = -1;
     id special_pad_id = -1;
 
-    id linefeed_id = 13;
+    id linefeed_id       = 13;
     id special_prefix_id = 32007;
     id special_middle_id = 32009;
     id special_suffix_id = 32008;
-    id special_eot_id = 32010;
+    id special_eot_id    = 32010;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
         replace_all(token_left,  " ",  "\u0120");
@@ -1359,10 +1359,7 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
-    // TODO: this should be:
-    //       cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*ggml_tensor_overhead());
-    //       change it and test that it works
-    cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*MB);
+    cache.buf.resize(2u*n_elements*ggml_type_size(wtype) + 2u*ggml_tensor_overhead());
     memset(cache.buf.data, 0, cache.buf.size);
 
     struct ggml_init_params params;

@@ -112,16 +112,16 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params);
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
-    params.grammar.clear();             // the draft samplers will copy the target sampler's grammar
-    params.sampling_params.temp = std::max(0.01f, params.sampling_params.temp);
+    params.sparams.grammar.clear(); // the draft samplers will copy the target sampler's grammar
+    params.sparams.temp = std::max(0.01f, params.sparams.temp);
 
     for (int s = 0; s < n_seq_dft; ++s) {
-        drafts[s].ctx_sampling = llama_sampling_init(params);
+        drafts[s].ctx_sampling = llama_sampling_init(params.sparams);
     }
 
     llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);

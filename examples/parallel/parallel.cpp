@@ -157,7 +157,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.ctx_sampling = llama_sampling_init(params);
+        client.ctx_sampling = llama_sampling_init(params.sparams);
     }
 
     std::vector<llama_token> tokens_system;

@@ -128,7 +128,7 @@ bool eval_string(struct MyModel * mymodel,const char* str){
 llama_token sampling_id(struct MyModel* mymodel) {
     llama_context* ctx = mymodel->ctx;
     gpt_params params = mymodel->params;
-    llama_sampling_params & sparams = params.sampling_params;
+    llama_sampling_params & sparams = params.sparams;
     // int n_ctx = llama_n_ctx(ctx);
 
     // out of user input, sample next token
