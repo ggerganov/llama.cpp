@@ -10593,6 +10593,18 @@ Current version: 83
 			internalHTMLparts.forEach((part, index) => { newbodystr = newbodystr.replace(`<internal_html_${index}>`, part); }); // Bring back the embedded HTML parts.
 			newbodystr = applyStylizedCodeBlocks(); 																// Then, apply the code-block styling, if markdown is used.
 		}
+		newbodystr = newbodystr.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
+			// m here means the whole matched string
+			let inner = m.substring(5, m.length - 5);
+			inner = render_image_html("", inner,false);
+			return inner;
+		});
+		newbodystr = newbodystr.replace(/\[<\|d\|.+?\|d\|>\]/g, function (m) {
+			// m here means the whole matched string
+			let inner = m.substring(5, m.length - 5);
+			inner = render_image_html(inner, "",false);
+			return inner;
+		});
 		return portraitsStyling + newbodystr.replaceAll(/(\r\n|\r|\n)/g,'<br>'); // Finally, convert newlines to HTML format and return the stylized string.
 
 
