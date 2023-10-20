@@ -816,6 +816,7 @@ Current version: 83
 			line-height: 1.8ex;
 			border-radius: 1.2ex;
 			margin-right: 4px;
+			margin-left: 1px;
 			padding: 1px;
 			color: #295071;
 			background: #ffffff;
@@ -3173,6 +3174,7 @@ Current version: 83
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
+	var wi_searchdepth = 0; //search everything
 	var generateimagesinterval = 600; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
 	var image_db = {}; //stores a dictionary of pending images
@@ -7817,6 +7819,12 @@ Current version: 83
 			//if world info exists, we inject it right after the memory
 			//for each matching key
 			let wimatch_context = truncated_context;
+			if(wi_searchdepth>0)
+			{
+				let cutoff = wimatch_context.length - wi_searchdepth;
+				cutoff = cutoff<0?0:cutoff;
+				wimatch_context = wimatch_context.substring(cutoff);
+			}
 			if (!localsettings.case_sensitive_wi)
 			{
 				wimatch_context = wimatch_context.toLowerCase();
@@ -9972,6 +9980,7 @@ Current version: 83
 			current_wi[i].content = document.getElementById("wival" + i).value;
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
+		wi_searchdepth = document.getElementById("wi_searchdepth").value;
 	}
 
 	let backup_wi_obj = [];
@@ -10031,6 +10040,8 @@ Current version: 83
 
 		selectionhtml += "</table>"
 		wilist.innerHTML = selectionhtml;
+		document.getElementById("wi_searchdepth").value = wi_searchdepth;
+
 	}
 
 	var backLongPressTimer = null;
@@ -11494,23 +11505,28 @@ Current version: 83
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Autosaves your current story and settings on exit, reloads when you return">Autosave Session </div>
+							<div class="justifyleft settingsmall">Autosave Session <span class="helpicon">?<span
+								class="helptext">Autosaves your current story and settings on exit, reloads when you return</span></span></div>
 							<input type="checkbox" id="persist_session" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Includes your current settings when saving or sharing your story">Save File Incl. Settings </div>
+							<div class="justifyleft settingsmall">Embed Settings File <span class="helpicon">?<span
+								class="helptext">Includes your current settings when saving or sharing your story</span></span></div>
 						   <input type="checkbox" id="export_settings" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall"  title="Prompts to input a different filename when saving file.">Show Rename Save File </div>
+							<div class="justifyleft settingsmall">Rename Save File <span class="helpicon">?<span
+								class="helptext">Prompts to input a different filename when saving file.</span></span></div>
 						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Automatically scrolls the text window down when new text is generated">Autoscroll Text </div>
+							<div class="justifyleft settingsmall">Autoscroll Text <span class="helpicon">?<span
+								class="helptext">Automatically scrolls the text window down when new text is generated</span></span></div>
 						   <input type="checkbox" id="autoscroll" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall" title="Inverts all colors, simple light mode">Inverted Colors </div>
+							<div class="justifyleft settingsmall">Inverted Colors <span class="helpicon">?<span
+								class="helptext">Inverts all colors, simple light mode</span></span></div>
 						   <input type="checkbox" id="invert_colors" style="margin:0px 0px 0px auto;">
 						</div>
 					</div>
@@ -11534,7 +11550,8 @@ Current version: 83
 				<div class="popuptitletext">Memory</div>
 			</div>
 			<div class="settinglabel">
-				<span class="justifyleft">Memory</span>
+				<span class="justifyleft">Memory<span class="helpicon">?<span
+					class="helptext">Put the information you want the AI to always remember. It will be inserted into the top of every request sent to the AI.</span></span></span>
 				<span class="justifyright flex-push-right" >
 					<div class="settinglabel" style="padding-top: 4px;">
 						<div class="justifyleft settingsmall" title="Add newline after injecting memory text">Newline After Memory </div>
@@ -11547,7 +11564,8 @@ Current version: 83
 
 			<div class="settinglabel">
 
-				<div class="justifyleft"><br>Author's Note</div>
+				<div class="justifyleft"><br>Author's Note<span class="helpicon">?<span
+					class="helptext">Similar to Memory, but inserted near the end of the text instead of the start. A good way to control the mood/behavior of the AI.</span></span></div>
 				<span class="justifyright flex-push-right" >
 					<button type="button" class="btn btn-primary" style="padding:4px 6px;margin-top:4px;" id="btnautogenmem" onclick="autogenerate_summary_memory()">AutoGenerate Memory</button>
 				</span>
@@ -11558,9 +11576,11 @@ Current version: 83
 				placeholder="Author's Note will be inserted close to end of context."></textarea>
 			<br>
 			<div class="settinglabel">
-				<span class="justifyleft">Author's Note Template</span>
+				<span class="justifyleft">Author's Note Template<span class="helpicon">?<span
+					class="helptext">A placeholder, will be inserted with the author's note replacing the &lt;|&gt;. You generally don't need to change this.</span></span></span>
 				<span class="justifyright flex-push-right" >
-					A/N Strength
+					A/N Strength<span class="helpicon">?<span
+						class="helptext">Controls how far back to insert the Author's Note. Notes injected closer to the end have a stronger effect.</span></span>
 				</span>
 			</div>
 
@@ -11590,7 +11610,7 @@ Current version: 83
 
 	<div class="popupcontainer flex hidden" id="wicontainer">
 		<div class="popupbg flex"></div>
-		<div class="nspopup moderate">
+		<div class="nspopup higher">
 			<div class="popuptitlebar">
 				<div style="float:right;"><button type="button" class="btn btn-info widelbtn" id="wiadd" onclick="add_wi()">+</button></div>
 				<div class="popuptitletext">World Info</div>
@@ -11599,6 +11619,17 @@ Current version: 83
 			<div class="wilist" id="wilist">
 
 			</div>
+			<div class="settinglabel" style="padding: 4px;">
+				<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
+					class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
+			<select style="height:16px;padding:0px;margin:0px 4px 0; width:80px;font-size:10px;" class="form-control" id="wi_searchdepth">
+				<option value="0">Full Context</option>
+				<option value="1024">Last 1024</option>
+				<option value="512">Last 512</option>
+				<option value="256">Last 256</option>
+			</select></div>
+
+
 			<div style="float:right;">
 				<input class="settinglabel miniinput" style="margin: 3px; width: 90px;" type="text" placeholder="Quick Search" value="" id="wiquicksearch" oninput="wi_quick_search()">
 			</div>
