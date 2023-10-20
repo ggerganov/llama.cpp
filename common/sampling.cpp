@@ -66,6 +66,20 @@ void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * ds
     dst->prev = src->prev;
 }
 
+std::string llama_sampling_print(const llama_sampling_params & params) {
+    char result[1024];
+
+    snprintf(result, sizeof(result),
+            "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
+            "\ttop_k = %d, tfs_z = %.3f, top_p = %.3f, typical_p = %.3f, temp = %.3f\n"
+            "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
+            params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present,
+            params.top_k, params.tfs_z, params.top_p, params.typical_p, params.temp,
+            params.mirostat, params.mirostat_eta, params.mirostat_tau);
+
+    return std::string(result);
+}
+
 llama_token llama_sampling_sample(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,

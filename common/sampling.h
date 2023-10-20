@@ -30,8 +30,8 @@ typedef struct llama_sampling_params {
 
     // Classifier-Free Guidance
     // https://arxiv.org/abs/2306.17806
-    std::string cfg_negative_prompt;   // string to help guidance
-    float       cfg_scale     = 1.f;   // How strong is guidance
+    std::string cfg_negative_prompt; // string to help guidance
+    float       cfg_scale     = 1.f; // how strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
 } llama_sampling_params;
@@ -69,6 +69,9 @@ void llama_sampling_reset(llama_sampling_context * ctx);
 
 // Copy the sampler context
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);
+
+// Print sampling parameters into a string
+std::string llama_sampling_print(const llama_sampling_params & params);
 
 // this is a common sampling function used across the examples for convenience
 // it can serve as a starting point for implementing your own sampling function
