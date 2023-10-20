@@ -32,6 +32,8 @@
 
 #include "ggml.h"
 
+#include "ggml-vulkan-shaders.hpp"
+
 #define VK_API_VERSION VK_API_VERSION_1_2
 
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
@@ -197,7 +199,7 @@ static std::vector<size_t> vk_preallocated_buffer_sizes;
 static std::vector<vk_buffer> vk_preallocated_buffers;
 static vk::Fence vk_fence;
 
-static vk_pipeline ggml_vk_create_pipeline(const std::string& name, size_t spv_size, const uint32_t* spv_data, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, std::vector<int>&& specialization_constants, uint32_t align) {
+static vk_pipeline ggml_vk_create_pipeline(const std::string& name, size_t spv_size, const void* spv_data, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, std::vector<int>&& specialization_constants, uint32_t align) {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_create_pipeline(" << name << ", " << entrypoint << ", " << parameter_count << ", " << push_constant_size << ", (" << wg_denoms[0] << "," << wg_denoms[1] << "," << wg_denoms[2] << "), specialization_constants, " << align << ")" << std::endl;
 #endif
@@ -212,7 +214,7 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& name, size_t spv_s
     pipeline.wg_denoms = wg_denoms;
     pipeline.align = align;
 
-    vk::ShaderModuleCreateInfo shader_module_create_info({}, spv_size, spv_data);
+    vk::ShaderModuleCreateInfo shader_module_create_info({}, spv_size, reinterpret_cast<const uint32_t *>(spv_data));
     vk::ShaderModule shader_module = vk_device.device.createShaderModule(shader_module_create_info);
 
     std::vector<vk::DescriptorSetLayoutBinding> dsl_binding;
@@ -299,27 +301,6 @@ static vk_pipeline ggml_vk_create_pipeline(const std::string& name, size_t spv_s
     pipeline.pipeline = vk_device.device.createComputePipeline(VK_NULL_HANDLE, compute_pipeline_create_info).value;
 
     return pipeline;
-}
-
-static vk_pipeline ggml_vk_create_pipeline_from_file(const std::string& name, const std::string& entrypoint, uint32_t parameter_count, uint32_t push_constant_size, std::array<uint32_t, 3> wg_denoms, std::vector<int>&& specialization_constants, uint32_t align) {
-#ifdef VK_DEBUG
-    std::cerr << "ggml_vk_create_pipeline_from_file(" << name << ", " << entrypoint << ", " << parameter_count << ", " << push_constant_size << ", (" << wg_denoms[0] << "," << wg_denoms[1] << "," << wg_denoms[2] << "), specialization_constants, " << align << ")" << std::endl;
-#endif
-
-    const std::string path = "vk_shaders/" + name + (vk_device.fp16 ? "" : "_fp32") + ".comp";
-
-    std::vector<char> matmul_shader_contents;
-    if (std::ifstream shader_file{ path, std::ios::binary | std::ios::ate }) {
-        const size_t file_size = shader_file.tellg();
-        shader_file.seekg(0);
-        matmul_shader_contents.resize(file_size, '\0');
-        shader_file.read(matmul_shader_contents.data(), file_size);
-    } else {
-        std::cerr << "ggml_vulkan: Invalid shader path " << path << std::endl;
-        abort();
-    }
-
-    return ggml_vk_create_pipeline(name, matmul_shader_contents.size(), reinterpret_cast<uint32_t *>(matmul_shader_contents.data()), entrypoint, parameter_count, push_constant_size, wg_denoms, std::move(specialization_constants), align);
 }
 
 static void ggml_vk_pipeline_allocate_descriptor_sets(vk_pipeline& pipeline, uint32_t n) {
@@ -684,58 +665,149 @@ static void ggml_vk_load_shaders() {
     auto warptile_m = { 128,  64,  64, 16, 32, 32, 2, 4, 2 };
     auto warptile_s = {  32,  32,  32,  8, 32, 32, 2, 2, 2 };
 
-    vk_pipeline_matmul_f32_l = ggml_vk_create_pipeline_from_file("matmul_f32_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f32_m = ggml_vk_create_pipeline_from_file("matmul_f32_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f32_s = ggml_vk_create_pipeline_from_file("matmul_f32_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
-    vk_pipeline_matmul_f32_aligned_l = ggml_vk_create_pipeline_from_file("matmul_f32_aligned_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f32_aligned_m = ggml_vk_create_pipeline_from_file("matmul_f32_aligned_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f32_aligned_s = ggml_vk_create_pipeline_from_file("matmul_f32_aligned_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+    if (vk_device.fp16) {
+        vk_pipeline_matmul_f32_l = ggml_vk_create_pipeline("matmul_f32_l", matmul_f32_l_len, matmul_f32_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f32_m = ggml_vk_create_pipeline("matmul_f32_m", matmul_f32_m_len, matmul_f32_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f32_s = ggml_vk_create_pipeline("matmul_f32_s", matmul_f32_s_len, matmul_f32_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f32_aligned_l = ggml_vk_create_pipeline("matmul_f32_aligned_l", matmul_f32_aligned_l_len, matmul_f32_aligned_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f32_aligned_m = ggml_vk_create_pipeline("matmul_f32_aligned_m", matmul_f32_aligned_m_len, matmul_f32_aligned_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f32_aligned_s = ggml_vk_create_pipeline("matmul_f32_aligned_s", matmul_f32_aligned_s_len, matmul_f32_aligned_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
 
-    vk_pipeline_matmul_f16_l = ggml_vk_create_pipeline_from_file("matmul_f16_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f16_m = ggml_vk_create_pipeline_from_file("matmul_f16_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f16_s = ggml_vk_create_pipeline_from_file("matmul_f16_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f16_l = ggml_vk_create_pipeline("matmul_f16_l", matmul_f16_l_len, matmul_f16_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_m = ggml_vk_create_pipeline("matmul_f16_m", matmul_f16_m_len, matmul_f16_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_s = ggml_vk_create_pipeline("matmul_f16_s", matmul_f16_s_len, matmul_f16_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
 
-    vk_pipeline_matmul_f16_aligned_l = ggml_vk_create_pipeline_from_file("matmul_f16_aligned_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f16_aligned_m = ggml_vk_create_pipeline_from_file("matmul_f16_aligned_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f16_aligned_s = ggml_vk_create_pipeline_from_file("matmul_f16_aligned_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f16_aligned_l = ggml_vk_create_pipeline("matmul_f16_aligned_l", matmul_f16_aligned_l_len, matmul_f16_aligned_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_aligned_m = ggml_vk_create_pipeline("matmul_f16_aligned_m", matmul_f16_aligned_m_len, matmul_f16_aligned_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_aligned_s = ggml_vk_create_pipeline("matmul_f16_aligned_s", matmul_f16_aligned_s_len, matmul_f16_aligned_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
 
-    vk_pipeline_matmul_f16_f32_l = ggml_vk_create_pipeline_from_file("matmul_f16_f32_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f16_f32_m = ggml_vk_create_pipeline_from_file("matmul_f16_f32_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f16_f32_s = ggml_vk_create_pipeline_from_file("matmul_f16_f32_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
-    vk_pipeline_matmul_f16_f32_aligned_l = ggml_vk_create_pipeline_from_file("matmul_f16_f32_aligned_l", "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
-    vk_pipeline_matmul_f16_f32_aligned_m = ggml_vk_create_pipeline_from_file("matmul_f16_f32_aligned_m", "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
-    vk_pipeline_matmul_f16_f32_aligned_s = ggml_vk_create_pipeline_from_file("matmul_f16_f32_aligned_s", "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f16_f32_l = ggml_vk_create_pipeline("matmul_f16_f32_l", matmul_f16_f32_l_len, matmul_f16_f32_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_f32_m = ggml_vk_create_pipeline("matmul_f16_f32_m", matmul_f16_f32_m_len, matmul_f16_f32_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_f32_s = ggml_vk_create_pipeline("matmul_f16_f32_s", matmul_f16_f32_s_len, matmul_f16_f32_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f16_f32_aligned_l = ggml_vk_create_pipeline("matmul_f16_f32_aligned_l", matmul_f16_f32_aligned_l_len, matmul_f16_f32_aligned_l_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_f32_aligned_m = ggml_vk_create_pipeline("matmul_f16_f32_aligned_m", matmul_f16_f32_aligned_m_len, matmul_f16_f32_aligned_m_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_f32_aligned_s = ggml_vk_create_pipeline("matmul_f16_f32_aligned_s", matmul_f16_f32_aligned_s_len, matmul_f16_f32_aligned_s_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
 
-    // Build dequant shaders
-    vk_pipeline_dequant[GGML_TYPE_F32] = ggml_vk_create_pipeline_from_file("f32_to_f16", "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
+        // Build dequant shaders
+        vk_pipeline_dequant[GGML_TYPE_F32] = ggml_vk_create_pipeline("f32_to_f16", f32_to_f16_len, f32_to_f16_data, "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
 
-    for (int i = 0; i < VK_NUM_TYPES; i++) {
-        if (!ggml_vk_build_shader((ggml_type)i)) {
-            continue;
-        }
-        const std::string name = "dequant_" + std::string(ggml_type_name((ggml_type)i));
-        vk_pipeline_dequant[i] = ggml_vk_create_pipeline_from_file(name, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_F16] = ggml_vk_create_pipeline("dequant_f16", dequant_f16_len, dequant_f16_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("dequant_q4_0", dequant_q4_0_len, dequant_q4_0_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("dequant_q4_1", dequant_q4_1_len, dequant_q4_1_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("dequant_q5_0", dequant_q5_0_len, dequant_q5_0_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("dequant_q5_1", dequant_q5_1_len, dequant_q5_1_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("dequant_q8_0", dequant_q8_0_len, dequant_q8_0_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("dequant_q2_K", dequant_q2_K_len, dequant_q2_K_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("dequant_q3_K", dequant_q3_K_len, dequant_q3_K_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("dequant_q4_K", dequant_q4_K_len, dequant_q4_K_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("dequant_q5_K", dequant_q5_K_len, dequant_q5_K_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("dequant_q6_K", dequant_q6_K_len, dequant_q6_K_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_F16] = ggml_vk_create_pipeline("mul_mat_vec_f16", mul_mat_vec_f16_len, mul_mat_vec_f16_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("mul_mat_vec_q4_0", mul_mat_vec_q4_0_len, mul_mat_vec_q4_0_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("mul_mat_vec_q4_1", mul_mat_vec_q4_1_len, mul_mat_vec_q4_1_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("mul_mat_vec_q5_0", mul_mat_vec_q5_0_len, mul_mat_vec_q5_0_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("mul_mat_vec_q5_1", mul_mat_vec_q5_1_len, mul_mat_vec_q5_1_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("mul_mat_vec_q8_0", mul_mat_vec_q8_0_len, mul_mat_vec_q8_0_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("mul_mat_vec_q2_K", mul_mat_vec_q2_K_len, mul_mat_vec_q2_K_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("mul_mat_vec_q3_K", mul_mat_vec_q3_K_len, mul_mat_vec_q3_K_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("mul_mat_vec_q4_K", mul_mat_vec_q4_K_len, mul_mat_vec_q4_K_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("mul_mat_vec_q5_K", mul_mat_vec_q5_K_len, mul_mat_vec_q5_K_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("mul_mat_vec_q6_K", mul_mat_vec_q6_K_len, mul_mat_vec_q6_K_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_F16] = ggml_vk_create_pipeline("mul_mat_vec_f16_f32", mul_mat_vec_f16_f32_len, mul_mat_vec_f16_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("mul_mat_vec_q4_0_f32", mul_mat_vec_q4_0_f32_len, mul_mat_vec_q4_0_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("mul_mat_vec_q4_1_f32", mul_mat_vec_q4_1_f32_len, mul_mat_vec_q4_1_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("mul_mat_vec_q5_0_f32", mul_mat_vec_q5_0_f32_len, mul_mat_vec_q5_0_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("mul_mat_vec_q5_1_f32", mul_mat_vec_q5_1_f32_len, mul_mat_vec_q5_1_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("mul_mat_vec_q8_0_f32", mul_mat_vec_q8_0_f32_len, mul_mat_vec_q8_0_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("mul_mat_vec_q2_K_f32", mul_mat_vec_q2_K_f32_len, mul_mat_vec_q2_K_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("mul_mat_vec_q3_K_f32", mul_mat_vec_q3_K_f32_len, mul_mat_vec_q3_K_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("mul_mat_vec_q4_K_f32", mul_mat_vec_q4_K_f32_len, mul_mat_vec_q4_K_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("mul_mat_vec_q5_K_f32", mul_mat_vec_q5_K_f32_len, mul_mat_vec_q5_K_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("mul_mat_vec_q6_K_f32", mul_mat_vec_q6_K_f32_len, mul_mat_vec_q6_K_f32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+
+        // add
+        vk_pipeline_add_f32 = ggml_vk_create_pipeline("add_f32", add_f32_len, add_f32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+        vk_pipeline_add_f16_f32_f16 = ggml_vk_create_pipeline("add_f16_f32_f16", add_f16_f32_f16_len, add_f16_f32_f16_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+
+        // Static shaders
+        vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline("split_k_reduce", split_k_reduce_len, split_k_reduce_data, "main", 1, 3 * sizeof(int), {32, 32, 1}, {}, 1);
+        vk_pipeline_mul_f32 = ggml_vk_create_pipeline("mul_f32", mul_f32_len, mul_f32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+
+        vk_pipeline_scale_f32 = ggml_vk_create_pipeline("scale_f32", scale_f32_len, scale_f32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+    } else {
+        vk_pipeline_matmul_f32_l = ggml_vk_create_pipeline("matmul_f32_l", matmul_f32_l_fp32_len, matmul_f32_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f32_m = ggml_vk_create_pipeline("matmul_f32_m", matmul_f32_m_fp32_len, matmul_f32_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f32_s = ggml_vk_create_pipeline("matmul_f32_s", matmul_f32_s_fp32_len, matmul_f32_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f32_aligned_l = ggml_vk_create_pipeline("matmul_f32_aligned_l", matmul_f32_aligned_l_fp32_len, matmul_f32_aligned_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f32_aligned_m = ggml_vk_create_pipeline("matmul_f32_aligned_m", matmul_f32_aligned_m_fp32_len, matmul_f32_aligned_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f32_aligned_s = ggml_vk_create_pipeline("matmul_f32_aligned_s", matmul_f32_aligned_s_fp32_len, matmul_f32_aligned_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+
+        vk_pipeline_matmul_f16_l = ggml_vk_create_pipeline("matmul_f16_l", matmul_f16_l_fp32_len, matmul_f16_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_m = ggml_vk_create_pipeline("matmul_f16_m", matmul_f16_m_fp32_len, matmul_f16_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_s = ggml_vk_create_pipeline("matmul_f16_s", matmul_f16_s_fp32_len, matmul_f16_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+
+        vk_pipeline_matmul_f16_aligned_l = ggml_vk_create_pipeline("matmul_f16_aligned_l", matmul_f16_aligned_l_fp32_len, matmul_f16_aligned_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_aligned_m = ggml_vk_create_pipeline("matmul_f16_aligned_m", matmul_f16_aligned_m_fp32_len, matmul_f16_aligned_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_aligned_s = ggml_vk_create_pipeline("matmul_f16_aligned_s", matmul_f16_aligned_s_fp32_len, matmul_f16_aligned_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+
+        vk_pipeline_matmul_f16_f32_l = ggml_vk_create_pipeline("matmul_f16_f32_l", matmul_f16_f32_l_fp32_len, matmul_f16_f32_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_f32_m = ggml_vk_create_pipeline("matmul_f16_f32_m", matmul_f16_f32_m_fp32_len, matmul_f16_f32_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_f32_s = ggml_vk_create_pipeline("matmul_f16_f32_s", matmul_f16_f32_s_fp32_len, matmul_f16_f32_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+        vk_pipeline_matmul_f16_f32_aligned_l = ggml_vk_create_pipeline("matmul_f16_f32_aligned_l", matmul_f16_f32_aligned_l_fp32_len, matmul_f16_f32_aligned_l_fp32_data, "main", 3, 7 * sizeof(int), {128, 128, 1}, warptile_l, 128);
+        vk_pipeline_matmul_f16_f32_aligned_m = ggml_vk_create_pipeline("matmul_f16_f32_aligned_m", matmul_f16_f32_aligned_m_fp32_len, matmul_f16_f32_aligned_m_fp32_data, "main", 3, 7 * sizeof(int), {64, 64, 1}, warptile_m, 64);
+        vk_pipeline_matmul_f16_f32_aligned_s = ggml_vk_create_pipeline("matmul_f16_f32_aligned_s", matmul_f16_f32_aligned_s_fp32_len, matmul_f16_f32_aligned_s_fp32_data, "main", 3, 7 * sizeof(int), { 32,  32, 1}, warptile_s, 32);
+
+        // Build dequant shaders
+        vk_pipeline_dequant[GGML_TYPE_F32] = ggml_vk_create_pipeline("f32_to_f16", f32_to_f16_fp32_len, f32_to_f16_fp32_data, "main", 2, 4 * sizeof(int), {64, 1, 1}, {}, 1);
+
+        vk_pipeline_dequant[GGML_TYPE_F16] = ggml_vk_create_pipeline("dequant_f16", dequant_f16_fp32_len, dequant_f16_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("dequant_q4_0", dequant_q4_0_fp32_len, dequant_q4_0_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("dequant_q4_1", dequant_q4_1_fp32_len, dequant_q4_1_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("dequant_q5_0", dequant_q5_0_fp32_len, dequant_q5_0_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("dequant_q5_1", dequant_q5_1_fp32_len, dequant_q5_1_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("dequant_q8_0", dequant_q8_0_fp32_len, dequant_q8_0_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("dequant_q2_K", dequant_q2_K_fp32_len, dequant_q2_K_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("dequant_q3_K", dequant_q3_K_fp32_len, dequant_q3_K_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("dequant_q4_K", dequant_q4_K_fp32_len, dequant_q4_K_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("dequant_q5_K", dequant_q5_K_fp32_len, dequant_q5_K_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+        vk_pipeline_dequant[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("dequant_q6_K", dequant_q6_K_fp32_len, dequant_q6_K_fp32_data, "main", 2, 4 * sizeof(int), {256 * 32, 1, 1}, {}, 1);
+
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_F16] = ggml_vk_create_pipeline("mul_mat_vec_f16", mul_mat_vec_f16_fp32_len, mul_mat_vec_f16_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("mul_mat_vec_q4_0", mul_mat_vec_q4_0_fp32_len, mul_mat_vec_q4_0_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("mul_mat_vec_q4_1", mul_mat_vec_q4_1_fp32_len, mul_mat_vec_q4_1_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("mul_mat_vec_q5_0", mul_mat_vec_q5_0_fp32_len, mul_mat_vec_q5_0_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("mul_mat_vec_q5_1", mul_mat_vec_q5_1_fp32_len, mul_mat_vec_q5_1_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("mul_mat_vec_q8_0", mul_mat_vec_q8_0_fp32_len, mul_mat_vec_q8_0_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("mul_mat_vec_q2_K", mul_mat_vec_q2_K_fp32_len, mul_mat_vec_q2_K_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("mul_mat_vec_q3_K", mul_mat_vec_q3_K_fp32_len, mul_mat_vec_q3_K_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("mul_mat_vec_q4_K", mul_mat_vec_q4_K_fp32_len, mul_mat_vec_q4_K_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("mul_mat_vec_q5_K", mul_mat_vec_q5_K_fp32_len, mul_mat_vec_q5_K_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("mul_mat_vec_q6_K", mul_mat_vec_q6_K_fp32_len, mul_mat_vec_q6_K_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_F16] = ggml_vk_create_pipeline("mul_mat_vec_f16_f32", mul_mat_vec_f16_f32_fp32_len, mul_mat_vec_f16_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_0] = ggml_vk_create_pipeline("mul_mat_vec_q4_0_f32", mul_mat_vec_q4_0_f32_fp32_len, mul_mat_vec_q4_0_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_1] = ggml_vk_create_pipeline("mul_mat_vec_q4_1_f32", mul_mat_vec_q4_1_f32_fp32_len, mul_mat_vec_q4_1_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_0] = ggml_vk_create_pipeline("mul_mat_vec_q5_0_f32", mul_mat_vec_q5_0_f32_fp32_len, mul_mat_vec_q5_0_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_1] = ggml_vk_create_pipeline("mul_mat_vec_q5_1_f32", mul_mat_vec_q5_1_f32_fp32_len, mul_mat_vec_q5_1_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q8_0] = ggml_vk_create_pipeline("mul_mat_vec_q8_0_f32", mul_mat_vec_q8_0_f32_fp32_len, mul_mat_vec_q8_0_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q2_K] = ggml_vk_create_pipeline("mul_mat_vec_q2_K_f32", mul_mat_vec_q2_K_f32_fp32_len, mul_mat_vec_q2_K_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q3_K] = ggml_vk_create_pipeline("mul_mat_vec_q3_K_f32", mul_mat_vec_q3_K_f32_fp32_len, mul_mat_vec_q3_K_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q4_K] = ggml_vk_create_pipeline("mul_mat_vec_q4_K_f32", mul_mat_vec_q4_K_f32_fp32_len, mul_mat_vec_q4_K_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q5_K] = ggml_vk_create_pipeline("mul_mat_vec_q5_K_f32", mul_mat_vec_q5_K_f32_fp32_len, mul_mat_vec_q5_K_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+        vk_pipeline_dequant_mul_mat_vec_f32[GGML_TYPE_Q6_K] = ggml_vk_create_pipeline("mul_mat_vec_q6_K_f32", mul_mat_vec_q6_K_f32_fp32_len, mul_mat_vec_q6_K_f32_fp32_data, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
+
+        // add
+        vk_pipeline_add_f32 = ggml_vk_create_pipeline("add_f32", add_f32_fp32_len, add_f32_fp32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+        vk_pipeline_add_f16_f32_f16 = ggml_vk_create_pipeline("add_f16_f32_f16", add_f16_f32_f16_fp32_len, add_f16_f32_f16_fp32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+
+        // Static shaders
+        vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline("split_k_reduce", split_k_reduce_fp32_len, split_k_reduce_fp32_data, "main", 1, 3 * sizeof(int), {32, 32, 1}, {}, 1);
+        vk_pipeline_mul_f32 = ggml_vk_create_pipeline("mul_f32", mul_f32_fp32_len, mul_f32_fp32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
+
+        vk_pipeline_scale_f32 = ggml_vk_create_pipeline("scale_f32", scale_f32_fp32_len, scale_f32_fp32_data, "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
     }
-
-    // mul mat vec
-    for (int i = 0; i < VK_NUM_TYPES; i++) {
-        if (!ggml_vk_build_shader((ggml_type)i)) {
-            continue;
-        }
-        const std::string name = "mul_mat_vec_" + std::string(ggml_type_name((ggml_type)i));
-        vk_pipeline_dequant_mul_mat_vec[i] = ggml_vk_create_pipeline_from_file(name, "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-        vk_pipeline_dequant_mul_mat_vec_f32[i] = ggml_vk_create_pipeline_from_file(name + "_f32", "main", 3, 1 * sizeof(int), {1, 1, 1}, {}, 1);
-    }
-
-    // add
-    vk_pipeline_add_f32 = ggml_vk_create_pipeline_from_file("add_f32", "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
-    vk_pipeline_add_f16_f32_f16 = ggml_vk_create_pipeline_from_file("add_f16_f32_f16", "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
-
-    // Static shaders
-    vk_pipeline_matmul_split_k_reduce = ggml_vk_create_pipeline_from_file("split_k_reduce", "main", 1, 3 * sizeof(int), {32, 32, 1}, {}, 1);
-    vk_pipeline_mul_f32 = ggml_vk_create_pipeline_from_file("mul_f32", "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
-
-    vk_pipeline_scale_f32 = ggml_vk_create_pipeline_from_file("scale_f32", "main", 3, sizeof(vk_op_push_constants), {32, 32, 1}, {}, 1);
 }
 
 void ggml_vk_test_transfer(size_t ne);
@@ -1111,8 +1183,11 @@ void* ggml_vk_host_malloc(size_t size) {
 }
 
 void ggml_vk_host_free(void* ptr) {
+    if (ptr == nullptr) {
+        return;
+    }
 #ifdef VK_DEBUG
-    std::cerr << "ggml_vk_host_free()" << std::endl;
+    std::cerr << "ggml_vk_host_free(" << ptr << ")" << std::endl;
 #endif
     vk_buffer* buf = nullptr;
     size_t index;

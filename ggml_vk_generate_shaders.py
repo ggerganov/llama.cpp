@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import os
 import sys
-from tempfile import NamedTemporaryFile
+from tempfile import gettempdir, NamedTemporaryFile
 
 shader_f32 = """
 #define FLOAT_TYPE float
@@ -1455,13 +1455,21 @@ type_names = {
 
 K_QUANTS_PER_ITERATION = 2
 
+output_dir = gettempdir()
 
-async def string_to_spv_file(name, code, defines, fp16):
+lock = asyncio.Lock()
+shader_fnames = []
+
+
+async def string_to_spv(name, code, defines, fp16):
     f = NamedTemporaryFile(mode="w", delete=False)
     f.write(code)
     f.flush()
 
-    cmd = [GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", f.name, "-o", os.path.join("vk_shaders", f"{name}{'_fp32' if not fp16 else ''}.comp")]
+    name = f"{name}{'_fp32' if not fp16 else ''}"
+    fname = os.path.join(output_dir, f"{name}.comp")
+
+    cmd = [GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", f.name, "-o", fname]
 
     cmd.extend([f"-D{key}={value}" for key, value in defines.items()])
 
@@ -1498,11 +1506,14 @@ async def string_to_spv_file(name, code, defines, fp16):
     f.close()
     os.remove(f.name)
 
+    async with lock:
+        shader_fnames.append((name, fname))
+
 
 async def main():
     print("ggml_vulkan: Generating and compiling shaders to SPIR-V")
 
-    os.makedirs("vk_shaders", exist_ok=True)
+    tasks = []
 
     for fp16 in (False, True):
         # mulmat
@@ -1517,36 +1528,34 @@ async def main():
             vec_type_f16 = "f16vec4"
             vec_type = "vec4"
 
-        tasks = []
-
         stream = []
         stream.extend((mulmat_head, shader_float_type, mulmat_body));
-        tasks.append(string_to_spv_file("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
         stream.clear();
         stream.extend((mulmat_head, shader_float_type, mulmat_body));
-        tasks.append(string_to_spv_file("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv_file("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv_file("matmul_f16_f32_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_f32_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_f32_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv_file("matmul_f16_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("matmul_f16_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
         # Build dequant shaders
-        tasks.append(string_to_spv_file("f32_to_f16", f32_to_f16_src, {}, fp16))
+        tasks.append(string_to_spv("f32_to_f16", f32_to_f16_src, {}, fp16))
 
         for i in range(0, VK_NUM_TYPES):
             stream.clear();
@@ -1578,7 +1587,7 @@ async def main():
             else:
                 continue
 
-            tasks.append(string_to_spv_file(f"dequant_{type_names[i]}", "".join(stream), {"D_TYPE": "float16_t"}, fp16))
+            tasks.append(string_to_spv(f"dequant_{type_names[i]}", "".join(stream), {"D_TYPE": "float16_t"}, fp16))
 
         # mul mat vec
         for i in range(0, VK_NUM_TYPES):
@@ -1610,26 +1619,45 @@ async def main():
             else:
                 continue
 
-            tasks.append(string_to_spv_file(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
-            tasks.append(string_to_spv_file(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
+            tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
+            tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
 
         # add
         stream.clear();
 
         stream.extend((add_head, shader_float_type, add_body))
-        tasks.append(string_to_spv_file("add_f32", "".join(stream), {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("add_f32", "".join(stream), {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
 
         stream.clear();
         stream.extend((add_head, shader_float_type, add_body))
-        tasks.append(string_to_spv_file("add_f16_f32_f16", "".join(stream), {"X_TYPE": "float16_t", "Y_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
+        tasks.append(string_to_spv("add_f16_f32_f16", "".join(stream), {"X_TYPE": "float16_t", "Y_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
 
         # Static shaders
-        tasks.append(string_to_spv_file("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
-        tasks.append(string_to_spv_file("mul_f32", mul_f32_src, {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
+        tasks.append(string_to_spv("mul_f32", mul_f32_src, {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv_file("scale_f32", scale_src, {"X_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("scale_f32", scale_src, {"X_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-        await asyncio.gather(*tasks)
+    await asyncio.gather(*tasks)
+
+    with open("ggml-vulkan-shaders.hpp", "w") as f:
+        f.write("#include <cstdint>\n\n")
+        for name, path in sorted(shader_fnames):
+
+            with open(path, "rb") as spv:
+                counter = 0
+                newline_counter = 0
+                f.write(f"unsigned char {name}_data[] = {{\n")
+                for val in spv.read():
+                    f.write(f"0x{val:02x}, ")
+                    newline_counter += 1
+                    counter += 1
+                    if newline_counter >= 12:
+                        newline_counter = 0
+                        f.write("\n")
+            f.write("\n};\n")
+            f.write(f"const uint64_t {name}_len = {counter};\n\n")
+            os.remove(path)
 
 
 if __name__ == "__main__":
