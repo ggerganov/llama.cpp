@@ -13345,7 +13345,7 @@ static void ggml_compute_forward_clamp(
 // ggml_compute_forward_rope
 
 static float rope_yarn_ramp(const float low, const float high, const int i0) {
-    const float y = (i0 / 2 - low) / MIN(0.001f, high - low);
+    const float y = (i0 / 2 - low) / MAX(0.001f, high - low);
     return 1 - MIN(1, MAX(0, y));
 }
 
@@ -13361,11 +13361,10 @@ static void rope_yarn(
     if (ext_factor != 0.0f) {
         float ramp_mix = rope_yarn_ramp(corr_dims[0], corr_dims[1], i0) * ext_factor;
         theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
-    }
 
-    // Get n-d magnitude scaling corrected for interpolation
-    if (freq_scale < 1.0f)
+        // Get n-d magnitude scaling corrected for interpolation
         mscale *= 1.0f + 0.1f * logf(1.0f / freq_scale);
+    }
     *cos_theta = cosf(theta) * mscale;
     *sin_theta = sinf(theta) * mscale;
 }

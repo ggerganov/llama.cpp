@@ -220,6 +220,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.rope_freq_scale = 1.0f/std::stof(argv[i]);
+        } else if (arg == "--yarn-orig-ctx") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_orig_ctx = std::stoi(argv[i]);
         } else if (arg == "--yarn-ext-factor") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -737,6 +743,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --rope-scale N        RoPE context scaling factor, expands context by a factor of N\n");
     printf("  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: loaded from model)\n");
     printf("  --rope-freq-scale N   RoPE frequency scaling factor, expands context by a factor of 1/N\n");
+    printf("  --yarn-orig-ctx N     YaRN: original context size of model (default: 0 = model training context size)\n");
     printf("  --yarn-ext-factor N   YaRN: extrapolation mix factor (default: 1.0, 0.0 = full interpolation)\n");
     printf("  --yarn-attn-factor N  YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
     printf("  --yarn-beta-slow N    YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
@@ -861,6 +868,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_attn_factor  = params.yarn_attn_factor;
     cparams.yarn_beta_fast    = params.yarn_beta_fast;
     cparams.yarn_beta_slow    = params.yarn_beta_slow;
+    cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
 
     return cparams;
 }

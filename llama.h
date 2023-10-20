@@ -182,12 +182,13 @@ extern "C" {
         int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float rope_freq_base;   // RoPE base frequency, 0 = from model
-        float rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
-        float yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
-        float yarn_attn_factor; // YaRN magnitude scaling factor
-        float yarn_beta_fast;   // YaRN low correction dim
-        float yarn_beta_slow;   // YaRN high correction dim
+        float    rope_freq_base;   // RoPE base frequency, 0 = from model
+        float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+        float    yarn_attn_factor; // YaRN magnitude scaling factor
+        float    yarn_beta_fast;   // YaRN low correction dim
+        float    yarn_beta_slow;   // YaRN high correction dim
+        uint32_t yarn_orig_ctx;    // YaRN original context size
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;  // if true, use experimental mul_mat_q kernels

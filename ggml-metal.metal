@@ -880,7 +880,7 @@ kernel void kernel_alibi_f32(
 }
 
 static float rope_yarn_ramp(const float low, const float high, const int i0) {
-    const float y = (i0 / 2 - low) / min(0.001f, high - low);
+    const float y = (i0 / 2 - low) / max(0.001f, high - low);
     return 1.0f - min(1.0f, max(0.0f, y));
 }
 
@@ -896,11 +896,10 @@ static void rope_yarn(
     if (ext_factor != 0.0f) {
         ramp_mix = rope_yarn_ramp(corr_dims[0], corr_dims[1], i0) * ext_factor;
         theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
-    }
 
-    // Get n-d magnitude scaling corrected for interpolation
-    if (freq_scale < 1.0f)
+        // Get n-d magnitude scaling corrected for interpolation
         mscale *= 1.0f + 0.1f * logf(1.0f / freq_scale);
+    }
     *cos_theta = cosf(theta) * mscale;
     *sin_theta = sinf(theta) * mscale;
 }

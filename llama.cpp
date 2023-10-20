@@ -1113,6 +1113,7 @@ struct llama_cparams {
     float    rope_freq_base;
     float    rope_freq_scale;
 
+    uint32_t n_yarn_orig_ctx;
     // These hyperparameters are not exposed in GGUF, because all
     // existing YaRN models use the same values for them.
     float yarn_ext_factor;
@@ -3028,7 +3029,7 @@ static struct ggml_cgraph * llm_build_llama(
     const int32_t n_embd      = hparams.n_embd;
     const int32_t n_layer     = hparams.n_layer;
     const int32_t n_ctx       = cparams.n_ctx;
-    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_orig_ctx  = cparams.n_yarn_orig_ctx;
     const int32_t n_head      = hparams.n_head;
     const int32_t n_head_kv   = hparams.n_head_kv;
     const int32_t n_embd_head = hparams.n_embd_head();
@@ -3430,7 +3431,7 @@ static struct ggml_cgraph * llm_build_baichaun(
     const int32_t n_embd      = hparams.n_embd;
     const int32_t n_layer     = hparams.n_layer;
     const int32_t n_ctx       = cparams.n_ctx;
-    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_orig_ctx  = cparams.n_yarn_orig_ctx;
     const int32_t n_head      = hparams.n_head;
     const int32_t n_head_kv   = hparams.n_head_kv;
     const int32_t n_embd_head = hparams.n_embd_head();
@@ -4194,7 +4195,7 @@ static struct ggml_cgraph * llm_build_falcon(
     const int32_t n_embd      = hparams.n_embd;
     const int32_t n_layer     = hparams.n_layer;
     const int32_t n_ctx       = cparams.n_ctx;
-    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_orig_ctx  = cparams.n_yarn_orig_ctx;
     const int32_t n_head      = hparams.n_head;
     const int32_t n_head_kv   = hparams.n_head_kv;
     const int32_t n_embd_head = hparams.n_embd_head();
@@ -4818,7 +4819,7 @@ static struct ggml_cgraph * llm_build_persimmon(
     const int64_t n_embd      = hparams.n_embd;
     const int64_t n_layer     = hparams.n_layer;
     const int64_t n_ctx       = cparams.n_ctx;
-    const int32_t n_orig_ctx  = hparams.n_yarn_orig_ctx;
+    const int32_t n_orig_ctx  = cparams.n_yarn_orig_ctx;
     const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_head      = hparams.n_head;
     const int64_t n_embd_head = hparams.n_embd_head();
@@ -8676,6 +8677,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.mul_mat_q        = params.mul_mat_q;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
+    cparams.n_yarn_orig_ctx  = params.yarn_orig_ctx   == 0    ? hparams.n_ctx_train           : params.yarn_orig_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
 
