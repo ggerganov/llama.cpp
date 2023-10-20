@@ -53,6 +53,19 @@ namespace console {
     static termios   initial_state;
 #endif
 
+    static bool locale_isvalid( const char * l )
+    {
+        return !(l == nullptr || l[0] == '\0' || (strcasestr(l, "utf-8") == nullptr && strcasestr(l, "utf8") == nullptr));
+    }
+
+    static bool locale_setverify( int c, const char * l )
+    {
+        setlocale(c, l);
+        auto locale = setlocale(c, nullptr);
+
+        return !strcmp( l, locale );
+    }
+
     //
     // Init and cleanup
     //
@@ -112,16 +125,18 @@ namespace console {
             }
         }
 
-        auto locale = setlocale(LC_ALL, "");
+        setlocale(LC_ALL, "");
+        auto locale = setlocale(LC_ALL, nullptr);
 
-        if (locale == nullptr || strcasestr(locale, "utf-8") == nullptr) {
+        if (!locale_isvalid(locale)) {
             auto lang = getenv("LANG");
-            if (lang != nullptr && strcasestr(lang, "utf-8") != nullptr) {
-                setlocale(LC_ALL, lang);
-            } else {
-                setlocale(LC_ALL, "C.UTF-8");
+            if (!locale_isvalid(lang) || !locale_setverify(LC_ALL, lang)) {
+                locale_setverify(LC_ALL, "C.UTF-8") || locale_setverify(LC_ALL, "C.utf8") || setlocale(LC_ALL, "");
             }
         }
+
+        auto usedlocale = setlocale(LC_ALL, nullptr);
+        fprintf(stderr,"Console: using '%s' locale.\n", usedlocale);
 #endif
     }
 
