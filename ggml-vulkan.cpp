@@ -666,6 +666,7 @@ static inline bool ggml_vk_build_shader(ggml_type type) {
     case GGML_TYPE_Q2_K:
     case GGML_TYPE_Q3_K:
     case GGML_TYPE_Q4_K:
+    case GGML_TYPE_Q5_K:
     case GGML_TYPE_Q6_K:
         return true;
     default:
@@ -962,6 +963,7 @@ static inline vk_pipeline* ggml_vk_get_to_fp16(ggml_type type) {
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q4_K:
+        case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
             break;
         default:
@@ -985,6 +987,7 @@ static inline vk_pipeline* ggml_vk_get_dequantize_mul_mat_vec(ggml_type type, bo
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
         case GGML_TYPE_Q4_K:
+        case GGML_TYPE_Q5_K:
         case GGML_TYPE_Q6_K:
             break;
         default:
@@ -2789,7 +2792,7 @@ void ggml_vk_check_results_1(ggml_compute_params * params, ggml_tensor * tensor)
 
     avg_err /= tensor->ne[3] * tensor->ne[2] * tensor->ne[1] * tensor->ne[0];
 
-    if (avg_err > 1.0 || std::isnan(avg_err)) {
+    if (avg_err > 0.1 || std::isnan(avg_err)) {
         std::cerr << "ERROR: avg_err=" << avg_err << " in " << ggml_op_name(tensor->op) << std::endl;
         std::cerr << "tensor->backend: " << tensor->backend << " ne0=" << tensor->ne[0] << " nb0=" << tensor->nb[0] << " ne1=" << tensor->ne[1] << " nb1=" << tensor->nb[1] << std::endl;
         if (tensor->src[0] != nullptr) {
