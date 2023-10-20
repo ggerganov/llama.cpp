@@ -198,7 +198,7 @@ struct llama_server_context
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
     gpt_params params;
-    llama_sampling_context *ctx_sampling;
+    llama_sampling_context *ctx_sampling = nullptr;
     int n_ctx;
 
     bool truncated = false;
