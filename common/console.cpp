@@ -118,7 +118,7 @@ namespace console {
             auto lang = getenv("LANG");
             if (lang != nullptr && strcmp(lang, "C") && strcasestr(lang, "utf-8") != nullptr) {
                 setlocale(LC_ALL, lang);
-            } else{
+            } else {
                 setlocale(LC_ALL, "C.UTF-8");
             }
         }
