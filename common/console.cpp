@@ -53,6 +53,7 @@ namespace console {
     static termios   initial_state;
 #endif
 
+#if !defined(_WIN32)
     static bool locale_isvalid( const char * l )
     {
         return !(l == nullptr || l[0] == '\0' || (strcasestr(l, "utf-8") == nullptr && strcasestr(l, "utf8") == nullptr));
@@ -65,6 +66,7 @@ namespace console {
 
         return !strcmp( l, locale );
     }
+#endif
 
     //
     // Init and cleanup
