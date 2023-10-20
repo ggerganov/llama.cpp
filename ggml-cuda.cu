@@ -4429,8 +4429,8 @@ static __device__ void rope_yarn(
     }
 
     // Get n-d magnitude scaling corrected for interpolation
-    if (freq_scale > 1.0f)
-        mscale *= 1.0f + 0.1f * logf(freq_scale);
+    if (freq_scale < 1.0f)
+        mscale *= 1.0f + 0.1f * logf(1.0f / freq_scale);
     *cos_theta = cosf(theta) * mscale;
     *sin_theta = sinf(theta) * mscale;
 }

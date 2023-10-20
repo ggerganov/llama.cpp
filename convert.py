@@ -234,6 +234,7 @@ class Params:
             n_head_kv         = config.get("num_key_value_heads", n_head),
             f_norm_eps        = config["rms_norm_eps"],
             f_rope_freq_base  = config.get("rope_theta"),
+            rope_scaling_type = rope_scaling_type,
             f_rope_scale      = f_rope_scale,
             n_orig_ctx        = n_orig_ctx,
             rope_finetuned    = rope_finetuned,
