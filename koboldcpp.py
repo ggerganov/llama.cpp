@@ -365,7 +365,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.47"
+KcppVersion = "1.47.1"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -527,6 +527,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         current_token = 0
         incomplete_token_buffer = bytearray()
+        await asyncio.sleep(0.1) #anti race condition, prevent check from overtaking generate
         while True:
             streamDone = handle.has_finished() #exit next loop on done
             tokenStr = ""
