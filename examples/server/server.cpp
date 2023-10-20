@@ -195,10 +195,12 @@ struct llama_server_context
     json prompt;
     std::vector<llama_token> embd;
 
+    gpt_params params;
+
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
-    gpt_params params;
     llama_sampling_context *ctx_sampling = nullptr;
+
     int n_ctx;
 
     bool truncated = false;
@@ -246,7 +248,10 @@ struct llama_server_context
         multibyte_pending = 0;
         n_remain = 0;
         n_past = 0;
+        params.sparams.n_prev = n_ctx;
+    }
 
+    void initSampling() {
         if (ctx_sampling != nullptr) {
             llama_sampling_free(ctx_sampling);
         }
@@ -311,16 +316,32 @@ struct llama_server_context
         return prompt_tokens;
     }
 
-    bool loadGrammar()
-    {
-        ctx_sampling = llama_sampling_init(params.sparams);
-        return true;
+    void truncatePrompt(std::vector<llama_token> &prompt_tokens) {
+        const int n_left = n_ctx - params.n_keep;
+        const int n_block_size = n_left / 2;
+        const int erased_blocks = (prompt_tokens.size() - params.n_keep - n_block_size) / n_block_size;
+
+        // Keep n_keep tokens at start of prompt (at most n_ctx - 4)
+        std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + params.n_keep);
+
+        new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + params.n_keep + erased_blocks * n_block_size, prompt_tokens.end());
+
+        LOG_VERBOSE("input truncated", {
+                {"n_ctx", n_ctx},
+                {"n_keep", params.n_keep},
+                {"n_left", n_left},
+                {"new_tokens", tokens_to_str(ctx, new_tokens.cbegin(), new_tokens.cend())},
+                {"num_prompt_tokens", new_tokens.size()}
+        });
+
+        truncated = true;
+        prompt_tokens = new_tokens;
     }
 
     void loadInfill()
     {
         bool suff_rm_leading_spc = true;
-        if (params.input_suffix.find_first_of(" ") == 0 && params.input_suffix.size() > 1) {
+        if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
             params.input_suffix.erase(0, 1);
             suff_rm_leading_spc = false;
         }
@@ -336,6 +357,7 @@ struct llama_server_context
         prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(ctx));
         prefix_tokens.insert(prefix_tokens.end(), suffix_tokens.begin(), suffix_tokens.end());
         prefix_tokens.push_back(llama_token_middle(ctx));
+
         auto prompt_tokens = prefix_tokens;
 
         num_prompt_tokens = prompt_tokens.size();
@@ -347,31 +369,18 @@ struct llama_server_context
         params.n_keep = std::min(params.n_ctx - 4, params.n_keep);
 
         // if input prompt is too big, truncate like normal
-        if (num_prompt_tokens >= (size_t)params.n_ctx)
+        if (num_prompt_tokens >= (size_t) n_ctx)
         {
-            printf("Input prompt is too big, truncating. Can only take %d tokens but got %zu\n", params.n_ctx, num_prompt_tokens);
-            // todo we probably want to cut from both sides
-            const int n_left = (params.n_ctx - params.n_keep) / 2;
-            std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + params.n_keep);
-            const int erased_blocks = (num_prompt_tokens - params.n_keep - n_left - 1) / n_left;
-            new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + params.n_keep + erased_blocks * n_left, prompt_tokens.end());
-            std::copy(prompt_tokens.end() - params.n_ctx, prompt_tokens.end(), ctx_sampling->prev.begin());
+            truncatePrompt(prompt_tokens);
+            num_prompt_tokens = prompt_tokens.size();
 
-            LOG_VERBOSE("input truncated", {
-                                               {"n_ctx", params.n_ctx},
-                                               {"n_keep", params.n_keep},
-                                               {"n_left", n_left},
-                                               {"new_tokens", tokens_to_str(ctx, new_tokens.cbegin(), new_tokens.cend())},
-                                           });
-
-            truncated = true;
-            prompt_tokens = new_tokens;
+            GGML_ASSERT(num_prompt_tokens < (size_t)n_ctx);
         }
-        else
+
+        // push the prompt into the sampling context (do not apply grammar)
+        for (auto & token : prompt_tokens)
         {
-            const size_t ps = num_prompt_tokens;
-            std::fill(ctx_sampling->prev.begin(), ctx_sampling->prev.end() - ps, 0);
-            std::copy(prompt_tokens.begin(), prompt_tokens.end(), ctx_sampling->prev.end() - ps);
+            llama_sampling_accept(ctx_sampling, ctx, token, false);
         }
 
         // compare the evaluated prompt with the new prompt
@@ -409,29 +418,18 @@ struct llama_server_context
         params.n_keep = std::min(n_ctx - 4, params.n_keep);
 
         // if input prompt is too big, truncate like normal
-        if (num_prompt_tokens >= (size_t)n_ctx)
+        if (num_prompt_tokens >= (size_t) n_ctx)
         {
-            const int n_left = (n_ctx - params.n_keep) / 2;
-            std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + params.n_keep);
-            const int erased_blocks = (num_prompt_tokens - params.n_keep - n_left - 1) / n_left;
-            new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + params.n_keep + erased_blocks * n_left, prompt_tokens.end());
-            std::copy(prompt_tokens.end() - n_ctx, prompt_tokens.end(), ctx_sampling->prev.begin());
+            truncatePrompt(prompt_tokens);
+            num_prompt_tokens = prompt_tokens.size();
 
-            LOG_VERBOSE("input truncated", {
-                                               {"n_ctx", n_ctx},
-                                               {"n_keep", params.n_keep},
-                                               {"n_left", n_left},
-                                               {"new_tokens", tokens_to_str(ctx, new_tokens.cbegin(), new_tokens.cend())},
-                                           });
-
-            truncated = true;
-            prompt_tokens = new_tokens;
+            GGML_ASSERT(num_prompt_tokens < (size_t)n_ctx);
         }
-        else
+
+        // push the prompt into the sampling context (do not apply grammar)
+        for (auto & token : prompt_tokens)
         {
-            const size_t ps = num_prompt_tokens;
-            std::fill(ctx_sampling->prev.begin(), ctx_sampling->prev.end() - ps, 0);
-            std::copy(prompt_tokens.begin(), prompt_tokens.end(), ctx_sampling->prev.end() - ps);
+            llama_sampling_accept(ctx_sampling, ctx, token, false);
         }
 
         // compare the evaluated prompt with the new prompt
@@ -542,7 +540,7 @@ struct llama_server_context
                 result.probs.push_back({cur_p.data[i].id, cur_p.data[i].p});
             }
 
-            llama_sampling_accept(ctx_sampling, ctx, result.tok);
+            llama_sampling_accept(ctx_sampling, ctx, result.tok, true);
 
             if (tg) {
                 num_tokens_predicted++;
@@ -1206,8 +1204,6 @@ static void parse_options_completion(const json &body, llama_server_context &lla
         }
     }
 
-    llama.ctx_sampling = llama_sampling_init(llama.params.sparams);
-
     LOG_VERBOSE("completion parameters parsed", format_generation_settings(llama));
 }
 
@@ -1376,15 +1372,9 @@ int main(int argc, char **argv)
         llama.rewind();
 
         llama_reset_timings(llama.ctx);
-
         parse_options_completion(json::parse(req.body), llama);
 
-        if (!llama.loadGrammar())
-        {
-            res.status = 400;
-            return;
-        }
-
+        llama.initSampling();
         llama.loadPrompt();
         llama.beginCompletion();
 
@@ -1539,14 +1529,9 @@ int main(int argc, char **argv)
         llama.rewind();
 
         llama_reset_timings(llama.ctx);
-
         parse_options_infill(json::parse(req.body), llama);
 
-        if (!llama.loadGrammar())
-        {
-            res.status = 400;
-            return;
-        }
+        llama.initSampling();
         llama.loadInfill();
         llama.beginCompletion();
         const auto chunked_content_provider = [&](size_t, DataSink & sink) {
@@ -1696,7 +1681,9 @@ int main(int argc, char **argv)
         const json body = json::parse(req.body);
 
         llama.rewind();
+
         llama_reset_timings(llama.ctx);
+
         if (body.count("content") != 0)
         {
             llama.prompt = body["content"];
@@ -1706,6 +1693,8 @@ int main(int argc, char **argv)
             llama.prompt = "";
         }
         llama.params.n_predict = 0;
+
+        llama.initSampling();
         llama.loadPrompt();
         llama.beginCompletion();
         llama.doCompletion();

@@ -154,7 +154,7 @@ int main(int argc, char ** argv) {
             // sample from the target model
             llama_token id = llama_sampling_sample(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft]);
 
-            llama_sampling_accept(ctx_sampling, ctx_tgt, id);
+            llama_sampling_accept(ctx_sampling, ctx_tgt, id, true);
 
             //LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_tgt, ctx_sampling->prev).c_str());
 
@@ -328,7 +328,7 @@ int main(int argc, char ** argv) {
 
                     const int s = sa[is];
 
-                    llama_sampling_accept(drafts[s].ctx_sampling, ctx_dft, id);
+                    llama_sampling_accept(drafts[s].ctx_sampling, ctx_dft, id, true);
 
                     drafts[s].tokens.push_back(id);
 

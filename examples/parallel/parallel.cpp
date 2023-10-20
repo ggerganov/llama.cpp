@@ -330,7 +330,7 @@ int main(int argc, char ** argv) {
 
                 const llama_token id = llama_sampling_sample(client.ctx_sampling, ctx, NULL, client.i_batch - i);
 
-                llama_sampling_accept(client.ctx_sampling, ctx, id);
+                llama_sampling_accept(client.ctx_sampling, ctx, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients

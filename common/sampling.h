@@ -70,6 +70,12 @@ void llama_sampling_reset(llama_sampling_context * ctx);
 // Copy the sampler context
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);
 
+// Get the last sampled token
+llama_token llama_sampling_last(llama_sampling_context * ctx);
+
+// Get a string representation of the last sampled tokens
+std::string llama_sampling_prev_str(llama_sampling_context * ctx_sampling, llama_context * ctx_main, int n);
+
 // Print sampling parameters into a string
 std::string llama_sampling_print(const llama_sampling_params & params);
 
@@ -99,4 +105,5 @@ llama_token llama_sampling_sample(
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,
-        llama_token id);
+        llama_token id,
+        bool apply_grammar);

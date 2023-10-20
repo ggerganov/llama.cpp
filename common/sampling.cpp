@@ -66,6 +66,24 @@ void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * ds
     dst->prev = src->prev;
 }
 
+llama_token llama_sampling_last(llama_sampling_context * ctx) {
+    return ctx->prev.back();
+}
+
+std::string llama_sampling_prev_str(llama_sampling_context * ctx_sampling, llama_context * ctx_main, int n) {
+    const int size = ctx_sampling->prev.size();
+
+    n = std::min(n, size);
+
+    std::string result;
+
+    for (int i = size - n; i < size; i++) {
+        result += llama_token_to_piece(ctx_main, ctx_sampling->prev[i]);
+    }
+
+    return result;
+}
+
 std::string llama_sampling_print(const llama_sampling_params & params) {
     char result[1024];
 
@@ -193,11 +211,12 @@ llama_token llama_sampling_sample(
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
         struct llama_context * ctx_main,
-        llama_token id) {
+        llama_token id,
+        bool apply_grammar) {
     ctx_sampling->prev.erase(ctx_sampling->prev.begin());
     ctx_sampling->prev.push_back(id);
 
-    if (ctx_sampling->grammar != NULL) {
+    if (ctx_sampling->grammar != NULL && apply_grammar) {
         llama_grammar_accept_token(ctx_main, ctx_sampling->grammar, id);
     }
 }
