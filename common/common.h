@@ -56,7 +56,7 @@ struct gpt_params {
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
 
     // // sampling parameters
-    struct llama_sampling_params sampling_params;
+    struct llama_sampling_params sparams;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_draft       = "";                              // draft model for speculative decoding
@@ -66,7 +66,6 @@ struct gpt_params {
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
-    std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
