@@ -9669,27 +9669,55 @@ llama_token llama_token_bos(const struct llama_context * ctx) {
     return ctx->model.vocab.special_bos_id;
 }
 
+llama_token llama_model_token_bos(const struct llama_model * model) {
+    return model->vocab.special_bos_id;
+}
+
 llama_token llama_token_eos(const struct llama_context * ctx) {
     return ctx->model.vocab.special_eos_id;
+}
+
+llama_token llama_model_token_eos(const struct llama_model * model) {
+    return model->vocab.special_eos_id;
 }
 
 llama_token llama_token_nl(const struct llama_context * ctx) {
     return ctx->model.vocab.linefeed_id;
 }
+
+llama_token llama_model_token_nl(const struct llama_model * model) {
+    return model->vocab.linefeed_id;
+}
 llama_token llama_token_prefix(const struct llama_context * ctx) {
     return ctx->model.vocab.special_prefix_id;
+}
+
+llama_token llama_model_token_prefix(const struct llama_model * model) {
+    return model->vocab.special_prefix_id;
 }
 
 llama_token llama_token_middle(const struct llama_context * ctx) {
     return ctx->model.vocab.special_middle_id;
 }
 
+llama_token llama_model_token_middle(const struct llama_model * model) {
+    return model->vocab.special_middle_id;
+}
+
 llama_token llama_token_suffix(const struct llama_context * ctx) {
     return ctx->model.vocab.special_suffix_id;
 }
 
+llama_token llama_model_token_suffix(const struct llama_model * model) {
+    return model->vocab.special_suffix_id;
+}
+
 llama_token llama_token_eot(const struct llama_context * ctx) {
     return ctx->model.vocab.special_eot_id;
+}
+
+llama_token llama_model_token_eot(const struct llama_model * model) {
+    return model->vocab.special_eot_id;
 }
 
 int llama_tokenize(
