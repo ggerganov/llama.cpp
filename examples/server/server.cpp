@@ -807,10 +807,10 @@ struct llama_server_context
                     data_b64.clear();
                     auto data = stbi_load_from_memory(image_buffer.data(), image_buffer.size(), &width, &height, &channels, 3);
                     if (!data) {
-                        LOG_TEE("slot %i - failed to load image id= %i\n", slot->id, img_sl.id);
+                        LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
                         return false;
                     }
-                    LOG_TEE("slot %i - image id= %i loaded (%i x %i)\n", slot->id, img_sl.id, width, height);
+                    LOG_TEE("slot %i - image loaded [id: %i] resolution (%i x %i)\n", slot->id, img_sl.id, width, height);
                     img_sl.img_data.nx = width;
                     img_sl.img_data.ny = height;
                     img_sl.img_data.size = width * height * 3;
@@ -848,7 +848,7 @@ struct llama_server_context
                                     }
                                 }
                                 if (!found) {
-                                    LOG_TEE("ERROR: Image with id %i not found.\n", img_id);
+                                    LOG_TEE("ERROR: Image with id: %i, not found.\n", img_id);
                                     slot->images.clear();
                                     return false;
                                 }
@@ -1119,7 +1119,7 @@ struct llama_server_context
                 clip_free(clp_ctx);
                 return false;
             }
-            LOG_TEE("slot %i - encoding image %i\n", slot.id, img.id);
+            LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
             if (!clip_image_encode(clp_ctx, params.n_threads, &img_res, img.image_embedding))
             {
                 LOG_TEE("Unable to encode image\n");

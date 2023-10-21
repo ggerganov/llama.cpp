@@ -205,6 +205,7 @@
       type: "chat",  // "chat" | "completion"
       char: "Llama",
       user: "User",
+      image_selected: ''
     })
 
     const params = signal({
@@ -298,6 +299,7 @@
 
     function userTemplateApply(t) {
       session.value = t.data.session;
+      session.value = {...session.value, image_selected: ''};
       params.value = t.data.params;
     }
 
@@ -488,8 +490,9 @@
                 const reader = new FileReader();
                 reader.onload = function () {
                     const image_data = reader.result;
+                    session.value = {...session.value, image_selected: image_data};
                     params.value = {...params.value, image_data: [
-                      { data: image_data.replace('data:image/png;base64,', ''), id: 10 }] }
+                      { data: image_data.replace(/data:image\/[^;]+;base64,/, ''), id: 10 }] }
                 };
                 selected_image = true;
                 reader.readAsDataURL(selectedFile);
@@ -580,6 +583,7 @@
 
       return html`
         <section id="chat" ref=${container}>
+          <img style="width: 60%;${!session.value.image_selected ? `display: none;`: ``}" src="${session.value.image_selected}"/>
           ${messages.flatMap(chatLine)}
         </section>`;
     };
