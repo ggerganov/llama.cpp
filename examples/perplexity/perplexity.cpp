@@ -352,13 +352,13 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     std::vector<int32_t> extremes;
     extremes.resize(n_layers);
     std::fill(extremes.begin(), extremes.end(), 0);
-    if (anti_mode) {
-        // No pointing in starting with first/last layer disabled.
-        skip_types[0] = 15;
-        skip_types[n_layers - 1] = 15;
-        skips.push_back(0); skips.push_back(0 + n_layers);
-        skips.push_back(n_layers - 1); skips.push_back(n_layers - 1 + n_layers);
-    }
+    // if (anti_mode) {
+    //     // No point in starting with first/last layer disabled.
+    //     skip_types[0] = 15;
+    //     skip_types[n_layers - 1] = 15;
+    //     skips.push_back(0); skips.push_back(0 + n_layers);
+    //     skips.push_back(n_layers - 1); skips.push_back(n_layers - 1 + n_layers);
+    // }
     int32_t curr_best_layer = -1, curr_best_type = 0;
     double curr_best_ppl = -1, ref_ppl = -1;
     const int32_t mask = anti_mode ? 3 : 0;
@@ -389,7 +389,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
             }
             if (skip_layer >= n_layers) {
                 if (curr_best_layer == -1) break;
-                if (prune_target > 0 && pass_results.size() >= prune_target * 2) {
+                if (anti_mode || (prune_target > 0 && pass_results.size() >= prune_target * 2)) {
                     std::sort(pass_results.begin(), pass_results.end(),
                         [](const std::tuple<int32_t, int32_t, double> & a, const std::tuple<int32_t, int32_t, double> & b) {
                             if (anti_mode) return std::get<2>(b) > std::get<2>(a);
@@ -399,14 +399,14 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                     const size_t num_prune = std::min(pass_results.size(), prune_target);
                     for (size_t temp = 0, pruned = 0; temp < pass_results.size(); temp++) {
                         int32_t lidx = std::get<0>(pass_results[temp]);
-                        if (lidx == curr_best_layer && std::get<1>(pass_results[temp]) == curr_best_type) continue;
-                        extremes[lidx] |= std::get<1>(pass_results[temp]);
-                        printf("\nPrune[%zu]: %d (%d) - %.2f\n", pruned + 1, lidx,
-                                std::get<1>(pass_results[temp]), std::get<2>(pass_results[temp]));
                         if (anti_mode) {
                             skip_types[lidx] |= std::get<1>(pass_results[temp]);
                             skips.push_back(std::get<1>(pass_results[temp]) == 1 ? lidx : lidx + n_layers);
                         }
+                        if (lidx == curr_best_layer && std::get<1>(pass_results[temp]) == curr_best_type) continue;
+                        extremes[lidx] |= std::get<1>(pass_results[temp]);
+                        printf("\nPrune[%zu]: %d (%d) - %.2f\n", pruned + 1, lidx,
+                                std::get<1>(pass_results[temp]), std::get<2>(pass_results[temp]));
                         if (++pruned >= num_prune) break;
                     }
                 }
@@ -414,9 +414,11 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 printf("\n\nADD %c%3d - ppl vs ref %.4f",
                     int(label[curr_best_type]), curr_best_layer,
                     curr_best_ppl - ref_ppl);
-                if (!anti_mode && curr_best_ppl > ref_ppl * 1.75) break;
-                skip_types[curr_best_layer] += curr_best_type;
-                skips.push_back(curr_best_type == 1 ? curr_best_layer : curr_best_layer + n_layers);
+                if (!anti_mode) {
+                    if (curr_best_ppl > ref_ppl * 1.75) break;
+                    skip_types[curr_best_layer] += curr_best_type;
+                    skips.push_back(curr_best_type == 1 ? curr_best_layer : curr_best_layer + n_layers);
+                }
                 curr_best_layer = -1;
                 curr_best_ppl = -1;
                 curr_best_type = 0;
