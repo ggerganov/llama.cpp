@@ -515,10 +515,10 @@ extern "C" {
     LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
     LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
 
-    llama_token llama_model_token_prefix(const struct llama_model * model);
-    llama_token llama_model_token_middle(const struct llama_model * model);
-    llama_token llama_model_token_suffix(const struct llama_model * model);
-    llama_token llama_model_token_eot   (const struct llama_model * model);
+    LLAMA_API llama_token llama_model_token_prefix(const struct llama_model * model);
+    LLAMA_API llama_token llama_model_token_middle(const struct llama_model * model);
+    LLAMA_API llama_token llama_model_token_suffix(const struct llama_model * model);
+    LLAMA_API llama_token llama_model_token_eot   (const struct llama_model * model);
 
     //
     // Tokenization
