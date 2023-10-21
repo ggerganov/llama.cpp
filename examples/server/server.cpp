@@ -1005,32 +1005,6 @@ struct llama_server_context
         slot.generated_text += token_str;
         slot.has_next_token = true;
 
-        size_t pos = std::min(slot.sent_count, slot.generated_text.size());
-        const std::string str_test = slot.generated_text.substr(pos);
-        bool is_stop_full = false;
-        size_t stop_pos = find_stopping_strings(str_test, token_str.size(), STOP_FULL, slot);
-        if (stop_pos != std::string::npos) {
-            is_stop_full = true;
-            slot.generated_text.erase(
-                slot.generated_text.begin() + pos + stop_pos,
-                slot.generated_text.end());
-            pos = std::min(slot.sent_count, slot.generated_text.size());
-        } else {
-            is_stop_full = false;
-            stop_pos = find_stopping_strings(str_test, token_str.size(), STOP_PARTIAL, slot);
-        }
-
-        // check if there is any token to predict
-        if(stop_pos == std::string::npos || (!slot.has_next_token && !is_stop_full && stop_pos > 0)) {
-            // no send the stop word in the response
-            result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
-            slot.sent_count += result.text_to_send.size();
-            // add the token to slot queue and cache
-        }
-        slot.add_token_string(result);
-        if(slot.params.stream) {
-            send_partial_response(slot, result);
-        }
         if (slot.multibyte_pending > 0)
         {
             slot.multibyte_pending -= token_str.size();
@@ -1056,6 +1030,36 @@ struct llama_server_context
             else
             {
                 slot.multibyte_pending = 0;
+            }
+        }
+
+        if (slot.multibyte_pending == 0)
+        {
+            size_t pos = std::min(slot.sent_count, slot.generated_text.size());
+            const std::string str_test = slot.generated_text.substr(pos);
+            bool is_stop_full = false;
+            size_t stop_pos = find_stopping_strings(str_test, token_str.size(), STOP_FULL, slot);
+            if (stop_pos != std::string::npos) {
+                is_stop_full = true;
+                slot.generated_text.erase(
+                    slot.generated_text.begin() + pos + stop_pos,
+                    slot.generated_text.end());
+                pos = std::min(slot.sent_count, slot.generated_text.size());
+            } else {
+                is_stop_full = false;
+                stop_pos = find_stopping_strings(str_test, token_str.size(), STOP_PARTIAL, slot);
+            }
+
+            // check if there is any token to predict
+            if(stop_pos == std::string::npos || (!slot.has_next_token && !is_stop_full && stop_pos > 0)) {
+                // no send the stop word in the response
+                result.text_to_send = slot.generated_text.substr(pos, std::string::npos);
+                slot.sent_count += result.text_to_send.size();
+                // add the token to slot queue and cache
+            }
+            slot.add_token_string(result);
+            if (slot.params.stream) {
+                send_partial_response(slot, result);
             }
         }
 
