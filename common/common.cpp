@@ -634,6 +634,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
+    printf("\n");
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
     printf("options:\n");
