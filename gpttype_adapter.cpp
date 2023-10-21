@@ -804,10 +804,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         #endif
 
         //compat for old falcon
-        if(file_format_meta.fileversion==1 && file_format==FileFormat::GGUF_FALCON)
+        if(file_format_meta.fileversion==1)
         {
             //apply compat fix
-            printf("\nUsing older tokenizer for Falcon...");
+            printf("\nUsing older tokenizer for GGUFv1...");
             OldBPETokenizerMode = true;
         }
 

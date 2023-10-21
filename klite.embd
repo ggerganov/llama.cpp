@@ -2902,6 +2902,7 @@ Current version: 83
 				else {
 					//error occurred, maybe captcha failed
 					console.error("error occurred in v1 generation");
+					retry_preserve_last = true;
 					clear_poll_flags();
 					render_gametext();
 
@@ -2919,6 +2920,7 @@ Current version: 83
 				}
 			})
 			.catch((error) => {
+				retry_preserve_last = true;
 				console.error('Error:', error);
 				clear_poll_flags();
 				render_gametext();
@@ -2985,6 +2987,7 @@ Current version: 83
 					}
 				},
 				abort(e) {
+					retry_preserve_last = true;
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
@@ -2993,6 +2996,7 @@ Current version: 83
 			}));
 		})
 		.catch((error) => {
+			retry_preserve_last = true;
 			console.error('Error:', error);
 			clear_poll_flags();
 			render_gametext();
@@ -3027,7 +3031,7 @@ Current version: 83
 	//casualwriter casual-markdown, under MIT license
 	function simpleMarkdown(e){var r=function(e){return e.replace(/</g,"<").replace(/\>/g,">")},l=function(e,r){return"<pre><code>"+(r=(r=(r=(r=(r=r.replace(/</g,"&lt;").replace(/\>/g,"&gt;")).replace(/\t/g,"   ").replace(/\^\^\^(.+?)\^\^\^/g,"<mark>$1</mark>")).replace(/^\/\/(.*)/gm,"<rem>//$1</rem>").replace(/\s\/\/(.*)/gm," <rem>//$1</rem>")).replace(/(\s?)(function|procedure|return|exit|if|then|else|end|loop|while|or|and|case|when)(\s)/gim,"$1<b>$2</b>$3")).replace(/(\s?)(var|let|const|=>|for|next|do|while|loop|continue|break|switch|try|catch|finally)(\s)/gim,"$1<b>$2</b>$3"))+"</code></pre>"},c=function(e){return(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=(e=e.replace(/^###### (.*?)\s*#*$/gm,"<h6>$1</h6>").replace(/^##### (.*?)\s*#*$/gm,"<h5>$1</h5>").replace(/^#### (.*?)\s*#*$/gm,"<h4>$1</h4>").replace(/^### (.*?)\s*#*$/gm,"<h3>$1</h3>").replace(/^## (.*?)\s*#*$/gm,"<h2>$1</h2>").replace(/^# (.*?)\s*#*$/gm,"<h1>$1</h1>")
 	.replace(/^<h(\d)\>(.*?)\s*{(.*)}\s*<\/h\d\>$/gm,'<h$1 id="$3">$2</h$1>')).replace(/^-{3,}|^\_{3,}|^\*{3,}$/gm,"<hr/>")).replace(/``(.*?)``/gm,function(e,l){return"<code>"+r(l).replace(/`/g,"`")+"</code>"})).replace(/`(.*?)`/gm,"<code>$1</code>")).replace(/^\>\> (.*$)/gm,"<blockquote><blockquote>$1</blockquote></blockquote>")).replace(/^\> (.*$)/gm,"<blockquote>$1</blockquote>")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n")).replace(/<\/blockquote\>\n<blockquote\>/g,"\n<br>")).replace(/!\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<img alt="$1" src="$2" $3 />')).replace(/!\[(.*?)\]\((.*?)\)/gm,'<img alt="$1" src="$2" />')).replace(/\[(.*?)\]\((.*?) "new"\)/gm,'<a href="$2" target=_new>$1</a>')).replace(/\[(.*?)\]\((.*?) "(.*?)"\)/gm,'<a href="$2" title="$3">$1</a>')).replace(/<http(.*?)\>/gm,'<a href="http$1">http$1</a>')).replace(/\[(.*?)\]\(\)/gm,'<a href="$1">$1</a>')).replace(/\[(.*?)\]\((.*?)\)/gm,'<a href="$2">$1</a>'))
-	.replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/\%SpcEtg\%(\d\d?)[ .](.*)([\n]?)/gm,"\%SpcEtg\%\n$1.$2\n").replace(/^\d\d?[ .](.*)([\n]??)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>")
+	.replace(/^[\*+-][ .](.*)/gm,"<ul><li>$1</li></ul>")).replace(/\%SpcEtg\%(\d\d?)[ .](.*)([\n]?)/gm,"\%SpcEtg\%\n$1.$2\n").replace(/^\d\d?[ .](.*)([\n]??)/gm,"<ol><li>$1</li></ol>").replace(/<\/li><\/ol><ol><li>/gm,"</li><li>")).replace(/^<[ou]l><li>(.*\%SpcStg\%.*\%SpcEtg\%.*)<\/li><\/[ou]l\>/gm,"$1").replace(/^\s{2,6}[\*+-][ .](.*)/gm,"<ul><ul><li>$1</li></ul></ul>")).replace(/^\s{2,6}\d[ .](.*)/gm,"<ul><ol><li>$1</li></ol></ul>")).replace(/<\/[ou]l\>\n\n<[ou]l\>/gm,"\n").replace(/<\/[ou]l\>\n<[ou]l\>/g,"")).replace(/<\/[ou]l\>\n<[ou]l\>/g,"\n").replace(/<\/li><\/ul><ul><li>/gm,"</li><li>")).replace(/\*\*\*(\w.*?[^\\])\*\*\*/gm,"<b><em>$1</em></b>")).replace(/\*\*(\w.*?[^\\])\*\*/gm,"<b>$1</b>")).replace(/\*(\w.*?[^\\])\*/gm,"<em>$1</em>")).replace(/___(\w.*?[^\\])___/gm,"<b><em>$1</em></b>")).replace(/__(\w.*?[^\\])__/gm,"<u>$1</u>")).replace(/~~(\w.*?)~~/gm,"<del>$1</del>")).replace(/\^\^(\w.*?)\^\^/gm,"<ins>$1</ins>")).replace(/\{\{(\w.*?)\}\}/gm,"<mark>$1</mark>")).replace(/^((?:\|[^|\r\n]*[^|\r\n\s]\s*)+\|(?:\r?\n|\r|))+/gm,function (matchedTable){return convertMarkdownTableToHtml(matchedTable);})).replace(/  \n/g,"\n<br/>")
 	//.replace(/\n\s*\n/g,"\n<p>\n")
 	).replace(/^ {4,10}(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/^\t(.*)/gm,function(e,l){return"<pre><code>"+r(l)+"</code></pre>"})).replace(/<\/code\><\/pre\>\n<pre\><code\>/g,"\n")).replace(/\\([`_~\*\+\-\.\^\\\<\>\(\)\[\]])/gm,"$1")},a=0,n=0,p="";for(e=(e=e.replace(/\r\n/g,"\n").replace(/\n~~~/g,"\n```")).replace(/```([^`]+)```/g,l);(a=e.indexOf("<code>"))>=0;)n=e.indexOf("</code>",a),p+=c(e.substr(0,a))+e.substr(a+6,n>0?n-a-6:mdtext.length),e=e.substr(n+7);return p+c(e)}
 
@@ -3163,6 +3167,7 @@ Current version: 83
 	var gametext_arr = []; //array of texts currently displayed
 	var redo_arr = []; //array of texts that are in the redo stack
 	var retry_prev_text = "" ; //when we retry, save the last version in case they want to undo
+	var retry_preserve_last = false; //if true, retrying does not delete any old text
 	var redo_prev_text = ""; //if we undo a retry, save a copy here so it can be reverted with redo
 	var pending_response_id = ""; //guid of response pending from horde server
 	var pending_response_horde = text_hordes[0]; //the url to poll for pending response from a v2 submit
@@ -3265,7 +3270,7 @@ Current version: 83
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
 
-		max_context_length: 1024,
+		max_context_length: 1600,
 		max_length: 120,
 		auto_ctxlen: true,
 		auto_genamt: true,
@@ -3761,14 +3766,14 @@ Current version: 83
 		}).catch((error) => {
 			if(!silent)
 			{
-				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
 			}
 			a1111_is_connected = false;
 		});
 		}).catch((error) => {
 			if(!silent)
 			{
-				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+				msgbox("A1111 Connect Error: " + error+"\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
 			}
 			a1111_is_connected = false;
 		});
@@ -3854,7 +3859,12 @@ Current version: 83
 	{
 		inputBox("Enter Automatic1111 API endpoint","A1111 Endpoint Selection",a1111_base_url,"Input A1111 API URL", ()=>{
 			let userinput = getInputBoxValue();
-			if (userinput != null && userinput.trim()!="") {
+			userinput = userinput.trim();
+			if(userinput!="" && userinput.slice(-1)=="/")
+			{
+				userinput = userinput.slice(0, -1);
+			}
+			if (userinput != null && userinput!="") {
 				a1111_base_url = userinput.trim();
 				connect_to_a1111(false);
 			}
@@ -6051,14 +6061,6 @@ Current version: 83
 				localsettings.saved_claude_addr = custom_claude_endpoint;
 				custom_claude_model = document.getElementById("custom_claude_model").value.trim();
 
-				if(document.getElementById("clauderenamecompat").checked)
-				{
-					localsettings.instruct_starttag = "Human:";
-					localsettings.chatname =  "Human";
-					localsettings.instruct_endtag = "Assistant:";
-					localsettings.chatopponent = "Assistant";
-				}
-
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_claude_model, "count": 1 }];
 				selected_workers = [];
 				if (perfdata == null) {
@@ -6115,6 +6117,10 @@ Current version: 83
 	{
 		document.getElementById("customendpointcontainer").classList.remove("hidden");
 		customapi_dropdown();
+	}
+	function dismiss_custom_endpoint()
+	{
+		document.getElementById("customendpointcontainer").classList.add("hidden");
 	}
 
 	function display_saveloadcontainer()
@@ -7009,8 +7015,8 @@ Current version: 83
 				document.getElementById('instruct_endtag').value = "\\nAnswer: ";
 				break;
 			case "6": //ChatML
-				document.getElementById('instruct_starttag').value = "<|im_start|>user";
-				document.getElementById('instruct_endtag').value = "<|im_end|><|im_start|>assistant";
+				document.getElementById('instruct_starttag').value = "<|im_end|>\\n<|im_start|>user\\n";
+				document.getElementById('instruct_endtag').value = "<|im_end|>\\n<|im_start|>assistant\\n";
 				break;
 			default:
 				break;
@@ -7289,6 +7295,7 @@ Current version: 83
 		redo_arr = [];
 		last_request_str = "No Requests Available";
 		retry_prev_text = "";
+		retry_preserve_last = false;
 		redo_prev_text = "";
 		nextgeneratedimagemilestone = generateimagesinterval;
 		pending_response_id = "";
@@ -7624,6 +7631,7 @@ Current version: 83
 			}
 			redo_arr = [];
 			retry_prev_text = "";
+			retry_preserve_last = false;
 			redo_prev_text = "";
 			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
@@ -8154,12 +8162,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in OAI generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8190,12 +8200,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Scale generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8229,7 +8241,7 @@ Current version: 83
 						}
 						else
 						{
-							claude_payload.prompt = claude_payload.prompt + " (cont.) Assistant:";
+							claude_payload.prompt = claude_payload.prompt + " Assistant:";
 						}
 
 					}
@@ -8258,12 +8270,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Claude generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8299,12 +8313,14 @@ Current version: 83
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in PaLM generation");
+							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
+						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8390,6 +8406,7 @@ Current version: 83
 					}
 				})
 				.catch((error) => {
+					retry_preserve_last = true;
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
@@ -8516,7 +8533,7 @@ Current version: 83
 					}, true);
 				}else{
 					image_db[imgid].queue = "Failed";
-					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --cors-allow-origins=*\n");
+					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
 				}
 			});
 		}
@@ -8752,6 +8769,8 @@ Current version: 83
 		if(gentxt!="")
 		{
 			gametext_arr.push(gentxt);
+		}else{
+			retry_preserve_last = true; //do not delete last message if retry is hit
 		}
 		if(localsettings.beep_on)
 		{
@@ -9010,6 +9029,8 @@ Current version: 83
 							{
 								handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 							}
+						}else{
+							retry_preserve_last = true;
 						}
 						synchro_polled_response = null;
 						synchro_pending_stream = "";
@@ -9030,6 +9051,7 @@ Current version: 83
 								clear_poll_flags();
 								render_gametext();
 								show_abort_button(false);
+								retry_preserve_last = true;
 								let errmsg = "Error encountered during text generation!\n";
 								if (data.message != null) {
 									errmsg += data.message;
@@ -9072,6 +9094,7 @@ Current version: 83
 												show_abort_button(false);
 											}).catch((error) => {
 												console.error('Error:', error);
+												retry_preserve_last = true;
 												clear_poll_flags();
 												render_gametext();
 												show_abort_button(false);
@@ -9107,6 +9130,7 @@ Current version: 83
 								}
 							}
 						}).catch((error) => {
+							retry_preserve_last = true;
 							console.error('Error:', error);
 							clear_poll_flags();
 							render_gametext();
@@ -9151,6 +9175,7 @@ Current version: 83
 				redo_arr = [];
 				last_reply_was_empty = false;
 				retry_prev_text = "";
+				retry_preserve_last = false;
 				redo_prev_text = "";
 
 				//stash images
@@ -10079,6 +10104,7 @@ Current version: 83
 					redo_arr.push(popped);
 				}
 			}
+			retry_preserve_last = false;
 			render_gametext();
 		}
 
@@ -10091,6 +10117,7 @@ Current version: 83
 	function btn_back() {
 		if (pending_response_id == "" && gametext_arr.length > 0) {
 			last_reply_was_empty = false;
+			retry_preserve_last = false;
 			if(retry_prev_text!="")
 			{
 				redo_prev_text = gametext_arr.pop();
@@ -10114,6 +10141,7 @@ Current version: 83
 		console.log("Redo All story");
 		if (pending_response_id == "" && redo_arr.length > 0) {
 			last_reply_was_empty = false;
+			retry_preserve_last = false;
 			while(redo_arr.length > 0)
 			{
 				retry_prev_text = "";
@@ -10135,12 +10163,14 @@ Current version: 83
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
 				retry_prev_text = "";
+				retry_preserve_last = false;
 				let popped = redo_arr.pop();
 				gametext_arr.push(popped);
 				render_gametext();
 			}else if (redo_prev_text != "") {
 				last_reply_was_empty = false;
 				retry_prev_text = gametext_arr.pop();
+				retry_preserve_last = false;
 				gametext_arr.push(redo_prev_text);
 				redo_prev_text = "";
 				render_gametext();
@@ -10157,7 +10187,11 @@ Current version: 83
 			let temp = gametext_arr[gametext_arr.length-1];
 			redo_prev_text = "";
 			retry_prev_text = "";
-			gametext_arr.pop();
+			if(!retry_preserve_last)
+			{
+				gametext_arr.pop();
+			}
+			retry_preserve_last = false;
 			submit_generation();
 			retry_prev_text = temp;
 			redo_arr = [];
@@ -11074,7 +11108,7 @@ Current version: 83
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
-				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick="dismiss_custom_endpoint()">Cancel</button>
 			</div>
 		</div>
 	</div>
@@ -11399,7 +11433,7 @@ Current version: 83
 
 					<div class="settingitem">
 						<div class="settinglabel">
-							<div class="justifyleft settingsmall">Additional Configs <span class="helpicon">?<span class="helptext">Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures.</span></span></div>
+							<div class="justifyleft settingsmall">Additional Configs <span class="helpicon">?<span class="helptext">Grammar Sampling (KCPP) - Allows you to constrain output to fit specific structures. Resets grammar state every generation unless Retain is checked.</span></span></div>
 							<button id="setgrammar" type="button" class="btn btn-primary" style="padding:2px 3px;margin-top:2px;font-size:11px;" onclick="selectGrammar()">Set Grammar</button>
 							<div class="settingsmall" style="padding:2px 3px;margin-top:4px;" title="Do not reset grammar on generate. May not work with multiple users.">Retain </div>
 						   	<input type="checkbox" id="grammar_retain_state" style="padding:2px 3px;margin-top:6px;height: max-content;">

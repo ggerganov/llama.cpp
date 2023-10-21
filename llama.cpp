@@ -2200,7 +2200,13 @@ static void llm_load_vocab(
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
                 if (!OldBPETokenizerMode)
                 {
-                    GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+                    auto validcodepoints = codepoints_from_utf8(word).size() > 0;
+                    GGML_ASSERT_CONTINUE(validcodepoints);
+                    if(!validcodepoints)
+                    {
+                        OldBPETokenizerMode = true;
+                        printf("\nFalling Back to older tokenizer...");
+                    }
                 }
 
                 std::string first;
@@ -2236,9 +2242,15 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        if (!OldBPETokenizerMode)
+       if (!OldBPETokenizerMode)
         {
-            GGML_ASSERT_CONTINUE(codepoints_from_utf8(word).size() > 0);
+            auto validcodepoints = codepoints_from_utf8(word).size() > 0;
+            GGML_ASSERT_CONTINUE(validcodepoints);
+            if(!validcodepoints)
+            {
+                OldBPETokenizerMode = true;
+                printf("\nFalling Back to older tokenizer...");
+            }
         }
 
         vocab.token_to_id[word] = i;
