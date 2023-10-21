@@ -105,7 +105,6 @@ void process_escapes(std::string& input) {
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
-    gpt_params default_params;
     const std::string arg_prefix = "--";
     llama_sampling_params & sparams = params.sparams;
 
@@ -547,11 +546,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, default_params);
-#ifndef LOG_DISABLE_LOGS
-            log_print_usage();
-#endif // LOG_DISABLE_LOGS
-            exit(0);
+            return false;
+
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
         } else if (arg == "--in-prefix-bos") {
@@ -610,22 +606,17 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
         } else {
-            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, default_params);
-            exit(1);
+            throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
     if (invalid_param) {
-        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
+        throw std::invalid_argument("error: invalid parameter for argument: " + arg);
     }
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
              params.instruct)) {
-        fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
+
+        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
     if (params.escape) {
@@ -753,6 +744,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("\n");
+#ifndef LOG_DISABLE_LOGS
+    log_print_usage();
+#endif // LOG_DISABLE_LOGS
 }
 
 std::string get_system_info(const gpt_params & params) {
