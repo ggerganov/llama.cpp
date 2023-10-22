@@ -1543,7 +1543,7 @@ struct llama_server_context
                             const int erased_blocks = (slot.num_prompt_tokens - slot.params.n_keep - n_block_size) / n_block_size;
                             std::vector<llama_token> new_tokens(prompt_tokens.begin(), prompt_tokens.begin() + slot.params.n_keep);
                             // Use half the left-over space in the context for the prompt
-                            new_tokens.insert(new_tokens.end(), prompt_tokens.end() + slot.params.n_keep + erased_blocks * n_block_size, prompt_tokens.end());
+                            new_tokens.insert(new_tokens.end(), prompt_tokens.begin() + slot.params.n_keep + erased_blocks * n_block_size, prompt_tokens.end());
                             LOG_VERBOSE("input truncated", {
                                                             {"n_ctx",  slot.n_ctx},
                                                             {"n_keep", slot.params.n_keep},
