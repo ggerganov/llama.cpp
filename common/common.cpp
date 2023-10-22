@@ -103,17 +103,19 @@ void process_escapes(std::string& input) {
 }
 
 bool gpt_params_parse(int argc, char** argv, gpt_params& params) {
+    bool result = true;
     try {
         if (!gpt_params_parse_ex(argc, argv, params)) {
             gpt_print_usage(argc, argv, gpt_params());
-            return false;
+            result = false;
         }
     }
     catch (const std::invalid_argument& ex) {
         fprintf(stderr, ex.what());
         gpt_print_usage(argc, argv, gpt_params());
-        return false;
+        result = false;
     }
+    return result;
 }
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
