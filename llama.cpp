@@ -5797,7 +5797,7 @@ static struct ggml_cgraph * llm_build_stablelm(
 
     const float freq_base    = cparams.rope_freq_base;
     const float freq_scale   = cparams.rope_freq_scale;
-    const float norm_rms_eps = hparams.f_norm_rms_eps;
+    const float norm_eps     = hparams.f_norm_eps;
 
     const int n_gpu_layers = model.n_gpu_layers;
 
@@ -5953,9 +5953,9 @@ static struct ggml_cgraph * llm_build_stablelm(
 
         // norm
         {
-            cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
+            cur = ggml_norm(ctx0, inpL, norm_eps);
             offload_func(cur);
-            ggml_set_name(cur, "rms_norm_0");
+            ggml_set_name(cur, "norm_0");
 
             // cur = cur*attn_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
@@ -6096,9 +6096,9 @@ static struct ggml_cgraph * llm_build_stablelm(
         {
             // norm
             {
-                cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
+                cur = ggml_norm(ctx0, inpFF, norm_eps);
                 offload_func(cur);
-                ggml_set_name(cur, "rms_norm_1");
+                ggml_set_name(cur, "norm_1");
 
                 // cur = cur*ffn_norm(broadcasted)
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
@@ -6152,14 +6152,19 @@ static struct ggml_cgraph * llm_build_stablelm(
 
     // norm
     {
-        cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
+        cur = ggml_norm(ctx0, cur, norm_eps);
         offload_func_nr(cur);
-        ggml_set_name(cur, "rms_norm_2");
+        ggml_set_name(cur, "norm_2");
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.output_norm);
         // offload_func_nr(cur); // TODO CPU + GPU mirrored backend
+        // ggml_set_name(cur, "result_norm");
+
+        cur = ggml_add(ctx0, cur, model.output_norm_b);
+        offload_func_nr(cur);
         ggml_set_name(cur, "result_norm");
+
     }
 
     // lm_head
