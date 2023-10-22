@@ -16602,6 +16602,10 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
+    if (tensor->op == GGML_OP_NONE) {
+        return;
+    }
+
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
     if (skip_cpu) {
