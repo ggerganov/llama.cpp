@@ -26,8 +26,8 @@ Command line options:
 -   `--embedding`: Enable embedding extraction, Default: disabled.
 -   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
 -   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
--   `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
--
+-   `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+-   `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 
 ## Build
 
@@ -161,6 +161,8 @@ node index.js
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
     `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+
+    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:` In this case, `[img-12]` will be replaced by the embeddings of the image id 12 in the following `image_data` array: `{..., "image_data": ["data": "<BASE64_STRING>", "id": 12]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
 
     *Result JSON:*
 
