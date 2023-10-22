@@ -413,7 +413,7 @@
           currentMessages.push(data);
           slot_id = data.slot_id;
           if (selected_image && !data.multimodal) {
-            alert("The server was no compiled for multimodal or the model projector can't be loaded.");
+            alert("The server was not compiled for multimodal or the model projector can't be loaded.");
             return;
           }
           transcriptUpdate([...history, [char, currentMessages]])
@@ -470,6 +470,7 @@
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
       await runLlama(prompt, {
         ...params.value,
+        slot_id: slot_id,
         stop: [],
       }, "");
     }

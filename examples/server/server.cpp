@@ -655,6 +655,7 @@ struct llama_server_context
     bool launch_slot_with_data(llama_client_slot* &slot, json data) {
         slot_params default_params;
         llama_sampling_params default_sparams;
+
         slot->params.stream           = json_value(data, "stream",            false);
         slot->params.cache_prompt     = json_value(data, "cache_prompt",      false);
         slot->params.n_predict        = json_value(data, "n_predict",         default_params.n_predict);
@@ -1141,10 +1142,10 @@ struct llama_server_context
         res.stop = false;
         res.result_json = json
         {
-            {"content",    tkn.text_to_send },
+            {"content",    tkn.text_to_send},
             {"stop",       false},
-            {"slot_id",    slot.id },
-            {"multimodal", multimodal }
+            {"slot_id",    slot.id},
+            {"multimodal", multimodal}
         };
         if (slot.sparams.n_probs > 0)
         {
@@ -1351,7 +1352,7 @@ struct llama_server_context
             switch (task.type)
             {
                 case COMPLETION_TASK: {
-                    llama_client_slot* slot = get_slot(json_value(task.data, "slot_id", -1));
+                    llama_client_slot *slot = get_slot(json_value(task.data, "slot_id", -1));
                     if (slot == nullptr)
                     {
                         LOG_TEE("slot unavailable\n");
@@ -1515,7 +1516,9 @@ struct llama_server_context
                         prefix_tokens.insert(prefix_tokens.end(), suffix_tokens.begin(), suffix_tokens.end());
                         prefix_tokens.push_back(llama_token_middle(ctx));
                         prompt_tokens = prefix_tokens;
-                    } else {
+                    }
+                    else
+                    {
                         prompt_tokens = tokenize(slot.prompt, system_prompt.empty());  // add BOS if there isn't system prompt
                     }
 
@@ -2069,7 +2072,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
 }
 
 static json format_partial_response(
-    llama_server_context &llama, llama_client_slot* slot, const std::string &content, const std::vector<completion_token_output> &probs
+    llama_server_context &llama, llama_client_slot *slot, const std::string &content, const std::vector<completion_token_output> &probs
 ) {
     json res = json
     {
