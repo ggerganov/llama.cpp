@@ -92,7 +92,7 @@ int main(int argc, char ** argv) {
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
 
-    llama_batch batch = llama_batch_init(512, 0);
+    llama_batch batch = llama_batch_init(512, 0, 1);
 
     // evaluate the initial prompt
     batch.n_tokens = tokens_list.size();
