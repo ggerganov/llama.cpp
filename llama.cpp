@@ -975,6 +975,21 @@ static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
+static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
+    std::vector<char> result(8, 0);
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+        GGML_ASSERT(check == -n_tokens);
+    }
+    else {
+        result.resize(n_tokens);
+    }
+
+    return std::string(result.data(), result.size());
+}
+
 //
 // globals
 //
@@ -7445,21 +7460,6 @@ void llama_sample_repetition_penalties(
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     }
-}
-
-static std::string llama_token_to_piece(const struct llama_context* ctx, llama_token token) {
-    std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
-    if (n_tokens < 0) {
-        result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
-        GGML_ASSERT(check == -n_tokens);
-    }
-    else {
-        result.resize(n_tokens);
-    }
-
-    return std::string(result.data(), result.size());
 }
 
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
