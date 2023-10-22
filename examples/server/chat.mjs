@@ -7,6 +7,11 @@ const args = process.argv.slice(2);
 const grammarJsonSchemaFile = args.find(
     (_, index) => args[index - 1] === "--grammar-json-schema"
 );
+
+const no_cached_prompt = args.find(
+    (_, index) => args[index - 1] === "--no-cache-prompt"
+) ?? "false";
+
 const grammarFile = args.find((_, index) => args[index - 1] === "--grammar");
 
 // Example usage: function,arguments
@@ -29,6 +34,9 @@ if (grammarJsonSchemaFile) {
 if (grammarFile) {
     grammar = readFileSync(grammarFile, 'utf-8')
 }
+
+// for cached prompt
+let slot_id = -1;
 
 const API_URL = 'http://127.0.0.1:8080'
 
@@ -76,6 +84,8 @@ async function chat_completion(question) {
             top_p: 0.9,
             n_keep: n_keep,
             n_predict: 256,
+            cache_prompt: no_cached_prompt === "false",
+            slot_id: slot_id,
             stop: ["\n### Human:"], // stop completion after generating this
             grammar,
             stream: true,
@@ -92,6 +102,7 @@ async function chat_completion(question) {
         const t = Buffer.from(chunk).toString('utf8')
         if (t.startsWith('data: ')) {
             const message = JSON.parse(t.substring(6))
+            slot_id = message.slot_id
             answer += message.content
             process.stdout.write(message.content)
             if (message.stop) {

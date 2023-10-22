@@ -131,6 +131,7 @@ pub fn build(b: *std.build.Builder) !void {
     const sampling = make.obj("sampling", "common/sampling.cpp");
     const grammar_parser = make.obj("grammar-parser", "common/grammar-parser.cpp");
     const train = make.obj("train", "common/train.cpp");
+    const clip = make.obj("clip", "examples/llava/clip.cpp");
 
     _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, sampling, console, grammar_parser });
     _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common });
@@ -139,7 +140,7 @@ pub fn build(b: *std.build.Builder) !void {
     _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, train });
     _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, train });
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, sampling, grammar_parser });
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, sampling, grammar_parser, clip });
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
     }
