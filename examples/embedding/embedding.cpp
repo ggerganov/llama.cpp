@@ -11,15 +11,7 @@
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    try {
-        if (!gpt_params_parse(argc, argv, params)) {
-            gpt_print_usage(argc, argv, gpt_params());
-            return 1;
-        }
-    }
-    catch (const std::invalid_argument& ex) {
-        fprintf(stderr, ex.what());
-        gpt_print_usage(argc, argv, gpt_params());
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
