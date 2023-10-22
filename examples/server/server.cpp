@@ -1358,14 +1358,16 @@ struct llama_server_context
             {
                 case COMPLETION_TASK: {
                     llama_client_slot* slot = get_slot(json_value(task.data, "slot_id", -1));
-                    if (slot == nullptr) {
+                    if (slot == nullptr)
+                    {
                         LOG_TEE("slot unavailable\n");
                         // send error result
                         send_error(task.id, "slot unavaliable");
                         return;
                     }
 
-                    if (task.data.contains("system_prompt")) {
+                    if (task.data.contains("system_prompt"))
+                    {
                         process_system_prompt_data(task.data["system_prompt"]);
                     }
 
@@ -1380,7 +1382,7 @@ struct llama_server_context
                         send_error(task.id, "internal_error");
                         break;
                     }
-                }
+                } break;
                 case CANCEL_TASK: { // release slot linked with the task id
                     for (auto & slot : slots) {
                         if (slot.task_id == task.target_id) {
@@ -1388,11 +1390,7 @@ struct llama_server_context
                             break;
                         }
                     }
-                }
-                    break;
-
-                default:
-                    break;
+                } break;
             }
         }
     }
