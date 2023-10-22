@@ -158,6 +158,7 @@ struct task_result {
     json result_json;
 };
 
+// TODO: can become bool if we can't find use of more states
 enum slot_state
 {
     IDLE,
@@ -188,11 +189,14 @@ struct slot_params
 
 struct slot_image
 {
-    clip_image_u8 img_data;
+    int32_t id;
+
     bool request_encode_image = false;
     float* image_embedding = nullptr;
-    int image_tokens = 0;
-    int id;
+    int32_t image_tokens = 0;
+
+    clip_image_u8 img_data;
+
     std::string prefix_prompt; // before of this image
 };
 
@@ -769,8 +773,8 @@ struct llama_server_context
             {
                 for (const auto &img : *images_data)
                 {
-                    slot_image img_sl;
                     std::string data_b64 = img["data"].get<std::string>();
+                    slot_image img_sl;
                     img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
                     int width, height, channels;
                     std::vector<uint8_t> image_buffer = base64_decode(data_b64);
