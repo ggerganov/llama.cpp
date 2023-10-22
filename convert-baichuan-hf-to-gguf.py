@@ -230,7 +230,7 @@ gguf_writer.add_token_list(tokens)
 gguf_writer.add_token_scores(scores)
 gguf_writer.add_token_types(toktypes)
 
-special_vocab = gguf.SpecialVocab(dir_model)
+special_vocab = gguf.SpecialVocab(dir_model, n_vocab = len(tokens))
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS

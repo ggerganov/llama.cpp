@@ -761,6 +761,9 @@ int main(int argc, char ** argv) {
                         n_consumed = embd_inp.size();
                         embd_inp.insert(embd_inp.end(), inp_pfx.begin(), inp_pfx.end());
                     }
+                    if (params.escape) {
+                        process_escapes(buffer);
+                    }
 
                     const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
                     const auto line_inp = ::llama_tokenize(ctx, buffer,              false, false);
