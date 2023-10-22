@@ -112,14 +112,20 @@ vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
 assert max(tokenizer.vocab.values()) < vocab_size
 
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
+added_vocab = tokenizer.get_added_vocab()
 
 for i in range(vocab_size):
-    tokens.append(reverse_vocab[i] if i in reverse_vocab else f"[PAD{i}]")
-    scores.append(0.0) # dummy
-    toktypes.append(gguf.TokenType.NORMAL)
+    if i not in reverse_vocab:
+        tokens.append(f"[PAD{i}]")
+        toktypes.append(gguf.TokenType.USER_DEFINED)
+    elif reverse_vocab[i] in added_vocab:
+        tokens.append(reverse_vocab[i])
+        toktypes.append(gguf.TokenType.USER_DEFINED)
+    else:
+        tokens.append(reverse_vocab[i])
+        toktypes.append(gguf.TokenType.NORMAL)
 
 gguf_writer.add_token_list(tokens)
-gguf_writer.add_token_scores(scores)
 gguf_writer.add_token_types(toktypes)
 
 special_vocab = gguf.SpecialVocab(dir_model, load_merges = True)
