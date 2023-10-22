@@ -161,7 +161,6 @@ struct task_result {
 enum slot_state
 {
     IDLE,
-    SLEEPING,
     PROCESSING,
 };
 
@@ -347,6 +346,9 @@ struct llama_client_slot
     slot_state state = IDLE;
     slot_command command = NONE;
 
+    // used to determine the slot that has been used the longest
+    int64_t t_last_used = -1;
+
     // generation props
     int32_t n_ctx       = 0;  // context size per slot
     int32_t n_past      = 0;
@@ -435,7 +437,7 @@ struct llama_client_slot
     }
 
     bool is_processing() const {
-        return ((state == IDLE || state == SLEEPING) && command == LOAD_PROMPT) || state == PROCESSING;
+        return (state == IDLE && command == LOAD_PROMPT) || state == PROCESSING;
     }
 
     void add_token_string(const completion_token_output &token) {
@@ -643,14 +645,24 @@ struct llama_server_context
     }
 
     llama_client_slot* get_slot(int id) {
+        int64_t t_last = ggml_time_us();
+        llama_client_slot *last_used = nullptr;
+
         for (llama_client_slot & slot : slots)
         {
-            if ((id == -1 && slot.available()) || slot.id == id)
+            if (slot.id == id && slot.available())
             {
                 return &slot;
             }
+
+            if (slot.available() && slot.t_last_used < t_last)
+            {
+                last_used = &slot;
+                t_last = slot.t_last_used;
+            }
         }
-        return nullptr;
+
+        return last_used;
     }
 
     bool launch_slot_with_data(llama_client_slot* &slot, json data) {
@@ -1484,22 +1496,16 @@ struct llama_server_context
             // release the slot
             if (slot.state == PROCESSING && slot.command == RELEASE)
             {
-                slot.state = slot.params.cache_prompt ? SLEEPING : IDLE;
-                if (slot.state == SLEEPING) {
-                    LOG_TEE("slot %i has %i tokens in cache.\n", slot.id, (int) slot.cache_tokens.size());
-                }
-                else
-                {
-                    LOG_TEE("slot %i released\n", slot.id);
-                }
+                slot.state = IDLE;
                 slot.command = NONE;
+                slot.t_last_used = ggml_time_us();
+
+                LOG_TEE("slot %d released (%d tokens in cache)\n", slot.id, (int) slot.cache_tokens.size());
+
                 continue;
             }
 
-            if (
-                slot.state == IDLE ||
-                slot.state == SLEEPING ||
-                slot.command == RELEASE)
+            if (slot.state == IDLE || slot.command == RELEASE)
             {
                 continue;
             }
@@ -1521,7 +1527,7 @@ struct llama_server_context
             for (auto & slot : slots)
             {
                 // need process the prompt
-                if ((slot.state == IDLE || slot.state == SLEEPING) && slot.command == LOAD_PROMPT)
+                if (slot.state == IDLE && slot.command == LOAD_PROMPT)
                 {
                     slot.state = PROCESSING;
                     slot.command = NONE;
