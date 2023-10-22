@@ -1080,6 +1080,8 @@ struct train_params_common get_default_train_params_common() {
     params.adam_beta2          = 0.999f;
     params.adam_gclip          = 1.0f;
     params.adam_eps_f          = 0.0f;
+
+    params.n_gpu_layers        = 0;
     return params;
 }
 
