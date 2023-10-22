@@ -132,15 +132,16 @@ added_vocab = tokenizer.get_added_vocab()
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
 
 for i in range(vocab_size):
-    if i in reverse_vocab:
-        tokens.append(reverse_vocab[i])
-        if reverse_vocab[i] not in added_vocab:
-            toktypes.append(gguf.TokenType.NORMAL)
-        else:
-            toktypes.append(gguf.TokenType.USER_DEFINED)
-    else:
+    if i not in reverse_vocab:
         tokens.append(f"[PAD{i}]")
         toktypes.append(gguf.TokenType.USER_DEFINED)
+    elif reverse_vocab[i] in added_vocab:
+        # NOTE: wouldn't we like to distinguish CONTROL tokens here?
+        tokens.append(reverse_vocab[i])
+        toktypes.append(gguf.TokenType.USER_DEFINED)
+    else:
+        tokens.append(reverse_vocab[i])
+        toktypes.append(gguf.TokenType.NORMAL)
 
 gguf_writer.add_token_list(tokens)
 gguf_writer.add_token_types(toktypes)
