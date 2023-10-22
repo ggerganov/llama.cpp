@@ -1425,7 +1425,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched, bool * canc
 
         int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
         if (impr_plot > 0) impr_plot = 0;
-        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
+        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_after)) impr_plot = 0;
         printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
             __func__, opt->iter, std::min(1+train->shuffle_next_sample, train->shuffle_sample_count), train->shuffle_sample_count,
             *sched, opt->loss_after);

@@ -112,8 +112,7 @@ static float get_f32(const gguf_context * ctx, const std::string & key) {
 static struct ggml_tensor * get_tensor(struct ggml_context * ctx, const std::string & name) {
     struct ggml_tensor * cur = ggml_get_tensor(ctx, name.c_str());
     if (!cur) {
-        printf("unable to find tensor %s\n", name.c_str());
-        throw std::runtime_error(format("unable to find tensor %s\n", name.c_str()));
+        throw std::runtime_error(format("%s: unable to find tensor %s\n", __func__, name.c_str()));
     }
 
     return cur;
@@ -136,7 +135,7 @@ static std::string get_ftype(int ftype) {
     case 8:
         return "q8_0";
     default:
-        throw std::runtime_error(format("Unrecognized file type: %d\n", ftype));
+        throw std::runtime_error(format("%s: Unrecognized file type: %d\n", __func__, ftype));
     }
 }
 
@@ -462,6 +461,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     };
 
     struct gguf_context * ctx = gguf_init_from_file(fname, params);
+    if (!ctx) {
+        throw std::runtime_error(format("%s: failed to load CLIP model from %s. Does this file exist?\n", __func__, fname));
+    }
 
     if (verbosity >= 1) {
         const int n_tensors = gguf_get_n_tensors(ctx);

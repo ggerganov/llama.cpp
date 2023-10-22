@@ -1489,46 +1489,45 @@ static void ggml_cl_mul_mat_f32(const ggml_tensor * src0, const ggml_tensor * sr
     cl_mem d_D = ggml_cl_pool_malloc(sizeof(float) * d_ne, &d_size);
 
     size_t x_offset = 0;
-    int64_t pi02 = -1;
-    int64_t pi03 = -1;
 
-    for (int64_t i13 = 0; i13 < ne13; i13++) {
-        int64_t i03 = i13 / r3;
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        // TODO: copy src0 here when r3>1
+        for (int64_t i13 = i03 * r3, e13 = i13 + r3; i13 < e13; i13++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                if (src0->backend == GGML_BACKEND_GPU) {
+                    x_offset = (i03 * ne02 + i02) * x_ne;
+                } else {
+                    // copy src0 to device
+                    CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
+                }
 
-        for (int64_t i12 = 0; i12 < ne12; i12++) {
-            int64_t i02 = i12 / r2;
+                for (int64_t i12 = i02 * r2, e12 = i12 + r2; i12 < e12; i12++) {
+                    // copy src1 to device
+                    CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, NULL));
 
-            // copy data to device
-            if (src0->backend == GGML_BACKEND_GPU) {
-                x_offset = (i03 * ne02 + i02) * x_ne;
-            } else if (i02 != pi02 || i03 != pi03) {
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
-                pi02 = i02;
-                pi03 = i03;
+                    CL_CHECK(clFinish(queue));
+
+                    // compute
+                    cl_event ev_sgemm;
+                    clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
+                                                               clblast::Transpose::kYes, clblast::Transpose::kNo,
+                                                               ne01, ne11, ne10,
+                                                               alpha,
+                                                               d_X, x_offset, ne00,
+                                                               d_Y, 0, ne10,
+                                                               beta,
+                                                               d_D, 0, ne01,
+                                                               &queue, &ev_sgemm);
+
+                    if (status != clblast::StatusCode::kSuccess) {
+                        GGML_ASSERT(false);
+                    }
+
+                    // copy dst to host
+                    float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
+                    CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL));
+                }
             }
-            CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, NULL));
-
-            CL_CHECK(clFinish(queue));
-
-            // compute
-            cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
-                                                       clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                       ne01, ne11, ne10,
-                                                       alpha,
-                                                       d_X, x_offset, ne00,
-                                                       d_Y, 0, ne10,
-                                                       beta,
-                                                       d_D, 0, ne01,
-                                                       &queue, &ev_sgemm);
-
-            if (status != clblast::StatusCode::kSuccess) {
-                GGML_ASSERT(false);
-            }
-
-            // copy dst to host
-            float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
-            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &ev_sgemm, NULL));
         }
     }
 
@@ -1589,73 +1588,70 @@ static void ggml_cl_mul_mat_f16(const ggml_tensor * src0, const ggml_tensor * sr
     bool src1_cont_cols = (size_t)nb11 == ne11*sizeof(float);
 
     size_t x_offset = 0;
-    int64_t pi02 = -1;
-    int64_t pi03 = -1;
 
-    for (int64_t i13 = 0; i13 < ne13; i13++) {
-        int64_t i03 = i13 / r3;
-
-        for (int64_t i12 = 0; i12 < ne12; i12++) {
-            int64_t i02 = i12 / r2;
-
-            // copy src0 to device
-            if (src0->backend == GGML_BACKEND_GPU) {
-                x_offset = (i03 * ne02 + i02) * x_ne;
-            } else if (i02 != pi02 || i03 != pi03) {
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
-                pi02 = i02;
-                pi03 = i03;
-            }
-
-            // convert src1 to fp16
-            // TODO: use multiple threads
-            char * src1i = (char *) src1->data + i13*nb13 + i12*nb12;
-            if (src1_cont_rows) {
-                if (src1_cont_cols) {
-                    ggml_fp32_to_fp16_row((float *) src1i, tmp, ne10*ne11);
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        // TODO: copy src0 here when r3>1
+        for (int64_t i13 = i03 * r3, e13 = i13 + r3; i13 < e13; i13++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                if (src0->backend == GGML_BACKEND_GPU) {
+                    x_offset = (i03 * ne02 + i02) * x_ne;
+                } else {
+                    // copy src0 to device
+                    CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_X, 0, src0, i03, i02, NULL));
                 }
-                else {
-                    for (int64_t i11 = 0; i11 < ne11; i11++) {
-                        ggml_fp32_to_fp16_row((float *) (src1i + i11*nb11), tmp + i11*ne10, ne10);
+
+                for (int64_t i12 = i02 * r2, e12 = i12 + r2; i12 < e12; i12++) {
+                    // convert src1 to fp16
+                    // TODO: use multiple threads
+                    char * src1i = (char *) src1->data + i13*nb13 + i12*nb12;
+                    if (src1_cont_rows) {
+                        if (src1_cont_cols) {
+                            ggml_fp32_to_fp16_row((float *) src1i, tmp, ne10*ne11);
+                        }
+                        else {
+                            for (int64_t i11 = 0; i11 < ne11; i11++) {
+                                ggml_fp32_to_fp16_row((float *) (src1i + i11*nb11), tmp + i11*ne10, ne10);
+                            }
+                        }
                     }
-                }
-            }
-            else {
-                for (int64_t i11 = 0; i11 < ne11; i11++) {
-                    for (int64_t i10 = 0; i10 < ne10; i10++) {
-                        // very slow due to no inlining
-                        tmp[i11*ne10 + i10] = ggml_fp32_to_fp16(*(float *) (src1i + i11*nb11 + i10*nb10));
+                    else {
+                        for (int64_t i11 = 0; i11 < ne11; i11++) {
+                            for (int64_t i10 = 0; i10 < ne10; i10++) {
+                                // very slow due to no inlining
+                                tmp[i11*ne10 + i10] = ggml_fp32_to_fp16(*(float *) (src1i + i11*nb11 + i10*nb10));
+                            }
+                        }
                     }
+
+                    // copy src1 to device
+                    CL_CHECK(clEnqueueWriteBuffer(queue, d_Y, false, 0, sizeof(ggml_fp16_t) * y_ne, tmp, 0, NULL, NULL));
+
+                    CL_CHECK(clFinish(queue));
+
+                    // compute
+                    cl_event ev_sgemm;
+                    clblast::StatusCode status = clblast::Gemm<cl_half>(clblast::Layout::kColMajor,
+                                                               clblast::Transpose::kYes, clblast::Transpose::kNo,
+                                                               ne01, ne11, ne10,
+                                                               alpha,
+                                                               d_X, x_offset, ne00,
+                                                               d_Y, 0, ne10,
+                                                               beta,
+                                                               d_D, 0, ne01,
+                                                               &queue, &ev_sgemm);
+
+                    if (status != clblast::StatusCode::kSuccess) {
+                        GGML_ASSERT(false);
+                    }
+
+                    // copy dst to host, then convert to float
+                    CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(ggml_fp16_t) * d_ne, tmp, 1, &ev_sgemm, NULL));
+
+                    float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
+
+                    ggml_fp16_to_fp32_row(tmp, d, d_ne);
                 }
             }
-
-            // copy src1 to device
-            CL_CHECK(clEnqueueWriteBuffer(queue, d_Y, false, 0, sizeof(ggml_fp16_t) * y_ne, tmp, 0, NULL, NULL));
-
-            CL_CHECK(clFinish(queue));
-
-            // compute
-            cl_event ev_sgemm;
-            clblast::StatusCode status = clblast::Gemm<cl_half>(clblast::Layout::kColMajor,
-                                                       clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                       ne01, ne11, ne10,
-                                                       alpha,
-                                                       d_X, x_offset, ne00,
-                                                       d_Y, 0, ne10,
-                                                       beta,
-                                                       d_D, 0, ne01,
-                                                       &queue, &ev_sgemm);
-
-            if (status != clblast::StatusCode::kSuccess) {
-                GGML_ASSERT(false);
-            }
-
-            // copy dst to host, then convert to float
-            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(ggml_fp16_t) * d_ne, tmp, 1, &ev_sgemm, NULL));
-
-            float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
-
-            ggml_fp16_to_fp32_row(tmp, d, d_ne);
         }
     }
 
@@ -1718,85 +1714,81 @@ static void ggml_cl_mul_mat_q_f32(const ggml_tensor * src0, const ggml_tensor * 
     size_t ev_idx = 0;
     std::vector<cl_event> events;
 
-    int64_t pi02 = -1;
-    int64_t pi03 = -1;
-
-    for (int64_t i13 = 0; i13 < ne13; i13++) {
-        int64_t i03 = i13 / r3;
-
-        for (int64_t i12 = 0; i12 < ne12; i12++) {
-            int64_t i02 = i12 / r2;
-
-            // copy src0 to device if necessary
-            if (src0->backend == GGML_BACKEND_CPU) {
-                if (i02 != pi02 || i03 != pi03) {
+    for (int64_t i03 = 0; i03 < ne03; i03++) {
+        // TODO: copy and dequantize src0 here when r3>1
+        for (int64_t i13 = i03 * r3, e13 = i13 + r3; i13 < e13; i13++) {
+            for (int64_t i02 = 0; i02 < ne02; i02++) {
+                // copy src0 to device if necessary
+                if (src0->backend == GGML_BACKEND_CPU) {
                     events.emplace_back();
                     CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Q, 0, src0, i03, i02, events.data() + ev_idx++));
-                    pi02 = i02;
-                    pi03 = i03;
-                }
-            } else if (src0->backend == GGML_BACKEND_GPU) {
-                d_Q = (cl_mem) src0->extra;
-            } else {
-                GGML_ASSERT(false);
-            }
-            if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
-                // copy src1 to device
-                events.emplace_back();
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, events.data() + ev_idx++));
-
-                // compute
-                const size_t global = ne01 * local;
-                const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
-                const cl_int ncols = ne00;
-                events.emplace_back();
-                CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
-                CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
-                CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
-                CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
-                CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, &offset, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
-            } else { // general dequantization kernel + CLBlast matrix matrix multiplication
-                // convert src0 to fp32 on device
-                const size_t global = x_ne / global_denom;
-                const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
-                CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
-                CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
-                CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, offset > 0 ? &offset : NULL, &global, local > 0 ? &local : NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
-
-                // copy src1 to device
-                CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, NULL));
-
-                events.emplace_back();
-
-                // wait for conversion
-                CL_CHECK(clFinish(queue));
-
-                // compute
-                clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
-                                                           clblast::Transpose::kYes, clblast::Transpose::kNo,
-                                                           ne01, ne11, ne10,
-                                                           alpha,
-                                                           d_X, 0, ne00,
-                                                           d_Y, 0, ne10,
-                                                           beta,
-                                                           d_D, 0, ne01,
-                                                           &queue, events.data() + ev_idx++);
-
-                if (status != clblast::StatusCode::kSuccess) {
+                } else if (src0->backend == GGML_BACKEND_GPU) {
+                    d_Q = (cl_mem) src0->extra;
+                } else {
                     GGML_ASSERT(false);
                 }
-            }
 
-            // copy dst to host
-            float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
-            CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
-            for (auto *event : events) {
-                clReleaseEvent(event);
-            }
+                if (!mul_mat_vec) {
+                    // convert src0 to fp32 on device
+                    const size_t global = x_ne / global_denom;
+                    const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
+                    CL_CHECK(clSetKernelArg(*to_fp32_cl, 0, sizeof(cl_mem), &d_Q));
+                    CL_CHECK(clSetKernelArg(*to_fp32_cl, 1, sizeof(cl_mem), &d_X));
+                    CL_CHECK(clEnqueueNDRangeKernel(queue, *to_fp32_cl, 1, &offset, &global, local > 0 ? &local : NULL, events.size(), !events.empty() ? events.data() : NULL, NULL));
+                }
 
-            ev_idx = 0;
-            events.clear();
+                for (int64_t i12 = i02 * r2, e12 = i12 + r2; i12 < e12; i12++) {
+                    if (mul_mat_vec) { // specialized dequantize_mul_mat_vec kernel
+                        // copy src1 to device
+                        events.emplace_back();
+                        CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, events.data() + ev_idx++));
+
+                        // compute
+                        const size_t global = ne01 * local;
+                        const size_t offset = src0->backend == GGML_BACKEND_GPU ? (i03 * ne02 + i02) * x_bps : 0;
+                        const cl_int ncols = ne00;
+                        events.emplace_back();
+                        CL_CHECK(clSetKernelArg(*dmmv, 0, sizeof(cl_mem), &d_Q));
+                        CL_CHECK(clSetKernelArg(*dmmv, 1, sizeof(float) * local, NULL));
+                        CL_CHECK(clSetKernelArg(*dmmv, 2, sizeof(cl_mem), &d_Y));
+                        CL_CHECK(clSetKernelArg(*dmmv, 3, sizeof(cl_mem), &d_D));
+                        CL_CHECK(clSetKernelArg(*dmmv, 4, sizeof(cl_int), &ncols));
+                        CL_CHECK(clEnqueueNDRangeKernel(queue, *dmmv, 1, &offset, &global, &local, events.size() - 1, events.data(), events.data() + ev_idx++));
+                    } else { // CLBlast matrix matrix multiplication
+                        // copy src1 to device
+                        CL_CHECK(ggml_cl_h2d_tensor_2d(queue, d_Y, 0, src1, i13, i12, NULL));
+
+                        // wait for conversion
+                        CL_CHECK(clFinish(queue));
+
+                        // compute
+                        events.emplace_back();
+                        clblast::StatusCode status = clblast::Gemm<cl_float>(clblast::Layout::kColMajor,
+                                                                   clblast::Transpose::kYes, clblast::Transpose::kNo,
+                                                                   ne01, ne11, ne10,
+                                                                   alpha,
+                                                                   d_X, 0, ne00,
+                                                                   d_Y, 0, ne10,
+                                                                   beta,
+                                                                   d_D, 0, ne01,
+                                                                   &queue, events.data() + ev_idx++);
+
+                        if (status != clblast::StatusCode::kSuccess) {
+                            GGML_ASSERT(false);
+                        }
+                    }
+
+                    // copy dst to host
+                    float * d = (float *) ((char *) dst->data + i12*nb2 + i13*nb3);
+                    CL_CHECK(clEnqueueReadBuffer(queue, d_D, true, 0, sizeof(float) * d_ne, d, 1, &events[events.size() - 1], NULL));
+                    for (auto *event : events) {
+                        clReleaseEvent(event);
+                    }
+
+                    ev_idx = 0;
+                    events.clear();
+                }
+            }
         }
     }
 
