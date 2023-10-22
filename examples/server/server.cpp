@@ -2440,20 +2440,31 @@ int main(int argc, char **argv)
                                           {"hostname", sparams.hostname},
                                           {"port", sparams.port},
                                       });
-    std::thread t([&llama]()
-        {
-            bool running = true;
-            while (running)
-            {
-                running = llama.update_slots();
-            }
-        }
-    );
 
-    if (!svr.listen_after_bind())
+    // run the HTTP server in a thread - see comment below
+    std::thread t([&]()
+            {
+                if (!svr.listen_after_bind())
+                {
+                    return 1;
+                }
+
+                return 0;
+            });
+
+    // GG: if I put the main loop inside a thread, it crashes on the first request when build in Debug!?
+    //     "Bus error: 10" - this is on macOS, it does not crash on Linux
+    //std::thread t2([&]()
     {
-        return 1;
+        bool running = true;
+        while (running)
+        {
+            running = llama.update_slots();
+        }
     }
+    //);
+
+    t.join();
 
     llama_backend_free();
     return 0;
