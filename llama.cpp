@@ -5790,6 +5790,7 @@ static struct ggml_cgraph * llm_build_stablelm(
     const int64_t n_embd      = hparams.n_embd;
     const int64_t n_layer     = hparams.n_layer;
     const int64_t n_ctx       = cparams.n_ctx;
+    const int64_t n_rot       = hparams.n_rot;
     const int64_t n_head      = hparams.n_head;
     const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_embd_head = hparams.n_embd_head();
@@ -5932,7 +5933,7 @@ static struct ggml_cgraph * llm_build_stablelm(
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
-                        K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
+                        K_shift, n_rot, 2, 0, freq_base, freq_scale);
             offload_func_kq(tmp);
             ggml_build_forward_expand(gf, tmp);
         }
@@ -5979,11 +5980,11 @@ static struct ggml_cgraph * llm_build_stablelm(
             offload_func_kq(tmpq);
             ggml_set_name(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_rot, 2, 0, freq_base, freq_scale);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_rot, 2, 0, freq_base, freq_scale);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
