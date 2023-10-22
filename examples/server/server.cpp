@@ -1539,10 +1539,12 @@ struct llama_server_context
                         }
                         auto prefix_tokens = tokenize(slot.params.input_prefix, false);
                         auto suffix_tokens = tokenize(slot.params.input_suffix, false);
-                        const int space_token = 29871;
-                        if (suff_rm_leading_spc  && suffix_tokens[0] == space_token) {
+
+                        const int space_token = 29871; // TODO: this should not be hardcoded
+                        if (suff_rm_leading_spc && !suffix_tokens.empty() && suffix_tokens[0] == space_token) {
                             suffix_tokens.erase(suffix_tokens.begin());
                         }
+
                         prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(ctx));
                         prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(ctx)); // always add BOS
                         prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(ctx));
