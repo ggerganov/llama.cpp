@@ -5910,6 +5910,7 @@ inline void ggml_cuda_op_add(
     } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
         add_f16_f32_f16_cuda((const half *) src0_dd, src1_dd, (half *) dst_dd, ggml_nelements(src0), main_stream);
     } else {
+        fprintf(stderr, "%d, %d\n", src0->type, dst->type);
         GGML_ASSERT(false);
     }
 
