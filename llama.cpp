@@ -5815,6 +5815,24 @@ static struct ggml_cgraph * llama_build_graph(
             GGML_ASSERT(false);
     }
 
+#if 1
+    for (int i = 0; i < result->n_nodes; ++i) {
+        struct ggml_tensor * node = result->nodes[i];
+        if (getenv("SKIP_KQ_ALL")) {
+            if (
+                    strcmp(node->name, "KQ")  == 0 ||
+                    strcmp(node->name, "KQ_scaled") == 0 ||
+                    strcmp(node->name, "KQ_masked") == 0 ||
+                    strcmp(node->name, "KQ_soft_max") == 0 ||
+                    strcmp(node->name, "KQV") == 0 ||
+                    false) {
+                //printf("skipping %s\n", dst->name);
+                node->op  = GGML_OP_NONE;
+            }
+        }
+    }
+#endif
+
     return result;
 }
 
