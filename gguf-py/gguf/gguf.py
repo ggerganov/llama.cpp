@@ -89,7 +89,7 @@ class MODEL_ARCH(IntEnum):
     REFACT        : int = auto()
     BERT          : int = auto()
     BLOOM         : int = auto()
-    STABLELM         : int = auto()
+    STABLELM      : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -129,7 +129,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.BLOOM:          "bloom",
-    MODEL_ARCH.STABLELM:          "stablelm",
+    MODEL_ARCH.STABLELM:       "stablelm",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
