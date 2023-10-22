@@ -5990,7 +5990,7 @@ static struct ggml_cgraph * llm_build_stablelm(
         for (int h = 0; h < 1; ++h) {
             for (int j = 0; j < n_tokens; ++j) {
                 const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j];
+                const llama_seq_id seq_id = batch.seq_id[j][0];
 
                 for (int i = 0; i < n_kv; ++i) {
                     if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
