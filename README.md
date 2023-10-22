@@ -57,6 +57,10 @@ For more information, be sure to run the program with the `--help` flag.
 ## AMD
 - Please check out https://github.com/YellowRoseCx/koboldcpp-rocm
 
+## Cloud / Colab
+- KoboldCpp now has an official Colab GPU Notebook! [Try it here](https://colab.research.google.com/github/LostRuins/koboldcpp/blob/concedo/colab.ipynb).
+- Note that KoboldCpp is not responsible for your usage of this Colab Notebook, you should ensure that your own usage complies with Google Colab's terms of use.
+
 ## Questions and Help
 - **First, please check out [The KoboldCpp FAQ and Knowledgebase](https://github.com/LostRuins/koboldcpp/wiki) which may already have answers to your questions! Also please search through past issues and discussions.**
 - If you cannot find an answer, open an issue on this github, or find us on the [KoboldAI Discord](https://koboldai.org/discord).

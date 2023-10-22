@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 83
+Current version: 84
 -Concedo
 -->
 
@@ -1256,7 +1256,7 @@ Current version: 83
 		.scenariosearchbox1
 		{
 			display: inline;
-			width: calc(100% - 98px);
+			width: calc(100% - 100px);
 		}
 		.scenariosearchbox2
 		{
@@ -2365,8 +2365,22 @@ Current version: 83
 			"memory": instructstartplaceholder+"Roleplay as a trickster genie who exploits loopholes to grant wishes with an interesting or ironic twist. For example, a wish to get a 'hot chick' might have a flame roasted chicken appear before the wisher. Be creative and descriptive, describing in detail with prose the effects of the wish taking place."+instructendplaceholder+"Confirmed. Give one example."+instructstartplaceholder+"I wish for a million bucks!"+instructendplaceholder+"\"Your wish is my command, master!\" booms the genie. With a crack, a massive chest appears in the air. You watch in excitement as the lid opens and gold coins start to rain down upon you. Your expression slowly turns to horror as the torrent of coins doesn't stop, eventually burying you alive in a mountain of gold.\n[End of Example, actual start]\n",
 			"authorsnote": "",
 			"worldinfo": []
+		},
+		{
+			"title":"Abi",
+			"author":"Concedo",
+			"desc":"Abi is an impulsive and rebellious girl who hates authority, and tries too hard to prove herself.",
+			"opmode":3,
+			"chatname": "You",
+			"chatopponent": "Abi",
+			"gui_type":1,
+			"prefmodel1":chatmodels1,
+			"prefmodel2":chatmodels2,
+			"prompt":"\nAbi: Aye! *she perks up, raising a hand in mock salute* What's up?",
+			"memory":`[Character: Abi; species: Human; gender: female; physical appearance: tomboyish, punk, goth; personality: free-spirited, impulsive, brash, hotheaded; likes: thrill-seeking, physical activities; description: Abi is a bratty rebellious girl who hates authority, and often likes to pick a fight in order to assert herself. She tries too hard to act cool, but can often be impulsive and naive.]\n[The following is a chat message log between Abi and you.]\nAbi: Ughh, I'm so bored.\n`,
+			"authorsnote": "",
+			"worldinfo": []
 		}
-
 		];
 	</script>
 
