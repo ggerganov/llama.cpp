@@ -128,15 +128,21 @@ vocab_size = hparams["vocab_size"]
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
 
+added_vocab = tokenizer.get_added_vocab()
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
 
 for i in range(vocab_size):
-    tokens.append(reverse_vocab[i] if i in reverse_vocab else f"[PAD{i}]")
-    scores.append(0.0) # dummy
-    toktypes.append(gguf.TokenType.NORMAL)
+    if i in reverse_vocab:
+        tokens.append(reverse_vocab[i])
+        if reverse_vocab[i] not in added_vocab:
+            toktypes.append(gguf.TokenType.NORMAL)
+        else:
+            toktypes.append(gguf.TokenType.USER_DEFINED)
+    else:
+        tokens.append(f"[PAD{i}]")
+        toktypes.append(gguf.TokenType.USER_DEFINED)
 
 gguf_writer.add_token_list(tokens)
-gguf_writer.add_token_scores(scores)
 gguf_writer.add_token_types(toktypes)
 
 special_vocab = gguf.SpecialVocab(dir_model, load_merges = True)

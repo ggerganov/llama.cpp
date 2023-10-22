@@ -62,6 +62,9 @@ int main(int argc, char **argv) {
     const int n_vocab = llama_n_vocab(model);
 
     for (int i = 0; i < n_vocab; ++i) {
+        if (llama_token_get_type(ctx, i) == LLAMA_TOKEN_TYPE_USER_DEFINED) {
+            continue;
+        }
         std::string str = llama_detokenize_bpe(ctx, std::vector<int>(1, i));
         try {
             auto cps = codepoints_from_utf8(str);
