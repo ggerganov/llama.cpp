@@ -69,7 +69,7 @@ for id: llama_token in tokens {
 
 print("\n")
 
-var batch = llama_batch_init(max(Int32(tokens.count), Int32(n_parallel)), 0)
+var batch = llama_batch_init(max(Int32(tokens.count), Int32(n_parallel)), 0, 1)
 defer {
     llama_batch_free(batch)
 }
@@ -80,7 +80,12 @@ batch.n_tokens = Int32(tokens.count)
 for (i, token) in tokens.enumerated() {
     batch.token[i] = token
     batch.pos[i] = Int32(i)
-    batch.seq_id[i] = 0
+    batch.n_seq_id[i] = 1
+    // batch.seq_id[i][0] = 0
+    // TODO: is this the proper way to do this?
+    if let seq_id = batch.seq_id[i] {
+        seq_id[0] = 0
+    }
     batch.logits[i] = 0
 }
 
@@ -169,7 +174,10 @@ while n_cur <= n_len {
         // push this new token for next evaluation
         batch.token[Int(batch.n_tokens)] = new_token_id
         batch.pos[Int(batch.n_tokens)] = n_cur
-        batch.seq_id[Int(batch.n_tokens)] = Int32(i)
+        batch.n_seq_id[Int(batch.n_tokens)] = 1
+        if let seq_id = batch.seq_id[Int(batch.n_tokens)] {
+            seq_id[0] = Int32(i)
+        }
         batch.logits[Int(batch.n_tokens)] = 1
 
         i_batch[i] = batch.n_tokens
@@ -209,7 +217,7 @@ llama_print_timings(context)
 private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
     let n_tokens = text.count + (add_bos ? 1 : 0)
     let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-    let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos)
+    let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
     var swiftTokens: [llama_token] = []
     for i in 0 ..< tokenCount {
         swiftTokens.append(tokens[Int(i)])

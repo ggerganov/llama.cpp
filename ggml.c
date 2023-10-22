@@ -13623,7 +13623,7 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[n_dims]     = GGML_FP32_TO_FP16(x2*cos_block_theta - x3*sin_block_theta);
                         dst_data[n_dims/2*3] = GGML_FP32_TO_FP16(x2*sin_block_theta + x3*cos_block_theta);
                     }
-                } if (!is_neox) {
+                } else if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
                         float cos_theta, sin_theta;
                         rope_yarn(
@@ -19265,6 +19265,7 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
                             if (idx == -1) {
                                 fprintf(stderr, "%s: failed to find tensor, arg = %d, node = %d\n", __func__, j, i);
+                                fclose(fout);
                                 return;
                             }
 
@@ -20939,7 +20940,7 @@ struct gguf_kv {
 };
 
 struct gguf_header {
-    uint32_t magic;
+    char magic[4];
     uint32_t version;
     uint64_t n_tensors; // GGUFv2
     uint64_t n_kv;      // GGUFv2
@@ -21009,7 +21010,7 @@ static bool gguf_fread_str_v1(FILE * file, struct gguf_str * p, size_t * offset)
 struct gguf_context * gguf_init_empty(void) {
     struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
-    ctx->header.magic     = GGUF_MAGIC;
+    memcpy(ctx->header.magic, GGUF_MAGIC, sizeof(ctx->header.magic));
     ctx->header.version   = GGUF_VERSION;
     ctx->header.n_tensors = 0;
     ctx->header.n_kv      = 0;
@@ -21035,16 +21036,18 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     // offset from start of file
     size_t offset = 0;
 
-    uint32_t magic = 0;
+    char magic[4];
 
     // check the magic before making allocations
     {
         gguf_fread_el(file, &magic, sizeof(magic), &offset);
 
-        if (magic != GGUF_MAGIC) {
-            fprintf(stderr, "%s: invalid magic number %08x\n", __func__, magic);
-            fclose(file);
-            return NULL;
+        for (uint32_t i = 0; i < sizeof(magic); i++) {
+            if (magic[i] != GGUF_MAGIC[i]) {
+                fprintf(stderr, "%s: invalid magic characters %s.\n", __func__, magic);
+                fclose(file);
+                return NULL;
+            }
         }
     }
 
@@ -21054,7 +21057,8 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the header
     {
-        ctx->header.magic = magic;
+        strncpy(ctx->header.magic, magic, 4);
+
 
         ctx->kv    = NULL;
         ctx->infos = NULL;
