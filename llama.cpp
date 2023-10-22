@@ -975,14 +975,15 @@ static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
-static std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
     const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
         int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
-    } else {
+    }
+    else {
         result.resize(n_tokens);
     }
 
@@ -1202,10 +1203,10 @@ struct llama_vocab {
     id special_eot_id    = 32010;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
-        replace_all(token_left,  " ",  "\u0120");
-        replace_all(token_left,  "\n", "\u010A");
-        replace_all(token_right, " ",  "\u0120");
-        replace_all(token_right, "\n", "\u010A");
+        GGML_ASSERT(token_left.find(" ") == std::string::npos);
+        GGML_ASSERT(token_left.find("\n") == std::string::npos);
+        GGML_ASSERT(token_right.find(" ") == std::string::npos);
+        GGML_ASSERT(token_right.find("\n") == std::string::npos);
 
         auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
         if (it == bpe_ranks.end()) {
@@ -7499,7 +7500,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id    = candidates->data[i].id;
-        const std::string piece = llama_token_to_str(ctx, id);
+        const std::string piece = llama_token_to_piece(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
@@ -7711,7 +7712,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string piece = llama_token_to_str(ctx, token);
+    const std::string piece = llama_token_to_piece(ctx, token);
 
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece.c_str(), grammar->partial_utf8);
