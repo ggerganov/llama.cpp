@@ -5830,6 +5830,15 @@ static struct ggml_cgraph * llama_build_graph(
                 node->op  = GGML_OP_NONE;
             }
         }
+        if (getenv("SKIP_KQ_KQV")) {
+            if (
+                    strcmp(node->name, "KQ")  == 0 ||
+                    strcmp(node->name, "KQV") == 0 ||
+                    false) {
+                //printf("skipping %s\n", dst->name);
+                node->op  = GGML_OP_NONE;
+            }
+        }
     }
 #endif
 
