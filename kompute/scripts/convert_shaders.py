@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
     Script to handle conversion of compute shaders to spirv and to headers
 """

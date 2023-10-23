@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import struct
 import numpy as np
 from pathlib import Path
