@@ -200,11 +200,37 @@ node index.js
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
+    `system'      : Set the system prompt added before text prompt (arrays).  It is independent of system_prompt above
+                    and should not be used together with it.
+
+    `input_prefix`: Set the prefix added to input text prompt lines.
+
+    `input_suffix`: Set the suffix added to input text prompt lines.
+
+     The system, input_prefix, and input_suffix are tokenized with special
+     tokens required by some models to work correctly.  Using these three
+     prompts enables the server API to support a full externally accumulated
+     chat history toggling between user inputs and generated outputs line by
+     line with the desired system header, input_prefix, and input_suffix to
+     delineate user and genrated lines, without relying on any context memory
+     in the server.  In order for this to work right, input prompts must
+     not have any hard lfs so the prompt array toggles between user input
+     and generated output every line.  Hard lfs in input prompts need to
+     be replaced with ascii \n sequence or space.
+
 -   **POST** `/tokenize`: Tokenize a given text.
 
     *Options:*
 
     `content`: Set the text to tokenize.
+
+    Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
+
+-   **POST** `/tokenizes`: Tokenize a given text with special tokens.
+
+    *Options:*
+
+    `content`: Set the text to tokenize with special tokens.
 
     Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
 
