@@ -4,7 +4,7 @@ cd ../..
 
 EXE="./finetune"
 
-MODEL="openllama-3b-v2.gguf"
+MODEL="c:/models/openllama-3b-v2.gguf"
 
 while getopts "dg" opt; do
   case $opt in
@@ -21,7 +21,7 @@ while getopts "dg" opt; do
 done
 
 $DEBUGGER $EXE \
-        --model-base c:/models/$MODEL \
+        --model-base $MODEL \
 	$GPUARG \
         --checkpoint-in  chk-ol3b-shakespeare-LATEST.gguf \
         --checkpoint-out chk-ol3b-shakespeare-ITERATION.gguf \
