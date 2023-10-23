@@ -1023,6 +1023,35 @@ class SpecialVocab:
     def _load(self, path: Path) -> None:
         if not self._try_load_from_tokenizer_json(path):
             self._try_load_from_config_json(path)
+        if self.load_merges and len(self.merges) == 0:
+            self._try_load_merges_txt(path)
+
+    def _try_load_merges_txt(self, path: Path) -> bool:
+        merges_file = path / 'merges.txt'
+        if not merges_file.is_file():
+            return False
+        with open(merges_file, 'r') as fp:
+            first_line = next(fp, '').strip()
+            if not first_line.startswith('#'):
+                fp.seek(0)
+                line_num = 0
+            else:
+                line_num = 1
+            merges = []
+            for line in fp:
+                line_num += 1
+                line = line.strip()
+                if len(line) == 0:
+                    continue
+                parts = line.split(None, 3)
+                if len(parts) != 2:
+                    print(f'gguf: WARNING: {merges_file.name}: Line {line_num}: Entry malformed, ignoring',
+                        file = sys.stderr)
+                    continue
+                merges.append(f'{parts[0]} {parts[1]}')
+        self.merges = merges
+        return True
+
 
     def _set_special_token(self, typ: str, tid: Any):
         if not isinstance(tid, int) or tid < 0:
@@ -1083,6 +1112,9 @@ class SpecialVocab:
             if not quiet:
                 print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
+        elif self.load_merges:
+            print('gguf: WARNING: Adding merges requested but no merges found, output may be non-functional.',
+                file = sys.stderr)
         for typ, tokid in self.special_token_ids.items():
             handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
             if handler is None:

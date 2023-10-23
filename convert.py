@@ -779,7 +779,7 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
                     break
             yield result
 
-def check_vocab_size(params: Params, vocab: Vocab) -> None:
+def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> None:
     if params.n_vocab != vocab.vocab_size:
         assert isinstance(vocab, BpeVocab) or isinstance(vocab, SentencePieceVocab)
         if params.n_vocab == vocab.vocab_size_base:
@@ -787,12 +787,21 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
             vocab.added_tokens_list = []
             vocab.vocab_size = vocab.vocab_size_base
             return
+        if pad_vocab and params.n_vocab > vocab.vocab_size:
+            pad_count = params.n_vocab - vocab.vocab_size
+            print(f'Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>')
+            for i in range(1, (params.n_vocab - vocab.vocab_size) + 1):
+                vocab.added_tokens_list.append(f'<dummy{i:05}>')
+            vocab.vocab_size = params.n_vocab
+            return
         msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
         if vocab.fname_added_tokens is not None:
             msg += f" combined with {vocab.fname_added_tokens}"
         msg += f" has {vocab.vocab_size})."
         if vocab.vocab_size < params.n_vocab < vocab.vocab_size + 20 and vocab.fname_added_tokens is None:
             msg += f"  Most likely you are missing added_tokens.json (should be in {vocab.fname_tokenizer.parent})."
+        if vocab.vocab_size < params.n_vocab:
+            msg += " Possibly try using the --padvocab option."
         raise Exception(msg)
 
 
@@ -877,8 +886,12 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
-        check_vocab_size(params, vocab)
+    def write_vocab_only(
+        fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
+        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
+        pad_vocab: bool            = False,
+        ) -> None:
+        check_vocab_size(params, vocab, pad_vocab = pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -905,8 +918,14 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY, endianess=gguf.GGUFEndian.LITTLE) -> None:
-        check_vocab_size(params, vocab)
+    def write_all(
+        fname_out  : Path, ftype: GGMLFileType, params: Params,
+        model      : LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab,
+        concurrency: int             = DEFAULT_CONCURRENCY,
+        endianess  : gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
+        pad_vocab  : bool            = False,
+        ) -> None:
+        check_vocab_size(params, vocab, pad_vocab = pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -1126,6 +1145,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
     parser.add_argument("--bigendian",   action="store_true",    help="model is executed on big endian machine")
+    parser.add_argument("--padvocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
 
     args = parser.parse_args(args_in)
     if args.dump_single:
@@ -1173,7 +1193,8 @@ def main(args_in: list[str] | None = None) -> None:
             load_merges = args.vocabtype == 'bpe',
             n_vocab = vocab.vocab_size)
         outfile = args.outfile
-        OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
+        OutputFile.write_vocab_only(outfile, params, vocab, special_vocab,
+            endianess = endianess, pad_vocab = args.padvocab)
         print(f"Wrote {outfile}")
         return
 
@@ -1196,7 +1217,8 @@ def main(args_in: list[str] | None = None) -> None:
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
 
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency, endianess=endianess)
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
+        concurrency = args.concurrency, endianess = endianess, pad_vocab = args.padvocab)
     print(f"Wrote {outfile}")
 
 
