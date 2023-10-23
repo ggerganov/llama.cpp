@@ -1439,6 +1439,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                                         ne11, ne12,
                                         nb11, nb12,
                                         nb1, nb2);
+                                break;
                             case GGML_TYPE_F16:
                                 ggml_vk_mul_mat_f16(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, nb01, nb02, ne11, ne12, nb11, nb12, ne0, ne1);
                                 break;
