@@ -136,9 +136,11 @@ for i in range(vocab_size):
         tokens.append(f"[PAD{i}]")
         toktypes.append(gguf.TokenType.USER_DEFINED)
     elif reverse_vocab[i] in added_vocab:
-        # NOTE: wouldn't we like to distinguish CONTROL tokens here?
         tokens.append(reverse_vocab[i])
-        toktypes.append(gguf.TokenType.USER_DEFINED)
+        if tokenizer.added_tokens_decoder[i].special:
+            toktypes.append(gguf.TokenType.CONTROL)
+        else:
+            toktypes.append(gguf.TokenType.USER_DEFINED)
     else:
         tokens.append(reverse_vocab[i])
         toktypes.append(gguf.TokenType.NORMAL)
