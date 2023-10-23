@@ -331,6 +331,7 @@ if (LLAMA_CUBLAS)
             set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
         else()
             set(CMAKE_CUDA_ARCHITECTURES "52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
+            #set(CMAKE_CUDA_ARCHITECTURES "") # use this to compile much faster, but only F16 models work
         endif()
     endif()
     message(STATUS "Using CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
