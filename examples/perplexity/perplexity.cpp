@@ -397,6 +397,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                         }
                     );
                     const size_t num_prune = std::min(pass_results.size(), prune_target);
+                    if (num_prune > 0) printf("\nPruning: ");
                     for (size_t temp = 0, pruned = 0; temp < pass_results.size(); temp++) {
                         int32_t lidx = std::get<0>(pass_results[temp]);
                         if (anti_mode) {
@@ -405,17 +406,17 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                         }
                         if (lidx == curr_best_layer && std::get<1>(pass_results[temp]) == curr_best_type) continue;
                         extremes[lidx] |= std::get<1>(pass_results[temp]);
-                        printf("\nPrune[%zu]: %d (%d) - %.2f\n", pruned + 1, lidx,
+                        printf("[%zu: %d (%d) - %.2f], ", pruned + 1, lidx,
                                 std::get<1>(pass_results[temp]), std::get<2>(pass_results[temp]));
                         if (++pruned >= num_prune) break;
                     }
                 }
                 pass_results.clear();
-                printf("\n\nADD %c%3d - ppl vs ref %.4f",
+                printf("\n\nADD %c%3d - ppl vs ref %.4f - cur:[",
                     int(label[curr_best_type]), curr_best_layer,
                     curr_best_ppl - ref_ppl);
                 if (!anti_mode) {
-                    if (curr_best_ppl > ref_ppl * 1.75) break;
+                    // if (curr_best_ppl > ref_ppl * 1.75) break;
                     skip_types[curr_best_layer] += curr_best_type;
                     skips.push_back(curr_best_type == 1 ? curr_best_layer : curr_best_layer + n_layers);
                 }
@@ -425,6 +426,10 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 skip_layer = n_layers;
                 for (int32_t new_sl = 0; new_sl < n_layers; new_sl++) {
                     skip_types[new_sl] = (skip_types[new_sl] & 3) | (extremes[new_sl] << 2);
+                }
+                for (int32_t i = 0; i < n_layers; i++) {
+                    const int val = mask ^ (skip_types[i] & 3);
+                    printf("%d%s", val, i < n_layers - 1 ? ", " : "]");
                 }
                 for (int32_t new_sl = 0; new_sl < n_layers; new_sl++) {
                     int32_t curr_skipped = (skip_types[new_sl] >> 2) | (skip_types[new_sl] & 3);
