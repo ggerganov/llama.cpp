@@ -163,7 +163,7 @@ int main(int argc, char ** argv) {
             printf("%s", token_str.c_str());
             fflush(stdout);
 
-            if (id == llama_token_eos(ctx_tgt)) {
+            if (id == llama_token_eos(model_tgt)) {
                 has_eos = true;
             }
 

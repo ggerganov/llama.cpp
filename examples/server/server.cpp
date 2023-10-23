@@ -726,7 +726,7 @@ struct llama_server_context
 
         if (json_value(data, "ignore_eos", false))
         {
-            slot->sparams.logit_bias[llama_token_eos(ctx)] = -INFINITY;
+            slot->sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
         }
 
         const auto &logit_bias = data.find("logit_bias");
@@ -1056,7 +1056,7 @@ struct llama_server_context
             slot.has_next_token = false;
         }
 
-        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(ctx))
+        if (!slot.cache_tokens.empty() && result.tok == llama_token_eos(model))
         {
             slot.stopped_eos = true;
             slot.has_next_token = false;
@@ -1130,7 +1130,7 @@ struct llama_server_context
 
     json get_formated_generation(llama_client_slot &slot)
     {
-        const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(ctx));
+        const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
                                 eos_bias->second < 0.0f && std::isinf(eos_bias->second);
         return json {
@@ -1555,11 +1555,11 @@ struct llama_server_context
                             suffix_tokens.erase(suffix_tokens.begin());
                         }
 
-                        prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(ctx));
-                        prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(ctx)); // always add BOS
-                        prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(ctx));
+                        prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
+                        prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(model)); // always add BOS
+                        prefix_tokens.insert(prefix_tokens.end(), llama_token_suffix(model));
                         prefix_tokens.insert(prefix_tokens.end(), suffix_tokens.begin(), suffix_tokens.end());
-                        prefix_tokens.push_back(llama_token_middle(ctx));
+                        prefix_tokens.push_back(llama_token_middle(model));
                         prompt_tokens = prefix_tokens;
                     }
                     else

@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
             //const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
             // is it an end of stream? -> mark the stream as finished
-            if (new_token_id == llama_token_eos(ctx) || n_cur == n_len) {
+            if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
                 i_batch[i] = -1;
                 LOG_TEE("\n");
                 if (n_parallel > 1) {
