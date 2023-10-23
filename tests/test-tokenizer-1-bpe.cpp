@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
             }
         }
     }
-    // Restrict to unicode planes
+    // Restrict to assigned unicode planes
     // for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
     for (uint32_t cp = 0x10000; cp < 0x00040000; ++cp) {
         std::string str = codepoint_to_utf8(cp);
