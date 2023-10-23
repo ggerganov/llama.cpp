@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
             }
         }
     }
-    // TODO: why doesn't this work for the full range of Unicodes?
+    // Restrict to unicode planes
     // for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
     for (uint32_t cp = 0x10000; cp < 0x00040000; ++cp) {
         std::string str = codepoint_to_utf8(cp);
