@@ -1,8 +1,7 @@
 ---
-name: Issue and enhancement template
-about: Used to report issues and request enhancements for llama.cpp
-title: "[User] Insert summary of your issue or enhancement.."
-labels: ''
+name: Bug template
+about: Used to report bugs in llama.cpp
+labels: ["bug"]
 assignees: ''
 
 ---
@@ -46,7 +45,7 @@ $ g++ --version
 
 # Failure Information (for bugs)
 
-Please help provide information about the failure if this is a bug. If it is not a bug, please remove the rest of this template.
+Please help provide information about the failure / bug.
 
 # Steps to Reproduce
 
