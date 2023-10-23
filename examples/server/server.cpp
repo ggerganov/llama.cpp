@@ -620,12 +620,12 @@ struct llama_server_context
                     std::vector<llama_token> p;
                     if (first)
                     {
-                        p = ::llama_tokenize(ctx, s, add_bos);
+                        p = ::llama_tokenize(ctx, s, add_bos, true);
                         first = false;
                     }
                     else
                     {
-                        p = ::llama_tokenize(ctx, s, false);
+                        p = ::llama_tokenize(ctx, s, false, true);
                     }
                     prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
                 }
@@ -642,7 +642,7 @@ struct llama_server_context
         else
         {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_bos, true);
         }
 
         return prompt_tokens;
@@ -861,7 +861,7 @@ struct llama_server_context
     }
 
     void update_system_prompt() {
-        system_tokens = ::llama_tokenize(ctx, system_prompt, true);
+        system_tokens = ::llama_tokenize(ctx, system_prompt, true, true);
 
         llama_batch_clear(batch);
 
@@ -1180,7 +1180,7 @@ struct llama_server_context
         if (slot.sparams.n_probs > 0)
         {
             std::vector<completion_token_output> probs_output = {};
-            const std::vector<llama_token> to_send_toks = llama_tokenize(ctx, tkn.text_to_send, false);
+            const std::vector<llama_token> to_send_toks = llama_tokenize(ctx, tkn.text_to_send, false, true);
             size_t probs_pos = std::min(slot.sent_token_probs_index, slot.generated_token_probs.size());
             size_t probs_stop_pos = std::min(slot.sent_token_probs_index + to_send_toks.size(), slot.generated_token_probs.size());
             if (probs_pos < probs_stop_pos)
@@ -1226,7 +1226,7 @@ struct llama_server_context
             std::vector<completion_token_output> probs = {};
             if (!slot.params.stream && slot.stopped_word)
             {
-                const std::vector<llama_token> stop_word_toks = llama_tokenize(ctx, slot.stopping_word, false);
+                const std::vector<llama_token> stop_word_toks = llama_tokenize(ctx, slot.stopping_word, false, true);
                 probs = std::vector<completion_token_output>(slot.generated_token_probs.begin(), slot.generated_token_probs.end() - stop_word_toks.size());
             }
             else
