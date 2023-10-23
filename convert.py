@@ -302,23 +302,35 @@ class Params:
 #
 class BpeVocab:
     def __init__(self, fname_tokenizer: Path, fname_added_tokens: Path | None) -> None:
-        self.bpe_tokenizer = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
+        fast_tokenizer = fname_tokenizer.name == 'tokenizer.json'
+        tokenizer_json = json.loads(open(str(fname_tokenizer), encoding="utf-8").read())
+        
+        if fast_tokenizer:
+            self.bpe_tokenizer = tokenizer_json['model']['vocab']
+        else:
+            self.bpe_tokenizer = tokenizer_json
+
         added_tokens: dict[str, int]
         if fname_added_tokens is not None:
-            # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
             added_tokens = json.load(open(fname_added_tokens, encoding="utf-8"))
         else:
-            # Fall back to trying to find the added tokens in tokenizer.json
-            tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
-            if not tokenizer_json_file.is_file():
-                added_tokens = {}
-            else:
-                tokenizer_json = json.load(open(tokenizer_json_file, encoding="utf-8"))
-                added_tokens = dict(
-                    (item['content'], item['id'])
-                    for item in tokenizer_json.get('added_tokens', [])
-                    # Added tokens here can be duplicates of the main vocabulary.
-                    if item['content'] not in self.bpe_tokenizer )
+            if not fast_tokenizer:
+                tokenizer_json_file = fname_tokenizer.parent / 'tokenizer.json'
+                
+                if not tokenizer_json_file.is_file():
+                    added_tokens = {}
+                else:
+                    tokenizer_json = json.load(open(tokenizer_json_file, encoding="utf-8"))
+
+            added_tokens = dict(
+                (item['content'], item['id'])
+                for item in tokenizer_json.get('added_tokens', []))
+
+        added_tokens = dict(
+        (token_content, token_id)
+        for token_content, token_id in added_tokens.items()
+        # Added tokens here can be duplicates of the main vocabulary.
+        if token_content not in self.bpe_tokenizer)
 
         vocab_size: int = len(self.bpe_tokenizer)
         expected_ids    = list(range(vocab_size, vocab_size + len(added_tokens)))
