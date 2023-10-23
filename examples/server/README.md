@@ -222,15 +222,9 @@ node index.js
 
     *Options:*
 
+    `special`: Boolean indicating if special tokens should be tokenized (default false)
+
     `content`: Set the text to tokenize.
-
-    Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
-
--   **POST** `/tokenizes`: Tokenize a given text with special tokens.
-
-    *Options:*
-
-    `content`: Set the text to tokenize with special tokens.
 
     Note that the special `BOS` token is not added in front of the text and also a space character is not inserted automatically as it is for `/completion`.
 
