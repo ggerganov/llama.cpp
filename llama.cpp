@@ -8133,20 +8133,20 @@ static ggml_type get_k_quant_type(
         int nx = tensor->ne[0];
         int ny = tensor->ne[1];
         if (nx % QK_K != 0) {
-            LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for k-quants\n", __func__, nx, ny, QK_K);
+            LLAMA_LOG_WARN("\n\n%s : tensor cols %d x %d are not divisible by %d, required for %s", __func__, nx, ny, QK_K, ggml_type_name(new_type));
             convert_incompatible_tensor = true;
         }
     }
     if (convert_incompatible_tensor) {
-        if (name == tn(LLM_TENSOR_OUTPUT, "weight")) {
-            new_type = GGML_TYPE_F16; //fall back to F16 instead of just failing.
-            LLAMA_LOG_WARN("F16 will be used for this tensor instead.\n");
-        } else if (name == tn(LLM_TENSOR_TOKEN_EMBD, "weight")) {
-            new_type = GGML_TYPE_Q4_0; //fall back to Q4_0 instead of just failing.
-            LLAMA_LOG_WARN("Q4_0 will be used for this tensor instead.\n");
-        } else {
-            throw std::runtime_error("Unsupported tensor size encountered\n");
+        switch (new_type) {
+            case GGML_TYPE_Q2_K: new_type = GGML_TYPE_Q4_0; break;
+            case GGML_TYPE_Q3_K: new_type = GGML_TYPE_Q4_1; break;
+            case GGML_TYPE_Q4_K: new_type = GGML_TYPE_Q5_0; break;
+            case GGML_TYPE_Q5_K: new_type = GGML_TYPE_Q5_1; break;
+            case GGML_TYPE_Q6_K: new_type = GGML_TYPE_Q8_0; break;
+            default: throw std::runtime_error("\nUnsupported tensor size encountered\n");
         }
+        LLAMA_LOG_WARN(" - using fallback quantization %s\n", ggml_type_name(new_type));
     }
 
     return new_type;
