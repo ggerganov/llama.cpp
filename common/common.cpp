@@ -632,6 +632,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         process_escapes(params.prompt);
         process_escapes(params.input_prefix);
         process_escapes(params.input_suffix);
+        process_escapes(sparams.cfg_negative_prompt);
         for (auto & antiprompt : params.antiprompt) {
             process_escapes(antiprompt);
         }

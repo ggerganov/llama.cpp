@@ -975,14 +975,15 @@ static void llama_nop(struct ggml_tensor * tensor) { // don't offload by default
     (void) tensor;
 }
 
-static std::string llama_token_to_str(const struct llama_context * ctx, llama_token token) {
+static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
     const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
     if (n_tokens < 0) {
         result.resize(-n_tokens);
         int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
         GGML_ASSERT(check == -n_tokens);
-    } else {
+    }
+    else {
         result.resize(n_tokens);
     }
 
@@ -1202,10 +1203,10 @@ struct llama_vocab {
     id special_eot_id    = 32010;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
-        replace_all(token_left,  " ",  "\u0120");
-        replace_all(token_left,  "\n", "\u010A");
-        replace_all(token_right, " ",  "\u0120");
-        replace_all(token_right, "\n", "\u010A");
+        GGML_ASSERT(token_left.find(" ") == std::string::npos);
+        GGML_ASSERT(token_left.find("\n") == std::string::npos);
+        GGML_ASSERT(token_right.find(" ") == std::string::npos);
+        GGML_ASSERT(token_right.find("\n") == std::string::npos);
 
         auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
         if (it == bpe_ranks.end()) {
@@ -2238,15 +2239,35 @@ static void llm_load_vocab(
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
         vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
     } else {
-        vocab.linefeed_id = llama_tokenize_internal(vocab, "\u010A", false)[0];
+        const std::vector<int> ids = llama_tokenize_internal(vocab, "\u010A", false);
+        GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
+        vocab.linefeed_id = ids[0];
     }
 
     // special tokens
-    GGUF_GET_KEY(ctx, vocab.special_bos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_BOS_ID));
-    GGUF_GET_KEY(ctx, vocab.special_eos_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_EOS_ID));
-    GGUF_GET_KEY(ctx, vocab.special_unk_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_UNK_ID));
-    GGUF_GET_KEY(ctx, vocab.special_sep_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_SEP_ID));
-    GGUF_GET_KEY(ctx, vocab.special_pad_id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_TOKENIZER_PAD_ID));
+    {
+        const std::vector<std::pair<enum llm_kv, int32_t &>> special_token_types = {
+            { LLM_KV_TOKENIZER_BOS_ID, vocab.special_bos_id },
+            { LLM_KV_TOKENIZER_EOS_ID, vocab.special_eos_id },
+            { LLM_KV_TOKENIZER_UNK_ID, vocab.special_unk_id },
+            { LLM_KV_TOKENIZER_SEP_ID, vocab.special_sep_id },
+            { LLM_KV_TOKENIZER_PAD_ID, vocab.special_pad_id },
+        };
+        for (const auto & it : special_token_types) {
+            const std::string & key = kv(std::get<0>(it));
+            int32_t & id = std::get<1>(it), old_id = id;
+
+            GGUF_GET_KEY(ctx, id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, key);
+            // Must be >= -1 and < vocab size. Since the key is unsigned, -1
+            // can only come from the default value, so there's no point in
+            // validating that.
+            if (size_t(id + 1) > vocab.id_to_token.size()) {
+                LLAMA_LOG_WARN("%s: bad special token: '%s' = %d, using default id %d\n",
+                    __func__, key.c_str(), id, old_id);
+                id = old_id;
+            }
+        }
+    }
 
     // build special tokens cache
     {
@@ -6103,11 +6124,10 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
 }
 
 static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
+    static const char * hex = "0123456789ABCDEF";
     switch (llama_vocab_get_type(vocab)) {
     case LLAMA_VOCAB_TYPE_SPM: {
-        char buf[7];
-        int result = snprintf(buf, sizeof(buf), "<0x%02X>", ch);
-        GGML_ASSERT(0 <= result && result < 7);
+        const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
         return vocab.token_to_id.at(buf);
     }
     case LLAMA_VOCAB_TYPE_BPE: {
@@ -7480,7 +7500,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id    = candidates->data[i].id;
-        const std::string piece = llama_token_to_str(ctx, id);
+        const std::string piece = llama_token_to_piece(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
@@ -7692,7 +7712,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string piece = llama_token_to_str(ctx, token);
+    const std::string piece = llama_token_to_piece(ctx, token);
 
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece.c_str(), grammar->partial_utf8);
