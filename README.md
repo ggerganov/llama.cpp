@@ -23,14 +23,34 @@ KoboldCpp is an easy-to-use AI text-generation software for GGML and GGUF models
 For more information, be sure to run the program with the `--help` flag.
 
 ## OSX and Linux
-- You will have to compile your binaries from source. A makefile is provided, simply run `make`
+- You will have to compile your binaries from source. A makefile is provided, simply run `make`.
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
+- Arch Linux users can install koboldcpp via the AUR package provided by @AlpinDale. Please see [below](#arch-linux) for more details.
 - Alternatively, if you want you can also link your own install of CLBlast manually with `make LLAMA_CLBLAST=1`, for this you will need to obtain and link OpenCL and CLBlast libraries.
   - For Arch Linux: Install `cblas` `openblas` and `clblast`.
   - For Debian: Install `libclblast-dev` and `libopenblas-dev`.
 - For a full featured build, do `make LLAMA_OPENBLAS=1 LLAMA_CLBLAST=1 LLAMA_CUBLAS=1`
 - After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
 - Note: Many OSX users have found that the using Accelerate is actually faster than OpenBLAS. To try, you may wish to run with `--noblas` and compare speeds.
+
+### Arch Linux
+There are 4 AUR packages available: [CPU-only](https://aur.archlinux.org/packages/koboldcpp-cpu), [CLBlast](https://aur.archlinux.org/packages/koboldcpp-clblast), [CUBLAS](https://aur.archlinux.org/packages/koboldcpp-cuda), and [HIPBLAS](https://aur.archlinux.org/packages/koboldcpp-hipblas). They are, respectively, for users with no GPU, users with a GPU (vendor-agnostic), users with NVIDIA GPUs, and users with a supported AMD GPU.
+
+The recommended installation method is through an AUR helper such as [paru](https://aur.archlinux.org/packages/paru) or [yay](https://aur.archlinux.org/packages/yay):
+
+```sh
+paru -S koboldcpp-cpu
+```
+
+Alternatively, you can manually install, though it's not recommended (since the build depends on [customtkinter](https://aur.archlinux.org/packages/customtkinter)):
+
+```sh
+git clone https://aur.archlinux.org/koboldcpp-cpu.git && cd koboldcpp-cpu
+
+makepkg -si
+```
+
+You can then run koboldcpp anywhere from the terminal by running `koboldcpp` to spawn the GUI, or `koboldcpp --help` to view the list of commands for commandline execution (in case the GUI does not work).
 
 ## Compiling on Windows
 - You're encouraged to use the .exe released, but if you want to compile your binaries from source at Windows, the easiest way is:
