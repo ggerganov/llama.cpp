@@ -4,7 +4,8 @@ cd ../..
 
 EXE="./finetune"
 
-MODEL="c:/models/openllama-3b-v2.gguf"
+# MODEL="c:/models/openllama-3b-v2-q8_0.gguf" # This is the model the readme uses.
+MODEL="c:/models/openllama-3b-v2.gguf" # An f16 model. Note in this case with "-g", you get an f32-format .BIN file that isn't yet supported if you use it with "main --lora" with GPU inferencing.
 
 while getopts "dg" opt; do
   case $opt in
@@ -12,8 +13,6 @@ while getopts "dg" opt; do
       DEBUGGER="gdb --args"
       ;;
     g)
-      # GPU. The makefile doesn't support CUDA on Windows, so I have to use CMake and so main is built to a different location.
-      # Note: "-d" doesn't really work with this - it will run under gdb, but there are no debugging symbols (in a format gdb understands). I think the easiest workaround is to use WinDbg instead.
       EXE="./build/bin/Release/finetune"
       GPUARG="--gpu-layers 25"
       ;;
