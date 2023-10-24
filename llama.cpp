@@ -3020,6 +3020,14 @@ static void llm_load_tensors(
                         ggml_backend_type backend_norm;
                         ggml_backend_type backend_output;
 
+                        // Don't allow for offloading of more than 33 layers.
+                        // Offloading 34 layers causes model to respond with letter 'E'
+                        // Offloading 35 layers doesn't work because of missing cuda implementation for rope:
+                        // GGML_ASSERT: ggml-cuda.cu:6402: ne00 == n_dims && "ne00 != n_dims is not implemented for CUDA yet"
+                        if (n_gpu_layers > 33) {
+                            n_gpu_layers = 33;
+                        }
+
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
