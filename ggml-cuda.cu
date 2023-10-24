@@ -5664,10 +5664,10 @@ void ggml_init_cublas() {
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %ld: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
+            fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
@@ -5677,15 +5677,15 @@ void ggml_init_cublas() {
             g_compute_capabilities[id] = 100*prop.major + 10*prop.minor;
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         }
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             g_tensor_split[id] /= total_vram;
         }
 
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             CUDA_CHECK(ggml_cuda_set_device(id));
 
             // create cuda streams
-            for (int64_t is = 0; is < MAX_STREAMS; ++is) {
+            for (int is = 0; is < MAX_STREAMS; ++is) {
                 CUDA_CHECK(cudaStreamCreateWithFlags(&g_cudaStreams[id][is], cudaStreamNonBlocking));
             }
 
