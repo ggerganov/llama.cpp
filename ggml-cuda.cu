@@ -7152,53 +7152,45 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
         const int ne23 = ne12*ne13;
 
         // TODO: avoid this alloc
-        void ** src0_ptrs = (void **) malloc(ne23*sizeof(void *));
-        void ** src1_ptrs = (void **) malloc(ne23*sizeof(void *));
-        void **  dst_ptrs = (void **) malloc(ne23*sizeof(void *));
+        void ** ptrs = (void **) malloc(3*ne23*sizeof(void *));
 
         for (int i13 = 0; i13 < ne13; ++i13) {
             for (int i12 = 0; i12 < ne12; ++i12) {
                 int i03 = i13 / r3;
                 int i02 = i12 / r2;
 
-                src0_ptrs[i12 + i13*ne12] = (char *) src0_as_f16 + i02*src0->nb[2]   + i03*src0->nb[3];
-                src1_ptrs[i12 + i13*ne12] = (char *) src1_as_f16 + i12*src1->nb[2]/2 + i13*src1->nb[3]/2;
-                dst_ptrs [i12 + i13*ne12] = (char *)     dst_f16 + i12* dst->nb[2]/2 + i13* dst->nb[3]/2;
+                ptrs[0*ne23 + i12 + i13*ne12] = (char *) src0_as_f16 + i02*src0->nb[2]   + i03*src0->nb[3];
+                ptrs[1*ne23 + i12 + i13*ne12] = (char *) src1_as_f16 + i12*src1->nb[2]/2 + i13*src1->nb[3]/2;
+                ptrs[2*ne23 + i12 + i13*ne12] = (char *)     dst_f16 + i12* dst->nb[2]/2 + i13* dst->nb[3]/2;
             }
         }
 
         // allocate device memory for pointers
-        const void ** src0_ptrs_as = nullptr;
-        const void ** src1_ptrs_as = nullptr;
-        void       **  dst_ptrs_as = nullptr;
+        void ** ptrs_as = nullptr;
+        CUDA_CHECK(cudaMalloc(&ptrs_as, 3*ne23*sizeof(void *)));
 
-        CUDA_CHECK(cudaMalloc(&src0_ptrs_as, ne23*sizeof(void *)));
-        CUDA_CHECK(cudaMalloc(&src1_ptrs_as, ne23*sizeof(void *)));
-        CUDA_CHECK(cudaMalloc(& dst_ptrs_as, ne23*sizeof(void *)));
+        // TODO: this does not work for some reason -- not sure why?
+        //size_t ptrs_s = 0;
+        //ptrs_as = (void **) ggml_cuda_pool_malloc(3*ne23*sizeof(void *), &ptrs_s);
 
         // copy pointers to device
-        CUDA_CHECK(cudaMemcpy(src0_ptrs_as, src0_ptrs, ne23*sizeof(void *), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(src1_ptrs_as, src1_ptrs, ne23*sizeof(void *), cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy( dst_ptrs_as,  dst_ptrs, ne23*sizeof(void *), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(ptrs_as, ptrs, 3*ne23*sizeof(void *), cudaMemcpyHostToDevice));
+
+        free(ptrs);
 
         CUBLAS_CHECK(
         cublasGemmBatchedEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
                 ne01, ne11, ne10,
-                &alpha_f16, (const void **) src0_ptrs_as, CUDA_R_16F, nb01/sizeof(half),
-                            (const void **) src1_ptrs_as, CUDA_R_16F, nb11/sizeof(float),
-                &beta_f16,  (      void **)  dst_ptrs_as, CUDA_R_16F, ne01,
+                &alpha_f16, (const void **) (ptrs_as + 0*ne23), CUDA_R_16F, nb01/sizeof(half),
+                            (const void **) (ptrs_as + 1*ne23), CUDA_R_16F, nb11/sizeof(float),
+                &beta_f16,  (      void **) (ptrs_as + 2*ne23), CUDA_R_16F, ne01,
                 ne23,
                 CUBLAS_COMPUTE_16F,
                 CUBLAS_GEMM_DEFAULT_TENSOR_OP));
 
         // free device memory for pointers
-        CUDA_CHECK(cudaFree(src0_ptrs_as));
-        CUDA_CHECK(cudaFree(src1_ptrs_as));
-        CUDA_CHECK(cudaFree( dst_ptrs_as));
-
-        free(src0_ptrs);
-        free(src1_ptrs);
-        free( dst_ptrs);
+        CUDA_CHECK(cudaFree(ptrs_as));
+        //ggml_cuda_pool_free(ptrs_as, ptrs_s);
     }
 #endif
 
