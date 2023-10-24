@@ -606,6 +606,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             rope_freq_base = (effectivenctx <= 2048 ? 10000.0f : (effectivenctx <= 3072 ? 26000.0f : (effectivenctx <= 4096 ? 32000.0f : (effectivenctx <= 6144 ? 54000.0f :
             (effectivenctx <= 8192 ? 82684.0f : (effectivenctx <= 12288 ? 140000.0f : (effectivenctx <= 16384 ? 200000.0f : (effectivenctx <= 24576 ? 320000.0f : 440000.0f))))))));
 
+            if(file_format_meta.freq_base_train > rope_freq_base)
+            {
+                rope_freq_base = file_format_meta.freq_base_train;
+            }
         }
 
         printf("Using automatic RoPE scaling (scale:%.3f, base:%.1f)\n",rope_freq_scale,rope_freq_base);
