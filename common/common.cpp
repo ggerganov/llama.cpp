@@ -880,13 +880,13 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     }
 
     if (params.ignore_eos) {
-        params.sparams.logit_bias[llama_token_eos(lctx)] = -INFINITY;
+        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
     }
 
     {
         LOG("warming up the model with an empty run\n");
 
-        std::vector<llama_token> tmp = { llama_token_bos(lctx), llama_token_eos(lctx), };
+        std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_tokens_rm(lctx, -1, -1);
         llama_reset_timings(lctx);
@@ -941,7 +941,7 @@ std::string llama_token_to_piece(const struct llama_context * ctx, llama_token t
 }
 
 std::string llama_detokenize_spm(llama_context * ctx, const std::vector<llama_token> & tokens) {
-    const llama_token bos_id = llama_token_bos(ctx);
+    const llama_token bos_id = llama_token_bos(llama_get_model(ctx));
 
     std::string piece;
     std::string result;
@@ -1186,7 +1186,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "hellaswag: %s # default: false\n", params.hellaswag ? "true" : "false");
     fprintf(stream, "hellaswag_tasks: %zu # default: 400\n", params.hellaswag_tasks);
 
-    const auto logit_bias_eos = sparams.logit_bias.find(llama_token_eos(lctx));
+    const auto logit_bias_eos = sparams.logit_bias.find(llama_token_eos(llama_get_model(lctx)));
     const bool ignore_eos = logit_bias_eos != sparams.logit_bias.end() && logit_bias_eos->second == -INFINITY;
     fprintf(stream, "ignore_eos: %s # default: false\n", ignore_eos ? "true" : "false");
 

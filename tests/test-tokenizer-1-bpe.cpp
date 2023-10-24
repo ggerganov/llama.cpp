@@ -91,9 +91,9 @@ int main(int argc, char **argv) {
             }
         }
     }
-    // TODO: why doesn't this work for the full range of Unicodes?
+    // Restrict to assigned unicode planes
     // for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
-    for (uint32_t cp = 0x10000; cp < 0x00080000; ++cp) {
+    for (uint32_t cp = 0x10000; cp < 0x00040000; ++cp) {
         std::string str = codepoint_to_utf8(cp);
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_bpe(ctx, tokens);
@@ -103,7 +103,16 @@ int main(int argc, char **argv) {
             return 4;
         }
     }
-
+    for (uint32_t cp = 0x000e0000; cp < 0x0010ffff; ++cp) {
+        std::string str = codepoint_to_utf8(cp);
+        std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
+        std::string check = llama_detokenize_bpe(ctx, tokens);
+        if (str != check) {
+            fprintf(stderr, "%s : error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
+                __func__, cp, check.c_str(), check.length(), str.c_str(), str.length());
+            return 4;
+        }
+    }
     llama_free_model(model);
     llama_free(ctx);
 

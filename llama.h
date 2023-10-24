@@ -494,21 +494,22 @@ extern "C" {
     // Vocab
     //
 
-    LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
 
-    LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
+    LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+
     // codellama infill tokens
-    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
-    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
-    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
-    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
+    LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
 
     //
     // Tokenization
