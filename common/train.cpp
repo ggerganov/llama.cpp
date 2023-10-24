@@ -236,8 +236,8 @@ int64_t get_example_targets_batch(
     int64_t used_samples = 0;
 
     ggml_set_f32(target_probs, 0.0f);
-    llama_token bos = llama_token_bos(lctx);
-    llama_token eos = llama_token_eos(lctx);
+    llama_token bos = llama_token_bos(llama_get_model(lctx));
+    llama_token eos = llama_token_eos(llama_get_model(lctx));
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
@@ -924,7 +924,7 @@ size_t tokenize_file(
         for (llama_token token=0; token < n_vocab; ++token) {
             max_token_text_size = std::max(
                 max_token_text_size,
-                strlen(llama_token_get_text(lctx, token)));
+                strlen(llama_token_get_text(llama_get_model(lctx), token)));
         }
 
         // upper bound of context byte length.

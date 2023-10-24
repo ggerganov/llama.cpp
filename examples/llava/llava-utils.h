@@ -137,7 +137,7 @@ inline llama_token sample_id(llama_context * ctx_llama, gpt_params & params) {
 inline const char * sample(struct llama_context * ctx_llama, gpt_params & params, int * n_past) {
     int id = sample_id(ctx_llama, params);
     static std::string ret;
-    if (id == llama_token_eos(ctx_llama)) {
+    if (id == llama_token_eos(llama_get_model(ctx_llama))) {
         ret = "</s>";
     } else {
         ret = llama_token_to_piece(ctx_llama, id);
