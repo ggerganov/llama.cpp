@@ -454,7 +454,7 @@ struct llama_client_slot
     }
 
     void release() {
-        if (state == PROCESSING)
+        if (state == IDLE || state == PROCESSING)
         {
             t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
             command = RELEASE;
@@ -754,6 +754,7 @@ struct llama_server_context
         }
 
         slot->params.antiprompt.clear();
+
         const auto &stop = data.find("stop");
         if (stop != data.end() && stop->is_array())
         {
@@ -867,7 +868,7 @@ struct llama_server_context
 
         kv_cache_clear();
 
-        for (int32_t i = 0; i < batch.n_tokens; ++i)
+        for (int i = 0; i < (int) system_tokens.size(); ++i)
         {
             llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
         }
@@ -894,16 +895,8 @@ struct llama_server_context
         {
             slot.release();
         }
-        wait_all_are_idle();
-        all_slots_are_idle = true;
 
-        // wait until system prompt load
         system_need_update = true;
-        while (system_need_update)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        // system prompt loaded, continue
     }
 
     void process_system_prompt_data(const json &sys_props) {
@@ -914,26 +907,6 @@ struct llama_server_context
         if (slots.size() > 0)
         {
             notify_system_prompt_changed();
-        }
-        else
-        {
-            system_need_update = true;
-        }
-    }
-
-    void wait_all_are_idle() {
-        bool wait = true;
-        while (wait)
-        {
-            wait = false;
-            for (auto &slot : slots)
-            {
-                if (!slot.available())
-                {
-                    wait = true;
-                    break;
-                }
-            }
         }
     }
 
@@ -965,7 +938,6 @@ struct llama_server_context
                     slot.has_next_token = false;
                 }
                 stop_pos = pos;
-
             }
         }
 
@@ -1444,7 +1416,7 @@ struct llama_server_context
         process_tasks();
 
         // update the system prompt wait until all slots are idle state
-        if (system_need_update)
+        if (system_need_update && all_slots_are_idle)
         {
             LOG_TEE("updating system prompt\n");
             update_system_prompt();
@@ -1498,7 +1470,7 @@ struct llama_server_context
         for (auto & slot : slots)
         {
             // release the slot
-            if (slot.state == PROCESSING && slot.command == RELEASE)
+            if (slot.command == RELEASE)
             {
                 slot.state = IDLE;
                 slot.command = NONE;
@@ -1509,7 +1481,7 @@ struct llama_server_context
                 continue;
             }
 
-            if (slot.state == IDLE || slot.command == RELEASE)
+            if (slot.state == IDLE)
             {
                 continue;
             }
@@ -1530,6 +1502,17 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
+                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
+
+                // empty prompt passed -> release the slot and send empty response
+                if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt)
+                {
+                    slot.release();
+                    slot.print_timings();
+                    send_final_response(slot);
+                    continue;
+                }
+
                 // need process the prompt
                 if (slot.state == IDLE && slot.command == LOAD_PROMPT)
                 {
@@ -1749,8 +1732,8 @@ struct llama_server_context
                 if (!process_token(result, slot))
                 {
                     slot.release();
-                    send_final_response(slot);
                     slot.print_timings();
+                    send_final_response(slot);
                 }
 
                 slot.i_batch = -1;
@@ -2285,7 +2268,7 @@ int main(int argc, char **argv)
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
-                    if(!result.error && result.stop) {
+                    if (!result.error && result.stop) {
                         res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
                     }
                     else
@@ -2312,7 +2295,7 @@ int main(int argc, char **argv)
                                 {
                                     return false;
                                 }
-                                if(result.stop) {
+                                if (result.stop) {
                                     break;
                                 }
                             } else {
