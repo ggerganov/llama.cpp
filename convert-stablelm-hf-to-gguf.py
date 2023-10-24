@@ -120,7 +120,10 @@ for i in range(vocab_size):
         toktypes.append(gguf.TokenType.USER_DEFINED)
     elif reverse_vocab[i] in added_vocab:
         tokens.append(reverse_vocab[i])
-        toktypes.append(gguf.TokenType.USER_DEFINED)
+        if tokenizer.added_tokens_decoder[i].special:
+            toktypes.append(gguf.TokenType.CONTROL)
+        else:
+            toktypes.append(gguf.TokenType.USER_DEFINED)
     else:
         tokens.append(reverse_vocab[i])
         toktypes.append(gguf.TokenType.NORMAL)
