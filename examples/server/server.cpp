@@ -867,7 +867,7 @@ struct llama_server_context
 
         kv_cache_clear();
 
-        for (int32_t i = 0; i < batch.n_tokens; ++i)
+        for (int i = 0; i < (int) system_tokens.size(); ++i)
         {
             llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
         }
@@ -897,13 +897,7 @@ struct llama_server_context
         wait_all_are_idle();
         all_slots_are_idle = true;
 
-        // wait until system prompt load
         system_need_update = true;
-        while (system_need_update)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        // system prompt loaded, continue
     }
 
     void process_system_prompt_data(const json &sys_props) {
@@ -914,10 +908,6 @@ struct llama_server_context
         if (slots.size() > 0)
         {
             notify_system_prompt_changed();
-        }
-        else
-        {
-            system_need_update = true;
         }
     }
 
@@ -965,7 +955,6 @@ struct llama_server_context
                     slot.has_next_token = false;
                 }
                 stop_pos = pos;
-
             }
         }
 
