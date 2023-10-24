@@ -754,6 +754,7 @@ struct llama_server_context
         }
 
         slot->params.antiprompt.clear();
+
         const auto &stop = data.find("stop");
         if (stop != data.end() && stop->is_array())
         {
@@ -2267,7 +2268,7 @@ int main(int argc, char **argv)
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
-                    if(!result.error && result.stop) {
+                    if (!result.error && result.stop) {
                         res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
                     }
                     else
@@ -2294,7 +2295,7 @@ int main(int argc, char **argv)
                                 {
                                     return false;
                                 }
-                                if(result.stop) {
+                                if (result.stop) {
                                     break;
                                 }
                             } else {
