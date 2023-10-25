@@ -335,15 +335,9 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState append = LogTriS
 
     if (change)
     {
-        if (append == LogTriStateTrue)
+        if (append != LogTriStateSame)
         {
-            _append = true;
-            return logfile;
-        }
-
-        if (append == LogTriStateFalse)
-        {
-            _append = false;
+            _append = append == LogTriStateTrue;
             return logfile;
         }
 
