@@ -326,9 +326,9 @@ inline std::string log_filename_generator_impl(LogTriState multilog, const std::
 // INTERNAL, DO NOT USE
 inline FILE *log_handler1_impl(bool change = false, LogTriState append = LogTriStateSame, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
 {
-    static bool _initialized{false};
-    static bool _append{false};
-    static bool _disabled{(filename.empty() && target == nullptr)};
+    static bool _initialized = false;
+    static bool _append = false;
+    static bool _disabled = filename.empty() && target == nullptr;
     static std::string log_current_filename{filename};
     static FILE *log_current_target{target};
     static FILE *logfile = nullptr;
@@ -451,7 +451,7 @@ inline FILE *log_handler() { return log_handler1_impl(); }
 
 // Enable or disable creating separate log files for each run.
 //  can ONLY be invoked BEFORE first log use.
-#define log_multilog(enable) log_filename_generator_impl(enable ? LogTriStateTrue : LogTriStateFalse, "", "")
+#define log_multilog(enable) log_filename_generator_impl((enable) ? LogTriStateTrue : LogTriStateFalse, "", "")
 // Enable or disable append mode for log file.
 //  can ONLY be invoked BEFORE first log use.
 #define log_append(enable) log_append_impl(enable)
@@ -522,13 +522,13 @@ inline bool log_param_single_parse(const std::string & param)
         return true;
     }
 
-    if ( param == "--log-new")
+    if (param == "--log-new")
     {
         log_multilog(true);
         return true;
     }
 
-    if ( param == "--log-append")
+    if (param == "--log-append")
     {
         log_append(true);
         return true;
