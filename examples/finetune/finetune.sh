@@ -4,8 +4,10 @@ cd ../..
 
 EXE="./finetune"
 
-# MODEL="c:/models/openllama-3b-v2-q8_0.gguf" # This is the model the readme uses.
-MODEL="c:/models/openllama-3b-v2.gguf" # An f16 model. Note in this case with "-g", you get an f32-format .BIN file that isn't yet supported if you use it with "main --lora" with GPU inferencing.
+if [[ ! $LLAMA_MODEL_DIR ]]; then LLAMA_MODEL_DIR="./models"; fi
+
+# MODEL="$LLAMA_MODEL_DIR/openllama-3b-v2-q8_0.gguf" # This is the model the readme uses.
+MODEL="$LLAMA_MODEL_DIR/openllama-3b-v2.gguf" # An f16 model. Note in this case with "-g", you get an f32-format .BIN file that isn't yet supported if you use it with "main --lora" with GPU inferencing.
 
 while getopts "dg" opt; do
   case $opt in
