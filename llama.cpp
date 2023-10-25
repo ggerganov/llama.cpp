@@ -5959,8 +5959,6 @@ static int llama_decode_internal(
         }
     }
 
-    ggml_cuda_set_mul_mat_q(cparams.mul_mat_q);
-
     // HACK: ggml-alloc may change the tensor backend when reusing a parent, so force output to be on the CPU here if needed
     if (!lctx.embedding.empty()) {
         embeddings->backend = GGML_BACKEND_CPU;
