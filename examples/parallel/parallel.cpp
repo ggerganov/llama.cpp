@@ -157,7 +157,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.ctx_sampling = llama_sampling_init(params);
+        client.ctx_sampling = llama_sampling_init(params.sparams);
     }
 
     std::vector<llama_token> tokens_system;
@@ -330,7 +330,7 @@ int main(int argc, char ** argv) {
 
                 const llama_token id = llama_sampling_sample(client.ctx_sampling, ctx, NULL, client.i_batch - i);
 
-                llama_sampling_accept(client.ctx_sampling, ctx, id);
+                llama_sampling_accept(client.ctx_sampling, ctx, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -347,7 +347,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (id == llama_token_eos(ctx) ||
+                        (id == llama_token_eos(model) ||
                          (params.n_predict > 0 && client.n_decoded + client.n_prompt >= params.n_predict) ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {

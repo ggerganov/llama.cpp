@@ -3770,8 +3770,10 @@ int llama_v3_apply_lora_from_file_internal(const struct llama_v3_model & model, 
                     throw std::runtime_error(format_old(
                         "%s: error: lora failed", __func__));
                 }
+#if defined(GGML_USE_CUBLAS)
                 offload_func = ggml_cuda_assign_buffers;
                 offload_func_force_inplace = ggml_cuda_assign_buffers_force_inplace;
+#endif
             }
 #endif // GGML_USE_CUBLAS
 

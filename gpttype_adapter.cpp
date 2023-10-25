@@ -176,7 +176,7 @@ static int GetEosID(FileFormat file_format, int32_t n_vocab)
     {
         if(file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON)
         {
-            eosID = llama_token_eos(llama_ctx_v4);
+            eosID = llama_token_eos(&(llama_ctx_v4->model));
         }
         else if(file_format == FileFormat::GGJT_3)
         {
@@ -369,9 +369,35 @@ void sample_top_a(llama_token_data_array * candidates, float a, size_t min_keep)
 void sample_rep_pen(int n_ctx, int rep_pen_range, float rep_pen, llama_token_data_array * candidates_p)
 {
     auto last_n_repeat = std::min(std::min((int)last_n_tokens.size(), rep_pen_range), n_ctx);
-    llama_sample_repetition_penalty(nullptr, candidates_p,
-        last_n_tokens.data() + last_n_tokens.size() - last_n_repeat,
-        last_n_repeat, rep_pen);
+
+    const llama_token * last_tokens =  last_n_tokens.data() + last_n_tokens.size() - last_n_repeat;
+    size_t last_tokens_size = last_n_repeat;
+    llama_token_data_array * candidates = candidates_p;
+    float penalty = rep_pen;
+
+    if (last_tokens_size == 0 || penalty == 1.0f) {
+        return;
+    }
+
+    const int64_t t_start_sample_us = ggml_time_us();
+
+    for (size_t i = 0; i < candidates->size; ++i) {
+        const auto * token_iter = std::find(last_tokens, last_tokens + last_tokens_size, candidates->data[i].id);
+        if (token_iter == last_tokens + last_tokens_size) {
+            continue;
+        }
+
+        // The academic publication that described this technique actually just only divided, but that would cause tokens with negative logits to become more likely, which is obviously wrong.
+        // This is common fix for this problem, which is to multiply by the penalty instead of dividing.
+        if (candidates->data[i].logit <= 0) {
+            candidates->data[i].logit *= penalty;
+        } else {
+            candidates->data[i].logit /= penalty;
+        }
+    }
+
+    candidates->sorted = false;
+
 }
 
 void sample_temperature(llama_token_data_array * candidates_p, float temp)

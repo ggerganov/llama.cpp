@@ -11,11 +11,18 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL]\n" , argv[0]);
         return 1 ;
     }
 
+    // number of parallel batches
     int n_parallel = 1;
+
+    // total length of the sequences including the prompt
+    int n_len = 32;
+
+    // number of layers to offload to the GPU
+    int n_gpu_layers = 0;
 
     if (argc >= 2) {
         params.model = argv[1];
@@ -29,12 +36,17 @@ int main(int argc, char ** argv) {
         n_parallel = std::atoi(argv[3]);
     }
 
+    if (argc >= 5) {
+        n_len = std::atoi(argv[4]);
+    }
+
+    if (argc >= 6) {
+        n_gpu_layers = std::atoi(argv[5]);
+    }
+
     if (params.prompt.empty()) {
         params.prompt = "Hello my name is";
     }
-
-    // total length of the sequences including the prompt
-    const int n_len = 32;
 
     // init LLM
 
@@ -44,7 +56,7 @@ int main(int argc, char ** argv) {
 
     llama_model_params model_params = llama_model_default_params();
 
-    // model_params.n_gpu_layers = 99; // offload all layers to the GPU
+    model_params.n_gpu_layers = n_gpu_layers;
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -175,7 +187,7 @@ int main(int argc, char ** argv) {
             //const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
             // is it an end of stream? -> mark the stream as finished
-            if (new_token_id == llama_token_eos(ctx) || n_cur == n_len) {
+            if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
                 i_batch[i] = -1;
                 LOG_TEE("\n");
                 if (n_parallel > 1) {

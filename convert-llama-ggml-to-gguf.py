@@ -388,7 +388,9 @@ def handle_metadata(cfg, hp):
         cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir,
         cfg.vocabtype )
     # FIXME: Respect cfg.vocab_dir?
-    svocab = gguf.SpecialVocab(cfg.model_metadata_dir)
+    svocab = gguf.SpecialVocab(cfg.model_metadata_dir,
+        load_merges = cfg.vocabtype == 'bpe',
+        n_vocab = vocab.vocab_size)
     convert.check_vocab_size(params, vocab)
     return (params, vocab, svocab)
 

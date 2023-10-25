@@ -494,21 +494,22 @@ extern "C" {
     // Vocab
     //
 
-    LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
 
-    LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
+    LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+
     // codellama infill tokens
-    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
-    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
-    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
-    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
+    LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
 
     //
     // Tokenization
@@ -560,21 +561,15 @@ extern "C" {
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
-    LLAMA_API void llama_sample_repetition_penalty(
-            struct llama_context * ctx,
-          llama_token_data_array * candidates,
-               const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                          float    penalty);
-
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
-    LLAMA_API void llama_sample_frequency_and_presence_penalties(
+    LLAMA_API void llama_sample_repetition_penalties(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
                const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                           float   alpha_frequency,
-                           float   alpha_presence);
+                          size_t   penalty_last_n,
+                           float   penalty_repeat,
+                           float   penalty_freq,
+                           float   penalty_present);
 
     /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
