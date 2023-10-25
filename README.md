@@ -7,7 +7,7 @@ KoboldCpp is an easy-to-use AI text-generation software for GGML and GGUF models
 ![Preview](media/preview3.png)
 ![Preview](media/preview4.png)
 
-## Usage
+## Windows Usage
 - **[Download the latest .exe release here](https://github.com/LostRuins/koboldcpp/releases/latest)** or clone the git repo.
 - Windows binaries are provided in the form of **koboldcpp.exe**, which is a pyinstaller wrapper for a few **.dll** files and **koboldcpp.py**. You can also rebuild it yourself with the provided makefiles and scripts.
 - Weights are not included, you can use the official llama.cpp `quantize.exe` to generate them from your official weight files (or download them from other places such as [TheBloke's Huggingface](https://huggingface.co/TheBloke).
@@ -15,12 +15,20 @@ KoboldCpp is an easy-to-use AI text-generation software for GGML and GGUF models
 - Launching with no command line arguments displays a GUI containing a subset of configurable settings. Generally you dont have to change much besides the `Presets` and `GPU Layers`. Read the `--help` for more info about each settings.
 - By default, you can connect to http://localhost:5001
 - You can also run it using the command line `koboldcpp.exe [ggml_model.bin] [port]`. For info, please check `koboldcpp.exe --help`
-- Default context size to small? Try `--contextsize 3072` to 1.5x your context size! without much perplexity gain. Note that you'll have to increase the max context in the Kobold Lite UI as well (click and edit the number text field).
-- Big context too slow? Try the `--smartcontext` flag to reduce prompt processing frequency. Also, you can try to run with your GPU using CLBlast, with `--useclblast` flag for a speedup
-- Want even more speedup? Combine `--useclblast` with `--gpulayers` to offload entire layers to the GPU! **Much faster, but uses more VRAM**. Experiment to determine number of layers to offload, and reduce by a few if you run out of memory.
+
+### Improving Performance
+- **(Nivida Only) GPU Acceleration**: If you're on Windows with an Nvidia GPU you can get CUDA support out of the box using the `--usecublas` flag, make sure you select the correct .exe with CUDA support.
+- **Any GPU Acceleration**: As a slightly slower alternative, try CLBlast with `--useclblast` flags for a slightly slower but more GPU compatible speedup.
+- **GPU Layer Offloading**: Want even more speedup? Combine one of the above GPU flags with `--gpulayers` to offload entire layers to the GPU! **Much faster, but uses more VRAM**. Experiment to determine number of layers to offload, and reduce by a few if you run out of memory.
+- **Increasing Context Size**: Try `--contextsize 4096` to 2x your context size! without much perplexity gain. Note that you'll have to increase the max context in the Kobold Lite UI as well (click and edit the number text field).
+- **Reducing Prompt Processing**: Try the `--smartcontext` flag to reduce prompt processing frequency.
 - If you are having crashes or issues, you can try turning off BLAS with the `--noblas` flag. You can also try running in a non-avx2 compatibility mode with `--noavx2`. Lastly, you can try turning off mmap with `--nommap`.
 
-For more information, be sure to run the program with the `--help` flag.
+For more information, be sure to run the program with the `--help` flag, or [check the wiki](https://github.com/LostRuins/koboldcpp/wiki).
+
+## Run on Colab
+- KoboldCpp now has an **official Colab GPU Notebook**! This is an easy way to get started without installing anything in a minute or two. [Try it here!](https://colab.research.google.com/github/LostRuins/koboldcpp/blob/concedo/colab.ipynb).
+- Note that KoboldCpp is not responsible for your usage of this Colab Notebook, you should ensure that your own usage complies with Google Colab's terms of use.
 
 ## OSX and Linux
 - You will have to compile your binaries from source. A makefile is provided, simply run `make`.
@@ -29,11 +37,13 @@ For more information, be sure to run the program with the `--help` flag.
 - Alternatively, if you want you can also link your own install of CLBlast manually with `make LLAMA_CLBLAST=1`, for this you will need to obtain and link OpenCL and CLBlast libraries.
   - For Arch Linux: Install `cblas` `openblas` and `clblast`.
   - For Debian: Install `libclblast-dev` and `libopenblas-dev`.
+- You can attempt a CuBLAS build with `LLAMA_CUBLAS=1`. You will need CUDA Toolkit installed. Some have also reported success with the CMake file, though that is more for windows.
 - For a full featured build, do `make LLAMA_OPENBLAS=1 LLAMA_CLBLAST=1 LLAMA_CUBLAS=1`
 - After all binaries are built, you can run the python script with the command `koboldcpp.py [ggml_model.bin] [port]`
+
 - Note: Many OSX users have found that the using Accelerate is actually faster than OpenBLAS. To try, you may wish to run with `--noblas` and compare speeds.
 
-### Arch Linux
+### Arch Linux Packages
 There are 4 AUR packages available: [CPU-only](https://aur.archlinux.org/packages/koboldcpp-cpu), [CLBlast](https://aur.archlinux.org/packages/koboldcpp-clblast), [CUBLAS](https://aur.archlinux.org/packages/koboldcpp-cuda), and [HIPBLAS](https://aur.archlinux.org/packages/koboldcpp-hipblas). They are, respectively, for users with no GPU, users with a GPU (vendor-agnostic), users with NVIDIA GPUs, and users with a supported AMD GPU.
 
 The recommended installation method is through an AUR helper such as [paru](https://aur.archlinux.org/packages/paru) or [yay](https://aur.archlinux.org/packages/yay):
@@ -65,21 +75,19 @@ You can then run koboldcpp anywhere from the terminal by running `koboldcpp` to 
   - OpenBLAS - tested with https://github.com/xianyi/OpenBLAS .
   - Move the respectives .lib files to the /lib folder of your project, overwriting the older files.
   - Also, replace the existing versions of the corresponding .dll files located in the project directory root (e.g. libopenblas.dll).
+  - You can attempt a CuBLAS build with using the provided CMake file with visual studio. If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC.
   - Make the KoboldCPP project using the instructions above.
 
 ## Android (Termux) Alternative method
 - See https://github.com/ggerganov/llama.cpp/pull/1828/files
 
-## Using CuBLAS
-- If you're on Windows with an Nvidia GPU you can get CUDA support out of the box using the `--usecublas` flag, make sure you select the correct .exe with CUDA support.
-- You can attempt a CuBLAS build with `LLAMA_CUBLAS=1` or using the provided CMake file (best for visual studio users). If you use the CMake file to build, copy the `koboldcpp_cublas.dll` generated into the same directory as the `koboldcpp.py` file. If you are bundling executables, you may need to include CUDA dynamic libraries (such as `cublasLt64_11.dll` and `cublas64_11.dll`) in order for the executable to work correctly on a different PC.
-
 ## AMD
 - Please check out https://github.com/YellowRoseCx/koboldcpp-rocm
 
-## Cloud / Colab
-- KoboldCpp now has an official Colab GPU Notebook! [Try it here](https://colab.research.google.com/github/LostRuins/koboldcpp/blob/concedo/colab.ipynb).
-- Note that KoboldCpp is not responsible for your usage of this Colab Notebook, you should ensure that your own usage complies with Google Colab's terms of use.
+## Docker
+- KoboldCpp has a few unofficial third-party community created docker images. Feel free to try them out, but do not expect up-to-date support:
+  - https://github.com/korewaChino/koboldCppDocker
+  - https://github.com/noneabove1182/koboldcpp-docker
 
 ## Questions and Help
 - **First, please check out [The KoboldCpp FAQ and Knowledgebase](https://github.com/LostRuins/koboldcpp/wiki) which may already have answers to your questions! Also please search through past issues and discussions.**
