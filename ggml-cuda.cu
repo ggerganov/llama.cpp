@@ -7202,151 +7202,11 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
     ggml_cuda_pool_free(dst_f16, dst_as);
 }
 
-static void ggml_cuda_mul_mat_mat_deq_cublas(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
-
-    // require tensor cores
-    const int compute_capability = g_compute_capabilities[id];
-    GGML_ASSERT(compute_capability >= CC_VOLTA);
-
-    GGML_ASSERT(!ggml_is_transposed(src0));
-    GGML_ASSERT(!ggml_is_transposed(src1));
-
-    //GGML_ASSERT(src0->backend != GGML_BACKEND_GPU_SPLIT);
-
-    GGML_ASSERT(ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16);
-    GGML_ASSERT(src1->type == GGML_TYPE_F16   || src1->type == GGML_TYPE_F32);
-
-    const int64_t ne00 = src0->ne[0]; GGML_UNUSED(ne00);
-    const int64_t ne01 = src0->ne[1];
-    const int64_t ne02 = src0->ne[2]; GGML_UNUSED(ne02);
-    const int64_t ne03 = src0->ne[3]; GGML_UNUSED(ne03);
-
-    const int64_t nb01 = src0->nb[1]; GGML_UNUSED(nb01);
-    const int64_t nb02 = src0->nb[2]; GGML_UNUSED(nb02);
-    const int64_t nb03 = src0->nb[3]; GGML_UNUSED(nb03);
-
-    const int64_t ne10 = src1->ne[0];
-    const int64_t ne11 = src1->ne[1];
-    const int64_t ne12 = src1->ne[2]; GGML_UNUSED(ne12);
-    const int64_t ne13 = src1->ne[3]; GGML_UNUSED(ne13);
-
-    const int64_t nb11 = src1->nb[1]; GGML_UNUSED(nb11);
-    const int64_t nb12 = src1->nb[2]; GGML_UNUSED(nb12);
-    const int64_t nb13 = src1->nb[3]; GGML_UNUSED(nb13);
-
-    const int64_t ne1 = ggml_nelements(src1);
-    const int64_t ne  = ggml_nelements(dst);
-
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
-    cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
-    CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], main_stream));
-
-    ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
-    void * src0_ddq = src0_extra->data_device[g_main_device];
-
-    ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
-    float * src1_ddf = (float *) src1_extra->data_device[g_main_device];
-
-    ggml_tensor_extra_gpu * dst_extra = (ggml_tensor_extra_gpu *) dst->extra;
-    float * dst_ddf = (float *) dst_extra->data_device[g_main_device];
-
-#if 1
-    {
-        // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
-        half * src0_as_f16 = nullptr;
-        size_t src0_as = 0;
-        if (src0->type != GGML_TYPE_F16) {
-            const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src0->type);
-            GGML_ASSERT(to_fp16_cuda != nullptr);
-            const size_t ne = ne01*ne00;
-            src0_as_f16 = (half *) ggml_cuda_pool_malloc(ne * sizeof(half), &src0_as);
-            to_fp16_cuda(src0_ddq, src0_as_f16, ne, main_stream);
-        }
-
-        const half * src0_ptr = src0->type == GGML_TYPE_F16 ? (const half *) src0_ddq : src0_as_f16;
-
-        half * src1_as_f16 = nullptr;
-        size_t src1_as = 0;
-        if (src1->type != GGML_TYPE_F16) {
-            const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src1->type);
-            GGML_ASSERT(to_fp16_cuda != nullptr);
-            const size_t ne = ne11*ne10;
-            src1_as_f16 = (half *) ggml_cuda_pool_malloc(ne * sizeof(half), &src1_as);
-            to_fp16_cuda(src1_ddf, src1_as_f16, ne, main_stream);
-        }
-
-        const half * src1_ptr = src1->type == GGML_TYPE_F16 ? (const half *) src1_ddf : src1_as_f16;
-
-        size_t dst_as = 0;
-        half * dst_f16 = (half *) ggml_cuda_pool_malloc(ne01*ne11 * sizeof(half), &dst_as);
-
-        const half alpha_f16 = 1.0f;
-        const half beta_f16 = 0.0f;
-
-        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], main_stream));
-        CUBLAS_CHECK(
-            cublasGemmEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
-                    ne01, ne11, ne10,
-                    &alpha_f16, src0_ptr, CUDA_R_16F, ne00,
-                                src1_ptr, CUDA_R_16F, ne10,
-                    &beta_f16,   dst_f16, CUDA_R_16F, ne01,
-                    CUBLAS_COMPUTE_16F,
-                    CUBLAS_GEMM_DEFAULT_TENSOR_OP));
-
-        const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(GGML_TYPE_F16);
-        to_fp32_cuda(dst_f16, dst_ddf, ne01*ne11, main_stream);
-
-        ggml_cuda_pool_free(dst_f16, dst_as);
-
-        if (src0_as != 0) {
-            ggml_cuda_pool_free(src0_as_f16, src0_as);
-        }
-
-        if (src1_as != 0) {
-            ggml_cuda_pool_free(src1_as_f16, src1_as);
-        }
-    }
-#else
-    // NOTE: this seems faster for tiny models and small batch-size
-    {
-        // convert src0 to fp32, multiply as fp32
-        float * src0_as_f32 = nullptr;
-        size_t src0_as = 0;
-        if (src0->type != GGML_TYPE_F32) {
-            const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(src0->type);
-            GGML_ASSERT(to_fp32_cuda != nullptr);
-            const size_t ne = ne01*ne00;
-            src0_as_f32 = (float *) ggml_cuda_pool_malloc(ne * sizeof(float), &src0_as);
-            to_fp32_cuda(src0_ddq, src0_as_f32, ne, main_stream);
-        }
-
-        const float * src0_ptr = src0->type == GGML_TYPE_F32 ? (const float *) src0_ddq : src0_as_f32;
-
-        const float * src1_ptr = (const float *) src1_ddf;
-
-        const float alpha = 1.0f;
-        const float beta  = 0.0f;
-
-        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], main_stream));
-        CUBLAS_CHECK(
-            cublasSgemm(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
-                    ne01, ne11, ne10,
-                    &alpha, src0_ptr, ne00,
-                            src1_ptr, ne10,
-                    &beta,  dst_ddf,  ne01));
-
-        if (src0_as != 0) {
-            ggml_cuda_pool_free(src0_as_f32, src0_as);
-        }
-    }
-#endif
-}
-
 static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    bool all_on_device = (src0->backend == GGML_BACKEND_GPU || src0->backend == GGML_BACKEND_GPU_SPLIT) &&
-        src1->backend == GGML_BACKEND_GPU && dst->backend == GGML_BACKEND_GPU;
+    const bool all_on_device =
+        (src0->backend == GGML_BACKEND_GPU || src0->backend == GGML_BACKEND_GPU_SPLIT) &&
+        (src1->backend == GGML_BACKEND_GPU) &&
+        ( dst->backend == GGML_BACKEND_GPU);
 
     int64_t min_compute_capability = INT_MAX;
     for (int64_t id = 0; id < g_device_count; ++id) {
@@ -7373,9 +7233,6 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     } else if (all_on_device && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
         // KQ + KQV multi-batch
         ggml_cuda_mul_mat_mat_batched_cublas(src0, src1, dst);
-    } else if (all_on_device && (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) && src1->ne[1] > 32) {
-       // F16 and quantized src0 + high-batch src1
-        ggml_cuda_mul_mat_mat_deq_cublas(src0, src1, dst);
     } else if (src0->type == GGML_TYPE_F32) {
         ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
     } else if (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) {
@@ -7393,15 +7250,19 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
             }
         } else {
-            if (g_mul_mat_q && ggml_is_quantized(src0->type) && min_compute_capability >= MIN_CC_DP4A) {
+            // ref: https://github.com/ggerganov/llama.cpp/pull/3776
+            bool use_mul_mat_q = g_mul_mat_q && min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type);
+
+            // TODO: better way to determine availability of tensor cores
+            //       currently fails for GeForce GTX 1660 which is TURING arch but does not have tensor cores
+            if (min_compute_capability >= CC_VOLTA && src1->ne[1] > 32) {
+                // when tensor cores are available, use them for large batch size
+                use_mul_mat_q = false;
+            }
+
+            if (use_mul_mat_q) {
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
             } else {
-                //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
-                //printf("      %8d %8d %8d %8d\n", src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3]);
-                //printf("src1: %8d %8d %8d %8d\n", src1->ne[0], src1->ne[1], src1->ne[2], src1->ne[3]);
-                //printf("      %8d %8d %8d %8d\n", src1->nb[0], src1->nb[1], src1->nb[2], src1->nb[3]);
-                //printf("src0 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name);
-                //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
             }
         }
