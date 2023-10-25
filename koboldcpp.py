@@ -527,7 +527,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         current_token = 0
         incomplete_token_buffer = bytearray()
-        await asyncio.sleep(0.1) #anti race condition, prevent check from overtaking generate
+        await asyncio.sleep(0.05) #anti race condition, prevent check from overtaking generate
         while True:
             streamDone = handle.has_finished() #exit next loop on done
             tokenStr = ""
