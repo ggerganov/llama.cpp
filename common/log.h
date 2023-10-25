@@ -136,7 +136,7 @@ inline std::string log_filename_generator_impl(LogTriState multilog, const std::
 
     if (multilog != LogTriStateSame)
     {
-        _multilog = (multilog == LogTriStateTrue ? true : false);
+        _multilog = multilog == LogTriStateTrue;
     }
 
     std::stringstream buf;
