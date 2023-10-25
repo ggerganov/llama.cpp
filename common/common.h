@@ -56,7 +56,7 @@ struct gpt_params {
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
 
     // // sampling parameters
-    struct llama_sampling_params sampling_params;
+    struct llama_sampling_params sparams;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_draft       = "";                              // draft model for speculative decoding
@@ -66,10 +66,10 @@ struct gpt_params {
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
-    std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
+    // TODO: avoid tuple, use struct
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter
 
@@ -124,9 +124,22 @@ void process_escapes(std::string& input);
 // Model utils
 //
 
+// TODO: avoid tuplue, use struct
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
-struct llama_model_params   llama_model_params_from_gpt_params(const gpt_params & params);
+
+struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+
+// Batch utils
+
+void llama_batch_clear(struct llama_batch & batch);
+
+void llama_batch_add(
+                 struct llama_batch & batch,
+                        llama_token   id,
+                          llama_pos   pos,
+    const std::vector<llama_seq_id> & seq_ids,
+                               bool   logits);
 
 //
 // Vocab utils
@@ -137,12 +150,14 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos);
+                        bool   add_bos,
+                        bool   special = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos);
+                        bool   add_bos,
+                        bool   special = false);
 
 // tokenizes a token into a piece
 // should work similar to Python's `tokenizer.id_to_piece`

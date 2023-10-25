@@ -11,12 +11,8 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- ‼️ Breaking change: `rope_freq_base` and `rope_freq_scale` must be set to zero to use the model default values: [#3401](https://github.com/ggerganov/llama.cpp/pull/3401)
-- Parallel decoding + continuous batching support added: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
-  **Devs should become familiar with the new API**
-- Local Falcon 180B inference on Mac Studio
-
-  https://github.com/ggerganov/llama.cpp/assets/1991296/98abd4e8-7077-464c-ae89-aebabca7757e
+- LLaVA support: https://github.com/ggerganov/llama.cpp/pull/3436
+- ‼️ BPE tokenizer update: existing Falcon and Starcoder `.gguf` models will need to be reconverted: [#3252](https://github.com/ggerganov/llama.cpp/pull/3252)
 
 ----
 
@@ -89,21 +85,23 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Vicuna](https://github.com/ggerganov/llama.cpp/discussions/643#discussioncomment-5533894)
 - [X] [Koala](https://bair.berkeley.edu/blog/2023/04/03/koala/)
 - [X] [OpenBuddy 🐶 (Multilingual)](https://github.com/OpenBuddy/OpenBuddy)
-- [X] [Pygmalion 7B / Metharme 7B](#using-pygmalion-7b--metharme-7b)
+- [X] [Pygmalion/Metharme](#using-pygmalion-7b--metharme-7b)
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
-- [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
-- [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
+- [X] [Baichuan 1 & 2](https://huggingface.co/models?search=baichuan-inc/Baichuan) + [derivations](https://huggingface.co/hiyouga/baichuan-7b-sft)
+- [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
-- [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+- [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
+- [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+
 
 **Bindings:**
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
-- Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp), [hlhr202/llama-node](https://github.com/hlhr202/llama-node)
+- Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
 - Rust: [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
@@ -206,7 +204,7 @@ https://user-images.githubusercontent.com/1991296/224442907-7693d4be-acaa-4e01-8
 
 ## Usage
 
-Here are the steps for the LLaMA-7B model.
+Here are the end-to-end binary build and model conversion steps for the LLaMA-7B model.
 
 ### Get the Code
 
@@ -572,6 +570,18 @@ python3 convert.py models/7B/
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
+
+### Running on Windows with prebuilt binaries
+
+You will find prebuilt Windows binaries on the release page.
+
+Simply download and extract the latest zip package of choice: (e.g. `llama-b1380-bin-win-avx2-x64.zip`)
+
+From the unzipped folder, open a terminal/cmd window here and place a pre-converted `.gguf` model file. Test out the main example like so:
+
+```
+.\main -m llama-2-7b.Q4_0.gguf -n 128
+```
 
 ### Memory/Disk Requirements
 
@@ -952,7 +962,6 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /
 
 - [main](./examples/main/README.md)
 - [server](./examples/server/README.md)
-- [embd-input](./examples/embd-input/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
 - [BLIS](./docs/BLIS.md)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)

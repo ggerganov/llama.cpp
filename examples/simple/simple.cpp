@@ -92,7 +92,7 @@ int main(int argc, char ** argv) {
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
 
-    llama_batch batch = llama_batch_init(512, 0);
+    llama_batch batch = llama_batch_init(512, 0, 1);
 
     // evaluate the initial prompt
     batch.n_tokens = tokens_list.size();
@@ -138,7 +138,7 @@ int main(int argc, char ** argv) {
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
             // is it an end of stream?
-            if (new_token_id == llama_token_eos(ctx) || n_cur == n_len) {
+            if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
                 LOG_TEE("\n");
 
                 break;

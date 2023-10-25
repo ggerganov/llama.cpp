@@ -1,7 +1,7 @@
 set(TARGET clip)
 add_library(${TARGET} clip.cpp clip.h)
 install(TARGETS ${TARGET} LIBRARY)
-target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PRIVATE common ggml ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
 if (NOT MSVC)
     target_compile_options(${TARGET} PRIVATE -Wno-cast-qual) # stb_image.h

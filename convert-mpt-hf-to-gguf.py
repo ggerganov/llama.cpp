@@ -98,6 +98,8 @@ gguf_writer.add_embedding_length(hparams["d_model"])
 gguf_writer.add_block_count(block_count)
 gguf_writer.add_feed_forward_length(4 * hparams["d_model"])
 gguf_writer.add_head_count(hparams["n_heads"])
+if kv_n_heads := hparams["attn_config"].get("kv_n_heads"):
+    gguf_writer.add_head_count_kv(kv_n_heads)
 gguf_writer.add_layer_norm_eps(1e-05)
 if hparams["attn_config"]["clip_qkv"] is not None:
     gguf_writer.add_clamp_kqv(hparams["attn_config"]["clip_qkv"])
@@ -126,18 +128,27 @@ vocab_size = hparams["vocab_size"]
 # ref: https://github.com/cmp-nct/ggllm.cpp/blob/master/falcon_convert.py
 tokenizer = AutoTokenizer.from_pretrained(dir_model)
 
+added_vocab = tokenizer.get_added_vocab()
 reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
 
 for i in range(vocab_size):
-    tokens.append(reverse_vocab[i] if i in reverse_vocab else f"[PAD{i}]")
-    scores.append(0.0) # dummy
-    toktypes.append(gguf.TokenType.NORMAL)
+    if i not in reverse_vocab:
+        tokens.append(f"[PAD{i}]")
+        toktypes.append(gguf.TokenType.USER_DEFINED)
+    elif reverse_vocab[i] in added_vocab:
+        tokens.append(reverse_vocab[i])
+        if tokenizer.added_tokens_decoder[i].special:
+            toktypes.append(gguf.TokenType.CONTROL)
+        else:
+            toktypes.append(gguf.TokenType.USER_DEFINED)
+    else:
+        tokens.append(reverse_vocab[i])
+        toktypes.append(gguf.TokenType.NORMAL)
 
 gguf_writer.add_token_list(tokens)
-gguf_writer.add_token_scores(scores)
 gguf_writer.add_token_types(toktypes)
 
-special_vocab = gguf.SpecialVocab(dir_model, load_merges = True)
+special_vocab = gguf.SpecialVocab(dir_model, load_merges = True, n_vocab = len(tokens))
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS

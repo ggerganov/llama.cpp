@@ -125,6 +125,7 @@
       background-color: #222;
       color: #ddd;
     }
+
     code {
       font-family: monospace;
       padding: 0.1em 0.3em;
@@ -141,7 +142,8 @@
       display: inline;
     }
 
-    header, footer {
+    header,
+    footer {
       text-align: center;
     }
 
@@ -163,6 +165,7 @@
       0% {
         background-position: 0%;
       }
+
       100% {
         background-position: 100%;
       }
@@ -181,6 +184,7 @@
         --loading-color-1: #22222200;
         --loading-color-2: #222222ff;
       }
+
       .popover-content {
         background-color: black;
       }
@@ -194,6 +198,8 @@
 
     import { llama } from '/completion.js';
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    let selected_image = false;
+    var slot_id = -1;
 
     const session = signal({
       prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
@@ -203,6 +209,7 @@
       type: "chat",  // "chat" | "completion"
       char: "Llama",
       user: "User",
+      image_selected: ''
     })
 
     const params = signal({
@@ -220,7 +227,9 @@
       mirostat_tau: 5, // target entropy
       mirostat_eta: 0.1, // learning rate
       grammar: '',
-      n_probs: 0, // no completion_probabilities
+      n_probs: 0, // no completion_probabilities,
+      image_data: [],
+      cache_prompt: true
     })
 
     /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
@@ -270,6 +279,7 @@
       // saved templates were successfuly imported.
 
       console.log('Processing saved templates and updating default template')
+      params.value = { ...params.value, image_data: [] };
 
       //console.log(importedTemplates);
       savedUserTemplates.value = importedTemplates;
@@ -294,7 +304,9 @@
 
     function userTemplateApply(t) {
       session.value = t.data.session;
+      session.value = { ...session.value, image_selected: '' };
       params.value = t.data.params;
+      params.value = { ...params.value, image_data: [] };
     }
 
     function userTemplateResetToDefaultAndApply() {
@@ -385,20 +397,25 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, {controller: controller.value})) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
         const data = chunk.data;
 
         if (data.stop) {
           while (
             currentMessages.length > 0 &&
             currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
-            ) {
+          ) {
             currentMessages.pop();
           }
           transcriptUpdate([...history, [char, currentMessages]])
           console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
         } else {
           currentMessages.push(data);
+          slot_id = data.slot_id;
+          if (selected_image && !data.multimodal) {
+            alert("The server was not compiled for multimodal or the model projector can't be loaded.");
+            return;
+          }
           transcriptUpdate([...history, [char, currentMessages]])
         }
 
@@ -419,7 +436,7 @@
 
       transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
 
-      const prompt = template(session.value.template, {
+      let prompt = template(session.value.template, {
         message: msg,
         history: session.value.transcript.flatMap(
           ([name, data]) =>
@@ -434,9 +451,12 @@
             )
         ).join("\n"),
       });
-
+      if (selected_image) {
+        prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
+      }
       await runLlama(prompt, {
         ...params.value,
+        slot_id: slot_id,
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
       }, "{{char}}");
     }
@@ -446,10 +466,11 @@
         console.log('already running...');
         return;
       }
-      const {prompt} = session.value;
+      const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
       await runLlama(prompt, {
         ...params.value,
+        slot_id: slot_id,
         stop: [],
       }, "");
     }
@@ -465,6 +486,27 @@
     const reset = (e) => {
       stop(e);
       transcriptUpdate([]);
+    }
+
+    const uploadImage = (e) => {
+      e.preventDefault();
+      document.getElementById("fileInput").click();
+      document.getElementById("fileInput").addEventListener("change", function (event) {
+        const selectedFile = event.target.files[0];
+        if (selectedFile) {
+          const reader = new FileReader();
+          reader.onload = function () {
+            const image_data = reader.result;
+            session.value = { ...session.value, image_selected: image_data };
+            params.value = {
+              ...params.value, image_data: [
+                { data: image_data.replace(/data:image\/[^;]+;base64,/, ''), id: 10 }]
+            }
+          };
+          selected_image = true;
+          reader.readAsDataURL(selectedFile);
+        }
+      });
     }
 
     function MessageInput() {
@@ -497,6 +539,7 @@
           </div>
           <div class="right">
             <button type="submit" disabled=${generating.value}>Send</button>
+            <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button onclick=${reset}>Reset</button>
           </div>
@@ -540,7 +583,7 @@
             data;
           message = html`<${Markdownish} text=${template(text)} />`
         }
-        if(user) {
+        if (user) {
           return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
         } else {
           return html`<p key=${index}>${message}</p>`
@@ -549,6 +592,7 @@
 
       return html`
         <section id="chat" ref=${container}>
+          <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
           ${messages.flatMap(chatLine)}
         </section>`;
     };
@@ -567,7 +611,7 @@
           const converter = new SchemaConverter(
             grammarJsonSchemaPropOrder.value
               .split(',')
-              .reduce((acc, cur, i) => ({...acc, [cur.trim()]: i}), {})
+              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
           )
           converter.visit(schema, '')
           params.value = {
@@ -579,7 +623,7 @@
         }
       }
 
-      const FloatField = ({label, max, min, name, step, value}) => {
+      const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
           <div>
             <label for="${name}">${label}</label>
@@ -589,7 +633,7 @@
         `
       };
 
-      const IntField = ({label, max, min, name, value}) => {
+      const IntField = ({ label, max, min, name, value }) => {
         return html`
           <div>
             <label for="${name}">${label}</label>
@@ -672,7 +716,7 @@
             ${GrammarControl()}
           </fieldset>
       `
-    );
+      );
 
       const CompletionConfigForm = () => (
         html`
@@ -694,20 +738,20 @@
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">
-            ${IntField({label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict})}
-            ${FloatField({label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature})}
-            ${FloatField({label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty})}
-            ${IntField({label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n})}
-            ${IntField({label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k})}
-            ${FloatField({label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p})}
+            ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
+            ${FloatField({ label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+            ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+            ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
+            ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
+            ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
           </fieldset>
           <details>
             <summary>More options</summary>
             <fieldset class="two">
-              ${FloatField({label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z})}
-              ${FloatField({label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p})}
-              ${FloatField({label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty})}
-              ${FloatField({label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty})}
+              ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
+              ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+              ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
+              ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
             </fieldset>
             <hr />
             <fieldset class="three">
@@ -716,11 +760,11 @@
                 <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
                 <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
               </div>
-              ${FloatField({label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau})}
-              ${FloatField({label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta})}
+              ${FloatField({ label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
+              ${FloatField({ label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
             </fieldset>
             <fieldset>
-              ${IntField({label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs})}
+              ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
             </fieldset>
           </details>
         </form>
@@ -759,20 +803,20 @@
         const popoverChildren = html`
           <div class="prob-set">
             ${probs.map((p, index) => {
-              return html`
+          return html`
                 <div
                   key=${index}
                   title=${`prob: ${p.prob}`}
                   style=${{
-                    padding: '0.3em',
-                    backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
-                  }}
+              padding: '0.3em',
+              backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+            }}
                 >
                   <span>${p.tok_str}: </span>
                   <span>${Math.floor(p.prob * 100)}%</span>
                 </div>
               `
-            })}
+        })}
           </div>
         `
 
@@ -851,9 +895,9 @@
               ref=${popoverRef}
               class="popover-content"
               style=${{
-                top: position.value.top,
-                left: position.value.left,
-              }}
+            top: position.value.top,
+            left: position.value.left,
+          }}
             >
               ${props.popoverChildren}
             </div>
@@ -952,8 +996,11 @@
 </head>
 
 <body>
-  <div id="container"></div>
+  <div id="container">
+    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+  </div>
   <div id="portal"></div>
 </body>
 
 </html>
+
