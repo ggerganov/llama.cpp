@@ -6254,16 +6254,15 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
 
-    GGML_ASSERT(src0_dd_i != nullptr);
+    GGML_ASSERT(src0_dd_i  != nullptr);
     GGML_ASSERT(src1_ddf_i != nullptr);
-    GGML_ASSERT(dst_dd_i != nullptr);
-
+    GGML_ASSERT(dst_dd_i   != nullptr);
 
     const int64_t ne00 = src0->ne[0];
-
     const int64_t ne10 = src1->ne[0];
 
     const int64_t ne0 = dst->ne[0];
+
     const int64_t row_diff = row_high - row_low;
 
     int id;
@@ -7223,12 +7222,13 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
 
     if (all_on_device && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
-        // KQ
+        // KQ single-batch
         ggml_cuda_mul_mat_vec_p021(src0, src1, dst);
     } else if (all_on_device && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
-        // KQV
+        // KQV single-batch
         ggml_cuda_mul_mat_vec_nc(src0, src1, dst);
     } else if (all_on_device && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
+        // KQ + KQV multi-batch
         ggml_cuda_mul_mat_mat_batched_cublas(src0, src1, dst);
     } else if (src0->type == GGML_TYPE_F32) {
         ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
