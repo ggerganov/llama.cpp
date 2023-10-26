@@ -364,6 +364,12 @@ vk::DeviceMemory *ggml_vk_allocate(size_t size, vk::MemoryPropertyFlags flags, v
     bool memoryTypeIndexFound = false;
     vk::PhysicalDeviceMemoryProperties memoryProperties = komputeManager()->physicalDevice()->getMemoryProperties();
     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
+        const vk::MemoryType &memoryType = memoryProperties.memoryTypes[i];
+        const vk::MemoryHeap &memoryHeap = memoryProperties.memoryHeaps[memoryType.heapIndex];
+        if (memoryHeap.size < size) {
+            continue;
+        }
+
         if (requirements.memoryTypeBits & (1 << i)) {
             if (((memoryProperties.memoryTypes[i]).propertyFlags &
                  flags) == flags) {
