@@ -565,9 +565,9 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
         self.wfile.flush()
-        await asyncio.sleep(0.2)
-        self.close_connection = True
         await asyncio.sleep(0.1)
+        self.close_connection = True
+        await asyncio.sleep(0.05)
 
 
     async def handle_request(self, genparams, api_format, stream_flag):
