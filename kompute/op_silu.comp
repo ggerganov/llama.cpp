@@ -19,8 +19,12 @@ layout(push_constant) uniform PushConstants {
     uint outOff;
 } pcs;
 void main() {
-    const uint i = gl_WorkGroupID.x;
-    const float x = in_[i + pcs.inOff];
 
-    out_[i + pcs.outOff] = x / (1.0 + exp(-x));
+    const uint baseIndex = gl_WorkGroupID.x * 4;
+
+    for (uint x = 0; x < 4; x++) {
+        const uint i = baseIndex + x;
+        const float y = in_[i + pcs.inOff];
+        out_[i + pcs.outOff] = y / (1.0 + exp(-y));
+    }
 }

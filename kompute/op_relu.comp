@@ -20,7 +20,10 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 void main() {
-    const uint i = gl_WorkGroupID.x;
+    const uint baseIndex = gl_WorkGroupID.x * 4;
 
-    out_[i + pcs.outOff] = max(0.0, in_[i + pcs.inOff]);
+    for (uint x = 0; x < 4; x++) {
+        const uint i = baseIndex + x;
+        out_[i + pcs.outOff] = max(0.0, in_[i + pcs.inOff]);
+    }
 }

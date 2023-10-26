@@ -1358,7 +1358,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                             // src1 is a row
                             ggml_vk_addrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst), ne00);
                         } else {
-                            ggml_vk_add(seq, id_src0, id_src1, id_dst,  off_src0, off_src1, off_dst, ggml_nelements(dst));
+                            ggml_vk_add(seq, id_src0, id_src1, id_dst,  off_src0, off_src1, off_dst, ggml_nelements(dst)/4);
                         }
                     } break;
                 case GGML_OP_MUL:
@@ -1367,7 +1367,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                             // src1 is a row
                             ggml_vk_mulrow(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst), ne00);
                         } else {
-                            ggml_vk_mul(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst));
+                            ggml_vk_mul(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ggml_nelements(dst)/4);
                         }
                     } break;
                 case GGML_OP_SCALE:
@@ -1379,15 +1379,15 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     switch (ggml_get_unary_op(gf->nodes[i])) {
                         case GGML_UNARY_OP_SILU:
                             {
-                                ggml_vk_silu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst));
+                                ggml_vk_silu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst)/4);
                             } break;
                         case GGML_UNARY_OP_RELU:
                             {
-                                ggml_vk_relu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst));
+                                ggml_vk_relu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst)/4);
                             } break;
                         case GGML_UNARY_OP_GELU:
                             {
-                                ggml_vk_gelu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst));
+                                ggml_vk_gelu(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst)/4);
                             } break;
                         default:
                             {
@@ -1427,9 +1427,9 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                             ggml_is_transposed(src1)) {
                             fprintf(stderr, "%s: %s: matmul on tranposed tensor not supported: %u/%u\n", __func__, ggml_op_name(dst->op), src0t, src1t);
                             goto not_implemented;
-                        } 
+                        }
 
-                        switch (src0t) {        
+                        switch (src0t) {
                             case GGML_TYPE_F32:
                                 ggml_vk_mul_mat_mat_f32(seq,
                                         id_src0, id_src1, id_dst,
@@ -1459,7 +1459,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                                 goto not_implemented;
                             }
                         }
-                        
+
                     } break;
                 case GGML_OP_GET_ROWS:
                     {
