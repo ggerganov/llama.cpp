@@ -1258,7 +1258,7 @@ static cl_kernel* ggml_get_dequantize_mul_mat_vec_cl(ggml_type type) {
 }
 
 // buffer pool for cl
-#define MAX_CL_BUFFERS 256
+#define MAX_CL_BUFFERS 400
 
 struct scoped_spin_lock {
     std::atomic_flag& lock;
