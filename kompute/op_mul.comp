@@ -20,7 +20,6 @@ layout(push_constant) uniform PushConstants {
     uint inAOff;
     uint inBOff;
     uint outOff;
-    uint row;
 } pcs;
 
 void main() {
