@@ -461,7 +461,12 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 #define GGML_CUDA_PEER_MAX_BATCH_SIZE 128
 #endif // GGML_CUDA_PEER_MAX_BATCH_SIZE
 
+#ifdef GGML_CUDA_FORCE_MMQ
 #define MUL_MAT_SRC1_COL_STRIDE 128
+#else
+// with tensor cores, we copy the entire hidden state to the devices in one go
+#define MUL_MAT_SRC1_COL_STRIDE 4096
+#endif
 
 #define MAX_STREAMS 8
 static cudaStream_t g_cudaStreams[GGML_CUDA_MAX_DEVICES][MAX_STREAMS] = { nullptr };
