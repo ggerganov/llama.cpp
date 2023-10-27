@@ -32,9 +32,9 @@ OpAlgoDispatch::record(const vk::CommandBuffer& commandBuffer)
          this->mAlgorithm->getTensors()) {
         tensor->recordPrimaryBufferMemoryBarrier(
           commandBuffer,
-          vk::AccessFlagBits::eTransferWrite,
+          vk::AccessFlagBits::eShaderWrite,
           vk::AccessFlagBits::eShaderRead,
-          vk::PipelineStageFlagBits::eTransfer,
+          vk::PipelineStageFlagBits::eComputeShader,
           vk::PipelineStageFlagBits::eComputeShader);
     }
 
