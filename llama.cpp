@@ -2407,7 +2407,7 @@ static bool llama_model_load(
         llama_model & model,
         int n_ctx,
         int n_batch,
-        int n_gpu_layers,
+        int * n_gpu_layers,
         int main_gpu,
         const float * tensor_split,
         const bool mul_mat_q,
@@ -2438,8 +2438,23 @@ static bool llama_model_load(
             return true;
         }
 
+#ifdef GGML_USE_KOMPUTE
+        if (ggml_vk_has_device() && *n_gpu_layers > 0 && (
+            !(model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON)
+            || !(
+                model.ftype == LLAMA_FTYPE_ALL_F32 ||
+                model.ftype == LLAMA_FTYPE_MOSTLY_F16 ||
+                model.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
+                model.ftype == LLAMA_FTYPE_MOSTLY_Q4_1
+            )
+        )) {
+            // disable Vulkan due to unsupported model architecture or quantization type
+            *n_gpu_layers = 0;
+        }
+#endif
+
         llm_load_tensors(
-                *ml, model, n_batch, n_gpu_layers,
+                *ml, model, n_batch, *n_gpu_layers,
                 main_gpu, tensor_split, mul_mat_q, low_vram, memory_type,
                 use_mlock, progress_callback, progress_callback_user_data);
     } catch (const std::exception & err) {
@@ -6354,7 +6369,7 @@ struct llama_model * llama_load_model_from_file(
         };
     }
 
-    if (!llama_model_load(path_model, *model, params.n_ctx, params.n_batch, params.n_gpu_layers,
+    if (!llama_model_load(path_model, *model, params.n_ctx, params.n_batch, &params.n_gpu_layers,
                 params.main_gpu, params.tensor_split, params.mul_mat_q, params.rope_freq_base, params.rope_freq_scale,
                 params.low_vram, memory_type, params.use_mmap, params.use_mlock, params.vocab_only,
                 params.progress_callback, params.progress_callback_user_data)) {
@@ -6502,12 +6517,7 @@ struct llama_context * llama_new_context_with_model(
 #undef LLAMA_METAL_CHECK_BUF
         }
 #elif defined(GGML_USE_KOMPUTE)
-    if (ggml_vk_has_device() && params.n_gpu_layers > 0
-        && (model->arch == LLM_ARCH_LLAMA || model->arch == LLM_ARCH_FALCON)
-        && (model->ftype == LLAMA_FTYPE_ALL_F32
-            || model->ftype == LLAMA_FTYPE_MOSTLY_F16
-            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_0
-            || model->ftype == LLAMA_FTYPE_MOSTLY_Q4_1)) {
+    if (ggml_vk_has_device() && params.n_gpu_layers > 0) {
         // this allocates all Vulkan resources and memory buffers
         ctx->ctx_kompute = ggml_vk_init();
 
