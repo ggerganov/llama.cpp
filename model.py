@@ -14,8 +14,8 @@ class Model:
     def __init__(self, dir_model: Path, ftype: int):
         self.dir_model = dir_model
         self.ftype = ftype
-        self.is_safetensors = not self._is_model_safetensors()
-        self.num_parts = Model.count_model_parts(self.dir_model, ".bin" if self.is_safetensors else ".bin")
+        self.is_safetensors = self._is_model_safetensors()
+        self.num_parts = Model.count_model_parts(self.dir_model, ".safetensors" if self.is_safetensors else ".bin")
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
         self.model_arch = self._get_model_architecture()
@@ -39,6 +39,8 @@ class Model:
             return gguf.MODEL_ARCH.GPTNEOX
         if arch == "BloomForCausalLM":
             return gguf.MODEL_ARCH.BLOOM
+        if arch == "MPTForCausalLM":
+            return gguf.MODEL_ARCH.MPT
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
     def get_tensors(self):
@@ -57,7 +59,7 @@ class Model:
 
     def set_gguf_parameters(self, gguf_writer: gguf.GGUFWriter):
         gguf_writer.add_name(self.dir_model.name)
-        gguf_writer.add_block_count(self.hparams["num_hidden_layers"])
+        gguf_writer.add_block_count(self.hparams.get("n_layers", self.hparams.get("num_hidden_layers")))
         if "max_position_embeddings" in self.hparams:
             gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         if "hidden_size" in self.hparams:
@@ -69,7 +71,7 @@ class Model:
         gguf_writer.add_parallel_residual(self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
 
     def write_tensors(self, gguf_writer: gguf.GGUFWriter):
-        block_count = self.hparams["num_hidden_layers"]
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         for name, data in self.get_tensors():
             # we don't need these
@@ -161,6 +163,8 @@ class Model:
             return GPTNeoXModel
         if model_architecture == "BloomForCausalLM":
             return BloomModel
+        if model_architecture == "MPTForCausalLM":
+            return MPTModel
         return Model
 
 class StableLMModel(Model):
@@ -259,3 +263,19 @@ class BloomModel(Model):
             if not has_lm_head and name == "word_embeddings.weight":
                 gguf_writer.add_tensor("output.weight", data)
                 print(name, "=>", "output.weight" + ", shape = " + str(data.shape) + ", " + str(old_dtype) + " --> " + str(data.dtype))  # noqa
+
+class MPTModel(Model):
+    def set_gguf_parameters(self, gguf_writer):
+        block_count = self.hparams["n_layers"]
+        gguf_writer.add_name(self.dir_model.name)
+        gguf_writer.add_context_length(self.hparams["max_seq_len"])
+        gguf_writer.add_embedding_length(self.hparams["d_model"])
+        gguf_writer.add_block_count(block_count)
+        gguf_writer.add_feed_forward_length(4 * self.hparams["d_model"])
+        gguf_writer.add_head_count(self.hparams["n_heads"])
+        if kv_n_heads := self.hparams["attn_config"].get("kv_n_heads"):
+            gguf_writer.add_head_count_kv(kv_n_heads)
+        gguf_writer.add_layer_norm_eps(1e-05)
+        if self.hparams["attn_config"]["clip_qkv"] is not None:
+            gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
+        gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
