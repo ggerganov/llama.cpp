@@ -18,8 +18,8 @@ layout(push_constant) uniform PushConstants {
     uint inOff;
     uint outOff;
 } pcs;
-void main() {
 
+void main() {
     const uint baseIndex = gl_WorkGroupID.x * 4;
 
     for (uint x = 0; x < 4; x++) {
