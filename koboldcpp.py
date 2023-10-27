@@ -583,6 +583,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             await asyncio.gather(*tasks)
             generate_result = generate_task.result()
             return generate_result
+        except ConnectionAbortedError as cae: # attempt to abort if connection lost
+            print(cae)
+            handle.abort_generate()
+            time.sleep(0.1) #short delay
         except Exception as e:
             print(e)
 
