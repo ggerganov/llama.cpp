@@ -53,7 +53,7 @@
           pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
         # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
         llama-python-extra =
-          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece torch transformers ]);
+          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece torchWithoutCuda transformers ]);
         postPatch = ''
           substituteInPlace ./ggml-metal.m \
             --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
