@@ -167,9 +167,13 @@ llama_token llama_sampling_sample(
         llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar);
     }
 
-    if (temp <= 0) {
-        // greedy sampling
+    if (temp < 0.0) {
+        // greedy sampling, no probs
         id = llama_sample_token_greedy(ctx_main, &cur_p);
+    } else if (temp == 0.0) {
+        // greedy sampling, with probs
+        llama_sample_softmax(ctx_main, &cur_p);
+        id = cur_p.data[0].id;
     } else {
         if (mirostat == 1) {
             const int mirostat_m = 100;
