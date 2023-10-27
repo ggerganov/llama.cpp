@@ -6361,7 +6361,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
     const int compute_capability = g_compute_capabilities[id];
 
-    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1]) {
+    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0)) {
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
         half * src0_as_f16 = nullptr;
         size_t src0_as = 0;
@@ -6386,7 +6386,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
         const half * src1_ptr = src1->type == GGML_TYPE_F16 ? (const half *) src1_ddq_i : src1_as_f16;
 
         size_t dst_as = 0;
-        half * dst_f16 = (half *) ggml_cuda_pool_malloc(row_diff*src1_ncols * sizeof(half), &dst_as);
+        half * dst_f16 = (half *) ggml_cuda_pool_malloc(ldc*src1_ncols * sizeof(half), &dst_as);
 
         const half alpha_f16 = 1.0f;
         const half beta_f16 = 0.0f;
@@ -6402,7 +6402,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
                     CUBLAS_GEMM_DEFAULT_TENSOR_OP));
 
         const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(GGML_TYPE_F16);
-        to_fp32_cuda(dst_f16, dst_dd_i, row_diff*src1_ncols, stream);
+        to_fp32_cuda(dst_f16, dst_dd_i, ldc*src1_ncols, stream);
 
         ggml_cuda_pool_free(dst_f16, dst_as);
 
