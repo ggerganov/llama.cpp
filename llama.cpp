@@ -5589,8 +5589,8 @@ static struct ggml_cgraph * llama_build_graph(
 
             if (k_offload_func.find(name) == k_offload_func.end()) {
                 if (worst_case && cur->view_src == nullptr) {
-                    LLAMA_LOG_WARN("%s: %32s: not offloaded (ref: %s)\n", __func__,
-                            name.c_str(), "https://github.com/ggerganov/llama.cpp/pull/3837");
+                    LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
+                            i, name.c_str(), "https://github.com/ggerganov/llama.cpp/pull/3837");
                 }
                 continue;
             }
@@ -5605,7 +5605,7 @@ static struct ggml_cgraph * llama_build_graph(
             f(cur);
 
             if (worst_case && cur->view_src == nullptr) {
-                LLAMA_LOG_INFO("%s: %32s: %s\n", __func__, name.c_str(), k_offload_func_name.at(f).c_str());
+                LLAMA_LOG_INFO("%s: node %4d %32s: %s\n", __func__, i, name.c_str(), k_offload_func_name.at(f).c_str());
             }
         }
     }
