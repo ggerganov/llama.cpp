@@ -93,7 +93,7 @@
 // -  7B quantum model: +100-200 MB
 // - 13B quantum model: +200-400 MB
 //
-//#define GGML_CUDA_FORCE_MMQ
+#define GGML_CUDA_FORCE_MMQ
 
 // TODO: improve this to be correct for more hardware
 //       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
@@ -488,7 +488,7 @@ static int g_device_count = -1;
 static int g_main_device = 0;
 static int g_compute_capabilities[GGML_CUDA_MAX_DEVICES];
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
-static bool g_mul_mat_q = true;
+static bool g_mul_mat_q = false;
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
@@ -7342,8 +7342,11 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
             // when tensor cores are available, use them for large batch size
             // ref: https://github.com/ggerganov/llama.cpp/pull/3776
-            if (use_tensor_cores && min_compute_capability >= CC_VOLTA && src1->ne[1] > MMQ_MAX_BATCH_SIZE) {
-                use_mul_mat_q = false;
+            if (min_compute_capability >= CC_VOLTA && src1->ne[1] > MMQ_MAX_BATCH_SIZE) {
+                if(!g_mul_mat_q)
+                {
+                    use_mul_mat_q = false;
+                }
             }
 
             if (use_mul_mat_q) {
