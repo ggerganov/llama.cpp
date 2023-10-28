@@ -592,7 +592,7 @@ void PurgeMissingTokens(llama_context * ctx, std::vector<int> &current_context_t
     //remove all tokens from old ctx between p0 and p1, updating both arrays and kv, then continue as normal
 
     const int ShortfallThreshold = 256; //dont trigger shifting if the distance between trimstart and currhead < this
-    const int SlackAllowance = 32; //in case the end text is slightly modified, be forgiving
+    const int SlackAllowance = 64; //in case the end text is slightly modified, be forgiving
 
     int trimstart = 0;
     int new_tokens_len = new_context_tokens.size();
@@ -621,14 +621,14 @@ void PurgeMissingTokens(llama_context * ctx, std::vector<int> &current_context_t
     }
 
     //at least this many tokens need to match, otherwise don't bother trimming
-    const int LCQTokThreshold = std::max((new_tokens_len - trimstart) - (genamt+SlackAllowance), ShortfallThreshold-SlackAllowance);
+    const int LCSTokThreshold = std::max((new_tokens_len - trimstart) - (genamt+SlackAllowance), ShortfallThreshold-SlackAllowance);
 
     auto curr_ctx_without_memory = std::vector<int>(current_context_tokens.begin() + trimstart, current_context_tokens.end());
     auto new_ctx_without_memory = std::vector<int>(new_context_tokens.begin() + trimstart, new_context_tokens.end());
 
     auto shared = LongestCommonSubseq(curr_ctx_without_memory, new_ctx_without_memory);
 
-    if (shared.size() > LCQTokThreshold && ArrStartWith(new_ctx_without_memory, shared)) // enough tokens in common
+    if (shared.size() > LCSTokThreshold && ArrStartWith(new_ctx_without_memory, shared)) // enough tokens in common
     {
         int found = ArrFindIndexOf(current_context_tokens,shared);
         if(found>=0 && found > trimstart)

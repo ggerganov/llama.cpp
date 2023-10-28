@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 86
+Current version: 87
 -Concedo
 -->
 
@@ -7876,11 +7876,11 @@ Current version: 86
 			}
 
 			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3.3 characters
-			let max_allowed_characters = Math.floor(maxctxlen * 3.35);
+			let max_allowed_characters = Math.max(1, Math.floor(maxctxlen * 3) - (maxgenamt+8));
 			if (current_memory == null || current_memory.trim() == "")
 			{
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				max_allowed_characters = Math.floor(maxctxlen * 4.8);
+				max_allowed_characters = Math.floor(maxctxlen * 4.6);
 			}
 
 			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
