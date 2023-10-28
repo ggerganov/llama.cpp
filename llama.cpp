@@ -8380,7 +8380,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         if (quantize) {
             new_type = quantized_type;
-            new_type = get_k_quant_type(qs, new_type, tensor, ftype);
+            if (!params->pure) {
+                new_type = get_k_quant_type(qs, new_type, tensor, ftype);
+            }
 
             // If we've decided to quantize to the same type the tensor is already
             // in then there's nothing to do.
@@ -8835,6 +8837,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
         /*.allow_requantize            =*/ false,
         /*.quantize_output_tensor      =*/ true,
         /*.only_copy                   =*/ false,
+        /*.pure                        =*/ false,
     };
 
     return result;

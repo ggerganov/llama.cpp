@@ -68,13 +68,14 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 }
 
 // usage:
-//  ./quantize [--allow-requantize] [--leave-output-tensor] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
+//  ./quantize [--allow-requantize] [--leave-output-tensor] [--pure] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
+    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
+    printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
         if (it.name != "COPY") {
@@ -101,6 +102,8 @@ int main(int argc, char ** argv) {
             params.quantize_output_tensor = false;
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
             params.allow_requantize = true;
+        } else if (strcmp(argv[arg_idx], "--pure") == 0) {
+            params.pure = true;
         } else {
             usage(argv[0]);
         }
