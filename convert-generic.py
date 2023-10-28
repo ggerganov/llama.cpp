@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# HF stablelm --> gguf conversion
 
 from __future__ import annotations
 
@@ -41,37 +40,30 @@ print("gguf: loading model " + dir_model.name)
 hparams = model.Model.load_hparams(dir_model)
 
 model_class = model.Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype)
-gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[model_instance.model_arch])
+model_instance = model_class(dir_model, ftype, fname_out)
 
 print("gguf: get model metadata")
 
-model_instance.set_gguf_parameters(gguf_writer)
+model_instance.set_gguf_parameters()
 
 # TOKENIZATION
 print("gguf: get tokenizer metadata")
-gguf_writer.add_tokenizer_model("gpt2")
 
 print("gguf: get gpt2 tokenizer vocab")
 
-tokens, toktypes = model.Model.load_vocab_gpt2(model_instance.dir_model, model_instance.hparams)
-gguf_writer.add_token_list(tokens)
-gguf_writer.add_token_types(toktypes)
-
-special_vocab = gguf.SpecialVocab(dir_model, load_merges = True)
-special_vocab.add_to_gguf(gguf_writer)
+model_instance.set_vocab()
 
 # write model
 print("gguf: write header")
-gguf_writer.write_header_to_file()
+model_instance.gguf_writer.write_header_to_file()
 print("gguf: write metadata")
-gguf_writer.write_kv_data_to_file()
+model_instance.gguf_writer.write_kv_data_to_file()
 if not args.vocab_only:
     print("gguf: write tensors")
-    model_instance.write_tensors(gguf_writer)
-    gguf_writer.write_tensors_to_file()
+    model_instance.write_tensors()
+    model_instance.gguf_writer.write_tensors_to_file()
 
-gguf_writer.close()
+model_instance.gguf_writer.close()
 
 print(f"gguf: model successfully exported to '{fname_out}'")
 print("")
