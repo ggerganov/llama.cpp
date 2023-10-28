@@ -675,23 +675,22 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         content_length = int(self.headers['content-length'])
         body = self.rfile.read(content_length)
         self.path = self.path.rstrip('/')
+        response_body = None
+        response_code = 200
+
         if self.path.endswith(('/api/extra/tokencount')):
             try:
                 genparams = json.loads(body)
                 countprompt = genparams.get('prompt', "")
                 count = handle.token_count(countprompt.encode("UTF-8"))
-                self.send_response(200)
-                self.end_headers(content_type='application/json')
-                self.wfile.write(json.dumps({"value": count}).encode())
+                response_body = (json.dumps({"value": count}).encode())
 
             except Exception as e:
                 utfprint("Count Tokens - Body Error: " + str(e))
-                self.send_response(400)
-                self.end_headers(content_type='application/json')
-                self.wfile.write(json.dumps({"value": -1}).encode())
-            return
+                response_code = 400
+                response_body = (json.dumps({"value": -1}).encode())
 
-        if self.path.endswith('/api/extra/abort'):
+        elif self.path.endswith('/api/extra/abort'):
             multiuserkey = ""
             try:
                 tempbody = json.loads(body)
@@ -704,17 +703,12 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
                 ag = handle.abort_generate()
                 time.sleep(0.1) #short delay before replying
-                self.send_response(200)
-                self.end_headers(content_type='application/json')
-                self.wfile.write(json.dumps({"success": ("true" if ag else "false")}).encode())
+                response_body = (json.dumps({"success": ("true" if ag else "false")}).encode())
                 print("\nGeneration Aborted")
             else:
-                self.send_response(200)
-                self.end_headers(content_type='application/json')
-                self.wfile.write(json.dumps({"success": "false"}).encode())
-            return
+                response_body = (json.dumps({"success": "false"}).encode())
 
-        if self.path.endswith('/api/extra/generate/check'):
+        elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
             multiuserkey = ""
             try:
@@ -723,15 +717,18 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     multiuserkey = tempbody.get('genkey', "")
             except Exception as e:
                 multiuserkey = ""
-                pass
 
             if totalgens>0:
                 if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
                     pendtxt = handle.get_pending_output()
                     pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
-            self.send_response(200)
+            response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
+
+        if response_body is not None:
+            self.send_response(response_code)
+            self.send_header('content-length', str(len(response_body)))
             self.end_headers(content_type='application/json')
-            self.wfile.write(json.dumps({"results": [{"text": pendtxtStr}]}).encode())
+            self.wfile.write(response_body)
             return
 
         reqblocking = False
@@ -794,8 +791,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     # Headers are already sent when streaming
                     if not sse_stream_flag:
                         self.send_response(200)
+                        genresp = (json.dumps(gen).encode())
+                        self.send_header('content-length', str(len(genresp)))
                         self.end_headers(content_type='application/json')
-                        self.wfile.write(json.dumps(gen).encode())
+                        self.wfile.write(genresp)
                 except:
                     print("Generate: The response could not be sent, maybe connection was terminated?")
                 return
