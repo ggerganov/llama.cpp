@@ -44,6 +44,7 @@ struct train_params_common {
     int n_batch;
     int n_gradient_accumulation;
     int n_epochs;
+	int n_gpu_layers;
 
     bool custom_n_ctx;
 
@@ -80,8 +81,6 @@ struct train_params_common {
     float adam_beta2;
     float adam_gclip;
     float adam_eps_f;
-
-	int32_t n_gpu_layers;
 };
 
 typedef void (*save_train_files_callback)(void * data, struct train_state * train);
