@@ -5452,14 +5452,11 @@ static struct ggml_cgraph * llama_build_graph(
     } while (0);
 
     // offload layers
-
     {
         const int n_layer = model.hparams.n_layer;
 
         const int n_gpu_layers = model.n_gpu_layers;
         const int i_gpu_start  = n_layer - n_gpu_layers;
-
-        GGML_UNUSED(i_gpu_start);
 
         // offload functions set the tensor output backend to GPU
         // tensors are GPU-accelerated if any input or the output has been offloaded
@@ -5588,13 +5585,16 @@ static struct ggml_cgraph * llama_build_graph(
             const std::string name = cur->name;
 
             if (k_offload_func.find(name) == k_offload_func.end()) {
+                // if a tensor that is not view hasn't been offloaded, we warn the user
                 if (worst_case && cur->view_src == nullptr) {
                     LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
                             i, name.c_str(), "https://github.com/ggerganov/llama.cpp/pull/3837");
                 }
+
                 continue;
             }
 
+            // count the number of layers and respect the provided n_gpu_layers
             offload_func_t f = k_offload_func.at(name);
             if (f == offload_func) {
                 if (ofn[name]++ < i_gpu_start) {
@@ -5602,6 +5602,7 @@ static struct ggml_cgraph * llama_build_graph(
                 }
             }
 
+            // apply offload function to the tensor
             f(cur);
 
             if (worst_case && cur->view_src == nullptr) {
