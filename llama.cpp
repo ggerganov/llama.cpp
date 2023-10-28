@@ -3091,8 +3091,9 @@ static bool llama_model_load(
 }
 
 static struct ggml_cgraph * llm_build_llama(
-    llama_context & lctx,
-    const llama_batch & batch) {
+        llama_context & lctx,
+    const llama_batch & batch,
+                 bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -3118,10 +3119,10 @@ static struct ggml_cgraph * llm_build_llama(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
+    const bool do_rope_shift = worst_case || kv_self.has_shift;
 
     //printf("n_kv = %d\n", n_kv);
 
@@ -3142,11 +3143,6 @@ static struct ggml_cgraph * llm_build_llama(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -3156,12 +3152,8 @@ static struct ggml_cgraph * llm_build_llama(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inpL);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
-        }
     }
+    ggml_set_name(inpL, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -3186,59 +3178,23 @@ static struct ggml_cgraph * llm_build_llama(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd_head)));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
     ggml_set_name(KQ_pos, "KQ_pos");
-    ggml_allocr_alloc(lctx.alloc, KQ_pos);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos->data;
-        for (int i = 0; i < n_tokens; ++i) {
-            data[i] = batch.pos[i];
-        }
-    }
 
     // shift the entire K-cache if needed
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
         ggml_set_name(K_shift, "K_shift");
-        ggml_allocr_alloc(lctx.alloc, K_shift);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            int * data = (int *) K_shift->data;
-            for (int i = 0; i < n_ctx; ++i) {
-                data[i] = kv_self.cells[i].delta;
-            }
-        }
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
@@ -3480,7 +3436,8 @@ static struct ggml_cgraph * llm_build_llama(
 
 static struct ggml_cgraph * llm_build_baichaun(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -3506,10 +3463,10 @@ static struct ggml_cgraph * llm_build_baichaun(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
+    const bool do_rope_shift = worst_case || kv_self.has_shift;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -3528,11 +3485,6 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -3542,12 +3494,8 @@ static struct ggml_cgraph * llm_build_baichaun(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inpL);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
-        }
     }
+    ggml_set_name(inpL, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -3572,59 +3520,23 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
     ggml_set_name(KQ_pos, "KQ_pos");
-    ggml_allocr_alloc(lctx.alloc, KQ_pos);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos->data;
-        for (int i = 0; i < n_tokens; ++i) {
-            data[i] = batch.pos[i];
-        }
-    }
 
     // shift the entire K-cache if needed
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
         ggml_set_name(K_shift, "K_shift");
-        ggml_allocr_alloc(lctx.alloc, K_shift);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            int * data = (int *) K_shift->data;
-            for (int i = 0; i < n_ctx; ++i) {
-                data[i] = kv_self.cells[i].delta;
-            }
-        }
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
@@ -3883,7 +3795,8 @@ static struct ggml_cgraph * llm_build_baichaun(
 
 static struct ggml_cgraph * llm_build_refact(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -3905,8 +3818,8 @@ static struct ggml_cgraph * llm_build_refact(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
     // printf("n_kv = %d\n", n_kv);
 
@@ -3927,11 +3840,6 @@ static struct ggml_cgraph * llm_build_refact(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -3941,12 +3849,8 @@ static struct ggml_cgraph * llm_build_refact(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inpL);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
-        }
     }
+    ggml_set_name(inpL, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -3971,34 +3875,12 @@ static struct ggml_cgraph * llm_build_refact(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd_head)));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     for (int il = 0; il < n_layer; ++il) {
         ggml_format_name(inpL, "layer_inp_%d", il);
@@ -4228,7 +4110,8 @@ static struct ggml_cgraph * llm_build_refact(
 
 static struct ggml_cgraph * llm_build_falcon(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -4254,10 +4137,10 @@ static struct ggml_cgraph * llm_build_falcon(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
+    const bool do_rope_shift = worst_case || kv_self.has_shift;
 
     //printf("kv_head = %d, n_kv = %d, n_tokens = %d, n_ctx = %d, is_measure = %d, has_shift = %d\n",
     //        kv_head, n_kv, n_tokens, n_ctx, ggml_allocr_is_measure(lctx.alloc), kv_self.has_shift);
@@ -4279,11 +4162,6 @@ static struct ggml_cgraph * llm_build_falcon(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -4293,12 +4171,8 @@ static struct ggml_cgraph * llm_build_falcon(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inpL);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
-        }
     }
+    ggml_set_name(inpL, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -4323,59 +4197,23 @@ static struct ggml_cgraph * llm_build_falcon(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     // KQ_pos - contains the positions
     struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
     offload_func_kq(KQ_pos);
     ggml_set_name(KQ_pos, "KQ_pos");
-    ggml_allocr_alloc(lctx.alloc, KQ_pos);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        int * data = (int *) KQ_pos->data;
-        for (int i = 0; i < n_tokens; ++i) {
-            data[i] = batch.pos[i];
-        }
-    }
 
     // shift the entire K-cache if needed
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
         ggml_set_name(K_shift, "K_shift");
-        ggml_allocr_alloc(lctx.alloc, K_shift);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            int * data = (int *) K_shift->data;
-            for (int i = 0; i < n_ctx; ++i) {
-                data[i] = kv_self.cells[i].delta;
-            }
-        }
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
@@ -4595,7 +4433,8 @@ static struct ggml_cgraph * llm_build_falcon(
 
 static struct ggml_cgraph * llm_build_starcoder(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -4619,8 +4458,8 @@ static struct ggml_cgraph * llm_build_starcoder(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -4635,32 +4474,23 @@ static struct ggml_cgraph * llm_build_starcoder(
     ggml_cgraph * gf = ggml_new_graph(ctx0);
 
     struct ggml_tensor * cur;
-    struct ggml_tensor * token;
-    struct ggml_tensor * position;
+    struct ggml_tensor * embd;
+    struct ggml_tensor * pos;
     struct ggml_tensor * inpL;
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
-        token = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
+        embd = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
 #ifdef GGML_USE_MPI
         GGML_ASSERT(false && "not implemented");
 #endif
 
-        token = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, token);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(token->data, batch.embd, n_tokens * n_embd * ggml_element_size(token));
-        }
+        embd = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
+    ggml_set_name(embd, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -4684,51 +4514,22 @@ static struct ggml_cgraph * llm_build_starcoder(
 #endif // GGML_USE_CUBLAS
 
     {
-        // Compute position embeddings.
-        struct ggml_tensor * inp_positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_allocr_alloc(lctx.alloc, inp_positions);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            for (int i = 0; i < n_tokens; ++i) {
-                ((int32_t *) inp_positions->data)[i] = batch.pos[i];
-            }
-        }
-        ggml_set_name(inp_positions, "inp_positions");
+        struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        ggml_set_name(inp_pos, "inp_pos");
 
-        position = ggml_get_rows(ctx0, model.pos_embeddings, inp_positions);
+        pos = ggml_get_rows(ctx0, model.pos_embeddings, inp_pos);
     }
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     ggml_set_name(KQ_mask, "KQ_mask");
     offload_func_kq(KQ_mask);
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
 
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
-
-    inpL = ggml_add(ctx0, token, position);
+    inpL = ggml_add(ctx0, embd, pos);
     ggml_set_name(inpL, "inpL");
 
     for (int il = 0; il < n_layer; ++il) {
@@ -4904,7 +4705,8 @@ static struct ggml_cgraph * llm_build_starcoder(
 
 static struct ggml_cgraph * llm_build_persimmon(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model = lctx.model;
     const auto & hparams = model.hparams;
 
@@ -4930,10 +4732,10 @@ static struct ggml_cgraph * llm_build_persimmon(
 
 
     const int32_t n_tokens    = batch.n_tokens;
-    const int32_t n_kv        = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv        = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head     = worst_case ? n_ctx - n_tokens : kv_self.head;
 
-    const bool do_rope_shift  = ggml_allocr_is_measure(lctx.alloc) || kv_self.has_shift;
+    const bool do_rope_shift  = worst_case || kv_self.has_shift;
 
     auto & buf_compute = lctx.buf_compute;
     struct ggml_init_params params = {
@@ -4951,12 +4753,8 @@ static struct ggml_cgraph * llm_build_persimmon(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
+
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
@@ -4976,7 +4774,7 @@ static struct ggml_cgraph * llm_build_persimmon(
     if (!ggml_allocr_is_measure(lctx.alloc)) {
         ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd_head)));
     }
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
+    ggml_set_name(KQ_scale, "KQ_scale");
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
@@ -5301,7 +5099,8 @@ static struct ggml_cgraph * llm_build_persimmon(
 
 static struct ggml_cgraph * llm_build_bloom(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -5323,8 +5122,8 @@ static struct ggml_cgraph * llm_build_bloom(
     const float norm_eps = hparams.f_norm_eps;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -5341,66 +5140,35 @@ static struct ggml_cgraph * llm_build_bloom(
     ggml_cgraph * gf = ggml_new_graph(ctx0);
 
     struct ggml_tensor * cur;
-    struct ggml_tensor * token;
+    struct ggml_tensor * embd;
     struct ggml_tensor * inpL;
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-        }
         ggml_set_name(inp_tokens, "inp_tokens");
 
-        token = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
+        embd = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
 #ifdef GGML_USE_MPI
         GGML_ASSERT(false && "not implemented");
 #endif
 
-        token = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, token);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(token->data, batch.embd, n_tokens * n_embd * ggml_element_size(token));
-        }
+        embd = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
+    ggml_set_name(embd, "embd");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     // norm
     {
-        inpL = ggml_norm(ctx0, token, norm_eps);
-        inpL = ggml_add(ctx0, ggml_mul(ctx0, inpL, model.tok_norm), model.tok_norm_b);
+        inpL = ggml_norm(ctx0, embd, norm_eps);
+        inpL = ggml_add (ctx0, ggml_mul(ctx0, inpL, model.tok_norm), model.tok_norm_b);
     }
 
     ggml_set_name(inpL, "inpL");
@@ -5416,9 +5184,9 @@ static struct ggml_cgraph * llm_build_bloom(
             // Self Attention
             cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wqkv, cur), model.layers[il].bqkv);
 
-            struct ggml_tensor * tmpq = ggml_view_2d(ctx0, cur, n_embd, n_tokens, cur->nb[1], 0*sizeof(float)*n_embd);
-            struct ggml_tensor * tmpk = ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], sizeof(float)*n_embd);
-            struct ggml_tensor * tmpv = ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], sizeof(float)*(n_embd + n_embd_gqa));
+            struct ggml_tensor * tmpq = ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd));
+            struct ggml_tensor * tmpk = ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd));
+            struct ggml_tensor * tmpv = ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa));
 
             struct ggml_tensor * Qcur = tmpq;
             struct ggml_tensor * Kcur = tmpk;
@@ -5543,7 +5311,8 @@ static struct ggml_cgraph * llm_build_bloom(
 
 static struct ggml_cgraph * llm_build_mpt(
          llama_context & lctx,
-     const llama_batch & batch) {
+     const llama_batch & batch,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -5567,8 +5336,8 @@ static struct ggml_cgraph * llm_build_mpt(
     const int n_gpu_layers = model.n_gpu_layers;
 
     const int32_t n_tokens = batch.n_tokens;
-    const int32_t n_kv     = ggml_allocr_is_measure(lctx.alloc) ? n_ctx            : kv_self.n;
-    const int32_t kv_head  = ggml_allocr_is_measure(lctx.alloc) ? n_ctx - n_tokens : kv_self.head;
+    const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
+    const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
     auto & buf_compute = lctx.buf_compute;
 
@@ -5590,13 +5359,6 @@ static struct ggml_cgraph * llm_build_mpt(
     //int warmup = 0;
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inp_tokens);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inp_tokens->data, batch.token, n_tokens*ggml_element_size(inp_tokens));
-            //warmup = ((uint32_t*) inp_tokens->data)[0] == 0;
-        }
-
         ggml_set_name(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
@@ -5606,12 +5368,8 @@ static struct ggml_cgraph * llm_build_mpt(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
-
-        ggml_allocr_alloc(lctx.alloc, inpL);
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            memcpy(inpL->data, batch.embd, n_tokens * n_embd * ggml_element_size(inpL));
-        }
     }
+    ggml_set_name(inpL, "inp_embd");
 
     const int i_gpu_start = n_layer - n_gpu_layers;
     (void) i_gpu_start;
@@ -5636,34 +5394,12 @@ static struct ggml_cgraph * llm_build_mpt(
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
-    ggml_allocr_alloc(lctx.alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    ggml_set_name(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
     offload_func_kq(KQ_mask);
     ggml_set_name(KQ_mask, "KQ_mask");
-    ggml_allocr_alloc(lctx.alloc, KQ_mask);
-    if (!ggml_allocr_is_measure(lctx.alloc)) {
-        float * data = (float *) KQ_mask->data;
-        memset(data, 0, ggml_nbytes(KQ_mask));
-
-        for (int h = 0; h < 1; ++h) {
-            for (int j = 0; j < n_tokens; ++j) {
-                const llama_pos    pos    = batch.pos[j];
-                const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                for (int i = 0; i < n_kv; ++i) {
-                    if (!kv_self.cells[i].has_seq_id(seq_id) || kv_self.cells[i].pos > pos) {
-                        data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                    }
-                }
-            }
-        }
-    }
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * attn_norm;
@@ -5865,42 +5601,179 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_cgraph * result = NULL;
 
+    // check if we should build the worst-case graph (for memory measurement)
+    const bool worst_case = ggml_allocr_is_measure(lctx.alloc);
+
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
             {
-                result = llm_build_llama(lctx, batch);
+                result = llm_build_llama(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_BAICHUAN:
             {
-                result = llm_build_baichaun(lctx, batch);
+                result = llm_build_baichaun(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_FALCON:
             {
-                result = llm_build_falcon(lctx, batch);
+                result = llm_build_falcon(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_STARCODER:
             {
-                result = llm_build_starcoder(lctx, batch);
+                result = llm_build_starcoder(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_PERSIMMON:
             {
-                result = llm_build_persimmon(lctx, batch);
+                result = llm_build_persimmon(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_REFACT:
             {
-                result = llm_build_refact(lctx, batch);
+                result = llm_build_refact(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_BLOOM:
             {
-                result = llm_build_bloom(lctx, batch);
+                result = llm_build_bloom(lctx, batch, worst_case);
             } break;
         case LLM_ARCH_MPT:
             {
-                result = llm_build_mpt(lctx, batch);
+                result = llm_build_mpt(lctx, batch, worst_case);
             } break;
         default:
             GGML_ASSERT(false);
     }
+
+    // set input data to the graph
+
+    // inp_tokens
+    if (batch.token) {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "inp_tokens");
+        GGML_ASSERT(cur != nullptr);
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_tokens = cur->ne[0];
+
+            memcpy(cur->data, batch.token, n_tokens*ggml_element_size(cur));
+        }
+    } else { // inp_embd
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "inp_embd");
+        GGML_ASSERT(cur != nullptr);
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_embd   = cur->ne[0];
+            const int64_t n_tokens = cur->ne[1];
+
+            memcpy(cur->data, batch.embd, n_tokens*n_embd*ggml_element_size(cur));
+        }
+    }
+
+    // inp_pos
+    do {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "inp_pos");
+        if (cur == nullptr) {
+            break;
+        }
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_tokens = cur->ne[0];
+
+            int32_t * data = (int32_t *) cur->data;
+
+            for (int i = 0; i < n_tokens; ++i) {
+                data[i] = batch.pos[i];
+            }
+        }
+    } while (0);
+
+    // KQ_scale
+    do {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "KQ_scale");
+        if (cur == nullptr) {
+            break;
+        }
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_embd_head = lctx.model.hparams.n_embd_head();
+            ggml_set_f32(cur, 1.0f/sqrtf(float(n_embd_head)));
+        }
+    } while (0);
+
+    // KQ_mask
+    do {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "KQ_mask");
+        if (cur == nullptr) {
+            break;
+        }
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_kv     = cur->ne[0];
+            const int64_t n_tokens = cur->ne[1];
+
+            float * data = (float *) cur->data;
+            memset(data, 0, ggml_nbytes(cur));
+
+            for (int h = 0; h < 1; ++h) {
+                for (int j = 0; j < n_tokens; ++j) {
+                    const llama_pos    pos    = batch.pos[j];
+                    const llama_seq_id seq_id = batch.seq_id[j][0];
+
+                    for (int i = 0; i < n_kv; ++i) {
+                        if (!lctx.kv_self.cells[i].has_seq_id(seq_id) || lctx.kv_self.cells[i].pos > pos) {
+                            data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
+                        }
+                    }
+                }
+            }
+        }
+    } while (0);
+
+    // KQ_pos
+    do {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "KQ_pos");
+        if (cur == nullptr) {
+            break;
+        }
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_tokens = cur->ne[0];
+
+            int32_t * data = (int32_t *) cur->data;
+
+            for (int i = 0; i < n_tokens; ++i) {
+                data[i] = batch.pos[i];
+            }
+        }
+    } while (0);
+
+    // K_shift
+    do {
+        struct ggml_tensor * cur = ggml_graph_get_tensor(result, "K_shift");
+        if (cur == nullptr) {
+            break;
+        }
+
+        ggml_allocr_alloc(lctx.alloc, cur);
+
+        if (!ggml_allocr_is_measure(lctx.alloc)) {
+            const int64_t n_ctx = cur->ne[0];
+
+            int32_t * data = (int32_t *) cur->data;
+
+            for (int i = 0; i < n_ctx; ++i) {
+                data[i] = lctx.kv_self.cells[i].delta;
+            }
+        }
+    } while (0);
 
     return result;
 }
