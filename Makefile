@@ -342,12 +342,8 @@ else
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
 
-ifndef LLAMA_NO_K_QUANTS
-	MK_CPPFLAGS += -DGGML_USE_K_QUANTS
-	OBJS     += k_quants.o
 ifdef LLAMA_QKK_64
 	MK_CPPFLAGS += -DGGML_QKK_64
-endif
 endif
 
 ifndef LLAMA_NO_ACCELERATE
@@ -365,7 +361,7 @@ ifdef LLAMA_MPI
 	MK_CPPFLAGS += -DGGML_USE_MPI
 	MK_CFLAGS   += -Wno-cast-qual
 	MK_CXXFLAGS += -Wno-cast-qual
-	OBJS     += ggml-mpi.o
+	OBJS        += ggml-mpi.o
 endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
@@ -382,7 +378,7 @@ endif # LLAMA_BLIS
 ifdef LLAMA_CUBLAS
 	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
-	OBJS      += ggml-cuda.o
+	OBJS         += ggml-cuda.o
 	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
 ifdef LLAMA_CUDA_NVCC
 	NVCC = $(LLAMA_CUDA_NVCC)
@@ -497,11 +493,6 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
-ifndef LLAMA_NO_K_QUANTS
-k_quants.o: k_quants.c k_quants.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_NO_K_QUANTS
-
 # combine build flags with cmdline overrides
 override CFLAGS        := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
 override CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
@@ -542,7 +533,10 @@ ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
 ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 	$(CC)  $(CFLAGS)   -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o
+ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h
+	$(CC) $(CFLAGS)    -c $< -o $@
+
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
 
 llama.o: llama.cpp ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@

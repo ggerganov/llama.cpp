@@ -1,19 +1,13 @@
 #pragma once
 
+// This is a private API for quantization and dequantization
+// Should not be used directly, use ggml.h instead
+
 #include "ggml.h"
 
 #include <stdint.h>
 #include <assert.h>
 #include <stddef.h>
-
-// Super-block size
-#ifdef GGML_QKK_64
-#define QK_K 64
-#define K_SCALE_SIZE 4
-#else
-#define QK_K 256
-#define K_SCALE_SIZE 12
-#endif
 
 #ifndef static_assert
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
@@ -23,9 +17,65 @@
 #endif
 #endif
 
+#define QK4_0 32
+typedef struct {
+    ggml_fp16_t d;          // delta
+    uint8_t qs[QK4_0 / 2];  // nibbles / quants
+} block_q4_0;
+static_assert(sizeof(block_q4_0) == sizeof(ggml_fp16_t) + QK4_0 / 2, "wrong q4_0 block size/padding");
+
+#define QK4_1 32
+typedef struct {
+    ggml_fp16_t d;          // delta
+    ggml_fp16_t m;          // min
+    uint8_t qs[QK4_1 / 2];  // nibbles / quants
+} block_q4_1;
+static_assert(sizeof(block_q4_1) == 2 * sizeof(ggml_fp16_t) + QK4_1 / 2, "wrong q4_1 block size/padding");
+
+#define QK5_0 32
+typedef struct {
+    ggml_fp16_t d;         // delta
+    uint8_t qh[4];         // 5-th bit of quants
+    uint8_t qs[QK5_0 / 2]; // nibbles / quants
+} block_q5_0;
+static_assert(sizeof(block_q5_0) == sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_0 / 2, "wrong q5_0 block size/padding");
+
+#define QK5_1 32
+typedef struct {
+    ggml_fp16_t d;         // delta
+    ggml_fp16_t m;         // min
+    uint8_t qh[4];         // 5-th bit of quants
+    uint8_t qs[QK5_1 / 2]; // nibbles / quants
+} block_q5_1;
+static_assert(sizeof(block_q5_1) == 2 * sizeof(ggml_fp16_t) + sizeof(uint32_t) + QK5_1 / 2, "wrong q5_1 block size/padding");
+
+#define QK8_0 32
+typedef struct {
+    ggml_fp16_t d;         // delta
+    int8_t  qs[QK8_0];     // quants
+} block_q8_0;
+static_assert(sizeof(block_q8_0) == sizeof(ggml_fp16_t) + QK8_0, "wrong q8_0 block size/padding");
+
+#define QK8_1 32
+typedef struct {
+    float d;               // delta
+    float s;               // d * sum(qs[i])
+    int8_t  qs[QK8_1];     // quants
+} block_q8_1;
+static_assert(sizeof(block_q8_1) == 2*sizeof(float) + QK8_1, "wrong q8_1 block size/padding");
+
 //
 // Super-block quantization structures
 //
+
+// Super-block size
+#ifdef GGML_QKK_64
+#define QK_K 64
+#define K_SCALE_SIZE 4
+#else
+#define QK_K 256
+#define K_SCALE_SIZE 12
+#endif
 
 // 2-bit quantization
 // weight is represented as x = a * q + b
@@ -127,12 +177,26 @@ static_assert(sizeof(block_q8_K) == sizeof(float) + QK_K + QK_K/16*sizeof(int16_
 
 
 // Quantization
+void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k);
+void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict y, int k);
+void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * restrict y, int k);
+void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict y, int k);
+void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict y, int k);
+void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict y, int k);
+
 void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict y, int k);
 void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict y, int k);
 void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict y, int k);
 void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict y, int k);
 void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict y, int k);
 void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict y, int k);
+
+void quantize_row_q4_0(const float * restrict x, void * restrict y, int k);
+void quantize_row_q4_1(const float * restrict x, void * restrict y, int k);
+void quantize_row_q5_0(const float * restrict x, void * restrict y, int k);
+void quantize_row_q5_1(const float * restrict x, void * restrict y, int k);
+void quantize_row_q8_0(const float * restrict x, void * restrict y, int k);
+void quantize_row_q8_1(const float * restrict x, void * restrict y, int k);
 
 void quantize_row_q2_K(const float * restrict x, void * restrict y, int k);
 void quantize_row_q3_K(const float * restrict x, void * restrict y, int k);
@@ -142,6 +206,13 @@ void quantize_row_q6_K(const float * restrict x, void * restrict y, int k);
 void quantize_row_q8_K(const float * restrict x, void * restrict y, int k);
 
 // Dequantization
+void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int k);
+void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict y, int k);
+void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict y, int k);
+void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict y, int k);
+void dequantize_row_q8_0(const block_q8_0 * restrict x, float * restrict y, int k);
+//void dequantize_row_q8_1(const block_q8_1 * restrict x, float * restrict y, int k);
+
 void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int k);
 void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int k);
 void dequantize_row_q4_K(const block_q4_K * restrict x, float * restrict y, int k);
@@ -150,16 +221,14 @@ void dequantize_row_q6_K(const block_q6_K * restrict x, float * restrict y, int 
 void dequantize_row_q8_K(const block_q8_K * restrict x, float * restrict y, int k);
 
 // Dot product
+void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
+
 void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
 void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, const void * restrict vx, const void * restrict vy);
-
-// Quantization with histogram collection
-size_t ggml_quantize_q2_K(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q3_K(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q4_K(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q5_K(const float * src, void * dst, int n, int k, int64_t * hist);
-size_t ggml_quantize_q6_K(const float * src, void * dst, int n, int k, int64_t * hist);
-
