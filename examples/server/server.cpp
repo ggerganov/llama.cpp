@@ -1502,7 +1502,7 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
-                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
+                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
 
                 // empty prompt passed -> release the slot and send empty response
                 if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt)
