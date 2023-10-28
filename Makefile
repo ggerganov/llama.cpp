@@ -429,7 +429,7 @@ gpttype_adapter_cublas.o: $(GPTTYPE_ADAPTER)
 clean:
 	rm -vf *.o main quantize_llama quantize_gpt2 quantize_gptj quantize_neox quantize_mpt quantize-stats perplexity embedding benchmark-matmult save-load-state gguf gguf.exe main.exe quantize_llama.exe quantize_gptj.exe quantize_gpt2.exe quantize_neox.exe quantize_mpt.exe koboldcpp_default.dll koboldcpp_openblas.dll koboldcpp_failsafe.dll koboldcpp_noavx2.dll koboldcpp_clblast.dll koboldcpp_cublas.dll koboldcpp_hipblas.dll koboldcpp_default.so koboldcpp_openblas.so koboldcpp_failsafe.so koboldcpp_noavx2.so koboldcpp_clblast.so koboldcpp_cublas.so koboldcpp_hipblas.so
 
-main: examples/main/main.cpp build-info.h ggml.o $(KQ1) ggml-alloc.o ggml-backend.o llama.o common.o console.o grammar-parser.o $(OBJS)
+main: examples/main/main.cpp common/sampling.cpp build-info.h ggml.o $(KQ1) ggml-alloc.o ggml-backend.o llama.o common.o console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='

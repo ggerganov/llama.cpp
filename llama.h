@@ -350,6 +350,8 @@ extern "C" {
                        llama_pos   p0,
                        llama_pos   p1);
 
+   LLAMA_API void printcache(struct llama_context * ctx);
+
     // Copy all tokens that belong to the specified sequence to another sequence
     // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
     // p0 < 0 : [0,  p1]

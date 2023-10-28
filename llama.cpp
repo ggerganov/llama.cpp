@@ -9819,12 +9819,22 @@ bool llama_save_session_file(struct llama_context * ctx, const char * path_sessi
     return true;
 }
 
+void printcache(struct llama_context * ctx)
+{
+    struct llama_kv_cache & cache = ctx->kv_self;
+    std::string vals = "\n";
+    for (int32_t i = 0; i < cache.size; ++i) {
+        vals += std::to_string(i) + "= pos:" + std::to_string(cache.cells[i].pos) + " delta:" + std::to_string(cache.cells[i].delta) +"\n";
+    }
+    printf("%s",vals.c_str());
+}
+
 int llama_eval(
         struct llama_context * ctx,
                  llama_token * tokens,
                      int32_t   n_tokens,
                          int   n_past) {
-    llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
+    llama_kv_cache_seq_rm(ctx->kv_self, 0, n_past, -1);
 
     const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0));
     if (ret < 0) {
