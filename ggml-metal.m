@@ -238,14 +238,17 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // load kernels
     {
         NSError * error = nil;
-#define GGML_METAL_ADD_KERNEL(name) \
-        ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
-        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
+
+        /*
         GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) ctx->pipeline_##name, \
                 (int) ctx->pipeline_##name.maxTotalThreadsPerThreadgroup, \
                 (int) ctx->pipeline_##name.threadExecutionWidth); \
+        */
+#define GGML_METAL_ADD_KERNEL(name) \
+        ctx->function_##name = [ctx->library newFunctionWithName:@"kernel_"#name]; \
+        ctx->pipeline_##name = [ctx->device newComputePipelineStateWithFunction:ctx->function_##name error:&error]; \
         if (error) { \
-          GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
+            GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
             return NULL; \
         }
 
