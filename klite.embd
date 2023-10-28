@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 84
+Current version: 86
 -Concedo
 -->
 
@@ -2835,13 +2835,17 @@ Current version: 84
 			let new_submit_payload = JSON.parse(JSON.stringify(submit_payload));
 			new_submit_payload.prompt += synchro_streaming_response;
 			new_submit_payload.max_length = Math.min(tokens_per_tick,synchro_streaming_tokens_left);
-			fetch(sub_endpt, {
+
+			let reqOpt = {
 			method: 'POST', // or 'PUT'
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: {'Content-Type': 'application/json',},
 			body: JSON.stringify(new_submit_payload),
-			})
+			};
+			if(globalabortcontroller)
+			{
+				reqOpt.signal = globalabortcontroller.signal;
+			}
+			fetch(sub_endpt, reqOpt)
 			.then((response) => response.json())
 			.then((data) => {
 				console.log("sync kobold_api_stream response: " + JSON.stringify(data));
@@ -2946,9 +2950,15 @@ Current version: 84
 	function kobold_api_stream_sse(sub_endpt,submit_payload)
 	{
 		synchro_pending_stream = "";
-		fetch(sub_endpt, {method: 'POST',
+		let reqOpt =
+		{method: 'POST',
 		headers: {'Content-Type': 'application/json'},
-		body: JSON.stringify(submit_payload)})
+		body: JSON.stringify(submit_payload)};
+		if(globalabortcontroller)
+		{
+			reqOpt.signal = globalabortcontroller.signal;
+		}
+		fetch(sub_endpt, reqOpt)
 		.then(resp => {
 			resp.body
 			.pipeThrough(new TextDecoderStream())
@@ -3220,7 +3230,6 @@ Current version: 84
 	var synchro_polled_response = null;
 	var synchro_pending_stream = ""; //used for token pseduo streaming for kobold api only
 	var waiting_for_autosummary = false;
-	var filter_enabled = true;
 	var italics_regex = new RegExp(/\*(\S[^*]+\S)\*/g); //the fallback regex
 	var temp_scenario = null;
 	var last_token_budget = ""; //to display token limits
@@ -3231,6 +3240,8 @@ Current version: 84
 	var koboldcpp_version = ""; //detect if we are using koboldcpp
 	var last_request_str = "No Requests Available"; //full context of last submitted request
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
+	var globalabortcontroller = null;
+	var passed_ai_warning_local = false;
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -3280,6 +3291,7 @@ Current version: 84
 		idle_responses: 0,
 		idle_duration: 60,
 		export_settings: true, //affects if settings are included with the story and sharelinks
+		show_advanced_load: false, //if true, every load opens the selector window
 		invert_colors: false,
 		passed_ai_warning: false, //used to store AI safety panel acknowledgement state
 		entersubmit: true, //enter sends the prompt
@@ -3402,10 +3414,23 @@ Current version: 84
 
 	}
 
+	function prepare_abort_controller()
+	{
+		try { //setup global abort controller
+			const controller = new AbortController();
+			const signal = controller.signal;
+			globalabortcontroller = controller;
+		} catch (e) {
+			console.log("AbortController Not Supported: " + e);
+		}
+	}
+
 	//attempt to load settings
 	function init() {
 
 		polyfills();
+
+		prepare_abort_controller();
 
 		//uncompress compacted scenarios
 		for(let i=0;i<compressed_scenario_db.length;++i)
@@ -3622,6 +3647,8 @@ Current version: 84
 			connect_custom_endpoint();
 			document.getElementById("lastreq").innerHTML = document.getElementById("lastreq2").innerHTML =
 			`<span class=color_gray>You're using Kobold Lite Embedded.</span>`;
+
+			read_url_params_data();
 		}
 		else
 		{
@@ -3656,46 +3683,12 @@ Current version: 84
 					document.getElementById("connectstatus").classList.add("color_green");
 					render_gametext(false);
 
-					//read the url params, and autoload a shared story if found
-					const foundStory = urlParams.get('s');
-					const foundScenario = urlParams.get('scenario');
-					const foundChub = urlParams.get('chub');
-					const nofiltermode = urlParams.get('nofilter');
-					if (nofiltermode) {
-						filter_enabled = false;
-						console.log("Safety filter is off. Use at your own risk.");
+					read_url_params_data();
+
+					if (popup_aiselect) {
+						display_models();
 					}
-					if (foundStory && foundStory != "") {
-						let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
-						if (localsettings.persist_session && !safe_to_overwrite) {
-							import_compressed_story_prompt_overwrite(foundStory);
-						} else {
-							import_compressed_story(foundStory,false);
-						}
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					} else if (foundScenario && foundScenario != "") {
-						display_scenarios();
-						document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
-						scenario_search();
-						const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
-						if (found !== undefined) {
-							temp_scenario = found;
-							preview_temp_scenario();
-						}
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					} else if (foundChub && foundChub != "") {
-						display_scenarios();
-						get_chubai_scenario(foundChub);
-						//purge url params
-						window.history.replaceState(null, null, window.location.pathname);
-					}
-					else {
-						if (popup_aiselect) {
-							display_models();
-						}
-					}
+
 				}
 				else {
 					msgbox("Failed to connect to KAI Horde!\nPlease check your network connection.");
@@ -3719,6 +3712,41 @@ Current version: 84
 			document.getElementById("apikey").value = localsettings.my_api_key;
 			initial_fetched_kudos = true;
 			fetch_kudo_balance();
+		}
+	}
+
+	function read_url_params_data()
+	{
+		//read the url params, and autoload a shared story if found
+		const foundStory = urlParams.get('s');
+		const foundScenario = urlParams.get('scenario');
+		const foundChub = urlParams.get('chub');
+
+		if (foundStory && foundStory != "") {
+			let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+			if (localsettings.persist_session && !safe_to_overwrite) {
+				import_compressed_story_prompt_overwrite(foundStory);
+			} else {
+				import_compressed_story(foundStory, false);
+			}
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundScenario && foundScenario != "") {
+			display_scenarios();
+			document.getElementById("scenariosearch").value = escapeHtml(foundScenario);
+			scenario_search();
+			const found = scenario_db.find(m => m.title.toLowerCase() == foundScenario.trim().toLowerCase());
+			if (found !== undefined) {
+				temp_scenario = found;
+				preview_temp_scenario();
+			}
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
+		} else if (foundChub && foundChub != "") {
+			display_scenarios();
+			get_chubai_scenario(foundChub);
+			//purge url params
+			window.history.replaceState(null, null, window.location.pathname);
 		}
 	}
 
@@ -4275,8 +4303,10 @@ Current version: 84
 		new_save_storyobj.memory = current_memory;
 		new_save_storyobj.worldinfo = current_wi;
 
-		//extra unofficial fields
+		//extra unofficial fields for the story
 		new_save_storyobj.extrastopseq = extrastopseq;
+		new_save_storyobj.anotestr = anote_strength;
+		new_save_storyobj.wisearchdepth = wi_searchdepth;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -4426,156 +4456,200 @@ Current version: 84
 
 	function kai_json_load(storyobj, force_load_settngs)
 	{
-		//determine if oldui file or newui file format
-		restart_new_game();
+		//either show popup or just proceed to load
+		handle_advload_popup((localsettings.show_advanced_load && !force_load_settngs),()=>
+		{
+			let old_gametext_arr = gametext_arr;
+			let old_current_anote = current_anote;
+			let old_current_anotetemplate = current_anotetemplate;
+			let old_current_memory = current_memory;
+			let old_current_wi = current_wi;
+			let old_extrastopseq = extrastopseq;
 
-		let is_oldui = (storyobj.file_version == null);
-		let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
-		console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
+			//determine if oldui file or newui file format
+			restart_new_game();
 
-		if (is_sharefile) {
-			//handle old shareformat
-			gametext_arr = storyobj.ga;
-			if(gametext_arr==null)
-			{
-				gametext_arr = [];
-			}
-			if (storyobj.ca && storyobj.ca != "") {
-				current_anote = storyobj.ca;
-				current_anotetemplate = storyobj.ct;
-			}
-			if (storyobj.cm && storyobj.cm != "") {
-				current_memory = storyobj.cm;
-			}
-			if (storyobj.cwi && storyobj.cwi.length > 0) {
-				current_wi = storyobj.cwi;
-			}
-			if (storyobj.ess && storyobj.ess != "") {
-				extrastopseq = storyobj.ess;
-			}
-		} else if (is_oldui) {
-			//v1 load
-			if (storyobj.prompt != "") {
-				gametext_arr.push(storyobj.prompt);
-			}
-			for (var i = 0; i < storyobj.actions.length; ++i) {
-				gametext_arr.push(storyobj.actions[i]);
-			}
+			let is_oldui = (storyobj.file_version == null);
+			let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
+			console.log("Is oldui: " + is_oldui + ", is sharefile: " + is_sharefile);
 
-			if (storyobj.anotetemplate) {
-				current_anotetemplate = storyobj.anotetemplate;
-			}
-			if (storyobj.authorsnote) {
-				current_anote = storyobj.authorsnote;
-			}
-			if (storyobj.memory) {
-				current_memory = storyobj.memory;
-			}
-			if (storyobj.worldinfo) {
-				current_wi = storyobj.worldinfo;
-			}
-			if (storyobj.extrastopseq) {
-				extrastopseq = storyobj.extrastopseq;
-			}
-		} else {
-			//v2 load
-			if(storyobj.prompt!="")
-			{
-				gametext_arr.push(storyobj.prompt);
-			}
-			for (var key in storyobj.actions.actions) {
-				var itm = storyobj.actions.actions[key];
-				gametext_arr.push(itm["Selected Text"]);
-			}
-			if (storyobj.authornotetemplate) {
-				current_anotetemplate = storyobj.authornotetemplate;
-			}
-			if (storyobj.authornote) {
-				current_anote = storyobj.authornote;
-			}
-			if (storyobj.memory) {
-				current_memory = storyobj.memory;
-			}
-			if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
-				for (var key in storyobj.worldinfo_v2.entries) {
-					var itm = storyobj.worldinfo_v2.entries[key];
-					if (itm.key.length > 0 && itm.content != null) {
-						let nwi = {
-							"key": itm.key[0],
-							"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary[0] : ""),
-							"content": itm.content,
-							"comment": itm.comment,
-							"folder": null,
-							"selective": itm.selective,
-							"constant": itm.constant
-						};
-						current_wi.push(nwi);
+			if (is_sharefile) {
+				//handle old shareformat
+				gametext_arr = storyobj.ga;
+				if(gametext_arr==null)
+				{
+					gametext_arr = [];
+				}
+				if (storyobj.ca && storyobj.ca != "") {
+					current_anote = storyobj.ca;
+					current_anotetemplate = storyobj.ct;
+				}
+				if (storyobj.cm && storyobj.cm != "") {
+					current_memory = storyobj.cm;
+				}
+				if (storyobj.cwi && storyobj.cwi.length > 0) {
+					current_wi = storyobj.cwi;
+				}
+				if (storyobj.ess && storyobj.ess != "") {
+					extrastopseq = storyobj.ess;
+				}
+			} else if (is_oldui) {
+				//v1 load
+				if (storyobj.prompt != "") {
+					gametext_arr.push(storyobj.prompt);
+				}
+				for (var i = 0; i < storyobj.actions.length; ++i) {
+					gametext_arr.push(storyobj.actions[i]);
+				}
+
+				if (storyobj.anotetemplate) {
+					current_anotetemplate = storyobj.anotetemplate;
+				}
+				if (storyobj.authorsnote) {
+					current_anote = storyobj.authorsnote;
+				}
+				if (storyobj.memory) {
+					current_memory = storyobj.memory;
+				}
+				if (storyobj.worldinfo) {
+					current_wi = storyobj.worldinfo;
+				}
+				if (storyobj.extrastopseq) {
+					extrastopseq = storyobj.extrastopseq;
+				}
+				if (storyobj.anotestr) {
+					anote_strength = storyobj.anotestr;
+				}
+				if (storyobj.wisearchdepth) {
+					wi_searchdepth = storyobj.wisearchdepth;
+				}
+			} else {
+				//v2 load
+				if(storyobj.prompt!="")
+				{
+					gametext_arr.push(storyobj.prompt);
+				}
+				for (var key in storyobj.actions.actions) {
+					var itm = storyobj.actions.actions[key];
+					gametext_arr.push(itm["Selected Text"]);
+				}
+				if (storyobj.authornotetemplate) {
+					current_anotetemplate = storyobj.authornotetemplate;
+				}
+				if (storyobj.authornote) {
+					current_anote = storyobj.authornote;
+				}
+				if (storyobj.memory) {
+					current_memory = storyobj.memory;
+				}
+				if (storyobj.worldinfo_v2 != null && storyobj.worldinfo_v2.entries != null) {
+					for (var key in storyobj.worldinfo_v2.entries) {
+						var itm = storyobj.worldinfo_v2.entries[key];
+						if (itm.key.length > 0 && itm.content != null) {
+							let nwi = {
+								"key": itm.key[0],
+								"keysecondary": (itm.keysecondary.length > 0 ? itm.keysecondary[0] : ""),
+								"content": itm.content,
+								"comment": itm.comment,
+								"folder": null,
+								"selective": itm.selective,
+								"constant": itm.constant
+							};
+							current_wi.push(nwi);
+						}
 					}
 				}
 			}
-		}
 
-		const import_settings = function()
-		{
-			let tmpapikey1 = localsettings.my_api_key;
-			let tmphc = localsettings.home_cluster;
-			let tmp_oai1 = localsettings.saved_oai_key;
-			let tmp_oai2 = localsettings.saved_oai_addr;
-			let tmp_or1 = localsettings.saved_openrouter_key;
-			let tmp_claude1 = localsettings.saved_claude_key;
-			let tmp_claude2 = localsettings.saved_claude_addr;
-			let tmp_palm1 = localsettings.saved_palm_key;
-			let tmp_kai = localsettings.saved_kai_addr;
-			import_props_into_object(localsettings, storyobj.savedsettings);
-			localsettings.my_api_key = tmpapikey1;
-			localsettings.home_cluster = tmphc;
-			localsettings.saved_oai_key = tmp_oai1;
-			localsettings.saved_oai_addr = tmp_oai2;
-			localsettings.saved_openrouter_key = tmp_or1;
-			localsettings.saved_claude_key = tmp_claude1;
-			localsettings.saved_claude_addr = tmp_claude2;
-			localsettings.saved_palm_key = tmp_palm1;
-			localsettings.saved_kai_addr = tmp_kai;
-
-			//backwards compat support for newlines
-			if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
-				localsettings.instruct_has_newlines = false;
-				if (!localsettings.instruct_starttag.includes("\\n")) {
-					localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
-				}
-				if (!localsettings.instruct_endtag.includes("\\n")) {
-					localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
-				}
-			}
-
-			if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
-				import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
-			}
-
-			//old versions dont have this flag
-			if(localsettings.entersubmit===true || localsettings.entersubmit===false)
+			const import_settings = function(loadmainstory,loadmemanote,loadworldinfo,loadstopseq,loadgensettings,loadaessettings)
 			{
-				document.getElementById("entersubmit").checked = localsettings.entersubmit;
+				if(!loadmainstory)
+				{
+					gametext_arr = old_gametext_arr;
+				}
+				if(!loadmemanote)
+				{
+					current_anote = old_current_anote;
+					current_anotetemplate = old_current_anotetemplate;
+					current_memory = old_current_memory;
+				}
+				if(!loadworldinfo)
+				{
+					current_wi = old_current_wi;
+				}
+				if(!loadstopseq)
+				{
+					extrastopseq = old_extrastopseq;
+				}
+
+				if (storyobj.savedsettings && storyobj.savedsettings != "")
+				{
+					let tmpapikey1 = localsettings.my_api_key;
+					let tmphc = localsettings.home_cluster;
+					let tmp_oai1 = localsettings.saved_oai_key;
+					let tmp_oai2 = localsettings.saved_oai_addr;
+					let tmp_or1 = localsettings.saved_openrouter_key;
+					let tmp_claude1 = localsettings.saved_claude_key;
+					let tmp_claude2 = localsettings.saved_claude_addr;
+					let tmp_palm1 = localsettings.saved_palm_key;
+					let tmp_kai = localsettings.saved_kai_addr;
+					if(loadgensettings)
+					{
+						import_props_into_object(localsettings, storyobj.savedsettings);
+						//backwards compat support for newlines
+						if (localsettings.instruct_has_newlines == true || (storyobj.savedsettings != null && storyobj.savedsettings.instruct_has_newlines == null && storyobj.savedsettings.instruct_has_markdown == null)) {
+							localsettings.instruct_has_newlines = false;
+							if (!localsettings.instruct_starttag.includes("\\n")) {
+								localsettings.instruct_starttag = "\\n" + localsettings.instruct_starttag + "\\n";
+							}
+							if (!localsettings.instruct_endtag.includes("\\n")) {
+								localsettings.instruct_endtag = "\\n" + localsettings.instruct_endtag + "\\n";
+							}
+						}
+						//old versions dont have this flag
+						if (localsettings.entersubmit === true || localsettings.entersubmit === false) {
+							document.getElementById("entersubmit").checked = localsettings.entersubmit;
+						}
+					}
+					localsettings.my_api_key = tmpapikey1;
+					localsettings.home_cluster = tmphc;
+					localsettings.saved_oai_key = tmp_oai1;
+					localsettings.saved_oai_addr = tmp_oai2;
+					localsettings.saved_openrouter_key = tmp_or1;
+					localsettings.saved_claude_key = tmp_claude1;
+					localsettings.saved_claude_addr = tmp_claude2;
+					localsettings.saved_palm_key = tmp_palm1;
+					localsettings.saved_kai_addr = tmp_kai;
+
+					if(loadaessettings)
+					{
+						if (storyobj.savedaestheticsettings && storyobj.savedaestheticsettings != "") {
+							import_props_into_object(aestheticInstructUISettings, storyobj.savedaestheticsettings);
+						}
+					}
+				}
 			}
 
-		}
+			//port over old images to the new format
+			migrate_old_images_in_gametext();
 
-		//port over old images to the new format
-		migrate_old_images_in_gametext();
-
-		//prompt to import settings
-		if(force_load_settngs)
-		{
-			import_settings();
+			//prompt to import settings
+			if (localsettings.show_advanced_load && !force_load_settngs)
+			{
+				import_settings(
+				document.getElementById("advset_mainstory").checked,
+				document.getElementById("advset_memanote").checked,
+				document.getElementById("advset_worldinfo").checked,
+				document.getElementById("advset_stopseq").checked,
+				document.getElementById("advset_gensettings").checked,
+				document.getElementById("advset_aessettings").checked
+				);
+			} else {
+				//force load everything
+				import_settings(true, true, true, true, true, true);
+			}
 			render_gametext();
-		}
-		else if (storyobj.savedsettings && storyobj.savedsettings != "") {
-			import_settings();
-			render_gametext();
-		} else {
-			render_gametext();
-		}
-
+		});
 	}
 
 	function load_agnai_wi(obj,chatopponent,myname)
@@ -5047,7 +5121,7 @@ Current version: 84
 	}
 	function confirm_scenario_verify()
 	{
-		if(temp_scenario.show_warning==true && localsettings.passed_ai_warning==false)
+		if(temp_scenario.show_warning==true && localsettings.passed_ai_warning==false && passed_ai_warning_local==false)
 		{
 			let warntxt = `<p><b><u>Disclaimer: The AI is not suitable to be used as an actual therapist, counselor or advisor of any kind.</u></b></p>
 			<p>While some find it comforting to talk about their issues with an AI, the responses are unpredictable.</p>
@@ -5062,6 +5136,7 @@ Current version: 84
 				{
 					confirm_scenario();
 					localsettings.passed_ai_warning = true; //remember flag for session
+					passed_ai_warning_local = true;
 				}
 			},true);
 		} else {
@@ -5218,6 +5293,23 @@ Current version: 84
 	}
 
 	var worker_data_showonly = []; //only for table display, dont mix
+	//track worker earn rates
+	var first_seen_workers = {};
+	function track_kudos_earnings(wdata)
+	{
+		if(wdata && wdata.length>0)
+		{
+			for (let i = 0; i < wdata.length; ++i) {
+				let elem = wdata[i];
+				if (elem && elem.id && !first_seen_workers.hasOwnProperty(elem.id)) {
+					first_seen_workers[elem.id] = {
+						startkudos: elem.kudos_rewards,
+						timestamp: performance.now()
+					};
+				}
+			}
+		}
+	}
 	function get_and_show_workers() {
 		if (localflag) {
 			return;
@@ -5239,6 +5331,7 @@ Current version: 84
 					worker_data_showonly[i].defaultmodel = elem.models[0];
 				}
 			}
+			track_kudos_earnings(worker_data_showonly);
 
 			show_workers();
 		});
@@ -5343,6 +5436,7 @@ Current version: 84
 		document.getElementById("workercontainer").classList.remove("hidden");
 
 		let str = "";
+		let timenow = performance.now();
 		for (var i = 0; i < worker_data_showonly.length; ++i) {
 			let elem = worker_data_showonly[i];
 			let tokenspersec = elem.performance.replace(" tokens per second", "");
@@ -5364,8 +5458,18 @@ Current version: 84
 				if (n > 0) { allmdls += "<br>"; }
 				allmdls += escapeHtml(elem.models[n].substring(0, 32));
 			}
-
-			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "</td><td>"+clustertag+"</td></tr>";
+			let kudos_per_hr = "";
+			if(first_seen_workers.hasOwnProperty(elem.id))
+			{
+				let firstseen = first_seen_workers[elem.id];
+				let kudosdiff = elem.kudos_rewards - firstseen.startkudos;
+				if(kudosdiff>0)
+				{
+					var hrspassed = ((timenow - firstseen.timestamp) / 1000)/3600.0; //time passed in sec
+					kudos_per_hr = "(" + (kudosdiff/hrspassed).toFixed(0) + "/hr)";
+				}
+			}
+			str += "<tr id='workertablerow_"+i+"'><td>" + workerNameHtml + "</td><td>" + allmdls + "</td><td>" + elem.max_length + " / " + elem.max_context_length + "<br>(" + tokenspersec + " T/s)</td><td "+brokenstyle+">" + format_uptime(elem.uptime) + "<br>(" + elem.requests_fulfilled + " jobs)</td><td "+style+">" + elem.kudos_rewards.toFixed(0) + "<br><span style='color:gray'>"+kudos_per_hr+"</span></td><td>"+clustertag+"</td></tr>";
 		}
 		document.getElementById("workertable").innerHTML = str;
 		document.getElementById("worktitlecount").innerText = "Worker List - Total " + worker_data_showonly.length;
@@ -5440,7 +5544,9 @@ Current version: 84
 			document.getElementById("wicontainer").classList.contains("hidden") &&
 			document.getElementById("customendpointcontainer").classList.contains("hidden") &&
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
-			document.getElementById("zoomedimgcontainer").classList.contains("hidden")
+			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
+			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
+			document.getElementById("advancedloadfile").classList.contains("hidden")
 		);
 	}
 	function hide_popups() {
@@ -5459,6 +5565,7 @@ Current version: 84
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
 	function explain_horde()
@@ -6366,6 +6473,9 @@ Current version: 84
 			if(modelsdone && workersdone)
 			{
 				onBothFetchesDone();
+
+				//track earnings if possible
+				track_kudos_earnings(wdata);
 			}
 		});
 
@@ -6685,6 +6795,7 @@ Current version: 84
 		document.getElementById("top_p").value = document.getElementById("top_p_slide").value = localsettings.top_p;
 		document.getElementById("autoscroll").checked = localsettings.autoscroll;
 		document.getElementById("export_settings").checked = localsettings.export_settings;
+		document.getElementById("show_advanced_load").checked = localsettings.show_advanced_load;
 		document.getElementById("invert_colors").checked = localsettings.invert_colors;
 		document.getElementById("trimsentences").checked = localsettings.trimsentences;
 		document.getElementById("trimwhitespace").checked = localsettings.trimwhitespace;
@@ -6898,6 +7009,7 @@ Current version: 84
 		localsettings.top_p = document.getElementById("top_p").value;
 		localsettings.autoscroll = (document.getElementById("autoscroll").checked ? true : false);
 		localsettings.export_settings = (document.getElementById("export_settings").checked ? true : false);
+		localsettings.show_advanced_load = (document.getElementById("show_advanced_load").checked ? true : false);
 		localsettings.invert_colors = (document.getElementById("invert_colors").checked ? true : false);
 		localsettings.trimsentences = (document.getElementById("trimsentences").checked ? true : false);
 		localsettings.trimwhitespace = (document.getElementById("trimwhitespace").checked ? true : false);
@@ -7139,6 +7251,30 @@ Current version: 84
 
 	}
 
+	//triggers if advanced load is enabled
+	var advload_callback = null;
+	function handle_advload_popup(need_display,callbackfn)
+	{
+		if(!need_display)
+		{
+			callbackfn();
+		}
+		else
+		{
+			advload_callback = callbackfn;
+			document.getElementById("advancedloadfile").classList.remove("hidden");
+		}
+	}
+	function advload_btnok()
+	{
+		document.getElementById("advancedloadfile").classList.add("hidden");
+		if(advload_callback)
+		{
+			advload_callback();
+		}
+		advload_callback = null;
+	}
+
 	//triggers when loading from slot, or when loading from url share
 	function import_compressed_story_prompt_overwrite(compressed_story) {
 		msgboxYesNo("You already have an existing persistent story. Do you want to overwrite it?","Overwrite Story Warning",()=>{
@@ -7322,6 +7458,8 @@ Current version: 84
 		current_wi = [];
 		pending_context_preinjection = "";
 		extrastopseq = "";
+		anote_strength = 320;
+		wi_searchdepth = 0;
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
@@ -7405,7 +7543,7 @@ Current version: 84
 
 	function end_trim_to_sentence(input,include_newline=false) {
 		let last = -1;
-		let enders = ['.', '!', '?', '`', '*', '"', ')', '}', '`', ']', ';'];
+		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';'];
 		for (let i = 0; i < enders.length; ++i)
 		{
 			last = Math.max(last, input.lastIndexOf(enders[i]));
@@ -7440,6 +7578,36 @@ Current version: 84
 			}
 		}
 		return input;
+	}
+
+	//if the string is longer than len, trim it to the last part, but always trim to a word or sentence boundary.
+	function substring_to_boundary(input_string, maxlen)
+	{
+		if(input_string.length <= maxlen)
+		{
+			return input_string;
+		}
+		else
+		{
+			let cutoff = input_string.length - maxlen;
+			let trim = input_string.substring(cutoff);
+			let idx = -1;
+			let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';', ' ', '\n'];
+			for (let i = 0; i < enders.length; ++i)
+			{
+				let f = trim.indexOf(enders[i]);
+				if (idx == -1) {
+					idx = f;
+				} else if (f>=0){
+					idx = Math.min(idx,f);
+				}
+			}
+			if(idx>=0 && idx <= 20) //if unable to trim safely (20 char max), do not trim
+			{
+				trim = trim.substring(idx); //no +1, include leading token!
+			}
+			return trim;
+		}
 	}
 
 	function handle_typing(event) {
@@ -7520,7 +7688,14 @@ Current version: 84
 			}),
 			})
 			.then((response) => response.json())
-			.then((data) => {})
+			.then((data) => {
+				if(globalabortcontroller)
+				{
+					globalabortcontroller.abort();
+					console.log("Abort Signal");
+					prepare_abort_controller();
+				}
+			})
 			.catch((error) => {
 				console.error('Error:', error);
 			});
@@ -7705,7 +7880,7 @@ Current version: 84
 			if (current_memory == null || current_memory.trim() == "")
 			{
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				max_allowed_characters = Math.floor(maxctxlen * 4.6);
+				max_allowed_characters = Math.floor(maxctxlen * 4.8);
 			}
 
 			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
@@ -7905,7 +8080,7 @@ Current version: 84
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = truncated_anote.substring(truncated_anote.length - max_mem_anote_len);
+			truncated_anote = substring_to_boundary(truncated_anote, max_mem_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
@@ -7916,15 +8091,17 @@ Current version: 84
 			//only do this processing if memory or anote is not blank
 			if (truncated_memory.length > 0 || current_anote.length > 0) {
 				//now we resize the context such that the memory and authors note can fit inside
-				truncated_context = truncated_context.substring(truncated_context.length - max_allowed_characters);
+				truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
 				let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
 				let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
-				truncated_context = truncated_context.substring(excess_len);
+				excess_len = excess_len < 0 ? 0 : excess_len;
+				let newlimit = (max_allowed_characters-excess_len) < 32 ? 32 : (max_allowed_characters-excess_len);
+				truncated_context = substring_to_boundary(truncated_context, newlimit); //must always have at least 32 chars from main context
 				//insert authors note 80 tokens before the ending (320 characters).
 				let anote_dist = anote_strength;
 				let anote_insert_idx = truncated_context.length - anote_dist;
 				//try to align anote with a word boundary
-				for(let i=0;i<10;++i)
+				for(let i=0;i<12;++i)
 				{
 					if(anote_insert_idx>=0 && anote_insert_idx<truncated_context.length
 					&& truncated_context[anote_insert_idx]!=" " && truncated_context[anote_insert_idx]!="."
@@ -8007,6 +8184,56 @@ Current version: 84
 		}
 	}
 
+	function get_stop_sequences() //the input object may not always be the same!
+	{
+		let seqs = [];
+		if (localsettings.opmode == 2) //stop on new action found
+		{
+			seqs = ["\n\> "];
+		}
+		if (localsettings.opmode == 3) //stop on selfname found
+		{
+			seqs = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
+
+			//for multichat, everyone else becomes a stopper token
+			if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
+				let coarr = localsettings.chatopponent.split("||$||");
+				coarr = coarr.filter(x => (x && x != ""));
+				coarr = coarr.map(x => x.trim());
+				for (let n = 0; n < coarr.length; ++n) {
+					seqs.push(coarr[n] + "\:");
+				}
+			}
+			else
+			{
+				if(localsettings.chatopponent!="")
+				{
+					seqs.push("\n"+localsettings.chatopponent + "\: ");
+				}
+			}
+		}
+		if (localsettings.opmode == 4) //stop on selfname found
+		{
+			let st = get_instruct_starttag(true);
+			let et = get_instruct_endtag(true);
+			seqs = [st, et];
+		}
+		if (extrastopseq != "") {
+			let rep = replaceAll(extrastopseq, "\\n", "\n");
+			let srep = rep.split("||$||");
+			if (srep.length > 0 && !seqs) {
+				seqs = [];
+			}
+			for (let i = 0; i < srep.length; ++i) {
+				if (srep[i] && srep[i] != "") {
+					seqs.push(srep[i]);
+				}
+			}
+		}
+
+		return seqs;
+	}
+
 	function dispatch_submit_generation(submit_payload, input_was_empty) //if input is not empty, always unban eos
 	{
 		console.log(submit_payload);
@@ -8034,49 +8261,7 @@ Current version: 84
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
 				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.1") > 0) {
-					if (localsettings.opmode == 2) //stop on new action found
-					{
-						submit_payload.stop_sequence = ["\n\> "];
-					}
-					if (localsettings.opmode == 3) //stop on selfname found
-					{
-						submit_payload.stop_sequence = [localsettings.chatname + "\:",("\n" + localsettings.chatname + " ")];
-
-						//for multichat, everyone else becomes a stopper token
-						if (localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||")) {
-							let coarr = localsettings.chatopponent.split("||$||");
-							coarr = coarr.filter(x => (x && x != ""));
-							coarr = coarr.map(x => x.trim());
-							for (let n = 0; n < coarr.length; ++n) {
-								submit_payload.stop_sequence.push(coarr[n] + "\:");
-							}
-						}
-						else
-						{
-							if(localsettings.chatopponent!="")
-							{
-								submit_payload.stop_sequence.push("\n"+localsettings.chatopponent + "\: ");
-							}
-						}
-					}
-					if (localsettings.opmode == 4) //stop on selfname found
-					{
-						let st = get_instruct_starttag(true);
-						let et = get_instruct_endtag(true);
-						submit_payload.stop_sequence = [st, et];
-					}
-					if (extrastopseq != "") {
-						let rep = replaceAll(extrastopseq, "\\n", "\n");
-						let srep = rep.split("||$||");
-						if (srep.length > 0 && !submit_payload.stop_sequence) {
-							submit_payload.stop_sequence = [];
-						}
-						for (let i = 0; i < srep.length; ++i) {
-							if (srep[i] && srep[i] != "") {
-								submit_payload.stop_sequence.push(srep[i]);
-							}
-						}
-					}
+					submit_payload.stop_sequence = get_stop_sequences();
 				}
 
 				//version 1.2.4 and later supports unban tokens
@@ -8385,10 +8570,13 @@ Current version: 84
 				subpostheaders['Client-Agent'] = clientagenttouse;
 			}
 
-			//horde supports unban tokens
 			if(submit_payload.params)
 			{
+				//horde supports unban tokens
 				submit_payload.params.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
+
+				//horde now supports stopping sequences
+				submit_payload.params.stop_sequence = get_stop_sequences();
 			}
 
 			last_request_str = JSON.stringify(submit_payload);
@@ -8466,7 +8654,7 @@ Current version: 84
 			sentence = localsettings.image_styles + " " + sentence;
 		}
 
-		if (filter_enabled && localsettings.generate_images_mode==1) {
+		if (localsettings.generate_images_mode==1) {
 			sentence = sanitize_horde_image_prompt(sentence);
 		}
 
@@ -8790,7 +8978,7 @@ Current version: 84
 		{
 			playbeep();
 		}
-		let lastreq = "<a href=\"#\" onclick=\"show_last_req()\">Last request</a> served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span> for " + genkudos + " kudos in " + getTimeTaken() + " seconds.";
+		let lastreq = "<a href=\"#\" onclick=\"show_last_req()\">Last request</a> served by <a href=\"#\" onclick=\"get_and_show_workers()\">" + genworker + "</a> using <span class=\"color_darkgreen\">"+genmdl+ "</span>"+(genkudos>0?(" for " + genkudos + " kudos"):"")+" in " + getTimeTaken() + " seconds.";
 		document.getElementById("lastreq").innerHTML = lastreq;
 		document.getElementById("lastreq2").innerHTML = lastreq;
 	}
@@ -9450,7 +9638,7 @@ Current version: 84
 			}
 			document.getElementById("btnmode_adventure").classList.remove("hidden");
 		}
-		else if(localsettings.opmode==3 && localsettings.chatopponent!="" && localsettings.chatopponent.includes("||$||"))
+		else if(localsettings.opmode==3 && localsettings.chatopponent!="")
 		{
 			document.getElementById("inputrow").classList.add("show_mode");
 			document.getElementById("btnmode_chat").classList.remove("hidden");
@@ -9729,7 +9917,7 @@ Current version: 84
 			{
 				document.getElementById("chat_msg_body").innerHTML = render_enhanced_chat_instruct(textToRender,false);
 			}
-			if (localsettings.opmode == 3 && localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+			if (localsettings.opmode == 3 && localsettings.chatopponent != "") {
 				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
 				document.getElementById("cht_inp").classList.add("shorter");
 			} else {
@@ -9862,6 +10050,7 @@ Current version: 84
 			let foundimg = "";
 			if(curr.msg && curr.msg!="")
 			{
+				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
 				//convert the msg into images
 				curr.msg = curr.msg.replace(/\[<\|p\|.+?\|p\|>\]/g, function (m) {
 					// m here means the whole matched string
@@ -9876,7 +10065,7 @@ Current version: 84
 					return inner;
 				});
 				curr.msg = curr.msg.replace(/\[<\|.+?\|>\]/g, ""); //remove normal comments too
-				curr.msg = curr.msg.replace(italics_regex,"<em style='opacity:0.7'>$1</em>");
+
 
 			}
 
@@ -9964,7 +10153,7 @@ Current version: 84
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
-		if(custom_kobold_endpoint!="")
+		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
 		{
 			document.getElementById("noextrastopseq").classList.add("hidden");
 		}
@@ -10217,18 +10406,44 @@ Current version: 84
 	function show_groupchat_select()
 	{
 		document.getElementById("groupselectcontainer").classList.remove("hidden");
-		let gs = `<table style="width:90%; margin:8px auto;">`;
-		if(localsettings.chatopponent!="")
-		{
+		let gs = ``;
+		if (localsettings.chatopponent != "" && localsettings.chatopponent.includes("||$||")) {
+			gs = `Selected participants will reply randomly, unless you address them directly by name.`
+			+`<br><br>Unselected participants will not reply in group chats.<br>`
+			+`<table style="width:90%; margin:8px auto;">`;
 			let grouplist = localsettings.chatopponent.split("||$||");
-			for(let i=0;i<grouplist.length;++i)
-			{
+			for (let i = 0; i < grouplist.length; ++i) {
 				let show = !groupchat_removals.includes(grouplist[i]);
-				gs += `<tr><td><span style="vertical-align: middle;">`+grouplist[i]+`</span></td><td><input type="checkbox" id="groupselectitem_`+i+`" style=" vertical-align: top;" `+(show?"checked":"")+`></td></tr>`;
+				gs += `<tr><td width='184px'><span style="vertical-align: middle;">` + grouplist[i] + `</span></td>`
+					+`<td width='24px'><button type="button" class="btn btn-primary widelbtn" id="widel0" onclick="impersonate_message(`+i+`)">+</button></td>`
+					+`<td width='24px'><input type="checkbox" id="groupselectitem_` + i + `" style=" vertical-align: top;" ` + (show ? "checked" : "") + `></td></tr>`;
 			}
+			gs += `</table>`;
 		}
-		gs += `</table>`;
+		else if(localsettings.chatopponent != "")
+		{
+			gs = `You're having a one-on-one chat with <b>`+localsettings.chatopponent+`</b>.<br><br>`
+			+`<a href='#' class='color_blueurl' onclick='hide_popups();display_settings()'>Turn it into a <b>group chat</b> by <b>adding more AI characters</b> (one per line)</a>.<br><br>`
+			+ `<a href='#' class='color_blueurl' onclick='impersonate_message(0)'>Impersonate `+localsettings.chatopponent+` speaking as them</a>`;
+		}
+
 		document.getElementById("groupselectitems").innerHTML = gs;
+	}
+	function impersonate_message(index)
+	{
+		hide_popups();
+		let grouplist = localsettings.chatopponent.split("||$||");
+		let target = grouplist[index];
+		inputBox("Add a messsage speaking as "+target+":","Impersonate "+target,"",target+" says...", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if(userinput!="")
+			{
+				gametext_arr.push("\n"+target+": "+userinput);
+				render_gametext();
+			}
+			hide_popups();
+		},false);
 	}
 	function confirm_groupchat_select()
 	{
@@ -11145,6 +11360,32 @@ Current version: 84
 		</div>
 	</div>
 
+	<div class="popupcontainer flex hidden" id="advancedloadfile">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Advanced Load File</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">
+				Select categories to import from saved file. Selected categories will be overwritten. Unselected categories will retain original values.<br>
+				<br><div>
+				<table style="width:90%; margin:8px auto;">
+				<tr><td><span style="vertical-align: middle;">Main Story</span></td><td><input type="checkbox" id="advset_mainstory" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Memory and Author's Note</span></td><td><input type="checkbox" id="advset_memanote" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">World Info</span></td><td><input type="checkbox" id="advset_worldinfo" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Stop Sequences</span></td><td><input type="checkbox" id="advset_stopseq" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">General Settings</span></td><td><input type="checkbox" id="advset_gensettings" style=" vertical-align: top;" checked></td></tr>
+				<tr><td><span style="vertical-align: middle;">Aesthetic Settings</span></td><td><input type="checkbox" id="advset_aessettings" style=" vertical-align: top;" checked></td></tr>
+				</table>
+				</div>
+			</div>
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="advload_btnok()">Ok</button>
+				<button type="button" class="btn btn-primary" onclick="hide_popups()">Cancel</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="popupcontainer flex hidden" id="settingscontainer">
 		<div class="popupbg flex"></div>
 		<div class="nspopup fixsize evenhigher">
@@ -11593,6 +11834,11 @@ Current version: 84
 						   <input type="checkbox" id="prompt_for_savename" style="margin:0px 0px 0px auto;">
 						</div>
 						<div class="settinglabel">
+							<div class="justifyleft settingsmall">Show Advanced Load <span class="helpicon">?<span
+								class="helptext">If enabled, allows you to selective import only specific categories of a JSON save file</span></span></div>
+						   <input type="checkbox" id="show_advanced_load" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
 							<div class="justifyleft settingsmall">Autoscroll Text <span class="helpicon">?<span
 								class="helptext">Automatically scrolls the text window down when new text is generated</span></span></div>
 						   <input type="checkbox" id="autoscroll" style="margin:0px 0px 0px auto;">
@@ -11666,12 +11912,10 @@ Current version: 84
 					<option value="0">Immediate</option>
 				</select>
 			<br><br>
-			<div class="justifyleft settinglabel">Extra Stopping Sequence (Kobold API Only) <span class="helpicon">?<span
+			<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
 				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
 				<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
 				<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
-
-
 
 			<br>
 			<div class="popupfooter">
@@ -11809,8 +12053,6 @@ Current version: 84
 				<div class="popuptitletext">Group Chat Selector</div>
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
-				Selected participants will reply randomly, unless you address them directly by name.<br><br>
-				Unselected participants will not reply in group chats.<br>
 				<div id="groupselectitems">
 				</div>
 			</div>
