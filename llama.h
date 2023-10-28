@@ -658,6 +658,7 @@ extern "C" {
                            float * mu);
 
     /// @details Selects the token with the highest probability.
+    ///          Does not compute the token probabilities. Use llama_sample_softmax() instead.
     LLAMA_API llama_token llama_sample_token_greedy(
             struct llama_context * ctx,
           llama_token_data_array * candidates);

@@ -224,6 +224,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.temp = std::stof(argv[i]);
+            sparams.temp = std::max(sparams.temp, 0.0f);
         } else if (arg == "--tfs") {
             if (++i >= argc) {
                 invalid_param = true;
