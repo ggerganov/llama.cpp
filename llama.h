@@ -600,7 +600,7 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
-    /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841#issue-1966758357
+    /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
     LLAMA_API void llama_sample_min_p(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
