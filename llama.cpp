@@ -7377,18 +7377,15 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     std::vector<llama_token_data> filtered_candidates;
     filtered_candidates.reserve(candidates->size);  // Reserve to avoid multiple reallocations
 
-    size_t kept_count = 0;  // Counter for how many tokens are kept
-
     for (size_t i = 0; i < candidates->size; ++i) {
-        // If a token's probability is above the threshold, we keep it.
-        if (candidates->data[i].p >= multiplied_min_p) {
+        // If a token's probability is above the threshold or if we haven't kept enough tokens yet
+        if (candidates->data[i].p >= multiplied_min_p || filtered_candidates.size() < min_keep) {
             filtered_candidates.push_back(candidates->data[i]);
-            kept_count++;  // Increment the counter
         }
     }
 
     // If not enough candidates meet the threshold, take the top 'min_keep' ones
-    if (kept_count < min_keep) {
+    if (filtered_candidates.size() < min_keep) {
         std::sort(candidates->data, candidates->data + candidates->size, 
                   [](const llama_token_data & a, const llama_token_data & b) {
                       return a.p > b.p;  // Sort by probability in descending order
