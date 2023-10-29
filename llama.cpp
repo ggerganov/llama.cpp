@@ -7361,44 +7361,29 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
 }
 
 void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    float base_min_p = p;  // This will hold the base minimum probability value
-    float multiplied_min_p;  // This will hold the adjusted minimum probability threshold
+    if (p <= 0.0f || !candidates->size) {
+        return;
+    }
 
-    // Ensure the probabilities are calculated.
     llama_sample_softmax(ctx, candidates);
 
-    // Calculate the multiplication factor based on the highest scoring token.
-    float multiplication_factor = candidates->data[0].p;
+    const int64_t t_start_sample_us = ggml_time_us();
 
-    // Calculate the minimum percentage requirement.
-    multiplied_min_p = base_min_p * multiplication_factor;
+    float scale = candidates->data[0].p; // scale by max prob
+    size_t i = 1; // first token always matches
 
-    // Store the tokens that meet the threshold in a new list.
-    std::vector<llama_token_data> filtered_candidates;
-    filtered_candidates.reserve(candidates->size);  // Reserve to avoid multiple reallocations
-
-    for (size_t i = 0; i < candidates->size; ++i) {
-        // If a token's probability is above the threshold or if we haven't kept enough tokens yet
-        if (candidates->data[i].p >= multiplied_min_p || filtered_candidates.size() < min_keep) {
-            filtered_candidates.push_back(candidates->data[i]);
+    for (; i < candidates->size; ++i) {
+        if (candidates->data[i].p < p * scale && i >= min_keep) {
+            break; // prob too small
         }
     }
 
-    // If not enough candidates meet the threshold, take the top 'min_keep' ones
-    if (filtered_candidates.size() < min_keep) {
-        std::sort(candidates->data, candidates->data + candidates->size, 
-                  [](const llama_token_data & a, const llama_token_data & b) {
-                      return a.p > b.p;  // Sort by probability in descending order
-                  });
-        filtered_candidates.clear();  // Clear the previously filtered candidates
-        for (size_t i = 0; i < min_keep; ++i) {
-            filtered_candidates.push_back(candidates->data[i]);
-        }
-    }
+    // Resize the output vector to keep only the matching tokens
+    candidates->size = i;
 
-    // Now we replace the original candidates with the filtered list.
-    std::copy(filtered_candidates.begin(), filtered_candidates.end(), candidates->data);
-    candidates->size = filtered_candidates.size();
+    if (ctx) {
+        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
+    }
 }
 
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
