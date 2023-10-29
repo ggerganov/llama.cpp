@@ -76,6 +76,7 @@ def parse_args() -> argparse.Namespace:
         "ftype", type=int, choices=[0, 1], default=1, nargs='?',
         help="output format - use 0 for float32, 1 for float16",
     )
+    parser.add_argument("--bigendian",   action="store_true",    help="model is executed on big endian machine")
     return parser.parse_args()
 
 args = parse_args()
@@ -86,6 +87,11 @@ if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file = sys.stderr)
     sys.exit(1)
 
+endianess = gguf.GGUFEndian.LITTLE
+if args.bigendian:
+    endianess = gguf.GGUFEndian.BIG
+endianess_str = "Big Endian" if args.bigendian else "Little Endian"
+print(f"gguf: Conversion Endianess {endianess}")
 # possible tensor data types
 #   ftype == 0 -> float32
 #   ftype == 1 -> float16
@@ -104,7 +110,7 @@ print("gguf: loading model "+dir_model.name)
 with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 print("hello print: ",hparams["architectures"][0])
-if hparams["architectures"][0] != "BaichuanForCausalLM":
+if hparams["architectures"][0] != "BaichuanForCausalLM" and hparams["architectures"][0] != "BaiChuanForCausalLM":
     print("Model architecture not supported: " + hparams["architectures"][0])
 
     sys.exit()
@@ -113,7 +119,7 @@ if hparams["architectures"][0] != "BaichuanForCausalLM":
 num_parts = count_model_parts(dir_model)
 print(f"num_parts:{num_parts}\n")
 ARCH=gguf.MODEL_ARCH.BAICHUAN
-gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
+gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
 print("gguf: get model metadata")
 
@@ -224,7 +230,7 @@ gguf_writer.add_token_list(tokens)
 gguf_writer.add_token_scores(scores)
 gguf_writer.add_token_types(toktypes)
 
-special_vocab = gguf.SpecialVocab(dir_model)
+special_vocab = gguf.SpecialVocab(dir_model, n_vocab = len(tokens))
 special_vocab.add_to_gguf(gguf_writer)
 
 # TENSORS

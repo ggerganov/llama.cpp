@@ -133,11 +133,12 @@ extern "C" {
     typedef struct llama_batch {
         int32_t n_tokens;
 
-        llama_token  * token;
-        float        * embd;
-        llama_pos    * pos;
-        llama_seq_id * seq_id;
-        int8_t       * logits;
+        llama_token  *  token;
+        float        *  embd;
+        llama_pos    *  pos;
+        int32_t      *  n_seq_id;
+        llama_seq_id ** seq_id;
+        int8_t       *  logits;
 
         // NOTE: helpers for smooth API transition - can be deprecated in the future
         //       for future-proof code, use the above fields instead and ignore everything below
@@ -177,7 +178,7 @@ extern "C" {
         float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels
+        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
         bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
         bool logits_all; // the llama_eval() call computes all logits, not just the last one
         bool embedding;  // embedding mode only
@@ -190,6 +191,7 @@ extern "C" {
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
         bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
     } llama_model_quantize_params;
 
     // grammar types
@@ -332,17 +334,14 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
-    // Remove all tokens data of cells in [c0, c1)
-    // c0 < 0 : [0,  c1]
-    // c1 < 0 : [c0, inf)
-    LLAMA_API void llama_kv_cache_tokens_rm(
-            struct llama_context * ctx,
-                         int32_t   c0,
-                         int32_t   c1);
+    // Clear the KV cache
+    LLAMA_API void llama_kv_cache_clear(
+            struct llama_context * ctx);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // p0 < 0 : [0,  p1]
-    // p1 < 0 : [p0, inf)
+    // seq_id < 0 : match any sequence
+    // p0 < 0     : [0,  p1]
+    // p1 < 0     : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
@@ -446,7 +445,8 @@ extern "C" {
                     llama_pos   pos_0,
                  llama_seq_id   seq_id);
 
-    // Allocates a batch of tokens on the heap
+    // Allocates a batch of tokens on the heap that can hold a maximum of n_tokens
+    // Each token can be assigned up to n_seq_max sequence ids
     // The batch has to be freed with llama_batch_free()
     // If embd != 0, llama_batch.embd will be allocated with size of n_tokens * embd * sizeof(float)
     // Otherwise, llama_batch.token will be allocated to store n_tokens llama_token
@@ -454,7 +454,8 @@ extern "C" {
     // All members are left uninitialized
     LLAMA_API struct llama_batch llama_batch_init(
             int32_t n_tokens,
-            int32_t embd);
+            int32_t embd,
+            int32_t n_seq_max);
 
     // Frees a batch of tokens allocated with llama_batch_init()
     LLAMA_API void llama_batch_free(struct llama_batch batch);
@@ -491,37 +492,41 @@ extern "C" {
     // Vocab
     //
 
-    LLAMA_API const char * llama_token_get_text(const struct llama_context * ctx, llama_token token);
+    LLAMA_API const char * llama_token_get_text(const struct llama_model * model, llama_token token);
 
-    LLAMA_API float llama_token_get_score(const struct llama_context * ctx, llama_token token);
+    LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_context * ctx, llama_token token);
+    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
 
     // Special tokens
-    LLAMA_API llama_token llama_token_bos(const struct llama_context * ctx);  // beginning-of-sentence
-    LLAMA_API llama_token llama_token_eos(const struct llama_context * ctx);  // end-of-sentence
-    LLAMA_API llama_token llama_token_nl (const struct llama_context * ctx);  // next-line
+    LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
+    LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
+    LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+
     // codellama infill tokens
-    LLAMA_API llama_token llama_token_prefix(const struct llama_context * ctx); // Beginning of infill prefix
-    LLAMA_API llama_token llama_token_middle(const struct llama_context * ctx); // Beginning of infill middle
-    LLAMA_API llama_token llama_token_suffix(const struct llama_context * ctx); // Beginning of infill suffix
-    LLAMA_API llama_token llama_token_eot   (const struct llama_context * ctx); // End of infill middle
+    LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
+    LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
+    LLAMA_API llama_token llama_token_suffix(const struct llama_model * model); // Beginning of infill suffix
+    LLAMA_API llama_token llama_token_eot   (const struct llama_model * model); // End of infill middle
 
     //
     // Tokenization
     //
 
-    // Convert the provided text into tokens.
-    // The tokens pointer must be large enough to hold the resulting tokens.
-    // Returns the number of tokens on success, no more than n_max_tokens
-    // Returns a negative number on failure - the number of tokens that would have been returned
+    /// @details Convert the provided text into tokens.
+    /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
+    /// @return Returns the number of tokens on success, no more than n_max_tokens
+    /// @return Returns a negative number on failure - the number of tokens that would have been returned
+    /// @param special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.
+    ///                Does not insert a leading space.
     LLAMA_API int llama_tokenize(
         const struct llama_model * model,
                       const char * text,
                              int   text_len,
                      llama_token * tokens,
                              int   n_max_tokens,
-                            bool   add_bos);
+                            bool   add_bos,
+                            bool   special);
 
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.
@@ -554,21 +559,15 @@ extern "C" {
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
-    LLAMA_API void llama_sample_repetition_penalty(
-            struct llama_context * ctx,
-          llama_token_data_array * candidates,
-               const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                          float    penalty);
-
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
-    LLAMA_API void llama_sample_frequency_and_presence_penalties(
+    LLAMA_API void llama_sample_repetition_penalties(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
                const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                           float   alpha_frequency,
-                           float   alpha_presence);
+                          size_t   penalty_last_n,
+                           float   penalty_repeat,
+                           float   penalty_freq,
+                           float   penalty_present);
 
     /// @details Apply classifier-free guidance to the logits as described in academic paper "Stay on topic with Classifier-Free Guidance" https://arxiv.org/abs/2306.17806
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, the logits must be directly extracted from the original generation context without being sorted.
@@ -657,6 +656,7 @@ extern "C" {
                            float * mu);
 
     /// @details Selects the token with the highest probability.
+    ///          Does not compute the token probabilities. Use llama_sample_softmax() instead.
     LLAMA_API llama_token llama_sample_token_greedy(
             struct llama_context * ctx,
           llama_token_data_array * candidates);

@@ -377,16 +377,19 @@ class SentencePieceVocab:
             added_tokens = {}
 
         vocab_size: int = self.sentencepiece_tokenizer.vocab_size()
-        expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
-        actual_ids   = sorted(added_tokens.values())
-        if expected_ids != actual_ids:
-            raise Exception(f"Expected added token IDs to be sequential and start at {len(added_tokens)}; got {actual_ids}")
 
-        items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
-        self.added_tokens_list = [text for (text, idx) in items]
-        self.vocab_size_base: int = vocab_size
-        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
-        self.fname_tokenizer = fname_tokenizer
+        new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
+        expected_new_ids = list(range(vocab_size, vocab_size + len(new_tokens)))
+        actual_new_ids   = sorted(new_tokens.keys())
+
+        if expected_new_ids != actual_new_ids:
+            raise ValueError(f"Expected new token IDs {expected_new_ids} to be sequential; got {actual_new_ids}")
+
+        # Token pieces that were added to the base vocabulary.
+        self.added_tokens_list  = [new_tokens[id] for id in actual_new_ids]
+        self.vocab_size_base    = vocab_size
+        self.vocab_size         = self.vocab_size_base + len(self.added_tokens_list)
+        self.fname_tokenizer    = fname_tokenizer
         self.fname_added_tokens = fname_added_tokens
 
     def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
@@ -867,8 +870,8 @@ def check_vocab_size(params: Params, vocab: Vocab) -> None:
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path) -> None:
-        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH])
+    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
+        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
         name = "LLaMA"
@@ -939,10 +942,10 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab) -> None:
+    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
         check_vocab_size(params, vocab)
 
-        of = OutputFile(fname_out)
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -967,10 +970,10 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY) -> None:
+    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY, endianess=gguf.GGUFEndian.LITTLE) -> None:
         check_vocab_size(params, vocab)
 
-        of = OutputFile(fname_out)
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -1215,8 +1218,9 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--vocabtype",   choices=["spm", "bpe", "hf"], help="vocab format (default: spm)", default="spm")
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
-    args = parser.parse_args(args_in)
+    parser.add_argument("--bigendian",   action="store_true",    help="model is executed on big endian machine")
 
+    args = parser.parse_args(args_in)
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
@@ -1230,6 +1234,9 @@ def main(args_in: list[str] | None = None) -> None:
     if args.dump:
         do_dump_model(model_plus)
         return
+    endianess = gguf.GGUFEndian.LITTLE
+    if args.bigendian:
+        endianess = gguf.GGUFEndian.BIG
 
     params = Params.load(model_plus)
     if params.n_ctx == -1:
@@ -1251,10 +1258,13 @@ def main(args_in: list[str] | None = None) -> None:
 
     vocab: Vocab
     if args.vocab_only:
-        assert args.outfile, "need --outfile if using --vocab-only"
+        if not args.outfile:
+            raise ValueError("need --outfile if using --vocab-only")
         # FIXME: Try to respect vocab_dir somehow?
         vocab = load_vocab(args.vocab_dir or args.model, args.vocabtype)
-        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab))
+        special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
+                                          load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab),
+                                          n_vocab = vocab.vocab_size)
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab)
         print(f"Wrote {outfile}")
@@ -1266,7 +1276,9 @@ def main(args_in: list[str] | None = None) -> None:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
         vocab = load_vocab(vocab_dir, args.vocabtype)
     # FIXME: Try to respect vocab_dir somehow?
-    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent, load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab))
+    special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
+                                      load_merges = isinstance(vocab, BpeVocab) or isinstance(vocab, HFVocab),
+                                      n_vocab = vocab.vocab_size)
 
     model   = model_plus.model
     model   = convert_model_names(model, params)
@@ -1277,7 +1289,7 @@ def main(args_in: list[str] | None = None) -> None:
     params.ftype = ftype
     print(f"Writing {outfile}, format {ftype}")
 
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency)
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency, endianess=endianess)
     print(f"Wrote {outfile}")
 
 
