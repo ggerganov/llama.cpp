@@ -5456,14 +5456,16 @@ static struct ggml_cgraph * llama_build_graph(
         const int i_gpu_start  = n_layer - n_gpu_layers;
 
         // should we offload the final norm? yes if we are not computing embeddings
-        const bool off_res_norm = !lctx.embedding.empty();
+        const bool off_res_norm = lctx.embedding.empty();
 
         // offload functions set the tensor output backend to GPU
         // tensors are GPU-accelerated if any input or the output has been offloaded
-        offload_func_t offload_func_nr = ggml_offload_nop; // nr = non-repeating
-        offload_func_t offload_func_kq = ggml_offload_nop;
-        offload_func_t offload_func_v  = ggml_offload_nop;
-        offload_func_t offload_func    = ggml_offload_nop;
+        offload_func_t offload_func_nr  = ggml_offload_nop; // nr = non-repeating
+        offload_func_t offload_func_kq  = ggml_offload_nop;
+        offload_func_t offload_func_v   = ggml_offload_nop;
+        offload_func_t offload_func_emb = ggml_offload_nop;
+        offload_func_t offload_func_out = ggml_offload_nop;
+        offload_func_t offload_func     = ggml_offload_nop;
 
 #ifdef GGML_USE_CUBLAS
         if (n_gpu_layers > n_layer) {
@@ -5476,105 +5478,108 @@ static struct ggml_cgraph * llama_build_graph(
             offload_func_kq = ggml_cuda_assign_buffers_no_alloc;
         }
 
+        offload_func_emb = off_res_norm ? ggml_cuda_assign_buffers_no_alloc : ggml_offload_nop;
+        offload_func_out = ggml_offload_nop;
+
         offload_func = ggml_cuda_assign_buffers_no_alloc;
 #endif // GGML_USE_CUBLAS
-
-        static const std::unordered_map<std::string, offload_func_t> k_offload_func = {
-            { "KQ_mask",                    offload_func_kq },
-            { "KQ_pos",                     offload_func_kq },
-            { "K_shift",                    offload_func_kq },
-            { "K_shifted",                  offload_func_kq },
-
-            { "inp_norm",                   offload_func_nr },
-            { "inp_norm_w",                 offload_func_nr },
-            { "inp_norm_wb",                offload_func_nr },
-
-            { "rms_norm_0",                 offload_func    },
-
-            { "attn_norm_0",                offload_func    },
-            { "attn_norm_0_w",              offload_func    },
-            { "attn_norm_0_wb",             offload_func    },
-
-            { "attn_norm_2",                offload_func    },
-            { "attn_norm_2_w",              offload_func    },
-            { "attn_norm_2_wb",             offload_func    },
-
-            { "wqkv",                       offload_func_kq },
-            { "bqkv",                       offload_func_kq },
-            { "wqkv_clamped",               offload_func_kq },
-
-            { "tmpk",                       offload_func_kq },
-            { "tmpq",                       offload_func_kq },
-            { "tmpv",                       offload_func_v  },
-            { "tmpkqv",                     offload_func_kq }, // ??
-            { "Kcur",                       offload_func_kq },
-            { "Qcur",                       offload_func_kq },
-            { "Vcur",                       offload_func_v  },
-            { "Vcur_0",                     offload_func_v  },
-            { "Vcur_1",                     offload_func_v  },
-
-            { "krot",                       offload_func_kq },
-            { "qrot",                       offload_func_kq },
-            { "kpass",                      offload_func_kq },
-            { "qpass",                      offload_func_kq },
-            { "krotated",                   offload_func_kq },
-            { "qrotated",                   offload_func_kq },
-
-            { "k",                          offload_func_kq },
-            { "v",                          offload_func_v  },
-
-            { "Q",                          offload_func_kq },
-            { "K",                          offload_func_kq },
-            { "KQ",                         offload_func_kq },
-            { "KQ_scaled",                  offload_func_kq },
-            { "KQ_scaled_alibi",            offload_func_kq },
-            { "KQ_masked",                  offload_func_kq },
-            { "KQ_soft_max",                offload_func_v  },
-            { "V",                          offload_func_v  },
-            { "KQV",                        offload_func_v  },
-            { "KQV_merged",                 offload_func_v  },
-            { "KQV_merged_contiguous",      offload_func_v  },
-
-            { "result_wo",                  offload_func    },
-            { "result_wo_b",                offload_func    },
-            { "inpL_+_result_wo",           offload_func    },
-
-            { "inpFF",                      offload_func    },
-
-            { "rms_norm_1",                 offload_func    },
-            { "ffn_norm",                   offload_func    },
-            { "ffn_norm_0",                 offload_func    },
-            { "ffn_norm_0_w",               offload_func    },
-            { "ffn_norm_0_wb",              offload_func    },
-
-            { "result_w3",                  offload_func    },
-            { "result_w3_b",                offload_func    },
-            { "result_w2",                  offload_func    },
-            { "result_w2_b",                offload_func    },
-            { "result_w1",                  offload_func    },
-
-            { "silu",                       offload_func    },
-            { "gelu",                       offload_func    },
-            { "relu",                       offload_func    },
-            { "sqr(relu)",                  offload_func    },
-
-            { "silu_x_result_w3",           offload_func    },
-            { "inpFF_+_result_w2",          offload_func    },
-            { "inpL_+_inpFF_+_result_w2",   offload_func    },
-
-            { "rms_norm_2",                 offload_func_nr },
-            { "out_norm_0",                 offload_func_nr },
-            { "out_norm_0_w",               offload_func_nr },
-
-            { "result_norm",                off_res_norm ? offload_func_nr : ggml_offload_nop },
-          //{ "result_output",              offload_func    },
-        };
 
         static const std::unordered_map<offload_func_t, std::string> k_offload_func_name = {
             { ggml_offload_nop,                  "CPU" },
 #ifdef GGML_USE_CUBLAS
             { ggml_cuda_assign_buffers_no_alloc, "GPU (CUDA)" },
 #endif
+        };
+
+        const std::unordered_map<std::string, offload_func_t> k_offload_func = {
+            { "KQ_mask",                    offload_func_kq  },
+            { "KQ_pos",                     offload_func_kq  },
+            { "K_shift",                    offload_func_kq  },
+            { "K_shifted",                  offload_func_kq  },
+
+            { "inp_norm",                   offload_func_nr  },
+            { "inp_norm_w",                 offload_func_nr  },
+            { "inp_norm_wb",                offload_func_nr  },
+
+            { "rms_norm_0",                 offload_func     },
+
+            { "attn_norm_0",                offload_func     },
+            { "attn_norm_0_w",              offload_func     },
+            { "attn_norm_0_wb",             offload_func     },
+
+            { "attn_norm_2",                offload_func     },
+            { "attn_norm_2_w",              offload_func     },
+            { "attn_norm_2_wb",             offload_func     },
+
+            { "wqkv",                       offload_func_kq  },
+            { "bqkv",                       offload_func_kq  },
+            { "wqkv_clamped",               offload_func_kq  },
+
+            { "tmpk",                       offload_func_kq  },
+            { "tmpq",                       offload_func_kq  },
+            { "tmpv",                       offload_func_v   },
+            { "tmpkqv",                     offload_func_kq  }, // ??
+            { "Kcur",                       offload_func_kq  },
+            { "Qcur",                       offload_func_kq  },
+            { "Vcur",                       offload_func_v   },
+            { "Vcur_0",                     offload_func_v   },
+            { "Vcur_1",                     offload_func_v   },
+
+            { "krot",                       offload_func_kq  },
+            { "qrot",                       offload_func_kq  },
+            { "kpass",                      offload_func_kq  },
+            { "qpass",                      offload_func_kq  },
+            { "krotated",                   offload_func_kq  },
+            { "qrotated",                   offload_func_kq  },
+
+            { "k",                          offload_func_kq  },
+            { "v",                          offload_func_v   },
+
+            { "Q",                          offload_func_kq  },
+            { "K",                          offload_func_kq  },
+            { "KQ",                         offload_func_kq  },
+            { "KQ_scaled",                  offload_func_kq  },
+            { "KQ_scaled_alibi",            offload_func_kq  },
+            { "KQ_masked",                  offload_func_kq  },
+            { "KQ_soft_max",                offload_func_v   },
+            { "V",                          offload_func_v   },
+            { "KQV",                        offload_func_v   },
+            { "KQV_merged",                 offload_func_v   },
+            { "KQV_merged_contiguous",      offload_func_v   },
+
+            { "result_wo",                  offload_func     },
+            { "result_wo_b",                offload_func     },
+            { "inpL_+_result_wo",           offload_func     },
+
+            { "inpFF",                      offload_func     },
+
+            { "rms_norm_1",                 offload_func     },
+            { "ffn_norm",                   offload_func     },
+            { "ffn_norm_0",                 offload_func     },
+            { "ffn_norm_0_w",               offload_func     },
+            { "ffn_norm_0_wb",              offload_func     },
+
+            { "result_w3",                  offload_func     },
+            { "result_w3_b",                offload_func     },
+            { "result_w2",                  offload_func     },
+            { "result_w2_b",                offload_func     },
+            { "result_w1",                  offload_func     },
+
+            { "silu",                       offload_func     },
+            { "gelu",                       offload_func     },
+            { "relu",                       offload_func     },
+            { "sqr(relu)",                  offload_func     },
+
+            { "silu_x_result_w3",           offload_func     },
+            { "inpFF_+_result_w2",          offload_func     },
+            { "inpL_+_inpFF_+_result_w2",   offload_func     },
+
+            { "rms_norm_2",                 offload_func_nr  },
+            { "out_norm_0",                 offload_func_nr  },
+            { "out_norm_0_w",               offload_func_nr  },
+
+            { "result_norm",                offload_func_emb },
+            { "result_output",              offload_func_out },
         };
 
         std::unordered_map<std::string, int> ofn;
@@ -5591,7 +5596,7 @@ static struct ggml_cgraph * llama_build_graph(
 
             const auto it = k_offload_func.find(name);
             if (it == k_offload_func.end()) {
-                // if a tensor that is not view hasn't been offloaded, we warn the user
+                // if a tensor hasn't been offloaded, we warn the user
                 if (worst_case) {
                     LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
                             i, name.c_str(), "https://github.com/ggerganov/llama.cpp/pull/3837");
@@ -5602,7 +5607,7 @@ static struct ggml_cgraph * llama_build_graph(
 
             // count the number of layers and respect the provided n_gpu_layers
             offload_func_t f = it->second;
-            if (f == offload_func) {
+            if (n_gpu_layers < n_layer && f == offload_func) {
                 if (ofn[name]++ < i_gpu_start) {
                     f = ggml_offload_nop;
                 }
