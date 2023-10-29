@@ -7332,7 +7332,7 @@ void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * can
     if (p >= 1.0f) {
         return;
     }
-    
+
     llama_sample_softmax(ctx, candidates);
 
     const int64_t t_start_sample_us = ggml_time_us();
