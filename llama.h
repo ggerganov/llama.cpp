@@ -333,13 +333,9 @@ extern "C" {
     LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
             "avoid using this, it will be removed in the future, instead - count the tokens in user code");
 
-    // Remove all tokens data of cells in [c0, c1)
-    // c0 < 0 : [0,  c1]
-    // c1 < 0 : [c0, inf)
-    LLAMA_API void llama_kv_cache_tokens_rm(
-            struct llama_context * ctx,
-                         int32_t   c0,
-                         int32_t   c1);
+    // Clear the KV cache
+    LLAMA_API void llama_kv_cache_clear(
+            struct llama_context * ctx);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
     // seq_id < 0 : match any sequence
