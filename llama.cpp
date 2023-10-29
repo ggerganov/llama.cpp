@@ -3638,7 +3638,6 @@ static struct ggml_cgraph * llm_build_baichaun(
 
         // self-attention
         {
-            // compute Q and K and RoPE them
             struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
             cb(Qcur, "Qcur", il);
 
@@ -3676,12 +3675,9 @@ static struct ggml_cgraph * llm_build_baichaun(
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             cb(K, "K", il);
 
-            // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             cb(KQ, "KQ", il);
 
-            // KQ_scaled = KQ / sqrt(n_embd_head)
-            // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
             cb(KQ_scaled, "KQ_scaled", il);
 
@@ -3694,7 +3690,7 @@ static struct ggml_cgraph * llm_build_baichaun(
                     break;
                 case MODEL_13B:
                     // TODO: replace with ggml_add()
-                    KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ 0, n_head, 8);
+                    KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ 0, n_head, 8); // TODO: n_head or n_head_kv
                     cb(KQ_scaled_alibi, "KQ_scaled_alibi", il);
                     KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
                     break;
@@ -3702,11 +3698,9 @@ static struct ggml_cgraph * llm_build_baichaun(
                     GGML_ASSERT(false);
             }
 
-            // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
             cb(KQ_soft_max, "KQ_soft_max", il);
 
-            // split cached V into n_head heads
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_kv, n_embd_head, n_head_kv,
@@ -3718,15 +3712,12 @@ static struct ggml_cgraph * llm_build_baichaun(
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             cb(KQV, "KQV", il);
 
-            // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
             cb(KQV_merged, "KQV_merged", il);
 
-            // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             cb(cur, "KQV_merged_contiguous", il);
 
-            // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
                     cur);
@@ -3882,7 +3873,6 @@ static struct ggml_cgraph * llm_build_falcon(
                 cur = attn_norm;
             }
 
-            // compute QKV
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
             cb(cur, "wqkv", il);
 
@@ -4106,24 +4096,18 @@ static struct ggml_cgraph * llm_build_starcoder(
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             cb(K, "K", il);
 
-            // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             cb(KQ, "KQ", il);
 
-            // KQ_scaled = KQ / sqrt(n_embd_head)
-            // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             cb(KQ_scaled, "KQ_scaled", il);
 
-            // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
             cb(KQ_masked, "KQ_masked", il);
 
-            // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             cb(KQ_soft_max, "KQ_soft_max", il);
 
-            // split cached V into n_head heads
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_kv, n_embd_head, n_head_kv,
@@ -4142,7 +4126,6 @@ static struct ggml_cgraph * llm_build_starcoder(
             cb(cur, "KQV_merged_contiguous", il);
         }
 
-        // Projection
         cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wo, cur), model.layers[il].bo);
         cb(cur, "result_wo", il);
 
@@ -4506,8 +4489,6 @@ static struct ggml_cgraph * llm_build_refact(
     const int32_t n_kv     = worst_case ? n_ctx            : kv_self.n;
     const int32_t kv_head  = worst_case ? n_ctx - n_tokens : kv_self.head;
 
-    // printf("n_kv = %d\n", n_kv);
-
     auto & buf_compute = lctx.buf_compute;
 
     struct ggml_init_params params = {
@@ -4584,27 +4565,21 @@ static struct ggml_cgraph * llm_build_refact(
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             cb(K, "K", il);
 
-            // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             cb(KQ, "KQ", il);
 
-            // KQ_scaled = KQ / sqrt(n_embd_head)
-            // KQ_scaled shape [n_kv, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
             cb(KQ_scaled, "KQ_scaled", il);
 
-            // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ 0, n_head, 8);
             cb(KQ_scaled_alibi, "KQ_scaled_alibi", il);
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
             cb(KQ_masked, "KQ_masked", il);
 
-            // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
             cb(KQ_soft_max, "KQ_soft_max", il);
 
-            // split cached V into n_head heads
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_kv, n_embd_head, n_head_kv,
@@ -4616,15 +4591,12 @@ static struct ggml_cgraph * llm_build_refact(
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             cb(KQV, "KQV", il);
 
-            // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
             cb(KQV_merged, "KQV_merged", il);
 
-            // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             cb(cur, "KQV_merged_contiguous", il);
 
-            // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
                     cur);
@@ -4789,27 +4761,21 @@ static struct ggml_cgraph * llm_build_bloom(
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
             cb(K, "K", il);
 
-            // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
             cb(KQ, "KQ", il);
 
-            // KQ_scaled = KQ / sqrt(n_embd_head)
-            // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
             cb(KQ_scaled, "KQ_scaled", il);
 
             struct ggml_tensor * KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ kv_head, n_head, 8);
             cb(KQ_scaled_alibi, "KQ_scaled_alibi", il);
 
-            // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
             cb(KQ_masked, "KQ_masked", il);
 
-            // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
             cb(KQ_soft_max, "KQ_soft_max", il);
 
-            // split cached V into n_head heads
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
                         n_kv, n_embd_head, n_head_kv,
@@ -4821,16 +4787,13 @@ static struct ggml_cgraph * llm_build_bloom(
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
             cb(KQV, "KQV", il);
 
-            // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
             cb(KQV_merged, "KQV_merged", il);
 
-            // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
             cb(cur, "KQV_merged_contiguous", il);
         }
 
-        // Projection
         cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
         cb(cur, "result_wo", il);
 
