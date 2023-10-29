@@ -342,8 +342,9 @@ extern "C" {
                          int32_t   c1);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // p0 < 0 : [0,  p1]
-    // p1 < 0 : [p0, inf)
+    // seq_id < 0 : match any sequence
+    // p0 < 0     : [0,  p1]
+    // p1 < 0     : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
