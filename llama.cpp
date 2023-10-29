@@ -3090,10 +3090,13 @@ static bool llama_model_load(
     return true;
 }
 
+using llm_build_cb = std::function<void(struct ggml_tensor * cur, const char * name)>;
+
 static struct ggml_cgraph * llm_build_llama(
-        llama_context & lctx,
-    const llama_batch & batch,
-                 bool   worst_case) {
+        llama_context  & lctx,
+    const llama_batch  & batch,
+    const llm_build_cb & cb,
+                  bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
@@ -3141,7 +3144,7 @@ static struct ggml_cgraph * llm_build_llama(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -3151,35 +3154,35 @@ static struct ggml_cgraph * llm_build_llama(
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "inp_embd");
+    cb(inpL, "inp_embd");
+
+    // inp_pos - contains the positions
+    struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    cb(inp_pos, "inp_pos");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
-
-    // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    ggml_set_name(KQ_pos, "KQ_pos");
+    cb(KQ_mask, "KQ_mask");
 
     // shift the entire K-cache if needed
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    ggml_set_name(K_shift, "K_shift");
-
     if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        cb(K_shift, "K_shift");
+
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
-                    ggml_rope_custom_inplace(ctx0,
+                ggml_rope_custom_inplace(ctx0,
                         ggml_view_3d(ctx0, kv_self.k,
                             n_embd_head, n_head_kv, n_ctx,
                             ggml_element_size(kv_self.k)*n_embd_head,
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
                         K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
-            ggml_set_name(tmp, "K_shifted");
+            cb(tmp, "K_shifted");
             ggml_build_forward_expand(gf, tmp);
         }
     }
@@ -3190,45 +3193,45 @@ static struct ggml_cgraph * llm_build_llama(
         // norm
         {
             cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
-            ggml_set_name(cur, "rms_norm_0");
+            cb(cur, "rms_norm_0");
 
             // cur = cur*attn_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
         }
 
         // self-attention
         {
             // compute Q and K and RoPE them
             struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
-            ggml_set_name(Kcur, "Kcur");
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), inp_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            cb(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
-            ggml_set_name(Qcur, "Qcur");
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), inp_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            cb(Qcur, "Qcur");
 
             // store key and value to memory
             {
                 // compute the transposed [n_tokens, n_embd] V matrix
 
                 struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
-                ggml_set_name(tmpv, "tmpv");
+                cb(tmpv, "tmpv");
 
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -3236,7 +3239,7 @@ static struct ggml_cgraph * llm_build_llama(
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -3244,24 +3247,24 @@ static struct ggml_cgraph * llm_build_llama(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_kv, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -3270,11 +3273,11 @@ static struct ggml_cgraph * llm_build_llama(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
 #if 1
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 #else
             // make V contiguous in memory to speed up the matmul, however we waste time on the copy
             // on M1 this is faster for the perplexity computation, but ~5% slower for the single-token generation
@@ -3285,59 +3288,59 @@ static struct ggml_cgraph * llm_build_llama(
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
                     cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
         }
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        ggml_set_name(inpFF, "inpFF");
+        cb(inpFF, "inpFF");
 
         // feed-forward network
         {
             // norm
             {
                 cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
-                ggml_set_name(cur, "rms_norm_1");
+                cb(cur, "rms_norm_1");
 
                 // cur = cur*ffn_norm(broadcasted)
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm");
+                cb(cur, "ffn_norm");
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
                     model.layers[il].w3,
                     cur);
-            ggml_set_name(tmp, "result_w3");
+            cb(tmp, "result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w1,
                     cur);
-            ggml_set_name(cur, "result_w1");
+            cb(cur, "result_w1");
 
             // SILU activation
             cur = ggml_silu(ctx0, cur);
-            ggml_set_name(cur, "silu");
+            cb(cur, "silu");
 
             cur = ggml_mul(ctx0, cur, tmp);
-            ggml_set_name(cur, "silu_x_result_w3");
+            cb(cur, "silu_x_result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,
                     cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+        cb(cur, "inpFF_+_result_w2");
 
         // input for next layer
         inpL = cur;
@@ -3348,16 +3351,16 @@ static struct ggml_cgraph * llm_build_llama(
     // norm
     {
         cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
-        ggml_set_name(cur, "rms_norm_2");
+        cb(cur, "rms_norm_2");
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     // lm_head
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -3369,6 +3372,7 @@ static struct ggml_cgraph * llm_build_llama(
 static struct ggml_cgraph * llm_build_baichaun(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -3415,7 +3419,7 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -3425,25 +3429,25 @@ static struct ggml_cgraph * llm_build_baichaun(
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "inp_embd");
+    cb(inpL, "inp_embd");
+
+    // inp_pos - contains the positions
+    struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    cb(inp_pos, "inp_pos");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
-
-    // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    ggml_set_name(KQ_pos, "KQ_pos");
+    cb(KQ_mask, "KQ_mask");
 
     // shift the entire K-cache if needed
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    ggml_set_name(K_shift, "K_shift");
-
     if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        cb(K_shift, "K_shift");
+
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
@@ -3453,7 +3457,7 @@ static struct ggml_cgraph * llm_build_baichaun(
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
                         K_shift, n_embd_head, 0, 0, freq_base, freq_scale);
-            ggml_set_name(tmp, "K_shifted");
+            cb(tmp, "K_shifted");
             ggml_build_forward_expand(gf, tmp);
         }
     }
@@ -3464,28 +3468,28 @@ static struct ggml_cgraph * llm_build_baichaun(
         // norm
         {
             cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
-            ggml_set_name(cur, "rms_norm_0");
+            cb(cur, "rms_norm_0");
 
             // cur = cur*attn_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
         }
 
         // self-attention
         {
             // compute Q and K and RoPE them
             struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             struct ggml_tensor * Kcur;
             struct ggml_tensor * Qcur;
             switch (model.type) {
                 case MODEL_7B:
-                    Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
-                    Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, n_tokens),    KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+                    Kcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), inp_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+                    Qcur = ggml_rope_custom(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, n_tokens),    inp_pos, n_embd_head, 0, 0, freq_base, freq_scale);
                     break;
                 case MODEL_13B:
                     Kcur = ggml_reshape_3d(ctx0, tmpk, n_embd/n_head, n_head, n_tokens);
@@ -3495,27 +3499,27 @@ static struct ggml_cgraph * llm_build_baichaun(
                     GGML_ASSERT(false);
             }
 
-            ggml_set_name(Kcur, "Kcur");
+            cb(Kcur, "Kcur");
 
-            ggml_set_name(Qcur, "Qcur");
+            cb(Qcur, "Qcur");
 
             // store key and value to memory
             {
                 // compute the transposed [n_tokens, n_embd] V matrix
 
                 struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
-                ggml_set_name(tmpv, "tmpv");
+                cb(tmpv, "tmpv");
 
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -3523,7 +3527,7 @@ static struct ggml_cgraph * llm_build_baichaun(
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -3531,16 +3535,16 @@ static struct ggml_cgraph * llm_build_baichaun(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             struct ggml_tensor * KQ_masked;
             struct ggml_tensor * KQ_scaled_alibi;
@@ -3552,7 +3556,7 @@ static struct ggml_cgraph * llm_build_baichaun(
                 case MODEL_13B:
                     // TODO: replace with ggml_add()
                     KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ 0, n_head, 8);
-                    ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
+                    cb(KQ_scaled_alibi, "KQ_scaled_alibi");
                     KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
                     break;
                 default:
@@ -3561,7 +3565,7 @@ static struct ggml_cgraph * llm_build_baichaun(
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -3570,66 +3574,66 @@ static struct ggml_cgraph * llm_build_baichaun(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
                     cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
         }
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        ggml_set_name(inpFF, "inpFF");
+        cb(inpFF, "inpFF");
 
         // feed-forward network
         {
             // norm
             {
                 cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
-                ggml_set_name(cur, "rms_norm_1");
+                cb(cur, "rms_norm_1");
 
                 // cur = cur*ffn_norm(broadcasted)
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm");
+                cb(cur, "ffn_norm");
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
                     model.layers[il].w3,
                     cur);
-            ggml_set_name(tmp, "result_w3");
+            cb(tmp, "result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w1,
                     cur);
-            ggml_set_name(cur, "result_w1");
+            cb(cur, "result_w1");
 
             // SILU activation
             cur = ggml_silu(ctx0, cur);
-            ggml_set_name(cur, "silu");
+            cb(cur, "silu");
 
             cur = ggml_mul(ctx0, cur, tmp);
-            ggml_set_name(cur, "silu_x_result_w3");
+            cb(cur, "silu_x_result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,
                     cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+        cb(cur, "inpFF_+_result_w2");
 
         // input for next layer
         inpL = cur;
@@ -3640,16 +3644,16 @@ static struct ggml_cgraph * llm_build_baichaun(
     // norm
     {
         cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
-        ggml_set_name(cur, "rms_norm_2");
+        cb(cur, "rms_norm_2");
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     // lm_head
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -3661,6 +3665,7 @@ static struct ggml_cgraph * llm_build_baichaun(
 static struct ggml_cgraph * llm_build_falcon(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -3710,7 +3715,7 @@ static struct ggml_cgraph * llm_build_falcon(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -3720,25 +3725,25 @@ static struct ggml_cgraph * llm_build_falcon(
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "inp_embd");
+    cb(inpL, "inp_embd");
+
+    // inp_pos - contains the positions
+    struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    cb(inp_pos, "inp_pos");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
-
-    // KQ_pos - contains the positions
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    ggml_set_name(KQ_pos, "KQ_pos");
+    cb(KQ_mask, "KQ_mask");
 
     // shift the entire K-cache if needed
-    struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-    ggml_set_name(K_shift, "K_shift");
-
     if (do_rope_shift) {
+        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        cb(K_shift, "K_shift");
+
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
                     ggml_rope_custom_inplace(ctx0,
@@ -3748,7 +3753,7 @@ static struct ggml_cgraph * llm_build_falcon(
                             ggml_element_size(kv_self.k)*n_embd_gqa,
                             ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
                         K_shift, n_embd_head, 2, 0, freq_base, freq_scale);
-            ggml_set_name(tmp, "K_shifted");
+            cb(tmp, "K_shifted");
             ggml_build_forward_expand(gf, tmp);
         }
     }
@@ -3760,23 +3765,23 @@ static struct ggml_cgraph * llm_build_falcon(
         // TODO: refactor into common function (shared with LLaMA)
         {
             attn_norm = ggml_norm(ctx0, inpL, norm_eps);
-            ggml_set_name(attn_norm, "attn_norm_0");
+            cb(attn_norm, "attn_norm_0");
 
             attn_norm = ggml_mul(ctx0, attn_norm, model.layers[il].attn_norm);
-            ggml_set_name(attn_norm, "attn_norm_0_w");
+            cb(attn_norm, "attn_norm_0_w");
 
             attn_norm = ggml_add(ctx0, attn_norm, model.layers[il].attn_norm_b);
-            ggml_set_name(attn_norm, "attn_norm_0_wb");
+            cb(attn_norm, "attn_norm_0_wb");
 
             if (model.layers[il].attn_norm_2) { // Falcon-40B
                 cur = ggml_norm(ctx0, inpL, norm_eps);
-                ggml_set_name(cur, "attn_norm_2");
+                cb(cur, "attn_norm_2");
 
                 cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm_2);
-                ggml_set_name(cur, "attn_norm_2_w");
+                cb(cur, "attn_norm_2_w");
 
                 cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_2_b);
-                ggml_set_name(cur, "attn_norm_2_wb");
+                cb(cur, "attn_norm_2_wb");
             } else { // Falcon 7B
                 cur = attn_norm;
             }
@@ -3784,7 +3789,7 @@ static struct ggml_cgraph * llm_build_falcon(
             // compute QKV
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-            ggml_set_name(cur, "wqkv");
+            cb(cur, "wqkv");
 
             // Note that the strides for Kcur, Vcur are set up so that the
             // resulting views are misaligned with the tensor's storage
@@ -3804,50 +3809,50 @@ static struct ggml_cgraph * llm_build_falcon(
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 0));
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             struct ggml_tensor * tmpk = ggml_cont(ctx0, ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, n_tokens,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 wsize * n_embd_head *  n_head));
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             struct ggml_tensor * tmpv = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, n_tokens,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 wsize * n_embd_head * (n_head +     n_head_kv));
-            ggml_set_name(tmpv, "tmpv");
+            cb(tmpv, "tmpv");
 
             // using mode = 2 for neox mode
-            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, tmpq, KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
-            ggml_set_name(Qcur, "Qcur");
+            struct ggml_tensor * Qcur = ggml_rope_custom(ctx0, tmpq, inp_pos, n_embd_head, 2, 0, freq_base, freq_scale);
+            cb(Qcur, "Qcur");
 
-            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, tmpk, KQ_pos, n_embd_head, 2, 0, freq_base, freq_scale);
-            ggml_set_name(Kcur, "Kcur");
+            struct ggml_tensor * Kcur = ggml_rope_custom(ctx0, tmpk, inp_pos, n_embd_head, 2, 0, freq_base, freq_scale);
+            cb(Kcur, "Kcur");
 
             {
                 struct ggml_tensor * Vcur = ggml_cont(ctx0, tmpv);
-                ggml_set_name(Vcur, "Vcur_0");
+                cb(Vcur, "Vcur_0");
 
                 Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur_1");
+                cb(Vcur, "Vcur_1");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -3855,19 +3860,19 @@ static struct ggml_cgraph * llm_build_falcon(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
@@ -3875,19 +3880,19 @@ static struct ggml_cgraph * llm_build_falcon(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
         }
 
         struct ggml_tensor * attn_out = cur;
@@ -3897,20 +3902,20 @@ static struct ggml_cgraph * llm_build_falcon(
             struct ggml_tensor * inpFF = attn_norm;
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, inpFF);
-            ggml_set_name(cur, "result_w3");
+            cb(cur, "result_w3");
 
             cur = ggml_gelu(ctx0, cur);
-            ggml_set_name(cur, "gelu");
+            cb(cur, "gelu");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
         }
 
         cur = ggml_add(ctx0, cur, attn_out);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+        cb(cur, "inpFF_+_result_w2");
 
         cur = ggml_add(ctx0, cur, inpL);
-        ggml_set_name(cur, "inpL_+_inpFF_+_result_w2");
+        cb(cur, "inpL_+_inpFF_+_result_w2");
 
         // input for next layer
         inpL = cur;
@@ -3921,17 +3926,17 @@ static struct ggml_cgraph * llm_build_falcon(
     // norm
     {
         cur = ggml_norm(ctx0, cur, norm_eps);
-        ggml_set_name(cur, "out_norm_0");
+        cb(cur, "out_norm_0");
 
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "out_norm_0_w");
+        cb(cur, "out_norm_0_w");
 
         cur = ggml_add(ctx0, cur, model.output_norm_b);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -3943,6 +3948,7 @@ static struct ggml_cgraph * llm_build_falcon(
 static struct ggml_cgraph * llm_build_starcoder(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -3987,7 +3993,7 @@ static struct ggml_cgraph * llm_build_starcoder(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         embd = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -3997,76 +4003,75 @@ static struct ggml_cgraph * llm_build_starcoder(
 
         embd = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(embd, "inp_embd");
+    cb(embd, "inp_embd");
 
-    {
-        struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_pos, "inp_pos");
-
-        pos = ggml_get_rows(ctx0, model.pos_embeddings, inp_pos);
-    }
+    // inp_pos - contains the positions
+    struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    cb(inp_pos, "inp_pos");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
+    cb(KQ_mask, "KQ_mask");
+
+    pos = ggml_get_rows(ctx0, model.pos_embeddings, inp_pos);
 
     inpL = ggml_add(ctx0, embd, pos);
-    ggml_set_name(inpL, "inpL");
+    cb(inpL, "inpL");
 
     for (int il = 0; il < n_layer; ++il) {
         {
             // Norm
             cur = ggml_norm(ctx0, inpL, norm_eps);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
 
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0_w");
+            cb(cur, "attn_norm_0_w");
 
             cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
-            ggml_set_name(cur, "attn_norm_0_wb");
+            cb(cur, "attn_norm_0_wb");
         }
 
         {
             // Self Attention
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-            ggml_set_name(cur, "wqkv");
+            cb(cur, "wqkv");
 
             cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
-            ggml_set_name(cur, "bqkv");
+            cb(cur, "bqkv");
 
             struct ggml_tensor * tmpq = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
             struct ggml_tensor * tmpk = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
             struct ggml_tensor * tmpv = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa)));
 
-            ggml_set_name(tmpq, "tmpq");
-            ggml_set_name(tmpk, "tmpk");
-            ggml_set_name(tmpv, "tmpv");
+            cb(tmpq, "tmpq");
+            cb(tmpk, "tmpk");
+            cb(tmpv, "tmpv");
 
             struct ggml_tensor * Qcur = ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, n_tokens);
             struct ggml_tensor * Kcur = tmpk;
 
             {
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, tmpv);
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -4074,24 +4079,24 @@ static struct ggml_cgraph * llm_build_starcoder(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -4100,25 +4105,25 @@ static struct ggml_cgraph * llm_build_starcoder(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
         }
 
         // Projection
         cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wo, cur), model.layers[il].bo);
-        ggml_set_name(cur, "result_wo");
+        cb(cur, "result_wo");
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        ggml_set_name(cur, "inpL_+_result_wo");
+        cb(cur, "inpL_+_result_wo");
 
         struct ggml_tensor * inpFF = cur;
 
@@ -4127,28 +4132,28 @@ static struct ggml_cgraph * llm_build_starcoder(
             // Norm
             {
                 cur = ggml_norm(ctx0, inpFF, norm_eps);
-                ggml_set_name(cur, "ffn_norm_0");
+                cb(cur, "ffn_norm_0");
 
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm_0_w");
+                cb(cur, "ffn_norm_0_w");
 
                 cur = ggml_add(ctx0, cur, model.layers[il].ffn_norm_b);
-                ggml_set_name(cur, "ffn_norm_0_wb");
+                cb(cur, "ffn_norm_0_wb");
             }
 
             cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].w3, cur), model.layers[il].b3);
-            ggml_set_name(cur, "result_w3");
+            cb(cur, "result_w3");
 
             // GELU activation
             cur = ggml_gelu(ctx0, cur);
-            ggml_set_name(cur, "gelu");
+            cb(cur, "gelu");
 
             // Projection
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
 
             cur = ggml_add(ctx0, cur, model.layers[il].b2);
-            ggml_set_name(cur, "result_w2_b");
+            cb(cur, "result_w2_b");
         }
 
         inpL = ggml_add(ctx0, cur, inpFF);
@@ -4158,17 +4163,17 @@ static struct ggml_cgraph * llm_build_starcoder(
     // Output Norm
     {
         cur = ggml_norm(ctx0, inpL, norm_eps);
-        ggml_set_name(cur, "out_norm_0");
+        cb(cur, "out_norm_0");
 
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "out_norm_0_w");
+        cb(cur, "out_norm_0_w");
 
         cur = ggml_add(ctx0, cur, model.output_norm_b);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
     ggml_free(ctx0);
@@ -4179,6 +4184,7 @@ static struct ggml_cgraph * llm_build_starcoder(
 static struct ggml_cgraph * llm_build_persimmon(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model = lctx.model;
     const auto & hparams = model.hparams;
@@ -4223,27 +4229,27 @@ static struct ggml_cgraph * llm_build_persimmon(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "imp_embd");
+    cb(inpL, "imp_embd");
+
+    struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+    cb(inp_pos, "inp_pos");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
-
-    struct ggml_tensor * KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-    ggml_set_name(KQ_pos, "KQ_pos");
+    cb(KQ_mask, "KQ_mask");
 
     if (do_rope_shift) {
         struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
-        ggml_set_name(K_shift, "K_shift");
+        cb(K_shift, "K_shift");
 
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * tmp =
@@ -4256,7 +4262,7 @@ static struct ggml_cgraph * llm_build_persimmon(
                             ggml_element_size(kv_self.k)*(n_embd_head*n_ctx*il)
                         ),
                         K_shift, n_rot, 2, 0, freq_base, freq_scale);
-            ggml_set_name(tmp, "K_shifted");
+            cb(tmp, "K_shifted");
             ggml_build_forward_expand(gf, tmp);
         }
     }
@@ -4266,31 +4272,31 @@ static struct ggml_cgraph * llm_build_persimmon(
 
         {
             cur = ggml_norm(ctx0, inpL, norm_eps);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
 
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0_w");
+            cb(cur, "attn_norm_0_w");
 
             cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
-            ggml_set_name(cur, "attn_norm_0_wb");
+            cb(cur, "attn_norm_0_wb");
         }
 
         // self attention
         {
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-            ggml_set_name(cur, "wqkv");
+            cb(cur, "wqkv");
 
             cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
-            ggml_set_name(cur, "bqkv");
+            cb(cur, "bqkv");
 
             // split qkv
             GGML_ASSERT(n_head_kv == n_head);
 
             struct ggml_tensor * tmpqkv = ggml_reshape_4d(ctx0, cur, n_embd_head, 3, n_head, n_tokens);
-            ggml_set_name(tmpqkv, "tmpqkv");
+            cb(tmpqkv, "tmpqkv");
 
             struct ggml_tensor * tmpqkv_perm = ggml_cont(ctx0, ggml_permute(ctx0, tmpqkv, 0, 3, 1, 2));
-            ggml_set_name(tmpqkv_perm, "tmpqkv");
+            cb(tmpqkv_perm, "tmpqkv");
 
             struct ggml_tensor * tmpq = ggml_view_3d(
                     ctx0, tmpqkv_perm, n_embd_head, n_head, n_tokens,
@@ -4298,7 +4304,7 @@ static struct ggml_cgraph * llm_build_persimmon(
                     ggml_element_size(tmpqkv_perm) * n_embd_head * n_head,
                     0
                 );
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             struct ggml_tensor * tmpk = ggml_view_3d(
                     ctx0, tmpqkv_perm, n_embd_head, n_head, n_tokens,
@@ -4306,26 +4312,26 @@ static struct ggml_cgraph * llm_build_persimmon(
                     ggml_element_size(tmpqkv_perm) * n_embd_head * n_head,
                     ggml_element_size(tmpqkv_perm) * n_embd_head * n_head * n_tokens
                 );
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             // Q/K Layernorm
             tmpq = ggml_norm(ctx0, tmpq, norm_eps);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             tmpq = ggml_mul(ctx0, tmpq, model.layers[il].attn_q_norm);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             tmpq = ggml_add(ctx0, tmpq, model.layers[il].attn_q_norm_b);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             tmpk = ggml_norm(ctx0, tmpk, norm_eps);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             tmpk =  ggml_mul(ctx0, tmpk, model.layers[il].attn_k_norm);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             tmpk =  ggml_add(ctx0, tmpk, model.layers[il].attn_k_norm_b);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             // RoPE the first n_rot of q/k, pass the other half, and concat.
             struct ggml_tensor * qrot = ggml_view_3d(
@@ -4334,7 +4340,7 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ggml_element_size(tmpq) * n_embd_head * n_head,
                 0
             );
-            ggml_set_name(qrot, "qrot");
+            cb(qrot, "qrot");
 
             struct ggml_tensor * krot = ggml_view_3d(
                 ctx0, tmpk, n_rot, n_head, n_tokens,
@@ -4342,7 +4348,7 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ggml_element_size(tmpk) * n_embd_head * n_head,
                 0
             );
-            ggml_set_name(krot, "krot");
+            cb(krot, "krot");
 
             // get the second half of tmpq, e.g tmpq[n_rot:, :, :]
             struct ggml_tensor * qpass = ggml_view_3d(
@@ -4351,7 +4357,7 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ggml_element_size(tmpq) * n_embd_head * n_head,
                 ggml_element_size(tmpq) * n_rot
             );
-            ggml_set_name(qpass, "qpass");
+            cb(qpass, "qpass");
 
             struct ggml_tensor * kpass = ggml_view_3d(
                 ctx0, tmpk, n_rot, n_head, n_tokens,
@@ -4359,43 +4365,43 @@ static struct ggml_cgraph * llm_build_persimmon(
                 ggml_element_size(tmpk) * n_embd_head * n_head,
                 ggml_element_size(tmpk) * n_rot
             );
-            ggml_set_name(kpass, "kpass");
+            cb(kpass, "kpass");
 
-            struct ggml_tensor * qrotated =  ggml_rope_custom(
-                    ctx0, qrot, KQ_pos, n_rot, 2, 0, freq_base, freq_scale
+            struct ggml_tensor * qrotated = ggml_rope_custom(
+                    ctx0, qrot, inp_pos, n_rot, 2, 0, freq_base, freq_scale
             );
-            ggml_set_name(qrotated, "qrotated");
+            cb(qrotated, "qrotated");
 
             struct ggml_tensor * krotated = ggml_rope_custom(
-                    ctx0, krot, KQ_pos, n_rot, 2, 0, freq_base, freq_scale
+                    ctx0, krot, inp_pos, n_rot, 2, 0, freq_base, freq_scale
             );
-            ggml_set_name(krotated, "krotated");
+            cb(krotated, "krotated");
 
             // ggml currently only supports concatenation on dim=2
             // so we need to permute qrot, qpass, concat, then permute back.
             qrotated = ggml_cont(ctx0, ggml_permute(ctx0, qrotated, 2, 1, 0, 3));
-            ggml_set_name(qrotated, "qrotated");
+            cb(qrotated, "qrotated");
 
             krotated = ggml_cont(ctx0, ggml_permute(ctx0, krotated, 2, 1, 0, 3));
-            ggml_set_name(krotated, "krotated");
+            cb(krotated, "krotated");
 
             qpass = ggml_cont(ctx0, ggml_permute(ctx0, qpass, 2, 1, 0, 3));
-            ggml_set_name(qpass, "qpass");
+            cb(qpass, "qpass");
 
             kpass = ggml_cont(ctx0, ggml_permute(ctx0, kpass, 2, 1, 0, 3));
-            ggml_set_name(kpass, "kpass");
+            cb(kpass, "kpass");
 
             struct ggml_tensor * Qcur = ggml_concat(ctx0, qrotated, qpass);
-            ggml_set_name(Qcur, "Qcur");
+            cb(Qcur, "Qcur");
 
             struct ggml_tensor * Kcur = ggml_concat(ctx0, krotated, kpass);
-            ggml_set_name(Kcur, "Kcur");
+            cb(Kcur, "Kcur");
 
             struct ggml_tensor * Q = ggml_cont(ctx0, ggml_permute(ctx0, Qcur, 1, 2, 0, 3));
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             Kcur = ggml_cont(ctx0, ggml_permute(ctx0, Kcur, 2, 1, 0, 3));
-            ggml_set_name(Kcur, "Kcur");
+            cb(Kcur, "Kcur");
 
             {
                 struct ggml_tensor * tmpv = ggml_view_3d(
@@ -4404,22 +4410,22 @@ static struct ggml_cgraph * llm_build_persimmon(
                         ggml_element_size(tmpqkv_perm) * n_embd_head * n_head,
                         ggml_element_size(tmpqkv_perm) * n_embd_head * n_head * n_tokens * 2
                     );
-                ggml_set_name(tmpv, "tmpv");
+                cb(tmpv, "tmpv");
 
                 // store K, V in cache
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(
                     ctx0, kv_self.k, n_tokens*n_embd_gqa,
                     (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head)
                 );
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 // important: storing RoPE-ed version of K in the KV cache!
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
@@ -4430,19 +4436,19 @@ static struct ggml_cgraph * llm_build_persimmon(
                     ggml_element_size(kv_self.k)*n_embd_gqa,
                     ggml_element_size(kv_self.k)*n_embd_head,
                     ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
@@ -4450,62 +4456,62 @@ static struct ggml_cgraph * llm_build_persimmon(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
 
             cur = ggml_add(ctx0, cur, model.layers[il].bo);
-            ggml_set_name(cur, "result_wo_b");
+            cb(cur, "result_wo_b");
         }
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, residual, cur);
-        ggml_set_name(inpFF, "inpFF");
+        cb(inpFF, "inpFF");
 
         {
             // MLP
             {
                 // Norm
                 cur = ggml_norm(ctx0, inpFF, norm_eps);
-                ggml_set_name(cur, "ffn_norm_0");
+                cb(cur, "ffn_norm_0");
 
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm_0_w");
+                cb(cur, "ffn_norm_0_w");
 
                 cur = ggml_add(ctx0, cur, model.layers[il].ffn_norm_b);
-                ggml_set_name(cur, "ffn_norm_0_wb");
+                cb(cur, "ffn_norm_0_wb");
             }
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, cur);
-            ggml_set_name(cur, "result_w3");
+            cb(cur, "result_w3");
 
             cur = ggml_add(ctx0, cur, model.layers[il].b3);
-            ggml_set_name(cur, "result_w3_b");
+            cb(cur, "result_w3_b");
 
             cur = ggml_relu(ctx0, cur);
-            ggml_set_name(cur, "relu");
+            cb(cur, "relu");
 
             cur = ggml_sqr(ctx0, cur);
-            ggml_set_name(cur, "sqr(relu)");
+            cb(cur, "sqr(relu)");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
 
             cur = ggml_add(ctx0, cur, model.layers[il].b2);
-            ggml_set_name(cur, "result_w2_b");
+            cb(cur, "result_w2_b");
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+        cb(cur, "inpFF_+_result_w2");
 
         inpL = cur;
     }
@@ -4514,17 +4520,17 @@ static struct ggml_cgraph * llm_build_persimmon(
 
     {
         cur = ggml_norm(ctx0, cur, norm_eps);
-        ggml_set_name(cur, "out_norm_0");
+        cb(cur, "out_norm_0");
 
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "out_norm_0_w");
+        cb(cur, "out_norm_0_w");
 
         cur = ggml_add(ctx0, cur, model.output_norm_b);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -4536,6 +4542,7 @@ static struct ggml_cgraph * llm_build_persimmon(
 static struct ggml_cgraph * llm_build_refact(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -4578,7 +4585,7 @@ static struct ggml_cgraph * llm_build_refact(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -4588,15 +4595,15 @@ static struct ggml_cgraph * llm_build_refact(
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "inp_embd");
+    cb(inpL, "inp_embd");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
+    cb(KQ_mask, "KQ_mask");
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * inpSA = inpL;
@@ -4604,52 +4611,52 @@ static struct ggml_cgraph * llm_build_refact(
         // norm
         {
             cur = ggml_rms_norm(ctx0, inpL, norm_rms_eps);
-            ggml_set_name(cur, "rms_norm_0");
+            cb(cur, "rms_norm_0");
 
             // cur = cur*attn_norm(broadcasted)
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
         }
 
         // self-attention
         {
             // compute Q and K
             struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-            ggml_set_name(tmpk, "tmpk");
+            cb(tmpk, "tmpk");
 
             struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-            ggml_set_name(tmpq, "tmpq");
+            cb(tmpq, "tmpq");
 
             struct ggml_tensor * Kcur = ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens);
-            ggml_set_name(Kcur, "Kcur");
+            cb(Kcur, "Kcur");
 
             struct ggml_tensor * Qcur = ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens);
-            ggml_set_name(Qcur, "Qcur");
+            cb(Qcur, "Qcur");
 
             // store key and value to memory
             {
                 // compute the transposed [n_tokens, n_embd] V matrix
 
                 struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
-                ggml_set_name(tmpv, "tmpv");
+                cb(tmpv, "tmpv");
 
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -4657,27 +4664,27 @@ static struct ggml_cgraph * llm_build_refact(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_kv, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ 0, n_head, 8);
-            ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
+            cb(KQ_scaled_alibi, "KQ_scaled_alibi");
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -4686,66 +4693,66 @@ static struct ggml_cgraph * llm_build_refact(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             // projection (no bias)
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].wo,
                     cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
         }
 
         struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        ggml_set_name(inpFF, "inpFF");
+        cb(inpFF, "inpFF");
 
         // feed-forward network
         {
             // norm
             {
                 cur = ggml_rms_norm(ctx0, inpFF, norm_rms_eps);
-                ggml_set_name(cur, "rms_norm_1");
+                cb(cur, "rms_norm_1");
 
                 // cur = cur*ffn_norm(broadcasted)
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm");
+                cb(cur, "ffn_norm");
             }
 
             struct ggml_tensor * tmp = ggml_mul_mat(ctx0,
                     model.layers[il].w3,
                     cur);
-            ggml_set_name(tmp, "result_w3");
+            cb(tmp, "result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w1,
                     cur);
-            ggml_set_name(cur, "result_w1");
+            cb(cur, "result_w1");
 
             // SILU activation
             cur = ggml_silu(ctx0, cur);
-            ggml_set_name(cur, "silu");
+            cb(cur, "silu");
 
             cur = ggml_mul(ctx0, cur, tmp);
-            ggml_set_name(cur, "silu_x_result_w3");
+            cb(cur, "silu_x_result_w3");
 
             cur = ggml_mul_mat(ctx0,
                     model.layers[il].w2,
                     cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        ggml_set_name(cur, "inpFF_+_result_w2");
+        cb(cur, "inpFF_+_result_w2");
 
         // input for next layer
         inpL = cur;
@@ -4756,16 +4763,16 @@ static struct ggml_cgraph * llm_build_refact(
     // norm
     {
         cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
-        ggml_set_name(cur, "rms_norm_2");
+        cb(cur, "rms_norm_2");
 
         // cur = cur*norm(broadcasted)
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     // lm_head
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -4777,6 +4784,7 @@ static struct ggml_cgraph * llm_build_refact(
 static struct ggml_cgraph * llm_build_bloom(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -4822,7 +4830,7 @@ static struct ggml_cgraph * llm_build_bloom(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         embd = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -4832,56 +4840,56 @@ static struct ggml_cgraph * llm_build_bloom(
 
         embd = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(embd, "inp_embd");
+    cb(embd, "inp_embd");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
+    cb(KQ_mask, "KQ_mask");
 
     // norm
     {
         inpL = ggml_norm(ctx0, embd, norm_eps);
-        ggml_set_name(inpL, "inp_norm");
+        cb(inpL, "inp_norm");
 
         inpL = ggml_mul(ctx0, inpL, model.tok_norm);
-        ggml_set_name(inpL, "inp_norm_w");
+        cb(inpL, "inp_norm_w");
 
         inpL = ggml_add (ctx0, inpL, model.tok_norm_b);
-        ggml_set_name(inpL, "inp_norm_wb");
+        cb(inpL, "inp_norm_wb");
     }
 
     for (int il = 0; il < n_layer; ++il) {
         {
             // Norm
             cur = ggml_norm(ctx0, inpL, norm_eps);
-            ggml_set_name(cur, "attn_norm_0");
+            cb(cur, "attn_norm_0");
 
             cur = ggml_mul(ctx0, cur, model.layers[il].attn_norm);
-            ggml_set_name(cur, "attn_norm_0_w");
+            cb(cur, "attn_norm_0_w");
 
             cur = ggml_add(ctx0, cur, model.layers[il].attn_norm_b);
-            ggml_set_name(cur, "attn_norm_0_wb");
+            cb(cur, "attn_norm_0_wb");
         }
 
         {
             // Self Attention
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-            ggml_set_name(cur, "wqkv");
+            cb(cur, "wqkv");
 
             cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
-            ggml_set_name(cur, "bqkv");
+            cb(cur, "bqkv");
 
             struct ggml_tensor * tmpq = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
             struct ggml_tensor * tmpk = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
             struct ggml_tensor * tmpv = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa)));
 
-            ggml_set_name(tmpq, "tmpq");
-            ggml_set_name(tmpk, "tmpk");
-            ggml_set_name(tmpv, "tmpv");
+            cb(tmpq, "tmpq");
+            cb(tmpk, "tmpk");
+            cb(tmpv, "tmpv");
 
             struct ggml_tensor * Qcur = ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, n_tokens);
             struct ggml_tensor * Kcur = tmpk;
@@ -4889,15 +4897,15 @@ static struct ggml_cgraph * llm_build_bloom(
             // store key and value to memory
             {
                 struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, ggml_cont(ctx0, tmpv), n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
@@ -4909,7 +4917,7 @@ static struct ggml_cgraph * llm_build_bloom(
                             Qcur,
                             ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_embd_head, n_head, n_tokens)),
                         0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -4917,27 +4925,27 @@ static struct ggml_cgraph * llm_build_bloom(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             // K * Q
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_past + n_tokens, n_tokens, n_head, 1]
             struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             struct ggml_tensor * KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, /*n_past*/ kv_head, n_head, 8);
-            ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
+            cb(KQ_scaled_alibi, "KQ_scaled_alibi");
 
             // KQ_masked = mask_past(KQ_scaled)
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             // KQ = soft_max(KQ_masked)
             struct ggml_tensor * KQ_soft_max = ggml_soft_max_inplace(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             // split cached V into n_head heads
             struct ggml_tensor * V =
@@ -4946,30 +4954,30 @@ static struct ggml_cgraph * llm_build_bloom(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             // KQV_merged = KQV.permute(0, 2, 1, 3)
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
         }
 
         // Projection
         cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
-        ggml_set_name(cur, "result_wo");
+        cb(cur, "result_wo");
 
         cur = ggml_add(ctx0, cur, model.layers[il].bo);
-        ggml_set_name(cur, "result_wo_b");
+        cb(cur, "result_wo_b");
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        ggml_set_name(cur, "inpL_+_result_wo");
+        cb(cur, "inpL_+_result_wo");
 
         struct ggml_tensor * inpFF = cur;
 
@@ -4978,49 +4986,49 @@ static struct ggml_cgraph * llm_build_bloom(
             // Norm
             {
                 cur = ggml_norm(ctx0, inpFF, norm_eps);
-                ggml_set_name(cur, "ffn_norm_0");
+                cb(cur, "ffn_norm_0");
 
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm_0_w");
+                cb(cur, "ffn_norm_0_w");
 
                 cur = ggml_add(ctx0, cur, model.layers[il].ffn_norm_b);
-                ggml_set_name(cur, "ffn_norm_0_wb");
+                cb(cur, "ffn_norm_0_wb");
             }
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, cur);
-            ggml_set_name(cur, "result_w3");
+            cb(cur, "result_w3");
 
             cur = ggml_add(ctx0, cur, model.layers[il].b3);
-            ggml_set_name(cur, "result_w3_b");
+            cb(cur, "result_w3_b");
 
             cur = ggml_gelu(ctx0, cur);
-            ggml_set_name(cur, "gelu");
+            cb(cur, "gelu");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
 
             cur = ggml_add(ctx0, cur, model.layers[il].b2);
-            ggml_set_name(cur, "result_w2_b");
+            cb(cur, "result_w2_b");
         }
 
         inpL = ggml_add(ctx0, cur, inpFF);
-        ggml_set_name(inpL, "inpFF_+_result_w2");
+        cb(inpL, "inpFF_+_result_w2");
     }
 
     // Output Norm
     {
         cur = ggml_norm(ctx0, inpL, norm_eps);
-        ggml_set_name(cur, "out_norm_0");
+        cb(cur, "out_norm_0");
 
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "out_norm_0_w");
+        cb(cur, "out_norm_0_w");
 
         cur = ggml_add(ctx0, cur, model.output_norm_b);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -5032,6 +5040,7 @@ static struct ggml_cgraph * llm_build_bloom(
 static struct ggml_cgraph * llm_build_mpt(
          llama_context & lctx,
      const llama_batch & batch,
+    const llm_build_cb & cb,
                   bool   worst_case) {
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
@@ -5076,7 +5085,7 @@ static struct ggml_cgraph * llm_build_mpt(
 
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        ggml_set_name(inp_tokens, "inp_tokens");
+        cb(inp_tokens, "inp_tokens");
 
         inpL = ggml_get_rows(ctx0, model.tok_embeddings, inp_tokens);
     } else {
@@ -5086,15 +5095,15 @@ static struct ggml_cgraph * llm_build_mpt(
 
         inpL = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_embd, n_tokens);
     }
-    ggml_set_name(inpL, "inp_embd");
+    cb(inpL, "inp_embd");
 
     // KQ_scale
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_set_name(KQ_scale, "KQ_scale");
+    cb(KQ_scale, "KQ_scale");
 
     // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
     struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-    ggml_set_name(KQ_mask, "KQ_mask");
+    cb(KQ_mask, "KQ_mask");
 
     for (int il = 0; il < n_layer; ++il) {
         struct ggml_tensor * attn_norm;
@@ -5103,10 +5112,10 @@ static struct ggml_cgraph * llm_build_mpt(
         // TODO: refactor into common function (shared with LLaMA)
         {
             attn_norm = ggml_norm(ctx0, inpL, norm_eps);
-            ggml_set_name(attn_norm, "attn_norm_0");
+            cb(attn_norm, "attn_norm_0");
 
             attn_norm = ggml_mul(ctx0, attn_norm, model.layers[il].attn_norm);
-            ggml_set_name(attn_norm, "attn_norm_0_w");
+            cb(attn_norm, "attn_norm_0_w");
 
             if (1) {
                 cur = attn_norm;
@@ -5115,11 +5124,11 @@ static struct ggml_cgraph * llm_build_mpt(
             // compute QKV
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
-            ggml_set_name(cur, "wqkv");
+            cb(cur, "wqkv");
 
             if (clamp_kqv > 0.0f) {
                 cur = ggml_clamp(ctx0, cur, -clamp_kqv, clamp_kqv);
-                ggml_set_name(cur, "wqkv_clamped");
+                cb(cur, "wqkv_clamped");
             }
 
             const size_t wsize = ggml_type_size(cur->type);
@@ -5129,43 +5138,43 @@ static struct ggml_cgraph * llm_build_mpt(
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 0);
-            ggml_set_name(Qcur, "Qcur");
+            cb(Qcur, "Qcur");
 
             struct ggml_tensor * Kcur = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, n_tokens,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 wsize * n_embd_head *  n_head);
-            ggml_set_name(Kcur, "Kcur");
+            cb(Kcur, "Kcur");
 
             struct ggml_tensor * tmpv = ggml_view_3d(
                 ctx0, cur, n_embd_head, n_head_kv, n_tokens,
                 wsize * n_embd_head,
                 wsize * n_embd_head * (n_head + 2 * n_head_kv),
                 wsize * n_embd_head * (n_head +     n_head_kv));
-            ggml_set_name(tmpv, "tmpv");
+            cb(tmpv, "tmpv");
 
             {
                 struct ggml_tensor * Vcur = ggml_cont(ctx0, tmpv);
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens));
-                ggml_set_name(Vcur, "Vcur");
+                cb(Vcur, "Vcur");
 
                 struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k, n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k)*n_embd_gqa)*(il*n_ctx + kv_head));
-                ggml_set_name(k, "k");
+                cb(k, "k");
 
                 struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
                         (   n_ctx)*ggml_element_size(kv_self.v),
                         (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                ggml_set_name(v, "v");
+                cb(v, "v");
 
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
                 ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
             }
 
             struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-            ggml_set_name(Q, "Q");
+            cb(Q, "Q");
 
             struct ggml_tensor * K =
                 ggml_view_3d(ctx0, kv_self.k,
@@ -5173,23 +5182,23 @@ static struct ggml_cgraph * llm_build_mpt(
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-            ggml_set_name(K, "K");
+            cb(K, "K");
 
             struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-            ggml_set_name(KQ, "KQ");
+            cb(KQ, "KQ");
 
             struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-            ggml_set_name(KQ_scaled, "KQ_scaled");
+            cb(KQ_scaled, "KQ_scaled");
 
             // TODO: replace with ggml_add()
             struct ggml_tensor * KQ_scaled_alibi = ggml_alibi(ctx0, KQ_scaled, 0, n_head, max_alibi_bias);
-            ggml_set_name(KQ_scaled_alibi, "KQ_scaled_alibi");
+            cb(KQ_scaled_alibi, "KQ_scaled_alibi");
 
             struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled_alibi, KQ_mask);
-            ggml_set_name(KQ_masked, "KQ_masked");
+            cb(KQ_masked, "KQ_masked");
 
             struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-            ggml_set_name(KQ_soft_max, "KQ_soft_max");
+            cb(KQ_soft_max, "KQ_soft_max");
 
             struct ggml_tensor * V =
                 ggml_view_3d(ctx0, kv_self.v,
@@ -5197,24 +5206,24 @@ static struct ggml_cgraph * llm_build_mpt(
                         ggml_element_size(kv_self.v)*n_ctx,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
                         ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-            ggml_set_name(V, "V");
+            cb(V, "V");
 
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-            ggml_set_name(KQV, "KQV");
+            cb(KQV, "KQV");
 
             struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-            ggml_set_name(KQV_merged, "KQV_merged");
+            cb(KQV_merged, "KQV_merged");
 
             cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-            ggml_set_name(cur, "KQV_merged_contiguous");
+            cb(cur, "KQV_merged_contiguous");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
-            ggml_set_name(cur, "result_wo");
+            cb(cur, "result_wo");
         }
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        ggml_set_name(cur, "inpL_+_result_wo");
+        cb(cur, "inpL_+_result_wo");
 
         struct ggml_tensor * attn_out = cur;
 
@@ -5223,24 +5232,24 @@ static struct ggml_cgraph * llm_build_mpt(
             // Norm
             {
                 cur = ggml_norm(ctx0, attn_out, norm_eps);
-                ggml_set_name(cur, "ffn_norm_0");
+                cb(cur, "ffn_norm_0");
 
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_norm);
-                ggml_set_name(cur, "ffn_norm_0_w");
+                cb(cur, "ffn_norm_0_w");
             }
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w3, cur);
-            ggml_set_name(cur, "result_w3");
+            cb(cur, "result_w3");
 
             cur = ggml_gelu(ctx0, cur);
-            ggml_set_name(cur, "gelu");
+            cb(cur, "gelu");
 
             cur = ggml_mul_mat(ctx0, model.layers[il].w2, cur);
-            ggml_set_name(cur, "result_w2");
+            cb(cur, "result_w2");
         }
 
         cur = ggml_add(ctx0, cur, attn_out);
-        ggml_set_name(cur, "inpL_+_inpFF_+_result_w2");
+        cb(cur, "inpL_+_inpFF_+_result_w2");
 
         // input for next layer
         inpL = cur;
@@ -5251,14 +5260,14 @@ static struct ggml_cgraph * llm_build_mpt(
     // norm
     {
         cur = ggml_norm(ctx0, cur, norm_eps);
-        ggml_set_name(cur, "out_norm_0");
+        cb(cur, "out_norm_0");
 
         cur = ggml_mul(ctx0, cur, model.output_norm);
-        ggml_set_name(cur, "result_norm");
+        cb(cur, "result_norm");
     }
 
     cur = ggml_mul_mat(ctx0, model.output, cur);
-    ggml_set_name(cur, "result_output");
+    cb(cur, "result_output");
 
     ggml_build_forward_expand(gf, cur);
 
@@ -5267,7 +5276,7 @@ static struct ggml_cgraph * llm_build_mpt(
     return gf;
 }
 
-enum offload_func_e {
+enum llm_offload_func_e {
     OFFLOAD_FUNC_NOP,
     OFFLOAD_FUNC,
     OFFLOAD_FUNC_KQ,
@@ -5277,7 +5286,7 @@ enum offload_func_e {
     OFFLOAD_FUNC_OUT,
 };
 
-struct llama_offload_trie {
+struct llm_offload_trie {
     struct node {
         ~node() {
             for (int i = 0; i < 256; ++i) {
@@ -5288,14 +5297,14 @@ struct llama_offload_trie {
         }
 
         node * children[256] = { nullptr };
-        offload_func_e func = OFFLOAD_FUNC_NOP;
+        llm_offload_func_e func = OFFLOAD_FUNC_NOP;
     };
 
-    llama_offload_trie() {
+    llm_offload_trie() {
         root = new node;
     }
 
-    llama_offload_trie(const std::unordered_map<const char *, offload_func_e> & map) {
+    llm_offload_trie(const std::unordered_map<const char *, llm_offload_func_e> & map) {
         root = new node;
 
         for (const auto & kv : map) {
@@ -5303,11 +5312,11 @@ struct llama_offload_trie {
         }
     }
 
-    ~llama_offload_trie() {
+    ~llm_offload_trie() {
         delete root;
     }
 
-    void add(const char * name, offload_func_e func) {
+    void add(const char * name, llm_offload_func_e func) {
         node * cur = root;
 
         for (int i = 0; ; ++i) {
@@ -5327,7 +5336,7 @@ struct llama_offload_trie {
         cur->func = func;
     }
 
-    offload_func_e find(const char * name) const {
+    llm_offload_func_e find(const char * name) const {
         const node * cur = root;
 
         for (int i = 0; ; ++i) {
@@ -5350,206 +5359,241 @@ struct llama_offload_trie {
     node * root = nullptr;
 };
 
+static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map = {
+    { "inp_pos",                    OFFLOAD_FUNC_KQ  },
+    { "KQ_mask",                    OFFLOAD_FUNC_KQ  },
+    { "K_shift",                    OFFLOAD_FUNC_KQ  },
+    { "K_shifted",                  OFFLOAD_FUNC_KQ  },
 
-static void llama_build_graph_input(
-         llama_context & lctx,
-     const llama_batch & batch,
-    struct ggml_cgraph * graph) {
-    struct ggml_tensor * cur = nullptr;
+    { "inp_norm",                   OFFLOAD_FUNC_NR  },
+    { "inp_norm_w",                 OFFLOAD_FUNC_NR  },
+    { "inp_norm_wb",                OFFLOAD_FUNC_NR  },
 
-    // inp_tokens
-    if (batch.token) {
-        cur = ggml_graph_get_tensor(graph, "inp_tokens");
-        GGML_ASSERT(cur != nullptr && "missing tensor 'inp_tokens'");
+    { "rms_norm_0",                 OFFLOAD_FUNC     },
 
-        ggml_allocr_alloc(lctx.alloc, cur);
+    { "attn_norm_0",                OFFLOAD_FUNC     },
+    { "attn_norm_0_w",              OFFLOAD_FUNC     },
+    { "attn_norm_0_wb",             OFFLOAD_FUNC     },
 
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            const int64_t n_tokens = cur->ne[0];
+    { "attn_norm_2",                OFFLOAD_FUNC     },
+    { "attn_norm_2_w",              OFFLOAD_FUNC     },
+    { "attn_norm_2_wb",             OFFLOAD_FUNC     },
 
-            memcpy(cur->data, batch.token, n_tokens*ggml_element_size(cur));
-        }
-    }
+    { "wqkv",                       OFFLOAD_FUNC_KQ  },
+    { "bqkv",                       OFFLOAD_FUNC_KQ  },
+    { "wqkv_clamped",               OFFLOAD_FUNC_KQ  },
 
-    // inp_embd
-    if (batch.embd) {
-        cur = ggml_graph_get_tensor(graph, "inp_embd");
-        GGML_ASSERT(cur != nullptr && "missing tensor 'inp_embd'");
+    { "tmpk",                       OFFLOAD_FUNC_KQ  },
+    { "tmpq",                       OFFLOAD_FUNC_KQ  },
+    { "tmpv",                       OFFLOAD_FUNC_V   },
+    { "tmpkqv",                     OFFLOAD_FUNC_KQ  }, // ??
+    { "Kcur",                       OFFLOAD_FUNC_KQ  },
+    { "Qcur",                       OFFLOAD_FUNC_KQ  },
+    { "Vcur",                       OFFLOAD_FUNC_V   },
+    { "Vcur_0",                     OFFLOAD_FUNC_V   },
+    { "Vcur_1",                     OFFLOAD_FUNC_V   },
 
-        ggml_allocr_alloc(lctx.alloc, cur);
+    { "krot",                       OFFLOAD_FUNC_KQ  },
+    { "qrot",                       OFFLOAD_FUNC_KQ  },
+    { "kpass",                      OFFLOAD_FUNC_KQ  },
+    { "qpass",                      OFFLOAD_FUNC_KQ  },
+    { "krotated",                   OFFLOAD_FUNC_KQ  },
+    { "qrotated",                   OFFLOAD_FUNC_KQ  },
 
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            const int64_t n_embd   = cur->ne[0];
-            const int64_t n_tokens = cur->ne[1];
+    { "k",                          OFFLOAD_FUNC_KQ  },
+    { "v",                          OFFLOAD_FUNC_V   },
 
-            memcpy(cur->data, batch.embd, n_tokens*n_embd*ggml_element_size(cur));
-        }
-    }
+    { "Q",                          OFFLOAD_FUNC_KQ  },
+    { "K",                          OFFLOAD_FUNC_KQ  },
+    { "KQ",                         OFFLOAD_FUNC_KQ  },
+    { "KQ_scaled",                  OFFLOAD_FUNC_KQ  },
+    { "KQ_scaled_alibi",            OFFLOAD_FUNC_KQ  },
+    { "KQ_masked",                  OFFLOAD_FUNC_KQ  },
+    { "KQ_soft_max",                OFFLOAD_FUNC_V   },
+    { "V",                          OFFLOAD_FUNC_V   },
+    { "KQV",                        OFFLOAD_FUNC_V   },
+    { "KQV_merged",                 OFFLOAD_FUNC_V   },
+    { "KQV_merged_contiguous",      OFFLOAD_FUNC_V   },
 
-    switch (lctx.model.arch) {
-        case LLM_ARCH_LLAMA:
-        case LLM_ARCH_BAICHUAN:
-        case LLM_ARCH_FALCON:
-        case LLM_ARCH_PERSIMMON:
-            {
-                // KQ_pos
-                cur = ggml_graph_get_tensor(graph, "KQ_pos");
-                GGML_ASSERT(cur != nullptr && "missing tensor 'KQ_pos'");
+    { "result_wo",                  OFFLOAD_FUNC     },
+    { "result_wo_b",                OFFLOAD_FUNC     },
+    { "inpL_+_result_wo",           OFFLOAD_FUNC     },
 
-                ggml_allocr_alloc(lctx.alloc, cur);
+    { "inpFF",                      OFFLOAD_FUNC     },
 
-                if (!ggml_allocr_is_measure(lctx.alloc)) {
-                    const int64_t n_tokens = cur->ne[0];
+    { "rms_norm_1",                 OFFLOAD_FUNC     },
+    { "ffn_norm",                   OFFLOAD_FUNC     },
+    { "ffn_norm_0",                 OFFLOAD_FUNC     },
+    { "ffn_norm_0_w",               OFFLOAD_FUNC     },
+    { "ffn_norm_0_wb",              OFFLOAD_FUNC     },
 
-                    int32_t * data = (int32_t *) cur->data;
+    { "result_w3",                  OFFLOAD_FUNC     },
+    { "result_w3_b",                OFFLOAD_FUNC     },
+    { "result_w2",                  OFFLOAD_FUNC     },
+    { "result_w2_b",                OFFLOAD_FUNC     },
+    { "result_w1",                  OFFLOAD_FUNC     },
 
-                    for (int i = 0; i < n_tokens; ++i) {
-                        data[i] = batch.pos[i];
-                    }
-                }
+    { "silu",                       OFFLOAD_FUNC     },
+    { "gelu",                       OFFLOAD_FUNC     },
+    { "relu",                       OFFLOAD_FUNC     },
+    { "sqr(relu)",                  OFFLOAD_FUNC     },
 
-                // K_shift
-                cur = ggml_graph_get_tensor(graph, "K_shift");
-                //GGML_ASSERT(cur != nullptr && "missing tensor 'K_shift'");
-                if (cur) {
-                    ggml_allocr_alloc(lctx.alloc, cur);
+    { "silu_x_result_w3",           OFFLOAD_FUNC     },
+    { "inpFF_+_result_w2",          OFFLOAD_FUNC     },
+    { "inpL_+_inpFF_+_result_w2",   OFFLOAD_FUNC     },
 
-                    if (!ggml_allocr_is_measure(lctx.alloc)) {
-                        const int64_t n_ctx = cur->ne[0];
+    { "rms_norm_2",                 OFFLOAD_FUNC_NR  },
+    { "out_norm_0",                 OFFLOAD_FUNC_NR  },
+    { "out_norm_0_w",               OFFLOAD_FUNC_NR  },
 
-                        int32_t * data = (int32_t *) cur->data;
+    { "result_norm",                OFFLOAD_FUNC_EMB },
+    { "result_output",              OFFLOAD_FUNC_OUT },
+};
 
-                        for (int i = 0; i < n_ctx; ++i) {
-                            data[i] = lctx.kv_self.cells[i].delta;
-                        }
-                    }
-                }
-            } break;
-        case LLM_ARCH_STARCODER:
-            {
-                // inp_pos
-                cur = ggml_graph_get_tensor(graph, "inp_pos");
-                GGML_ASSERT(cur != nullptr && "missing tensor 'inp_pos'");
-
-                ggml_allocr_alloc(lctx.alloc, cur);
-
-                if (!ggml_allocr_is_measure(lctx.alloc)) {
-                    const int64_t n_tokens = cur->ne[0];
-
-                    int32_t * data = (int32_t *) cur->data;
-
-                    for (int i = 0; i < n_tokens; ++i) {
-                        data[i] = batch.pos[i];
-                    }
-                }
-            } break;
-        default:
-            break;
-    }
-
-    // common
-    {
-        // KQ_scale
-        cur = ggml_graph_get_tensor(graph, "KQ_scale");
-        GGML_ASSERT(cur != nullptr && "missing tensor 'KQ_scale'");
-
-        ggml_allocr_alloc(lctx.alloc, cur);
-
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            const int64_t n_embd_head = lctx.model.hparams.n_embd_head();
-            ggml_set_f32(cur, 1.0f/sqrtf(float(n_embd_head)));
-        }
-
-        // KQ_mask
-        cur = ggml_graph_get_tensor(graph, "KQ_mask");
-        GGML_ASSERT(cur != nullptr && "missing tensor 'KQ_mask'");
-
-        ggml_allocr_alloc(lctx.alloc, cur);
-
-        if (!ggml_allocr_is_measure(lctx.alloc)) {
-            const int64_t n_kv     = cur->ne[0];
-            const int64_t n_tokens = cur->ne[1];
-
-            float * data = (float *) cur->data;
-            memset(data, 0, ggml_nbytes(cur));
-
-            for (int h = 0; h < 1; ++h) {
-                for (int j = 0; j < n_tokens; ++j) {
-                    const llama_pos    pos    = batch.pos[j];
-                    const llama_seq_id seq_id = batch.seq_id[j][0];
-
-                    for (int i = 0; i < n_kv; ++i) {
-                        if (!lctx.kv_self.cells[i].has_seq_id(seq_id) || lctx.kv_self.cells[i].pos > pos) {
-                            data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+static llm_offload_trie k_offload_func_trie(k_offload_map);
 
 static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
      const llama_batch & batch) {
     const auto & model = lctx.model;
 
-    struct ggml_cgraph * result = NULL;
-
     // check if we should build the worst-case graph (for memory measurement)
     const bool worst_case = ggml_allocr_is_measure(lctx.alloc);
 
-    switch (model.arch) {
-        case LLM_ARCH_LLAMA:
-            {
-                result = llm_build_llama(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_BAICHUAN:
-            {
-                result = llm_build_baichaun(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_FALCON:
-            {
-                result = llm_build_falcon(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_STARCODER:
-            {
-                result = llm_build_starcoder(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_PERSIMMON:
-            {
-                result = llm_build_persimmon(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_REFACT:
-            {
-                result = llm_build_refact(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_BLOOM:
-            {
-                result = llm_build_bloom(lctx, batch, worst_case);
-            } break;
-        case LLM_ARCH_MPT:
-            {
-                result = llm_build_mpt(lctx, batch, worst_case);
-            } break;
-        default:
-            GGML_ASSERT(false);
-    }
+    // count the number of times a tensor with a given name has been offloaded
+    std::unordered_map<std::string, int> offload_n;
 
-    // allocate memory and set the values for the input tensors of the graph
-    llama_build_graph_input(lctx, batch, result);
+    // keep track of the input that has already been allocated
+    bool alloc_inp_tokens   = false;
+    bool alloc_inp_embd     = false;
+    bool alloc_inp_pos      = false;
+    bool alloc_inp_KQ_scale = false;
+    bool alloc_inp_KQ_mask  = false;
+    bool alloc_inp_K_shift  = false;
 
-    //auto t_start = std::chrono::high_resolution_clock::now();
+    // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
+    llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name) {
+        ggml_set_name(cur, name);
 
-    // offload layers
-    // TODO: this code will be obsoleted with backend v2
+        //
+        // allocate input tensors and set input data
+        //
+
+        if (batch.token && !alloc_inp_tokens && strcmp(name, "inp_tokens") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_tokens = cur->ne[0];
+
+                memcpy(cur->data, batch.token, n_tokens*ggml_element_size(cur));
+            }
+
+            alloc_inp_tokens = true;
+        }
+
+        if (batch.embd && !alloc_inp_embd && strcmp(name, "inp_embd") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_embd   = cur->ne[0];
+                const int64_t n_tokens = cur->ne[1];
+
+                memcpy(cur->data, batch.embd, n_tokens*n_embd*ggml_element_size(cur));
+            }
+
+            alloc_inp_embd = true;
+        }
+
+        if (batch.pos && !alloc_inp_pos && strcmp(name, "inp_pos") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_tokens = cur->ne[0];
+
+                int32_t * data = (int32_t *) cur->data;
+
+                for (int i = 0; i < n_tokens; ++i) {
+                    data[i] = batch.pos[i];
+                }
+            }
+
+            alloc_inp_pos = true;
+        }
+
+        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_embd_head = model.hparams.n_embd_head();
+                ggml_set_f32(cur, 1.0f/sqrtf(float(n_embd_head)));
+            }
+
+            alloc_inp_KQ_scale = true;
+        }
+
+        if (!alloc_inp_KQ_mask && strcmp(name, "KQ_mask") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_kv     = cur->ne[0];
+                const int64_t n_tokens = cur->ne[1];
+
+                float * data = (float *) cur->data;
+                memset(data, 0, ggml_nbytes(cur));
+
+                for (int h = 0; h < 1; ++h) {
+                    for (int j = 0; j < n_tokens; ++j) {
+                        const llama_pos    pos    = batch.pos[j];
+                        const llama_seq_id seq_id = batch.seq_id[j][0];
+
+                        for (int i = 0; i < n_kv; ++i) {
+                            if (!lctx.kv_self.cells[i].has_seq_id(seq_id) || lctx.kv_self.cells[i].pos > pos) {
+                                data[h*(n_kv*n_tokens) + j*n_kv + i] = -INFINITY;
+                            }
+                        }
+                    }
+                }
+            }
+
+            alloc_inp_KQ_mask = true;
+        }
+
+        if (!alloc_inp_K_shift && strcmp(name, "K_shift") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_ctx = cur->ne[0];
+
+                int32_t * data = (int32_t *) cur->data;
+
+                for (int i = 0; i < n_ctx; ++i) {
+                    data[i] = lctx.kv_self.cells[i].delta;
+                }
+            }
+
+            alloc_inp_K_shift = true;
+        }
+
+        //
+        // offload layers
+        //
+        // TODO: this code will be obsoleted with backend v2
+
 #ifdef GGML_USE_CUBLAS
-    const bool do_offload = true;
+        const bool do_offload = true;
 #else
-    const bool do_offload = false;
+        const bool do_offload = false;
 #endif
 
-    if (do_offload) {
+        if (!do_offload) {
+            return;
+        }
+
+        // view tensors are not offloaded
+        if (cur->view_src != nullptr) {
+            return;
+        }
+
         const int n_layer = model.hparams.n_layer;
 
         const int n_gpu_layers = model.n_gpu_layers;
@@ -5558,7 +5602,7 @@ static struct ggml_cgraph * llama_build_graph(
         // should we offload the final norm? yes if we are not computing embeddings
         const bool offload_emb = lctx.embedding.empty();
 
-        static const std::unordered_map<offload_func_e, std::string, std::hash<int>> k_offload_func_name = {
+        static const std::unordered_map<llm_offload_func_e, std::string, std::hash<int>> k_offload_func_name = {
             { OFFLOAD_FUNC_NOP, "CPU" },
 #ifdef GGML_USE_CUBLAS
             { OFFLOAD_FUNC,     "GPU (CUDA)" },
@@ -5577,186 +5621,120 @@ static struct ggml_cgraph * llama_build_graph(
 #endif // GGML_USE_CUBLAS
         };
 
-        static const std::unordered_map<const char *, offload_func_e> k_offload_func = {
-            { "KQ_mask",                    OFFLOAD_FUNC_KQ  },
-            { "KQ_pos",                     OFFLOAD_FUNC_KQ  },
-            { "K_shift",                    OFFLOAD_FUNC_KQ  },
-            { "K_shifted",                  OFFLOAD_FUNC_KQ  },
+        // check the global map for what offload function to use for this tensor
+        llm_offload_func_e func_e = k_offload_func_trie.find(cur->name);
 
-            { "inp_norm",                   OFFLOAD_FUNC_NR  },
-            { "inp_norm_w",                 OFFLOAD_FUNC_NR  },
-            { "inp_norm_wb",                OFFLOAD_FUNC_NR  },
-
-            { "rms_norm_0",                 OFFLOAD_FUNC     },
-
-            { "attn_norm_0",                OFFLOAD_FUNC     },
-            { "attn_norm_0_w",              OFFLOAD_FUNC     },
-            { "attn_norm_0_wb",             OFFLOAD_FUNC     },
-
-            { "attn_norm_2",                OFFLOAD_FUNC     },
-            { "attn_norm_2_w",              OFFLOAD_FUNC     },
-            { "attn_norm_2_wb",             OFFLOAD_FUNC     },
-
-            { "wqkv",                       OFFLOAD_FUNC_KQ  },
-            { "bqkv",                       OFFLOAD_FUNC_KQ  },
-            { "wqkv_clamped",               OFFLOAD_FUNC_KQ  },
-
-            { "tmpk",                       OFFLOAD_FUNC_KQ  },
-            { "tmpq",                       OFFLOAD_FUNC_KQ  },
-            { "tmpv",                       OFFLOAD_FUNC_V   },
-            { "tmpkqv",                     OFFLOAD_FUNC_KQ  }, // ??
-            { "Kcur",                       OFFLOAD_FUNC_KQ  },
-            { "Qcur",                       OFFLOAD_FUNC_KQ  },
-            { "Vcur",                       OFFLOAD_FUNC_V   },
-            { "Vcur_0",                     OFFLOAD_FUNC_V   },
-            { "Vcur_1",                     OFFLOAD_FUNC_V   },
-
-            { "krot",                       OFFLOAD_FUNC_KQ  },
-            { "qrot",                       OFFLOAD_FUNC_KQ  },
-            { "kpass",                      OFFLOAD_FUNC_KQ  },
-            { "qpass",                      OFFLOAD_FUNC_KQ  },
-            { "krotated",                   OFFLOAD_FUNC_KQ  },
-            { "qrotated",                   OFFLOAD_FUNC_KQ  },
-
-            { "k",                          OFFLOAD_FUNC_KQ  },
-            { "v",                          OFFLOAD_FUNC_V   },
-
-            { "Q",                          OFFLOAD_FUNC_KQ  },
-            { "K",                          OFFLOAD_FUNC_KQ  },
-            { "KQ",                         OFFLOAD_FUNC_KQ  },
-            { "KQ_scaled",                  OFFLOAD_FUNC_KQ  },
-            { "KQ_scaled_alibi",            OFFLOAD_FUNC_KQ  },
-            { "KQ_masked",                  OFFLOAD_FUNC_KQ  },
-            { "KQ_soft_max",                OFFLOAD_FUNC_V   },
-            { "V",                          OFFLOAD_FUNC_V   },
-            { "KQV",                        OFFLOAD_FUNC_V   },
-            { "KQV_merged",                 OFFLOAD_FUNC_V   },
-            { "KQV_merged_contiguous",      OFFLOAD_FUNC_V   },
-
-            { "result_wo",                  OFFLOAD_FUNC     },
-            { "result_wo_b",                OFFLOAD_FUNC     },
-            { "inpL_+_result_wo",           OFFLOAD_FUNC     },
-
-            { "inpFF",                      OFFLOAD_FUNC     },
-
-            { "rms_norm_1",                 OFFLOAD_FUNC     },
-            { "ffn_norm",                   OFFLOAD_FUNC     },
-            { "ffn_norm_0",                 OFFLOAD_FUNC     },
-            { "ffn_norm_0_w",               OFFLOAD_FUNC     },
-            { "ffn_norm_0_wb",              OFFLOAD_FUNC     },
-
-            { "result_w3",                  OFFLOAD_FUNC     },
-            { "result_w3_b",                OFFLOAD_FUNC     },
-            { "result_w2",                  OFFLOAD_FUNC     },
-            { "result_w2_b",                OFFLOAD_FUNC     },
-            { "result_w1",                  OFFLOAD_FUNC     },
-
-            { "silu",                       OFFLOAD_FUNC     },
-            { "gelu",                       OFFLOAD_FUNC     },
-            { "relu",                       OFFLOAD_FUNC     },
-            { "sqr(relu)",                  OFFLOAD_FUNC     },
-
-            { "silu_x_result_w3",           OFFLOAD_FUNC     },
-            { "inpFF_+_result_w2",          OFFLOAD_FUNC     },
-            { "inpL_+_inpFF_+_result_w2",   OFFLOAD_FUNC     },
-
-            { "rms_norm_2",                 OFFLOAD_FUNC_NR  },
-            { "out_norm_0",                 OFFLOAD_FUNC_NR  },
-            { "out_norm_0_w",               OFFLOAD_FUNC_NR  },
-
-            { "result_norm",                OFFLOAD_FUNC_EMB },
-            { "result_output",              OFFLOAD_FUNC_OUT },
-        };
-
-        static llama_offload_trie k_offload_func_trie(k_offload_func);
-
-        std::unordered_map<std::string, int> ofn;
-
-        for (int i = 0; i < result->n_nodes; ++i) {
-            struct ggml_tensor * cur = result->nodes[i];
-
-            // view tensors are not offloaded
-            if (cur->view_src != nullptr) {
-                continue;
+        if (func_e == OFFLOAD_FUNC_NOP) {
+            // if a tensor hasn't been offloaded, we warn the user
+            if (worst_case) {
+                LLAMA_LOG_WARN("%s: %32s: not offloaded (ref: %s)\n", __func__,
+                        cur->name, "https://github.com/ggerganov/llama.cpp/pull/3837");
             }
 
-            offload_func_e func_e = k_offload_func_trie.find(cur->name);
+            return;
+        }
 
-            if (func_e == OFFLOAD_FUNC_NOP) {
-                // if a tensor hasn't been offloaded, we warn the user
-                if (worst_case) {
-                    LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
-                            i, cur->name, "https://github.com/ggerganov/llama.cpp/pull/3837");
+        // count the number of layers and respect the provided n_gpu_layers
+        switch (func_e) {
+            case OFFLOAD_FUNC_NOP:
+            case OFFLOAD_FUNC_OUT:
+                break;
+            case OFFLOAD_FUNC:
+                if (n_gpu_layers < n_layer) {
+                    if (offload_n[cur->name]++ < i_gpu_start) {
+                        func_e = OFFLOAD_FUNC_NOP;
+                    }
                 }
+                break;
+            case OFFLOAD_FUNC_NR:
+                if (n_gpu_layers <= n_layer + 0) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                }
+                break;
+            case OFFLOAD_FUNC_V:
+                if (n_gpu_layers <= n_layer + 1) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                }
+                break;
+            case OFFLOAD_FUNC_KQ:
+                if (n_gpu_layers <= n_layer + 2) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                }
+                break;
+            case OFFLOAD_FUNC_EMB:
+                if (!offload_emb || n_gpu_layers < n_layer) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                }
+                break;
+            default: GGML_ASSERT(false);
+        }
 
-                continue;
-            }
+        offload_func_t func = ggml_offload_nop;
 
-            // count the number of layers and respect the provided n_gpu_layers
-            switch (func_e) {
-                case OFFLOAD_FUNC_NOP:
-                case OFFLOAD_FUNC_OUT: break;
-                case OFFLOAD_FUNC:
-                    if (n_gpu_layers < n_layer) {
-                        if (ofn[cur->name]++ < i_gpu_start) {
-                            func_e = OFFLOAD_FUNC_NOP;
-                        }
-                    }
-                    break;
-                case OFFLOAD_FUNC_NR:
-                    if (n_gpu_layers <= n_layer + 0) {
-                        func_e = OFFLOAD_FUNC_NOP;
-                    }
-                    break;
-                case OFFLOAD_FUNC_V:
-                    if (n_gpu_layers <= n_layer + 1) {
-                        func_e = OFFLOAD_FUNC_NOP;
-                    }
-                    break;
-                case OFFLOAD_FUNC_KQ:
-                    if (n_gpu_layers <= n_layer + 2) {
-                        func_e = OFFLOAD_FUNC_NOP;
-                    }
-                    break;
-                case OFFLOAD_FUNC_EMB:
-                    if (!offload_emb || n_gpu_layers < n_layer) {
-                        func_e = OFFLOAD_FUNC_NOP;
-                    }
-                    break;
-                default: GGML_ASSERT(false);
-            }
-
-            offload_func_t func = ggml_offload_nop;
-
+        // this is needed for compatibility with Metal for example
 #ifdef GGML_USE_CUBLAS
-            static offload_func_t ggml_offload_gpu = ggml_cuda_assign_buffers_no_alloc;
+        static offload_func_t ggml_offload_gpu = ggml_cuda_assign_buffers_no_alloc;
 #else
-            static offload_func_t ggml_offload_gpu = ggml_offload_nop;
+        static offload_func_t ggml_offload_gpu = ggml_offload_nop;
 #endif
 
-            switch (func_e) {
-                case OFFLOAD_FUNC_NOP:
-                case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
-                case OFFLOAD_FUNC:
-                case OFFLOAD_FUNC_KQ:
-                case OFFLOAD_FUNC_V:
-                case OFFLOAD_FUNC_NR:
-                case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
-                default: GGML_ASSERT(false);
-            }
-
-            // apply offload function to the tensor
-            func(cur);
-
-            if (worst_case) {
-                LLAMA_LOG_INFO("%s: node %4d %32s: %s\n", __func__, i, cur->name, k_offload_func_name.at(func_e).c_str());
-            }
+        switch (func_e) {
+            case OFFLOAD_FUNC_NOP:
+            case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
+            case OFFLOAD_FUNC:
+            case OFFLOAD_FUNC_KQ:
+            case OFFLOAD_FUNC_V:
+            case OFFLOAD_FUNC_NR:
+            case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
+            default: GGML_ASSERT(false);
         }
+
+        // apply offload function to the tensor
+        func(cur);
+
+        if (worst_case) {
+            LLAMA_LOG_INFO("%s: %32s: %s\n", __func__, cur->name, k_offload_func_name.at(func_e).c_str());
+        }
+    };
+
+    struct ggml_cgraph * result = NULL;
+
+    switch (model.arch) {
+        case LLM_ARCH_LLAMA:
+            {
+                result = llm_build_llama(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_BAICHUAN:
+            {
+                result = llm_build_baichaun(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_FALCON:
+            {
+                result = llm_build_falcon(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_STARCODER:
+            {
+                result = llm_build_starcoder(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_PERSIMMON:
+            {
+                result = llm_build_persimmon(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_REFACT:
+            {
+                result = llm_build_refact(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_BLOOM:
+            {
+                result = llm_build_bloom(lctx, batch, cb, worst_case);
+            } break;
+        case LLM_ARCH_MPT:
+            {
+                result = llm_build_mpt(lctx, batch, cb, worst_case);
+            } break;
+        default:
+            GGML_ASSERT(false);
     }
-
-    //auto t_end = std::chrono::high_resolution_clock::now();
-
-    //printf("offload time: %f ms\n", std::chrono::duration<double, std::milli>(t_end - t_start).count());
 
     return result;
 }
