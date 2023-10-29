@@ -5469,9 +5469,6 @@ static struct ggml_cgraph * llama_build_graph(
     // check if we should build the worst-case graph (for memory measurement)
     const bool worst_case = ggml_allocr_is_measure(lctx.alloc);
 
-    // count the number of times a tensor with a given name has been offloaded
-    std::unordered_map<std::string, int> offload_n;
-
     // keep track of the input that has already been allocated
     bool alloc_inp_tokens   = false;
     bool alloc_inp_embd     = false;
@@ -5654,7 +5651,7 @@ static struct ggml_cgraph * llama_build_graph(
                 break;
             case OFFLOAD_FUNC:
                 if (n_gpu_layers < n_layer) {
-                    if (offload_n[name]++ < i_gpu_start) {
+                    if (il < i_gpu_start) {
                         func_e = OFFLOAD_FUNC_NOP;
                     }
                 }
