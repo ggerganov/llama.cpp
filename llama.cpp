@@ -5553,6 +5553,13 @@ static struct ggml_cgraph * llama_build_graph(
             { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR" },
             { OFFLOAD_FUNC_EMB, "GPU (CUDA) EMB" },
             { OFFLOAD_FUNC_OUT, "GPU (CUDA) OUT" },
+#else
+            { OFFLOAD_FUNC,     "CPU" },
+            { OFFLOAD_FUNC_KQ,  "CPU" },
+            { OFFLOAD_FUNC_V,   "CPU" },
+            { OFFLOAD_FUNC_NR,  "CPU" },
+            { OFFLOAD_FUNC_EMB, "CPU" },
+            { OFFLOAD_FUNC_OUT, "CPU" },
 #endif // GGML_USE_CUBLAS
         };
 
@@ -5707,6 +5714,12 @@ static struct ggml_cgraph * llama_build_graph(
 
             offload_func_t func = ggml_offload_nop;
 
+#ifdef GGML_USE_CUBLAS
+            static offload_func_t ggml_offload_gpu = ggml_cuda_assign_buffers_no_alloc;
+#else
+            static offload_func_t ggml_offload_gpu = ggml_offload_nop;
+#endif
+
             switch (func_e) {
                 case OFFLOAD_FUNC_NOP:
                 case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
@@ -5714,7 +5727,7 @@ static struct ggml_cgraph * llama_build_graph(
                 case OFFLOAD_FUNC_KQ:
                 case OFFLOAD_FUNC_V:
                 case OFFLOAD_FUNC_NR:
-                case OFFLOAD_FUNC_EMB: func = ggml_cuda_assign_buffers_no_alloc; break;
+                case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
                 default: GGML_ASSERT(false);
             }
 
