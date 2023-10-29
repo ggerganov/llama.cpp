@@ -3253,8 +3253,8 @@ static void llm_build_k_shift(
 
     const auto & hparams = model.hparams;
 
-    const int64_t n_head      = hparams.n_head;
     const int64_t n_layer     = hparams.n_layer;
+    const int64_t n_head_kv   = hparams.n_head_kv;
     const int64_t n_embd_gqa  = hparams.n_embd_gqa();
     const int64_t n_embd_head = hparams.n_embd_head();
 
@@ -3281,7 +3281,7 @@ static void llm_build_k_shift(
             // we rotate only the first n_rot dimensions
             ggml_rope_custom_inplace(ctx,
                     ggml_view_3d(ctx, kv_self.k,
-                        n_rot, n_head, n_ctx,
+                        n_rot, n_head_kv, n_ctx,
                         ggml_element_size(kv_self.k)*n_embd_head,
                         ggml_element_size(kv_self.k)*n_embd_gqa,
                         ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il),
