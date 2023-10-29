@@ -424,6 +424,7 @@ class BaichuanModel(Model):
         # Collect tensors from generator object
         model_kv = dict(self.get_tensors())
         block_count = self.hparams["num_hidden_layers"]
+        head_count = self.hparams["num_attention_heads"]
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
         for i in range(block_count):
