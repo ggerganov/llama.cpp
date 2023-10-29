@@ -5443,7 +5443,13 @@ static struct ggml_cgraph * llama_build_graph(
 
     // offload layers
     // TODO: this code will be obsoleted with backend v2
-    {
+#ifdef GGML_USE_CUBLAS
+    const bool do_offload = true;
+#else
+    const bool do_offload = false;
+#endif
+
+    if (do_offload) {
         const int n_layer = model.hparams.n_layer;
 
         const int n_gpu_layers = model.n_gpu_layers;
@@ -5576,12 +5582,17 @@ static struct ggml_cgraph * llama_build_graph(
         for (int i = 0; i < result->n_nodes; ++i) {
             struct ggml_tensor * cur = result->nodes[i];
 
+            // view tensors are not offloaded
+            if (cur->view_src != nullptr) {
+                continue;
+            }
+
             const std::string name = cur->name;
 
             const auto it = k_offload_func.find(name);
             if (it == k_offload_func.end()) {
                 // if a tensor that is not view hasn't been offloaded, we warn the user
-                if (worst_case && cur->view_src == nullptr) {
+                if (worst_case) {
                     LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
                             i, name.c_str(), "https://github.com/ggerganov/llama.cpp/pull/3837");
                 }
@@ -5600,7 +5611,7 @@ static struct ggml_cgraph * llama_build_graph(
             // apply offload function to the tensor
             f(cur);
 
-            if (worst_case && cur->view_src == nullptr) {
+            if (worst_case) {
                 LLAMA_LOG_INFO("%s: node %4d %32s: %s\n", __func__, i, name.c_str(), k_offload_func_name.at(f).c_str());
             }
         }
