@@ -54,14 +54,19 @@ print("gguf: get gpt2 tokenizer vocab")
 model_instance.set_vocab()
 
 # write model
-print("gguf: write header")
-model_instance.gguf_writer.write_header_to_file()
-print("gguf: write metadata")
-model_instance.gguf_writer.write_kv_data_to_file()
 if not args.vocab_only:
-    print("gguf: write tensors")
     model_instance.write_tensors()
+    print("gguf: write header")
+    model_instance.gguf_writer.write_header_to_file()
+    print("gguf: write metadata")
+    model_instance.gguf_writer.write_kv_data_to_file()
+    print("gguf: write tensors")
     model_instance.gguf_writer.write_tensors_to_file()
+else:
+    print("gguf: write header")
+    model_instance.gguf_writer.write_header_to_file()
+    print("gguf: write metadata")
+    model_instance.gguf_writer.write_kv_data_to_file()
 
 model_instance.gguf_writer.close()
 

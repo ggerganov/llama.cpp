@@ -190,7 +190,18 @@ class StableLMModel(Model):
 
 
 class GPTNeoXModel(Model):
-    pass
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_rope_dimension_count(int(self.hparams["rotary_pct"]*(self.hparams["hidden_size"]//self.hparams["num_attention_heads"])))
+        self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
+        self.gguf_writer.add_parallel_residual(self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
 
 class BloomModel(Model):
     def set_gguf_parameters(self):
