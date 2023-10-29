@@ -5213,12 +5213,9 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "tmpk",                       OFFLOAD_FUNC_KQ  },
     { "tmpq",                       OFFLOAD_FUNC_KQ  },
     { "tmpv",                       OFFLOAD_FUNC_V   },
-    { "tmpkqv",                     OFFLOAD_FUNC_KQ  }, // ??
     { "Kcur",                       OFFLOAD_FUNC_KQ  },
     { "Qcur",                       OFFLOAD_FUNC_KQ  },
     { "Vcur",                       OFFLOAD_FUNC_V   },
-    { "Vcur_0",                     OFFLOAD_FUNC_V   },
-    { "Vcur_1",                     OFFLOAD_FUNC_V   },
 
     { "krot",                       OFFLOAD_FUNC_KQ  },
     { "qrot",                       OFFLOAD_FUNC_KQ  },
@@ -5226,9 +5223,6 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "qpass",                      OFFLOAD_FUNC_KQ  },
     { "krotated",                   OFFLOAD_FUNC_KQ  },
     { "qrotated",                   OFFLOAD_FUNC_KQ  },
-
-    { "k",                          OFFLOAD_FUNC_KQ  },
-    { "v",                          OFFLOAD_FUNC_V   },
 
     { "Q",                          OFFLOAD_FUNC_KQ  },
     { "K",                          OFFLOAD_FUNC_KQ  },
