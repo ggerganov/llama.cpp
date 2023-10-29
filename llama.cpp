@@ -19,13 +19,11 @@
 #ifdef GGML_USE_MPI
 #  include "ggml-mpi.h"
 #endif
-#ifdef GGML_USE_K_QUANTS
-#  ifndef QK_K
-#    ifdef GGML_QKK_64
-#      define QK_K 64
-#    else
-#      define QK_K 256
-#    endif
+#ifndef QK_K
+#  ifdef GGML_QKK_64
+#    define QK_K 64
+#  else
+#    define QK_K 256
 #  endif
 #endif
 
@@ -8052,7 +8050,7 @@ struct no_init {
 struct quantize_state_internal {
     const llama_model                 & model;
     const llama_model_quantize_params * params;
-#ifdef GGML_USE_K_QUANTS
+
     int n_attention_wv    = 0;
     int n_feed_forward_w2 = 0;
     int i_attention_wv    = 0;
@@ -8060,7 +8058,7 @@ struct quantize_state_internal {
 
     int n_k_quantized     = 0;
     int n_fallback        = 0;
-#endif
+
     quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
         : model(model)
         , params(params)
@@ -8125,7 +8123,6 @@ static void llama_convert_tensor_internal(
     workers.clear();
 }
 
-#ifdef GGML_USE_K_QUANTS
 static ggml_type get_k_quant_type(
     quantize_state_internal & qs,
     ggml_type new_type, const ggml_tensor * tensor, llama_ftype ftype
@@ -8237,7 +8234,6 @@ static ggml_type get_k_quant_type(
 
     return new_type;
 }
-#endif
 
 static void llama_model_quantize_internal(const std::string & fname_inp, const std::string & fname_out, const llama_model_quantize_params * params) {
     ggml_type quantized_type;
@@ -8252,7 +8248,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_F16:  quantized_type = GGML_TYPE_F16;  break;
         case LLAMA_FTYPE_ALL_F32:     quantized_type = GGML_TYPE_F32;  break;
 
-#ifdef GGML_USE_K_QUANTS
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K:   quantized_type = GGML_TYPE_Q2_K; break;
         case LLAMA_FTYPE_MOSTLY_Q3_K_S:
@@ -8263,7 +8258,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_Q5_K_S:
         case LLAMA_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
         case LLAMA_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
-#endif
+
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
 
@@ -8304,7 +8299,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     gguf_set_val_u32(ctx_out, "general.quantization_version", GGML_QNT_VERSION);
     gguf_set_val_u32(ctx_out, "general.file_type", ftype);
 
-#ifdef GGML_USE_K_QUANTS
     for (int i = 0; i < ml.n_tensors; ++i) {
         struct ggml_tensor * meta = ml.get_tensor_meta(i);
 
@@ -8322,7 +8316,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         LLAMA_LOG_WARN("%s ============ Strange model: n_attention_wv = %d, n_feed_forward_w2 = %d, hparams.n_layer = %d\n",
                 __func__, qs.n_attention_wv, qs.n_feed_forward_w2, model.hparams.n_layer);
     }
-#endif
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
@@ -8387,9 +8380,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
         if (quantize) {
             new_type = quantized_type;
-#ifdef GGML_USE_K_QUANTS
-            new_type = get_k_quant_type(qs, new_type, tensor, ftype);
-#endif
+            if (!params->pure) {
+                new_type = get_k_quant_type(qs, new_type, tensor, ftype);
+            }
+
             // If we've decided to quantize to the same type the tensor is already
             // in then there's nothing to do.
             quantize = tensor->type != new_type;
@@ -8514,12 +8508,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             LLAMA_LOG_INFO("\n");
         }
     }
-#ifdef GGML_USE_K_QUANTS
+
     if (qs.n_fallback > 0) {
         LLAMA_LOG_WARN("%s: WARNING: %d of %d tensor(s) incompatible with k-quants and required fallback quantization\n",
                 __func__, qs.n_fallback, qs.n_k_quantized + qs.n_fallback);
     }
-#endif
 }
 
 static int llama_apply_lora_from_file_internal(
@@ -8844,6 +8837,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
         /*.allow_requantize            =*/ false,
         /*.quantize_output_tensor      =*/ true,
         /*.only_copy                   =*/ false,
+        /*.pure                        =*/ false,
     };
 
     return result;
