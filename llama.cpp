@@ -62,7 +62,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <forward_list>
 #include <fstream>
+#include <functional>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -71,11 +73,10 @@
 #include <queue>
 #include <random>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
-#include <set>
-#include <forward_list>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
