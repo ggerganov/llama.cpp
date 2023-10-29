@@ -685,7 +685,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", sparams.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)sparams.top_p);
-    printf("  --min-p N             min-p sampling (default: %.2f, 1.0 = disabled)\n", (double)sparams.min_p);
+    printf("  --min-p N             min-p sampling (default: %.2f, 0.0 = disabled)\n", (double)sparams.min_p);
     printf("  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)sparams.tfs_z);
     printf("  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)sparams.typical_p);
     printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", sparams.penalty_last_n);
@@ -1282,7 +1282,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "threads: %d # default: %d\n", params.n_threads, std::thread::hardware_concurrency());
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
-    fprintf(stream, "min_p: %f # default: 0.05\n", sparams.min_p);
+    fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
 }

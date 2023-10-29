@@ -190,7 +190,7 @@ llama_token llama_sampling_sample(
             llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep);
             llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep);
             llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep);
-            if (min_p != 1.0 && min_p != 0.0) {
+            if (min_p != 0.0) {
                 llama_sample_min_p(ctx_main, &cur_p, min_p, min_keep);  
             } else {
                 llama_sample_top_p(ctx_main, &cur_p, top_p, min_keep);
