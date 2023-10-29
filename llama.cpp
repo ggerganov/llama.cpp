@@ -9836,7 +9836,7 @@ int llama_eval(
                  llama_token * tokens,
                      int32_t   n_tokens,
                          int   n_past) {
-    llama_kv_cache_seq_rm(ctx->kv_self, 0, n_past, -1);
+    llama_kv_cache_tokens_rm(ctx->kv_self, n_past, -1);
 
     const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0));
     if (ret < 0) {
