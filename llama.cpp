@@ -5452,11 +5452,15 @@ static struct ggml_cgraph * llama_build_graph(
     } while (0);
 
     // offload layers
+    // TODO: this code will be obsoleted with backend v2
     {
         const int n_layer = model.hparams.n_layer;
 
         const int n_gpu_layers = model.n_gpu_layers;
         const int i_gpu_start  = n_layer - n_gpu_layers;
+
+        // should we offload the final norm? yes if we are not computing embeddings
+        const bool off_res_norm = !lctx.embedding.empty();
 
         // offload functions set the tensor output backend to GPU
         // tensors are GPU-accelerated if any input or the output has been offloaded
@@ -5566,7 +5570,7 @@ static struct ggml_cgraph * llama_build_graph(
             { "out_norm_0",                 offload_func_nr },
             { "out_norm_0_w",               offload_func_nr },
 
-          //{ "result_norm",                offload_func_nr }, // TODO CPU + GPU mirrored backend
+            { "result_norm",                off_res_norm ? offload_func_nr : ggml_offload_nop },
           //{ "result_output",              offload_func    },
         };
 
@@ -5584,7 +5588,8 @@ static struct ggml_cgraph * llama_build_graph(
 
             const std::string name = cur->name;
 
-            if (k_offload_func.find(name) == k_offload_func.end()) {
+            const auto it = k_offload_func.find(name);
+            if (it == k_offload_func.end()) {
                 // if a tensor that is not view hasn't been offloaded, we warn the user
                 if (worst_case && cur->view_src == nullptr) {
                     LLAMA_LOG_WARN("%s: node %4d %32s: not offloaded (ref: %s)\n", __func__,
@@ -5595,7 +5600,7 @@ static struct ggml_cgraph * llama_build_graph(
             }
 
             // count the number of layers and respect the provided n_gpu_layers
-            offload_func_t f = k_offload_func.at(name);
+            offload_func_t f = it->second;
             if (f == offload_func) {
                 if (ofn[name]++ < i_gpu_start) {
                     f = ggml_offload_nop;
@@ -5753,11 +5758,13 @@ static int llama_decode_internal(
     }
 
     // If all tensors can be run on the GPU then using more than 1 thread is detrimental.
-    const bool full_offload_supported = model.arch == LLM_ARCH_LLAMA ||
+    const bool full_offload_supported =
+        model.arch == LLM_ARCH_LLAMA    ||
         model.arch == LLM_ARCH_BAICHUAN ||
-        model.arch == LLM_ARCH_FALCON ||
-        model.arch == LLM_ARCH_REFACT ||
+        model.arch == LLM_ARCH_FALCON   ||
+        model.arch == LLM_ARCH_REFACT   ||
         model.arch == LLM_ARCH_MPT;
+
     const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 3;
     if (ggml_cpu_has_cublas() && full_offload_supported && fully_offloaded) {
         n_threads = 1;
@@ -5803,6 +5810,8 @@ static int llama_decode_internal(
     //}
 
     // extract logits
+    // TODO: do not compute and extract logits if only embeddings are needed
+    //       need to update the graphs to skip "result_output"
     {
         auto & logits_out = lctx.logits;
 
