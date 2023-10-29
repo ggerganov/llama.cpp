@@ -5544,7 +5544,7 @@ static struct ggml_cgraph * llama_build_graph(
         // should we offload the final norm? yes if we are not computing embeddings
         const bool offload_emb = lctx.embedding.empty();
 
-        static const std::unordered_map<offload_func_e, std::string> k_offload_func_name = {
+        static const std::unordered_map<offload_func_e, std::string, std::hash<int>> k_offload_func_name = {
             { OFFLOAD_FUNC_NOP, "CPU" },
 #ifdef GGML_USE_CUBLAS
             { OFFLOAD_FUNC,     "GPU (CUDA)" },
