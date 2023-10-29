@@ -110,14 +110,23 @@ int ggml_mpi_size(struct ggml_mpi_context * ctx);
  *
  * @param ctx_mpi The context in which to prepare for evaluation.
  * @param n_tokens A pointer to the n_tokens, which will be synchronized after this function.
- * @param n_past A pointer to the n_past, which will be synchronized after this function.
- * @param n_threads A pointer to the n_threads, which is unused currently.
+ * @param pos A pointer to the pos array, which will be synchronized after this function.
+ * @param n_seq_ids A pointer to the n_seq_ids array, which will be synchronized after this function.
+ * @param seq_id A pointer to the seq_id 2D array, which will be synchronized after this function.
+ * @param logits A pointer to the logits array, which is unused currently since only node 0 needs them.
  */
 void ggml_mpi_eval_init(
-        struct ggml_mpi_context * ctx_mpi,
-                            int * n_tokens,
-                            int * n_past,
-                            int * n_threads);
+        struct ggml_mpi_context *   ctx_mpi,
+                int32_t         *   n_tokens,
+                int32_t         **  pos,
+                int32_t         **  n_seq_ids,
+                int32_t         *** seq_id,
+                int8_t          **  logits);
+
+void ggml_mpi_synch_int(
+        struct ggml_mpi_context     * ctx_mpi,
+                int32_t * val
+        );
 
 /**
  * Split a range across all nodes within the given

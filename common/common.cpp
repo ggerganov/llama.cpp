@@ -1403,7 +1403,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         LOG("warming up the model with an empty run\n");
 
 #ifndef GGML_USE_MPI
-        // When using MPI, llama_eval() enters into an infinite loop
+        // When using MPI, llama_decode() enters into an infinite loop
         // on non-head nodes. Thus, we only want to warmup the model here
         // if we aren't using MPI.
         // FIXME have a way to terminate the infinite loop so we can warmup the model

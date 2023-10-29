@@ -8776,8 +8776,7 @@ static int llama_decode_internal(
          llama_context & lctx,
            llama_batch   batch_all) { // TODO: rename back to batch
 
-    const uint32_t n_tokens_all = batch_all.n_tokens;
-
+    uint32_t n_tokens_all = batch_all.n_tokens;
     if (n_tokens_all == 0) {
         LLAMA_LOG_ERROR("%s: n_tokens == 0", __func__);
         return -1;
@@ -8798,11 +8797,7 @@ static int llama_decode_internal(
     }
     lctx.n_queued_tokens += n_tokens_all;
 
-#ifdef GGML_USE_MPI
-    // TODO: needs fix after #3228
-    GGML_ASSERT(false && "not implemented");
-    //ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
-#endif
+
 
     auto & kv_self = lctx.kv_self;
 
@@ -8828,7 +8823,7 @@ static int llama_decode_internal(
     std::vector<std::vector<llama_seq_id>> seq_id;
 
     for (uint32_t cur_token = 0; cur_token < n_tokens_all; cur_token += n_ubatch) {
-        const uint32_t n_tokens = std::min(n_ubatch, n_tokens_all - cur_token);
+        uint32_t n_tokens = std::min(n_ubatch, n_tokens_all - cur_token);
         llama_batch u_batch = {
             /* .n_tokens   = */ (int32_t) n_tokens,
             /* .token      = */ batch_all.token     ? batch_all.token    + cur_token        : nullptr,
@@ -8881,7 +8876,12 @@ static int llama_decode_internal(
                 kv_self.head = 0;
             }
 
-            if (!llama_kv_cache_find_slot(kv_self, u_batch)) {
+    #ifdef GGML_USE_MPI
+        // TODO: needs fix after #3228
+        ggml_mpi_eval_init(lctx.ctx_mpi, &(u_batch.n_tokens), &(u_batch.pos), &(u_batch.n_seq_id), &(u_batch.seq_id), &(u_batch.logits));
+        n_tokens = u_batch.n_tokens;
+#endif
+        if (!llama_kv_cache_find_slot(kv_self, u_batch)) {
                 return 1;
             }
 
@@ -13923,6 +13923,17 @@ void llama_batch_free(struct llama_batch batch) {
 int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
+
+#ifdef GGML_USE_MPI
+    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
+        // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
+        const int n_ctx = llama_n_ctx(ctx);
+        std::vector<llama_token> tmp(n_ctx, llama_token_bos(&ctx->model));
+        while (llama_decode_internal(*ctx, batch) >= 0){};
+        llama_backend_free();
+        exit(1);
+    }
+#endif
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);

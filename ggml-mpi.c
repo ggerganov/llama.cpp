@@ -60,16 +60,67 @@ int ggml_mpi_size(struct ggml_mpi_context * ctx) {
 }
 
 void ggml_mpi_eval_init(
-        struct ggml_mpi_context * ctx_mpi,
-                            int * n_tokens,
-                            int * n_past,
-                            int * n_threads) {
+        struct ggml_mpi_context *   ctx_mpi,
+                int32_t         *   n_tokens,
+                int32_t         **  pos,
+                int32_t         **  n_seq_ids,
+                int32_t         *** seq_id,
+                int8_t          **  logits) {
 
 
     MPI_Barrier(ctx_mpi->comm);
 
-    MPI_Bcast(n_tokens,  1, MPI_INT, 0, ctx_mpi->comm);
-    MPI_Bcast(n_past,    1, MPI_INT, 0, ctx_mpi->comm);
+    MPI_Bcast(n_tokens, 1, MPI_INT, 0, ctx_mpi->comm);
+
+    if (ctx_mpi->rank != 0) {
+        *pos = calloc(*n_tokens, sizeof(int32_t));
+        *n_seq_ids = calloc(*n_tokens, sizeof(int32_t));
+        *logits = calloc(*n_tokens, sizeof(int8_t));
+    }
+
+    int32_t total_n_seq_ids = 0;
+    for (size_t i = 0; i < *n_tokens; i++) {
+        total_n_seq_ids += (*n_seq_ids)[i];
+    }
+
+    MPI_Bcast(&total_n_seq_ids,     1,               MPI_INT32_T, 0, ctx_mpi->comm);
+    MPI_Bcast(*n_seq_ids,                  *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
+
+    int32_t * flattened_seq_ids = calloc(total_n_seq_ids, sizeof(int32_t));
+
+    int32_t current_index = 0;
+
+    if (ctx_mpi->rank == 0) {
+        for (size_t i = 0; i < *n_tokens; i++) {
+            for (size_t j = 0; j < (*n_seq_ids)[i]; j++) {
+                flattened_seq_ids[current_index] = (*seq_id)[i][j];
+                current_index++;
+            }
+        }
+    }
+
+
+    MPI_Bcast(*pos,                  *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
+    MPI_Bcast(flattened_seq_ids,    total_n_seq_ids, MPI_INT32_T, 0, ctx_mpi->comm);
+    //MPI_Bcast(*logits,               *n_tokens,        MPI_INT8_T, 0, ctx_mpi->comm);
+    int32_t ** new_seq_id = calloc(*n_tokens, sizeof(int32_t*));
+    current_index = 0;
+    for (size_t i = 0; i < *n_tokens; i++) {
+        new_seq_id[i] = calloc((*n_seq_ids)[i], sizeof(int32_t));
+        for (size_t j = 0; j < (*n_seq_ids)[i]; j++) {
+            new_seq_id[i][j] = flattened_seq_ids[current_index];
+            current_index++;
+        }
+    }
+    free(flattened_seq_ids);
+    *seq_id = new_seq_id;
+}
+
+void ggml_mpi_synch_int(
+        struct ggml_mpi_context     * ctx_mpi,
+        int32_t * val
+) {
+    MPI_Bcast(val, 1, MPI_INT32_T, 0, ctx_mpi->comm);
 }
 
 static int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
