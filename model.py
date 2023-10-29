@@ -427,6 +427,12 @@ class BaichuanModel(Model):
         head_count = self.hparams["num_attention_heads"]
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
+        if "num_key_value_heads" in self.hparams:
+            head_count_kv = self.hparams["num_key_value_heads"]
+        else:
+            head_count_kv = head_count
+
+
         for i in range(block_count):
             if f"model.layers.{i}.self_attn.W_pack.weight" in model_kv:
                 print(f"Unpacking and permuting layer {i}")
