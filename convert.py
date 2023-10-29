@@ -1159,7 +1159,7 @@ def load_vocab(path: Path, vocabtype: str | None) -> Vocab:
             hf_path = vocab_check_and_append_path(path, vocab_file)
             find_candidates.append(vocab_file)
             
-            if vocabtype == "spm" and hf_path is not None:
+            if hf_path is not None:
                 # A case where there is no tokenizer.model but there is a tokenizer.json and it needs to be loaded into HFVocab.
                 vocabtype = "hf"
             else:
