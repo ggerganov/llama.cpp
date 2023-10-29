@@ -7364,22 +7364,13 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     float base_min_p = p;  // This will hold the base minimum probability value
     float multiplied_min_p;  // This will hold the adjusted minimum probability threshold
 
-    printf("\nUSING MIN P SAMPLING MODE\n\n");
-
     // Ensure the probabilities are calculated.
     llama_sample_softmax(ctx, candidates);
 
-    // Print the top tokens before filtering
-    printf("Top tokens before filtering:\n");
-    for (size_t i = 0; i < candidates->size && i < 10; ++i) {
-        printf("Token %zu: %.6f%%\n", i + 1, candidates->data[i].p * 100);  // Multiplying by 100 to convert to percentage
-    }
-
     // Calculate the multiplication factor based on the highest scoring token.
-    float multiplication_factor = candidates->data[0].p;  // Assuming the probabilities are sorted
-    printf("Highest scoring token probability (multiplication factor): %f\n", multiplication_factor);
+    float multiplication_factor = candidates->data[0].p;
 
-    // Calculate the dynamic threshold.
+    // Calculate the minimum percentage requirement.
     multiplied_min_p = base_min_p * multiplication_factor;
     printf("Base min_p value: %f\n", base_min_p);
     printf("Calculated multiplied_min_p (threshold) value: %f\n", multiplied_min_p);
@@ -7388,31 +7379,16 @@ void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * can
     std::vector<llama_token_data> filtered_candidates;
     filtered_candidates.reserve(candidates->size);  // Reserve to avoid multiple reallocations
 
-    // Variable to count how many tokens meet the condition
-    int count_qualifying_tokens = 0;
-
     for (size_t i = 0; i < candidates->size; ++i) {
         // If a token's probability is above the threshold, we keep it.
         if (candidates->data[i].p >= multiplied_min_p) {
             filtered_candidates.push_back(candidates->data[i]);
-            ++count_qualifying_tokens;  // Increase count
         }
-    }
-
-    // Debug information about how many tokens were retained
-    printf("Number of tokens that met the multiplied_min_p condition: %d\n", count_qualifying_tokens);
-
-    // Print the top tokens after filtering
-    printf("Tokens after filtering:\n\n");
-    for (size_t i = 0; i < filtered_candidates.size() && i < 10; ++i) {  // Adjust 10 to however many top tokens you want to display
-        printf("Token %zu: %.6f%%\n", i + 1, filtered_candidates[i].p * 100);  // Multiplying by 100 to convert to percentage
     }
 
     // Now we replace the original candidates with the filtered list.
     std::copy(filtered_candidates.begin(), filtered_candidates.end(), candidates->data);
     candidates->size = filtered_candidates.size();
-
-    return;
 }
 
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
