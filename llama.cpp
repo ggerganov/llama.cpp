@@ -5277,6 +5277,11 @@ static struct ggml_cgraph * llm_build_mpt(
     return gf;
 }
 
+//
+// tensor offloading helpers
+//
+// TODO: will be removed with backend v2
+
 enum llm_offload_func_e {
     OFFLOAD_FUNC_NOP,
     OFFLOAD_FUNC,
