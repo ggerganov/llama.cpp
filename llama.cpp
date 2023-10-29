@@ -3185,6 +3185,8 @@ static struct ggml_tensor * llm_build_ffn(
                     }
                 } break;
         };
+    } else {
+        cur = tmp;
     }
 
     switch (type_op) {
@@ -3761,15 +3763,11 @@ static struct ggml_cgraph * llm_build_baichaun(
 
     cur = inpL;
 
-    // norm
-    {
-        cur = ggml_rms_norm(ctx0, cur, norm_rms_eps);
-        cb(cur, "rms_norm_2", -1);
-
-        // cur = cur*norm(broadcasted)
-        cur = ggml_mul(ctx0, cur, model.output_norm);
-        cb(cur, "result_norm", -1);
-    }
+    cur = llm_build_norm(ctx0, cur,
+            model.output_norm,
+            NULL,
+            LLM_NORM_RMS, norm_rms_eps, cb, -1);
+    cb(cur, "result_norm", -1);
 
     // lm_head
     cur = ggml_mul_mat(ctx0, model.output, cur);
@@ -5374,30 +5372,24 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
 
     { "inpFF",                      OFFLOAD_FUNC     },
 
-    { "rms_norm_1",                 OFFLOAD_FUNC     },
     { "ffn_norm",                   OFFLOAD_FUNC     },
-    { "ffn_norm_0",                 OFFLOAD_FUNC     },
-    { "ffn_norm_0_w",               OFFLOAD_FUNC     },
-    { "ffn_norm_0_wb",              OFFLOAD_FUNC     },
 
-    { "result_w3",                  OFFLOAD_FUNC     },
-    { "result_w3_b",                OFFLOAD_FUNC     },
-    { "result_w2",                  OFFLOAD_FUNC     },
-    { "result_w2_b",                OFFLOAD_FUNC     },
-    { "result_w1",                  OFFLOAD_FUNC     },
+    { "ffn_up",                     OFFLOAD_FUNC     },
+    { "ffn_up_b",                   OFFLOAD_FUNC     },
+    { "ffn_gate",                   OFFLOAD_FUNC     },
+    { "ffn_gate_b",                 OFFLOAD_FUNC     },
+    { "ffn_gate_par",               OFFLOAD_FUNC     },
+    { "ffn_down",                   OFFLOAD_FUNC     },
+    { "ffn_down_b",                 OFFLOAD_FUNC     },
+    { "ffn_result",                 OFFLOAD_FUNC     },
 
-    { "silu",                       OFFLOAD_FUNC     },
-    { "gelu",                       OFFLOAD_FUNC     },
-    { "relu",                       OFFLOAD_FUNC     },
-    { "sqr(relu)",                  OFFLOAD_FUNC     },
+    { "ffn_silu",                   OFFLOAD_FUNC     },
+    { "ffn_gelu",                   OFFLOAD_FUNC     },
+    { "ffn_relu",                   OFFLOAD_FUNC     },
+    { "ffn_sqr(relu)",              OFFLOAD_FUNC     },
 
-    { "silu_x_result_w3",           OFFLOAD_FUNC     },
     { "inpFF_+_result_w2",          OFFLOAD_FUNC     },
     { "inpL_+_inpFF_+_result_w2",   OFFLOAD_FUNC     },
-
-    { "rms_norm_2",                 OFFLOAD_FUNC_NR  },
-    { "out_norm_0",                 OFFLOAD_FUNC_NR  },
-    { "out_norm_0_w",               OFFLOAD_FUNC_NR  },
 
     { "result_norm",                OFFLOAD_FUNC_EMB },
     { "result_output",              OFFLOAD_FUNC_OUT },
