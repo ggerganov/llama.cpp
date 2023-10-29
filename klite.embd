@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 87
+Current version: 88
 -Concedo
 -->
 
@@ -3048,6 +3048,16 @@ Current version: 87
 			}
 		}
 		return segmentsA.length - segmentsB.length;
+	}
+
+	function countWords(str) { //simple word counter
+		if (str == "") { return 0; }
+		const wordPattern = /[a-zA-Z0-9_]+/g;
+		const words = str.match(wordPattern);
+		if (!words) {
+			return 0;
+		}
+		return words.length;
 	}
 
 
@@ -7875,16 +7885,23 @@ Current version: 87
 				}
 			}
 
-			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3.3 characters
-			let max_allowed_characters = Math.max(1, Math.floor(maxctxlen * 3) - (maxgenamt+8));
+			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
+			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
+
+			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
+			let chars_per_token = 3.0;
+			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
+			let avgwordlen = (1.0+truncated_context.length)/(1.0+countWords(truncated_context));
+			if(avgwordlen>=7.8)
+			{
+				chars_per_token = 2.7;
+			}
 			if (current_memory == null || current_memory.trim() == "")
 			{
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
-				max_allowed_characters = Math.floor(maxctxlen * 4.6);
+				chars_per_token = 4.8;
 			}
-
-			let truncated_context = concat_gametext(true, ""); //no need to truncate if memory is empty
-			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
+			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 8);
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
