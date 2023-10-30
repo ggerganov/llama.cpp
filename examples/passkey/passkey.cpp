@@ -32,6 +32,7 @@ int main(int argc, char ** argv) {
     }
 
     const std::string prompt_prefix = "There is an important info hidden inside a lot of irrelevant text. Find it and memorize them. I will quiz you about the important information there.";
+    const std::string prompt_suffix = " What is the pass key? The pass key is";
 
     if (seed == -1) {
         seed = time(NULL);
@@ -53,7 +54,7 @@ int main(int argc, char ** argv) {
         params.prompt += " The grass is green. The sky is blue. The sun is yellow. Here we go. There and back again.";
     }
 
-    params.prompt += " What is the pass key? The pass key is";
+    params.prompt += prompt_suffix;
 
     // init LLM
 
@@ -183,11 +184,16 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
+    LOG_TEE("%s: passkey = %d, inserted at position %d / %d\n", __func__, passkey, n_insert, n_junk);
+    LOG_TEE("\n");
 
     // main loop
 
     int n_cur    = tokens_list.size();
     int n_decode = 0;
+
+    LOG_TEE("%s", prompt_suffix.c_str());
+    fflush(stdout);
 
     const auto t_main_start = ggml_time_us();
 
@@ -237,9 +243,6 @@ int main(int argc, char ** argv) {
             return 1;
         }
     }
-
-    LOG_TEE("\n");
-    LOG_TEE("%s: passkey = %d, inserted at position %d / %d\n", __func__, passkey, n_insert, n_junk);
 
     LOG_TEE("\n");
 
