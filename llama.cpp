@@ -3548,11 +3548,11 @@ static struct ggml_cgraph * llm_build_llama(
                     model.layers[il].ffn_gate, NULL,
                     model.layers[il].ffn_down, NULL,
                     LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_+_result_w2", il);
+        cb(cur, "inpFF_ffn_out", il);
 
         // input for next layer
         inpL = cur;
@@ -3714,11 +3714,11 @@ static struct ggml_cgraph * llm_build_baichaun(
                     model.layers[il].ffn_gate, NULL,
                     model.layers[il].ffn_down, NULL,
                     LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_+_result_w2", il);
+        cb(cur, "inpFF_ffn_out", il);
 
         // input for next layer
         inpL = cur;
@@ -3884,14 +3884,14 @@ static struct ggml_cgraph * llm_build_falcon(
                     NULL,                      NULL,
                     model.layers[il].ffn_down, NULL,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, attn_out);
-        cb(cur, "inpFF_+_result_w2", il);
+        cb(cur, "inpFF_ffn_out", il);
 
         cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_+_inpFF_+_result_w2", il);
+        cb(cur, "inpL_inpFF_ffn_out", il);
 
         // input for next layer
         inpL = cur;
@@ -3988,6 +3988,7 @@ static struct ggml_cgraph * llm_build_starcoder(
     cb(KQ_mask, "KQ_mask", -1);
 
     pos = ggml_get_rows(ctx0, model.pos_embeddings, inp_pos);
+    cb(pos, "pos_embd", -1);
 
     inpL = ggml_add(ctx0, embd, pos);
     cb(inpL, "inpL", -1);
@@ -4027,7 +4028,7 @@ static struct ggml_cgraph * llm_build_starcoder(
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_+_result_wo", il);
+        cb(cur, "inpL_kqv_out", il);
 
         struct ggml_tensor * inpFF = cur;
 
@@ -4044,11 +4045,11 @@ static struct ggml_cgraph * llm_build_starcoder(
                     NULL,                      NULL,
                     model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         inpL = ggml_add(ctx0, cur, inpFF);
-
+        cb(inpL, "inpL_inpFF_ffn_out", il);
     }
 
     cur = llm_build_norm(ctx0, inpL,
@@ -4294,11 +4295,11 @@ static struct ggml_cgraph * llm_build_persimmon(
                     NULL,                      NULL,
                     model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                     LLM_FFN_RELU_SQR, LLM_FFN_SEQ, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_+_result_w2", il);
+        cb(cur, "inpFF_ffn_out", il);
 
         inpL = cur;
     }
@@ -4432,11 +4433,11 @@ static struct ggml_cgraph * llm_build_refact(
                     model.layers[il].ffn_gate, NULL,
                     model.layers[il].ffn_down, NULL,
                     LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_+_result_w2", il);
+        cb(cur, "inpFF_ffn_out", il);
 
         // input for next layer
         inpL = cur;
@@ -4569,7 +4570,7 @@ static struct ggml_cgraph * llm_build_bloom(
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_+_result_wo", il);
+        cb(cur, "inpL_kqv_out", il);
 
         struct ggml_tensor * inpFF = cur;
 
@@ -4586,11 +4587,11 @@ static struct ggml_cgraph * llm_build_bloom(
                     NULL,                      NULL,
                     model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         inpL = ggml_add(ctx0, cur, inpFF);
-        cb(inpL, "inpFF_+_result_w2", il);
+        cb(inpL, "inpFF_ffn_out", il);
     }
 
     cur = llm_build_norm(ctx0, inpL,
@@ -4717,7 +4718,7 @@ static struct ggml_cgraph * llm_build_mpt(
 
         // Add the input
         cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_+_result_wo", il);
+        cb(cur, "inpL_kqv_out", il);
 
         struct ggml_tensor * attn_out = cur;
 
@@ -4734,11 +4735,11 @@ static struct ggml_cgraph * llm_build_mpt(
                     NULL,                      NULL,
                     model.layers[il].ffn_down, NULL,
                     LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-            cb(cur, "ffn_result", il);
+            cb(cur, "ffn_out", il);
         }
 
         cur = ggml_add(ctx0, cur, attn_out);
-        cb(cur, "inpL_+_inpFF_+_result_w2", il);
+        cb(cur, "inpL_inpFF_ffn_out", il);
 
         // input for next layer
         inpL = cur;
@@ -4777,6 +4778,7 @@ enum llm_offload_func_e {
     OFFLOAD_FUNC_OUT,
 };
 
+// TODO: will be removed with backend v2
 struct llm_offload_trie {
     struct node {
         ~node() {
@@ -4850,10 +4852,12 @@ struct llm_offload_trie {
     node * root = nullptr;
 };
 
+// TODO: will be removed with backend v2
 static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map = {
   //{ "inp_tokens",                 OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
   //{ "inp_embd",                   OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
     { "inp_pos",                    OFFLOAD_FUNC_NR  },
+    { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
     { "KQ_mask",                    OFFLOAD_FUNC_NR  },
     { "K_shift",                    OFFLOAD_FUNC_NR  },
@@ -4902,7 +4906,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "kqv_wo",                     OFFLOAD_FUNC_V   },
     { "kqv_out",                    OFFLOAD_FUNC_V   },
 
-    { "inpL_+_result_wo",           OFFLOAD_FUNC     },
+    { "inpL_kqv_out",               OFFLOAD_FUNC     },
     { "inpFF",                      OFFLOAD_FUNC     },
 
     { "ffn_norm",                   OFFLOAD_FUNC     },
@@ -4914,15 +4918,15 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_gate_par",               OFFLOAD_FUNC     },
     { "ffn_down",                   OFFLOAD_FUNC     },
     { "ffn_down_b",                 OFFLOAD_FUNC     },
-    { "ffn_result",                 OFFLOAD_FUNC     },
+    { "ffn_out",                    OFFLOAD_FUNC     },
 
     { "ffn_silu",                   OFFLOAD_FUNC     },
     { "ffn_gelu",                   OFFLOAD_FUNC     },
     { "ffn_relu",                   OFFLOAD_FUNC     },
     { "ffn_sqr(relu)",              OFFLOAD_FUNC     },
 
-    { "inpFF_+_result_w2",          OFFLOAD_FUNC     },
-    { "inpL_+_inpFF_+_result_w2",   OFFLOAD_FUNC     },
+    { "inpFF_ffn_out",              OFFLOAD_FUNC     },
+    { "inpL_inpFF_ffn_out",         OFFLOAD_FUNC     },
 
     { "result_norm",                OFFLOAD_FUNC_EMB },
     { "result_output",              OFFLOAD_FUNC_OUT },
@@ -4945,6 +4949,14 @@ static struct ggml_cgraph * llama_build_graph(
     bool alloc_inp_KQ_scale = false;
     bool alloc_inp_KQ_mask  = false;
     bool alloc_inp_K_shift  = false;
+
+#ifdef GGML_USE_CUBLAS
+    const bool do_offload = true;
+#else
+    const bool do_offload = true; // TODO: set to false after finishing refactoring
+#endif
+
+    int n_non_view = 0; // number of non-view tensors that have been processed by the callback
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -5053,23 +5065,23 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_K_shift = true;
         }
 
-        //
-        // offload layers
-        //
-        // TODO: this code will be obsoleted with backend v2
-
-#ifdef GGML_USE_CUBLAS
-        const bool do_offload = true;
-#else
-        const bool do_offload = true; // TODO: set to false after finishing refactoring
-#endif
-
-        if (!do_offload) {
+        // view tensors are not processed further
+        if (cur->view_src != nullptr) {
             return;
         }
 
-        // view tensors are not offloaded
-        if (cur->view_src != nullptr) {
+        if (cur->op != GGML_OP_NONE) {
+            n_non_view++;
+        }
+
+        //
+        // offload layers
+        //
+        // TODO: will be removed with backend v2
+
+//#define LLAMA_OFFLOAD_DEBUG
+
+        if (!do_offload) {
             return;
         }
 
@@ -5103,11 +5115,13 @@ static struct ggml_cgraph * llama_build_graph(
         llm_offload_func_e func_e = k_offload_func_trie.find(name);
 
         if (func_e == OFFLOAD_FUNC_NOP) {
+#ifdef LLAMA_OFFLOAD_DEBUG
             // if a tensor hasn't been offloaded, we warn the user
             if (worst_case) {
                 LLAMA_LOG_WARN("%s: %32s: not offloaded (ref: %s)\n", __func__,
                         cur->name, "https://github.com/ggerganov/llama.cpp/pull/3837");
             }
+#endif
 
             return;
         }
@@ -5170,9 +5184,11 @@ static struct ggml_cgraph * llama_build_graph(
         // apply offload function to the tensor
         func(cur);
 
+#ifdef LLAMA_OFFLOAD_DEBUG
         if (worst_case) {
             LLAMA_LOG_INFO("%s: %32s: %s\n", __func__, cur->name, k_offload_func_name.at(func_e).c_str());
         }
+#endif
     };
 
     struct ggml_cgraph * result = NULL;
@@ -5212,6 +5228,29 @@ static struct ggml_cgraph * llama_build_graph(
             } break;
         default:
             GGML_ASSERT(false);
+    }
+
+    if (worst_case) {
+        int n_non_view_total = 0;
+
+        for (int i = 0; i < result->n_nodes; ++i) {
+            if (result->nodes[i]->view_src == nullptr) {
+                n_non_view_total++;
+            }
+        }
+
+        LLAMA_LOG_INFO("%s: non-view tensors processed: %d/%d\n", __func__, n_non_view, n_non_view_total);
+
+#ifdef LLAMA_OFFLOAD_DEBUG
+        if (n_non_view != n_non_view_total) {
+            LLAMA_LOG_WARN("%s: ****************************************************************\n", __func__);
+            LLAMA_LOG_WARN("%s: not all non-view tensors have been processed with a callback\n",     __func__);
+            LLAMA_LOG_WARN("%s: this can indicate an inefficiency in the graph implementation\n",    __func__);
+            LLAMA_LOG_WARN("%s: build with LLAMA_OFFLOAD_DEBUG for more info\n",                     __func__);
+            LLAMA_LOG_WARN("%s: ref: https://github.com/ggerganov/llama.cpp/pull/3837\n",            __func__);
+            LLAMA_LOG_WARN("%s: ****************************************************************\n", __func__);
+        }
+#endif
     }
 
     return result;
