@@ -45,7 +45,7 @@ endif()
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
 option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
-option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
+option(LLAMA_LTO                        "llama: enable link time optimization"                  ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"                   ON)
@@ -675,8 +675,6 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
-
-set_property(TARGET ggml PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
