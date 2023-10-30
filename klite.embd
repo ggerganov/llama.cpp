@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 88
+Current version: 89
 -Concedo
 -->
 
@@ -3871,8 +3871,6 @@ Current version: 88
 				"eta_ancestral": 1.0,
 				"ddim_discretize": "uniform",
 				"img2img_fix_steps": false,
-				"enable_emphasis": true,
-				"use_old_emphasis_implementation": false,
 				"sd_hypernetwork": "None",
 				"inpainting_mask_weight": 1.0,
 				"initial_noise_multiplier": 1.0,
@@ -5150,6 +5148,11 @@ Current version: 88
 				}
 			},true);
 		} else {
+			if(localsettings.passed_ai_warning==true || passed_ai_warning_local==true)
+			{
+				localsettings.passed_ai_warning = true; //remember flag for session
+				passed_ai_warning_local = true;
+			}
 			confirm_scenario();
 		}
 	}
@@ -7553,7 +7556,7 @@ Current version: 88
 
 	function end_trim_to_sentence(input,include_newline=false) {
 		let last = -1;
-		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';'];
+		let enders = ['.', '!', '?', '*', '"', ')', '}', '`', ']', ';', '…'];
 		for (let i = 0; i < enders.length; ++i)
 		{
 			last = Math.max(last, input.lastIndexOf(enders[i]));
@@ -8885,6 +8888,8 @@ Current version: 88
 			}
 			let foundMyName = gentxt.indexOf(localsettings.chatname + "\:");
 			let foundMyName2 = gentxt.indexOf("\n" + localsettings.chatname + " ");
+			var foundAltYouName = new RegExp("\nYou [A-Z\"\'*] ", "gi");
+			var foundAltYouNameRes = gentxt.match(foundAltYouName);
 			let splitresponse = [];
 
 			let prune_multiliners = function(input_arr)
@@ -8910,7 +8915,9 @@ Current version: 88
 				splitresponse = gentxt.split(localsettings.chatname + "\:");
 				splitresponse = prune_multiliners(splitresponse);
 			}
-			else if (foundMyName2 != -1 && localsettings.chatname!="You") //added by henky request, trigger even without colon
+			else if (foundMyName2 != -1 &&
+			(localsettings.chatname!="You" ||
+			(foundAltYouNameRes!=null && foundAltYouNameRes.length>0))) //added by henky request, trigger even without colon
 			{
 				splitresponse = gentxt.split("\n" + localsettings.chatname + " ");
 				splitresponse = prune_multiliners(splitresponse);

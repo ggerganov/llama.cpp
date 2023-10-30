@@ -228,7 +228,7 @@ def load_model(model_filename):
         if len(args.lora) > 1:
             inputs.lora_base = args.lora[1].encode("UTF-8")
     inputs.use_smartcontext = args.smartcontext
-    inputs.use_contextshift = (not args.nocontextshift)
+    inputs.use_contextshift = args.contextshift
     inputs.blasbatchsize = args.blasbatchsize
     inputs.forceversion = args.forceversion
     inputs.gpulayers = args.gpulayers
@@ -818,7 +818,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self, content_type=None):
         self.send_header('access-control-allow-origin', '*')
         self.send_header('access-control-allow-methods', '*')
-        self.send_header('access-control-allow-headers', '*, Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Client-Agent, X-Fields, Content-Type, Authorization, X-Requested-With, X-HTTP-Method-Override, apikey, genkey')
+        self.send_header('access-control-allow-headers', '*, Accept, Content-Type, Content-Length, Cache-Control, Accept-Encoding, X-CSRF-Token, Client-Agent, X-Fields, Content-Type, Authorization, X-Requested-With, X-HTTP-Method-Override, apikey, genkey')
+        self.send_header("cache-control", "no-store")
         if content_type is not None:
             self.send_header('content-type', content_type)
         return super(ServerRequestHandler, self).end_headers()
@@ -930,6 +931,9 @@ def show_new_gui():
     contextsize_text = ["256", "512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384", "24576", "32768", "65536"]
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
+    if os.name != 'nt':
+        antirunopts.remove("NoAVX2 Mode (Old CPU)")
+        antirunopts.remove("Failsafe Mode (Old CPU)")
     if not any(runopts):
         show_gui_msgbox("No Backends Available!","KoboldCPP couldn't locate any backends to use (i.e Default, OpenBLAS, CLBlast, CuBLAS).\n\nTo use the program, please run the 'make' command from the directory.")
         time.sleep(3)
@@ -1020,7 +1024,7 @@ def show_new_gui():
             tooltip.withdraw()
 
     def setup_backend_tooltip(parent):
-        num_backends_built = makelabel(parent, str(len(runopts)) + "/6", 5, 2)
+        num_backends_built = makelabel(parent, str(len(runopts)) + f"/{6 if os.name == 'nt' else 4}", 5, 2)
         num_backends_built.grid(row=1, column=2, padx=0, pady=0)
         num_backends_built.configure(text_color="#00ff00")
         # Bind the backend count label with the tooltip function
@@ -1047,7 +1051,7 @@ def show_new_gui():
     version_var = ctk.StringVar(value="0")
     tensor_split_str_vars = ctk.StringVar(value="")
 
-    contextshift = ctk.IntVar(value=1)
+    contextshift = ctk.IntVar(value=0)
     smartcontext = ctk.IntVar()
     context_var = ctk.IntVar()
     customrope_var = ctk.IntVar()
@@ -1276,7 +1280,7 @@ def show_new_gui():
         args.highpriority = highpriority.get()==1
         args.nommap = disablemmap.get()==1
         args.smartcontext = smartcontext.get()==1
-        args.nocontextshift = contextshift.get()==0
+        args.contextshift = contextshift.get()==1
         args.foreground = keepforeground.get()==1
 
         gpuchoiceidx = 0
@@ -1340,7 +1344,7 @@ def show_new_gui():
         highpriority.set(1 if "highpriority" in dict and dict["highpriority"] else 0)
         disablemmap.set(1 if "nommap" in dict and dict["nommap"] else 0)
         smartcontext.set(1 if "smartcontext" in dict and dict["smartcontext"] else 0)
-        contextshift.set(0 if "nocontextshift" in dict and dict["nocontextshift"] else 1)
+        contextshift.set(1 if "contextshift" in dict and dict["contextshift"] else 0)
         keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
             if clblast_option is not None:
@@ -1838,7 +1842,7 @@ def main(launch_args,start_server=True):
 
     modelname = os.path.abspath(args.model_param)
     print(args)
-    print(f"==========\nLoading model: {modelname} \n[Threads: {args.threads}, BlasThreads: {args.blasthreads}, SmartContext: {args.smartcontext}, ContextShift: {not (args.nocontextshift)}]")
+    print(f"==========\nLoading model: {modelname} \n[Threads: {args.threads}, BlasThreads: {args.blasthreads}, SmartContext: {args.smartcontext}, ContextShift: {(args.contextshift)}]")
     loadok = load_model(modelname)
     print("Load Model OK: " + str(loadok))
 
@@ -1922,7 +1926,7 @@ if __name__ == '__main__':
     parser.add_argument("--blasbatchsize", help="Sets the batch size used in BLAS processing (default 512). Setting it to -1 disables BLAS mode, but keeps other benefits like GPU offload.", type=int,choices=[-1,32,64,128,256,512,1024,2048], default=512)
     parser.add_argument("--ropeconfig", help="If set, uses customized RoPE scaling from configured frequency scale and frequency base (e.g. --ropeconfig 0.25 10000). Otherwise, uses NTK-Aware scaling set automatically based on context size. For linear rope, simply set the freq-scale and ignore the freq-base",metavar=('[rope-freq-scale]', '[rope-freq-base]'), default=[0.0, 10000.0], type=float, nargs='+')
     parser.add_argument("--smartcontext", help="Reserving a portion of context to try processing less frequently.", action='store_true')
-    parser.add_argument("--nocontextshift", help="If set, do not attempt to Trim and Shift the GGUF context.", action='store_true')
+    parser.add_argument("--contextshift", help="If set, attempt to Trim and Shift the GGUF context.", action='store_true')
     parser.add_argument("--bantokens", help="You can manually specify a list of token SUBSTRINGS that the AI cannot use. This bans ALL instances of that substring.", metavar=('[token_substrings]'), nargs='+')
     parser.add_argument("--forceversion", help="If the model file format detection fails (e.g. rogue modified model) you can set this to override the detected format (enter desired version, e.g. 401 for GPTNeoX-Type2).",metavar=('[version]'), type=int, default=0)
     parser.add_argument("--nommap", help="If set, do not use mmap to load newer models", action='store_true')
