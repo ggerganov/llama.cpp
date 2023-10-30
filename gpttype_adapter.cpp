@@ -638,19 +638,20 @@ void PurgeMissingTokens(llama_context * ctx, std::vector<int> &current_context_t
         int found = ArrFindIndexOf(current_context_tokens,shared);
         if(found>=0 && found > trimstart)
         {
+
             //extract the unwanted tokens out from context and KV
             int diff = found - trimstart;
-            llama_kv_cache_seq_rm(llama_ctx_v4, 0, trimstart + 1, trimstart + diff + 1);
-            llama_kv_cache_seq_shift(llama_ctx_v4, 0, trimstart + diff + 1, -1, -diff);
+            llama_kv_cache_seq_rm(llama_ctx_v4, 0, trimstart, trimstart + diff);
+            llama_kv_cache_seq_shift(llama_ctx_v4, 0, trimstart + diff, -1, -diff);
 
             for (size_t i = trimstart + diff; i < current_context_tokens.size() - 1; i++)
             {
                 current_context_tokens[i - diff] = current_context_tokens[i];
             }
 
-            printf("\n[Context Shifting: Erased %d tokens at position %d]", diff, trimstart+1);
+            printf("\n[Context Shifting: Erased %d tokens at position %d]", diff, trimstart + 1);
 
-            current_context_tokens.resize(current_context_tokens.size() - diff - 1);
+            current_context_tokens.resize(current_context_tokens.size() - diff);
         }
     }
 
@@ -1446,8 +1447,16 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     if (embd_inp.size() + params.n_predict > nctx)
     {
+        //get bos token
+        std::vector<int> bos;
+        TokenizeString("", bos, file_format);
         int offset = embd_inp.size() - nctx + params.n_predict;
         embd_inp = std::vector<int>(embd_inp.begin() + offset, embd_inp.end());
+        //replace bos into front if exists
+        if(bos.size()>0 && embd_inp.size()>0)
+        {
+            embd_inp[0] = bos[0];
+        }
     }
 
     //determine how much npast we have to rewind from the current state
