@@ -387,11 +387,6 @@ Algorithm::recordDispatch(const vk::CommandBuffer& commandBuffer)
 void
 Algorithm::setWorkgroup(const Workgroup& workgroup, uint32_t minSize)
 {
-    if (workgroup[0] > 65535) {
-        fprintf(stderr, "workgroup size is %d\n", workgroup[0]);
-        fflush(stderr);
-    }
-
     KP_LOG_INFO("Kompute OpAlgoCreate setting dispatch size");
 
     // The dispatch size is set up based on either explicitly provided template
