@@ -1467,7 +1467,7 @@ static int32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
 }
 
 static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
-    for (int32_t i = 0; i < cache.size; ++i) {
+    for (int32_t i = 0; i < (int32_t) cache.size; ++i) {
         cache.cells[i].pos = -1;
         cache.cells[i].seq_id.clear();
     }

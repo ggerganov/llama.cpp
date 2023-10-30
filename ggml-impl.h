@@ -4,6 +4,7 @@
 
 // GGML internal header
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h> // memcpy
