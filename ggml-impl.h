@@ -207,7 +207,8 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 #endif // __ARM_NEON
 
 // precomputed f32 table for f16 (256 KB)
-extern float table_f32_f16[1 << 16];
+// defined in ggml.c, initialized in ggml_init()
+extern float ggml_table_f32_f16[1 << 16];
 
 // On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
 // so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
@@ -217,7 +218,7 @@ extern float table_f32_f16[1 << 16];
 inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
     uint16_t s;
     memcpy(&s, &f, sizeof(uint16_t));
-    return table_f32_f16[s];
+    return ggml_table_f32_f16[s];
 }
 
 #define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)

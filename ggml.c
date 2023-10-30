@@ -232,19 +232,19 @@ typedef double ggml_float;
 //
 
 // precomputed gelu table for f16 (128 KB)
-static ggml_fp16_t table_gelu_f16[1 << 16];
+static ggml_fp16_t ggml_table_gelu_f16[1 << 16];
 
 // precomputed quick gelu table for f16 (128 KB)
-static ggml_fp16_t table_gelu_quick_f16[1 << 16];
+static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 
 // precomputed silu table for f16 (128 KB)
-static ggml_fp16_t table_silu_f16[1 << 16];
+static ggml_fp16_t ggml_table_silu_f16[1 << 16];
 
 // precomputed exp table for f16 (128 KB)
-static ggml_fp16_t table_exp_f16[1 << 16];
+static ggml_fp16_t ggml_table_exp_f16[1 << 16];
 
 // precomputed f32 table for f16 (256 KB) (ggml-impl.h)
-float table_f32_f16[1 << 16];
+float ggml_table_f32_f16[1 << 16];
 
 // note: do not use these inside ggml.c
 // these are meant to be used via the ggml.h API
@@ -1363,7 +1363,7 @@ inline static float ggml_gelu_f32(float x) {
 inline static void ggml_vec_gelu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
     const uint16_t * i16 = (const uint16_t *) x;
     for (int i = 0; i < n; ++i) {
-        y[i] = table_gelu_f16[i16[i]];
+        y[i] = ggml_table_gelu_f16[i16[i]];
     }
 }
 
@@ -1373,7 +1373,7 @@ inline static void ggml_vec_gelu_f32(const int n, float * y, const float * x) {
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_gelu_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_gelu_f16[t]);
     }
 }
 #else
@@ -1391,7 +1391,7 @@ inline static float ggml_gelu_quick_f32(float x) {
 //inline static void ggml_vec_gelu_quick_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
 //    const uint16_t * i16 = (const uint16_t *) x;
 //    for (int i = 0; i < n; ++i) {
-//        y[i] = table_gelu_quick_f16[i16[i]];
+//        y[i] = ggml_table_gelu_quick_f16[i16[i]];
 //    }
 //}
 
@@ -1401,7 +1401,7 @@ inline static void ggml_vec_gelu_quick_f32(const int n, float * y, const float *
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_gelu_quick_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_gelu_quick_f16[t]);
     }
 }
 #else
@@ -1420,7 +1420,7 @@ inline static float ggml_silu_f32(float x) {
 //inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
 //    const uint16_t * i16 = (const uint16_t *) x;
 //    for (int i = 0; i < n; ++i) {
-//        y[i] = table_silu_f16[i16[i]];
+//        y[i] = ggml_table_silu_f16[i16[i]];
 //    }
 //}
 
@@ -1430,7 +1430,7 @@ inline static void ggml_vec_silu_f32(const int n, float * y, const float * x) {
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_silu_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_silu_f16[t]);
     }
 }
 #else
@@ -2146,11 +2146,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             for (int i = 0; i < (1 << 16); ++i) {
                 uint16_t ui = i;
                 memcpy(&ii, &ui, sizeof(ii));
-                const float f = table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(ii);
-                table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
-                table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
-                table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
-                table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
+                const float f = ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(ii);
+                ggml_table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
+                ggml_table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
+                ggml_table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
+                ggml_table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
             }
 
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
@@ -10513,7 +10513,7 @@ static void ggml_compute_forward_soft_max_f32(
                 // const float val = (sp[i] == -INFINITY) ? 0.0 : exp(sp[i] - max);
                 ggml_fp16_t s = GGML_FP32_TO_FP16(sp[i] - max);
                 memcpy(&scvt, &s, sizeof(scvt));
-                const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
                 sum += (ggml_float)val;
                 dp[i] = val;
             }
@@ -12802,7 +12802,7 @@ static void ggml_compute_forward_flash_attn_f32(
 #else
                             ggml_fp16_t s = GGML_FP32_TO_FP16(SS[j] - max);
                             memcpy(&scvt[j], &s, sizeof(uint16_t));
-                            const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                            const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
 #endif
                             sump[j] += (ggml_float)val;
                             SS[j] = val;
@@ -13004,7 +13004,7 @@ static void ggml_compute_forward_flash_attn_f16(
                         } else {
                             ggml_fp16_t s = GGML_FP32_TO_FP16(SS[j] - max);
                             memcpy(&scvt[j], &s, sizeof(uint16_t));
-                            const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                            const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
                             sump[j] += (ggml_float)val;
                             SS[j] = val;
                         }
@@ -13455,7 +13455,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
 #else
                                     ggml_fp16_t s = GGML_FP32_TO_FP16(SR[j] - max);
                                     memcpy(&scvt[j], &s, sizeof(uint16_t));
-                                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
 #endif
                                     sump[j] += (ggml_float)val;
                                     SW[j] = val;
@@ -14205,7 +14205,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
 #else
                     ggml_fp16_t s = GGML_FP32_TO_FP16(s0[i] - max);
                     memcpy(&scvt, &s, sizeof(scvt));
-                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
 #endif
                     sum += (ggml_float)val;
                     st[i] = val;
@@ -14319,7 +14319,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
 #else
                     ggml_fp16_t s = GGML_FP32_TO_FP16(s0[i] - max);
                     memcpy(&scvt, &s, sizeof(scvt));
-                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
 #endif
                     sum += (ggml_float)val;
                     ds0[i] = val;
