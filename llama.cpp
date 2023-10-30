@@ -8968,9 +8968,12 @@ struct llama_context * llama_new_context_with_model(
     cparams.mul_mat_q        = params.mul_mat_q;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
-    cparams.n_yarn_orig_ctx  = params.yarn_orig_ctx   == 0    ? hparams.n_ctx_train           : params.yarn_orig_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
     cparams.rope_freq_scale  = params.rope_freq_scale == 0.0f ? hparams.rope_freq_scale_train : params.rope_freq_scale;
+
+    cparams.n_yarn_orig_ctx  = params.yarn_orig_ctx    != 0 ? params.yarn_orig_ctx    :
+                               hparams.n_yarn_orig_ctx != 0 ? hparams.n_yarn_orig_ctx :
+                                                              hparams.n_ctx_train;
 
     auto rope_scaling_type = params.rope_scaling_type;
     if (rope_scaling_type == LLAMA_ROPE_SCALING_UNSPECIFIED) {
