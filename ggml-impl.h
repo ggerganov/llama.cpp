@@ -6,7 +6,8 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <string.h>
+#include <string.h> // memcpy
+#include <math.h>   // fabsf
 
 // static_assert should be a #define, but if it's not,
 // fall back to the _Static_assert C11 keyword.
