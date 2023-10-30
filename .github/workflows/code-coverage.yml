@@ -15,13 +15,13 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8 lcov
+          sudo apt-get install build-essential gcc-9 g++-9 lcov
 
       - name: Build
-        run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
+        run: CC=gcc-9 CXX=g++-9 make -j LLAMA_CODE_COVERAGE=1 tests
 
       - name: Run tests
-        run: CC=gcc-8 make test
+        run: CC=gcc-9 CXX=g++-9 make test
 
       - name: Generate coverage report
         run: |
