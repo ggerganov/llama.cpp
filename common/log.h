@@ -97,22 +97,23 @@
     #define LOG_TEE_TARGET stderr
 #endif
 
+// NOTE: currently disabled as it produces too many log files
 // Utility to obtain "pid" like unique process id and use it when creating log files.
-inline std::string log_get_pid()
-{
-    static std::string pid;
-    if (pid.empty())
-    {
-        // std::this_thread::get_id() is the most portable way of obtaining a "process id"
-        //  it's not the same as "pid" but is unique enough to solve multiple instances
-        //  trying to write to the same log.
-        std::stringstream ss;
-        ss << std::this_thread::get_id();
-        pid = ss.str();
-    }
-
-    return pid;
-}
+//inline std::string log_get_pid()
+//{
+//    static std::string pid;
+//    if (pid.empty())
+//    {
+//        // std::this_thread::get_id() is the most portable way of obtaining a "process id"
+//        //  it's not the same as "pid" but is unique enough to solve multiple instances
+//        //  trying to write to the same log.
+//        std::stringstream ss;
+//        ss << std::this_thread::get_id();
+//        pid = ss.str();
+//    }
+//
+//    return pid;
+//}
 
 // Utility function for generating log file names with unique id based on thread id.
 //  invocation with log_filename_generator( "llama", "log" ) creates a string "llama.<number>.log"
@@ -126,8 +127,8 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
     std::stringstream buf;
 
     buf << log_file_basename;
-    buf << ".";
-    buf << log_get_pid();
+    //buf << ".";
+    //buf << log_get_pid();
     buf << ".";
     buf << log_file_extension;
 

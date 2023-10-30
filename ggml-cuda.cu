@@ -5678,10 +5678,10 @@ void ggml_init_cublas() {
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %ld: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
+            fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
@@ -5691,15 +5691,15 @@ void ggml_init_cublas() {
             g_compute_capabilities[id] = 100*prop.major + 10*prop.minor;
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         }
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             g_tensor_split[id] /= total_vram;
         }
 
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             CUDA_CHECK(ggml_cuda_set_device(id));
 
             // create cuda streams
-            for (int64_t is = 0; is < MAX_STREAMS; ++is) {
+            for (int is = 0; is < MAX_STREAMS; ++is) {
                 CUDA_CHECK(cudaStreamCreateWithFlags(&g_cudaStreams[id][is], cudaStreamNonBlocking));
             }
 
@@ -6271,16 +6271,15 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
 
-    GGML_ASSERT(src0_dd_i != nullptr);
+    GGML_ASSERT(src0_dd_i  != nullptr);
     GGML_ASSERT(src1_ddf_i != nullptr);
-    GGML_ASSERT(dst_dd_i != nullptr);
-
+    GGML_ASSERT(dst_dd_i   != nullptr);
 
     const int64_t ne00 = src0->ne[0];
-
     const int64_t ne10 = src1->ne[0];
 
     const int64_t ne0 = dst->ne[0];
+
     const int64_t row_diff = row_high - row_low;
 
     int id;
@@ -7240,12 +7239,13 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
 
     if (all_on_device && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
-        // KQ
+        // KQ single-batch
         ggml_cuda_mul_mat_vec_p021(src0, src1, dst);
     } else if (all_on_device && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
-        // KQV
+        // KQV single-batch
         ggml_cuda_mul_mat_vec_nc(src0, src1, dst);
     } else if (all_on_device && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
+        // KQ + KQV multi-batch
         ggml_cuda_mul_mat_mat_batched_cublas(src0, src1, dst);
     } else if (src0->type == GGML_TYPE_F32) {
         ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
