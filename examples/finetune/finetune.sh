@@ -24,7 +24,7 @@ done
 
 $DEBUGGER $EXE \
         --model-base $MODEL \
-	$GPUARG \
+        $GPUARG \
         --checkpoint-in  chk-ol3b-shakespeare-LATEST.gguf \
         --checkpoint-out chk-ol3b-shakespeare-ITERATION.gguf \
         --lora-out lora-ol3b-shakespeare-ITERATION.bin \
