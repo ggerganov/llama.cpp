@@ -10,6 +10,10 @@
 #include <string.h> // memcpy
 #include <math.h>   // fabsf
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // static_assert should be a #define, but if it's not,
 // fall back to the _Static_assert C11 keyword.
 // if C99 - static_assert is noop
@@ -224,10 +228,6 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 #define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)
 #define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
     // TODO: backend v2 PR
