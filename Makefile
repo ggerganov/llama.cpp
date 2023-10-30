@@ -120,12 +120,12 @@ MK_CXXFLAGS = -std=c++11 -fPIC
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
-MK_CFLAGS        += -Ofast
-MK_HOST_CXXFLAGS += -Ofast
-MK_CUDA_CXXFLAGS += -O3
+MK_CFLAGS        += -flto -Ofast
+MK_HOST_CXXFLAGS += -flto -Ofast
+MK_CUDA_CXXFLAGS += -flto -O3
 else
-MK_CFLAGS        += -O3
-MK_CXXFLAGS      += -O3
+MK_CFLAGS        += -flto -O3
+MK_CXXFLAGS      += -flto -O3
 endif
 
 # clock_gettime came in POSIX.1b (1993)
