@@ -3503,8 +3503,7 @@ static struct ggml_cgraph * llm_build_llama(
 
         // norm
         cur = llm_build_norm(ctx0, inpL,
-                model.layers[il].attn_norm,
-                NULL,
+                model.layers[il].attn_norm, NULL,
                 LLM_NORM_RMS, norm_rms_eps, cb, il);
         cb(cur, "attn_norm", il);
 
@@ -3540,8 +3539,7 @@ static struct ggml_cgraph * llm_build_llama(
         // feed-forward network
         {
             cur = llm_build_norm(ctx0, inpFF,
-                    model.layers[il].ffn_norm,
-                    NULL,
+                    model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
 
@@ -3563,8 +3561,7 @@ static struct ggml_cgraph * llm_build_llama(
     cur = inpL;
 
     cur = llm_build_norm(ctx0, cur,
-            model.output_norm,
-            NULL,
+            model.output_norm, NULL,
             LLM_NORM_RMS, norm_rms_eps, cb, -1);
     cb(cur, "result_norm", -1);
 
@@ -3661,8 +3658,7 @@ static struct ggml_cgraph * llm_build_baichaun(
         struct ggml_tensor * inpSA = inpL;
 
         cur = llm_build_norm(ctx0, inpL,
-                model.layers[il].attn_norm,
-                NULL,
+                model.layers[il].attn_norm, NULL,
                 LLM_NORM_RMS, norm_rms_eps, cb, il);
         cb(cur, "attn_norm", il);
 
@@ -3709,8 +3705,7 @@ static struct ggml_cgraph * llm_build_baichaun(
         // feed-forward network
         {
             cur = llm_build_norm(ctx0, inpFF,
-                    model.layers[il].ffn_norm,
-                    NULL,
+                    model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
 
@@ -3732,8 +3727,7 @@ static struct ggml_cgraph * llm_build_baichaun(
     cur = inpL;
 
     cur = llm_build_norm(ctx0, cur,
-            model.output_norm,
-            NULL,
+            model.output_norm, NULL,
             LLM_NORM_RMS, norm_rms_eps, cb, -1);
     cb(cur, "result_norm", -1);
 
@@ -4394,8 +4388,7 @@ static struct ggml_cgraph * llm_build_refact(
         struct ggml_tensor * inpSA = inpL;
 
         cur = llm_build_norm(ctx0, inpL,
-                model.layers[il].attn_norm,
-                NULL,
+                model.layers[il].attn_norm, NULL,
                 LLM_NORM_RMS, norm_rms_eps, cb, il);
         cb(cur, "attn_norm", il);
 
@@ -4430,8 +4423,7 @@ static struct ggml_cgraph * llm_build_refact(
         // feed-forward network
         {
             cur = llm_build_norm(ctx0, inpFF,
-                    model.layers[il].ffn_norm,
-                    NULL,
+                    model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
 
@@ -4453,8 +4445,7 @@ static struct ggml_cgraph * llm_build_refact(
     cur = inpL;
 
     cur = llm_build_norm(ctx0, cur,
-            model.output_norm,
-            NULL,
+            model.output_norm, NULL,
             LLM_NORM_RMS, norm_rms_eps, cb, -1);
     cb(cur, "result_norm", -1);
 
