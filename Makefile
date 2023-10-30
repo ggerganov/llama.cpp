@@ -120,11 +120,11 @@ MK_CXXFLAGS = -std=c++11 -fPIC
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
-MK_CFLAGS        += -Ofast -flto
+MK_CFLAGS        += -Ofast -flto=auto
 MK_HOST_CXXFLAGS += -Ofast
 MK_CUDA_CXXFLAGS += -O3
 else
-MK_CFLAGS        += -O3 -flto
+MK_CFLAGS        += -O3 -flto=auto
 MK_CXXFLAGS      += -O3
 endif
 
