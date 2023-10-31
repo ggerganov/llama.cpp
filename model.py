@@ -95,6 +95,7 @@ class Model:
 
             with ctx as model_part:
                 for name in model_part.keys():
+                    print("yield ", name)
                     data = model_part.get_tensor(name) if self.is_safetensors else model_part[name]
                     yield name, data
 
@@ -305,6 +306,54 @@ class MPTModel(Model):
         if self.hparams["attn_config"]["clip_qkv"] is not None:
             self.gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
         self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        for name, data in self.get_tensors():
+            # we don't need these
+            if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
+                continue
+
+            old_dtype = data.dtype
+
+            # convert any unsupported data types to float32
+            if data.dtype != torch.float16 and data.dtype != torch.float32:
+                data = data.to(torch.float32)
+
+            data = data.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            if new_name is None:
+                print("Can not map tensor '" + name + "'")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+            # note: MPT output is tied to (same as) wte in original model;
+            # for easier implementation in llama.cpp it's duplicated in GGUF, though :/
+            if new_name == "token_embd.weight":
+                self.gguf_writer.add_tensor("output.weight", data)
+
+
 
 class BaichuanModel(Model):
     def set_vocab(self):
