@@ -1,21 +1,11 @@
 #pragma once
 
-// This is a private API for quantization and dequantization
-// Should not be used directly, use ggml.h instead
+#include "ggml-impl.h"
 
-#include "ggml.h"
+// GGML internal header
 
 #include <stdint.h>
-#include <assert.h>
 #include <stddef.h>
-
-#ifndef static_assert
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
-#define static_assert(cond, msg) _Static_assert(cond, msg)
-#else
-#define static_assert(cond, msg) struct global_scope_noop_trick
-#endif
-#endif
 
 #define QK4_0 32
 typedef struct {

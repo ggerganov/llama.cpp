@@ -1,6 +1,6 @@
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
-#include "ggml.h"
+#include "ggml-impl.h"
 #include "ggml-quants.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
@@ -25,18 +25,6 @@
 
 #ifdef GGML_USE_METAL
 #include <unistd.h>
-#endif
-
-// static_assert should be a #define, but if it's not,
-// fall back to the _Static_assert C11 keyword.
-// if C99 - static_assert is noop
-// ref: https://stackoverflow.com/a/53923785/4039976
-#ifndef static_assert
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
-#define static_assert(cond, msg) _Static_assert(cond, msg)
-#else
-#define static_assert(cond, msg) struct global_scope_noop_trick
-#endif
 #endif
 
 #if defined(_MSC_VER)
@@ -106,21 +94,9 @@ typedef void * thread_ret_t;
 #include <unistd.h>
 
 #endif
+
 #ifdef GGML_USE_CPU_HBM
 #include <hbwmalloc.h>
-#endif
-
-// __FMA__ and __F16C__ are not defined in MSVC, however they are implied with AVX2/AVX512
-#if defined(_MSC_VER) && (defined(__AVX2__) || defined(__AVX512F__))
-#ifndef __FMA__
-#define __FMA__
-#endif
-#ifndef __F16C__
-#define __F16C__
-#endif
-#ifndef __SSE3__
-#define __SSE3__
-#endif
 #endif
 
 /*#define GGML_PERF*/
@@ -248,213 +224,27 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #include "ggml-opencl.h"
 #endif
 
-#undef MIN
-#undef MAX
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
 // floating point type used to accumulate sums
 typedef double ggml_float;
-
-// 16-bit float
-// on Arm, we use __fp16
-// on x86, we use uint16_t
-#if defined(__ARM_NEON) && !defined(_MSC_VER)
-
-// if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
-//
-//   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
-//
-#include <arm_neon.h>
-
-#define GGML_COMPUTE_FP16_TO_FP32(x) ((float) (x))
-#define GGML_COMPUTE_FP32_TO_FP16(x) (x)
-
-#define GGML_FP16_TO_FP32(x) ((float) (x))
-#define GGML_FP32_TO_FP16(x) (x)
-
-#else
-
-#ifdef __wasm_simd128__
-#include <wasm_simd128.h>
-#else
-#ifdef __POWER9_VECTOR__
-#include <altivec.h>
-#undef bool
-#define bool _Bool
-#else
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#include <intrin.h>
-#else
-#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__) || defined(__SSE3__)
-#if !defined(__riscv)
-#include <immintrin.h>
-#endif
-#endif
-#endif
-#endif
-#endif
-
-#ifdef __riscv_v_intrinsic
-#include <riscv_vector.h>
-#endif
-
-#ifdef __F16C__
-
-#ifdef _MSC_VER
-#define GGML_COMPUTE_FP16_TO_FP32(x) _mm_cvtss_f32(_mm_cvtph_ps(_mm_cvtsi32_si128(x)))
-#define GGML_COMPUTE_FP32_TO_FP16(x) _mm_extract_epi16(_mm_cvtps_ph(_mm_set_ss(x), 0), 0)
-#else
-#define GGML_COMPUTE_FP16_TO_FP32(x) _cvtsh_ss(x)
-#define GGML_COMPUTE_FP32_TO_FP16(x) _cvtss_sh(x, 0)
-#endif
-
-#elif defined(__POWER9_VECTOR__)
-
-#define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
-#define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
-/* the inline asm below is about 12% faster than the lookup method */
-#define GGML_FP16_TO_FP32(x) GGML_COMPUTE_FP16_TO_FP32(x)
-#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
-
-static inline float ggml_compute_fp16_to_fp32(ggml_fp16_t h) {
-    register float f;
-    register double d;
-    __asm__(
-        "mtfprd %0,%2\n"
-        "xscvhpdp %0,%0\n"
-        "frsp %1,%0\n" :
-        /* temp */ "=d"(d),
-        /* out */  "=f"(f):
-        /* in */   "r"(h));
-    return f;
-}
-
-static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
-    register double d;
-    register ggml_fp16_t r;
-    __asm__( /* xscvdphp can work on double or single precision */
-        "xscvdphp %0,%2\n"
-        "mffprd %1,%0\n" :
-        /* temp */ "=d"(d),
-        /* out */  "=r"(r):
-        /* in */   "f"(f));
-    return r;
-}
-
-#else
-
-// FP16 <-> FP32
-// ref: https://github.com/Maratyszcza/FP16
-
-static inline float fp32_from_bits(uint32_t w) {
-    union {
-        uint32_t as_bits;
-        float as_value;
-    } fp32;
-    fp32.as_bits = w;
-    return fp32.as_value;
-}
-
-static inline uint32_t fp32_to_bits(float f) {
-    union {
-        float as_value;
-        uint32_t as_bits;
-    } fp32;
-    fp32.as_value = f;
-    return fp32.as_bits;
-}
-
-static inline float ggml_compute_fp16_to_fp32(ggml_fp16_t h) {
-    const uint32_t w = (uint32_t) h << 16;
-    const uint32_t sign = w & UINT32_C(0x80000000);
-    const uint32_t two_w = w + w;
-
-    const uint32_t exp_offset = UINT32_C(0xE0) << 23;
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) || defined(__GNUC__) && !defined(__STRICT_ANSI__)
-    const float exp_scale = 0x1.0p-112f;
-#else
-    const float exp_scale = fp32_from_bits(UINT32_C(0x7800000));
-#endif
-    const float normalized_value = fp32_from_bits((two_w >> 4) + exp_offset) * exp_scale;
-
-    const uint32_t magic_mask = UINT32_C(126) << 23;
-    const float magic_bias = 0.5f;
-    const float denormalized_value = fp32_from_bits((two_w >> 17) | magic_mask) - magic_bias;
-
-    const uint32_t denormalized_cutoff = UINT32_C(1) << 27;
-    const uint32_t result = sign |
-        (two_w < denormalized_cutoff ? fp32_to_bits(denormalized_value) : fp32_to_bits(normalized_value));
-    return fp32_from_bits(result);
-}
-
-static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) || defined(__GNUC__) && !defined(__STRICT_ANSI__)
-    const float scale_to_inf = 0x1.0p+112f;
-    const float scale_to_zero = 0x1.0p-110f;
-#else
-    const float scale_to_inf = fp32_from_bits(UINT32_C(0x77800000));
-    const float scale_to_zero = fp32_from_bits(UINT32_C(0x08800000));
-#endif
-    float base = (fabsf(f) * scale_to_inf) * scale_to_zero;
-
-    const uint32_t w = fp32_to_bits(f);
-    const uint32_t shl1_w = w + w;
-    const uint32_t sign = w & UINT32_C(0x80000000);
-    uint32_t bias = shl1_w & UINT32_C(0xFF000000);
-    if (bias < UINT32_C(0x71000000)) {
-        bias = UINT32_C(0x71000000);
-    }
-
-    base = fp32_from_bits((bias >> 1) + UINT32_C(0x07800000)) + base;
-    const uint32_t bits = fp32_to_bits(base);
-    const uint32_t exp_bits = (bits >> 13) & UINT32_C(0x00007C00);
-    const uint32_t mantissa_bits = bits & UINT32_C(0x00000FFF);
-    const uint32_t nonsign = exp_bits + mantissa_bits;
-    return (sign >> 16) | (shl1_w > UINT32_C(0xFF000000) ? UINT16_C(0x7E00) : nonsign);
-}
-
-#define GGML_COMPUTE_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
-#define GGML_COMPUTE_FP32_TO_FP16(x) ggml_compute_fp32_to_fp16(x)
-
-#endif // __F16C__
-
-#endif // __ARM_NEON
 
 //
 // global data
 //
 
 // precomputed gelu table for f16 (128 KB)
-static ggml_fp16_t table_gelu_f16[1 << 16];
+static ggml_fp16_t ggml_table_gelu_f16[1 << 16];
 
 // precomputed quick gelu table for f16 (128 KB)
-static ggml_fp16_t table_gelu_quick_f16[1 << 16];
+static ggml_fp16_t ggml_table_gelu_quick_f16[1 << 16];
 
 // precomputed silu table for f16 (128 KB)
-static ggml_fp16_t table_silu_f16[1 << 16];
+static ggml_fp16_t ggml_table_silu_f16[1 << 16];
 
 // precomputed exp table for f16 (128 KB)
-static ggml_fp16_t table_exp_f16[1 << 16];
+static ggml_fp16_t ggml_table_exp_f16[1 << 16];
 
-// precomputed f32 table for f16 (256 KB)
-static float table_f32_f16[1 << 16];
-
-// On ARM NEON, it's quicker to directly convert x -> x instead of calling into ggml_lookup_fp16_to_fp32,
-// so we define GGML_FP16_TO_FP32 and GGML_FP32_TO_FP16 elsewhere for NEON.
-// This is also true for POWER9.
-#if !defined(GGML_FP16_TO_FP32) || !defined(GGML_FP32_TO_FP16)
-
-inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
-    uint16_t s;
-    memcpy(&s, &f, sizeof(uint16_t));
-    return table_f32_f16[s];
-}
-
-#define GGML_FP16_TO_FP32(x) ggml_lookup_fp16_to_fp32(x)
-#define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
-
-#endif
+// precomputed f32 table for f16 (256 KB) (ggml-impl.h)
+float ggml_table_f32_f16[1 << 16];
 
 // note: do not use these inside ggml.c
 // these are meant to be used via the ggml.h API
@@ -631,6 +421,28 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .from_float_reference     = (ggml_from_float_t) quantize_row_q4_1_reference,
         .vec_dot                  = ggml_vec_dot_q4_1_q8_1,
         .vec_dot_type             = GGML_TYPE_Q8_1,
+    },
+    [4] = { // GGML_TYPE_Q4_2
+        .type_name                = "DEPRECATED",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+        .to_float                 = NULL,
+        .from_float               = NULL,
+        .from_float_reference     = NULL,
+        .vec_dot                  = NULL,
+        .vec_dot_type             = GGML_TYPE_COUNT,
+    },
+    [5] = { // GGML_TYPE_Q4_3
+        .type_name                = "DEPRECATED",
+        .blck_size                = 0,
+        .type_size                = 0,
+        .is_quantized             = false,
+        .to_float                 = NULL,
+        .from_float               = NULL,
+        .from_float_reference     = NULL,
+        .vec_dot                  = NULL,
+        .vec_dot_type             = GGML_TYPE_COUNT,
     },
     [GGML_TYPE_Q5_0] = {
         .type_name                = "q5_0",
@@ -1551,7 +1363,7 @@ inline static float ggml_gelu_f32(float x) {
 inline static void ggml_vec_gelu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
     const uint16_t * i16 = (const uint16_t *) x;
     for (int i = 0; i < n; ++i) {
-        y[i] = table_gelu_f16[i16[i]];
+        y[i] = ggml_table_gelu_f16[i16[i]];
     }
 }
 
@@ -1561,7 +1373,7 @@ inline static void ggml_vec_gelu_f32(const int n, float * y, const float * x) {
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_gelu_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_gelu_f16[t]);
     }
 }
 #else
@@ -1579,7 +1391,7 @@ inline static float ggml_gelu_quick_f32(float x) {
 //inline static void ggml_vec_gelu_quick_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
 //    const uint16_t * i16 = (const uint16_t *) x;
 //    for (int i = 0; i < n; ++i) {
-//        y[i] = table_gelu_quick_f16[i16[i]];
+//        y[i] = ggml_table_gelu_quick_f16[i16[i]];
 //    }
 //}
 
@@ -1589,7 +1401,7 @@ inline static void ggml_vec_gelu_quick_f32(const int n, float * y, const float *
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_gelu_quick_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_gelu_quick_f16[t]);
     }
 }
 #else
@@ -1608,7 +1420,7 @@ inline static float ggml_silu_f32(float x) {
 //inline static void ggml_vec_silu_f16(const int n, ggml_fp16_t * y, const ggml_fp16_t * x) {
 //    const uint16_t * i16 = (const uint16_t *) x;
 //    for (int i = 0; i < n; ++i) {
-//        y[i] = table_silu_f16[i16[i]];
+//        y[i] = ggml_table_silu_f16[i16[i]];
 //    }
 //}
 
@@ -1618,7 +1430,7 @@ inline static void ggml_vec_silu_f32(const int n, float * y, const float * x) {
     for (int i = 0; i < n; ++i) {
         ggml_fp16_t fp16 = GGML_FP32_TO_FP16(x[i]);
         memcpy(&t, &fp16, sizeof(uint16_t));
-        y[i] = GGML_FP16_TO_FP32(table_silu_f16[t]);
+        y[i] = GGML_FP16_TO_FP32(ggml_table_silu_f16[t]);
     }
 }
 #else
@@ -2334,11 +2146,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             for (int i = 0; i < (1 << 16); ++i) {
                 uint16_t ui = i;
                 memcpy(&ii, &ui, sizeof(ii));
-                const float f = table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(ii);
-                table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
-                table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
-                table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
-                table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
+                const float f = ggml_table_f32_f16[i] = GGML_COMPUTE_FP16_TO_FP32(ii);
+                ggml_table_gelu_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_f32(f));
+                ggml_table_gelu_quick_f16[i] = GGML_FP32_TO_FP16(ggml_gelu_quick_f32(f));
+                ggml_table_silu_f16[i] = GGML_FP32_TO_FP16(ggml_silu_f32(f));
+                ggml_table_exp_f16[i]  = GGML_FP32_TO_FP16(expf(f));
             }
 
             const uint64_t t_end = ggml_time_us(); UNUSED(t_end);
@@ -10701,7 +10513,7 @@ static void ggml_compute_forward_soft_max_f32(
                 // const float val = (sp[i] == -INFINITY) ? 0.0 : exp(sp[i] - max);
                 ggml_fp16_t s = GGML_FP32_TO_FP16(sp[i] - max);
                 memcpy(&scvt, &s, sizeof(scvt));
-                const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
                 sum += (ggml_float)val;
                 dp[i] = val;
             }
@@ -12990,7 +12802,7 @@ static void ggml_compute_forward_flash_attn_f32(
 #else
                             ggml_fp16_t s = GGML_FP32_TO_FP16(SS[j] - max);
                             memcpy(&scvt[j], &s, sizeof(uint16_t));
-                            const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                            const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
 #endif
                             sump[j] += (ggml_float)val;
                             SS[j] = val;
@@ -13192,7 +13004,7 @@ static void ggml_compute_forward_flash_attn_f16(
                         } else {
                             ggml_fp16_t s = GGML_FP32_TO_FP16(SS[j] - max);
                             memcpy(&scvt[j], &s, sizeof(uint16_t));
-                            const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                            const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
                             sump[j] += (ggml_float)val;
                             SS[j] = val;
                         }
@@ -13643,7 +13455,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
 #else
                                     ggml_fp16_t s = GGML_FP32_TO_FP16(SR[j] - max);
                                     memcpy(&scvt[j], &s, sizeof(uint16_t));
-                                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt[j]]);
+                                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt[j]]);
 #endif
                                     sump[j] += (ggml_float)val;
                                     SW[j] = val;
@@ -14393,7 +14205,7 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
 #else
                     ggml_fp16_t s = GGML_FP32_TO_FP16(s0[i] - max);
                     memcpy(&scvt, &s, sizeof(scvt));
-                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
 #endif
                     sum += (ggml_float)val;
                     st[i] = val;
@@ -14507,7 +14319,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
 #else
                     ggml_fp16_t s = GGML_FP32_TO_FP16(s0[i] - max);
                     memcpy(&scvt, &s, sizeof(scvt));
-                    const float val = GGML_FP16_TO_FP32(table_exp_f16[scvt]);
+                    const float val = GGML_FP16_TO_FP32(ggml_table_exp_f16[scvt]);
 #endif
                     sum += (ggml_float)val;
                     ds0[i] = val;
