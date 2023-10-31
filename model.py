@@ -109,7 +109,7 @@ class Model:
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
-        self.gguf_writer.add_block_count(self.hparams.get("n_layers", self.hparams.get("num_hidden_layers")))
+        self.gguf_writer.add_block_count(self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer"))))
         if "max_position_embeddings" in self.hparams:
             self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         if "hidden_size" in self.hparams:
@@ -121,7 +121,7 @@ class Model:
         self.gguf_writer.add_parallel_residual(self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
 
     def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         for name, data in self.get_tensors():
             # we don't need these
