@@ -95,7 +95,6 @@ gguf_writer.add_file_type(ftype)
 print("gguf: get tokenizer metadata")
 
 tokens: list[bytearray] = []
-scores: list[float] = []
 toktypes: list[int] = []
 
 # gpt2 tokenizer

@@ -107,7 +107,6 @@ gguf_writer.add_layer_norm_eps(hparams["layer_norm_eps"])
 print("gguf: get tokenizer metadata")
 
 tokens: list[bytearray] = []
-scores: list[float] = []
 toktypes: list[int] = []
 
 # gpt2 tokenizer

@@ -110,7 +110,6 @@ gguf_writer.add_max_alibi_bias(hparams["attn_config"]["alibi_bias_max"])
 print("gguf: get tokenizer metadata")
 
 tokens: list[bytearray] = []
-scores: list[float] = []
 toktypes: list[int] = []
 
 # gpt2 tokenizer
