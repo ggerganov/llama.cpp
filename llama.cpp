@@ -4856,12 +4856,13 @@ struct llm_offload_trie {
 static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map = {
   //{ "inp_tokens",                 OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
   //{ "inp_embd",                   OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
-    { "inp_pos",                    OFFLOAD_FUNC_NR  },
     { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
-    { "KQ_mask",                    OFFLOAD_FUNC_NR  },
-    { "K_shift",                    OFFLOAD_FUNC_NR  },
-    { "K_shifted",                  OFFLOAD_FUNC_NR  },
+    { "inp_pos",                    OFFLOAD_FUNC_KQ  }, // this is often used for KQ ops (e.g. rope)
+    { "KQ_scale",                   OFFLOAD_FUNC_KQ  },
+    { "KQ_mask",                    OFFLOAD_FUNC_KQ  },
+    { "K_shift",                    OFFLOAD_FUNC_KQ  },
+    { "K_shifted",                  OFFLOAD_FUNC_KQ  },
 
     { "inp_norm",                   OFFLOAD_FUNC_NR  },
     { "inp_norm_w",                 OFFLOAD_FUNC_NR  },
