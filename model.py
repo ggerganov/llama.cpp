@@ -7,10 +7,20 @@ import torch
 import contextlib
 import numpy as np
 
+from enum import Enum
 from pathlib import Path
 from typing import TypeAlias, Any
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
+
+
+class SentencePieceTokenTypes(Enum):
+    NORMAL = 1
+    UNKNOWN = 2
+    CONTROL = 3
+    USER_DEFINED = 4
+    UNUSED = 5
+    BYTE = 6
 
 
 class Model:
@@ -59,7 +69,7 @@ class Model:
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
-    def set_vocab(self):
+    def _set_vocab_gpt2(self):
         dir_model = self.dir_model
         hparams = self.hparams
         tokens: list[bytearray] = []
@@ -93,6 +103,62 @@ class Model:
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_sentencepiece(self):
+        from sentencepiece import SentencePieceProcessor
+
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        tokens: list[bytes] = []
+        scores: list[float] = []
+        toktypes: list[int] = []
+
+        if not tokenizer_path.is_file():
+            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            sys.exit(1)
+
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+
+        for token_id in range(vocab_size):
+            piece = tokenizer.id_to_piece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+
+        added_tokens_file = self.dir_model / 'added_tokens.json'
+        if added_tokens_file.is_file():
+            with open(added_tokens_file, "r", encoding="utf-8") as f:
+                added_tokens_json = json.load(f)
+
+                for key in added_tokens_json:
+                    tokens.append(key.encode("utf-8"))
+                    scores.append(-1000.0)
+                    toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
 
     def get_tensors(self):
         for part_name in self.part_names:
@@ -380,68 +446,7 @@ class MPTModel(Model):
 
 class BaichuanModel(Model):
     def set_vocab(self):
-        from sentencepiece import SentencePieceProcessor  # type: ignore[import]
-        tokens: list[bytes] = []
-        scores: list[float] = []
-        toktypes: list[int] = []
-
-        tokenizer_model_file = self.dir_model / 'tokenizer.model'
-        if not tokenizer_model_file.is_file():
-            print(f'Error: Missing {tokenizer_model_file}', file=sys.stderr)
-            sys.exit(1)
-
-        # vocab type sentencepiece
-        print("gguf: get sentencepiece tokenizer vocab, scores and token types")
-
-        tokenizer = SentencePieceProcessor(str(tokenizer_model_file))
-        vocab_size = self.hparams.get('vocab_size')
-        if vocab_size is None:
-            vocab_size = tokenizer.vocab_size()
-
-        for i in range(vocab_size):
-            text: bytes
-            score: float
-
-            piece = tokenizer.id_to_piece(i)
-            text = piece.encode("utf-8")
-            score = tokenizer.get_score(i)
-
-            toktype = 1  # defualt to normal token type
-            if tokenizer.is_unknown(i):
-                toktype = 2
-            if tokenizer.is_control(i):
-                toktype = 3
-
-            # toktype = 4 is user-defined = tokens from added_tokens.json
-
-            if tokenizer.is_unused(i):
-                toktype = 5
-            if tokenizer.is_byte(i):
-                toktype = 6
-
-            tokens.append(text)
-            scores.append(score)
-            toktypes.append(toktype)
-
-        added_tokens_file = self.dir_model / 'added_tokens.json'
-        if added_tokens_file.is_file():
-            with open(added_tokens_file, "r", encoding="utf-8") as f:
-                addtokens_json = json.load(f)
-
-                print("gguf: get added tokens")
-
-                for key in addtokens_json:
-                    tokens.append(key.encode("utf-8"))
-                    scores.append(-1000.0)
-                    toktypes.append(4)  # user-defined token type
-
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
+        self._set_vocab_sentencepiece()
 
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
@@ -780,18 +785,14 @@ class PersimmonModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layernorm_epsilon"])
 
     def set_vocab(self):
-        tokens, scores, toktypes = self._get_sentencepiece_tokenizer_info()
-        self.gguf_writer.add_tokenizer_model('llama')
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-        self.gguf_writer.add_bos_token_id(71013)
+        self._set_vocab_sentencepiece()
+        # self.gguf_writer.add_bos_token_id(71013)
         # self.gguf_writer.add_eos_token_id(71013)
 
     def write_tensors(self):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        print(tensor_map)
+
         for name, data in self.get_tensors():
             if name.endswith(".self_attention.rotary_emb.inv_freq"):
                 continue
@@ -805,38 +806,3 @@ class PersimmonModel(Model):
             n_dims = len(data.shape)
             print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
             self.gguf_writer.add_tensor(new_name, data)
-
-    def _get_sentencepiece_tokenizer_info(self):
-        from sentencepiece import SentencePieceProcessor
-        tokenizer_path = self.dir_model / 'tokenizer.model'
-        tokenizer = SentencePieceProcessor(str(tokenizer_path))
-
-        print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
-        print('gguf: adding tokens')
-        tokens: list[bytes] = []
-        scores: list[float] = []
-        toktypes: list[int] = []
-
-        for i in range(tokenizer.vocab_size()):
-            text: bytes
-            score: float
-
-            piece = tokenizer.id_to_piece(i)
-            text = piece.encode("utf-8")
-            score = tokenizer.get_score(i)
-
-            toktype = 1
-            if tokenizer.is_unknown(i):
-                toktype = 2
-            if tokenizer.is_control(i):
-                toktype = 3
-            if tokenizer.is_unused(i):
-                toktype = 5
-            if tokenizer.is_byte(i):
-                toktype = 6
-
-            tokens.append(text)
-            scores.append(score)
-            toktypes.append(toktype)
-            pass
-        return tokens, scores, toktypes
