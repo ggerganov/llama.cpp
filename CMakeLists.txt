@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.13)  # for add_link_options
+cmake_minimum_required(VERSION 3.20)  # for CMP0115
+cmake_policy(SET CMP0115 NEW)  # explicit file extensions
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -99,39 +100,6 @@ option(LLAMA_QKK_64                          "llama: use super-block size of 64 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
-
-#
-# Build info header
-#
-
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-    set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-
-    # Is git submodule
-    if(NOT IS_DIRECTORY "${GIT_DIR}")
-        file(READ ${GIT_DIR} REAL_GIT_DIR_LINK)
-        string(REGEX REPLACE "gitdir: (.*)\n$" "\\1" REAL_GIT_DIR ${REAL_GIT_DIR_LINK})
-        set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${REAL_GIT_DIR}")
-    endif()
-
-    set(GIT_INDEX "${GIT_DIR}/index")
-else()
-    message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
-    set(GIT_INDEX "")
-endif()
-
-# Add a custom target for build-info.h
-add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
-
-# Add a custom command to rebuild build-info.h when .git/index changes
-add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
-    COMMENT "Generating build details from Git"
-    COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION} -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    DEPENDS ${GIT_INDEX}
-    VERBATIM
-)
 
 #
 # Compile flags

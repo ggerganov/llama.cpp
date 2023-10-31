@@ -19,7 +19,6 @@
 #include "ggml.h"
 #include "llama.h"
 #include "common.h"
-#include "build-info.h"
 #include "ggml-cuda.h"
 
 // utils
@@ -641,8 +640,8 @@ struct test {
     }
 };
 
-const std::string test::build_commit = BUILD_COMMIT;
-const int         test::build_number = BUILD_NUMBER;
+const std::string test::build_commit = LLAMA_COMMIT;
+const int         test::build_number = LLAMA_BUILD_NUMBER;
 const bool        test::cuda         = !!ggml_cpu_has_cublas();
 const bool        test::opencl       = !!ggml_cpu_has_clblast();
 const bool        test::metal        = !!ggml_cpu_has_metal();

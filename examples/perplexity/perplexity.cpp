@@ -1,4 +1,3 @@
-#include "build-info.h"
 #include "common.h"
 #include "llama.h"
 
