@@ -3533,12 +3533,12 @@ static struct ggml_cgraph * llm_build_llama(
             cb(cur, "kqv_out", il);
         }
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        cb(inpFF, "inpFF", il);
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
+        cb(ffn_inp, "ffn_inp", il);
 
         // feed-forward network
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
@@ -3551,8 +3551,8 @@ static struct ggml_cgraph * llm_build_llama(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         // input for next layer
         inpL = cur;
@@ -3699,12 +3699,12 @@ static struct ggml_cgraph * llm_build_baichaun(
             cb(cur, "kqv_out", il);
         }
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        cb(inpFF, "inpFF", il);
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
+        cb(ffn_inp, "ffn_inp", il);
 
         // feed-forward network
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
@@ -3717,8 +3717,8 @@ static struct ggml_cgraph * llm_build_baichaun(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         // input for next layer
         inpL = cur;
@@ -3875,7 +3875,7 @@ static struct ggml_cgraph * llm_build_falcon(
             cb(cur, "kqv_out", il);
         }
 
-        struct ggml_tensor * attn_out = cur;
+        struct ggml_tensor * ffn_inp = cur;
 
         // feed forward
         {
@@ -3887,11 +3887,11 @@ static struct ggml_cgraph * llm_build_falcon(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, attn_out);
-        cb(cur, "inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_inpFF_ffn_out", il);
+        cb(cur, "l_out", il);
 
         // input for next layer
         inpL = cur;
@@ -4026,15 +4026,13 @@ static struct ggml_cgraph * llm_build_starcoder(
             cb(cur, "kqv_out", il);
         }
 
-        // Add the input
-        cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_kqv_out", il);
-
-        struct ggml_tensor * inpFF = cur;
+        // add the input
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
+        cb(ffn_inp, "ffn_inp", il);
 
         // FF
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm,
                     model.layers[il].ffn_norm_b,
                     LLM_NORM, norm_eps, cb, il);
@@ -4048,8 +4046,8 @@ static struct ggml_cgraph * llm_build_starcoder(
             cb(cur, "ffn_out", il);
         }
 
-        inpL = ggml_add(ctx0, cur, inpFF);
-        cb(inpL, "inpL_inpFF_ffn_out", il);
+        inpL = ggml_add(ctx0, cur, ffn_inp);
+        cb(inpL, "l_out", il);
     }
 
     cur = llm_build_norm(ctx0, inpL,
@@ -4279,12 +4277,12 @@ static struct ggml_cgraph * llm_build_persimmon(
             cb(cur, "kqv_out", il);
         }
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, residual, cur);
-        cb(inpFF, "inpFF", il);
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, residual, cur);
+        cb(ffn_inp, "ffn_inp", il);
 
         // feed-forward network
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm,
                     model.layers[il].ffn_norm_b,
                     LLM_NORM, norm_eps, cb, il);
@@ -4298,8 +4296,8 @@ static struct ggml_cgraph * llm_build_persimmon(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         inpL = cur;
     }
@@ -4418,12 +4416,12 @@ static struct ggml_cgraph * llm_build_refact(
             cb(cur, "kqv_out", il);
         }
 
-        struct ggml_tensor * inpFF = ggml_add(ctx0, cur, inpSA);
-        cb(inpFF, "inpFF", il);
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
+        cb(ffn_inp, "ffn_inp", il);
 
         // feed-forward network
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm, NULL,
                     LLM_NORM_RMS, norm_rms_eps, cb, il);
             cb(cur, "ffn_norm", il);
@@ -4436,8 +4434,8 @@ static struct ggml_cgraph * llm_build_refact(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, inpFF);
-        cb(cur, "inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         // input for next layer
         inpL = cur;
@@ -4569,14 +4567,12 @@ static struct ggml_cgraph * llm_build_bloom(
         }
 
         // Add the input
-        cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_kqv_out", il);
-
-        struct ggml_tensor * inpFF = cur;
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
+        cb(ffn_inp, "ffn_inp", il);
 
         // FF
         {
-            cur = llm_build_norm(ctx0, inpFF,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm,
                     model.layers[il].ffn_norm_b,
                     LLM_NORM, norm_eps, cb, il);
@@ -4590,8 +4586,8 @@ static struct ggml_cgraph * llm_build_bloom(
             cb(cur, "ffn_out", il);
         }
 
-        inpL = ggml_add(ctx0, cur, inpFF);
-        cb(inpL, "inpFF_ffn_out", il);
+        inpL = ggml_add(ctx0, cur, ffn_inp);
+        cb(inpL, "l_out", il);
     }
 
     cur = llm_build_norm(ctx0, inpL,
@@ -4717,14 +4713,12 @@ static struct ggml_cgraph * llm_build_mpt(
         }
 
         // Add the input
-        cur = ggml_add(ctx0, cur, inpL);
-        cb(cur, "inpL_kqv_out", il);
-
-        struct ggml_tensor * attn_out = cur;
+        struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
+        cb(ffn_inp, "ffn_inp", il);
 
         // feed forward
         {
-            cur = llm_build_norm(ctx0, attn_out,
+            cur = llm_build_norm(ctx0, ffn_inp,
                     model.layers[il].ffn_norm,
                     NULL,
                     LLM_NORM, norm_eps, cb, il);
@@ -4738,8 +4732,8 @@ static struct ggml_cgraph * llm_build_mpt(
             cb(cur, "ffn_out", il);
         }
 
-        cur = ggml_add(ctx0, cur, attn_out);
-        cb(cur, "inpL_inpFF_ffn_out", il);
+        cur = ggml_add(ctx0, cur, ffn_inp);
+        cb(cur, "l_out", il);
 
         // input for next layer
         inpL = cur;
@@ -4907,9 +4901,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "kqv_wo",                     OFFLOAD_FUNC_V   },
     { "kqv_out",                    OFFLOAD_FUNC_V   },
 
-    { "inpL_kqv_out",               OFFLOAD_FUNC     },
-    { "inpFF",                      OFFLOAD_FUNC     },
-
+    { "ffn_inp",                    OFFLOAD_FUNC     },
     { "ffn_norm",                   OFFLOAD_FUNC     },
 
     { "ffn_up",                     OFFLOAD_FUNC     },
@@ -4926,8 +4918,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_relu",                   OFFLOAD_FUNC     },
     { "ffn_sqr(relu)",              OFFLOAD_FUNC     },
 
-    { "inpFF_ffn_out",              OFFLOAD_FUNC     },
-    { "inpL_inpFF_ffn_out",         OFFLOAD_FUNC     },
+    { "l_out",                      OFFLOAD_FUNC     },
 
     { "result_norm",                OFFLOAD_FUNC_EMB },
     { "result_output",              OFFLOAD_FUNC_OUT },
@@ -4960,6 +4951,7 @@ static struct ggml_cgraph * llama_build_graph(
     int n_non_view = 0; // number of non-view tensors that have been processed by the callback
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
+    // TODO: will be removed with backend v2
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
         if (il >= 0) {
             ggml_format_name(cur, "%s-%d", name, il);
@@ -4970,6 +4962,7 @@ static struct ggml_cgraph * llama_build_graph(
         //
         // allocate input tensors and set input data
         //
+        // TODO: will be removed with backend v2
 
         if (!alloc_inp_tokens && strcmp(name, "inp_tokens") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
