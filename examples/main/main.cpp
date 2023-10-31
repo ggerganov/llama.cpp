@@ -39,6 +39,7 @@ static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
+static bool allow_sigint = false;
 
 
 static void write_logfile(
@@ -88,10 +89,11 @@ static void write_logfile(
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__)) || defined (_WIN32)
 static void sigint_handler(int signo) {
     if (signo == SIGINT) {
-        if (!is_interacting) {
+        if (!is_interacting && !allow_sigint) {
             is_interacting = true;
         } else {
             console::cleanup();
+            if (allow_sigint) printf("\nSIGINT received. Terminating.\n");
             printf("\n");
             llama_print_timings(*g_ctx);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
@@ -298,7 +300,7 @@ int main(int argc, char ** argv) {
         }
 
         // remove any "future" tokens that we might have inherited from the previous session
-        llama_kv_cache_seq_rm(ctx, -1, n_matching_session_tokens, -1);
+        llama_kv_cache_tokens_rm(ctx, n_matching_session_tokens, -1);
     }
 
     LOGLN(
@@ -363,7 +365,7 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
     }
 
-    if (params.interactive) {
+    if (params.sigint || params.interactive) {
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
         struct sigaction sigint_action;
         sigint_action.sa_handler = sigint_handler;
@@ -419,7 +421,12 @@ int main(int argc, char ** argv) {
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
-    if (params.interactive) {
+    if (!params.interactive) {
+        if (params.sigint) {
+            LOG_TEE("== --sigint enabled: Press Ctrl+C to terminate at any time.\n");
+            allow_sigint = true;
+        }
+    } else {
         const char *control_message;
         if (params.multiline_input) {
             control_message = " - To return control to LLaMa, end your input with '\\'.\n"

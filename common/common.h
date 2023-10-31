@@ -84,6 +84,7 @@ struct gpt_params {
     bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
+    bool sigint            = false; // allow sigint (^C) to interrupt when not in -i mode
     bool interactive       = false; // interactive mode
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
