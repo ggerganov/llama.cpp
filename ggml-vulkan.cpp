@@ -928,13 +928,6 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
         }
     }
 
-    std::cerr << "Queue Families:" << std::endl;
-    for(size_t i = 0; i < queue_family_props.size(); i++) {
-        std::cerr << i << ": Queues: "  + std::to_string(queue_family_props[i].queueCount) << " flags: " + to_string(queue_family_props[i].queueFlags) << std::endl;
-    }
-
-    std::cerr << "Using compute queue family " << compute_queue_family_index << " and transfer queue family " << transfer_queue_family_index << std::endl;
-
     const float compute_queue_priority = 1.0f;
     const float transfer_queue_priority[] = { 1.0f, 1.0f, 1.0f };
     std::vector<vk::DeviceQueueCreateInfo> device_queue_create_infos;
@@ -970,6 +963,7 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
 
     if (!vk11_features.storageBuffer16BitAccess) {
         std::cerr << "ggml_vulkan: device does not support 16-bit storage" << std::endl;
+        GGML_ASSERT(false);
     }
 
     device_extensions.push_back("VK_KHR_16bit_storage");
