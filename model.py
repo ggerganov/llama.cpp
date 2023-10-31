@@ -49,6 +49,10 @@ class Model:
             return gguf.MODEL_ARCH.BAICHUAN
         if arch == "FalconForCausalLM":
             return gguf.MODEL_ARCH.FALCON
+        if arch == "GPTBigCodeForCausalLM":
+            return gguf.MODEL_ARCH.STARCODER
+        if arch == "GPTRefactForCausalLM":
+            return gguf.MODEL_ARCH.REFACT
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -185,6 +189,10 @@ class Model:
             return BaichuanModel
         if model_architecture == "FalconForCausalLM":
             return FalconModel
+        if model_architecture == "GPTBigCodeForCausalLM":
+            return StarCoderModel
+        if model_architecture == "GPTRefactForCausalLM":
+            return RefactModel
         return Model
 
 class StableLMModel(Model):
@@ -612,6 +620,112 @@ class FalconModel(Model):
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            if new_name is None:
+                print("Can not map tensor '" + name + "'")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+class StarCoderModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["n_layer"]
+
+        self.gguf_writer.add_name("StarCoder")
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_head_count_kv(1)
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+
+class RefactModel(Model):
+    def set_gguf_parameters(self):
+        hidden_dim = self.hparams["n_embd"]
+        inner_dim = 4 * hidden_dim
+        hidden_dim = int(2 * inner_dim / 3)
+        multiple_of = 256
+        ff_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+
+        block_count = self.hparams["n_layer"]
+
+        self.gguf_writer.add_name("Refact")
+# refact uses Alibi. So this is from config.json which might be used by training.
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+
+        self.gguf_writer.add_feed_forward_length(ff_dim)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_head_count_kv(1)
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        hidden_dim = self.hparams["n_embd"]
+        inner_dim = 4 * hidden_dim
+        hidden_dim = int(2 * inner_dim / 3)
+        multiple_of = 256
+        ff_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+        n_head = self.hparams["n_head"]
+        n_head_kv = 1
+        head_dim = self.hparams["n_embd"] // n_head
+
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        block_count = self.hparams["n_layer"]
+        tensors = dict(self.get_tensors())
+        for i in range(block_count):
+            if f"transformer.h.{i}.attn.kv.weight" in tensors:
+                data = tensors[f"transformer.h.{i}.attn.kv.weight"]
+                tensors[f"model.layers.{i}.self_attn.k_proj.weight"] = data[
+                    : n_head_kv * head_dim
+                ]
+                tensors[f"model.layers.{i}.self_attn.v_proj.weight"] = data[
+                    n_head_kv * head_dim :
+                ]
+                del tensors[f"transformer.h.{i}.attn.kv.weight"]
+            if f"transformer.h.{i}.attn.q.weight" in tensors:
+                tensors[f"model.layers.{i}.self_attn.q_proj.weight"] = tensors[
+                    f"transformer.h.{i}.attn.q.weight"
+                ]
+                del tensors[f"transformer.h.{i}.attn.q.weight"]
+            if f"transformer.h.{i}.mlp.gate_up_proj.weight" in tensors:
+                data = tensors[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
+                tensors[f"model.layers.{i}.mlp.gate_proj.weight"] = data[:ff_dim]
+                tensors[f"model.layers.{i}.mlp.up_proj.weight"] = data[ff_dim:]
+                del tensors[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
+
+        for name, data in tensors.items():
+            old_dtype = data.dtype
+
+            # convert any unsupported data types to float32
+            if data.dtype != torch.float16 and data.dtype != torch.float32:
+                data = data.to(torch.float32)
+
+            data = data.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight",))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
