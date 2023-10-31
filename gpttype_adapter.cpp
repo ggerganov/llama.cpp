@@ -963,7 +963,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         //determine mem per token
         std::vector<int> tmp = {1, 2, 3, 4};
-        llama_kv_cache_tokens_rm(llama_ctx_v4, -1, -1);
+        llama_kv_cache_clear(llama_ctx_v4);
         auto er = llama_decode(llama_ctx_v4, llama_batch_get_one(tmp.data(), tmp.size(), 0, 0));
         if(er!=0)
         {

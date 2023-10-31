@@ -6,6 +6,8 @@
 #include <cstdio>
 #endif
 
+#define GGML_USE_K_QUANTS //forced on, now that the flag has been removed upstream
+
 #include "llama-util.h"
 #include "llama_v3.h"
 

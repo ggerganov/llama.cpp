@@ -53,7 +53,6 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
-option(LLAMA_K_QUANTS                        "llama: use k-quants"                              ON)
 
 
 #
@@ -67,7 +66,6 @@ set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_compile_definitions(GGML_USE_K_QUANTS)
 add_compile_definitions(LOG_DISABLE_LOGS)
 
 set(GGML_SOURCES_CUDA ggml-cuda.cu ggml-cuda.h)
@@ -358,8 +356,8 @@ add_library(ggml OBJECT
             ggml-alloc.h
             ggml-backend.c
             ggml-backend.h
-            k_quants.h
-            k_quants.c
+            ggml-quants.c
+            ggml-quants.h
             ${GGML_SOURCES_CUDA})
 target_include_directories(ggml PUBLIC . ./otherarch ./otherarch/tools)
 target_compile_features(ggml PUBLIC c_std_11) # don't bump

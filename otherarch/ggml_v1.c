@@ -360,7 +360,7 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 // method 5
 // blocks of QK elements
 // represented with a single float (delta) and QK/2 8-bit ints (i.e QK 4-bit signed integer factors)
-void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
+static void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
     assert(k % QK == 0);
 
     const int nb = k / QK;
@@ -484,7 +484,7 @@ void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
 // method 4
 // blocks of QK elements
 // represented with 2 floats (min + delta) and QK/2 8-bit ints (i.e QK 4-bit unsigned integer factors)
-void quantize_row_q4_1(const float * restrict x, void * restrict y, int k) {
+static void quantize_row_q4_1(const float * restrict x, void * restrict y, int k) {
     assert(k % QK == 0);
 
     const int nb = k / QK;
@@ -529,7 +529,7 @@ void quantize_row_q4_1(const float * restrict x, void * restrict y, int k) {
 }
 
 // TODO: vectorize
-void dequantize_row_q4_0(const void * restrict x, float * restrict y, int k) {
+static void dequantize_row_q4_0(const void * restrict x, float * restrict y, int k) {
     assert(k % QK == 0);
 
     const int nb = k / QK;
@@ -561,7 +561,7 @@ void dequantize_row_q4_0(const void * restrict x, float * restrict y, int k) {
     }
 }
 
-void dequantize_row_q4_1(const void * restrict x, float * restrict y, int k) {
+static void dequantize_row_q4_1(const void * restrict x, float * restrict y, int k) {
     assert(k % QK == 0);
 
     const int nb = k / QK;

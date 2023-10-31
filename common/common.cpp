@@ -224,6 +224,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.temp = std::stof(argv[i]);
+            sparams.temp = std::max(sparams.temp, 0.0f);
         } else if (arg == "--tfs") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -743,7 +744,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif // GGML_USE_CUBLAS
 #endif
     printf("  --verbose-prompt      print prompt before generation\n");
-    fprintf(stderr, "  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
+    printf("  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
     printf("  --lora-base FNAME     optional model to use as a base for the layers modified by the LoRA adapter\n");
@@ -888,7 +889,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 
         std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
-        llama_kv_cache_tokens_rm(lctx, -1, -1);
+        llama_kv_cache_clear(lctx);
         llama_reset_timings(lctx);
     }
 
