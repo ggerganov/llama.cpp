@@ -53,6 +53,7 @@ class Model:
             return gguf.MODEL_ARCH.STARCODER
         if arch == "GPTRefactForCausalLM":
             return gguf.MODEL_ARCH.REFACT
+        if arch == ""
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -748,4 +749,86 @@ class RefactModel(Model):
             print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
             self.gguf_writer.add_tensor(new_name, data)
+
+class PersimmonModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_layers"]
+        head_count = self.hparams["num_attention_heads"]
+        head_count_kv = head_count
+        ctx_length = self.hparams["seq_length"]
+        hidden_size = self.hparams["hidden_size"]
+
+        self.gguf_writer.add_name('persimmon-8b-chat')
+        self.gguf_writer.add_context_length(ctx_length)
+        self.gguf_writer.add_embedding_length(hidden_size)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(self.hparams["ffn_hidden_size"])
+        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
+        self.gguf_writer.add_head_count(head_count)
+        self.gguf_writer.add_head_count_kv(head_count_kv)
+        self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layernorm_epsilon"])
+
+    def set_vocab(self):
+        tokens, scores, toktypes = self._get_sentencepiece_tokenizer_info()
+        self.gguf_writer.add_tokenizer_model('llama')
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_bos_token_id(71013)
+        # self.gguf_writer.add_eos_token_id(71013)
+
+    def write_tensors(self):
+        block_count = self.hparams["num_layers"]
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        print(tensor_map)
+        for name, data in self.get_tensors():
+            if name.endswith(".self_attention.rotary_emb.inv_freq"):
+                continue
+            old_dtype = data.dtype
+            # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
+            data = data.to(torch.float32).squeeze().numpy()
+            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            if new_name is None:
+                print("Can not map tensor '" + name + "'")
+                sys.exit()
+            n_dims = len(data.shape)
+            print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+            self.gguf_writer.add_tensor(new_name, data)
+
+
+    def _get_sentencepiece_tokenizer_info(self):
+        from sentencepiece import SentencePieceProcessor
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+
+        print('gguf: getting sentencepiece tokenizer from', tokenizer_path)
+        print('gguf: adding tokens')
+        tokens: list[bytes] = []
+        scores: list[float] = []
+        toktypes: list[int] = []
+
+        for i in range(tokenizer.vocab_size()):
+            text: bytes
+            score: float
+
+            piece = tokenizer.id_to_piece(i)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(i)
+
+            toktype = 1
+            if tokenizer.is_unknown(i):
+                toktype = 2
+            if tokenizer.is_control(i):
+                toktype = 3
+            if tokenizer.is_unused(i):
+                toktype = 5
+            if tokenizer.is_byte(i):
+                toktype = 6
+
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+            pass
+        return tokens, scores, toktypes
 
