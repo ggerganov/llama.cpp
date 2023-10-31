@@ -47,6 +47,9 @@ class Model:
             return gguf.MODEL_ARCH.MPT
         if arch in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
             return gguf.MODEL_ARCH.BAICHUAN
+        if arch == "FalconForCausalLM":
+            return gguf.MODEL_ARCH.FALCON
+
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
     def set_vocab(self):
@@ -180,6 +183,8 @@ class Model:
             return MPTModel
         if model_architecture in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
             return BaichuanModel
+        if model_architecture == "FalconForCausalLM":
+            return FalconModel
         return Model
 
 class StableLMModel(Model):
@@ -535,5 +540,98 @@ class BaichuanModel(Model):
                 data = data.astype(np.float16)
 
             print(name + " -> " +  new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+            self.gguf_writer.add_tensor(new_name, data)
+
+
+class FalconModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams.get("num_hidden_layers")
+        if block_count is None:
+            block_count = self.hparams["n_layer"]  # old name
+
+        n_head = self.hparams.get("num_attention_heads")
+        if n_head is None:
+            n_head = self.hparams["n_head"]  # old name
+
+        n_head_kv = self.hparams.get("num_kv_heads")
+        if n_head_kv is None:
+            n_head_kv = self.hparams.get("n_head_kv", 1)  # old name
+
+        self.gguf_writer.add_name("Falcon")
+        self.gguf_writer.add_context_length(2048) # not in config.json
+        self.gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(n_head)
+        self.gguf_writer.add_head_count_kv(n_head_kv)
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        block_count = self.hparams.get("num_hidden_layers")
+        if block_count is None:
+            block_count = self.hparams["n_layer"]  # old name
+
+        n_head = self.hparams.get("num_attention_heads")
+        if n_head is None:
+            n_head = self.hparams["n_head"]  # old name
+
+        n_head_kv = self.hparams.get("num_kv_heads")
+        if n_head_kv is None:
+            n_head_kv = self.hparams.get("n_head_kv", 1)  # old name
+
+        head_dim = self.hparams["hidden_size"] // n_head
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        for name, data in self.get_tensors():
+            old_dtype = data.dtype
+
+            # convert any unsupported data types to float32
+            if data.dtype != torch.float16 and data.dtype != torch.float32:
+                data = data.to(torch.float32)
+
+            # QKV tensor transform
+            # The original query_key_value tensor contains n_head_kv "kv groups",
+            # each consisting of n_head/n_head_kv query weights followed by one key
+            # and one value weight (shared by all query heads in the kv group).
+            # This layout makes it a big pain to work with in GGML.
+            # So we rearrange them here,, so that we have n_head query weights
+            # followed by n_head_kv key weights followed by n_head_kv value weights,
+            # in contiguous fashion.
+            # ref: https://github.com/jploski/ggml/blob/falcon40b/examples/falcon/convert-hf-to-ggml.py
+
+            if "query_key_value" in name:
+                qkv = data.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
+                q = qkv[:, :-2 ].reshape(n_head * head_dim, head_dim * n_head)
+                k = qkv[:, [-2]].reshape(n_head_kv * head_dim, head_dim * n_head)
+                v = qkv[:, [-1]].reshape(n_head_kv * head_dim, head_dim * n_head)
+                data = torch.cat((q,k,v)).reshape_as(data)
+
+            data = data.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            if new_name is None:
+                print("Can not map tensor '" + name + "'")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+
             self.gguf_writer.add_tensor(new_name, data)
 
