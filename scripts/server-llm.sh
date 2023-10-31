@@ -27,7 +27,7 @@
 #
 # Example:
 #
-#   bash <(curl https://ggml.ai/server-llm.sh)
+#   bash -c "$(curl -s https://ggml.ai/server-llm.sh)"
 #
 
 set -e
@@ -76,7 +76,7 @@ function print_usage {
     printf "  --n-kv:       KV cache size, default is 4096\n"
     printf "  --verbose:    verbose output\n\n"
     printf "Example:\n\n"
-    printf "  bash <(curl https://ggml.ai/server-llm.sh)\n\n"
+    printf '  bash -c "$(curl -s https://ggml.ai/server-llm.sh)"\n\n'
 }
 
 while [[ $# -gt 0 ]]; do
