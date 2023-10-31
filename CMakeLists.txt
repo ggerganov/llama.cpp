@@ -104,9 +104,6 @@ option(LLAMA_BUILD_SERVER               "llama: build server example"           
 # Build info header
 #
 
-# Generate initial build-info.h
-include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
-
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
     set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.git")
 
@@ -117,21 +114,24 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
         set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${REAL_GIT_DIR}")
     endif()
 
-    # Add a custom target for build-info.h
-    add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
-
-    # Add a custom command to rebuild build-info.h when .git/index changes
-    add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
-        COMMENT "Generating build details from Git"
-        COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION} -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS "${GIT_DIR}/index"
-        VERBATIM
-    )
+    set(GIT_INDEX "${GIT_DIR}/index")
 else()
     message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
+    set(GIT_INDEX "")
 endif()
+
+# Add a custom target for build-info.h
+add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
+
+# Add a custom command to rebuild build-info.h when .git/index changes
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
+    COMMENT "Generating build details from Git"
+    COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION} -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    DEPENDS ${GIT_INDEX}
+    VERBATIM
+)
 
 #
 # Compile flags
