@@ -210,7 +210,7 @@ Example usage: `--top-p 0.95`
 
 ### Min P Sampling
 
--   `--min-p N`: Sets a minimum base probability threshold for token selection (default: 0.0).
+-   `--min-p N`: Sets a minimum base probability threshold for token selection (default: 0.05).
 
 The Min-P sampling method was designed as an alternative to Top-P, and aims to ensure a balance of quality and variety. The parameter *p* represents the minimum probability for a token to be considered, relative to the probability of the most likely token. For example, with *p*=0.05 and the most likely token having a probability of 0.9, logits with a value less than 0.045 are filtered out.
 
