@@ -857,7 +857,7 @@ struct llama_server_context
 
     void kv_cache_clear() {
         // clear the entire KV cache
-        llama_kv_cache_tokens_rm(ctx, -1, -1);
+        llama_kv_cache_clear(ctx);
         clean_kv_cache = false;
     }
 
