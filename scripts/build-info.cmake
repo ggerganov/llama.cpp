@@ -24,15 +24,21 @@ if(Git_FOUND)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE HEAD
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE RES
     )
+    if (RES EQUAL 0)
+        set(BUILD_COMMIT ${HEAD})
+    endif()
     execute_process(
         COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE COUNT
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE RES
     )
-    set(BUILD_COMMIT ${HEAD})
-    set(BUILD_NUMBER ${COUNT})
+    if (RES EQUAL 0)
+        set(BUILD_NUMBER ${COUNT})
+    endif()
 endif()
 
 if(MSVC)
