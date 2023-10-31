@@ -28,41 +28,25 @@ else:
     # output in the same directory as the model by default
     fname_out = dir_model / f'ggml-model-{ftype_str[ftype]}.gguf'
 
-
-print("gguf: loading model " + dir_model.name)
+print(f"Loading model: {dir_model.name}")
 
 hparams = model.Model.load_hparams(dir_model)
 
 model_class = model.Model.from_model_architecture(hparams["architectures"][0])
 model_instance = model_class(dir_model, ftype, fname_out)
 
-print("gguf: get model metadata")
-
+print("Set model parameters")
 model_instance.set_gguf_parameters()
 
-# TOKENIZATION
-print("gguf: get tokenizer metadata")
-
-print("gguf: get gpt2 tokenizer vocab")
-
+print("Set model tokenizer")
 model_instance.set_vocab()
 
-# write model
 if not args.vocab_only:
-    model_instance.write_tensors()
-    print("gguf: write header")
-    model_instance.gguf_writer.write_header_to_file()
-    print("gguf: write metadata")
-    model_instance.gguf_writer.write_kv_data_to_file()
-    print("gguf: write tensors")
-    model_instance.gguf_writer.write_tensors_to_file()
+    print(f"Exporting model to '{fname_out}'")
+    model_instance.write()
 else:
-    print("gguf: write header")
-    model_instance.gguf_writer.write_header_to_file()
-    print("gguf: write metadata")
-    model_instance.gguf_writer.write_kv_data_to_file()
+    print(f"Exporting model vocab to '{fname_out}'")
+    model_instance.write_vocab()
 
-model_instance.gguf_writer.close()
-
-print(f"gguf: model successfully exported to '{fname_out}'")
+print(f"Model successfully exported to '{fname_out}'")
 print("")

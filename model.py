@@ -9,7 +9,7 @@ import numpy as np
 
 from enum import Enum
 from pathlib import Path
-from typing import TypeAlias, Any
+from typing import TypeAlias, Any, Generator
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
@@ -48,7 +48,7 @@ class Model:
                 return ("pytorch_model.bin",)
             return (f"pytorch_model-{n:05}-of-{self.num_parts:05}.bin" for n in range(1, self.num_parts + 1))
 
-    def _get_model_architecture(self):
+    def _get_model_architecture(self) -> gguf.MODEL_ARCH:
         arch = self.hparams["architectures"][0]
         if arch == "GPTNeoXForCausalLM":
             return gguf.MODEL_ARCH.GPTNEOX
@@ -160,7 +160,7 @@ class Model:
     def set_vocab(self):
         self._set_vocab_gpt2()
 
-    def get_tensors(self):
+    def get_tensors(self) -> Generator[str, Any]:
         for part_name in self.part_names:
             print("gguf: loading model part '" + part_name + "'")
             if self.is_safetensors:
@@ -229,6 +229,18 @@ class Model:
             print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
             self.gguf_writer.add_tensor(new_name, data)
+
+    def write(self):
+        self.write_tensors()
+        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_kv_data_to_file()
+        self.gguf_writer.write_tensors_to_file()
+        self.gguf_writer.close()
+
+    def write_vocab(self):
+        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_kv_data_to_file()
+        self.gguf_writer.close()
 
     @staticmethod
     def count_model_parts(dir_model: Path, prefix: str) -> int:
