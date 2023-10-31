@@ -693,10 +693,10 @@ class RefactModel(Model):
         n_head = self.hparams["n_head"]
         n_head_kv = 1
         head_dim = self.hparams["n_embd"] // n_head
+        block_count = self.hparams["n_layer"]
 
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
-        block_count = self.hparams["n_layer"]
         tensors = dict(self.get_tensors())
         for i in range(block_count):
             if f"transformer.h.{i}.attn.kv.weight" in tensors:
@@ -755,14 +755,12 @@ class RefactModel(Model):
 
 class PersimmonModel(Model):
     def set_gguf_parameters(self):
-        block_count = self.hparams["num_layers"]
+        block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         head_count = self.hparams["num_attention_heads"]
         head_count_kv = head_count
-        ctx_length = self.hparams["seq_length"]
         hidden_size = self.hparams["hidden_size"]
 
         self.gguf_writer.add_name('persimmon-8b-chat')
-        self.gguf_writer.add_context_length(ctx_length)
         self.gguf_writer.add_embedding_length(hidden_size)
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(self.hparams["ffn_hidden_size"])
@@ -782,7 +780,7 @@ class PersimmonModel(Model):
         # self.gguf_writer.add_eos_token_id(71013)
 
     def write_tensors(self):
-        block_count = self.hparams["num_layers"]
+        block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         print(tensor_map)
         for name, data in self.get_tensors():
