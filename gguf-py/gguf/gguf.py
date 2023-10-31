@@ -696,7 +696,6 @@ class GGUFWriter:
         self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.ti_data_count))
         self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.kv_data_count))
         self.flush()
-        #print("tensors " + str(self.ti_data_count) + " kv " + str(self.kv_data_count))
         self.state = WriterState.HEADER
 
     def write_kv_data_to_file(self):
