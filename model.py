@@ -95,7 +95,6 @@ class Model:
 
             with ctx as model_part:
                 for name in model_part.keys():
-                    print("yield ", name)
                     data = model_part.get_tensor(name) if self.is_safetensors else model_part[name]
                     yield name, data
 
