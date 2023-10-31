@@ -5235,7 +5235,6 @@ static struct ggml_cgraph * llama_build_graph(
 
         LLAMA_LOG_INFO("%s: non-view tensors processed: %d/%d\n", __func__, n_non_view, n_non_view_total);
 
-#ifdef LLAMA_OFFLOAD_DEBUG
         if (n_non_view != n_non_view_total) {
             LLAMA_LOG_WARN("%s: ****************************************************************\n", __func__);
             LLAMA_LOG_WARN("%s: not all non-view tensors have been processed with a callback\n",     __func__);
@@ -5244,7 +5243,6 @@ static struct ggml_cgraph * llama_build_graph(
             LLAMA_LOG_WARN("%s: ref: https://github.com/ggerganov/llama.cpp/pull/3837\n",            __func__);
             LLAMA_LOG_WARN("%s: ****************************************************************\n", __func__);
         }
-#endif
     }
 
     return result;
