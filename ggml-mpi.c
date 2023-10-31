@@ -47,7 +47,7 @@ struct ggml_mpi_context * ggml_mpi_split_comm(struct ggml_mpi_context * ctx, int
 }
 
 void ggml_mpi_free(struct ggml_mpi_context * ctx) {
-    MPI_Comm_free(ctx->comm);
+    MPI_Comm_free(&(ctx->comm));
     free(ctx);
 }
 
@@ -55,7 +55,7 @@ int ggml_mpi_rank(struct ggml_mpi_context * ctx) {
     return ctx->rank;
 }
 
-int ggml_mpi_size(struct ggml_mpi_context * ctx) {
+size_t ggml_mpi_size(struct ggml_mpi_context * ctx) {
     return ctx->size;
 }
 
@@ -69,30 +69,41 @@ void ggml_mpi_eval_init(
 
 
     MPI_Barrier(ctx_mpi->comm);
-
+    int32_t old_n_tokens = *n_tokens;
     MPI_Bcast(n_tokens, 1, MPI_INT, 0, ctx_mpi->comm);
 
-    if (ctx_mpi->rank != 0) {
-        *pos = calloc(*n_tokens, sizeof(int32_t));
-        *n_seq_ids = calloc(*n_tokens, sizeof(int32_t));
-        *logits = calloc(*n_tokens, sizeof(int8_t));
+    // If what was passed in differs from what was broadcast,
+    // we can't guarantee the allocated sizes are correct
+    // TODO check how often this is done and if it's a problem,
+    //      try to allocate ahead of time
+    if (old_n_tokens != *n_tokens) {
+        *pos = realloc(*pos, *n_tokens * sizeof(int32_t));
+        *n_seq_ids = realloc(*n_seq_ids, *n_tokens * sizeof(int32_t ));
+        *logits = realloc(*logits, *n_tokens * sizeof(int32_t));
     }
 
+
+
+//    MPI_Bcast(&total_n_seq_ids,     1, MPI_INT32_T, 0, ctx_mpi->comm);
+    MPI_Bcast(*n_seq_ids,   *n_tokens, MPI_INT32_T, 0, ctx_mpi->comm);
+
+    // We need to know the total number of sequence
+    // ids, so we count them all up
     int32_t total_n_seq_ids = 0;
-    for (size_t i = 0; i < *n_tokens; i++) {
+    for (int32_t i = 0; i < *n_tokens; i++) {
         total_n_seq_ids += (*n_seq_ids)[i];
     }
 
-    MPI_Bcast(&total_n_seq_ids,     1,               MPI_INT32_T, 0, ctx_mpi->comm);
-    MPI_Bcast(*n_seq_ids,                  *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
-
+    // MPI can't chase the pointers for multidimensional arrays, so we flatten them first
+    // for transit
     int32_t * flattened_seq_ids = calloc(total_n_seq_ids, sizeof(int32_t));
 
     int32_t current_index = 0;
 
+    // Only rank 0 needs to flatten since the others don't have the real seq_id
     if (ctx_mpi->rank == 0) {
-        for (size_t i = 0; i < *n_tokens; i++) {
-            for (size_t j = 0; j < (*n_seq_ids)[i]; j++) {
+        for (int32_t i = 0; i < *n_tokens; i++) {
+            for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
                 flattened_seq_ids[current_index] = (*seq_id)[i][j];
                 current_index++;
             }
@@ -100,25 +111,26 @@ void ggml_mpi_eval_init(
     }
 
 
-    MPI_Bcast(*pos,                  *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
-    MPI_Bcast(flattened_seq_ids,    total_n_seq_ids, MPI_INT32_T, 0, ctx_mpi->comm);
+    MPI_Bcast(             *pos, *n_tokens,        MPI_INT32_T, 0, ctx_mpi->comm);
+    MPI_Bcast(flattened_seq_ids,  total_n_seq_ids, MPI_INT32_T, 0, ctx_mpi->comm);
     //MPI_Bcast(*logits,               *n_tokens,        MPI_INT8_T, 0, ctx_mpi->comm);
     int32_t ** new_seq_id = calloc(*n_tokens, sizeof(int32_t*));
     current_index = 0;
-    for (size_t i = 0; i < *n_tokens; i++) {
+    for (int32_t i = 0; i < *n_tokens; i++) {
         new_seq_id[i] = calloc((*n_seq_ids)[i], sizeof(int32_t));
-        for (size_t j = 0; j < (*n_seq_ids)[i]; j++) {
+        for (int32_t j = 0; j < (*n_seq_ids)[i]; j++) {
             new_seq_id[i][j] = flattened_seq_ids[current_index];
             current_index++;
         }
     }
     free(flattened_seq_ids);
+    //free(*seq_id); // <- something is still holding onto this, need to investigate
     *seq_id = new_seq_id;
 }
 
 void ggml_mpi_synch_int(
-        struct ggml_mpi_context     * ctx_mpi,
-        int32_t * val
+        struct ggml_mpi_context * ctx_mpi,
+                        int32_t * val
 ) {
     MPI_Bcast(val, 1, MPI_INT32_T, 0, ctx_mpi->comm);
 }
@@ -284,7 +296,7 @@ void ggml_mpi_graph_compute_pre(
     {
 
 
-        const int n_per_node = (n_layers + (mpi_size - 1)) / mpi_size;
+        //const int n_per_node = (n_layers + (mpi_size - 1)) / mpi_size;
 
         const int mpi_idx = mpi_rank > 0 ? mpi_rank - 1 : mpi_size - 1;
 

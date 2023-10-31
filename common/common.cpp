@@ -1094,6 +1094,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
         printf("  -mg i, --main-gpu i   the GPU to use for the model (with split-mode = none),\n");
         printf("                        or for intermediate results and KV (with split-mode = row) (default: %d)\n", params.main_gpu);
     }
+#ifdef GGML_USE_MPI
+    printf("  --mpi-layer-split N   percentiles to split the layers by across nodes\n");
+#endif
     printf("  --verbose-prompt      print a verbose prompt before generation (default: %s)\n", params.verbose_prompt ? "true" : "false");
     printf("  --no-display-prompt   don't print prompt at generation (default: %s)\n", !params.display_prompt ? "true" : "false");
     printf("  -gan N, --grp-attn-n N\n");

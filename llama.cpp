@@ -13094,6 +13094,7 @@ void llama_split_layers_weighted(struct llama_context * ctx, float device_weight
     }
     uint16_t** ranges = ggml_mpi_split_range(ctx->ctx_mpi, 0, ctx->model.hparams.n_layer - 1, device_weights);
     ggml_mpi_scatter_layers(ctx->ctx_mpi, ranges);
+    free(ranges);
 #endif
 }
 

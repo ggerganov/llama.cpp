@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 struct ggml_context;
 struct ggml_tensor;
@@ -98,7 +99,7 @@ int ggml_mpi_rank(struct ggml_mpi_context * ctx);
  * @param ctx The context containing the communicator used for this size check.
  * @return The number of nodes that are a part of the given context's communicator.
  */
-int ggml_mpi_size(struct ggml_mpi_context * ctx);
+size_t ggml_mpi_size(struct ggml_mpi_context * ctx);
 
 /**
  * Synchronize needed information among the nodes
