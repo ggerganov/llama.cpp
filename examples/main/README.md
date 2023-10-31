@@ -208,6 +208,14 @@ Top-p sampling, also known as nucleus sampling, is another text generation metho
 
 Example usage: `--top-p 0.95`
 
+### Min P Sampling
+
+-   `--min-p N`: Sets a minimum base probability threshold for token selection (default: 0.0).
+
+Min-P sampling is a sampling method where the value represents the base required probability percentage. This value is adjusted based on the probability of the most likely token. For example, with a Min-P value set at 0.05 and the highest token probability being 90%, the minimum required threshold becomes 4.5%. This approach ensures a balance of quality and variety in the results. The default value is 0.05.
+
+Example usage: `--min-p 0.05`
+
 ### Tail Free Sampling (TFS)
 
 -   `--tfs N`: Enable tail free sampling with parameter z (default: 1.0, 1.0 = disabled).
