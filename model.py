@@ -53,7 +53,8 @@ class Model:
             return gguf.MODEL_ARCH.STARCODER
         if arch == "GPTRefactForCausalLM":
             return gguf.MODEL_ARCH.REFACT
-        if arch == ""
+        if arch == "PersimmonForCausalLM":
+            return gguf.MODEL_ARCH.PERSIMMON
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -194,6 +195,8 @@ class Model:
             return StarCoderModel
         if model_architecture == "GPTRefactForCausalLM":
             return RefactModel
+        if model_architecture == "PersimmonForCausalLM":
+            return PersimmonModel
         return Model
 
 class StableLMModel(Model):
