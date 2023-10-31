@@ -5,11 +5,16 @@
 # - Works on Linux and macOS
 # - Supports: CPU, CUDA, Metal, OpenCL
 # - Can run all GGUF models from HuggingFace
-# - Always build latest llama.cpp from GitHub
+# - Can serve requests in parallel
+# - Always builds latest llama.cpp from GitHub
+#
+# Limitations
+#
+# - Chat templates are poorly supported (base models recommended)
 # - Might be unstable!
 #
 # Usage:
-#   ./deploy-server.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]
+#   ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]
 #
 #   --port:       port number, default is 8888
 #   --repo:       path to a repo containing GGUF model files
@@ -22,7 +27,7 @@
 #
 # Example:
 #
-#   curl https://ggml.ai/deploy-server.sh | bash -s --
+#   bash <(curl https://ggml.ai/server-llm.sh)
 #
 
 set -e
@@ -58,6 +63,21 @@ gpu_id=0
 n_parallel=8
 n_kv=4096
 verbose=0
+
+function print_usage {
+    printf "Usage:\n"
+    printf "  ./server-llm.sh [--port] [--repo] [--wtype] [--backend] [--gpu-id] [--n-parallel] [--n-kv] [--verbose]\n\n"
+    printf "  --port:       port number, default is 8888\n"
+    printf "  --repo:       path to a repo containing GGUF model files\n"
+    printf "  --wtype:      weights type (f16, q8_0, q4_0, q4_1), default is user-input\n"
+    printf "  --backend:    cpu, cuda, metal, opencl, depends on the OS\n"
+    printf "  --gpu-id:     gpu id, default is 0\n"
+    printf "  --n-parallel: number of parallel requests, default is 8\n"
+    printf "  --n-kv:       KV cache size, default is 4096\n"
+    printf "  --verbose:    verbose output\n\n"
+    printf "Example:\n\n"
+    printf "  bash <(curl https://ggml.ai/server-llm.sh)\n\n"
+}
 
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -101,8 +121,13 @@ while [[ $# -gt 0 ]]; do
             verbose=1
             shift
             ;;
+        --help)
+            print_usage
+            exit 0
+            ;;
         *)
             echo "Unknown argument: $key"
+            print_usage
             exit 1
             ;;
     esac
@@ -121,6 +146,9 @@ repos=(
     "https://huggingface.co/TheBloke/Llama-2-7B-GGUF"
     "https://huggingface.co/TheBloke/Llama-2-13B-GGUF"
     "https://huggingface.co/TheBloke/Llama-2-70B-GGUF"
+    "https://huggingface.co/TheBloke/CodeLlama-7B-GGUF"
+    "https://huggingface.co/TheBloke/CodeLlama-13B-GGUF"
+    "https://huggingface.co/TheBloke/CodeLlama-34B-GGUF"
     "https://huggingface.co/TheBloke/Mistral-7B-v0.1-GGUF"
     "https://huggingface.co/TheBloke/zephyr-7B-beta-GGUF"
     "https://huggingface.co/TheBloke/OpenHermes-2-Mistral-7B-GGUF"
@@ -131,15 +159,30 @@ printf "\n"
 printf "[I] This is a helper script for deploying llama.cpp's server on this machine.\n\n"
 printf "    Based on the options that follow, the script might download a model file\n"
 printf "    from the internet, which can be a few GBs in size. The script will also\n"
-printf "    build the latest llama.cpp source code from GitHub, which can be unstable.\n\n"
-printf "    If you don't know what you are doing, please press Ctrl-C to abort now\n\n"
+printf "    build the latest llama.cpp source code from GitHub, which can be unstable.\n"
+printf "\n"
+printf "    Upon success, an HTTP server will be started and it will serve the selected\n"
+printf "    model using llama.cpp for demonstration purposes.\n"
+printf "\n"
+printf "    Please note:\n"
+printf "\n"
+printf "    - All new data will be stored in the current folder\n"
+printf "    - The server will be listening on all network interfaces\n"
+printf "    - The server will run with default settings which are not always optimal\n"
+printf "    - Do not judge the quality of a model based on the results from this script\n"
+printf "    - Do not use this script to benchmark llama.cpp\n"
+printf "    - Do not use this script in production\n"
+printf "    - This script is only for demonstration purposes\n"
+printf "\n"
+printf "    If you don't know what you are doing, please press Ctrl-C to abort now\n"
+printf "\n"
 printf "    Press Enter to continue ...\n\n"
 
 read
 
 if [[ -z "$repo" ]]; then
     printf "[+] No repo provided from the command line\n"
-    printf "    Please select a number from the sample repos below or enter an URL:\n\n"
+    printf "    Please select a number from the list below or enter an URL:\n\n"
 
     is=0
     for r in "${repos[@]}"; do
@@ -174,6 +217,8 @@ repo=$(echo "$repo" | sed -E 's/\/tree\/main$//g')
 
 printf "[+] Checking for GGUF model files in %s\n" "$repo"
 
+# find GGUF files in the source
+# TODO: better logic
 model_tree="${repo%/}/tree/main"
 model_files=$(curl -s "$model_tree" | grep -i "\\.gguf</span>" | sed -E 's/.*<span class="truncate group-hover:underline">(.*)<\/span><\/a>/\1/g')
 
@@ -230,7 +275,10 @@ chk="$wfile.chk"
 # - if $wfile does not exist
 # - if $wfile exists but $chk does not exist
 # - if $wfile exists and $chk exists but $wfile is newer than $chk
+# TODO: better logic using git lfs info
+
 do_download=0
+
 if [[ ! -f "$wfile" ]]; then
     do_download=1
 elif [[ ! -f "$chk" ]]; then
@@ -276,6 +324,8 @@ elif [[ -d "$llama_cpp_dir" ]]; then
 
     cd ..
 else
+    printf "[+] Cloning llama.cpp\n"
+
     git clone https://github.com/ggerganov/llama.cpp "$llama_cpp_dir"
 fi
 
