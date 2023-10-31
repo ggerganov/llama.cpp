@@ -7,14 +7,14 @@ import torch
 import contextlib
 import numpy as np
 
-from enum import Enum
+from enum import IntEnum
 from pathlib import Path
 from typing import TypeAlias, Any, Generator
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 
-class SentencePieceTokenTypes(Enum):
+class SentencePieceTokenTypes(IntEnum):
     NORMAL = 1
     UNKNOWN = 2
     CONTROL = 3
