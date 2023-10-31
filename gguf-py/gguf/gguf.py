@@ -806,6 +806,9 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32], tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None):
+        if self.state is not WriterState.EMPTY:
+            raise ValueError(f'Expected output file to be empty, got {self.state}')
+
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
