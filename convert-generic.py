@@ -1,24 +1,18 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+from util import parse_args
 
-import os
 import sys
-from pathlib import Path
-
-if 'NO_LOCAL_GGUF' not in os.environ:
-   sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
-
-import gguf
 import model
-import util
 
-args = util.parse_args()
+
+args = parse_args()
 
 dir_model = args.model
 ftype = args.ftype
 if not dir_model.is_dir():
-    print(f'Error: {args.model} is not a directory', file = sys.stderr)
+    print(f'Error: {args.model} is not a directory', file=sys.stderr)
     sys.exit(1)
 
 # possible tensor data types

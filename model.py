@@ -12,6 +12,7 @@ from typing import TypeAlias, Any
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
+
 class Model:
     def __init__(self, dir_model: Path, ftype: int, fname_out: Path):
         self.dir_model = dir_model
@@ -90,7 +91,7 @@ class Model:
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges = True)
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def get_tensors(self):
@@ -109,7 +110,8 @@ class Model:
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
-        self.gguf_writer.add_block_count(self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer"))))
+        self.gguf_writer.add_block_count(self.hparams.get(
+            "n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer"))))
         if "max_position_embeddings" in self.hparams:
             self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         if "hidden_size" in self.hparams:
@@ -118,7 +120,8 @@ class Model:
             self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
         if "num_attention_head" in self.hparams:
             self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
-        self.gguf_writer.add_parallel_residual(self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
+        self.gguf_writer.add_parallel_residual(
+            self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
 
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
@@ -137,7 +140,7 @@ class Model:
             data = data.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
@@ -176,7 +179,6 @@ class Model:
             hparams = json.load(f)
             return hparams
 
-
     @staticmethod
     def from_model_architecture(model_architecture):
         if model_architecture == "StableLMEpochForCausalLM":
@@ -199,10 +201,12 @@ class Model:
             return PersimmonModel
         return Model
 
+
 class StableLMModel(Model):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        self.gguf_writer.add_rope_dimension_count(int(self.hparams["rope_pct"]*(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])))
+        self.gguf_writer.add_rope_dimension_count(
+            int(self.hparams["rope_pct"]*(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])))
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
 
@@ -215,10 +219,13 @@ class GPTNeoXModel(Model):
         self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(int(self.hparams["rotary_pct"]*(self.hparams["hidden_size"]//self.hparams["num_attention_heads"])))
+        self.gguf_writer.add_rope_dimension_count(
+            int(self.hparams["rotary_pct"]*(self.hparams["hidden_size"]//self.hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
-        self.gguf_writer.add_parallel_residual(self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
+        self.gguf_writer.add_parallel_residual(
+            self.hparams["use_parallel_residual"] if "use_parallel_residual" in self.hparams else True)
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+
 
 class BloomModel(Model):
     def set_gguf_parameters(self):
@@ -307,6 +314,7 @@ class BloomModel(Model):
                 self.gguf_writer.add_tensor("output.weight", data)
                 print(name, "=>", "output.weight" + ", shape = " + str(data.shape) + ", " + str(old_dtype) + " --> " + str(data.dtype))  # noqa
 
+
 class MPTModel(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams["n_layers"]
@@ -340,7 +348,7 @@ class MPTModel(Model):
             data = data.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
@@ -370,7 +378,6 @@ class MPTModel(Model):
                 self.gguf_writer.add_tensor("output.weight", data)
 
 
-
 class BaichuanModel(Model):
     def set_vocab(self):
         from sentencepiece import SentencePieceProcessor  # type: ignore[import]
@@ -380,7 +387,7 @@ class BaichuanModel(Model):
 
         tokenizer_model_file = self.dir_model / 'tokenizer.model'
         if not tokenizer_model_file.is_file():
-            print(f'Error: Missing {tokenizer_model_file}', file = sys.stderr)
+            print(f'Error: Missing {tokenizer_model_file}', file=sys.stderr)
             sys.exit(1)
 
         # vocab type sentencepiece
@@ -424,17 +431,16 @@ class BaichuanModel(Model):
                 print("gguf: get added tokens")
 
                 for key in addtokens_json:
-                    tokens.append( key.encode("utf-8") )
+                    tokens.append(key.encode("utf-8"))
                     scores.append(-1000.0)
-                    toktypes.append(4) # user-defined token type
-
+                    toktypes.append(4)  # user-defined token type
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab = len(tokens))
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -474,11 +480,10 @@ class BaichuanModel(Model):
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
 
-        if "rope_scaling" in self.hparams and self.hparams["rope_scaling"] != None and "factor" in self.hparams["rope_scaling"]:
+        if "rope_scaling" in self.hparams and self.hparams["rope_scaling"] is not None and "factor" in self.hparams["rope_scaling"]:
             if "type" in self.hparams["rope_scaling"]:
                 if self.hparams["rope_scaling"]["type"] == "linear":
                     self.gguf_writer.add_rope_scale_linear(self.hparams["rope_scaling"]["factor"])
-
 
     def _reverse_hf_permute(self, weights: NDArray, n_head: int, n_kv_head: int | None = None) -> NDArray:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -488,13 +493,13 @@ class BaichuanModel(Model):
                 .swapaxes(1, 2)
                 .reshape(weights.shape))
 
-    def _reverse_hf_permute_part(self, weights: NDArray, n_part: int, n_head: int, n_head_kv: int| None = None) -> NDArray:
+    def _reverse_hf_permute_part(self, weights: NDArray, n_part: int, n_head: int, n_head_kv: int | None = None) -> NDArray:
         r = weights.shape[0] // 3
-        return (self._reverse_hf_permute(weights[r * n_part : r * n_part + r, ...], n_head, n_head_kv))
+        return (self._reverse_hf_permute(weights[r * n_part:r * n_part + r, ...], n_head, n_head_kv))
 
     def _reverse_hf_part(self, weights: NDArray, n_part: int) -> NDArray:
         r = weights.shape[0] // 3
-        return weights[r * n_part : r * n_part + r, ...]
+        return weights[r * n_part:r * n_part + r, ...]
 
     def write_tensors(self):
         # Collect tensors from generator object
@@ -508,13 +513,15 @@ class BaichuanModel(Model):
         else:
             head_count_kv = head_count
 
-
         for i in range(block_count):
             if f"model.layers.{i}.self_attn.W_pack.weight" in model_kv:
                 print(f"Unpacking and permuting layer {i}")
-                model_kv[f"model.layers.{i}.self_attn.q_proj.weight"] = self._reverse_hf_permute_part(model_kv[f"model.layers.{i}.self_attn.W_pack.weight"],0,head_count,head_count)
-                model_kv[f"model.layers.{i}.self_attn.k_proj.weight"] = self._reverse_hf_permute_part(model_kv[f"model.layers.{i}.self_attn.W_pack.weight"],1,head_count,head_count_kv)
-                model_kv[f"model.layers.{i}.self_attn.v_proj.weight"] = self._reverse_hf_part(model_kv[f"model.layers.{i}.self_attn.W_pack.weight"],2)
+                model_kv[f"model.layers.{i}.self_attn.q_proj.weight"] = self._reverse_hf_permute_part(
+                    model_kv[f"model.layers.{i}.self_attn.W_pack.weight"], 0, head_count, head_count)
+                model_kv[f"model.layers.{i}.self_attn.k_proj.weight"] = self._reverse_hf_permute_part(
+                    model_kv[f"model.layers.{i}.self_attn.W_pack.weight"], 1, head_count, head_count_kv)
+                model_kv[f"model.layers.{i}.self_attn.v_proj.weight"] = self._reverse_hf_part(
+                    model_kv[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
                 del model_kv[f"model.layers.{i}.self_attn.W_pack.weight"]
 
         for name, data in model_kv.items():
@@ -531,7 +538,7 @@ class BaichuanModel(Model):
             data = data.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
@@ -551,7 +558,7 @@ class BaichuanModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(name + " -> " +  new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
+            print(name + " -> " + new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
             self.gguf_writer.add_tensor(new_name, data)
 
 
@@ -570,8 +577,8 @@ class FalconModel(Model):
             n_head_kv = self.hparams.get("n_head_kv", 1)  # old name
 
         self.gguf_writer.add_name("Falcon")
-        self.gguf_writer.add_context_length(2048) # not in config.json
-        self.gguf_writer.add_tensor_data_layout("jploski") # qkv tensor transform
+        self.gguf_writer.add_context_length(2048)  # not in config.json
+        self.gguf_writer.add_tensor_data_layout("jploski")  # qkv tensor transform
         self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
         self.gguf_writer.add_feed_forward_length(4 * self.hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -615,15 +622,15 @@ class FalconModel(Model):
 
             if "query_key_value" in name:
                 qkv = data.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
-                q = qkv[:, :-2 ].reshape(n_head * head_dim, head_dim * n_head)
+                q = qkv[:, :-2].reshape(n_head * head_dim, head_dim * n_head)
                 k = qkv[:, [-2]].reshape(n_head_kv * head_dim, head_dim * n_head)
                 v = qkv[:, [-1]].reshape(n_head_kv * head_dim, head_dim * n_head)
-                data = torch.cat((q,k,v)).reshape_as(data)
+                data = torch.cat((q, k, v)).reshape_as(data)
 
             data = data.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
@@ -646,6 +653,7 @@ class FalconModel(Model):
             print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
 
             self.gguf_writer.add_tensor(new_name, data)
+
 
 class StarCoderModel(Model):
     def set_gguf_parameters(self):
@@ -705,7 +713,7 @@ class RefactModel(Model):
                     : n_head_kv * head_dim
                 ]
                 tensors[f"model.layers.{i}.self_attn.v_proj.weight"] = data[
-                    n_head_kv * head_dim :
+                    n_head_kv * head_dim:
                 ]
                 del tensors[f"transformer.h.{i}.attn.kv.weight"]
             if f"transformer.h.{i}.attn.q.weight" in tensors:
@@ -753,6 +761,7 @@ class RefactModel(Model):
 
             self.gguf_writer.add_tensor(new_name, data)
 
+
 class PersimmonModel(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
@@ -789,14 +798,13 @@ class PersimmonModel(Model):
             old_dtype = data.dtype
             # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
             data = data.to(torch.float32).squeeze().numpy()
-            new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
                 sys.exit()
             n_dims = len(data.shape)
             print(new_name + ", n_dims = " + str(n_dims) + ", " + str(old_dtype) + " --> " + str(data.dtype))
             self.gguf_writer.add_tensor(new_name, data)
-
 
     def _get_sentencepiece_tokenizer_info(self):
         from sentencepiece import SentencePieceProcessor
@@ -832,4 +840,3 @@ class PersimmonModel(Model):
             toktypes.append(toktype)
             pass
         return tokens, scores, toktypes
-
