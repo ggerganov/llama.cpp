@@ -1,6 +1,5 @@
 #include "grammar-parser.h"
 #include <cstdint>
-#include <cwchar>
 #include <string>
 #include <utility>
 #include <stdexcept>

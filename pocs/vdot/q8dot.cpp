@@ -1,16 +1,13 @@
-#include <cstdio>
-#include <type_traits>
-#include <vector>
-#include <random>
-#include <chrono>
-#include <cstdlib>
-#include <cmath>
-#include <cassert>
-#include <cstring>
-#include <array>
-#include <type_traits>
+#include "ggml.h"
 
-#include <ggml.h>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <random>
+#include <vector>
 
 constexpr int kVecSize = 1 << 16;
 

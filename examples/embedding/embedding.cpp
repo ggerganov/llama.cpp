@@ -1,7 +1,12 @@
 #include "common.h"
 #include "llama.h"
 
+#include <algorithm>
+#include <cstdio>
 #include <ctime>
+#include <random>
+#include <tuple>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

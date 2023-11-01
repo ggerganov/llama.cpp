@@ -1,20 +1,28 @@
 #include "common.h"
+#include "ggml.h"
 #include "llama.h"
+#include "log.h"
+#include "sampling.h"
 
 #include <algorithm>
-#include <cassert>
+#include <cctype>
+#include <chrono>
+#include <cinttypes>
 #include <cmath>
-#include <cstring>
+#include <cstdlib>
 #include <ctime>
+#include <exception>
 #include <fstream>
 #include <iterator>
-#include <iostream>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <thread>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
-#include <cinttypes>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -32,9 +40,7 @@
 #include <fcntl.h>
 #include <io.h>
 #else
-#include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #endif
 
 #if defined(_MSC_VER)

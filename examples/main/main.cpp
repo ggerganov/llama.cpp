@@ -1,18 +1,17 @@
 #include "common.h"
-
 #include "console.h"
 #include "llama.h"
+#include "sampling.h"
 
-#include <cassert>
-#include <cinttypes>
-#include <cmath>
+#include <algorithm>
 #include <cstdio>
-#include <cstring>
+#include <cstdlib>
 #include <ctime>
 #include <fstream>
-#include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))

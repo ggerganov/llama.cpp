@@ -8,15 +8,16 @@
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <map>
+#include <iterator>
+#include <mutex>
 #include <numeric>
 #include <regex>
 #include <string>
-#include <unordered_map>
-#include <vector>
 #include <thread>
-#include <mutex>
+#include <utility>
+#include <vector>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

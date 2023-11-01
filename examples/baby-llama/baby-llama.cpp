@@ -1,11 +1,13 @@
 #include "ggml.h"
 #include "train.h"
 
-#include <vector>
+#include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <random>
 #include <vector>
 
 #if defined(_MSC_VER)

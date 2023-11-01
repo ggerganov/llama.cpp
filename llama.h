@@ -2,12 +2,14 @@
 #define LLAMA_H
 
 #include "ggml.h"
+
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
 #else
 #define LLAMA_MAX_DEVICES 1
 #endif // GGML_USE_CUBLAS
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -759,8 +761,9 @@ extern "C" {
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
 #ifdef LLAMA_API_INTERNAL
 
-#include <vector>
 #include <string>
+#include <utility>
+#include <vector>
 
 struct ggml_tensor;
 

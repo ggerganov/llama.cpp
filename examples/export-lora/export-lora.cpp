@@ -1,11 +1,16 @@
-
 #include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
 
-#include <vector>
+#include <algorithm>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <thread>
+#include <vector>
 
 static const size_t tensor_alignment = 32;
 

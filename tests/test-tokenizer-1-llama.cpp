@@ -1,16 +1,13 @@
-#include "llama.h"
 #include "common.h"
-#include "unicode.h"
 #include "console.h"
+#include "ggml.h"
+#include "llama.h"
+#include "unicode.h"
 
-#include <cassert>
+#include <cstdint>
 #include <cstdio>
-#include <cstring>
 #include <string>
-#include <codecvt>
-#include <map>
 #include <vector>
-#include <locale>
 
 int main(int argc, char **argv) {
     if (argc < 2) {

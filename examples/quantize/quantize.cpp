@@ -1,10 +1,14 @@
 #include "common.h"
 #include "llama.h"
 
+#include <cctype>
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <vector>
+#include <exception>
 #include <string>
+#include <vector>
 
 struct quant_option {
     std::string name;
