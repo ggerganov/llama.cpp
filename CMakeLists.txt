@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.20)  # for CMP0115
-cmake_policy(SET CMP0115 NEW)  # explicit file extensions
+cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
