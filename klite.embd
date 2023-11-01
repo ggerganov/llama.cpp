@@ -1693,6 +1693,7 @@ Current version: 89
 		font-size: 15px;
 		height: 33px;
 		position: relative;
+		vertical-align: top;
 		top: 11px;
 		width: 33px;
 		background-size: 50% !important;

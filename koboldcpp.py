@@ -969,6 +969,7 @@ def show_new_gui():
     tensor_split_str_vars = ctk.StringVar(value="")
 
     contextshift = ctk.IntVar(value=1)
+    remotetunnel = ctk.IntVar(value=0)
     smartcontext = ctk.IntVar()
     context_var = ctk.IntVar()
     customrope_var = ctk.IntVar()
@@ -1247,7 +1248,7 @@ def show_new_gui():
     makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
 
     # quick boxes
-    quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Use SmartContext":smartcontext, "Disable MMAP":disablemmap,"Use ContextShift":contextshift}
+    quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Use SmartContext":smartcontext, "Disable MMAP":disablemmap,"Use ContextShift":contextshift,"Remote Tunnel":remotetunnel}
     for idx, name, in enumerate(quick_boxes):
         makecheckbox(quick_tab, name, quick_boxes[name], int(idx/2) +20, idx%2)
     # context size
@@ -1337,6 +1338,7 @@ def show_new_gui():
     makelabelentry(network_tab, "Host: ", host_var, 2, 150)
 
     makecheckbox(network_tab, "Multiuser Mode", multiuser_var, 3)
+    makecheckbox(network_tab, "Remote Tunnel", remotetunnel, 3, 1)
 
     # horde
     makelabel(network_tab, "Horde:", 5).grid(pady=10)
@@ -1382,6 +1384,7 @@ def show_new_gui():
         args.nommap = disablemmap.get()==1
         args.smartcontext = smartcontext.get()==1
         args.noshift = contextshift.get()==0
+        args.remotetunnel = remotetunnel.get()==1
         args.foreground = keepforeground.get()==1
 
         gpuchoiceidx = 0
@@ -1446,6 +1449,7 @@ def show_new_gui():
         disablemmap.set(1 if "nommap" in dict and dict["nommap"] else 0)
         smartcontext.set(1 if "smartcontext" in dict and dict["smartcontext"] else 0)
         contextshift.set(0 if "noshift" in dict and dict["noshift"] else 1)
+        remotetunnel.set(1 if "remotetunnel" in dict and dict["remotetunnel"] else 0)
         keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
             if clblast_option is not None:
@@ -1761,6 +1765,46 @@ def run_horde_worker(args, api_key, worker_name):
         time.sleep(3)
     sys.exit(2)
 
+def setuptunnel():
+    # This script will help setup a cloudflared tunnel for accessing KoboldCpp over the internet
+    # It should work out of the box on both linux and windows
+    try:
+        import subprocess, re
+
+        def run_tunnel():
+            tunnelproc = None
+            if os.name == 'nt':
+                print("Starting Cloudflare Tunnel for Windows...")
+                tunnelproc = subprocess.Popen(f"cloudflared.exe tunnel --url localhost:{args.port}", text=True, encoding='utf-8', shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            else:
+                print("Starting Cloudflare Tunnel for Linux...")
+                tunnelproc = subprocess.Popen(f"cloudflared-linux-amd64 tunnel --url http://localhost:{args.port}", text=True, encoding='utf-8', shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            time.sleep(5)
+            pattern = r'https://[\w\.-]+\.trycloudflare\.com'
+            while True:
+                line = tunnelproc.stderr.readline() #cloudflare writes to stderr for some reason
+                if not line:
+                    break  # No more data to read
+                found = re.findall(pattern, line)
+                for x in found:
+                    print(f"Your remote tunnel is ready, please connect to {x}")
+                    tunnelproc.wait()
+                    break
+            tunnelproc.wait()
+
+        if os.name == 'nt':
+            print("Downloading Cloudflare Tunnel for Windows...")
+            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -o cloudflared.exe", capture_output=True, text=True, check=True, encoding='utf-8')
+        else:
+            print("Downloading Cloudflare Tunnel for Linux...")
+            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o 'cloudflared-linux-amd64'", capture_output=True, text=True, check=True, encoding='utf-8')
+            subprocess.run("chmod +x 'cloudflared-linux-amd64'", shell=True)
+        tunnel_thread = threading.Thread(target=run_tunnel)
+        tunnel_thread.start()
+    except Exception as ex:
+        print("Remote Tunnel Failed!")
+        return None
+
 def unload_libs():
     global handle
     import platform
@@ -2001,6 +2045,8 @@ def main(launch_args,start_server=True):
         timer_thread.start()
 
     if start_server:
+        if args.remotetunnel:
+            setuptunnel()
         print(f"Please connect to custom endpoint at {epurl}")
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite, embedded_kcpp_docs))
     else:
@@ -2048,6 +2094,7 @@ if __name__ == '__main__':
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
     parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
     parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them.", action='store_true')
+    parser.add_argument("--remotetunnel", help="Uses Cloudflare to create a remote tunnel, allowing you to access koboldcpp remotely over the internet even behind a firewall.", action='store_true')
     parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
 
     # #deprecated hidden args. they do nothing. do not use
