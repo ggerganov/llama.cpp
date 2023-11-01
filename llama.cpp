@@ -6352,9 +6352,11 @@ int64_t llama_time_us(void) {
     return ggml_time_us();
 }
 
-struct llama_model * llama_load_model_from_file(
-                             const char * path_model,
-            struct llama_context_params   params) {
+static struct llama_model * llama_load_model_from_file_internal(
+    const char * path_model, struct llama_context_params * params_p
+) {
+    auto & params = *params_p;
+
     ggml_time_init();
 
     llama_model * model = new llama_model;
@@ -6387,6 +6389,10 @@ struct llama_model * llama_load_model_from_file(
     }
 
     return model;
+}
+
+struct llama_model * llama_load_model_from_file(const char * path_model, struct llama_context_params params) {
+    return llama_load_model_from_file_internal(path_model, &params);
 }
 
 void llama_free_model(struct llama_model * model) {
@@ -6559,7 +6565,7 @@ struct llama_context * llama_new_context_with_model(
 static struct llama_context * llama_init_from_file(
                              const char * path_model,
             struct llama_context_params   params) {
-    struct llama_model * model = llama_load_model_from_file(path_model, params);
+    struct llama_model * model = llama_load_model_from_file_internal(path_model, &params);
     if (!model) {
         return nullptr;
     }
