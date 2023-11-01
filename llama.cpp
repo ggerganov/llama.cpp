@@ -8003,7 +8003,7 @@ static int llama_apply_lora_from_file_internal(
             if (dest_t->backend == GGML_BACKEND_GPU || dest_t->backend == GGML_BACKEND_GPU_SPLIT) {
                 if (dest_t->type != GGML_TYPE_F16) {
                     throw std::runtime_error(format(
-                        "%s: error: the simultaneous use of LoRAs and GPU acceleration is only supported for f16 models", __func__));
+                        "%s: error: the simultaneous use of LoRAs and GPU acceleration is only supported for f16 models. dest_t->type: %d", __func__, dest_t->type));
                 }
                 offload_func = ggml_cuda_assign_buffers;
                 offload_func_force_inplace = ggml_cuda_assign_buffers_force_inplace;
