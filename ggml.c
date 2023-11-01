@@ -22308,8 +22308,16 @@ int ggml_cpu_has_clblast(void) {
 #endif
 }
 
+int ggml_cpu_has_vulkan(void) {
+#if defined(GGML_USE_VULKAN)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_gpublas(void) {
-    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast();
+    return ggml_cpu_has_cublas() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan();
 }
 
 int ggml_cpu_has_sse3(void) {

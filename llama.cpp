@@ -2495,7 +2495,7 @@ static void llm_load_tensors(
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #elif defined(GGML_USE_VULKAN)
-    fprintf(stderr, "%s: using Vulkan for GPU acceleration\n", __func__);
+    LLAMA_LOG_INFO("%s: using Vulkan for GPU acceleration\n", __func__);
 #define LLAMA_BACKEND_OFFLOAD       GGML_BACKEND_GPU
 #define LLAMA_BACKEND_OFFLOAD_SPLIT GGML_BACKEND_GPU
 #else
