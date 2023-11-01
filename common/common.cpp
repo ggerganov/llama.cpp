@@ -110,8 +110,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             exit(0);
         }
     }
-    catch (const std::invalid_argument& ex) {
-        fprintf(stderr, ex.what());
+    catch (const std::invalid_argument & ex) {
+        fprintf(stderr, "%s\n", ex.what());
         gpt_print_usage(argc, argv, gpt_params());
         exit(1);
     }
