@@ -947,6 +947,48 @@ def show_new_gui():
         show_gui_msgbox("No Backends Available!","KoboldCPP couldn't locate any backends to use (i.e Default, OpenBLAS, CLBlast, CuBLAS).\n\nTo use the program, please run the 'make' command from the directory.")
         time.sleep(3)
         sys.exit(2)
+
+    # Vars - should be in scope to be used by multiple widgets
+    gpulayers_var = ctk.StringVar(value="0")
+    threads_var = ctk.StringVar(value=str(default_threads))
+    runopts_var = ctk.StringVar()
+    gpu_choice_var = ctk.StringVar(value="1")
+
+    launchbrowser = ctk.IntVar(value=1)
+    highpriority = ctk.IntVar()
+    disablemmap = ctk.IntVar()
+    usemlock = ctk.IntVar()
+    debugmode = ctk.IntVar()
+    keepforeground = ctk.IntVar()
+
+    lowvram_var = ctk.IntVar()
+    mmq_var = ctk.IntVar(value=1)
+    blas_threads_var = ctk.StringVar()
+    blas_size_var = ctk.IntVar()
+    version_var = ctk.StringVar(value="0")
+    tensor_split_str_vars = ctk.StringVar(value="")
+
+    contextshift = ctk.IntVar(value=1)
+    smartcontext = ctk.IntVar()
+    context_var = ctk.IntVar()
+    customrope_var = ctk.IntVar()
+    customrope_scale = ctk.StringVar(value="1.0")
+    customrope_base = ctk.StringVar(value="10000")
+
+    model_var = ctk.StringVar()
+    lora_var = ctk.StringVar()
+    lora_base_var  = ctk.StringVar()
+
+    port_var = ctk.StringVar(value=defaultport)
+    host_var = ctk.StringVar(value="")
+    multiuser_var = ctk.IntVar()
+    horde_name_var = ctk.StringVar(value="koboldcpp")
+    horde_gen_var = ctk.StringVar(value=maxhordelen)
+    horde_context_var = ctk.StringVar(value=maxhordectx)
+    horde_apikey_var = ctk.StringVar(value="")
+    horde_workername_var = ctk.StringVar(value="")
+    usehorde_var = ctk.IntVar()
+
     def tabbuttonaction(name):
         for t in tabcontent:
             if name == t:
@@ -968,6 +1010,8 @@ def show_new_gui():
         navbuttons[name].grid(row=idx)
 
     tabbuttonaction(tabnames[0])
+    # Quick Launch Tab
+    quick_tab = tabcontent["Quick Launch"]
 
     # helper functions
     def makecheckbox(parent, text, variable=None, row=0, column=0, command=None, onvalue=1, offvalue=0):
@@ -1067,9 +1111,12 @@ def show_new_gui():
     def autoset_gpu_layers(filepath): #shitty algo to determine how many layers to use
         try:
             fsize = os.path.getsize(filepath)
-            mem = MaxMemory[0]
-            # print(mem)
-            # print(fsize)
+            if fsize>10000000: #dont bother with models < 10mb
+                mem = MaxMemory[0]
+                sizeperlayer = fsize*0.05714
+                layerlimit = int(min(200,mem/sizeperlayer))
+                if (gpulayers_var.get()=="" or gpulayers_var.get()=="0") and layerlimit>0:
+                    gpulayers_var.set(str(layerlimit))
         except Exception as ex:
             pass
 
@@ -1117,51 +1164,7 @@ def show_new_gui():
             quick_gpuname_label.configure(text="")
             gpuname_label.configure(text="")
 
-    # Vars - should be in scope to be used by multiple widgets
-    gpulayers_var = ctk.StringVar(value="0")
-    threads_var = ctk.StringVar(value=str(default_threads))
-    runopts_var = ctk.StringVar()
-    gpu_choice_var = ctk.StringVar(value="1")
     gpu_choice_var.trace("w", changed_gpu_choice_var)
-
-    launchbrowser = ctk.IntVar(value=1)
-    highpriority = ctk.IntVar()
-    disablemmap = ctk.IntVar()
-    usemlock = ctk.IntVar()
-    debugmode = ctk.IntVar()
-    keepforeground = ctk.IntVar()
-
-    lowvram_var = ctk.IntVar()
-    mmq_var = ctk.IntVar(value=1)
-    blas_threads_var = ctk.StringVar()
-    blas_size_var = ctk.IntVar()
-    version_var = ctk.StringVar(value="0")
-    tensor_split_str_vars = ctk.StringVar(value="")
-
-    contextshift = ctk.IntVar(value=1)
-    smartcontext = ctk.IntVar()
-    context_var = ctk.IntVar()
-    customrope_var = ctk.IntVar()
-    customrope_scale = ctk.StringVar(value="1.0")
-    customrope_base = ctk.StringVar(value="10000")
-
-    model_var = ctk.StringVar()
-    lora_var = ctk.StringVar()
-    lora_base_var  = ctk.StringVar()
-
-    port_var = ctk.StringVar(value=defaultport)
-    host_var = ctk.StringVar(value="")
-    multiuser_var = ctk.IntVar()
-    horde_name_var = ctk.StringVar(value="koboldcpp")
-    horde_gen_var = ctk.StringVar(value=maxhordelen)
-    horde_context_var = ctk.StringVar(value=maxhordectx)
-    horde_apikey_var = ctk.StringVar(value="")
-    horde_workername_var = ctk.StringVar(value="")
-    usehorde_var = ctk.IntVar()
-
-    # Quick Launch Tab
-    quick_tab = tabcontent["Quick Launch"]
-
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
