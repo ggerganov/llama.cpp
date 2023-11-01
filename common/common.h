@@ -9,6 +9,7 @@
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
+#include <cmath>
 #include <string>
 #include <vector>
 #include <random>
@@ -54,6 +55,12 @@ struct gpt_params {
     int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 0.0f; // RoPE base frequency
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
+    float   yarn_ext_factor                 = NAN;  // YaRN extrapolation mix factor
+    float   yarn_attn_factor                = 1.0f; // YaRN magnitude scaling factor
+    float   yarn_beta_fast                  = 32.0f;// YaRN low correction dim
+    float   yarn_beta_slow                  = 1.0f; // YaRN high correction dim
+    int32_t yarn_orig_ctx                   = 0;    // YaRN original context length
+    int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED;
 
     // // sampling parameters
     struct llama_sampling_params sparams;
