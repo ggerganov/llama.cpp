@@ -15,6 +15,7 @@
 .DS_Store
 .build/
 .cache/
+.ccls-cache/
 .direnv/
 .envrc
 .swiftpm
