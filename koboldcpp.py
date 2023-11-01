@@ -922,6 +922,7 @@ def show_new_gui():
     CUDevices = ["1","2","3","4","All"]
     CLDevicesNames = ["","","",""]
     CUDevicesNames = ["","","","",""]
+    MaxMemory = [0]
 
     tabcontent = {}
     lib_option_pairs = [
@@ -1001,10 +1002,12 @@ def show_new_gui():
         return entry, label
 
 
-    def makefileentry(parent, text, searchtext, var, row=0, width=250, filetypes=[]):
+    def makefileentry(parent, text, searchtext, var, row=0, width=250, filetypes=[], onchoosefile=None):
         makelabel(parent, text, row)
         def getfilename(var, text):
             var.set(askopenfilename(title=text,filetypes=filetypes))
+            if onchoosefile:
+                onchoosefile(var.get())
         entry = ctk.CTkEntry(parent, width, textvariable=var)
         entry.grid(row=row+1, column=0, padx=8, stick="nw")
         button = ctk.CTkButton(parent, 50, text="Browse", command= lambda a=var,b=searchtext:getfilename(a,b))
@@ -1017,6 +1020,7 @@ def show_new_gui():
     def auto_gpu_heuristics():
         from subprocess import run, CalledProcessError
         FetchedCUdevices = []
+        FetchedCUdeviceMem = []
         try: # Get OpenCL GPU names on windows using a special binary. overwrite at known index if found.
             if os.name == 'nt':
                 basepath = os.path.abspath(os.path.dirname(__file__))
@@ -1033,8 +1037,9 @@ def show_new_gui():
             pass
 
         try: # Get NVIDIA GPU names
-            output = run(['nvidia-smi', '-L'], capture_output=True, text=True, check=True, encoding='utf-8').stdout
-            FetchedCUdevices = [line.split(":", 1)[1].strip().split("(")[0].strip() for line in output.splitlines() if line.startswith("GPU")]
+            output = run(['nvidia-smi','--query-gpu=name,memory.total','--format=csv,noheader'], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+            FetchedCUdevices = [line.split(",")[0].strip() for line in output.splitlines()]
+            FetchedCUdeviceMem = [line.split(",")[1].strip().split(" ")[0].strip() for line in output.splitlines()]
         except Exception as e:
             pass
 
@@ -1053,10 +1058,20 @@ def show_new_gui():
         for idx in range(0,4):
             if(len(FetchedCUdevices)>idx):
                 CUDevicesNames[idx] = FetchedCUdevices[idx]
+                MaxMemory[0] = max(int(FetchedCUdeviceMem[idx])*1024*1024,MaxMemory[0])
                 pass
 
         changed_gpu_choice_var()
         return
+
+    def autoset_gpu_layers(filepath): #shitty algo to determine how many layers to use
+        try:
+            fsize = os.path.getsize(filepath)
+            mem = MaxMemory[0]
+            # print(mem)
+            # print(fsize)
+        except Exception as ex:
+            pass
 
     def show_tooltip(event, tooltip_text=None):
         if hasattr(show_tooltip, "_tooltip"):
@@ -1236,7 +1251,7 @@ def show_new_gui():
     makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=3)
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170)
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170, onchoosefile=autoset_gpu_layers)
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
@@ -1307,7 +1322,7 @@ def show_new_gui():
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1)
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, onchoosefile=autoset_gpu_layers)
     makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
     makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
 
