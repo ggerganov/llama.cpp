@@ -3763,7 +3763,7 @@ struct llm_build_context {
             {
                 if (model.layers[il].attn_norm_2) {
                     // Falcon-40B
-                    cur = llm_build_norm(ctx0, attn_norm, hparams,
+                    cur = llm_build_norm(ctx0, inpL, hparams,
                             model.layers[il].attn_norm_2,
                             model.layers[il].attn_norm_2_b,
                             LLM_NORM, cb, il);
