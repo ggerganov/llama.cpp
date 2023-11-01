@@ -3138,8 +3138,6 @@ struct llm_build_context {
     const float freq_scale;
     const float norm_eps;
     const float norm_rms_eps;
-    const float clamp_kqv;
-    const float max_alibi_bias;
 
     const int32_t n_tokens;
     const int32_t n_kv;
@@ -3176,8 +3174,6 @@ struct llm_build_context {
         freq_scale    (cparams.rope_freq_scale),
         norm_eps      (hparams.f_norm_eps),
         norm_rms_eps  (hparams.f_norm_rms_eps),
-        clamp_kqv     (hparams.f_clamp_kqv),
-        max_alibi_bias(hparams.f_max_alibi_bias),
         n_tokens      (batch.n_tokens),
         n_kv          (worst_case ? n_ctx            : kv_self.n),
         kv_head       (worst_case ? n_ctx - n_tokens : kv_self.head),
@@ -3297,11 +3293,10 @@ private:
              struct ggml_tensor * mw,
              struct ggml_tensor * mb,
                   llm_norm_type   type,
-                          float   eps,
                             int   il) {
         switch (type) {
-            case LLM_NORM:     cur = ggml_norm    (ctx, cur, eps); break;
-            case LLM_NORM_RMS: cur = ggml_rms_norm(ctx, cur, eps); break;
+            case LLM_NORM:     cur = ggml_norm    (ctx, cur, hparams.f_norm_eps);     break;
+            case LLM_NORM_RMS: cur = ggml_rms_norm(ctx, cur, hparams.f_norm_rms_eps); break;
         }
 
         if (mw || mb) {
@@ -3418,9 +3413,7 @@ private:
              struct ggml_tensor * q_cur,
              struct ggml_tensor * kq_scale,
              struct ggml_tensor * kq_mask,
-                        int32_t   n_tokens,
-                        int32_t   n_kv,
-                        float     alibi_bias_max,
+                        float     max_alibi_bias,
                         int       il) {
         struct ggml_tensor * q = ggml_permute(ctx, q_cur, 0, 2, 1, 3);
         cb(q, "q", il);
@@ -3439,11 +3432,11 @@ private:
         kq = ggml_scale(ctx, kq, kq_scale);
         cb(kq, "kq_scaled", il);
 
-        if (alibi_bias_max > 0.0f) {
+        if (max_alibi_bias > 0.0f) {
             // TODO: n_head or n_head_kv
             // TODO: K-shift is likely not working
             // TODO: change to ggml_add
-            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, alibi_bias_max);
+            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
             cb(kq, "kq_scaled_alibi", il);
         }
 
@@ -3516,7 +3509,7 @@ public:
             // norm
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm, NULL,
-                    LLM_NORM_RMS, norm_rms_eps, il);
+                    LLM_NORM_RMS, il);
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -3541,7 +3534,7 @@ public:
 
                 cur = build_kqv(ctx0, cur,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, -1.0f, il);
+                        Qcur, KQ_scale, KQ_mask, -1.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -3552,7 +3545,7 @@ public:
             {
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm, NULL,
-                        LLM_NORM_RMS, norm_rms_eps, il);
+                        LLM_NORM_RMS, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -3574,7 +3567,7 @@ public:
 
         cur = build_norm(ctx0, cur,
                 model.output_norm, NULL,
-                LLM_NORM_RMS, norm_rms_eps, -1);
+                LLM_NORM_RMS, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
@@ -3616,7 +3609,7 @@ public:
 
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm, NULL,
-                    LLM_NORM_RMS, norm_rms_eps, il);
+                    LLM_NORM_RMS, il);
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -3648,11 +3641,11 @@ public:
                 build_kv_store(ctx0, Kcur, Vcur, il);
 
                 // apply ALiBi for 13B model
-                const float alibi_bias_max = model.type == MODEL_13B ? 8.0f : -1.0f;
+                const float max_alibi_bias = model.type == MODEL_13B ? 8.0f : -1.0f;
 
                 cur = build_kqv(ctx0, cur,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, alibi_bias_max, il);
+                        Qcur, KQ_scale, KQ_mask, max_alibi_bias, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -3663,7 +3656,7 @@ public:
             {
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm, NULL,
-                        LLM_NORM_RMS, norm_rms_eps, il);
+                        LLM_NORM_RMS, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -3685,7 +3678,7 @@ public:
 
         cur = build_norm(ctx0, cur,
                 model.output_norm, NULL,
-                LLM_NORM_RMS, norm_rms_eps, -1);
+                LLM_NORM_RMS, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
@@ -3728,7 +3721,7 @@ public:
             attn_norm = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm,
                     model.layers[il].attn_norm_b,
-                    LLM_NORM, norm_eps, il);
+                    LLM_NORM, il);
             cb(attn_norm, "attn_norm", il);
 
             // self-attention
@@ -3738,7 +3731,7 @@ public:
                     cur = build_norm(ctx0, attn_norm,
                             model.layers[il].attn_norm_2,
                             model.layers[il].attn_norm_2_b,
-                            LLM_NORM, norm_eps, il);
+                            LLM_NORM, il);
                     cb(cur, "attn_norm_2", il);
                 } else {
                     cur = attn_norm;
@@ -3769,7 +3762,7 @@ public:
 
                 cur = build_kqv(ctx0, attn_norm,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, -1.0f, il);
+                        Qcur, KQ_scale, KQ_mask, -1.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -3801,7 +3794,7 @@ public:
         cur = build_norm(ctx0, cur,
                 model.output_norm,
                 model.output_norm_b,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
@@ -3843,7 +3836,7 @@ public:
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm,
                     model.layers[il].attn_norm_b,
-                    LLM_NORM, norm_eps, il);
+                    LLM_NORM, il);
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -3868,7 +3861,7 @@ public:
 
                 cur = build_kqv(ctx0, cur,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, -1.0f, il);
+                        Qcur, KQ_scale, KQ_mask, -1.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -3881,7 +3874,7 @@ public:
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm,
                         model.layers[il].ffn_norm_b,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -3899,7 +3892,7 @@ public:
         cur = build_norm(ctx0, inpL,
                 model.output_norm,
                 model.output_norm_b,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
@@ -3940,7 +3933,7 @@ public:
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm,
                     model.layers[il].attn_norm_b,
-                    LLM_NORM, norm_eps, il);
+                    LLM_NORM, il);
             cb(cur, "attn_norm", il);
 
             // self attention
@@ -3980,13 +3973,13 @@ public:
                 tmpq = build_norm(ctx0, tmpq,
                         model.layers[il].attn_q_norm,
                         model.layers[il].attn_q_norm_b,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(tmpq, "tmpq", il);
 
                 tmpk = build_norm(ctx0, tmpk,
                         model.layers[il].attn_k_norm,
                         model.layers[il].attn_k_norm_b,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(tmpk, "tmpk", il);
 
                 // RoPE the first n_rot of q/k, pass the other half, and concat.
@@ -4072,7 +4065,7 @@ public:
                 // TODO: not tested, could be broken
                 cur = build_kqv(ctx0, Q,
                         model.layers[il].wo, model.layers[il].bo,
-                        Q, KQ_scale, KQ_mask, n_tokens, n_kv, -1.0f, il);
+                        Q, KQ_scale, KQ_mask, -1.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4084,7 +4077,7 @@ public:
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm,
                         model.layers[il].ffn_norm_b,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -4106,7 +4099,7 @@ public:
         cur = build_norm(ctx0, cur,
                 model.output_norm,
                 model.output_norm_b,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
@@ -4138,7 +4131,7 @@ public:
 
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm, NULL,
-                    LLM_NORM_RMS, norm_rms_eps, il);
+                    LLM_NORM_RMS, il);
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -4162,7 +4155,7 @@ public:
 
                 cur = build_kqv(ctx0, Qcur,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, 8.0f, il);
+                        Qcur, KQ_scale, KQ_mask, 8.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4173,7 +4166,7 @@ public:
             {
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm, NULL,
-                        LLM_NORM_RMS, norm_rms_eps, il);
+                        LLM_NORM_RMS, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -4195,7 +4188,7 @@ public:
 
         cur = build_norm(ctx0, cur,
                 model.output_norm, NULL,
-                LLM_NORM_RMS, norm_rms_eps, -1);
+                LLM_NORM_RMS, -1);
         cb(cur, "result_norm", -1);
 
         // lm_head
@@ -4226,14 +4219,14 @@ public:
         inpL = build_norm(ctx0, inpL,
                 model.tok_norm,
                 model.tok_norm_b,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(inpL, "inp_norm", -1);
 
         for (int il = 0; il < n_layer; ++il) {
             cur = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm,
                     model.layers[il].attn_norm_b,
-                    LLM_NORM, norm_eps, il);
+                    LLM_NORM, il);
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -4258,7 +4251,7 @@ public:
 
                 cur = build_kqv(ctx0, Qcur,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, 8.0f, il);
+                        Qcur, KQ_scale, KQ_mask, 8.0f, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4271,7 +4264,7 @@ public:
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm,
                         model.layers[il].ffn_norm_b,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -4289,7 +4282,7 @@ public:
         cur = build_norm(ctx0, inpL,
                 model.output_norm,
                 model.output_norm_b,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
@@ -4322,7 +4315,7 @@ public:
             attn_norm = build_norm(ctx0, inpL,
                     model.layers[il].attn_norm,
                     NULL,
-                    LLM_NORM, norm_eps, il);
+                    LLM_NORM, il);
             cb(attn_norm, "attn_norm", il);
 
             // self-attention
@@ -4332,8 +4325,8 @@ public:
                 cur = ggml_mul_mat(ctx0, model.layers[il].wqkv, cur);
                 cb(cur, "wqkv", il);
 
-                if (clamp_kqv > 0.0f) {
-                    cur = ggml_clamp(ctx0, cur, -clamp_kqv, clamp_kqv);
+                if (hparams.f_clamp_kqv > 0.0f) {
+                    cur = ggml_clamp(ctx0, cur, -hparams.f_clamp_kqv, hparams.f_clamp_kqv);
                     cb(cur, "wqkv_clamped", il);
                 }
 
@@ -4351,7 +4344,7 @@ public:
 
                 cur = build_kqv(ctx0, Qcur,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_tokens, n_kv, max_alibi_bias, il);
+                        Qcur, KQ_scale, KQ_mask, hparams.f_max_alibi_bias, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4364,7 +4357,7 @@ public:
                 cur = build_norm(ctx0, ffn_inp,
                         model.layers[il].ffn_norm,
                         NULL,
-                        LLM_NORM, norm_eps, il);
+                        LLM_NORM, il);
                 cb(cur, "ffn_norm", il);
 
                 cur = build_ffn(ctx0, cur,
@@ -4387,7 +4380,7 @@ public:
         cur = build_norm(ctx0, cur,
                 model.output_norm,
                 NULL,
-                LLM_NORM, norm_eps, -1);
+                LLM_NORM, -1);
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
