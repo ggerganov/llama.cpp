@@ -7980,6 +7980,7 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_attn_factor            =*/ 1.0f,
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
+        /*.yarn_orig_ctx               =*/ 0,
         /*.mul_mat_q                   =*/ true,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
