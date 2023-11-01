@@ -39,6 +39,7 @@ void llama_sampling_free(struct llama_sampling_context * ctx) {
 void llama_sampling_reset(llama_sampling_context * ctx) {
     if (ctx->grammar != NULL) {
         llama_grammar_free(ctx->grammar);
+        ctx->grammar = NULL;
     }
 
     if (!ctx->parsed_grammar.rules.empty()) {
