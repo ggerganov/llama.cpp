@@ -491,6 +491,10 @@ quantize_neox: ggml.o llama.o ggml-quants.o ggml-alloc.o ggml-backend.o otherarc
 quantize_mpt: ggml.o llama.o ggml-quants.o ggml-alloc.o ggml-backend.o otherarch/tools/mpt_quantize.cpp otherarch/tools/common-ggml.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
+#window simple clinfo
+simpleclinfo: simpleclinfo.cpp
+	$(CXX) $(CXXFLAGS) $^ lib/OpenCL.lib lib/clblast.lib -o $@ $(LDFLAGS)
+
 
 build-info.h:
 	$(DONOTHING)

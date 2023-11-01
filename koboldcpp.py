@@ -895,7 +895,7 @@ def show_new_gui():
 
     import customtkinter as ctk
     nextstate = 0 #0=exit, 1=launch
-    windowwidth = 530
+    windowwidth = 540
     windowheight = 500
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
@@ -914,6 +914,11 @@ def show_new_gui():
     tabcontentframe = ctk.CTkFrame(tabs, width=windowwidth - int(navbuttonframe.cget("width")), height=int(tabs.cget("height")))
     tabcontentframe.grid(row=0, column=1, sticky="nsew", padx=2, pady=2)
     tabcontentframe.grid_propagate(False)
+
+    CLDevices = ["1","2","3","4"]
+    CUDevices = ["1","2","3","4","All"]
+    CLDevicesNames = ["","","",""]
+    CUDevicesNames = ["","","","",""]
 
     tabcontent = {}
     lib_option_pairs = [
@@ -1003,6 +1008,53 @@ def show_new_gui():
         button.grid(row=row+1, column=1, stick="nw")
         return
 
+    # decided to follow yellowrose's and kalomaze's suggestions, this function will automatically try to determine GPU identifiers
+    # todo: autopick the right number of layers when a model is selected.
+    # run in new thread so it doesnt block. does not return anything, instead overwrites specific values and redraws GUI
+    def auto_gpu_heuristics():
+        from subprocess import run, CalledProcessError
+        FetchedCUdevices = []
+        try: # Get OpenCL GPU names on windows using a special binary. overwrite at known index if found.
+            if os.name == 'nt':
+                basepath = os.path.abspath(os.path.dirname(__file__))
+                output = run([os.path.join(basepath, "simpleclinfo.exe")], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+                for line in output.splitlines():
+                    pd = line.split("=")[0].strip()
+                    name = line.split("=")[1].strip()
+                    plat = int(pd.split(" ")[0].strip())
+                    dev = int(pd.split(" ")[1].strip())
+                    idx = plat+dev*2
+                    if idx<len(CLDevices):
+                        CLDevicesNames[idx] = name
+        except Exception as e:
+            pass
+
+        try: # Get NVIDIA GPU names
+            output = run(['nvidia-smi', '-L'], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+            FetchedCUdevices = [line.split(":", 1)[1].strip().split("(")[0].strip() for line in output.splitlines() if line.startswith("GPU")]
+        except Exception as e:
+            pass
+
+        if len(FetchedCUdevices)==0:
+            try: # Get AMD ROCm GPU names
+                output = run(['rocminfo'], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+                device_name = None
+                for line in output.splitlines():
+                    line = line.strip()
+                    if line.startswith("Marketing Name:"): device_name = line.split(":", 1)[1].strip()
+                    elif line.startswith("Device Type:") and "GPU" in line and device_name is not None: FetchedCUdevices.append(device_name)
+                    elif line.startswith("Device Type:") and "GPU" not in line: device_name = None
+            except Exception as e:
+                pass
+
+        for idx in range(0,4):
+            if(len(FetchedCUdevices)>idx):
+                CUDevicesNames[idx] = FetchedCUdevices[idx]
+                pass
+
+        changed_gpu_choice_var()
+        return
+
     def show_tooltip(event, tooltip_text=None):
         if hasattr(show_tooltip, "_tooltip"):
             tooltip = show_tooltip._tooltip
@@ -1025,17 +1077,34 @@ def show_new_gui():
 
     def setup_backend_tooltip(parent):
         num_backends_built = makelabel(parent, str(len(runopts)) + f"/{6 if os.name == 'nt' else 4}", 5, 2)
-        num_backends_built.grid(row=1, column=2, padx=0, pady=0)
+        num_backends_built.grid(row=1, column=1, padx=195, pady=0)
         num_backends_built.configure(text_color="#00ff00")
         # Bind the backend count label with the tooltip function
         num_backends_built.bind("<Enter>", lambda event: show_tooltip(event, f"This is the number of backends you have built and available." + (f"\nMissing: {', '.join(antirunopts)}" if len(runopts) != 6 else "")))
         num_backends_built.bind("<Leave>", hide_tooltip)
+
+    def changed_gpu_choice_var(*args):
+        if gpu_choice_var.get()!="All":
+            try:
+                s = int(gpu_choice_var.get())-1
+                if runopts_var.get() == "Use CLBlast":
+                    quick_gpuname_label.configure(text=CLDevicesNames[s])
+                    gpuname_label.configure(text=CLDevicesNames[s])
+                else:
+                    quick_gpuname_label.configure(text=CUDevicesNames[s])
+                    gpuname_label.configure(text=CUDevicesNames[s])
+            except Exception as ex:
+                pass
+        else:
+            quick_gpuname_label.configure(text="")
+            gpuname_label.configure(text="")
 
     # Vars - should be in scope to be used by multiple widgets
     gpulayers_var = ctk.StringVar(value="0")
     threads_var = ctk.StringVar(value=str(default_threads))
     runopts_var = ctk.StringVar()
     gpu_choice_var = ctk.StringVar(value="1")
+    gpu_choice_var.trace("w", changed_gpu_choice_var)
 
     launchbrowser = ctk.IntVar(value=1)
     highpriority = ctk.IntVar()
@@ -1079,6 +1148,8 @@ def show_new_gui():
     def changerunmode(a,b,c):
         index = runopts_var.get()
         if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
+            quick_gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
+            gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             if index == "Use CLBlast":
@@ -1090,6 +1161,8 @@ def show_new_gui():
                 CUDA_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 CUDA_quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
         else:
+            quick_gpuname_label.grid_forget()
+            gpuname_label.grid_forget()
             gpu_selector_label.grid_forget()
             gpu_selector_box.grid_forget()
             CUDA_gpu_selector_box.grid_forget()
@@ -1122,6 +1195,7 @@ def show_new_gui():
             gpu_layers_entry.grid_forget()
             quick_gpu_layers_label.grid_forget()
             quick_gpu_layers_entry.grid_forget()
+        changed_gpu_choice_var()
 
 
     # presets selector
@@ -1136,8 +1210,11 @@ def show_new_gui():
 
     # gpu options
     quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
-    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","4"], width=60, variable=gpu_choice_var, state="readonly")
-    CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=["1","2","3","4","All"], width=60, variable=gpu_choice_var, state="readonly")
+    quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
+    quick_gpuname_label = ctk.CTkLabel(quick_tab, text="")
+    quick_gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
+    quick_gpuname_label.configure(text_color="#ffff00")
     quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50)
     quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0)
     quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
@@ -1172,8 +1249,11 @@ def show_new_gui():
 
     # gpu options
     gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
-    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4"], width=60, variable=gpu_choice_var, state="readonly")
-    CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=["1","2","3","4", "All"], width=60, variable=gpu_choice_var, state="readonly")
+    gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
+    CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
+    gpuname_label = ctk.CTkLabel(hardware_tab, text="")
+    gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
+    gpuname_label.configure(text_color="#ffff00")
     gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
     tensor_split_entry,tensor_split_label = makelabelentry(hardware_tab, "Tensor Split:", tensor_split_str_vars, 6, 80)
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
@@ -1464,6 +1544,10 @@ def show_new_gui():
     ctk.CTkButton(tabs , text = "Save", fg_color="#084a66", hover_color="#085a88", command = save_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 5, pady=5)
     ctk.CTkButton(tabs , text = "Load", fg_color="#084a66", hover_color="#085a88", command = load_config, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 70, pady=5)
     ctk.CTkButton(tabs , text = "Help", fg_color="#992222", hover_color="#bb3333", command = display_help, width=60, height = 35 ).grid(row=1,column=1, stick="sw", padx= 135, pady=5)
+
+    # start a thread that tries to get actual gpu names and layer counts
+    gpuinfo_thread = threading.Thread(target=auto_gpu_heuristics)
+    gpuinfo_thread.start() #submit job in new thread so nothing is waiting
 
     # runs main loop until closed or launch clicked
     root.mainloop()
