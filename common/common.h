@@ -110,6 +110,8 @@ struct gpt_params {
     std::string image = ""; // path to an image file
 };
 
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
 void gpt_print_usage(int argc, char ** argv, const gpt_params & params);

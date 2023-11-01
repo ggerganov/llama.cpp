@@ -87,6 +87,24 @@
 #define CC_OFFSET_AMD 1000000
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
 
+// define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
+// on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
+// for large computational tasks. the drawback is that this requires some extra amount of VRAM:
+// -  7B quantum model: +100-200 MB
+// - 13B quantum model: +200-400 MB
+//
+//#define GGML_CUDA_FORCE_MMQ
+
+// TODO: improve this to be correct for more hardware
+//       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
+//       probably other such cases, and not sure what happens on AMD hardware
+#if !defined(GGML_CUDA_FORCE_MMQ)
+#define CUDA_USE_TENSOR_CORES
+#endif
+
+// max batch size to use MMQ kernels when tensor cores are available
+#define MMQ_MAX_BATCH_SIZE 32
+
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
 
@@ -470,7 +488,6 @@ static int g_device_count = -1;
 static int g_main_device = 0;
 static int g_compute_capabilities[GGML_CUDA_MAX_DEVICES];
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
-static bool g_mul_mat_q = true;
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
@@ -494,6 +511,15 @@ static __global__ void add_f16_f32_f16(const half * x, const float * y, half * d
         return;
     }
     dst[i] = __hadd(x[i], __float2half(y[i]));
+}
+
+static __global__ void add_f16_f32_f32(const half * x, const float * y, float * dst, const int k) {
+    const int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+    if (i >= k) {
+        return;
+    }
+    dst[i] = __half2float(x[i]) + y[i];
 }
 
 static __global__ void mul_f32(const float * x, const float * y, float * dst, const int kx, const int ky) {
@@ -3554,9 +3580,15 @@ static __device__ __forceinline__ void mul_mat_q(
 #define  MMQ_X_Q4_0_RDNA1  64
 #define  MMQ_Y_Q4_0_RDNA1  64
 #define NWARPS_Q4_0_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q4_0_AMPERE 4
+#define  MMQ_Y_Q4_0_AMPERE 32
+#define NWARPS_Q4_0_AMPERE 4
+#else
 #define  MMQ_X_Q4_0_AMPERE 64
 #define  MMQ_Y_Q4_0_AMPERE 128
 #define NWARPS_Q4_0_AMPERE 4
+#endif
 #define  MMQ_X_Q4_0_PASCAL 64
 #define  MMQ_Y_Q4_0_PASCAL 64
 #define NWARPS_Q4_0_PASCAL 8
@@ -3615,9 +3647,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q4_1_RDNA1  64
 #define  MMQ_Y_Q4_1_RDNA1  64
 #define NWARPS_Q4_1_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q4_1_AMPERE 4
+#define  MMQ_Y_Q4_1_AMPERE 32
+#define NWARPS_Q4_1_AMPERE 4
+#else
 #define  MMQ_X_Q4_1_AMPERE 64
 #define  MMQ_Y_Q4_1_AMPERE 128
 #define NWARPS_Q4_1_AMPERE 4
+#endif
 #define  MMQ_X_Q4_1_PASCAL 64
 #define  MMQ_Y_Q4_1_PASCAL 64
 #define NWARPS_Q4_1_PASCAL 8
@@ -3678,9 +3716,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q5_0_RDNA1  64
 #define  MMQ_Y_Q5_0_RDNA1  64
 #define NWARPS_Q5_0_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q5_0_AMPERE 4
+#define  MMQ_Y_Q5_0_AMPERE 32
+#define NWARPS_Q5_0_AMPERE 4
+#else
 #define  MMQ_X_Q5_0_AMPERE 128
 #define  MMQ_Y_Q5_0_AMPERE 64
 #define NWARPS_Q5_0_AMPERE 4
+#endif
 #define  MMQ_X_Q5_0_PASCAL 64
 #define  MMQ_Y_Q5_0_PASCAL 64
 #define NWARPS_Q5_0_PASCAL 8
@@ -3739,9 +3783,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q5_1_RDNA1  64
 #define  MMQ_Y_Q5_1_RDNA1  64
 #define NWARPS_Q5_1_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q5_1_AMPERE 4
+#define  MMQ_Y_Q5_1_AMPERE 32
+#define NWARPS_Q5_1_AMPERE 4
+#else
 #define  MMQ_X_Q5_1_AMPERE 128
 #define  MMQ_Y_Q5_1_AMPERE 64
 #define NWARPS_Q5_1_AMPERE 4
+#endif
 #define  MMQ_X_Q5_1_PASCAL 64
 #define  MMQ_Y_Q5_1_PASCAL 64
 #define NWARPS_Q5_1_PASCAL 8
@@ -3800,9 +3850,15 @@ mul_mat_q5_1(
 #define  MMQ_X_Q8_0_RDNA1  64
 #define  MMQ_Y_Q8_0_RDNA1  64
 #define NWARPS_Q8_0_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q8_0_AMPERE 4
+#define  MMQ_Y_Q8_0_AMPERE 32
+#define NWARPS_Q8_0_AMPERE 4
+#else
 #define  MMQ_X_Q8_0_AMPERE 128
 #define  MMQ_Y_Q8_0_AMPERE 64
 #define NWARPS_Q8_0_AMPERE 4
+#endif
 #define  MMQ_X_Q8_0_PASCAL 64
 #define  MMQ_Y_Q8_0_PASCAL 64
 #define NWARPS_Q8_0_PASCAL 8
@@ -3861,9 +3917,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q2_K_RDNA1  128
 #define  MMQ_Y_Q2_K_RDNA1  32
 #define NWARPS_Q2_K_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q2_K_AMPERE 4
+#define  MMQ_Y_Q2_K_AMPERE 32
+#define NWARPS_Q2_K_AMPERE 4
+#else
 #define  MMQ_X_Q2_K_AMPERE 64
 #define  MMQ_Y_Q2_K_AMPERE 128
 #define NWARPS_Q2_K_AMPERE 4
+#endif
 #define  MMQ_X_Q2_K_PASCAL 64
 #define  MMQ_Y_Q2_K_PASCAL 64
 #define NWARPS_Q2_K_PASCAL 8
@@ -3922,9 +3984,15 @@ mul_mat_q2_K(
 #define  MMQ_X_Q3_K_RDNA1  32
 #define  MMQ_Y_Q3_K_RDNA1  128
 #define NWARPS_Q3_K_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q3_K_AMPERE 4
+#define  MMQ_Y_Q3_K_AMPERE 32
+#define NWARPS_Q3_K_AMPERE 4
+#else
 #define  MMQ_X_Q3_K_AMPERE 128
 #define  MMQ_Y_Q3_K_AMPERE 128
 #define NWARPS_Q3_K_AMPERE 4
+#endif
 #define  MMQ_X_Q3_K_PASCAL 64
 #define  MMQ_Y_Q3_K_PASCAL 64
 #define NWARPS_Q3_K_PASCAL 8
@@ -3985,9 +4053,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q4_K_RDNA1  32
 #define  MMQ_Y_Q4_K_RDNA1  64
 #define NWARPS_Q4_K_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q4_K_AMPERE 4
+#define  MMQ_Y_Q4_K_AMPERE 32
+#define NWARPS_Q4_K_AMPERE 4
+#else
 #define  MMQ_X_Q4_K_AMPERE 64
 #define  MMQ_Y_Q4_K_AMPERE 128
 #define NWARPS_Q4_K_AMPERE 4
+#endif
 #define  MMQ_X_Q4_K_PASCAL 64
 #define  MMQ_Y_Q4_K_PASCAL 64
 #define NWARPS_Q4_K_PASCAL 8
@@ -4048,9 +4122,15 @@ template <bool need_check> static __global__ void
 #define  MMQ_X_Q5_K_RDNA1  32
 #define  MMQ_Y_Q5_K_RDNA1  64
 #define NWARPS_Q5_K_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q5_K_AMPERE 4
+#define  MMQ_Y_Q5_K_AMPERE 32
+#define NWARPS_Q5_K_AMPERE 4
+#else
 #define  MMQ_X_Q5_K_AMPERE 64
 #define  MMQ_Y_Q5_K_AMPERE 128
 #define NWARPS_Q5_K_AMPERE 4
+#endif
 #define  MMQ_X_Q5_K_PASCAL 64
 #define  MMQ_Y_Q5_K_PASCAL 64
 #define NWARPS_Q5_K_PASCAL 8
@@ -4109,9 +4189,15 @@ mul_mat_q5_K(
 #define  MMQ_X_Q6_K_RDNA1  32
 #define  MMQ_Y_Q6_K_RDNA1  64
 #define NWARPS_Q6_K_RDNA1  8
+#if defined(CUDA_USE_TENSOR_CORES)
+#define  MMQ_X_Q6_K_AMPERE 4
+#define  MMQ_Y_Q6_K_AMPERE 32
+#define NWARPS_Q6_K_AMPERE 4
+#else
 #define  MMQ_X_Q6_K_AMPERE 64
 #define  MMQ_Y_Q6_K_AMPERE 64
 #define NWARPS_Q6_K_AMPERE 4
+#endif
 #define  MMQ_X_Q6_K_PASCAL 64
 #define  MMQ_Y_Q6_K_PASCAL 64
 #define NWARPS_Q6_K_PASCAL 8
@@ -4614,6 +4700,11 @@ static void add_f32_cuda(const float * x, const float * y, float * dst, const in
 static void add_f16_f32_f16_cuda(const half * x, const float * y, half * dst, const int k, cudaStream_t stream) {
     const int num_blocks = (k + CUDA_ADD_BLOCK_SIZE - 1) / CUDA_ADD_BLOCK_SIZE;
     add_f16_f32_f16<<<num_blocks, CUDA_ADD_BLOCK_SIZE, 0, stream>>>(x, y, dst, k);
+}
+
+static void add_f16_f32_f32_cuda(const half * x, const float * y, float * dst, const int k, cudaStream_t stream) {
+    const int num_blocks = (k + CUDA_ADD_BLOCK_SIZE - 1) / CUDA_ADD_BLOCK_SIZE;
+    add_f16_f32_f32<<<num_blocks, CUDA_ADD_BLOCK_SIZE, 0, stream>>>(x, y, dst, k);
 }
 
 static void mul_f32_cuda(const float * x, const float * y, float * dst, const int kx, const int ky, cudaStream_t stream) {
@@ -5663,6 +5754,16 @@ void ggml_init_cublas() {
         CUDA_CHECK(cudaGetDeviceCount(&g_device_count));
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
+#if defined(GGML_CUDA_FORCE_MMQ)
+        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   yes\n", __func__);
+#else
+        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   no\n", __func__);
+#endif
+#if defined(CUDA_USE_TENSOR_CORES)
+        fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: yes\n", __func__);
+#else
+        fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
+#endif
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
         for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
@@ -5909,7 +6010,10 @@ inline void ggml_cuda_op_add(
         add_f32_cuda(src0_dd, src1_dd, dst_dd, ggml_nelements(src0), ne10*ne11, main_stream);
     } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
         add_f16_f32_f16_cuda((const half *) src0_dd, src1_dd, (half *) dst_dd, ggml_nelements(src0), main_stream);
+    } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F32) {
+        add_f16_f32_f32_cuda((const half *) src0_dd, src1_dd, dst_dd, ggml_nelements(src0), main_stream);
     } else {
+        fprintf(stderr, "src0->type: %d  dst->type: %d\n", src0->type, dst->type);
         GGML_ASSERT(false);
     }
 
@@ -6347,7 +6451,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
             cublasSgemm(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
                     row_diff, src1_ncols, ne10,
                     &alpha, src0_ddf_i, ne00,
-                            src1_ddf_i,  ne10,
+                            src1_ddf_i, ne10,
                     &beta,  dst_dd_i,   ldc));
 
         if (src0_as != 0) {
@@ -7048,9 +7152,10 @@ static void ggml_cuda_mul_mat_vec_nc(const ggml_tensor * src0, const ggml_tensor
     ggml_mul_mat_vec_nc_f16_f32_cuda(src0_ddq, src1_ddf, dst_ddf, ne00, ne01, row_stride_x, ne02, ne12, channel_stride_x, main_stream);
 }
 
-static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
+static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_ASSERT(!ggml_is_transposed(src0));
     GGML_ASSERT(!ggml_is_transposed(src1));
+
     GGML_ASSERT(src0->backend != GGML_BACKEND_GPU_SPLIT);
     GGML_ASSERT(src0->type == GGML_TYPE_F16);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
@@ -7202,16 +7307,23 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
 }
 
 static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    bool all_on_device = (src0->backend == GGML_BACKEND_GPU || src0->backend == GGML_BACKEND_GPU_SPLIT) &&
-        src1->backend == GGML_BACKEND_GPU && dst->backend == GGML_BACKEND_GPU;
+    const bool all_on_device =
+        (src0->backend == GGML_BACKEND_GPU) &&
+        (src1->backend == GGML_BACKEND_GPU) &&
+        ( dst->backend == GGML_BACKEND_GPU);
 
     int64_t min_compute_capability = INT_MAX;
     for (int64_t id = 0; id < g_device_count; ++id) {
-        if (min_compute_capability > g_compute_capabilities[id]
-                && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
+        if (min_compute_capability > g_compute_capabilities[id] && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
             min_compute_capability = g_compute_capabilities[id];
         }
     }
+
+#ifdef CUDA_USE_TENSOR_CORES
+    const bool use_tensor_cores = true;
+#else
+    const bool use_tensor_cores = false;
+#endif
 
     // debug helpers
     //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
@@ -7221,20 +7333,19 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     //printf("src0 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name);
     //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
 
-    if (all_on_device && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
+    if (all_on_device && !use_tensor_cores && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
         // KQ single-batch
         ggml_cuda_mul_mat_vec_p021(src0, src1, dst);
-    } else if (all_on_device && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
+    } else if (all_on_device && !use_tensor_cores && src0->type == GGML_TYPE_F16 && !ggml_is_contiguous(src0) && !ggml_is_transposed(src1) && src1->ne[1] == 1) {
         // KQV single-batch
         ggml_cuda_mul_mat_vec_nc(src0, src1, dst);
-    } else if (all_on_device && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1) && src1->ne[2]*src1->ne[3] > 1) {
+    } else if (all_on_device && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 && !ggml_is_transposed(src0) && !ggml_is_transposed(src1)) {
         // KQ + KQV multi-batch
         ggml_cuda_mul_mat_mat_batched_cublas(src0, src1, dst);
     } else if (src0->type == GGML_TYPE_F32) {
         ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
     } else if (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16) {
         if (src1->ne[1] == 1 && src0->ne[0] % GGML_CUDA_DMMV_X == 0) {
-
 #ifdef GGML_CUDA_FORCE_DMMV
             const bool use_mul_mat_vec_q = false;
 #else
@@ -7247,7 +7358,15 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
             }
         } else {
-            if (g_mul_mat_q && ggml_is_quantized(src0->type) && min_compute_capability >= MIN_CC_DP4A) {
+            bool use_mul_mat_q = min_compute_capability >= MIN_CC_DP4A && ggml_is_quantized(src0->type);
+
+            // when tensor cores are available, use them for large batch size
+            // ref: https://github.com/ggerganov/llama.cpp/pull/3776
+            if (use_tensor_cores && min_compute_capability >= CC_VOLTA && src1->ne[1] > MMQ_MAX_BATCH_SIZE) {
+                use_mul_mat_q = false;
+            }
+
+            if (use_mul_mat_q) {
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
             } else {
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
@@ -7599,10 +7718,6 @@ void ggml_cuda_set_main_device(const int main_device) {
         CUDA_CHECK(cudaGetDeviceProperties(&prop, g_main_device));
         fprintf(stderr, "%s: using device %d (%s) as main device\n", __func__, g_main_device, prop.name);
     }
-}
-
-void ggml_cuda_set_mul_mat_q(const bool mul_mat_q) {
-    g_mul_mat_q = mul_mat_q;
 }
 
 void ggml_cuda_set_scratch_size(const size_t scratch_size) {
