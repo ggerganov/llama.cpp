@@ -10,10 +10,12 @@
 *.gcno
 *.gcda
 *.dot
+*.bat
 *.metallib
 .DS_Store
 .build/
 .cache/
+.ccls-cache/
 .direnv/
 .envrc
 .swiftpm

@@ -246,14 +246,14 @@ int main(int argc, char ** argv) {
     if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
         inp_sfx.erase(inp_sfx.begin());
     }
-    inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+    inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
     if (add_bos) {
-        inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+        inp_pfx.insert(inp_pfx.begin(), llama_token_bos(model));
     }
-    inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
+    inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
     embd_inp = inp_pfx;
     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-    embd_inp.push_back(llama_token_middle(ctx));
+    embd_inp.push_back(llama_token_middle(model));
 
     LOG("prefix: \"%s\"\n", log_tostr(params.input_prefix));
     LOG("suffix: \"%s\"\n", log_tostr(params.input_suffix));
@@ -261,7 +261,7 @@ int main(int argc, char ** argv) {
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
-        embd_inp.push_back(llama_token_bos(ctx));
+        embd_inp.push_back(llama_token_bos(model));
         LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
     }
 
@@ -577,10 +577,10 @@ int main(int argc, char ** argv) {
         if ((int) embd_inp.size() <= n_consumed) {
 
             // deal with eot token in infill mode
-            if ((llama_sampling_last(ctx_sampling) == llama_token_eot(ctx) || is_interacting) && params.interactive){
+            if ((llama_sampling_last(ctx_sampling) == llama_token_eot(model) || is_interacting) && params.interactive){
                 if(is_interacting && !params.interactive_first) {
                     // print an eot token
-                    printf("%s", llama_token_to_piece(ctx, llama_token_eot(ctx)).c_str());
+                    printf("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
                 }
                 fflush(stdout);
                 printf("\n");
@@ -627,14 +627,14 @@ int main(int argc, char ** argv) {
                 if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
                     inp_sfx.erase(inp_sfx.begin());
                 }
-                inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(ctx));
+                inp_pfx.insert(inp_pfx.begin(), llama_token_prefix(model));
                 if (add_bos) {
-                    inp_pfx.insert(inp_pfx.begin(), llama_token_bos(ctx));
+                    inp_pfx.insert(inp_pfx.begin(), llama_token_bos(model));
                 }
-                inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(ctx));
+                inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
                 embd_inp = inp_pfx;
                 embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-                embd_inp.push_back(llama_token_middle(ctx));
+                embd_inp.push_back(llama_token_middle(model));
                 embd.clear();
                 embd_guidance.clear();
                 n_remain = params.n_predict;
@@ -644,7 +644,7 @@ int main(int argc, char ** argv) {
                 is_interacting = false;
             }
             // deal with end of text token in interactive mode
-            else if (llama_sampling_last(ctx_sampling) == llama_token_eos(ctx)) {
+            else if (llama_sampling_last(ctx_sampling) == llama_token_eos(model)) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -661,7 +661,7 @@ int main(int argc, char ** argv) {
 
                 if (params.input_prefix_bos) {
                     LOG("adding input prefix BOS token\n");
-                    embd_inp.push_back(llama_token_bos(ctx));
+                    embd_inp.push_back(llama_token_bos(model));
                 }
 
                 std::string buffer;
@@ -724,7 +724,7 @@ int main(int argc, char ** argv) {
         }
 
         // end of text token
-        if (!embd.empty() && embd.back() == llama_token_eos(ctx) && !params.interactive) {
+        if (!embd.empty() && embd.back() == llama_token_eos(model) && !params.interactive) {
             break;
         }
 
@@ -736,7 +736,7 @@ int main(int argc, char ** argv) {
         }
     }
     if (!params.interactive && n_remain <= 0) {
-        printf("%s", llama_token_to_piece(ctx, llama_token_eot(ctx)).c_str());
+        printf("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
         fflush(stdout);
     }
 

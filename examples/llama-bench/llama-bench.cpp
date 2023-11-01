@@ -933,7 +933,7 @@ struct sql_printer : public printer {
 };
 
 static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_batch, int n_threads) {
-    std::vector<llama_token> tokens(n_batch, llama_token_bos(ctx));
+    std::vector<llama_token> tokens(n_batch, llama_token_bos(llama_get_model(ctx)));
     int n_processed = 0;
 
     llama_set_n_threads(ctx, n_threads, n_threads);
@@ -946,7 +946,7 @@ static void test_prompt(llama_context * ctx, int n_prompt, int n_past, int n_bat
 }
 
 static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) {
-    llama_token token = llama_token_bos(ctx);
+    llama_token token = llama_token_bos(llama_get_model(ctx));
 
     llama_set_n_threads(ctx, n_threads, n_threads);
 
@@ -1037,7 +1037,7 @@ int main(int argc, char ** argv) {
 
         test t(inst, lmodel, ctx);
 
-        llama_kv_cache_tokens_rm(ctx, -1, -1);
+        llama_kv_cache_clear(ctx);
 
         // warmup run
         if (t.n_prompt > 0) {
@@ -1048,7 +1048,7 @@ int main(int argc, char ** argv) {
         }
 
         for (int i = 0; i < params.reps; i++) {
-            llama_kv_cache_tokens_rm(ctx, -1, -1);
+            llama_kv_cache_clear(ctx);
 
             uint64_t t_start = get_time_ns();
             if (t.n_prompt > 0) {
