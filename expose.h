@@ -60,6 +60,7 @@ struct generation_inputs
     const int top_k;
     const float top_a = 0.0f;
     const float top_p;
+    const float min_p = 0.0f;
     const float typical_p;
     const float tfs;
     const float rep_pen;
