@@ -372,6 +372,9 @@ extern "C" {
 
     LLAMA_API size_t llama_max_devices(void);
 
+    // Get the ID of this compute node, usually 0
+    // unless running MPI, in which case it is the rank of the node
+    LLAMA_API int llama_node_id(struct llama_context * ctx);
     LLAMA_API bool llama_supports_mmap       (void);
     LLAMA_API bool llama_supports_mlock      (void);
     LLAMA_API bool llama_supports_gpu_offload(void);

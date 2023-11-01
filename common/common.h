@@ -44,11 +44,10 @@ int32_t get_num_physical_cores();
 
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
-
-    int32_t n_threads             = get_num_physical_cores();
-    int32_t n_threads_draft       = -1;
-    int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_threads_batch_draft = -1;
+    std::vector<int32_t> n_threads                       = {get_num_physical_cores()};
+    std::vector<int32_t> n_threads_batch                 = {-1};    // number of threads to use for batch processing (-1 = use n_threads)
+    std::vector<int32_t> n_threads_draft                 = {get_num_physical_cores()};
+    std::vector<int32_t> n_threads_batch_draft           = {-1};    // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_predict             = -1;    // new tokens to predict
     int32_t n_ctx                 = 512;   // context size
     int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)

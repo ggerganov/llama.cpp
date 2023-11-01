@@ -12668,6 +12668,14 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
+int llama_node_id(struct llama_context * ctx) {
+#ifdef GGML_USE_MPI
+    return ggml_mpi_rank(ctx->ctx_mpi);
+
+#endif
+    return 0;
+}
+
 size_t llama_max_devices(void) {
 #if defined(GGML_USE_METAL)
     return 1;
