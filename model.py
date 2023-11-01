@@ -2,7 +2,6 @@ import os
 import re
 import sys
 import json
-import gguf
 import torch
 import contextlib
 import numpy as np
@@ -10,6 +9,12 @@ import numpy as np
 from enum import IntEnum
 from pathlib import Path
 from typing import TypeAlias, Any, Generator
+
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+import gguf
+
+
 
 NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
@@ -160,7 +165,7 @@ class Model:
     def set_vocab(self):
         self._set_vocab_gpt2()
 
-    def get_tensors(self) -> Generator[str, Any]:
+    def get_tensors(self) -> Generator[str, Any, None]:
         for part_name in self.part_names:
             print("gguf: loading model part '" + part_name + "'")
             if self.is_safetensors:
@@ -789,12 +794,13 @@ class PersimmonModel(Model):
         self.gguf_writer.add_name('persimmon-8b-chat')
         self.gguf_writer.add_embedding_length(hidden_size)
         self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_feed_forward_length(self.hparams["ffn_hidden_size"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
         self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
-        self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
-        self.gguf_writer.add_layer_norm_eps(self.hparams["layernorm_epsilon"])
+        self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()

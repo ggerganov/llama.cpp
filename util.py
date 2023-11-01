@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert a stablelm model to a GGML compatible file")
+    parser = argparse.ArgumentParser(description="Convert a huggingface model to a GGML compatible file")
     parser.add_argument(
         "--vocab-only", action="store_true",
         help="extract only the vocab",
