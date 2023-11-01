@@ -102,7 +102,7 @@ void process_escapes(std::string& input) {
     input.resize(output_idx);
 }
 
-bool gpt_params_parse(int argc, char** argv, gpt_params& params) {
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool result = true;
     try {
         if (!gpt_params_parse_ex(argc, argv, params)) {
