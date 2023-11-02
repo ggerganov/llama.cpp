@@ -40,8 +40,8 @@ endif()
 
 set(TARGET common)
 
-add_library(${TARGET} OBJECT
-    base64.hpp
+add_library(${TARGET} STATIC
+base64.hpp
     common.h
     common.cpp
     sampling.h

@@ -52,14 +52,13 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
 
     // llava chat format is "<system_prompt>USER: <image_embeddings>\n<textual_prompt>\nASSISTANT:"
-    // GG: are we sure that the should be a trailing whitespace at the end of this string?
     printf("evaluating system prompt\n");
-    eval_string(ctx_llava->ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER: ", params->n_batch, &n_past);
+    eval_string(ctx_llava->ctx_llama, "A chat between a curious human and an artificial intelligence assistant.  The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:", params->n_batch, &n_past, true);
     printf("evaluating image embed\n");
     llava_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past);
     printf("evaluating prompt\n");
-    eval_string(ctx_llava->ctx_llama, prompt, params->n_batch, &n_past);
-    eval_string(ctx_llava->ctx_llama, "\nASSISTANT:",        params->n_batch, &n_past);
+    eval_string(ctx_llava->ctx_llama, prompt, params->n_batch, &n_past, false);
+    eval_string(ctx_llava->ctx_llama, "\nASSISTANT:",        params->n_batch, &n_past, false);
     printf("awaiting response\n");
 
     // generate the response
