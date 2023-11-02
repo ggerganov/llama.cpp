@@ -236,8 +236,8 @@ int64_t get_example_targets_batch(
     int64_t used_samples = 0;
 
     ggml_set_f32(target_probs, 0.0f);
-    llama_token bos = llama_token_bos(lctx);
-    llama_token eos = llama_token_eos(lctx);
+    llama_token bos = llama_token_bos(llama_get_model(lctx));
+    llama_token eos = llama_token_eos(llama_get_model(lctx));
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
@@ -863,7 +863,7 @@ size_t tokenize_file(
             (int) buf.size(),
             out_tokens.data(),
             (int) out_tokens.size(),
-            false);
+            false, false);
         if (n_tokens < 0) {
             out_tokens.resize(-n_tokens);
             n_tokens = llama_tokenize(
@@ -872,7 +872,7 @@ size_t tokenize_file(
                 (int) buf.size(),
                 out_tokens.data(),
                 (int) out_tokens.size(),
-                false);
+                false, false);
         }
         if (n_tokens >= 0) {
             out_tokens.resize(n_tokens);
@@ -924,7 +924,7 @@ size_t tokenize_file(
         for (llama_token token=0; token < n_vocab; ++token) {
             max_token_text_size = std::max(
                 max_token_text_size,
-                strlen(llama_token_get_text(lctx, token)));
+                strlen(llama_token_get_text(llama_get_model(lctx), token)));
         }
 
         // upper bound of context byte length.
@@ -966,7 +966,7 @@ size_t tokenize_file(
                     (int) buf_sample.size(),
                     tok_sample.data(),
                     (int) tok_sample.size(),
-                    false);
+                    false, false);
                 if (n_tokens < 0) {
                     tok_sample.resize(-n_tokens);
                     n_tokens = llama_tokenize(llama_get_model(lctx),
@@ -974,7 +974,7 @@ size_t tokenize_file(
                         (int) buf_sample.size(),
                         tok_sample.data(),
                         (int) tok_sample.size(),
-                        false);
+                        false, false);
                     GGML_ASSERT(n_tokens >= 0);
                 }
                 GGML_ASSERT(n_tokens <= (int) tok_sample.size());
@@ -1045,6 +1045,7 @@ struct train_params_common get_default_train_params_common() {
     params.n_batch    =    8;
     params.n_gradient_accumulation = 1;
     params.n_epochs   = -1;
+    params.n_gpu_layers = 0;
 
     params.custom_n_ctx = false;
 
@@ -1080,6 +1081,7 @@ struct train_params_common get_default_train_params_common() {
     params.adam_beta2          = 0.999f;
     params.adam_gclip          = 1.0f;
     params.adam_eps_f          = 0.0f;
+
     return params;
 }
 
@@ -1425,7 +1427,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched, bool * canc
 
         int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
         if (impr_plot > 0) impr_plot = 0;
-        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
+        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_after)) impr_plot = 0;
         printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
             __func__, opt->iter, std::min(1+train->shuffle_next_sample, train->shuffle_sample_count), train->shuffle_sample_count,
             *sched, opt->loss_after);

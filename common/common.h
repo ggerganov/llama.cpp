@@ -9,6 +9,7 @@
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
+#include <cmath>
 #include <string>
 #include <vector>
 #include <random>
@@ -25,10 +26,16 @@
 #define die(msg)          do { fputs("error: " msg "\n", stderr);                exit(1); } while (0)
 #define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
 
-#define print_build_info() do {                                                             \
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);         \
-    fprintf(stderr, "%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);  \
+#define print_build_info() do {                                                                     \
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);           \
+    fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
+
+// build info
+extern int LLAMA_BUILD_NUMBER;
+extern char const *LLAMA_COMMIT;
+extern char const *LLAMA_COMPILER;
+extern char const *LLAMA_BUILD_TARGET;
 
 //
 // CLI argument parsing
@@ -54,9 +61,15 @@ struct gpt_params {
     int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 0.0f; // RoPE base frequency
     float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
+    float   yarn_ext_factor                 = NAN;  // YaRN extrapolation mix factor
+    float   yarn_attn_factor                = 1.0f; // YaRN magnitude scaling factor
+    float   yarn_beta_fast                  = 32.0f;// YaRN low correction dim
+    float   yarn_beta_slow                  = 1.0f; // YaRN high correction dim
+    int32_t yarn_orig_ctx                   = 0;    // YaRN original context length
+    int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED;
 
     // // sampling parameters
-    struct llama_sampling_params sampling_params;
+    struct llama_sampling_params sparams;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path
     std::string model_draft       = "";                              // draft model for speculative decoding
@@ -66,10 +79,10 @@ struct gpt_params {
     std::string path_prompt_cache = "";  // path to file for saving/loading prompt eval state
     std::string input_prefix      = "";  // string to prefix user inputs with
     std::string input_suffix      = "";  // string to suffix user inputs with
-    std::string grammar           = "";  // optional BNF-like grammar to constrain sampling
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
+    // TODO: avoid tuple, use struct
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter
 
@@ -104,7 +117,13 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
+
+    // multimodal models (see examples/llava)
+    std::string mmproj = ""; // path to multimodal projector
+    std::string image = ""; // path to an image file
 };
+
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 
@@ -120,9 +139,22 @@ void process_escapes(std::string& input);
 // Model utils
 //
 
+// TODO: avoid tuplue, use struct
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
-struct llama_model_params   llama_model_params_from_gpt_params(const gpt_params & params);
+
+struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+
+// Batch utils
+
+void llama_batch_clear(struct llama_batch & batch);
+
+void llama_batch_add(
+                 struct llama_batch & batch,
+                        llama_token   id,
+                          llama_pos   pos,
+    const std::vector<llama_seq_id> & seq_ids,
+                               bool   logits);
 
 //
 // Vocab utils
@@ -133,12 +165,14 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
-                        bool   add_bos);
+                        bool   add_bos,
+                        bool   special = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
-                        bool   add_bos);
+                        bool   add_bos,
+                        bool   special = false);
 
 // tokenizes a token into a piece
 // should work similar to Python's `tokenizer.id_to_piece`
