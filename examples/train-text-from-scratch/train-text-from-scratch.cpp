@@ -1109,8 +1109,8 @@ int main(int argc, char ** argv) {
 
     // context for compute tensors without their data
     size_t estimated_compute_size_wo_data = (
-        ggml_tensor_overhead()*GGML_MAX_NODES*2
-      + (GGML_OBJECT_SIZE+GGML_GRAPH_SIZE)*(
+        ggml_tensor_overhead()*LLAMA_TRAIN_MAX_NODES*2
+      + (GGML_OBJECT_SIZE+ggml_graph_overhead())*(
             params.common.use_checkpointing ? 3 : 2
         )
     );
