@@ -1808,36 +1808,48 @@ def setuptunnel():
 
         def run_tunnel():
             tunnelproc = None
+            tunneloutput = ""
+            time.sleep(0.2)
             if os.name == 'nt':
                 print("Starting Cloudflare Tunnel for Windows...")
-                tunnelproc = subprocess.Popen(f"cloudflared.exe tunnel --url localhost:{args.port}", text=True, encoding='utf-8', shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                tunnelproc = subprocess.Popen(f"cloudflared.exe tunnel --url localhost:{args.port}", text=True, encoding='utf-8', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             else:
                 print("Starting Cloudflare Tunnel for Linux...")
-                tunnelproc = subprocess.Popen(f"cloudflared-linux-amd64 tunnel --url http://localhost:{args.port}", text=True, encoding='utf-8', shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            time.sleep(5)
-            pattern = r'https://[\w\.-]+\.trycloudflare\.com'
-            while True:
-                line = tunnelproc.stderr.readline() #cloudflare writes to stderr for some reason
-                if not line:
-                    break  # No more data to read
-                found = re.findall(pattern, line)
-                for x in found:
-                    print(f"Your remote tunnel is ready, please connect to {x}")
-                    tunnelproc.wait()
-                    break
+                tunnelproc = subprocess.Popen(f"cloudflared-linux-amd64 tunnel --url http://localhost:{args.port}", text=True, encoding='utf-8', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            time.sleep(5.4)
+            def tunnel_reader():
+                nonlocal tunnelproc,tunneloutput
+                pattern = r'https://[\w\.-]+\.trycloudflare\.com'
+                while True:
+                    line = tunnelproc.stderr.readline() #cloudflare writes to stderr for some reason
+                    if not line:
+                        return
+                    found = re.findall(pattern, line)
+                    for x in found:
+                        tunneloutput = x
+                        return
+
+            tunnel_reader_thread = threading.Thread(target=tunnel_reader)
+            tunnel_reader_thread.start()
+            time.sleep(0.4)
+            if tunneloutput!="":
+                print(f"Your remote tunnel is ready, please connect to {tunneloutput}")
+            else:
+                print(f"Error: Could not create cloudflare tunnel.")
             tunnelproc.wait()
 
         if os.name == 'nt':
             print("Downloading Cloudflare Tunnel for Windows...")
-            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -o cloudflared.exe", capture_output=True, text=True, check=True, encoding='utf-8')
+            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -o cloudflared.exe", shell=True, capture_output=True, text=True, check=True, encoding='utf-8')
         else:
             print("Downloading Cloudflare Tunnel for Linux...")
-            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o 'cloudflared-linux-amd64'", capture_output=True, text=True, check=True, encoding='utf-8')
+            subprocess.run("curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o 'cloudflared-linux-amd64'", shell=True, capture_output=True, text=True, check=True, encoding='utf-8')
             subprocess.run("chmod +x 'cloudflared-linux-amd64'", shell=True)
         tunnel_thread = threading.Thread(target=run_tunnel)
         tunnel_thread.start()
     except Exception as ex:
         print("Remote Tunnel Failed!")
+        print(str(ex))
         return None
 
 def unload_libs():
