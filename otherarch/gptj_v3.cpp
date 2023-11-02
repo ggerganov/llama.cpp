@@ -494,8 +494,8 @@ bool gptj_eval(
                 }
             }
 
-            struct ggml_tensor *Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].c_attn_q_proj_w, cur), n_embd / n_head, n_head, N), KQ_pos, n_rot, 0, n_ctx, 0, freq_base, freq_scale, 0, 0, 0, 0);
-            struct ggml_tensor *Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].c_attn_k_proj_w, cur), n_embd / n_head, n_head, N), KQ_pos, n_rot, 0, n_ctx, 0, freq_base, freq_scale, 0, 0, 0, 0);
+            struct ggml_tensor *Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].c_attn_q_proj_w, cur), n_embd / n_head, n_head, N), KQ_pos, n_rot, 0, n_ctx, 0, freq_base, freq_scale, NAN, 1, 32, 1);
+            struct ggml_tensor *Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, ggml_mul_mat(ctx0, model.layers[il].c_attn_k_proj_w, cur), n_embd / n_head, n_head, N), KQ_pos, n_rot, 0, n_ctx, 0, freq_base, freq_scale, NAN, 1, 32, 1);
 
             // store key and value to memory
             {

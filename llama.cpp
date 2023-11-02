@@ -1245,10 +1245,15 @@ struct llama_vocab {
     id special_eot_id    = 32010;
 
     int find_bpe_rank(std::string token_left, std::string token_right) const {
-        GGML_ASSERT(token_left.find(" ") == std::string::npos);
-        GGML_ASSERT(token_left.find("\n") == std::string::npos);
-        GGML_ASSERT(token_right.find(" ") == std::string::npos);
-        GGML_ASSERT(token_right.find("\n") == std::string::npos);
+        // GGML_ASSERT(token_left.find(" ") == std::string::npos);
+        // GGML_ASSERT(token_left.find("\n") == std::string::npos);
+        // GGML_ASSERT(token_right.find(" ") == std::string::npos);
+        // GGML_ASSERT(token_right.find("\n") == std::string::npos);
+        //the above breaks gguf v1 falcons
+        replace_all(token_left,  " ",  "\u0120");
+        replace_all(token_left,  "\n", "\u010A");
+        replace_all(token_right, " ",  "\u0120");
+        replace_all(token_right, "\n", "\u010A");
 
         auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
         if (it == bpe_ranks.end()) {
