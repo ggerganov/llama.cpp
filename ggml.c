@@ -100,7 +100,8 @@ typedef void * thread_ret_t;
 #include <hbwmalloc.h>
 #endif
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#if (defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)) && \
+    (!defined(TARGET_OS_TV))
 
 #include <sys/wait.h>
 
