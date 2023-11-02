@@ -150,7 +150,7 @@ static void concat_chunks(const std::vector<tokens_chunk> & chunks, std::vector<
         for (size_t i = 0; i < chunk_size; i++, tp++) {
             dst.push_back(*tp);
         }
-        offset += chunk_size;
+        offset += chunk.tokens.size();
     }
 }
 
@@ -500,12 +500,12 @@ void gen_ctx::dump_chunks(const std::vector<tokens_chunk> & chunks, const size_t
     console::set_display(console::reset);
 
     for (const tokens_chunk & chunk : chunks) {
-        if (offset + chunk.tokens.size() < start_offset) {
+        if (offset + chunk.tokens.size() <= start_offset) {
             offset += chunk.tokens.size();
             continue;
         }
 
-        const size_t chunk_offset = start_offset - offset;
+        const size_t chunk_offset = offset < start_offset ? start_offset - offset : 0;
         const size_t chunk_size = chunk.tokens.size() - chunk_offset;
         const llama_token * tp = chunk.tokens.data() + chunk_offset;
 
@@ -518,6 +518,7 @@ void gen_ctx::dump_chunks(const std::vector<tokens_chunk> & chunks, const size_t
             const std::string token_str = llama_token_to_piece(ctx, *tp);
             fputs(token_str.c_str(), stdout);
         }
+        offset += chunk.tokens.size();
     }
     if (prompt_mode) {
         console::set_display(console::reset);
