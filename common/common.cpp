@@ -1,5 +1,4 @@
 #include "common.h"
-#include "build-info.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -1199,8 +1198,8 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
     const llama_sampling_params & sparams = params.sparams;
 
-    fprintf(stream, "build_commit: %s\n", BUILD_COMMIT);
-    fprintf(stream, "build_number: %d\n", BUILD_NUMBER);
+    fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
+    fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
     fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
     fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
     fprintf(stream, "cpu_has_avx2: %s\n",        ggml_cpu_has_avx2()        ? "true" : "false");

@@ -24,12 +24,7 @@ if out=$($CC -dumpmachine); then
   build_target=$out
 fi
 
-echo "#ifndef BUILD_INFO_H"
-echo "#define BUILD_INFO_H"
-echo
-echo "#define BUILD_NUMBER $build_number"
-echo "#define BUILD_COMMIT \"$build_commit\""
-echo "#define BUILD_COMPILER \"$build_compiler\""
-echo "#define BUILD_TARGET \"$build_target\""
-echo
-echo "#endif // BUILD_INFO_H"
+echo "int LLAMA_BUILD_NUMBER = ${build_number};"
+echo "char const *LLAMA_COMMIT = \"${build_commit}\";"
+echo "char const *LLAMA_COMPILER = \"${build_compiler}\";"
+echo "char const *LLAMA_BUILD_TARGET = \"${build_target}\";"

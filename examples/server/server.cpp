@@ -1,6 +1,5 @@
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 #include "grammar-parser.h"
 
 #include "../llava/clip.h"
@@ -2264,8 +2263,8 @@ int main(int argc, char **argv)
 
     llama_backend_init(params.numa);
 
-    LOG_INFO("build info", {{"build", BUILD_NUMBER},
-                            {"commit", BUILD_COMMIT}});
+    LOG_INFO("build info", {{"build", LLAMA_BUILD_NUMBER},
+                            {"commit", LLAMA_COMMIT}});
 
     LOG_INFO("system info", {
                                 {"n_threads", params.n_threads},
