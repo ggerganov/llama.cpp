@@ -7341,7 +7341,7 @@ Current version: 90
 		let onOk = ()=>{
 			pending_response_id = "-1";
 			waiting_for_autosummary = true;
-			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.35)-100;
+			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.2)-100;
 			let truncated_context = concat_gametext(true, "");
 
 			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
@@ -7906,7 +7906,7 @@ Current version: 90
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
 			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
-			let chars_per_token = 3.0;
+			let chars_per_token = 3.2;
 			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
 			let avgwordlen = (1.0+truncated_context.length)/(1.0+countWords(truncated_context));
 			if(avgwordlen>=7.8)
