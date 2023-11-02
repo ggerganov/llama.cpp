@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from util import parse_args
 
 import sys
-import model
 
+import model
+from util import parse_args
 
 args = parse_args()
 

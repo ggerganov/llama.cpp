@@ -1,6 +1,6 @@
 import argparse
-
 from pathlib import Path
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a huggingface model to a GGML compatible file")
