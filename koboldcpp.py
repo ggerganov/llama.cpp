@@ -108,13 +108,14 @@ lib_failsafe = pick_existant_file("koboldcpp_failsafe.dll","koboldcpp_failsafe.s
 lib_openblas = pick_existant_file("koboldcpp_openblas.dll","koboldcpp_openblas.so")
 lib_noavx2 = pick_existant_file("koboldcpp_noavx2.dll","koboldcpp_noavx2.so")
 lib_clblast = pick_existant_file("koboldcpp_clblast.dll","koboldcpp_clblast.so")
+lib_clblast_noavx2 = pick_existant_file("koboldcpp_clblast_noavx2.dll","koboldcpp_clblast_noavx2.so")
 lib_cublas = pick_existant_file("koboldcpp_cublas.dll","koboldcpp_cublas.so")
 lib_hipblas = pick_existant_file("koboldcpp_hipblas.dll","koboldcpp_hipblas.so")
 
 
 def init_library():
     global handle, args
-    global lib_default,lib_failsafe,lib_openblas,lib_noavx2,lib_clblast,lib_cublas
+    global lib_default,lib_failsafe,lib_openblas,lib_noavx2,lib_clblast,lib_clblast_noavx2,lib_cublas,lib_hipblas
 
     libname = ""
     use_openblas = False # if true, uses OpenBLAS for acceleration. libopenblas.dll must exist in the same dir.
@@ -125,13 +126,20 @@ def init_library():
     use_failsafe = False #uses no intrinsics, failsafe mode
     if args.noavx2:
         use_noavx2 = True
-        if not file_exists(lib_noavx2):
-            print("Warning: NoAVX2 library file not found. Failsafe library will be used.")
-        elif (args.noblas and args.nommap):
-            use_failsafe = True
-            print("!!! Attempting to use FAILSAFE MODE !!!")
+        if args.useclblast:
+            if not file_exists(lib_clblast_noavx2) or (os.name=='nt' and not file_exists("clblast.dll")):
+                print("Warning: NoAVX2 CLBlast library file not found. Non-BLAS library will be used.")
+            else:
+                print("Attempting to use NoAVX2 CLBlast library for faster prompt ingestion. A compatible clblast will be required.")
+                use_clblast = True
         else:
-            print("Attempting to use non-avx2 compatibility library.")
+            if not file_exists(lib_noavx2):
+                print("Warning: NoAVX2 library file not found. Failsafe library will be used.")
+            elif (args.noblas and args.nommap):
+                use_failsafe = True
+                print("!!! Attempting to use FAILSAFE MODE !!!")
+            else:
+                print("Attempting to use non-avx2 compatibility library.")
     elif args.useclblast:
         if not file_exists(lib_clblast) or (os.name=='nt' and not file_exists("clblast.dll")):
             print("Warning: CLBlast library file not found. Non-BLAS library will be used.")
@@ -163,6 +171,8 @@ def init_library():
     if use_noavx2:
         if use_failsafe:
             libname = lib_failsafe
+        elif use_clblast:
+            libname = lib_clblast_noavx2
         else:
             libname = lib_noavx2
     else:
@@ -871,6 +881,7 @@ def RunServerMultiThreaded(addr, port, embedded_kailite = None, embedded_kcpp_do
         try:
             time.sleep(10)
         except KeyboardInterrupt:
+            global exitcounter
             exitcounter = 999
             for i in range(numThreads):
                 threadArr[i].stop()
@@ -891,6 +902,8 @@ def show_new_gui():
         if args.model_param and args.model_param!="" and args.model_param.lower().endswith('.kcpps'):
             loadconfigfile(args.model_param)
         if not args.model_param:
+            global exitcounter
+            exitcounter = 999
             print("\nNo ggml model or kcpps file was selected. Exiting.")
             time.sleep(3)
             sys.exit(2)
@@ -931,9 +944,10 @@ def show_new_gui():
         (lib_cublas, "Use CuBLAS"),
         (lib_hipblas, "Use hipBLAS (ROCm)"),
         (lib_default, "Use No BLAS"),
+        (lib_clblast_noavx2, "CLBlast NoAVX2 (Old CPU)"),
         (lib_noavx2, "NoAVX2 Mode (Old CPU)"),
         (lib_failsafe, "Failsafe Mode (Old CPU)")]
-    openblas_option, clblast_option, cublas_option, hipblas_option, default_option, noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
+    openblas_option, clblast_option, cublas_option, hipblas_option, default_option, clblast_noavx2_option, noavx2_option, failsafe_option = (opt if file_exists(lib) or (os.name == 'nt' and file_exists(opt + ".dll")) else None for lib, opt in lib_option_pairs)
     # slider data
     blasbatchsize_values = ["-1", "32", "64", "128", "256", "512", "1024", "2048"]
     blasbatchsize_text = ["Don't Batch BLAS","32","64","128","256","512","1024","2048"]
@@ -943,7 +957,9 @@ def show_new_gui():
     if os.name != 'nt':
         antirunopts.remove("NoAVX2 Mode (Old CPU)")
         antirunopts.remove("Failsafe Mode (Old CPU)")
+        antirunopts.remove("CLBlast NoAVX2 (Old CPU)")
     if not any(runopts):
+        exitcounter = 999
         show_gui_msgbox("No Backends Available!","KoboldCPP couldn't locate any backends to use (i.e Default, OpenBLAS, CLBlast, CuBLAS).\n\nTo use the program, please run the 'make' command from the directory.")
         time.sleep(3)
         sys.exit(2)
@@ -1149,18 +1165,23 @@ def show_new_gui():
             tooltip.withdraw()
 
     def setup_backend_tooltip(parent):
-        num_backends_built = makelabel(parent, str(len(runopts)) + f"/{6 if os.name == 'nt' else 4}", 5, 2)
+        num_backends_built = makelabel(parent, str(len(runopts)) + f"/{7 if os.name == 'nt' else 4}", 5, 2)
         num_backends_built.grid(row=1, column=1, padx=195, pady=0)
         num_backends_built.configure(text_color="#00ff00")
         # Bind the backend count label with the tooltip function
-        num_backends_built.bind("<Enter>", lambda event: show_tooltip(event, f"This is the number of backends you have built and available." + (f"\nMissing: {', '.join(antirunopts)}" if len(runopts) != 6 else "")))
+        nl = '\n'
+        num_backends_built.bind("<Enter>", lambda event: show_tooltip(event, f"Number of backends you have built and available." + (f"\n\nMissing Backends: \n\n{nl.join(antirunopts)}" if len(runopts) != 6 else "")))
         num_backends_built.bind("<Leave>", hide_tooltip)
 
     def changed_gpu_choice_var(*args):
+        global exitcounter
+        if exitcounter > 100:
+            return
         if gpu_choice_var.get()!="All":
             try:
                 s = int(gpu_choice_var.get())-1
-                if runopts_var.get() == "Use CLBlast":
+                v = runopts_var.get()
+                if v == "Use CLBlast" or v == "CLBlast NoAVX2 (Old CPU)":
                     quick_gpuname_label.configure(text=CLDevicesNames[s])
                     gpuname_label.configure(text=CLDevicesNames[s])
                 else:
@@ -1176,12 +1197,12 @@ def show_new_gui():
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
-        if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
+        if index == "Use CLBlast" or index == "CLBlast NoAVX2 (Old CPU)" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             quick_gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
             gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
             gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
             quick_gpu_selector_label.grid(row=3, column=0, padx = 8, pady=1, stick="nw")
-            if index == "Use CLBlast":
+            if index == "Use CLBlast" or index == "CLBlast NoAVX2 (Old CPU)":
                 gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 quick_gpu_selector_box.grid(row=3, column=1, padx=8, pady=1, stick="nw")
                 if gpu_choice_var.get()=="All":
@@ -1214,7 +1235,7 @@ def show_new_gui():
             tensor_split_label.grid_forget()
             tensor_split_entry.grid_forget()
 
-        if index == "Use CLBlast" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
+        if index == "Use CLBlast" or index == "CLBlast NoAVX2 (Old CPU)" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
             gpu_layers_entry.grid(row=5, column=1, padx=8, pady=1, stick="nw")
             quick_gpu_layers_label.grid(row=5, column=0, padx = 8, pady=1, stick="nw")
@@ -1397,7 +1418,7 @@ def show_new_gui():
         gpuchoiceidx = 0
         if gpu_choice_var.get()!="All":
             gpuchoiceidx = int(gpu_choice_var.get())-1
-        if runopts_var.get() == "Use CLBlast":
+        if runopts_var.get() == "Use CLBlast" or runopts_var.get() == "CLBlast NoAVX2 (Old CPU)":
             args.useclblast = [[0,0], [1,0], [0,1], [1,1]][gpuchoiceidx]
         if runopts_var.get() == "Use CuBLAS" or runopts_var.get() == "Use hipBLAS (ROCm)":
             if gpu_choice_var.get()=="All":
@@ -1459,9 +1480,14 @@ def show_new_gui():
         remotetunnel.set(1 if "remotetunnel" in dict and dict["remotetunnel"] else 0)
         keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
-            if clblast_option is not None:
-                runopts_var.set(clblast_option)
-                gpu_choice_var.set(str(["0 0", "1 0", "0 1", "1 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
+            if "noavx2" in dict and dict["noavx2"]:
+                if clblast_noavx2_option is not None:
+                    runopts_var.set(clblast_noavx2_option)
+                    gpu_choice_var.set(str(["0 0", "1 0", "0 1", "1 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
+            else:
+                if clblast_option is not None:
+                    runopts_var.set(clblast_option)
+                    gpu_choice_var.set(str(["0 0", "1 0", "0 1", "1 1"].index(str(dict["useclblast"][0]) + " " + str(dict["useclblast"][1])) + 1))
         elif "usecublas" in dict and dict["usecublas"]:
             if cublas_option is not None or hipblas_option is not None:
                 if cublas_option:
@@ -1585,14 +1611,16 @@ def show_new_gui():
     root.mainloop()
 
     if nextstate==0:
+        exitcounter = 999
         print("Exiting by user request.")
         time.sleep(3)
-        sys.exit()
+        sys.exit(0)
     else:
         # processing vars
         export_vars()
 
         if not args.model_param:
+            exitcounter = 999
             print("\nNo ggml model file was selected. Exiting.")
             time.sleep(3)
             sys.exit(2)
@@ -1766,10 +1794,10 @@ def run_horde_worker(args, api_key, worker_name):
 
     if exitcounter<100:
         print_with_time(f"Horde Worker Shutdown - Too many errors.")
-        time.sleep(3)
     else:
         print_with_time(f"Horde Worker Shutdown - Server Closing.")
-        time.sleep(3)
+    exitcounter = 999
+    time.sleep(3)
     sys.exit(2)
 
 def setuptunnel():
@@ -1901,6 +1929,8 @@ def main(launch_args,start_server=True):
         if isinstance(args.config[0], str) and os.path.exists(args.config[0]):
            loadconfigfile(args.config[0])
         else:
+            global exitcounter
+            exitcounter = 999
             print("Specified kcpp config file invalid or not found.")
             time.sleep(3)
             sys.exit(2)
@@ -1919,6 +1949,7 @@ def main(launch_args,start_server=True):
         try:
             show_new_gui()
         except Exception as ex:
+            exitcounter = 999
             ermsg = "Reason: " + str(ex) + "\nFile selection GUI unsupported.\ncustomtkinter python module required!\nPlease check command line: script.py --help"
             show_gui_msgbox("Warning, GUI failed to start",ermsg)
             time.sleep(3)
@@ -1974,12 +2005,14 @@ def main(launch_args,start_server=True):
     print("==========")
     time.sleep(1)
     if not os.path.exists(args.model_param):
+        exitcounter = 999
         print(f"Cannot find model file: {args.model_param}")
         time.sleep(3)
         sys.exit(2)
 
     if args.lora and args.lora[0]!="":
         if not os.path.exists(args.lora[0]):
+            exitcounter = 999
             print(f"Cannot find lora file: {args.lora[0]}")
             time.sleep(3)
             sys.exit(2)
@@ -1987,6 +2020,7 @@ def main(launch_args,start_server=True):
             args.lora[0] = os.path.abspath(args.lora[0])
             if len(args.lora) > 1:
                 if not os.path.exists(args.lora[1]):
+                    exitcounter = 999
                     print(f"Cannot find lora base: {args.lora[1]}")
                     time.sleep(3)
                     sys.exit(2)
@@ -2003,6 +2037,7 @@ def main(launch_args,start_server=True):
     print("Load Model OK: " + str(loadok))
 
     if not loadok:
+        exitcounter = 999
         print("Could not load model: " + modelname)
         time.sleep(3)
         sys.exit(3)
