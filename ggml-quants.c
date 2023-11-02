@@ -718,6 +718,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
         __riscv_vse8_v_i8m1(y[i].qs , vs, vl);
     }
 #else
+    GGML_UNUSED(nb);
     // scalar
     quantize_row_q8_0_reference(x, y, k);
 #endif
@@ -971,6 +972,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
         y[i].s = sum*d;
     }
 #else
+    GGML_UNUSED(nb);
     // scalar
     quantize_row_q8_1_reference(x, y, k);
 #endif
