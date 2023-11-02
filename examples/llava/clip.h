@@ -1,7 +1,6 @@
 #ifndef CLIP_H
 #define CLIP_H
 
-#include "ggml.h"
 #include "llama.h"
 
 struct clip_ctx;
