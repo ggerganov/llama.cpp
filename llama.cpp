@@ -1837,6 +1837,12 @@ struct llama_model_loader {
             throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name.c_str()));
         }
 
+        if (backend == GGML_BACKEND_GPU_SPLIT) {
+            if (ne.size() == 1) {
+                throw std::runtime_error(format("%s: 1-dimensional tensor '%s' cannot be split on the GPU", __func__, name.c_str()));
+            }
+        }
+
         {
             bool is_ok = true;
             for (size_t i = 0; i < ne.size(); ++i) {
@@ -2817,8 +2823,8 @@ static void llm_load_tensors(
                         layer.ffn_down   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, backend_split);
                         layer.ffn_down_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd},       backend);
 
-                        layer.ffn_up = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
-                        layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff},           backend);
+                        layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff}, backend_split);
+                        layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),           {n_ff}, backend);
 
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
@@ -2877,13 +2883,13 @@ static void llm_load_tensors(
                         layer.attn_norm     = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "weight", i), {n_embd}, backend);
                         layer.attn_norm_b   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "bias",   i), {n_embd}, backend);
                         layer.wqkv          = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV,    "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, backend_split);
-                        layer.bqkv          = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV,    "bias",   i), {n_embd + 2*n_embd_gqa},         backend_split);
+                        layer.bqkv          = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV,    "bias",   i), {n_embd + 2*n_embd_gqa},         backend);
                         layer.wo            = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT,    "weight", i), {n_embd, n_embd},   backend_split);
-                        layer.bo            = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT,    "bias",   i), {n_embd},           backend_split);
+                        layer.bo            = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT,    "bias",   i), {n_embd},           backend);
                         layer.ffn_down      = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN,    "weight", i), {n_ff, n_embd}, backend_split);
-                        layer.ffn_down_b    = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN,    "bias",   i), {n_embd},       backend_split);
+                        layer.ffn_down_b    = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN,    "bias",   i), {n_embd},       backend);
                         layer.ffn_up        = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,      "weight", i), {n_embd,   n_ff}, backend_split);
-                        layer.ffn_up_b      = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,      "bias",   i), {n_ff},           backend_split);
+                        layer.ffn_up_b      = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,      "bias",   i), {n_ff},           backend);
                         layer.ffn_norm      = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM,    "weight", i), {n_embd}, backend);
                         layer.ffn_norm_b    = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM,    "bias",   i), {n_embd}, backend);
                         layer.attn_q_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {64}, backend);
@@ -2949,19 +2955,19 @@ static void llm_load_tensors(
                         layer.attn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM,   "bias", i),   {n_embd}, backend);
 
                         layer.wqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "weight", i), {n_embd, n_embd + 2*n_embd_gqa}, backend_split);
-                        layer.bqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa},         backend_split);
+                        layer.bqkv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_QKV, "bias", i),   {n_embd + 2*n_embd_gqa},         backend);
 
                         layer.wo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},                backend_split);
-                        layer.bo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd},                        backend_split);
+                        layer.bo   = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd},                        backend);
 
                         layer.ffn_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
                         layer.ffn_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "bias", i),   {n_embd}, backend);
 
                         layer.ffn_down   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd}, backend_split);
-                        layer.ffn_down_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd},       backend_split);
+                        layer.ffn_down_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd},       backend);
 
-                        layer.ffn_up = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
-                        layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff},           backend_split);
+                        layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+                        layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff},           backend);
 
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
