@@ -219,7 +219,7 @@
 #define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            6
 #define GGML_MAX_NAME           64
-#define GGML_MAX_OP_PARAMS      32
+#define GGML_MAX_OP_PARAMS      64
 #define GGML_DEFAULT_N_THREADS  4
 #define GGML_DEFAULT_GRAPH_SIZE 2048
 #if UINTPTR_MAX == 0xFFFFFFFF
