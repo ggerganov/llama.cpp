@@ -8,15 +8,14 @@ import numpy as np
 
 from enum import IntEnum
 from pathlib import Path
-from typing import TypeAlias, Any, Generator
+from typing import TYPE_CHECKING, Any, ContextManager, Iterator, TypeAlias, cast
+
+if TYPE_CHECKING:
+    from torch import Tensor
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
-
-
-
-NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 
 
 class SentencePieceTokenTypes(IntEnum):
@@ -80,7 +79,7 @@ class Model:
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
-        from transformers import AutoTokenizer
+        from transformers import AutoTokenizer  # type: ignore[attr-defined]
         tokenizer = AutoTokenizer.from_pretrained(dir_model)
         vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
         assert max(tokenizer.vocab.values()) < vocab_size
@@ -90,7 +89,8 @@ class Model:
 
         for i in range(vocab_size):
             if i not in reverse_vocab:
-                tokens.append(f"[PAD{i}]")
+                pad_token = f"[PAD{i}]".encode('utf-8')
+                tokens.append(bytearray(pad_token))
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
@@ -165,12 +165,13 @@ class Model:
     def set_vocab(self):
         self._set_vocab_gpt2()
 
-    def get_tensors(self) -> Generator[str, Any, None]:
+    def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         for part_name in self.part_names:
             print("gguf: loading model part '" + part_name + "'")
+            ctx: ContextManager[Any]
             if self.is_safetensors:
                 from safetensors import safe_open
-                ctx = safe_open(self.dir_model / part_name, framework="pt", device="cpu")
+                ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
             else:
                 ctx = contextlib.nullcontext(torch.load(self.dir_model / part_name, map_location="cpu"))
 
@@ -197,18 +198,18 @@ class Model:
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        for name, data in self.get_tensors():
+        for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
                 continue
 
-            old_dtype = data.dtype
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
@@ -332,19 +333,19 @@ class BloomModel(Model):
         n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
         n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
 
-        for name, data in tensors.items():
+        for name, data_torch in tensors.items():
             if "lm_head.weight" not in tensors.keys() and "output.weight" not in tensors.keys():
                 has_lm_head = False
 
             name = re.sub(r'transformer\.', '', name)
 
-            old_dtype = data.dtype
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             if re.match(r"h\.\d+\.self_attention\.query_key_value\.weight", name):
                 # Map bloom-style qkv_linear to gpt-style qkv_linear
@@ -417,18 +418,18 @@ class MPTModel(Model):
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        for name, data in self.get_tensors():
+        for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith(".attention.masked_bias") or name.endswith(".attention.bias") or name.endswith(".attention.rotary_emb.inv_freq"):
                 continue
 
-            old_dtype = data.dtype
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
@@ -507,7 +508,7 @@ class BaichuanModel(Model):
                 if self.hparams["rope_scaling"]["type"] == "linear":
                     self.gguf_writer.add_rope_scale_linear(self.hparams["rope_scaling"]["factor"])
 
-    def _reverse_hf_permute(self, weights: NDArray, n_head: int, n_kv_head: int | None = None) -> NDArray:
+    def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
             n_head //= n_kv_head
 
@@ -515,11 +516,11 @@ class BaichuanModel(Model):
                 .swapaxes(1, 2)
                 .reshape(weights.shape))
 
-    def _reverse_hf_permute_part(self, weights: NDArray, n_part: int, n_head: int, n_head_kv: int | None = None) -> NDArray:
+    def _reverse_hf_permute_part(self, weights: Tensor, n_part: int, n_head: int, n_head_kv: int | None = None) -> Tensor:
         r = weights.shape[0] // 3
         return (self._reverse_hf_permute(weights[r * n_part:r * n_part + r, ...], n_head, n_head_kv))
 
-    def _reverse_hf_part(self, weights: NDArray, n_part: int) -> NDArray:
+    def _reverse_hf_part(self, weights: Tensor, n_part: int) -> Tensor:
         r = weights.shape[0] // 3
         return weights[r * n_part:r * n_part + r, ...]
 
@@ -546,18 +547,18 @@ class BaichuanModel(Model):
                     model_kv[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
                 del model_kv[f"model.layers.{i}.self_attn.W_pack.weight"]
 
-        for name, data in model_kv.items():
+        for name, data_torch in model_kv.items():
             # we don't need these
             if name.endswith(".rotary_emb.inv_freq"):
                 continue
 
-            old_dtype = data.dtype
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
@@ -625,12 +626,12 @@ class FalconModel(Model):
         head_dim = self.hparams["hidden_size"] // n_head
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
-        for name, data in self.get_tensors():
-            old_dtype = data.dtype
+        for name, data_torch in self.get_tensors():
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
             # QKV tensor transform
             # The original query_key_value tensor contains n_head_kv "kv groups",
@@ -643,13 +644,13 @@ class FalconModel(Model):
             # ref: https://github.com/jploski/ggml/blob/falcon40b/examples/falcon/convert-hf-to-ggml.py
 
             if "query_key_value" in name:
-                qkv = data.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
+                qkv = data_torch.view(n_head_kv, n_head // n_head_kv + 2, head_dim, head_dim * n_head)
                 q = qkv[:, :-2].reshape(n_head * head_dim, head_dim * n_head)
                 k = qkv[:, [-2]].reshape(n_head_kv * head_dim, head_dim * n_head)
                 v = qkv[:, [-1]].reshape(n_head_kv * head_dim, head_dim * n_head)
-                data = torch.cat((q, k, v)).reshape_as(data)
+                data_torch = torch.cat((q, k, v)).reshape_as(data_torch)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
@@ -730,11 +731,11 @@ class RefactModel(Model):
         tensors = dict(self.get_tensors())
         for i in range(block_count):
             if f"transformer.h.{i}.attn.kv.weight" in tensors:
-                data = tensors[f"transformer.h.{i}.attn.kv.weight"]
-                tensors[f"model.layers.{i}.self_attn.k_proj.weight"] = data[
+                weight = tensors[f"transformer.h.{i}.attn.kv.weight"]
+                tensors[f"model.layers.{i}.self_attn.k_proj.weight"] = weight[
                     : n_head_kv * head_dim
                 ]
-                tensors[f"model.layers.{i}.self_attn.v_proj.weight"] = data[
+                tensors[f"model.layers.{i}.self_attn.v_proj.weight"] = weight[
                     n_head_kv * head_dim:
                 ]
                 del tensors[f"transformer.h.{i}.attn.kv.weight"]
@@ -744,19 +745,19 @@ class RefactModel(Model):
                 ]
                 del tensors[f"transformer.h.{i}.attn.q.weight"]
             if f"transformer.h.{i}.mlp.gate_up_proj.weight" in tensors:
-                data = tensors[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
-                tensors[f"model.layers.{i}.mlp.gate_proj.weight"] = data[:ff_dim]
-                tensors[f"model.layers.{i}.mlp.up_proj.weight"] = data[ff_dim:]
+                weight = tensors[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
+                tensors[f"model.layers.{i}.mlp.gate_proj.weight"] = weight[:ff_dim]
+                tensors[f"model.layers.{i}.mlp.up_proj.weight"] = weight[ff_dim:]
                 del tensors[f"transformer.h.{i}.mlp.gate_up_proj.weight"]
 
-        for name, data in tensors.items():
-            old_dtype = data.dtype
+        for name, data_torch in tensors.items():
+            old_dtype = data_torch.dtype
 
             # convert any unsupported data types to float32
-            if data.dtype != torch.float16 and data.dtype != torch.float32:
-                data = data.to(torch.float32)
+            if data_torch.dtype != torch.float16 and data_torch.dtype != torch.float32:
+                data_torch = data_torch.to(torch.float32)
 
-            data = data.squeeze().numpy()
+            data = data_torch.squeeze().numpy()
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight",))
@@ -811,12 +812,12 @@ class PersimmonModel(Model):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
 
-        for name, data in self.get_tensors():
+        for name, data_torch in self.get_tensors():
             if name.endswith(".self_attention.rotary_emb.inv_freq"):
                 continue
-            old_dtype = data.dtype
+            old_dtype = data_torch.dtype
             # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
-            data = data.to(torch.float32).squeeze().numpy()
+            data = data_torch.to(torch.float32).squeeze().numpy()
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print("Can not map tensor '" + name + "'")
