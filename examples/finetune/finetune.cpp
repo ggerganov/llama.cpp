@@ -772,7 +772,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     if (enable_checkpointing) {
         ggml_build_backward_gradient_checkpointing(ctx, gf, gb, gb_tmp, checkpoints.data(), (int) checkpoints.size());
     } else {
-        *gb = *gf;
+        ggml_graph_cpy(gf, gb);
         ggml_build_backward_expand(ctx, gf, gb, true);
     }
 
