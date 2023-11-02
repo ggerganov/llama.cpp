@@ -18884,6 +18884,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
         ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
 
+        if (ctx->header.version == 1) {
+            fprintf(stderr, "%s: GGUFv1 is no longer supported. please use a more up-to-date version\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
+
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
             fclose(file);
