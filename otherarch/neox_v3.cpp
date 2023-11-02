@@ -522,8 +522,8 @@ bool gpt_neox_eval(
             }
 
             // using mode = 2 for GPT-NeoX mode
-            Qcur = ggml_rope_custom_inplace(ctx0, Qcur, KQ_pos, n_rot, 2, n_ctx, freq_base, freq_scale);
-            Kcur = ggml_rope_custom_inplace(ctx0, Kcur, KQ_pos, n_rot, 2, n_ctx, freq_base, freq_scale);
+            Qcur = ggml_rope_custom_inplace(ctx0, Qcur, KQ_pos, n_rot, 2, n_ctx, 0, freq_base, freq_scale, 0, 0, 0, 0);
+            Kcur = ggml_rope_custom_inplace(ctx0, Kcur, KQ_pos, n_rot, 2, n_ctx, 0, freq_base, freq_scale, 0, 0, 0, 0);
 
             // store key and value to memory
             {

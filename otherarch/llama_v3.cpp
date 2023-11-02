@@ -1614,11 +1614,11 @@ static struct ggml_cgraph * llama_v3_build_graph(
             }
 #endif
 
-            struct ggml_tensor * Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor *Kcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, N), KQ_pos, n_embd_head, 0, 0, 0, freq_base, freq_scale, 0, 0, 0, 0);
             offload_func_kq(Kcur);
             ggml_set_name(Kcur, "Kcur");
 
-            struct ggml_tensor * Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N),    KQ_pos, n_embd_head, 0, 0, freq_base, freq_scale);
+            struct ggml_tensor *Qcur = ggml_rope_custom_inplace(ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head, N), KQ_pos, n_embd_head, 0, 0, 0, freq_base, freq_scale, 0, 0, 0, 0);
             offload_func_kq(Qcur);
             ggml_set_name(Qcur, "Qcur");
 
