@@ -41,12 +41,12 @@ model_instance.set_gguf_parameters()
 print("Set model tokenizer")
 model_instance.set_vocab()
 
-if not args.vocab_only:
-    print(f"Exporting model to '{fname_out}'")
-    model_instance.write()
-else:
+if args.vocab_only:
     print(f"Exporting model vocab to '{fname_out}'")
     model_instance.write_vocab()
+else:
+    print(f"Exporting model to '{fname_out}'")
+    model_instance.write()
 
 print(f"Model successfully exported to '{fname_out}'")
 print("")
