@@ -1615,6 +1615,7 @@ int main(int argc, char ** argv) {
     opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
     opt->params.print_forward_graph     = false;
     opt->params.print_backward_graph    = false;
+    opt->params.graph_size              = LLAMA_TRAIN_MAX_NODES;
     opt->params.n_threads               = params.common.n_threads;
     opt->params.past                    = params.common.opt_past;
     opt->params.delta                   = params.common.opt_delta;
@@ -1768,11 +1769,11 @@ int main(int argc, char ** argv) {
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
         alloc = ggml_allocr_new_measure(tensor_alignment);
-        gf = ggml_new_graph(ctx_compute);
+        gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
-        gb = ggml_new_graph(ctx_compute);
+        gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false);
         gb_tmp = params.common.use_checkpointing
-            ? ggml_new_graph(ctx_compute)
+            ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
             : NULL;
         loss = llama_build_lora_finetune_graphs(
             &model, &lora, alloc, ctx_compute,
@@ -1801,11 +1802,11 @@ int main(int argc, char ** argv) {
     mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
     alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
-    gf = ggml_new_graph(ctx_compute);
+    gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
-    gb = ggml_new_graph(ctx_compute);
+    gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false);
     gb_tmp = params.common.use_checkpointing
-        ? ggml_new_graph(ctx_compute)
+        ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
         : NULL;
     loss = llama_build_lora_finetune_graphs(
         &model, &lora, alloc, ctx_compute,
