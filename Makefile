@@ -563,7 +563,7 @@ ifndef LLAMA_NO_SEQREP_SAMPLER
 COMMON_H_DEFS += common/seqrep-sampler.h
 COMMON_DEPS += seqrep-sampler.o
 
-seqrep-sampler.o: common/seqrep-sampler.cpp $(COMMON_H_DEPS)
+seqrep-sampler.o: common/seqrep-sampler.cpp common/seqrep-sampler.h $(COMMON_H_DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif
 

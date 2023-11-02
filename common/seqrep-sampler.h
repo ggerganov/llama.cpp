@@ -135,6 +135,10 @@ struct seqrep_logit_info {
     // Return top k token_data by logit.
     std::vector<llama_token_data> top_k(const float * const logits, const size_t k);
 
+    seqrep_logit_info(const int n_vocab, const std::vector<llama_token_data> & token_data = {})
+        : n_vocab(n_vocab)
+        , token_data(token_data)
+        {}
 };
 
 struct seqrep_rewind_slot {
