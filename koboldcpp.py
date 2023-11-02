@@ -1067,17 +1067,24 @@ def show_new_gui():
         FetchedCUdevices = []
         FetchedCUdeviceMem = []
         try: # Get OpenCL GPU names on windows using a special binary. overwrite at known index if found.
-            if os.name == 'nt':
-                basepath = os.path.abspath(os.path.dirname(__file__))
-                output = run([os.path.join(basepath, "simpleclinfo.exe")], capture_output=True, text=True, check=True, encoding='utf-8').stdout
-                for line in output.splitlines():
-                    pd = line.split("=")[0].strip()
-                    name = line.split("=")[1].strip()
-                    plat = int(pd.split(" ")[0].strip())
-                    dev = int(pd.split(" ")[1].strip())
+            basepath = os.path.abspath(os.path.dirname(__file__))
+            output = run([((os.path.join(basepath, "winclinfo.exe")) if os.name == 'nt' else "clinfo"),"--json"], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+            data = json.loads(output)
+            plat = 0
+            dev = 0
+            lowestclmem = 0
+            for platform in data["devices"]:
+                dev = 0
+                for device in platform["online"]:
+                    dname = device["CL_DEVICE_NAME"]
+                    dmem = int(device["CL_DEVICE_GLOBAL_MEM_SIZE"])
                     idx = plat+dev*2
                     if idx<len(CLDevices):
-                        CLDevicesNames[idx] = name
+                        CLDevicesNames[idx] = dname
+                        lowestclmem = dmem if lowestclmem==0 else (dmem if dmem<lowestclmem else lowestclmem)
+                    dev += 1
+                plat += 1
+            MaxMemory[0] = lowestclmem
         except Exception as e:
             pass
 
