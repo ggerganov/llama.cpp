@@ -100,8 +100,12 @@ typedef void * thread_ret_t;
 #include <hbwmalloc.h>
 #endif
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #if (defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)) && \
-    (!defined(TARGET_OS_TV))
+    (!defined(TARGET_OS_TV) && !defined(TARGET_OS_WATCH))
 
 #include <sys/wait.h>
 
