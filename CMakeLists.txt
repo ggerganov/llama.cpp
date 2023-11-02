@@ -44,7 +44,7 @@ endif()
 
 # general
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
-option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      ON)
+option(LLAMA_NATIVE                     "llama: enable -march=native flag"                      OFF)
 option(LLAMA_LTO                        "llama: enable link time optimization"                  OFF)
 
 # debug
