@@ -7387,7 +7387,6 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
                 dst->nb[2], dst->nb[3],
                 r2, r3);
         CUDA_CHECK(cudaGetLastError());
-        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], main_stream));
         CUBLAS_CHECK(
         cublasGemmBatchedEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
                 ne01, ne11, ne10,
