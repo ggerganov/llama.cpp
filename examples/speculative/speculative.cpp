@@ -37,9 +37,11 @@ int main(int argc, char ** argv) {
     // max number of parallel drafting sequences (i.e. tree branches)
     const int n_seq_dft = params.n_parallel;
 
-    // TODO: make this configurable
-    const float p_accept = 0.80f;
-    const float p_split  = 0.10f;
+    // probability threshold for accepting a token from the draft model
+    const float p_accept = params.p_accept;
+
+    // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
+    const float p_split  = params.p_split;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("speculative", "log"));
