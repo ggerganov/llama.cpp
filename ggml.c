@@ -18907,6 +18907,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
         }
 
+        if (ctx->header.version == 1) {
+            fprintf(stderr, "%s: GGUFv1 is deprecated. please update if possible.\n", __func__);
+        }
+
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
             fclose(file);
