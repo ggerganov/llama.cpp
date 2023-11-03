@@ -5851,16 +5851,13 @@ void ggml_init_cublas() {
             fprintf(stderr, "  Device %d: %s, compute capability %d.%d", id, prop.name, prop.major, prop.minor);
 #if defined(CUDA_USE_MEMORY_POOL)
             // configure memory pool
-            if (prop.memoryPoolsSupported == 1) {
-                cudaError_t err = cudaDeviceGetMemPool(&g_cudaMemPools[id], id);
-                if (err == cudaSuccess) {
-                    size_t treshold = UINT64_MAX;
-                    CUDA_CHECK(cudaMemPoolSetAttribute(g_cudaMemPools[id], cudaMemPoolAttrReleaseThreshold, &treshold));
-                    fprintf(stderr, ", CUDA memory pool is supported\n");
-                } else {
-                    g_cudaMemPools[id] = nullptr;
-                }
+            cudaError_t err = cudaDeviceGetMemPool(&g_cudaMemPools[id], id);
+            if (err == cudaSuccess) {
+                size_t treshold = UINT64_MAX;
+                CUDA_CHECK(cudaMemPoolSetAttribute(g_cudaMemPools[id], cudaMemPoolAttrReleaseThreshold, &treshold));
+                fprintf(stderr, ", CUDA memory pool is supported\n");
             } else {
+                g_cudaMemPools[id] = nullptr;
                 fprintf(stderr, ", CUDA memory pool is not supported\n");
             }
 #endif
