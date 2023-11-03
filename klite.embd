@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 90
+Current version: 91
 -Concedo
 -->
 
@@ -3320,6 +3320,7 @@ Current version: 90
 		temperature: 0.7,
 		top_p: 0.92,
 		min_p: 0.00,
+		sampler_seed: -1,
 		top_k: 100,
 		top_a: 0,
 		typ_s: 1,
@@ -6829,6 +6830,7 @@ Current version: 90
 		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
 		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
 		document.getElementById("min_p").value = localsettings.min_p;
+		document.getElementById("sampler_seed").value = localsettings.sampler_seed;
 		document.getElementById("top_k").value = localsettings.top_k;
 		document.getElementById("top_a").value = localsettings.top_a;
 		document.getElementById("typ_s").value = localsettings.typ_s;
@@ -7074,6 +7076,7 @@ Current version: 90
 		if (localsettings.instruct_endtag == null || localsettings.instruct_endtag == "") {
 			localsettings.instruct_endtag = "\\n### Response:\\n";
 		}
+		localsettings.sampler_seed = document.getElementById("sampler_seed").value;
 		localsettings.min_p = document.getElementById("min_p").value;
 		localsettings.top_k = document.getElementById("top_k").value;
 		localsettings.top_a = document.getElementById("top_a").value;
@@ -7133,6 +7136,7 @@ Current version: 90
 		localsettings.miro_type = cleannum(localsettings.miro_type, 0, 2);
 		localsettings.miro_tau = cleannum(localsettings.miro_tau, 0, 30);
 		localsettings.miro_eta = cleannum(localsettings.miro_eta, 0, 10);
+		localsettings.sampler_seed = cleannum(localsettings.sampler_seed, -1, 999999);
 		toggle_invert_colors();
 
 		hide_popups();
@@ -7378,6 +7382,11 @@ Current version: 90
 			},
 			"models": selected_models.map((m) => { return m.name }),
 		};
+
+		if(localsettings.sampler_seed>=1)
+		{
+			submit_payload.params.sampler_seed = localsettings.sampler_seed;
+		}
 
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
 		{
@@ -8174,6 +8183,11 @@ Current version: 90
 				},
 				"models": selected_models.map((m) => { return m.name }),
 			};
+
+			if(localsettings.sampler_seed>=1)
+			{
+				submit_payload.params.sampler_seed = localsettings.sampler_seed;
+			}
 
 			if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
 			{
@@ -11673,9 +11687,13 @@ Current version: 90
 								</tr>
 
 								<tr>
+								<th title="Sampler Seed. -1 to Deactivate.">Seed</th>
 								<th title="Min-P Sampling. 0 to Deactivate.">Min-P</th>
 								</tr>
 								<tr>
+
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
+								id="sampler_seed"></td>
 								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="min_p"></td>
 								</tr>

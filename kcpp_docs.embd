@@ -101,8 +101,8 @@
                      },
                      "sampler_seed": {
                         "description": "RNG seed to use for sampling. If not specified, the global RNG will be used.",
-                        "maximum": 18446744073709551615,
-                        "minimum": 0,
+                        "maximum": 999999,
+                        "minimum": 1,
                         "type": "integer"
                      },
                      "stop_sequence": {
@@ -135,6 +135,12 @@
                      },
                      "top_p": {
                         "description": "Top-p sampling value.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                     },
+                     "min_p": {
+                        "description": "Min-p sampling value.",
                         "maximum": 1,
                         "minimum": 0,
                         "type": "number"
