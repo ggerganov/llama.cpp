@@ -5853,6 +5853,8 @@ void ggml_init_cublas() {
                     size_t treshold = UINT64_MAX;
                     CUDA_CHECK(cudaMemPoolSetAttribute(g_cudaMemPools[id], cudaMemPoolAttrReleaseThreshold, &treshold));
                     fprintf(stderr, ", CUDA memory pool is supported\n");
+                } else {
+                    g_cudaMemPools[id] = nullptr;
                 }
             } else {
                 fprintf(stderr, ", CUDA memory pool is not supported\n");
