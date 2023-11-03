@@ -43,29 +43,29 @@ extern char const *LLAMA_BUILD_TARGET;
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                           = -1;   // RNG seed
+    uint32_t seed                           = -1;    // RNG seed
     int32_t n_threads                       = get_num_physical_cores();
-    int32_t n_threads_batch                 = -1;   // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_predict                       = -1;   // new tokens to predict
-    int32_t n_ctx                           = 512;  // context size
-    int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
-    int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
-    int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
-    int32_t n_parallel                      = 1;    // number of parallel sequences to decode
-    int32_t n_sequences                     = 1;    // number of sequences to decode
-    int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
-    int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
-    int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
-    float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
-    int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
-    float   rope_freq_base                  = 0.0f; // RoPE base frequency
-    float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
-    float   yarn_ext_factor                 = NAN;  // YaRN extrapolation mix factor
-    float   yarn_attn_factor                = 1.0f; // YaRN magnitude scaling factor
-    float   yarn_beta_fast                  = 32.0f;// YaRN low correction dim
-    float   yarn_beta_slow                  = 1.0f; // YaRN high correction dim
-    int32_t yarn_orig_ctx                   = 0;    // YaRN original context length
+    int32_t n_threads_batch                 = -1;    // number of threads to use for batch processing (-1 = use n_threads)
+    int32_t n_predict                       = -1;    // new tokens to predict
+    int32_t n_ctx                           = 512;   // context size
+    int32_t n_batch                         = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep                          = 0;     // number of tokens to keep from initial prompt
+    int32_t n_draft                         = 16;    // number of tokens to draft during speculative decoding
+    int32_t n_chunks                        = -1;    // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel                      = 1;     // number of parallel sequences to decode
+    int32_t n_sequences                     = 1;     // number of sequences to decode
+    int32_t n_gpu_layers                    = -1;    // number of layers to store in VRAM (-1 - use default)
+    int32_t n_gpu_layers_draft              = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
+    int32_t main_gpu                        = 0;     // the GPU that is used for scratch and small tensors
+    float   tensor_split[LLAMA_MAX_DEVICES] = {0};   // how split tensors should be distributed across GPUs
+    int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
+    float   rope_freq_base                  = 0.0f;  // RoPE base frequency
+    float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
+    float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor
+    float   yarn_attn_factor                = 1.0f;  // YaRN magnitude scaling factor
+    float   yarn_beta_fast                  = 32.0f; // YaRN low correction dim
+    float   yarn_beta_slow                  = 1.0f;  // YaRN high correction dim
+    int32_t yarn_orig_ctx                   = 0;     // YaRN original context length
     int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED;
 
     // // sampling parameters
