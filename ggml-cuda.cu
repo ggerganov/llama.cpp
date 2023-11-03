@@ -4874,6 +4874,7 @@ static void dequantize_row_q6_K_cuda(const void * vx, dst_t * y, const int k, cu
 static void dequantize_mul_mat_vec_q4_0_cuda(const void * vx, const dfloat * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     GGML_ASSERT(ncols % GGML_CUDA_DMMV_X == 0);
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
+    // the number of rows may exceed maximum grid size in the y or z dimensions, use the x dimension instead
     const dim3 block_nums(block_num_y, 1, 1);
     const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
     dequantize_mul_mat_vec<QK4_0, QR4_0, dequantize_q4_0>
