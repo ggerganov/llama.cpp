@@ -7,7 +7,6 @@
 
 #include "console.h"
 #include "llama.h"
-#include "build-info.h"
 #include "grammar-parser.h"
 
 #include <algorithm>
@@ -788,7 +787,7 @@ static bool handle_commands(gen_ctx & gctx) {
             printf("  /help              : Show this help. Alias: /h\n");
             printf("  /[SEQ]dump N       : Dump the last N tokens of SEQ showing offsets from the end. Alias: /d\n");
             printf("  /[SEQ]dumptokens N : Same as /dump but displays token IDs as well. Alias: /dt\n");
-            printf("  /[SEQ]kill         : Stop sequence SEQ. Alia: /k\n");
+            printf("  /[SEQ]kill         : Stop sequence SEQ. Alias: /k\n");
             printf("  /list              : List sequences and their state. Alias: /l\n");
             printf("  /[SEQ]focus        : Focus sequence SEQ. Alias: Just use /1, /2, etc\n");
             printf("  /[SEQ]print        : Display the content of SEQ. Alias: /p\n");
