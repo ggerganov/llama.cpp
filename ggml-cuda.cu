@@ -108,6 +108,10 @@
 #define CUDA_USE_TENSOR_CORES
 #endif
 
+#if !defined(GGML_CUDA_FORCE_CUSTOM_MEMORY_POOL)
+#define CUDA_USE_MEMORY_POOL
+#endif
+
 // max batch size to use MMQ kernels when tensor cores are available
 #define MMQ_MAX_BATCH_SIZE 32
 
@@ -5845,7 +5849,7 @@ void ggml_init_cublas() {
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
             fprintf(stderr, "  Device %d: %s, compute capability %d.%d", id, prop.name, prop.major, prop.minor);
-
+#if defined(CUDA_USE_MEMORY_POOL)
             // configure memory pool
             if (prop.memoryPoolsSupported == 1) {
                 cudaError_t err = cudaDeviceGetMemPool(&g_cudaMemPools[id], id);
@@ -5859,7 +5863,7 @@ void ggml_init_cublas() {
             } else {
                 fprintf(stderr, ", CUDA memory pool is not supported\n");
             }
-
+#endif
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
