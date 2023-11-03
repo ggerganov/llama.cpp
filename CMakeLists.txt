@@ -100,11 +100,6 @@ option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALO
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
 
-# instruction set detection for MSVC only
-if (LLAMA_NATIVE)
-    include(cmake/FindSIMD.cmake)
-endif ()
-
 #
 # Build info header
 #
@@ -137,11 +132,6 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
 else()
     message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
 endif()
-
-if(LLAMA_NATIVE)
-    include(cmake/FindSIMD.cmake)
-endif()
->>>>>>> 8a2a73102c8b7af446af0350282b65d7820fe4ac
 
 #
 # Compile flags
@@ -523,6 +513,11 @@ if (NOT MSVC)
         add_compile_options(-pg)
     endif()
 endif()
+
+# instruction set detection for MSVC only
+if (LLAMA_NATIVE)
+    include(cmake/FindSIMD.cmake)
+endif ()
 
 if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
     message(STATUS "ARM detected")
