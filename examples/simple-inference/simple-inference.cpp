@@ -415,6 +415,9 @@ bool gen_ctx::init_batches() {
         ctxs_seq.push_back(bs);
         // if (i > 0) llama_kv_cache_seq_cp(ctx, 0, i, 0, prompt_size);
     }
+    if (!ctxs_seq.empty()) {
+        focused_sequence = ctxs_seq.size() - 1;
+    }
 
     return true;
 }
@@ -536,7 +539,7 @@ void gen_ctx::dump_batches(const size_t prompt_start) {
 #ifndef LLAMA_NO_SEQREP_SAMPLER
         printf(", rewind cnt/toks: %zu/%zu", sctx.rewind_count, sctx.rewind_tokens);
 #endif
-        puts("):");
+        printf("%s):", sctx.state == SEQ_DONE ? ", DONE" : "");
         dump_chunks(sctx.chunks, prompt_start);
         first = false;
     }
@@ -785,7 +788,7 @@ static bool handle_commands(gen_ctx & gctx) {
             printf("  /[SEQ]addesc TEXT  : Same as /add but handles escapes (\\n, \\x20, etc) and tokenizes without a leading space. Alias: /ae\n");
             printf("  /[SEQ]addline TEXT : Same as /add but appends a newline. Alias: /al\n");
             printf("  /help              : Show this help. Alias: /h\n");
-            printf("  /[SEQ]dump N       : Dump the last N tokens of SEQ showing offsets from the end. Alias: /d\n");
+            printf("  /[SEQ]dump [N]     : Dump the last N tokens of SEQ showing offsets from the end. N defaults to 200 if not specified. Alias: /d\n");
             printf("  /[SEQ]dumptokens N : Same as /dump but displays token IDs as well. Alias: /dt\n");
             printf("  /[SEQ]kill         : Stop sequence SEQ. Alias: /k\n");
             printf("  /list              : List sequences and their state. Alias: /l\n");
@@ -798,7 +801,7 @@ static bool handle_commands(gen_ctx & gctx) {
 
         if (command == "q" || command == "quit") return false;
 
-        llama_seq_id target = -1;
+        llama_seq_id target = gctx.focused_sequence;
 
         // Focus
         if (isdigit(command[0])) {
