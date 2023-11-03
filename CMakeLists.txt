@@ -481,11 +481,6 @@ if (NOT MSVC)
     endif()
 endif()
 
-# instruction set detection for MSVC only
-if (LLAMA_NATIVE)
-    include(cmake/FindSIMD.cmake)
-endif ()
-
 if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64") OR ("${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "arm64"))
     message(STATUS "ARM detected")
     if (MSVC)
@@ -515,6 +510,10 @@ if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATC
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
     message(STATUS "x86 detected")
     if (MSVC)
+        # instruction set detection for MSVC only
+        if (LLAMA_NATIVE)
+            include(cmake/FindSIMD.cmake)
+        endif ()
         if (LLAMA_AVX512)
             add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX512>)
             add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)
