@@ -77,6 +77,7 @@ macro(check_sse type flags)
 
 endmacro()
 
+# flags are for MSVC only!
 check_sse("AVX" "-mavx")
 if(NOT ${AVX_FOUND})
     set(LLAMA_AVX OFF)
@@ -85,7 +86,8 @@ else()
 endif()
 
 check_sse("AVX2" "-mavx2")
-if(NOT ${AVX2_FOUND})
+check_sse("FMA" "-mfma")
+if((NOT ${AVX2_FOUND}) OR (NOT ${FMA_FOUND}))
     set(LLAMA_AVX2 OFF)
 else()
     set(LLAMA_AVX2 ON)
