@@ -455,7 +455,7 @@ endif # LLAMA_CLBLAST
 ifdef LLAMA_VULKAN
 	CFLAGS  += -DGGML_USE_VULKAN
 	CXXFLAGS  += -DGGML_USE_VULKAN
-	LDFLAGS += -lvulkan -lcblas
+	LDFLAGS += -lvulkan
 	OBJS    += ggml-vulkan.o
 
 ifdef LLAMA_VULKAN_CHECK_RESULTS
