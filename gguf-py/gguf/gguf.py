@@ -93,6 +93,7 @@ class MODEL_ARCH(IntEnum):
     REFACT        : int = auto()
     BERT          : int = auto()
     BLOOM         : int = auto()
+    PHI_1         : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -132,6 +133,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.BLOOM:          "bloom",
+    MODEL_ARCH.PHI_1:          "phi-1",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -301,6 +303,9 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.PHI_1: [
+        # TODO
     ],
     MODEL_ARCH.GPT2: [
         # TODO
