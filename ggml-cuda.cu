@@ -5844,7 +5844,19 @@ void ggml_init_cublas() {
         for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
+            fprintf(stderr, "  Device %d: %s, compute capability %d.%d", id, prop.name, prop.major, prop.minor);
+
+            // configure memory pool
+            if (prop.memoryPoolsSupported == 1) {
+                cudaError_t err = cudaDeviceGetMemPool(&g_cudaMemPools[id], id);
+                if (err == cudaSuccess) {
+                    size_t treshold = UINT64_MAX;
+                    CUDA_CHECK(cudaMemPoolSetAttribute(g_cudaMemPools[id], cudaMemPoolAttrReleaseThreshold, &treshold));
+                    fprintf(stderr, ", CUDA memory pool is supported\n");
+                }
+            } else {
+                fprintf(stderr, ", CUDA memory pool is not supported\n");
+            }
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
@@ -5869,13 +5881,6 @@ void ggml_init_cublas() {
             // create cublas handle
             CUBLAS_CHECK(cublasCreate(&g_cublas_handles[id]));
             CUBLAS_CHECK(cublasSetMathMode(g_cublas_handles[id], CUBLAS_TF32_TENSOR_OP_MATH));
-
-            // configure memory pool
-            cudaError_t err = cudaDeviceGetMemPool(&g_cudaMemPools[id], id);
-            if (err == cudaSuccess) {
-                size_t treshold = UINT64_MAX;
-                CUDA_CHECK(cudaMemPoolSetAttribute(g_cudaMemPools[id], cudaMemPoolAttrReleaseThreshold, &treshold));
-            }
         }
 
         // configure logging to stdout
