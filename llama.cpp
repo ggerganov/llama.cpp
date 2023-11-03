@@ -7982,7 +7982,7 @@ struct llama_context_params llama_context_default_params() {
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
-        /*.yarn_ext_factor             =*/ NAN,
+        /*.yarn_ext_factor             =*/ -1.0f,
         /*.yarn_attn_factor            =*/ 1.0f,
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
@@ -8125,7 +8125,7 @@ struct llama_context * llama_new_context_with_model(
         cparams.rope_freq_scale = 1.0f; // never scale if scaling type is none
     }
 
-    if (std::isnan(cparams.yarn_ext_factor)) { // NaN indicates 'not set'
+    if (cparams.yarn_ext_factor < 0.0f) { // negative indicates 'not set'
         cparams.yarn_ext_factor = rope_scaling_type == LLAMA_ROPE_SCALING_YARN ? 1.0f : 0.0f;
     }
 
