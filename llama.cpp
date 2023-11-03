@@ -91,6 +91,8 @@
 #define LLAMA_ATTRIBUTE_FORMAT(...)
 #endif
 
+#define LLAMA_MAX_NODES 4096
+
 //
 // logging
 //
@@ -3580,7 +3582,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_llama() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         GGML_ASSERT(n_embd_head == hparams.n_rot);
 
@@ -3692,7 +3694,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_baichuan() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -3812,7 +3814,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_falcon() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -3934,7 +3936,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_starcoder() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
@@ -4033,7 +4035,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_persimmon() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         const int64_t n_rot = n_embd_head / 2;
 
@@ -4243,7 +4245,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_refact() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4334,7 +4336,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_bloom() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4428,7 +4430,7 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * build_mpt() {
-        struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -8169,7 +8171,7 @@ struct llama_context * llama_new_context_with_model(
         {
             static const size_t tensor_alignment = 32;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
-            ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead());
+            ctx->buf_compute.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead());
 
             // create measure allocator
             ctx->alloc = ggml_allocr_new_measure(tensor_alignment);
