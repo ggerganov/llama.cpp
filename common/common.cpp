@@ -92,11 +92,11 @@ void process_escapes(std::string& input) {
                 case '\\': input[output_idx++] = '\\'; break;
                 case 'x':
                     // Handle \x12, etc
-                    if (input_idx + 2 < input_len && input[input_idx + 1] != 0) {
+                    if (input_idx + 2 < input_len) {
                         const char x[3] = { input[input_idx + 1], input[input_idx + 2], 0 };
                         char *err_p = nullptr;
                         const long val = std::strtol(x, &err_p, 16);
-                        if (*err_p == 0) {
+                        if (err_p == x + 2) {
                             input_idx += 2;
                             input[output_idx++] = char(val);
                             break;
