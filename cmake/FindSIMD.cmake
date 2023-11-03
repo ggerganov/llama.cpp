@@ -67,12 +67,12 @@ macro(check_sse type flags)
         endif()
     endforeach()
     set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_SAVE})
-  
+
     if (NOT ${type}_FOUND)
         set(${type}_FOUND FALSE CACHE BOOL "${type} support")
         set(${type}_FLAGS "" CACHE STRING "${type} flags")
     endif()
-  
+
     mark_as_advanced(${type}_FOUND ${type}_FLAGS)
 endmacro()
 
