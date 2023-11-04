@@ -1814,12 +1814,12 @@ def setuptunnel():
             tunnelrawlog = ""
             time.sleep(0.2)
             if os.name == 'nt':
-                print("Starting Cloudflare Tunnel for Windows...")
+                print("Starting Cloudflare Tunnel for Windows, please wait...")
                 tunnelproc = subprocess.Popen(f"cloudflared.exe tunnel --url localhost:{args.port}", text=True, encoding='utf-8', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
             else:
-                print("Starting Cloudflare Tunnel for Linux...")
+                print("Starting Cloudflare Tunnel for Linux, please wait...")
                 tunnelproc = subprocess.Popen(f"./cloudflared-linux-amd64 tunnel --url http://localhost:{args.port}", text=True, encoding='utf-8', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            time.sleep(6)
+            time.sleep(10)
             def tunnel_reader():
                 nonlocal tunnelproc,tunneloutput,tunnelrawlog
                 pattern = r'https://[\w\.-]+\.trycloudflare\.com'
@@ -1831,15 +1831,15 @@ def setuptunnel():
                     found = re.findall(pattern, line)
                     for x in found:
                         tunneloutput = x
+                        print(f"Your remote tunnel is ready, please connect to {tunneloutput}")
                         return
 
             tunnel_reader_thread = threading.Thread(target=tunnel_reader)
             tunnel_reader_thread.start()
-            time.sleep(0.8)
-            if tunneloutput!="":
-                print(f"Your remote tunnel is ready, please connect to {tunneloutput}")
-            else:
+            time.sleep(5)
+            if tunneloutput=="":
                 print(f"Error: Could not create cloudflare tunnel!\nMore Info:\n{tunnelrawlog}")
+            time.sleep(0.5)
             tunnelproc.wait()
 
         if os.name == 'nt':
