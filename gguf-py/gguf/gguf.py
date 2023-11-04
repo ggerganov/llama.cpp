@@ -393,6 +393,7 @@ class TensorNameMap:
             "layers.{bid}.attention_norm",                         # llama-pth
             "encoder.layer.{bid}.attention.output.LayerNorm",      # bert
             "language_model.encoder.layers.{bid}.input_layernorm", # persimmon
+            "model.layers.{bid}.ln1",                              # yi
         ),
 
         # Attention norm 2
@@ -464,6 +465,7 @@ class TensorNameMap:
             "layers.{bid}.ffn_norm",                                        # llama-pth
             "encoder.layer.{bid}.output.LayerNorm",                         # bert
             "language_model.encoder.layers.{bid}.post_attention_layernorm", # persimmon
+            "model.layers.{bid}.ln2",                                       # yi
         ),
 
         # Feed-forward up
