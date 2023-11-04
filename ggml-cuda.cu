@@ -5869,7 +5869,7 @@ void ggml_init_cublas() {
                     }
                 } else {
                     g_cudaMemPools[id] = nullptr;
-                    fprintf(stderr, ", CUDA memory pool is not supported (cant load default pool)\n");
+                    fprintf(stderr, ", CUDA memory pool is not supported (can't load default pool)\n");
                 }
                 // test alloc/dealoc
                 if (err == cudaSuccess) {
@@ -5887,6 +5887,8 @@ void ggml_init_cublas() {
                         fprintf(stderr, ", CUDA memory pool is not supported (allocation failed)\n");
                     }
                 }
+            } else {
+                fprintf(stderr, ", CUDA memory pool is not supported\n");
             }
 #endif
             g_tensor_split[id] = total_vram;
@@ -5915,6 +5917,7 @@ void ggml_init_cublas() {
                         fprintf(stderr,
                                 "Warning: Device %d doesnt support CUDA memory pool, skipping pool access config\n",
                                 id);
+                        continue;
                     }
 
                     cudaMemAccessDesc desc_device = {};
@@ -5923,13 +5926,13 @@ void ggml_init_cublas() {
                     desc_device.flags = cudaMemAccessFlagsProtReadWrite;
                     cudaError_t err = cudaMemPoolSetAccess(main_device_pool, &desc_device, 1 /* numDescs */);
                     if (err != cudaSuccess) {
-                        fprintf(stderr, "Cant give access for main device memory pool to device %d\n", id);
+                        fprintf(stderr, "Can't give access for main device memory pool to device %d\n", id);
                     }
                     cudaMemPool_t mempool;
                     CUDA_CHECK(cudaDeviceGetDefaultMemPool(&mempool, id));
                     err = cudaMemPoolSetAccess(mempool, &desc_main_device, 1 /* numDescs */);
                     if (err != cudaSuccess) {
-                        fprintf(stderr, "Cant give access for device %d memory pool to main device \n", id);
+                        fprintf(stderr, "Can't give access for device %d memory pool to main device \n", id);
                     }
                 }
             } else {
