@@ -1902,7 +1902,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     int realnpredict = params.n_predict-stopper_unused_tokens;
     float pt2 = (time2*1000.0/(realnpredict==0?1:realnpredict));
     float tokens_per_second = (realnpredict == 0 ? 0 : realnpredict / (time1 + time2));
-    printf("\nContextLimit: %d/%d, Processing:%.1fs (%.0fms/T), Generation:%.1fs (%.0fms/T), Total:%.1fs (%.1fT/s)",current_context_tokens.size(),nctx, time1, pt1, time2, pt2, (time1 + time2), tokens_per_second);
+    printf("\nContextLimit: %d/%d, Processing:%.2fs (%.1fms/T), Generation:%.2fs (%.1fms/T), Total:%.2fs (%.2fT/s)",current_context_tokens.size(),nctx, time1, pt1, time2, pt2, (time1 + time2), tokens_per_second);
     fflush(stdout);
     output.status = 1;
     generation_finished = true;

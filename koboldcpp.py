@@ -392,6 +392,7 @@ rewardcounter = 0 #reduces error counts for successful jobs
 totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
 args = None #global args
+gui_layers_untouched = True
 
 class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
     sys_version = ""
@@ -1129,18 +1130,30 @@ def show_new_gui():
                 MaxMemory[0] = max(int(FetchedCUdeviceMem[idx])*1024*1024,MaxMemory[0])
                 pass
 
+        #autopick cublas if suitable
+        global exitcounter
+        if exitcounter < 100 and MaxMemory[0]>3500000000 and CUDevicesNames[0]!="" and "Use CuBLAS" in runopts and runopts_var.get()=="Use OpenBLAS":
+            runopts_var.set("Use CuBLAS")
+            pass
+
         changed_gpu_choice_var()
         return
 
     def autoset_gpu_layers(filepath): #shitty algo to determine how many layers to use
         try:
+            global gui_layers_untouched
             fsize = os.path.getsize(filepath)
             if fsize>10000000: #dont bother with models < 10mb
                 mem = MaxMemory[0]
                 sizeperlayer = fsize*0.05714
                 layerlimit = int(min(200,mem/sizeperlayer))
-                if (gpulayers_var.get()=="" or gpulayers_var.get()=="0") and layerlimit>0:
+                old_gui_layers_untouched = gui_layers_untouched
+                gui_layers_zeroed = gpulayers_var.get()=="" or gpulayers_var.get()=="0"
+                if (gui_layers_untouched or gui_layers_zeroed) and layerlimit>0:
                     gpulayers_var.set(str(layerlimit))
+                    gui_layers_untouched = old_gui_layers_untouched
+                    if gui_layers_zeroed:
+                        gui_layers_untouched = True
         except Exception as ex:
             pass
 
@@ -1173,6 +1186,11 @@ def show_new_gui():
         num_backends_built.bind("<Enter>", lambda event: show_tooltip(event, f"Number of backends you have built and available." + (f"\n\nMissing Backends: \n\n{nl.join(antirunopts)}" if len(runopts) != 6 else "")))
         num_backends_built.bind("<Leave>", hide_tooltip)
 
+    def changed_gpulayers(*args):
+        global gui_layers_untouched
+        gui_layers_untouched = False
+        pass
+
     def changed_gpu_choice_var(*args):
         global exitcounter
         if exitcounter > 100:
@@ -1194,6 +1212,7 @@ def show_new_gui():
             gpuname_label.configure(text="")
 
     gpu_choice_var.trace("w", changed_gpu_choice_var)
+    gpulayers_var.trace("w", changed_gpulayers)
 
     def changerunmode(a,b,c):
         index = runopts_var.get()
