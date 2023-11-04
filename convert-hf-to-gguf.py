@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+from pathlib import Path
 
+import os
 import sys
-
 import model
+
+
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 from util import parse_args
 
 args = parse_args()
