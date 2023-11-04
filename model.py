@@ -153,7 +153,7 @@ class Model:
             return MPTModel
         if model_architecture in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
             return BaichuanModel
-        if model_architecture == "FalconForCausalLM":
+        if model_architecture in ("FalconForCausalLM", "RWForCausalLM"):
             return FalconModel
         if model_architecture == "GPTBigCodeForCausalLM":
             return StarCoderModel
