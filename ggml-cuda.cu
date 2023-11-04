@@ -108,7 +108,7 @@
 #define CUDA_USE_TENSOR_CORES
 #endif
 
-#if !defined(GGML_CUDA_FORCE_CUSTOM_MEMORY_POOL)
+#if defined(GGML_USE_CUDA_MEMORY_POOL)
 #define CUDA_USE_MEMORY_POOL
 #endif
 
@@ -503,7 +503,6 @@ static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
-static bool g_cudaMutliGpuMemPoolSupported = true;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
 
@@ -5814,7 +5813,7 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
 
 
 static void ggml_cuda_pool_free_async(void * ptr, size_t actual_size, int id, cudaStream_t stream) {
-    if (g_cudaMemPools[id] == nullptr || !g_cudaMutliGpuMemPoolSupported) {
+    if (g_cudaMemPools[id] == nullptr) {
         return ggml_cuda_pool_free(ptr, actual_size);
     }
     CUDA_CHECK(cudaFreeAsync(ptr, stream));
@@ -5938,7 +5937,9 @@ void ggml_init_cublas() {
             } else {
                 fprintf(stderr,
                         "WARNING: Your main GPU device doesnt support CUDA memory pools. Using custom memory pool implementation.\n");
-                g_cudaMutliGpuMemPoolSupported = false;
+                for (int id = 0; id < g_device_count; ++id) {
+                    g_cudaMemPools[id] = nullptr;
+                }
             }
         }
 #endif
