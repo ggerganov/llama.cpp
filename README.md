@@ -830,23 +830,13 @@ If you opt to utilize OpenBLAS, you'll need to install the corresponding package
 apt install libopenblas
 ```
 
-Subsequently, if you decide to incorporate CLBlast, you'll first need to install the requisite OpenCL packages:
+Subsequently, if you decide to incorporate CLBlast, you'll need to install the corresponding package.
 ```
-apt install ocl-icd opencl-headers opencl-clhpp clinfo
-```
-
-In order to compile CLBlast, you'll need to first clone the respective Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
-```
-cmake .
-make
-cp libclblast.so* $PREFIX/lib
-cp ./include/clblast.h ../llama.cpp
+apt install opencl-headers clblast pkg-config
 ```
 
 Following the previous steps, navigate to the LlamaCpp directory. To compile it with OpenBLAS and CLBlast, execute the command provided below:
 ```
-cp /data/data/com.termux/files/usr/include/openblas/cblas.h .
-cp /data/data/com.termux/files/usr/include/openblas/openblas_config.h .
 make LLAMA_CLBLAST=1 //(sometimes you need to run this command twice)
 ```
 
