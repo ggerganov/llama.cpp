@@ -505,7 +505,8 @@ class BaichuanModel(Model):
 
         if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
             if self.hparams["rope_scaling"].get("type") == "linear":
-                self.gguf_writer.add_rope_scale_linear(self.hparams["rope_scaling"]["factor"])
+                self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+                self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
     def write_tensors(self):
         # Collect tensors from generator object
