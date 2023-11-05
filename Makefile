@@ -73,6 +73,10 @@ endif
 ifeq ($(UNAME_S),Darwin)
 	CFLAGS   += -pthread
 	CXXFLAGS += -pthread
+	CLANG_VER = $(shell clang -v 2>&1 | head -n 1 | awk 'BEGIN {FS="[. ]"};{print $$1 $$2 $$4}')
+    ifeq ($(CLANG_VER),Appleclang15)
+		LDFLAGS += -ld_classic
+	endif
 endif
 ifeq ($(UNAME_S),FreeBSD)
 	CFLAGS   += -pthread
