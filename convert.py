@@ -311,17 +311,18 @@ class VocabLoader:
         vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.vocab.items()}
 
         self.added_tokens_list = []
-        self.vocab_size_base: int = len(self.tokenizer.vocab)
-        self.vocab_size: int = len(self.tokenizer.vocab)
+        self.vocab_size_base: int = len(vocab_set)
+        self.vocab_size: int = len(vocab_set)
         self.fname_tokenizer = fname_tokenizer
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
+        special_ids = set(tokenizer.all_special_ids)
         
         for i in range(self.vocab_size_base):
             text = reverse_vocab[i].encode("utf-8")
-            yield text, 0.0, gguf.TokenType.NORMAL
+            yield text, 0.0, gguf.TokenType.NORMAL if i not in special_ids else gguf.TokenType.CONTROL
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         for text in self.added_tokens_list:
