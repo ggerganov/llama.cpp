@@ -2939,13 +2939,14 @@ Current version: 91
 				}
 			})
 			.catch((error) => {
-				retry_preserve_last = true;
 				console.error('Error:', error);
 				clear_poll_flags();
 				render_gametext();
 				if(error.name!="AbortError") //aborts are silent
 				{
 					msgbox("Error while submitting prompt: " + error);
+				}else{
+					retry_preserve_last = true;
 				}
 			});
 		}
