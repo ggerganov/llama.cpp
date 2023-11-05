@@ -895,5 +895,3 @@ else:
     model_instance.write()
 
 print(f"Model successfully exported to '{fname_out}'")
-print("")
-

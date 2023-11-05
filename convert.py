@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
 
 import numpy as np
-from sentencepiece import SentencePieceProcessor  # type: ignore[import-untyped]
+from sentencepiece import SentencePieceProcessor
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
