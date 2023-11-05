@@ -461,22 +461,23 @@
       }, "{{char}}");
     }
 
-    const runCompletion = async () => {
+    const runCompletion = () => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      await runLlama(prompt, {
+      runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
-      }, "");
-      session.value.prompt = session.value.transcript.map(([_, data]) =>
-        Array.isArray(data) ? data.map(msg => msg.content).join('') : data
-      ).join('');
-      session.value.transcript = [];
+      }, "").finally(() => {
+        session.value.prompt = session.value.transcript.map(([_, data]) =>
+          Array.isArray(data) ? data.map(msg => msg.content).join('') : data
+        ).join('');
+        session.value.transcript = [];
+      })
     }
 
     const stop = (e) => {
