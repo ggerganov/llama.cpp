@@ -1,3 +1,6 @@
+#ifndef LLA_UTILS_H
+#define LLAVA_UTILS_H
+
 #pragma once
 
 // this one and clip lib will be eventually merged to a single lib, let's keep it this way for now
@@ -200,3 +203,5 @@ inline std::string remove_image_from_prompt(const std::string& prompt, const cha
     auto post = prompt.substr(end + strlen(IMG_BASE64_TAG_END));
     return pre + replacement + post;
 }
+
+#endif
