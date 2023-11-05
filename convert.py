@@ -309,42 +309,23 @@ class VocabLoader:
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
         vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.vocab.items()}
-        
-        added_tokens = {
-            token: tid
-            for token, tid in self.tokenizer.get_added_vocab().items()
-            if token not in vocab_set
-        }
 
-        vocab_size: int = self.tokenizer.vocab_size
-        
-        expected_ids = list(range(vocab_size, vocab_size + len(added_tokens)))
-        actual_ids   = sorted(added_tokens.values())
-        if expected_ids != actual_ids:
-            raise Exception(f"Expected added token IDs to be sequential and start at {len(added_tokens)}; got {actual_ids}")
-
-        items = sorted(added_tokens.items(), key=lambda text_idx: text_idx[1])
-        self.added_tokens_list = [text for (text, idx) in items]
-        self.vocab_size_base: int = vocab_size
-        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
+        self.vocab_size: int = len(self.tokenizer.vocab)
         self.fname_tokenizer = fname_tokenizer
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
         
-        for i in range(tokenizer.vocab_size):
+        for i in range(self.vocab_size):
             text = reverse_vocab[i].encode("utf-8")
             yield text, 0.0, gguf.TokenType.NORMAL
-
-    def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
-        for text in self.added_tokens_list:
-            score = -1000.0
-            yield text.encode("utf-8"), score, gguf.TokenType.USER_DEFINED
+            
+    def has_newline_token(self):
+        return '<0x0A>' in self.tokenizer.vocab or '\n' in self.tokenizer.vocab
 
     def all_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         yield from self.hf_tokens()
-        yield from self.added_tokens()
 
     def get_vocab_type(self) -> str:
         path_candidates = []
@@ -352,26 +333,29 @@ class VocabLoader:
         path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "llama"
-            
+
         path_candidates.append(path_candidate)
         vocab_file = "vocab.json"
         path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "gpt2"
-            
+
         path_candidates.append(path_candidate)
         vocab_file = "tokenizer.json"
         path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
         if path_candidate:
-            return "llama"
-            
+            if not self.tokenizer.can_save_slow_tokenizer(): 
+                return "gpt2"
+            else:
+                return "llama"
+
         path_candidates.append(path_candidate)
         raise FileNotFoundError(
                     f"Could not find {find_candidates} in {path} or its parent; "
                     "if it's in another directory, pass the directory as --vocab-dir")
 
     def __repr__(self) -> str:
-        return f"<VocabLoader with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<VocabLoader with {self.vocab_size} tokens>"
 
 Vocab: TypeAlias = 'VocabLoader'
 
@@ -746,10 +730,10 @@ def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], conc
 
 def check_vocab_size(params: Params, vocab: Vocab) -> None:
     if params.n_vocab != vocab.vocab_size:
-        if params.n_vocab == vocab.vocab_size_base:
+        if params.n_vocab == vocab.vocab_size:
             print("Ignoring added_tokens.json since model matches vocab size without it.")
             vocab.added_tokens_list = []
-            vocab.vocab_size = vocab.vocab_size_base
+            vocab.vocab_size = vocab.vocab_size
             return
         msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
         msg += f" has {vocab.vocab_size})."
