@@ -680,7 +680,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-clip_image_u8 * make_clip_image_u8() { 
+clip_image_u8 * make_clip_image_u8() {
     auto img = new clip_image_u8();
     return img;
 }
