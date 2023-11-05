@@ -74,19 +74,17 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     }
 
     printf("\n");
-
 }
 
 
 static struct llava_context * llava_init(gpt_params * params) {
-
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
-    
+
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
 
     llama_backend_init(params->numa);
