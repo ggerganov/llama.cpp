@@ -118,7 +118,11 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		FULLCFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
 	else
 # if not on windows, they are clearly building it themselves, so lets just use whatever is supported
+		ifdef LLAMA_COLAB
+		CFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
+		else
 		CFLAGS += -march=native -mtune=native
+		endif
 	endif
 endif
 ifneq ($(filter ppc64%,$(UNAME_M)),)
