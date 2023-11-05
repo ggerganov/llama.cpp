@@ -111,6 +111,7 @@ tests/test-tokenizer-1-bpe
 rocblas.dll
 hipblas.dll
 koboldcpp_hipblas.so
+koboldcpp_hipblas.dll
 
 # Jetbrains idea folder
 .idea/
