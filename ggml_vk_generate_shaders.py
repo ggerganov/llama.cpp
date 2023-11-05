@@ -304,17 +304,17 @@ void main() {
     const int loadstride = int(gl_WorkGroupSize.x * LOAD_VEC) / BK;
 
     const int start_k = ik * p.k_split;
-    const int end_k = (ik + 1) * p.k_split;
+    const int end_k = min(p.K, (ik + 1) * p.k_split);
 
     int pos_a = ir * BM * p.stride_a / LOAD_VEC + start_k / LOAD_VEC;
     int pos_b = ic * BN * p.stride_b / LOAD_VEC + start_k / LOAD_VEC;
 
-    D_TYPE sums[WMITER * TM * WNITER * TN];
+    FLOAT_TYPE sums[WMITER * TM * WNITER * TN];
     FLOAT_TYPE cache_a[WMITER * TM];
     FLOAT_TYPE cache_b[WNITER * TN];
 
     [[unroll]] for (int i = 0; i < WMITER*TM*WNITER*TN; i++) {
-        sums[i] = 0.0f;
+        sums[i] = FLOAT_TYPE(0.0f);
     }
 
     [[unroll]] for (int block = start_k; block < end_k; block += BK) {
@@ -374,7 +374,7 @@ void main() {
         pos_a += BK / LOAD_VEC;
         pos_b += BK / LOAD_VEC;
 
-        for (int i = 0; i < min(BK, p.K - block); i++) {
+        for (int i = 0; i < BK; i++) {
             // Load from shared into cache
             [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
                 [[unroll]] for (int j = 0; j < TM; j++) {
@@ -391,7 +391,7 @@ void main() {
                 [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
                     [[unroll]] for (int cc = 0; cc < TN; cc++) {
                         [[unroll]] for (int cr = 0; cr < TM; cr++) {
-                            sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr] += D_TYPE(cache_a[wsir * TM + cr]) * D_TYPE(cache_b[wsic * TN + cc]);
+                            sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr] += FLOAT_TYPE(cache_a[wsir * TM + cr]) * FLOAT_TYPE(cache_b[wsic * TN + cc]);
                         }
                     }
                 }
@@ -414,7 +414,7 @@ void main() {
             [[unroll]] for (int cc = 0; cc < TN; cc++) {
                 [[unroll]] for (int cr = 0; cr < TM; cr++) {
                     if (dr_warp + cr < p.M && dc_warp + cc < p.N) {
-                        data_d[k_split_offset + (dc_warp + cc) * p.stride_d + dr_warp + cr] = sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr];
+                        data_d[k_split_offset + (dc_warp + cc) * p.stride_d + dr_warp + cr] = D_TYPE(sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr]);
                     }
                 }
             }
@@ -1590,12 +1590,9 @@ async def main():
         tasks.append(string_to_spv("matmul_f32_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f32_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type, "B_TYPE": vec_type, "D_TYPE": "float"}, fp16))
 
-        stream.clear();
-        stream.extend((mulmat_head, shader_float_type, mulmat_body));
         tasks.append(string_to_spv("matmul_f16_l", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f16_m", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f16_s", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float16_t", "D_TYPE": "float"}, fp16))
-
         tasks.append(string_to_spv("matmul_f16_aligned_l", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f16_aligned_m", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f16_aligned_s", "".join(stream), {"LOAD_VEC": load_vec, "A_TYPE": vec_type_f16, "B_TYPE": vec_type_f16, "D_TYPE": "float"}, fp16))
