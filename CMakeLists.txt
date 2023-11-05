@@ -52,6 +52,9 @@ option(LLAMA_ALL_WARNINGS               "llama: enable all compiler warnings"   
 option(LLAMA_ALL_WARNINGS_3RD_PARTY     "llama: enable all compiler warnings in 3rd party libs" OFF)
 option(LLAMA_GPROF                      "llama: enable gprof"                                   OFF)
 
+# build
+option(LLAMA_FATAL_WARNINGS              "llama: enable -Werror flag"                           OFF)
+
 # sanitizers
 option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        OFF)
 option(LLAMA_SANITIZE_ADDRESS           "llama: enable address sanitizer"                       OFF)
@@ -111,6 +114,14 @@ set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include(CheckCXXCompilerFlag)
+
+if (LLAMA_FATAL_WARNINGS)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-Werror)
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        add_compile_options(/WX)
+    endif()
+endif()
 
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)

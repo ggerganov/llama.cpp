@@ -37,6 +37,8 @@ jobs:
 
       - name: Build
         id: make_build
+        env:
+            LLAMA_FATAL_WARNINGS: 1
         run: |
           CC=gcc-8 make -j $(nproc)
 
@@ -65,7 +67,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
@@ -100,7 +102,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
@@ -134,7 +136,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DLLAMA_MPI=ON ..
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_MPI=ON ..
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
@@ -159,6 +161,8 @@ jobs:
 
       - name: Build
         id: make_build
+        env:
+            LLAMA_FATAL_WARNINGS: 1
         run: |
           make -j $(sysctl -n hw.logicalcpu)
 
@@ -188,7 +192,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake ..
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -218,6 +222,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -246,6 +251,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_FATAL_WARNINGS=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -352,7 +358,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. ${{ matrix.defines }}
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON ${{ matrix.defines }}
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add clblast.dll
@@ -455,7 +461,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name

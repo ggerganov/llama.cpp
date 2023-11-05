@@ -215,6 +215,11 @@ MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmis
 				-Werror=implicit-function-declaration
 MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 
+ifeq ($(LLAMA_FATAL_WARNINGS),1)
+	MK_CFLAGS += -Werror
+	MK_CXXFLAGS += -Werror
+endif
+
 ifeq ($(CC_IS_CLANG), 1)
 	# clang options
 	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return

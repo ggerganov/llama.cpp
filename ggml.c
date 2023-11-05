@@ -786,7 +786,7 @@ do {                                                              \
     const __m128 t0 = _mm_add_ps(_mm256_castps256_ps128(x[0]),    \
                                  _mm256_extractf128_ps(x[0], 1)); \
     const __m128 t1 = _mm_hadd_ps(t0, t0);                        \
-    res = _mm_cvtss_f32(_mm_hadd_ps(t1, t1));                     \
+    res = (ggml_float) _mm_cvtss_f32(_mm_hadd_ps(t1, t1));        \
 } while (0)
 // TODO: is this optimal ?
 
@@ -1067,7 +1067,7 @@ inline static void __wasm_f16x4_store(ggml_fp16_t * p, v128_t x) {
         x[i] = _mm_add_ps(x[i], x[offset+i]);                     \
     }                                                             \
     const __m128 t0 = _mm_hadd_ps(x[0], x[0]);                    \
-    res = _mm_cvtss_f32(_mm_hadd_ps(t0, t0));                     \
+    res = (ggml_float) _mm_cvtss_f32(_mm_hadd_ps(t0, t0));        \
 }
 // TODO: is this optimal ?
 
