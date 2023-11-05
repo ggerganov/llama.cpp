@@ -379,7 +379,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.48"
+KcppVersion = "1.48.1"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -1140,20 +1140,17 @@ def show_new_gui():
                     MaxMemory[0] = max(int(FetchedCUdeviceMem[idx]),MaxMemory[0])
                 else:
                     MaxMemory[0] = max(int(FetchedCUdeviceMem[idx])*1024*1024,MaxMemory[0])
-                    pass
 
-        #autopick cublas if suitable
+        #autopick cublas if suitable, requires at least 3.5GB VRAM to auto pick
         global exitcounter
-        if exitcounter < 100 and MaxMemory[0]>3500000000 and CUDevicesNames[0]!="" and "Use CuBLAS" or "Use hipBLAS (ROCM)" in runopts and runopts_var.get()=="Use OpenBLAS":
+        if exitcounter < 100 and MaxMemory[0]>3500000000 and CUDevicesNames[0]!="" and ("Use CuBLAS" in runopts or "Use hipBLAS (ROCM)" in runopts) and runopts_var.get()=="Use OpenBLAS":
             if "Use CuBLAS" in runopts:
                 runopts_var.set("Use CuBLAS")
-                pass
             elif "Use hipBLAS (ROCM)" in runopts:
                 runopts_var.set("Use hipBLAS (ROCM)")
 
         changed_gpu_choice_var()
         return
-
 
     def autoset_gpu_layers(filepath): #shitty algo to determine how many layers to use
         try:
