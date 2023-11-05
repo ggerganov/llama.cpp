@@ -11,7 +11,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../.git")
     if(NOT IS_DIRECTORY "${GIT_DIR}")
         file(READ ${GIT_DIR} REAL_GIT_DIR_LINK)
         string(REGEX REPLACE "gitdir: (.*)\n$" "\\1" REAL_GIT_DIR ${REAL_GIT_DIR_LINK})
-        set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${REAL_GIT_DIR}")
+        set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../${REAL_GIT_DIR}")
     endif()
 
     set(GIT_INDEX "${GIT_DIR}/index")
