@@ -1058,10 +1058,10 @@ void main() {
         const uint8_t q4_6 = uint8_t(x[ib0 + i].qs[q_offset + 64]  >> 4);
         const uint8_t q4_7 = uint8_t(x[ib0 + i].qs[q_offset + 65]  >> 4);
 
-        const FLOAT_TYPE sx = FLOAT_TYPE(y[y1_idx     ] * q4_0  + y[y1_idx +  1] * q4_1  + y[y1_idx +  2] * q4_2  + y[y1_idx +  3] * q4_3 );
-        const FLOAT_TYPE sy = FLOAT_TYPE(y[y1_idx + 32] * q4_4  + y[y1_idx + 33] * q4_5  + y[y1_idx + 34] * q4_6  + y[y1_idx + 35] * q4_7 );
-        const FLOAT_TYPE sz = FLOAT_TYPE(y[y2_idx     ] * q4_8  + y[y2_idx +  1] * q4_9  + y[y2_idx +  2] * q4_10 + y[y2_idx +  3] * q4_11);
-        const FLOAT_TYPE sw = FLOAT_TYPE(y[y2_idx + 32] * q4_12 + y[y2_idx + 33] * q4_13 + y[y2_idx + 34] * q4_14 + y[y2_idx + 35] * q4_15);
+        const FLOAT_TYPE sx = FLOAT_TYPE(y[y1_idx     ] * q4_0  + y[y1_idx +  1] * q4_1);
+        const FLOAT_TYPE sy = FLOAT_TYPE(y[y1_idx + 32] * q4_2  + y[y1_idx + 33] * q4_3);
+        const FLOAT_TYPE sz = FLOAT_TYPE(y[y2_idx     ] * q4_4  + y[y2_idx +  1] * q4_5);
+        const FLOAT_TYPE sw = FLOAT_TYPE(y[y2_idx + 32] * q4_6 + y[y2_idx + 33] * q4_7);
         const FLOAT_TYPE smin = FLOAT_TYPE(
             y[y1_idx] * sc2 + y[y1_idx + 32] * sc3 + y[y2_idx] * sc6 + y[y2_idx + 32] * sc7
           + y[y1_idx + 1] * sc2 + y[y1_idx + 33] * sc3 + y[y2_idx + 1] * sc6 + y[y2_idx + 33] * sc7
