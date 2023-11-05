@@ -956,9 +956,12 @@ def show_new_gui():
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
     if os.name != 'nt':
-        antirunopts.remove("NoAVX2 Mode (Old CPU)")
-        antirunopts.remove("Failsafe Mode (Old CPU)")
-        antirunopts.remove("CLBlast NoAVX2 (Old CPU)")
+        if "NoAVX2 Mode (Old CPU)" in antirunopts:
+            antirunopts.remove("NoAVX2 Mode (Old CPU)")
+        if "Failsafe Mode (Old CPU)" in antirunopts:
+            antirunopts.remove("Failsafe Mode (Old CPU)")
+        if "CLBlast NoAVX2 (Old CPU)" in antirunopts:
+            antirunopts.remove("CLBlast NoAVX2 (Old CPU)")
     if not any(runopts):
         exitcounter = 999
         show_gui_msgbox("No Backends Available!","KoboldCPP couldn't locate any backends to use (i.e Default, OpenBLAS, CLBlast, CuBLAS).\n\nTo use the program, please run the 'make' command from the directory.")
