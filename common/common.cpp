@@ -101,8 +101,8 @@ void process_escapes(std::string& input) {
                             input[output_idx++] = char(val);
                             break;
                         }
-                        // Intentionally fall through to default.
                     }
+                    // fall through
                 default:   input[output_idx++] = '\\';
                            input[output_idx++] = input[input_idx]; break;
             }
