@@ -673,7 +673,6 @@ target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
 target_link_libraries(llama PRIVATE
     ggml
-    llava
     ${LLAMA_EXTRA_LIBS}
     )
 
