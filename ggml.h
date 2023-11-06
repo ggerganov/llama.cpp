@@ -1380,14 +1380,6 @@ extern "C" {
             float                 beta_fast,
             bool                  beta_slow);
 
-    GGML_API struct ggml_tensor * ggml_rope_xpos_back(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a,
-            struct ggml_tensor  * b,
-            int                   n_dims,
-            float                 base,
-            bool                  down);
-
     // alibi position embedding
     // in-place, returns view(a)
     GGML_API struct ggml_tensor * ggml_alibi(
