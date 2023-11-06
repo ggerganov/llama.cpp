@@ -1,4 +1,3 @@
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 
 set(TEMPLATE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/common/build-info.cpp.in")
