@@ -682,22 +682,6 @@ if (BUILD_SHARED_LIBS)
     if (LLAMA_METAL)
         set_target_properties(llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
     endif()
-
-    # By default, symbols provided by the sublibs that are not used by mainlib (which is all of them in this case)
-    # are not used. This changes that.
-    if (WIN32)
-        set_target_properties(llama PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE /FORCE:MULTIPLE /NODEFAULTLIB:library"
-    )
-    elseif (APPLE)
-        set_target_properties(llama PROPERTIES
-        LINK_FLAGS "-Wl,-all_load"
-    )
-    else ()
-        set_target_properties(llama PROPERTIES
-        LINK_FLAGS "-Wl,--whole-archive"
-    )
-    endif ()
 endif()
 
 
