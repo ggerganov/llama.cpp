@@ -687,7 +687,7 @@ if (BUILD_SHARED_LIBS)
     # are not used. This changes that.
     if (WIN32)
         set_target_properties(llama PROPERTIES
-        LINK_FLAGS "/WHOLEARCHIVE /FORCE:MULTIPLE"
+        LINK_FLAGS "/WHOLEARCHIVE /FORCE:MULTIPLE /NODEFAULTLIB:library"
     )
     elseif (APPLE)
         set_target_properties(llama PROPERTIES
