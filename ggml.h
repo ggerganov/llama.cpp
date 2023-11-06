@@ -1378,7 +1378,9 @@ extern "C" {
             float                 ext_factor,
             float                 attn_factor,
             float                 beta_fast,
-            bool                  beta_slow);
+            bool                  beta_slow,
+            float                 xpos_base,
+            bool                  xpos_down);
 
     // alibi position embedding
     // in-place, returns view(a)
