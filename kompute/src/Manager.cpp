@@ -180,6 +180,16 @@ Manager::createInstance()
           applicationExtensions.data();
     }
 
+    try {
+        mDynamicLoader = std::make_shared<vk::DynamicLoader>();
+    } catch (const std::exception & err) {
+        return;
+    }
+
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
+      mDynamicLoader->getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+
 #ifndef KOMPUTE_DISABLE_VK_DEBUG_LAYERS
     KP_LOG_DEBUG("Kompute Manager adding debug validation layers");
     // We'll identify the layers that are supported
@@ -234,16 +244,6 @@ Manager::createInstance()
     }
 #endif
 
-    try {
-        mDynamicLoader = std::make_shared<vk::DynamicLoader>();
-    } catch (const std::exception & err) {
-        return;
-    }
-
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
-      mDynamicLoader->getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
-
     this->mInstance = std::make_shared<vk::Instance>();
     vk::Result r = vk::createInstance(
       &computeInstanceCreateInfo, nullptr, this->mInstance.get());
@@ -270,7 +270,7 @@ Manager::createInstance()
           (PFN_vkDebugReportCallbackEXT)debugMessageCallback;
         debugCreateInfo.flags = debugFlags;
 
-        this->mDebugDispatcher.init(*this->mInstance, &vkGetInstanceProcAddr);
+        this->mDebugDispatcher.init(*this->mInstance, vkGetInstanceProcAddr);
         this->mDebugReportCallback =
           this->mInstance->createDebugReportCallbackEXT(
             debugCreateInfo, nullptr, this->mDebugDispatcher);
