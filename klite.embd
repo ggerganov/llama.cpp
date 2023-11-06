@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 91
+Current version: 92
 -Concedo
 -->
 
@@ -6282,20 +6282,25 @@ Current version: 91
 				</div>`;
 		filetable += entry;
 
-		for(let i=0;i<4;++i)
+		try
 		{
-			let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
-			entry = `<div style="display:flex; height:46px;">
-				<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
-				`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
-				</div>
-				<div style="text-align: right; align-self: center; width: 184px;">
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
-				<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
-				</div></div>`;
-			filetable += entry;
+			for(let i=0;i<4;++i)
+			{
+				let testslot = localStorage.getItem(STORAGE_PREFIX + "slot_"+i+"_meta");
+				entry = `<div style="display:flex; height:46px;">
+					<div style="font-size:12px; margin:3px; text-align: center; align-self: center; width: calc(100% - 184px);">
+					`+(testslot?`[ Slot `+(i+1)+` - `+testslot+` ]`:`[ Slot `+(i+1)+` - Empty ]`)+`
+					</div>
+					<div style="text-align: right; align-self: center; width: 184px;">
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="save_to_slot(`+i+`)"><img class="btnicon-save"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary" onclick="load_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-load"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_green" onclick="download_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-download"/></button>
+					<button type="button" style="font-size:12px;" name="slc`+i+`" class="btn btn-primary bg_red" onclick="delete_from_slot(`+i+`)" `+(testslot?"":"disabled")+`><img class="btnicon-delete"/></button>
+					</div></div>`;
+				filetable += entry;
+			}
+		} catch (e) {
+			console.log("get slots failed: " + e);
 		}
 		document.getElementById("saveloadentries").innerHTML = filetable;
 	}
@@ -7346,7 +7351,7 @@ Current version: 91
 		let onOk = ()=>{
 			pending_response_id = "-1";
 			waiting_for_autosummary = true;
-			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.2)-100;
+			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0)-100;
 			let truncated_context = concat_gametext(true, "");
 
 			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
@@ -7916,7 +7921,7 @@ Current version: 91
 			truncated_context = truncated_context.replace(/\xA0/g,' '); //replace non breaking space nbsp
 
 			//this is a hack since we dont have a proper tokenizer, but we can estimate 1 token per 3 characters
-			let chars_per_token = 3.2;
+			let chars_per_token = 3.0;
 			//we try to detect attempts at coding which tokenize poorly. This usually happens when the average word length is high.
 			let avgwordlen = (1.0+truncated_context.length)/(1.0+countWords(truncated_context));
 			if(avgwordlen>=7.8)
@@ -7928,7 +7933,7 @@ Current version: 91
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
 				chars_per_token = 4.8;
 			}
-			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 8);
+			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 12);
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
 			if (localsettings.opmode == 2  && localsettings.adventure_context_mod)
@@ -8056,7 +8061,7 @@ Current version: 91
 			//we clip the memory if its too long, taking the last x chars (not the first)
 			//memory or anote is allowed to be up to 0.9 times of ctx allowance
 			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
-			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
+			let truncated_memory = substring_to_boundary(current_memory, max_mem_anote_len);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -10187,12 +10192,17 @@ Current version: 91
 
 	function autosave() {
 		//autosave
-		localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
-		if (localsettings.persist_session) {
-			let compressedstory = generate_compressed_story(true,true,true);
-			localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+		try {
+			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
+			if (localsettings.persist_session) {
+				let compressedstory = generate_compressed_story(true, true, true);
+				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+			}
+			console.log("autosave done");
+		} catch (e) {
+			console.log("autosave failed: " + e);
 		}
-		console.log("autosave done");
+
 	}
 
 	function btn_adventure_mode()
