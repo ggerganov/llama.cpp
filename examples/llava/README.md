@@ -51,7 +51,6 @@ Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` director
 
 ## TODO
 
-- [ ] Support server mode.
 - [ ] Support non-CPU backend for the image encoding part.
 - [ ] Support different sampling methods.
 - [ ] Support more model variants.
