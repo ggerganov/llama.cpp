@@ -118,7 +118,7 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686))
 		FULLCFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
 	else
 # if not on windows, they are clearly building it themselves, so lets just use whatever is supported
-		ifdef LLAMA_COLAB
+		ifdef LLAMA_PORTABLE
 		CFLAGS += -mavx2 -msse3 -mfma -mf16c -mavx
 		else
 		CFLAGS += -march=native -mtune=native
@@ -152,11 +152,17 @@ ifdef LLAMA_CUBLAS
 	CUBLAS_OBJS = ggml-cuda.o ggml_v2-cuda.o ggml_v2-cuda-legacy.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
+
 ifdef CUDA_DOCKER_ARCH
 	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
 else
+ifdef LLAMA_PORTABLE
+	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=all-major
+else
 	NVCCFLAGS += -arch=native
+endif
 endif # CUDA_DOCKER_ARCH
+
 ifdef LLAMA_CUDA_FORCE_DMMV
 	NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
