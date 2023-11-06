@@ -3,7 +3,6 @@
 from __future__ import annotations
 from pathlib import Path
 from enum import IntEnum
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast
 
 
@@ -848,6 +847,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bigendian", action="store_true", help="model is executed on big endian machine")
 
     return parser.parse_args()
+
 
 args = parse_args()
 
