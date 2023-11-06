@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from pathlib import Path
+
+import argparse
+import contextlib
+import json
+import os
+import re
+import sys
 from enum import IntEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast
 
-
-import os
-import sys
-import contextlib
-import re
-import json
-import argparse
 import numpy as np
 import torch
 
