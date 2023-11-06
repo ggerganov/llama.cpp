@@ -88,6 +88,7 @@ You can then run koboldcpp anywhere from the terminal by running `koboldcpp` to 
 - KoboldCpp has a few unofficial third-party community created docker images. Feel free to try them out, but do not expect up-to-date support:
   - https://github.com/korewaChino/koboldCppDocker
   - https://github.com/noneabove1182/koboldcpp-docker
+- If you're building your own docker, remember to set CUDA_DOCKER_ARCH or enable LLAMA_PORTABLE
 
 ## Questions and Help
 - **First, please check out [The KoboldCpp FAQ and Knowledgebase](https://github.com/LostRuins/koboldcpp/wiki) which may already have answers to your questions! Also please search through past issues and discussions.**
