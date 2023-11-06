@@ -1372,10 +1372,21 @@ extern "C" {
             int                   n_dims,
             int                   mode,
             int                   n_ctx,
+            int                   n_orig_ctx,
             float                 freq_base,
             float                 freq_scale,
-            float                 xpos_base,
-            bool                  xpos_down);
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            bool                  beta_slow);
+
+    GGML_API struct ggml_tensor * ggml_rope_xpos_back(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int                   n_dims,
+            float                 base,
+            bool                  down);
 
     // alibi position embedding
     // in-place, returns view(a)
