@@ -2560,7 +2560,7 @@ static void llm_load_tensors(
         llama_backend_offload = GGML_BACKEND_GPU;
         llama_backend_offload_split = GGML_BACKEND_GPU_SPLIT;
     }
-#elif GGML_USE_CLBLAST
+#elif defined(GGML_USE_CLBLAST)
         LLAMA_LOG_INFO("%s: using OpenCL for GPU acceleration\n", __func__);
         llama_backend_offload = GGML_BACKEND_GPU;
         llama_backend_offload_split = GGML_BACKEND_GPU;
