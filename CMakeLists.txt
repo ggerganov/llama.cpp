@@ -100,6 +100,9 @@ option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALO
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
 
+# Required for relocatable CMake package
+include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
+
 #
 # Compile flags
 #
