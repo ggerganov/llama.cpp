@@ -1,5 +1,4 @@
 #include "clip.h"
-#include "llava-utils.h"
 #include "common.h"
 #include "llama.h"
 #include "llava.h"
@@ -28,12 +27,11 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
         return false;
     }
+
     const int64_t t_img_enc_end_us = ggml_time_us();
     float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
 
-    {
-        printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
-    }
+    printf("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
 
     return true;
 }
@@ -50,7 +48,6 @@ bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx *
 }
 
 static bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
-
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip));
     if (!image_embd) {
         fprintf(stderr, "Unable to allocate memory for image embeddings\n");
@@ -70,8 +67,6 @@ static bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_thre
     return true;
 }
 
-
-
 bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed, int n_batch, int * n_past) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
 
@@ -90,9 +85,7 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
     return true;
 }
 
-
-LLAMA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length)
-{
+LLAVA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length) {
     clip_image_u8 * img = make_clip_image_u8();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
@@ -116,8 +109,7 @@ LLAMA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct cl
     return result;
 }
 
-static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut)
-{
+static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long *sizeOut) {
     auto file = fopen(path, "rb");
     if (file == NULL) {
         fprintf(stderr, "%s: can't read file %s\n", __func__, path);
@@ -141,11 +133,9 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
     *bytesOut = buffer;
     *sizeOut = fileSize;
     return true;
-
 }
 
-LLAMA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path)
-{
+LLAVA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
     unsigned char* image_bytes;
     long image_bytes_length;
     auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
@@ -160,8 +150,7 @@ LLAMA_API struct llava_image_embed * llava_image_embed_make_with_filename(struct
     return embed;
 }
 
-
-LLAMA_API void llava_image_embed_free(struct llava_image_embed * embed) {
+LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed->embed);
     free(embed);
 }
