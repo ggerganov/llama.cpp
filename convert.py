@@ -253,6 +253,11 @@ class Params:
         elif config["norm_eps"] in (1e-05, 1e-06):
             # LLaMA v2
             n_ctx = 4096
+            # For some reason FB writes -1 to vocab size for their LLAMA2 models
+            # simply remove this bogus value and let the return statement belo
+            # figure it out
+            if config["vocab_size"] == -1:
+                del config["vocab_size"]
         else:
             # LLaMA v1
             n_ctx = 2048
