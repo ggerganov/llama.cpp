@@ -250,7 +250,7 @@ class Params:
         if config.get("rope_theta") == 1000000:
             # CodeLlama
             n_ctx = 16384
-        elif config["norm_eps"] == 1e-05:
+        elif config["norm_eps"] in (1e-05, 1e-06):
             # LLaMA v2
             n_ctx = 4096
         else:
