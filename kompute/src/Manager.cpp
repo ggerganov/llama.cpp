@@ -349,7 +349,7 @@ Manager::createDevice(const std::vector<uint32_t>& familyQueueIndices,
 
     KP_LOG_INFO("Using physical device index {} found {}",
                 physicalDeviceIndex,
-                physicalDeviceProperties.deviceName);
+                physicalDeviceProperties.deviceName.data());
 
     if (familyQueueIndices.empty()) {
         // Find compute queue
