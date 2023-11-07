@@ -837,13 +837,13 @@ def parse_args() -> argparse.Namespace:
         help="path to write to; default: based on input",
     )
     parser.add_argument(
-        "--outtype", type=str, choices=["f32", "f16"], default="f16", nargs='?',
-        help="output format - use 0 for float32, 1 for float16",
+        "--outtype", type=str, choices=["f32", "f16"], default="f16",
+        help="output format - use f32 for float32, f16 for float16",
     )
     parser.add_argument("--bigendian", action="store_true", help="model is executed on big endian machine")
     parser.add_argument(
         "model", type=Path,
-        help="directory containing model file, or model file itself (*.bin)",
+        help="directory containing model file",
     )
 
     return parser.parse_args()
