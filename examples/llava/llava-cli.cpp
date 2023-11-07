@@ -242,18 +242,16 @@ static struct llava_context * llava_init(gpt_params * params) {
 
     llama_backend_init(params->numa);
 
-    llama_model_params model_params = llama_model_default_params();
+    llama_model_params model_params = llama_model_params_from_gpt_params(*params);
+
     llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
         return NULL;
     }
 
-    llama_context_params ctx_params = llama_context_default_params();
-
+    llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
     ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
-    ctx_params.n_threads       = params->n_threads;
-    ctx_params.n_threads_batch = params->n_threads_batch == -1 ? params->n_threads : params->n_threads_batch;
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 
