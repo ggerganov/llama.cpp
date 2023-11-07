@@ -856,7 +856,7 @@ if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
     sys.exit(1)
 
-ftype = {
+ftype_map = {
     "f32": gguf.GGMLQuantizationType.F32,
     "f16": gguf.GGMLQuantizationType.F16,
 }
@@ -872,7 +872,7 @@ print(f"Loading model: {dir_model.name}")
 hparams = Model.load_hparams(dir_model)
 
 model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype[args.outtype], fname_out, args.bigendian)
+model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
 print("Set model parameters")
 model_instance.set_gguf_parameters()
