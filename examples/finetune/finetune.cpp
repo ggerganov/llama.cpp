@@ -1769,7 +1769,7 @@ int main(int argc, char ** argv) {
         alloc = ggml_allocr_new_measure(tensor_alignment);
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
-        gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false);
+        gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gb_tmp = params.common.use_checkpointing
             ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
             : NULL;
@@ -1802,7 +1802,7 @@ int main(int argc, char ** argv) {
     alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
-    gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false);
+    gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gb_tmp = params.common.use_checkpointing
         ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
         : NULL;
