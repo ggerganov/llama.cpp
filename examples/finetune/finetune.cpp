@@ -1771,7 +1771,7 @@ int main(int argc, char ** argv) {
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gb_tmp = params.common.use_checkpointing
-            ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
+            ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true)
             : NULL;
         loss = llama_build_lora_finetune_graphs(
             &model, &lora, alloc, ctx_compute,
@@ -1804,7 +1804,7 @@ int main(int argc, char ** argv) {
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gb_tmp = params.common.use_checkpointing
-        ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, false)
+        ? ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true)
         : NULL;
     loss = llama_build_lora_finetune_graphs(
         &model, &lora, alloc, ctx_compute,
