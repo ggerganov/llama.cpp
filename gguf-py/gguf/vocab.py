@@ -9,11 +9,8 @@ from typing import Any, Callable
 from .gguf_writer import GGUFWriter
 
 class SpecialVocab:
-    load_merges: bool = False
-    merges: list[str] = []
-    special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
-    special_token_ids: dict[str, int] = {}
-    n_vocab: int | None = None
+    merges: list[str]
+    special_token_ids: dict[str, int]
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
@@ -23,8 +20,11 @@ class SpecialVocab:
         self.special_token_ids = {}
         self.n_vocab = n_vocab
         self.load_merges = load_merges
+        self.merges = []
         if special_token_types is not None:
             self.special_token_types = special_token_types
+        else:
+            self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad')
         self._load(Path(path))
 
     def _load(self, path: Path) -> None:
