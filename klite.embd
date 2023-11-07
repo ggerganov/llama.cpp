@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 92
+Current version: 93
 -Concedo
 -->
 
@@ -4009,6 +4009,10 @@ Current version: 92
 	{
 		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
 	}
+	function is_using_kcpp_with_added_memory()
+	{
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.48.2") > 0);
+	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
 	function determine_streaming_type()
@@ -7354,8 +7358,8 @@ Current version: 92
 			let max_allowed_characters = Math.floor(localsettings.max_context_length * 3.0)-100;
 			let truncated_context = concat_gametext(true, "");
 
-			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
-			let truncated_memory = current_memory.substring(current_memory.length - max_mem_anote_len);
+			let max_mem_len = Math.floor(max_allowed_characters*0.8);
+			let truncated_memory = current_memory.substring(current_memory.length - max_mem_len);
 			if (truncated_memory != null && truncated_memory != "") {
 				truncated_memory += "\n";
 			}
@@ -7933,6 +7937,10 @@ Current version: 92
 				//if there is no memory, then we can be a lot of lenient with the character counts since the backend will truncate excess anyway
 				chars_per_token = 4.8;
 			}
+			if(is_using_kcpp_with_added_memory()) //easily handle overflow
+			{
+				chars_per_token = 6;
+			}
 			let max_allowed_characters = Math.max(1, Math.floor((maxctxlen-maxgenamt) * chars_per_token) - 12);
 
 			//for adventure mode, inject hidden context, even more if there's nothing in memory
@@ -8059,9 +8067,10 @@ Current version: 92
 			}
 
 			//we clip the memory if its too long, taking the last x chars (not the first)
-			//memory or anote is allowed to be up to 0.9 times of ctx allowance
-			let max_mem_anote_len = Math.floor(max_allowed_characters*0.9);
-			let truncated_memory = substring_to_boundary(current_memory, max_mem_anote_len);
+			//memory is allowed to be up to 0.8 times of ctx allowance, anote up to 0.6 times
+			let max_mem_len = Math.floor(max_allowed_characters*0.8);
+			let max_anote_len = Math.floor(max_allowed_characters*0.6);
+			let truncated_memory = substring_to_boundary(current_memory, max_mem_len);
 			if (truncated_memory != null && truncated_memory != "") {
 				if(newlineaftermemory)
 				{
@@ -8129,23 +8138,29 @@ Current version: 92
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
-			truncated_anote = substring_to_boundary(truncated_anote, max_mem_anote_len);
+			truncated_anote = substring_to_boundary(truncated_anote, max_anote_len);
 
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
 				truncated_anote = "";
 			}
 
+			//now we resize the context such that the memory and authors note can fit inside
+			truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
+
 			//append memory to the start of the context, clipping excess space if needed
 			//only do this processing if memory or anote is not blank
-			if (truncated_memory.length > 0 || current_anote.length > 0) {
-				//now we resize the context such that the memory and authors note can fit inside
-				truncated_context = substring_to_boundary(truncated_context, max_allowed_characters);
-				let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
-				let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
-				excess_len = excess_len < 0 ? 0 : excess_len;
-				let newlimit = (max_allowed_characters-excess_len) < 32 ? 32 : (max_allowed_characters-excess_len);
-				truncated_context = substring_to_boundary(truncated_context, newlimit); //must always have at least 32 chars from main context
+			if (truncated_memory.length > 0 || current_anote.length > 0)
+			{
+				if(!is_using_kcpp_with_added_memory())
+				{
+					let augmented_len = truncated_memory.length + truncated_context.length + truncated_anote.length;
+					let excess_len = augmented_len - max_allowed_characters; //if > 0, then we exceeded context window
+					excess_len = excess_len < 0 ? 0 : excess_len;
+					let newlimit = (max_allowed_characters-excess_len) < 32 ? 32 : (max_allowed_characters-excess_len);
+					truncated_context = substring_to_boundary(truncated_context, newlimit); //must always have at least 32 chars from main context
+				}
+
 				//insert authors note 80 tokens before the ending (320 characters).
 				let anote_dist = anote_strength;
 				let anote_insert_idx = truncated_context.length - anote_dist;
@@ -8164,11 +8179,24 @@ Current version: 92
 				}
 				anote_insert_idx = clamp(anote_insert_idx, 0, truncated_context.length);
 				truncated_context = truncated_context.slice(0, anote_insert_idx) + truncated_anote + truncated_context.slice(anote_insert_idx);
-				truncated_context = truncated_memory + truncated_context;
+				if(!is_using_kcpp_with_added_memory())
+				{
+					truncated_context = truncated_memory + truncated_context;
+				}
 			}
+
+			truncated_memory = replace_placeholders(truncated_memory);
 			truncated_context = replace_placeholders(truncated_context);
 
-			last_token_budget = truncated_context.length  + "/" + max_allowed_characters;
+			if(is_using_kcpp_with_added_memory())
+			{
+				last_token_budget = (truncated_memory.length + truncated_context.length)  + "/" + max_allowed_characters;
+			}
+			else
+			{
+				last_token_budget = truncated_context.length  + "/" + max_allowed_characters;
+			}
+
 
 			let submit_payload = {
 				"prompt": truncated_context,
@@ -8189,6 +8217,11 @@ Current version: 92
 				},
 				"models": selected_models.map((m) => { return m.name }),
 			};
+
+			if(is_using_kcpp_with_added_memory())
+			{
+				submit_payload.params.memory = truncated_memory;
+			}
 
 			if(localsettings.sampler_seed>=1)
 			{

@@ -53,7 +53,8 @@ struct load_model_inputs
 struct generation_inputs
 {
     const int seed;
-    const char *prompt;
+    const char * prompt;
+    const char * memory;
     const int max_context_length;
     const int max_length;
     const float temperature;
@@ -79,7 +80,7 @@ struct generation_inputs
 struct generation_outputs
 {
     int status = -1;
-    char text[24576]; //24kb should be enough for any response
+    char text[32768]; //32kb should be enough for any response
 };
 
 extern std::string executable_path;
