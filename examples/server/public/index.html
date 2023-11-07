@@ -160,6 +160,11 @@
       height: 10em;
     }
 
+    [contenteditable] {
+      display: inline-block;
+      white-space: pre-wrap;
+      outline: 0px solid transparent;
+    }
 
     @keyframes loading-bg-wipe {
       0% {
@@ -608,7 +613,7 @@
       return html`
         <div id="chat" ref=${container} key=${messages.length}>
           <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit} style="display:inline-block; white-space: pre-wrap;">
+          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
             ${messages.flatMap(chatLine)}
           </span>
         </div>`;
