@@ -12,28 +12,8 @@ import numpy as np
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
-
-# Note: Does not support GGML_QKK_64
-QK_K = 256
-# Items here are (block size, type size)
-GGML_QUANT_SIZES = {
-    gguf.GGMLQuantizationType.F32  : (1, 4),
-    gguf.GGMLQuantizationType.F16  : (1, 2),
-    gguf.GGMLQuantizationType.Q4_0 : (32, 2 + 16),
-    gguf.GGMLQuantizationType.Q4_1 : (32, 2 + 2 + 16),
-    gguf.GGMLQuantizationType.Q5_0 : (32, 2 + 4 + 16),
-    gguf.GGMLQuantizationType.Q5_1 : (32, 2 + 2 + 4 + 16),
-    gguf.GGMLQuantizationType.Q8_0 : (32, 2 + 32),
-    gguf.GGMLQuantizationType.Q8_1 : (32, 4 + 4 + 32),
-    gguf.GGMLQuantizationType.Q2_K : (256, 2 + 2 + QK_K // 16 + QK_K // 4),
-    gguf.GGMLQuantizationType.Q3_K : (256, 2 + QK_K // 4 + QK_K // 8 + 12),
-    gguf.GGMLQuantizationType.Q4_K : (256, 2 + 2 + QK_K // 2 + 12),
-    gguf.GGMLQuantizationType.Q5_K : (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
-    gguf.GGMLQuantizationType.Q6_K : (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    gguf.GGMLQuantizationType.Q8_K : (256, 4 + QK_K + QK_K // 8),
-}
 
 class GGMLFormat(IntEnum):
     GGML = 0
@@ -125,7 +105,7 @@ class Tensor:
         (n_dims, name_len, dtype) = struct.unpack('<3I', data[offset:offset + 12])
         assert n_dims >= 0 and n_dims <= 4, f'Invalid tensor dimensions {n_dims}'
         assert name_len < 4096, 'Absurd tensor name length'
-        quant = GGML_QUANT_SIZES.get(dtype)
+        quant = gguf.GGML_QUANT_SIZES.get(dtype)
         assert quant is not None, 'Unknown tensor type'
         (blksize, tysize) = quant
         offset += 12

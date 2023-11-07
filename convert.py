@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import copy
 import enum
 import faulthandler
 import functools
-import io
 import itertools
 import json
 import math
@@ -23,14 +21,14 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, TypeVar
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
 if TYPE_CHECKING:
@@ -851,7 +849,7 @@ class OutputFile:
         elif isinstance(vocab, BpeVocab):
             self.gguf.add_tokenizer_model("gpt2")
         else:
-            raise ValueError(f'Unknown vocab type: Not BpeVocab or SentencePieceVocab')
+            raise ValueError('Unknown vocab type: Not BpeVocab or SentencePieceVocab')
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
@@ -905,7 +903,7 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY, endianess=gguf.GGUFEndian.LITTLE) -> None:
+    def write_all(fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab, concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE) -> None:
         check_vocab_size(params, vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
