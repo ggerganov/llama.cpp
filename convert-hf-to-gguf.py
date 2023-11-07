@@ -870,16 +870,12 @@ else:
     # output in the same directory as the model by default
     fname_out = dir_model / f'ggml-model-{ftype_str[ftype]}.gguf'
 
-is_big_endian = False
-if args.bigendian is not None:
-    is_big_endian = True
-
 print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
 model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype, fname_out, is_big_endian)
+model_instance = model_class(dir_model, ftype, fname_out, args.bigendian)
 
 print("Set model parameters")
 model_instance.set_gguf_parameters()
