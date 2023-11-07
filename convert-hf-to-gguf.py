@@ -841,7 +841,7 @@ def parse_args() -> argparse.Namespace:
         help="directory containing model file, or model file itself (*.bin)",
     )
     parser.add_argument(
-        "ftype", type=int, choices=[0, 1], default=1, nargs='?',
+        "ftype", type=str, choices=["f32", "f16"], default="f16", nargs='?',
         help="output format - use 0 for float32, 1 for float16",
     )
     parser.add_argument("--bigendian", action="store_true", help="model is executed on big endian machine")
@@ -857,25 +857,20 @@ if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
     sys.exit(1)
 
-# possible tensor data types
-#   ftype == 0 -> float32
-#   ftype == 1 -> float16
-
-# map from ftype to string
 ftype_str = ["f32", "f16"]
 
 if args.outfile is not None:
     fname_out = args.outfile
 else:
     # output in the same directory as the model by default
-    fname_out = dir_model / f'ggml-model-{ftype_str[ftype]}.gguf'
+    fname_out = dir_model / f'ggml-model-{ftype}.gguf'
 
 print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
 model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype, fname_out, args.bigendian)
+model_instance = model_class(dir_model, ftype_str.index(ftype), fname_out, args.bigendian)
 
 print("Set model parameters")
 model_instance.set_gguf_parameters()
