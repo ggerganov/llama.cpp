@@ -46,7 +46,7 @@ models-mnt
 /infill
 /libllama.so
 /llama-bench
-/llava
+/llava-cli
 /main
 /metal
 /perplexity
