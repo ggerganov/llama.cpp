@@ -50,8 +50,13 @@ int main(int argc, char ** argv) {
     llama_model * model_amateur = llama_load_model_from_file(params_amateur.model.c_str(), model_params);
 
 
-    if (model_expert == NULL or model_amateur == NULL) {
-        fprintf(stderr , "%s: error: unable to load model\n" , __func__);
+    if (model_expert == NULL) {
+        fprintf(stderr , "%s: error: unable to load expert model\n" , __func__);
+        return 1;
+    }
+
+    if (model_amateur == NULL) {
+        fprintf(stderr , "%s: error: unable to load amateur model\n" , __func__);
         return 1;
     }
 
@@ -67,8 +72,13 @@ int main(int argc, char ** argv) {
     llama_context * ctx_expert = llama_new_context_with_model(model_expert, ctx_params);
     llama_context * ctx_amateur = llama_new_context_with_model(model_amateur, ctx_params);
 
-    if (ctx_expert == NULL or ctx_amateur == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
+    if (ctx_expert == NULL) {
+        fprintf(stderr , "%s: error: failed to create the llama_context for expert\n" , __func__);
+        return 1;
+    }
+
+    if (ctx_amateur == NULL) {
+        fprintf(stderr , "%s: error: failed to create the llama_context for amateur\n" , __func__);
         return 1;
     }
 
