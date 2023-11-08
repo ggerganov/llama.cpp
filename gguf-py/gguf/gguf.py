@@ -1,36 +1,15 @@
-#!/usr/bin/env python3
+# This file left for compatibility. If you want to use the GGUF API from Python
+# then don't import gguf/gguf.py directly. If you're looking for examples, see the
+# examples/ directory for gguf-py
 
-# Example usage:
-if __name__ == "__main__":
-    import sys
-    from pathlib import Path
+import importlib
+import sys
+from pathlib import Path
 
-    # Allow running file in package as a script.
-    sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-    import numpy as np
+# Compatibility for people trying to import gguf/gguf.py directly instead of as a package.
+importlib.invalidate_caches()
+import gguf  # noqa: E402
 
-    from gguf.gguf_writer import GGUFWriter
-
-    # Example usage with a file
-    gguf_writer = GGUFWriter("example.gguf", "llama")
-
-    gguf_writer.add_architecture()
-    gguf_writer.add_block_count(12)
-    gguf_writer.add_uint32("answer", 42)  # Write a 32-bit integer
-    gguf_writer.add_float32("answer_in_float", 42.0)  # Write a 32-bit float
-    gguf_writer.add_custom_alignment(64)
-
-    tensor1 = np.ones((32,), dtype=np.float32) * 100.0
-    tensor2 = np.ones((64,), dtype=np.float32) * 101.0
-    tensor3 = np.ones((96,), dtype=np.float32) * 102.0
-
-    gguf_writer.add_tensor("tensor1", tensor1)
-    gguf_writer.add_tensor("tensor2", tensor2)
-    gguf_writer.add_tensor("tensor3", tensor3)
-
-    gguf_writer.write_header_to_file()
-    gguf_writer.write_kv_data_to_file()
-    gguf_writer.write_tensors_to_file()
-
-    gguf_writer.close()
+importlib.reload(gguf)

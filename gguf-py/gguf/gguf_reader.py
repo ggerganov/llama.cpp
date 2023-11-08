@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import OrderedDict
-from typing import Any, Dict, Literal, NamedTuple, Type, TypeVar
+from typing import Any, Dict, Literal, NamedTuple, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -58,11 +58,10 @@ class ReaderTensor(NamedTuple):
 
 class GGUFReader:
     byte_order: Literal['I' | 'S' | '<'] = 'I'
-    fields: 'OrderedDict[str, ReaderField]' = OrderedDict()
-    tensors: list[ReaderTensor] = []
     alignment: int = GGUF_DEFAULT_ALIGNMENT
 
-    _simple_value_map: Dict[GGUFValueType, Type[Any]] = {
+    # Note: Internal helper, API may change.
+    gguf_scalar_to_np: Dict[GGUFValueType, npt.DTypeLike] = {
         GGUFValueType.UINT8:   np.uint8,
         GGUFValueType.INT8:    np.int8,
         GGUFValueType.UINT16:  np.uint16,
@@ -89,6 +88,8 @@ class GGUFReader:
         version = temp_version[0]
         if version not in READER_SUPPORTED_VERSIONS:
             raise ValueError(f'Sorry, file appears to be version {version} which we cannot handle')
+        self.fields: OrderedDict[str, ReaderField] = OrderedDict()
+        self.tensors: list[ReaderTensor] = []
         offs += self._push_field(ReaderField(offs, 'GGUF.version', [temp_version], [0], [GGUFValueType.UINT32]))
         temp_counts = self._get(offs, np.uint64, 2)
         offs += self._push_field(ReaderField(offs, 'GGUF.tensor_count', [temp_counts[:1]], [0], [GGUFValueType.UINT64]))
@@ -107,6 +108,14 @@ class GGUFReader:
         self._build_tensors(offs, tensors_fields)
 
     _DT = TypeVar('_DT', bound = npt.DTypeLike)
+
+    # Fetch a key/value metadata field by key.
+    def get_field(self, key: str) -> Union[ReaderField, None]:
+        return self.fields.get(key, None)
+
+    # Fetch a tensor from the list by index.
+    def get_tensor(self, idx: int) -> ReaderTensor:
+        return self.tensors[idx]
 
     def _get(
         self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I' | 'S' | '<'] = None,
@@ -143,7 +152,7 @@ class GGUFReader:
             size = sum(int(part.nbytes) for part in sparts)
             return size, sparts, [1], types
         # Check if it's a simple scalar type.
-        nptype = self._simple_value_map.get(gtype)
+        nptype = self.gguf_scalar_to_np.get(gtype)
         if nptype is not None:
             val = self._get(offs, nptype)
             return int(val.nbytes), [val], [0], types
@@ -245,35 +254,3 @@ class GGUFReader:
                 field = field,
             ))
         self.tensors = tensors
-
-
-# Example usage:
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print('gguf_reader: Error: Specify an input file', file = sys.stderr)
-        sys.exit(1)
-    print(f'* Loading: {sys.argv[1]}')
-    reader = GGUFReader(sys.argv[1], 'r')
-    print(f'\n* Dumping {len(reader.fields)} key/value pair(s)')
-    for n, field in enumerate(reader.fields.values(), 1):
-        if not field.types:
-            pretty_type = 'N/A'
-        elif field.types[0] == GGUFValueType.ARRAY:
-            nest_count = len(field.types) - 1
-            pretty_type = '[' * nest_count + str(field.types[-1].name) + ']' * nest_count
-        else:
-            pretty_type = str(field.types[-1].name)
-        print(f'  {n:5}: {pretty_type:10} | {len(field.data):8} | {field.name}', end = '')
-        if len(field.types) == 1:
-            curr_type = field.types[0]
-            if curr_type == GGUFValueType.STRING:
-                print(' = {0}'.format(repr(str(bytes(field.parts[-1]), encoding='utf8')[:60])), end = '')
-            elif field.types[0] in reader._simple_value_map:
-                print(' = {0}'.format(field.parts[-1][0]), end = '')
-        print()
-
-    print(f'\n* Dumping {len(reader.tensors)} tensor(s)')
-    for n, tensor in enumerate(reader.tensors, 1):
-
-        prettydims = ', '.join('{0:5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-        print(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')

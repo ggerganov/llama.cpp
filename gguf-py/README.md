@@ -11,6 +11,14 @@ as an example for its usage.
 pip install gguf
 ```
 
+## API Examples
+
+[examples/writer.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/examples/writer.py) — Generates `example.gguf` in the current directory to demonstrate generating a GGUF file. Note that this file cannot be used as a model.
+
+[examples/dump_gguf.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/examples/dump_gguf.py) — Dumps a GGUF file's metadata to the console.
+
+[examples/modify_gguf.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/examples/dump_gguf.py) — Allows changing simple metadata values in a GGUF file by key.
+
 ## Development
 Maintainers who participate in development of this package are advised to install it in editable mode:
 
