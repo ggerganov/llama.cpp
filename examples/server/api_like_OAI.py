@@ -179,12 +179,12 @@ def chat_completions():
             data = requests.request("POST", urllib.parse.urljoin(args.llama_api, "/completion"), data=json.dumps(postData), stream=True)
             time_now = int(time.time())
             resData = make_resData_stream({}, chat=True, time_now=time_now, start=True)
-            yield 'data: {}\n'.format(json.dumps(resData))
+            yield 'data: {}\n\n'.format(json.dumps(resData))
             for line in data.iter_lines():
                 if line:
                     decoded_line = line.decode('utf-8')
                     resData = make_resData_stream(json.loads(decoded_line[6:]), chat=True, time_now=time_now)
-                    yield 'data: {}\n'.format(json.dumps(resData))
+                    yield 'data: {}\n\n'.format(json.dumps(resData))
         return Response(generate(), mimetype='text/event-stream', headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*"})
 
 
@@ -220,7 +220,7 @@ def completion():
                 if line:
                     decoded_line = line.decode('utf-8')
                     resData = make_resData_stream(json.loads(decoded_line[6:]), chat=False, time_now=time_now)
-                    yield 'data: {}\n'.format(json.dumps(resData))
+                    yield 'data: {}\n\n'.format(json.dumps(resData))
         return Response(generate(), mimetype='text/event-stream', headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*"})
 
 if __name__ == '__main__':
