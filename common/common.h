@@ -9,6 +9,7 @@
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
+#include <cmath>
 #include <string>
 #include <vector>
 #include <random>
@@ -25,10 +26,16 @@
 #define die(msg)          do { fputs("error: " msg "\n", stderr);                exit(1); } while (0)
 #define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
 
-#define print_build_info() do {                                                             \
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);         \
-    fprintf(stderr, "%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);  \
+#define print_build_info() do {                                                                     \
+    fprintf(stderr, "%s: build = %d (%s)\n", __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);           \
+    fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
+
+// build info
+extern int LLAMA_BUILD_NUMBER;
+extern char const *LLAMA_COMMIT;
+extern char const *LLAMA_COMPILER;
+extern char const *LLAMA_BUILD_TARGET;
 
 //
 // CLI argument parsing
@@ -36,24 +43,34 @@
 int32_t get_num_physical_cores();
 
 struct gpt_params {
-    uint32_t seed                           = -1;   // RNG seed
+    uint32_t seed                           = -1;    // RNG seed
+
     int32_t n_threads                       = get_num_physical_cores();
-    int32_t n_threads_batch                 = -1;   // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_predict                       = -1;   // new tokens to predict
-    int32_t n_ctx                           = 512;  // context size
-    int32_t n_batch                         = 512;  // batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
-    int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
-    int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
-    int32_t n_parallel                      = 1;    // number of parallel sequences to decode
-    int32_t n_sequences                     = 1;    // number of sequences to decode
-    int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
-    int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
-    int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
-    float   tensor_split[LLAMA_MAX_DEVICES] = {0};  // how split tensors should be distributed across GPUs
-    int32_t n_beams                         = 0;    // if non-zero then use beam search of given width.
-    float   rope_freq_base                  = 0.0f; // RoPE base frequency
-    float   rope_freq_scale                 = 0.0f; // RoPE frequency scaling factor
+    int32_t n_threads_batch                 = -1;    // number of threads to use for batch processing (-1 = use n_threads)
+    int32_t n_predict                       = -1;    // new tokens to predict
+    int32_t n_ctx                           = 512;   // context size
+    int32_t n_batch                         = 512;   // batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep                          = 0;     // number of tokens to keep from initial prompt
+    int32_t n_draft                         = 16;    // number of tokens to draft during speculative decoding
+    int32_t n_chunks                        = -1;    // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel                      = 1;     // number of parallel sequences to decode
+    int32_t n_sequences                     = 1;     // number of sequences to decode
+    float   p_accept                        = 0.5f;  // speculative decoding accept probability
+    float   p_split                         = 0.1f;  // speculative decoding split probability
+    int32_t n_gpu_layers                    = -1;    // number of layers to store in VRAM (-1 - use default)
+    int32_t n_gpu_layers_draft              = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
+    int32_t main_gpu                        = 0;     // the GPU that is used for scratch and small tensors
+    float   tensor_split[LLAMA_MAX_DEVICES] = {0};   // how split tensors should be distributed across GPUs
+    int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
+    float   rope_freq_base                  = 0.0f;  // RoPE base frequency
+    float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
+    float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor
+    float   yarn_attn_factor                = 1.0f;  // YaRN magnitude scaling factor
+    float   yarn_beta_fast                  = 32.0f; // YaRN low correction dim
+    float   yarn_beta_slow                  = 1.0f;  // YaRN high correction dim
+    int32_t yarn_orig_ctx                   = 0;     // YaRN original context length
+    int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED; // TODO: better to be int32_t for alignment
+                                                                              //       pinging @cebtenzzre
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -77,7 +94,7 @@ struct gpt_params {
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
                                     //                                       (which is more convenient to use for plotting)
                                     //
-    bool hellaswag         = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
+    bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
@@ -109,6 +126,8 @@ struct gpt_params {
     std::string mmproj = ""; // path to multimodal projector
     std::string image = ""; // path to an image file
 };
+
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
 

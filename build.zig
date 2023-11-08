@@ -10,7 +10,6 @@ const Maker = struct {
     builder: *std.build.Builder,
     target: CrossTarget,
     optimize: Mode,
-    config_header: *ConfigHeader,
     enable_lto: bool,
 
     include_dirs: ArrayList([]const u8),
@@ -41,26 +40,24 @@ const Maker = struct {
         const commit_hash = try std.ChildProcess.exec(
             .{ .allocator = builder.allocator, .argv = &.{ "git", "rev-parse", "HEAD" } },
         );
-        const config_header = builder.addConfigHeader(
-            .{ .style = .blank, .include_path = "build-info.h" },
-            .{
-                .BUILD_NUMBER = 0,
-                .BUILD_COMMIT = commit_hash.stdout[0 .. commit_hash.stdout.len - 1], // omit newline
-                .BUILD_COMPILER = builder.fmt("Zig {s}", .{zig_version}),
-                .BUILD_TARGET = try target.allocDescription(builder.allocator),
-            },
-        );
+        try std.fs.cwd().writeFile("common/build-info.cpp", builder.fmt(
+            \\int LLAMA_BUILD_NUMBER = {};
+            \\char const *LLAMA_COMMIT = "{s}";
+            \\char const *LLAMA_COMPILER = "Zig {s}";
+            \\char const *LLAMA_BUILD_TARGET = "{s}";
+            \\
+        , .{ 0, commit_hash.stdout[0 .. commit_hash.stdout.len - 1], zig_version, try target.allocDescription(builder.allocator) }));
         var m = Maker{
             .builder = builder,
             .target = target,
             .optimize = builder.standardOptimizeOption(.{}),
-            .config_header = config_header,
             .enable_lto = false,
             .include_dirs = ArrayList([]const u8).init(builder.allocator),
             .cflags = ArrayList([]const u8).init(builder.allocator),
             .cxxflags = ArrayList([]const u8).init(builder.allocator),
             .objs = ArrayList(*Compile).init(builder.allocator),
         };
+
         try m.addCFlag("-std=c11");
         try m.addCxxFlag("-std=c++11");
         try m.addProjectInclude(&.{});
@@ -72,7 +69,7 @@ const Maker = struct {
         const o = m.builder.addObject(.{ .name = name, .target = m.target, .optimize = m.optimize });
         if (o.target.getAbi() != .msvc)
             o.defineCMacro("_GNU_SOURCE", null);
-        o.addConfigHeader(m.config_header);
+
         if (std.mem.endsWith(u8, src, ".c")) {
             o.addCSourceFiles(&.{src}, m.cflags.items);
             o.linkLibC();
@@ -85,7 +82,6 @@ const Maker = struct {
                 o.linkLibCpp();
             }
         }
-        o.addConfigHeader(m.config_header);
         for (m.include_dirs.items) |i| o.addIncludePath(.{ .path = i });
         o.want_lto = m.enable_lto;
         return o;
@@ -105,7 +101,6 @@ const Maker = struct {
             // linkLibCpp already add (libc++ + libunwind + libc)
             e.linkLibCpp();
         }
-        e.addConfigHeader(m.config_header);
         m.builder.installArtifact(e);
         e.want_lto = m.enable_lto;
         return e;
@@ -116,16 +111,12 @@ pub fn build(b: *std.build.Builder) !void {
     var make = try Maker.init(b);
     make.enable_lto = b.option(bool, "lto", "Enable LTO optimization, (default: false)") orelse false;
 
-    if (b.option(bool, "k-quants", "Enable K-quants, (default: true)") orelse true) {
-        try make.addFlag("-DGGML_USE_K_QUANTS");
-        const k_quants = make.obj("k_quants", "k_quants.c");
-        try make.objs.append(k_quants);
-    }
-
     const ggml = make.obj("ggml", "ggml.c");
     const ggml_alloc = make.obj("ggml-alloc", "ggml-alloc.c");
     const ggml_backend = make.obj("ggml-backend", "ggml-backend.c");
+    const ggml_quants = make.obj("ggml-quants", "ggml-quants.c");
     const llama = make.obj("llama", "llama.cpp");
+    const buildinfo = make.obj("common", "common/build-info.cpp");
     const common = make.obj("common", "common/common.cpp");
     const console = make.obj("console", "common/console.cpp");
     const sampling = make.obj("sampling", "common/sampling.cpp");
@@ -133,14 +124,14 @@ pub fn build(b: *std.build.Builder) !void {
     const train = make.obj("train", "common/train.cpp");
     const clip = make.obj("clip", "examples/llava/clip.cpp");
 
-    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, sampling, console, grammar_parser });
-    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common });
-    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common });
-    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common });
-    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, train });
-    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, train });
+    _ = make.exe("main", "examples/main/main.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, console, grammar_parser });
+    _ = make.exe("quantize", "examples/quantize/quantize.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    _ = make.exe("perplexity", "examples/perplexity/perplexity.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    _ = make.exe("embedding", "examples/embedding/embedding.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo });
+    _ = make.exe("finetune", "examples/finetune/finetune.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
+    _ = make.exe("train-text-from-scratch", "examples/train-text-from-scratch/train-text-from-scratch.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, train });
 
-    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, llama, common, sampling, grammar_parser, clip });
+    const server = make.exe("server", "examples/server/server.cpp", &.{ ggml, ggml_alloc, ggml_backend, ggml_quants, llama, common, buildinfo, sampling, grammar_parser, clip });
     if (server.target.isWindows()) {
         server.linkSystemLibrary("ws2_32");
     }

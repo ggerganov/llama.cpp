@@ -1,6 +1,5 @@
 #include "common.h"
 #include "llama.h"
-#include "build-info.h"
 #include "grammar-parser.h"
 
 #include "../llava/clip.h"
@@ -149,6 +148,7 @@ struct task_server {
     task_type type;
     json data;
     bool infill_mode = false;
+    bool embedding_mode = false;
 };
 
 struct task_result {
@@ -371,6 +371,7 @@ struct llama_client_slot
     std::vector<completion_token_output> generated_token_probs;
 
     bool infill = false;
+    bool embedding = false;
     bool has_next_token = true;
     bool truncated = false;
     bool stopped_eos = false;
@@ -857,7 +858,7 @@ struct llama_server_context
 
     void kv_cache_clear() {
         // clear the entire KV cache
-        llama_kv_cache_tokens_rm(ctx, -1, -1);
+        llama_kv_cache_clear(ctx);
         clean_kv_cache = false;
     }
 
@@ -1244,13 +1245,14 @@ struct llama_server_context
         queue_results.push_back(res);
     }
 
-    int request_completion(json data, bool infill)
+    int request_completion(json data, bool infill, bool embedding)
     {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
         task.data = data;
         task.infill_mode = infill;
+        task.embedding_mode = embedding;
         task.type = COMPLETION_TASK;
         queue_tasks.push_back(task);
         return task.id;
@@ -1376,7 +1378,7 @@ struct llama_server_context
                     {
                         LOG_TEE("slot unavailable\n");
                         // send error result
-                        send_error(task.id, "slot unavaliable");
+                        send_error(task.id, "slot unavailable");
                         return;
                     }
 
@@ -1388,6 +1390,7 @@ struct llama_server_context
                     slot->reset();
 
                     slot->infill = task.infill_mode;
+                    slot->embedding = task.embedding_mode;
                     slot->task_id = task.id;
 
                     if (!launch_slot_with_data(slot, task.data))
@@ -1502,7 +1505,7 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
-                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty());
+                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
 
                 // empty prompt passed -> release the slot and send empty response
                 if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt)
@@ -1695,7 +1698,7 @@ struct llama_server_context
                 }
 
                 // prompt evaluated for embedding
-                if (params.embedding)
+                if (slot.embedding)
                 {
                     send_embedding(slot);
                     slot.release();
@@ -1751,12 +1754,18 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("options:\n");
     printf("  -h, --help                show this help message and exit\n");
     printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    printf("  -t N,  --threads N        number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
-    printf("  -c N,  --ctx-size N       size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  --rope-scaling {none,linear,yarn}\n");
+    printf("                            RoPE frequency scaling method, defaults to linear unless specified by the model\n");
     printf("  --rope-freq-base N        RoPE base frequency (default: loaded from model)\n");
-    printf("  --rope-freq-scale N       RoPE frequency scaling factor (default: loaded from model)\n");
-    printf("  -b N,  --batch-size N     batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  --rope-freq-scale N       RoPE frequency scaling factor, expands context by a factor of 1/N\n");
+    printf("  --yarn-ext-factor N       YaRN: extrapolation mix factor (default: 1.0, 0.0 = full interpolation)\n");
+    printf("  --yarn-attn-factor N      YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
+    printf("  --yarn-beta-slow N        YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
+    printf("  --yarn-beta-fast N        YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
+    printf("  -b N, --batch-size N      batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_mlock_supported())
@@ -1877,6 +1886,19 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.n_ctx = std::stoi(argv[i]);
         }
+        else if (arg == "--rope-scaling")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            std::string value(argv[i]);
+            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_NONE; }
+            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_LINEAR; }
+            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_YARN; }
+            else { invalid_param = true; break; }
+        }
         else if (arg == "--rope-freq-base")
         {
             if (++i >= argc)
@@ -1894,6 +1916,38 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
+        }
+        else if (arg == "--yarn-ext-factor")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_ext_factor = std::stof(argv[i]);
+        }
+        else if (arg == "--yarn-attn-factor")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_attn_factor = std::stof(argv[i]);
+        }
+        else if (arg == "--yarn-beta-fast")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_beta_fast = std::stof(argv[i]);
+        }
+        else if (arg == "--yarn-beta-slow")
+        {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_beta_slow = std::stof(argv[i]);
         }
         else if (arg == "--memory-f32" || arg == "--memory_f32")
         {
@@ -2209,8 +2263,8 @@ int main(int argc, char **argv)
 
     llama_backend_init(params.numa);
 
-    LOG_INFO("build info", {{"build", BUILD_NUMBER},
-                            {"commit", BUILD_COMMIT}});
+    LOG_INFO("build info", {{"build", LLAMA_BUILD_NUMBER},
+                            {"commit", LLAMA_COMMIT}});
 
     LOG_INFO("system info", {
                                 {"n_threads", params.n_threads},
@@ -2274,7 +2328,7 @@ int main(int argc, char **argv)
     svr.Post("/completion", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = json::parse(req.body);
-                const int task_id = llama.request_completion(data, false);
+                const int task_id = llama.request_completion(data, false, false);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
@@ -2329,7 +2383,7 @@ int main(int argc, char **argv)
     svr.Post("/infill", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = json::parse(req.body);
-                const int task_id = llama.request_completion(data, true);
+                const int task_id = llama.request_completion(data, true, false);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
@@ -2433,7 +2487,7 @@ int main(int argc, char **argv)
                 {
                     prompt = "";
                 }
-                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false);
+                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true);
                 task_result result = llama.next_result(task_id);
                 return res.set_content(result.result_json.dump(), "application/json");
             });

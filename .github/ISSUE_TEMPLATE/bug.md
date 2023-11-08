@@ -1,7 +1,7 @@
 ---
 name: Bug template
 about: Used to report bugs in llama.cpp
-labels: ["bug"]
+labels: ["bug-unconfirmed"]
 assignees: ''
 
 ---

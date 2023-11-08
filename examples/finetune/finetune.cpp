@@ -642,8 +642,9 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         const int rope_mode = 0;
 
         return ggml_rope_custom(ctx,
-            t, KQ_pos, n_rot, rope_mode, n_ctx,
-            rope_freq_base, rope_freq_scale);
+            t, KQ_pos, n_rot, rope_mode, n_ctx, 0,
+            rope_freq_base, rope_freq_scale, 0.0f, 1.0f, 0.0f, 0.0f
+        );
     };
 
     set_name(tokens_input, "tokens_input");
@@ -652,7 +653,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     GGML_ASSERT(tokens_input->type == GGML_TYPE_I32);
 
     auto add_to_f32 = [] (struct ggml_context * ctx, struct ggml_tensor * a, struct ggml_tensor * b) {
-        if (ggml_is_quantized(a->type)) {
+        if (ggml_is_quantized(a->type) || a->type == GGML_TYPE_F16) {
             return ggml_add_cast(ctx, a, b, GGML_TYPE_F32);
         } else if (a->type == GGML_TYPE_F32) {
             return ggml_add(ctx, a, b);
@@ -1459,6 +1460,17 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
             }
             params->n_rank_w3 = std::stoi(argv[i]);
             params->custom_n_rank_w3 = true;
+        } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
+            params->common.n_gpu_layers = std::stoi(argv[i]);
+#else
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             train_print_usage(argc, argv, &default_params);
@@ -1545,6 +1557,7 @@ int main(int argc, char ** argv) {
     srand(params.common.seed);
 
     struct llama_model_params llama_mparams = llama_model_default_params();
+    llama_mparams.n_gpu_layers = params.common.n_gpu_layers;
     llama_mparams.vocab_only = false;
 
     printf("%s: model base = '%s'\n", __func__, params.fn_model_base);
