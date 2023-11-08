@@ -231,7 +231,7 @@ class GGUFWriter:
         tensor.tofile(self.temp_file)
         self.write_padding(self.temp_file, tensor.nbytes)
 
-    def write_padding(self, fp: IO[bytes], n: int, align: int | None = None):
+    def write_padding(self, fp: IO[bytes], n: int, align: int | None = None) -> None:
         pad = GGUFWriter.ggml_pad(n, align if align is not None else self.data_alignment) - n
         if pad != 0:
             fp.write(bytes([0] * pad))
@@ -280,7 +280,7 @@ class GGUFWriter:
         self.add_string(KEY.GENERAL.AUTHOR, author)
 
     def add_tensor_data_layout(self, layout: str) -> None:
-        self.add_string(KEY.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
+        self.add_string(KEY.LLM.TENSOR_DATA_LAYOUT.value.format(arch=self.arch), layout)
 
     def add_url(self, url: str) -> None:
         self.add_string(KEY.GENERAL.URL, url)
@@ -310,66 +310,66 @@ class GGUFWriter:
 
     def add_context_length(self, length: int) -> None:
         self.add_uint32(
-            KEY.LLM.CONTEXT_LENGTH.format(arch=self.arch), length)
+            KEY.LLM.CONTEXT_LENGTH.value.format(arch=self.arch), length)
 
     def add_embedding_length(self, length: int) -> None:
         self.add_uint32(
-            KEY.LLM.EMBEDDING_LENGTH.format(arch=self.arch), length)
+            KEY.LLM.EMBEDDING_LENGTH.value.format(arch=self.arch), length)
 
     def add_block_count(self, length: int) -> None:
         self.add_uint32(
-            KEY.LLM.BLOCK_COUNT.format(arch=self.arch), length)
+            KEY.LLM.BLOCK_COUNT.value.format(arch=self.arch), length)
 
     def add_feed_forward_length(self, length: int) -> None:
         self.add_uint32(
-            KEY.LLM.FEED_FORWARD_LENGTH.format(arch=self.arch), length)
+            KEY.LLM.FEED_FORWARD_LENGTH.value.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool) -> None:
         self.add_bool(
-            KEY.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
+            KEY.LLM.USE_PARALLEL_RESIDUAL.value.format(arch=self.arch), use)
 
     def add_head_count(self, count: int) -> None:
         self.add_uint32(
-            KEY.ATTENTION.HEAD_COUNT.format(arch=self.arch), count)
+            KEY.ATTENTION.HEAD_COUNT.value.format(arch=self.arch), count)
 
     def add_head_count_kv(self, count: int) -> None:
         self.add_uint32(
-            KEY.ATTENTION.HEAD_COUNT_KV.format(arch=self.arch), count)
+            KEY.ATTENTION.HEAD_COUNT_KV.value.format(arch=self.arch), count)
 
     def add_max_alibi_bias(self, bias: float) -> None:
         self.add_float32(
-            KEY.ATTENTION.MAX_ALIBI_BIAS.format(arch=self.arch), bias)
+            KEY.ATTENTION.MAX_ALIBI_BIAS.value.format(arch=self.arch), bias)
 
     def add_clamp_kqv(self, value: float) -> None:
         self.add_float32(
-            KEY.ATTENTION.CLAMP_KQV.format(arch=self.arch), value)
+            KEY.ATTENTION.CLAMP_KQV.value.format(arch=self.arch), value)
 
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(
-            KEY.ATTENTION.LAYERNORM_EPS.format(arch=self.arch), value)
+            KEY.ATTENTION.LAYERNORM_EPS.value.format(arch=self.arch), value)
 
     def add_layer_norm_rms_eps(self, value: float) -> None:
         self.add_float32(
-            KEY.ATTENTION.LAYERNORM_RMS_EPS.format(arch=self.arch), value)
+            KEY.ATTENTION.LAYERNORM_RMS_EPS.value.format(arch=self.arch), value)
 
     def add_rope_dimension_count(self, count: int) -> None:
         self.add_uint32(
-            KEY.ROPE.DIMENSION_COUNT.format(arch=self.arch), count)
+            KEY.ROPE.DIMENSION_COUNT.value.format(arch=self.arch), count)
 
     def add_rope_freq_base(self, value: float) -> None:
-        self.add_float32(KEY.ROPE.FREQ_BASE.format(arch=self.arch), value)
+        self.add_float32(KEY.ROPE.FREQ_BASE.value.format(arch=self.arch), value)
 
     def add_rope_scaling_type(self, value: RopeScalingType) -> None:
-        self.add_string(KEY.ROPE.SCALING_TYPE.format(arch=self.arch), value.value)
+        self.add_string(KEY.ROPE.SCALING_TYPE.value.format(arch=self.arch), value.value)
 
     def add_rope_scaling_factor(self, value: float) -> None:
-        self.add_float32(KEY.ROPE.SCALING_FACTOR.format(arch=self.arch), value)
+        self.add_float32(KEY.ROPE.SCALING_FACTOR.value.format(arch=self.arch), value)
 
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
-        self.add_uint32(KEY.ROPE.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)
+        self.add_uint32(KEY.ROPE.SCALING_ORIG_CTX_LEN.value.format(arch=self.arch), value)
 
     def add_rope_scaling_finetuned(self, value: bool) -> None:
-        self.add_bool(KEY.ROPE.SCALING_FINETUNED.format(arch=self.arch), value)
+        self.add_bool(KEY.ROPE.SCALING_FINETUNED.value.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(KEY.TOKENIZER.MODEL, model)
