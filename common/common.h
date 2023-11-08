@@ -42,6 +42,8 @@ struct gpt_params {
     int32_t n_keep                          = 0;    // number of tokens to keep from initial prompt
     int32_t n_draft                         = 16;   // number of tokens to draft during speculative decoding
     int32_t n_chunks                        = -1;   // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel                      = 1;    // number of parallel sequences to decode
+    int32_t n_sequences                     = 1;    // number of sequences to decode
     int32_t n_gpu_layers                    = -1;   // number of layers to store in VRAM (-1 - use default)
     int32_t n_gpu_layers_draft              = -1;   // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu                        = 0;    // the GPU that is used for scratch and small tensors
@@ -107,16 +109,16 @@ struct gpt_params {
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
+    bool cont_batching     = false; // insert new sequences for decoding on-the-fly
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
     bool instruct          = false; // instruction mode (used for Alpaca models)
     bool penalize_nl       = true;  // consider newlines as a repeatable token
-    bool perplexity        = false; // compute perplexity over the prompt
+    bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
     bool numa              = false; // attempt optimizations that help on some NUMA systems
-    bool export_cgraph     = false; // export the computation graph
     bool verbose_prompt    = false; // print prompt tokens before generation
 };
 
@@ -181,7 +183,7 @@ std::string llama_detokenize_bpe(
 //  - ctx_guidance:  context to use for classifier-free guidance, ignore if NULL
 //  - grammar:       grammar to use for sampling, ignore if NULL
 //  - last_tokens:   needed for repetition penalty, ignore if empty
-//  - idx:           sample from llama_get_logits(ctx) + idx * n_vocab
+//  - idx:           sample from llama_get_logits_ith(ctx, idx)
 //
 // returns:
 //  - token:      sampled token
