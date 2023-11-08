@@ -28,6 +28,26 @@ class SpecialVocab:
             self.special_token_types = ('bos', 'eos', 'unk', 'sep', 'pad')
         self._load(Path(path))
 
+    def __repr__(self) -> str:
+        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids or "unset"}>'
+
+    def add_to_gguf(self, gw: GGUFWriter, quiet: bool = False) -> None:
+        if self.merges:
+            if not quiet:
+                print(f'gguf: Adding {len(self.merges)} merge(s).')
+            gw.add_token_merges(self.merges)
+        for typ, tokid in self.special_token_ids.items():
+            handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
+            if handler is None:
+                print(
+                    f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping',
+                    file = sys.stderr,
+                )
+                continue
+            if not quiet:
+                print(f'gguf: Setting special token type {typ} to {tokid}')
+            handler(tokid)
+
     def _load(self, path: Path) -> None:
         if not self._try_load_from_tokenizer_json(path):
             self._try_load_from_config_json(path)
@@ -38,9 +58,10 @@ class SpecialVocab:
         if self.n_vocab is None or tid < self.n_vocab:
             self.special_token_ids[typ] = tid
             return
-        print(f'gguf: WARNING: Special token type {typ}, id {tid} out of range, must be under {self.n_vocab} - skipping',
-            file = sys.stderr)
-
+        print(
+            f'gguf: WARNING: Special token type {typ}, id {tid} out of range, must be under {self.n_vocab} - skipping',
+            file = sys.stderr,
+        )
 
     def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
@@ -50,7 +71,7 @@ class SpecialVocab:
             tokenizer = json.load(f)
         if self.load_merges:
             merges = tokenizer.get('model', {}).get('merges')
-            if isinstance(merges, list) and len(merges) > 0 and isinstance(merges[0], str):
+            if isinstance(merges, list) and merges and isinstance(merges[0], str):
                 self.merges = merges
         tokenizer_config_file = path / 'tokenizer_config.json'
         added_tokens = tokenizer.get('added_tokens')
@@ -70,9 +91,10 @@ class SpecialVocab:
             else:
                 continue
             # We only need the first match here.
-            maybe_token_id = next((
-                atok.get('id') for atok in added_tokens
-                if atok.get('content') == tc_content), None)
+            maybe_token_id = next(
+                (atok.get('id') for atok in added_tokens if atok.get('content') == tc_content),
+                None,
+            )
             self._set_special_token(typ, maybe_token_id)
         return True
 
@@ -85,20 +107,3 @@ class SpecialVocab:
         for typ in self.special_token_types:
             self._set_special_token(typ, config.get(f'{typ}_token_id'))
         return True
-
-    def add_to_gguf(self, gw: GGUFWriter, quiet: bool = False) -> None:
-        if len(self.merges) > 0:
-            if not quiet:
-                print(f'gguf: Adding {len(self.merges)} merge(s).')
-            gw.add_token_merges(self.merges)
-        for typ, tokid in self.special_token_ids.items():
-            handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
-            if handler is None:
-                print(f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping', file = sys.stderr)
-                continue
-            if not quiet:
-                print(f'gguf: Setting special token type {typ} to {tokid}')
-            handler(tokid)
-
-    def __repr__(self) -> str:
-        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids or "unset"}>'

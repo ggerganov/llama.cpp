@@ -19,7 +19,7 @@ from .constants import (
     GGUFEndian,
     GGUFValueType,
     RopeScalingType,
-    TokenType
+    TokenType,
 )
 
 
@@ -28,6 +28,7 @@ class WriterState(Enum):
     HEADER  = auto()
     KV_DATA = auto()
     TI_DATA = auto()
+
 
 class GGUFWriter:
     fout: BufferedWriter
@@ -47,16 +48,10 @@ class GGUFWriter:
         GGUFValueType.BOOL:    "?",
     }
 
-    def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
-        pack_prefix = ''
-        if not skip_pack_prefix:
-            pack_prefix = '<' if self.endianess == GGUFEndian.LITTLE else '>'
-        return struct.pack(f'{pack_prefix}{fmt}', value)
-
-    def _write_packed(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
-        self.fout.write(self._pack(fmt, value, skip_pack_prefix))
-
-    def __init__(self, path: os.PathLike[str] | str, arch: str, use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE) -> None:
+    def __init__(
+        self, path: os.PathLike[str] | str, arch: str, use_temp_file: bool = True,
+        endianess: GGUFEndian = GGUFEndian.LITTLE,
+    ):
         self.fout = open(path, "wb")
         self.arch = arch
         self.endianess = endianess
@@ -69,8 +64,9 @@ class GGUFWriter:
         self.use_temp_file = use_temp_file
         self.temp_file = None
         self.tensors = []
-        print("gguf: This GGUF file is for {0} Endian only"
-            .format("Big" if self.endianess == GGUFEndian.BIG else "Little"))
+        print("gguf: This GGUF file is for {0} Endian only".format(
+            "Big" if self.endianess == GGUFEndian.BIG else "Little",
+        ))
         self.state = WriterState.EMPTY
 
         self.add_architecture()
@@ -150,7 +146,7 @@ class GGUFWriter:
         self.add_val(val, GGUFValueType.BOOL)
 
     def add_string(self, key: str, val: str) -> None:
-        if len(val) == 0:
+        if not val:
             return
         self.add_key(key)
         self.add_val(val, GGUFValueType.STRING)
@@ -177,7 +173,7 @@ class GGUFWriter:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
             self.kv_data += self._pack("Q", len(encoded_val))
             self.kv_data += encoded_val
-        elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and len(val) > 0:
+        elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
             ltype = GGUFValueType.get_type(val[0])
             if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
                 raise ValueError("All items in a GGUF array should be of the same type")
@@ -192,7 +188,10 @@ class GGUFWriter:
     def ggml_pad(x: int, n: int) -> int:
         return ((x + n - 1) // n) * n
 
-    def add_tensor_info(self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32], tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None) -> None:
+    def add_tensor_info(
+        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32],
+        tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
+    ) -> None:
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
 
@@ -215,7 +214,10 @@ class GGUFWriter:
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
-    def add_tensor(self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None, raw_dtype: GGMLQuantizationType | None = None) -> None:
+    def add_tensor(
+        self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
+        raw_dtype: GGMLQuantizationType | None = None,
+    ) -> None:
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
         if self.use_temp_file and self.temp_file is None:
@@ -242,7 +244,7 @@ class GGUFWriter:
         if self.state is not WriterState.TI_DATA:
             raise ValueError(f'Expected output file to contain tensor info, got {self.state}')
 
-        if self.endianess==GGUFEndian.BIG:
+        if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
         self.write_padding(self.fout, self.fout.tell())
         tensor.tofile(self.fout)
@@ -402,3 +404,12 @@ class GGUFWriter:
 
     def add_pad_token_id(self, id: int) -> None:
         self.add_uint32(KEY.TOKENIZER.PAD_ID, id)
+
+    def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
+        pack_prefix = ''
+        if not skip_pack_prefix:
+            pack_prefix = '<' if self.endianess == GGUFEndian.LITTLE else '>'
+        return struct.pack(f'{pack_prefix}{fmt}', value)
+
+    def _write_packed(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
+        self.fout.write(self._pack(fmt, value, skip_pack_prefix))
