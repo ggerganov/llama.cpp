@@ -228,6 +228,7 @@ class GGUFWriter:
 
         if self.temp_file is None:
             self.tensors.append(tensor)
+            return
 
         tensor.tofile(self.temp_file)
         self.write_padding(self.temp_file, tensor.nbytes)
