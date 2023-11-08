@@ -4,9 +4,9 @@ import os
 import shutil
 import struct
 import tempfile
-from io import BufferedWriter
 from enum import Enum, auto
-from typing import Any, IO, Sequence
+from io import BufferedWriter
+from typing import IO, Any, Sequence
 
 import numpy as np
 
@@ -19,8 +19,9 @@ from .constants import (
     GGUFEndian,
     GGUFValueType,
     RopeScalingType,
-    TokenType,
+    TokenType
 )
+
 
 class WriterState(Enum):
     EMPTY   = auto()

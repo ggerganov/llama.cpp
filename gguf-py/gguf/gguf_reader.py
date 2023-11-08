@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import OrderedDict
-from typing import Any, TypeVar, NamedTuple, Dict, Type, Literal
+from typing import Any, Dict, Literal, NamedTuple, Type, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -15,12 +15,12 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf.constants import (
+    GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
     GGUF_VERSION,
-    GGML_QUANT_SIZES,
     GGMLQuantizationType,
-    GGUFValueType,
+    GGUFValueType
 )
 
 READER_SUPPORTED_VERSIONS = [2, GGUF_VERSION]

@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .gguf_writer import GGUFWriter
 
+
 class SpecialVocab:
     merges: list[str]
     special_token_ids: dict[str, int]

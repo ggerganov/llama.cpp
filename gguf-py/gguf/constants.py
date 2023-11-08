@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from enum import Enum, IntEnum, auto, StrEnum
+from enum import Enum, IntEnum, StrEnum, auto
 from typing import Any, NamedTuple, Type
 
 #
