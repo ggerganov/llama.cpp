@@ -24,7 +24,7 @@ def change_gguf(reader: GGUFReader, key: str, value: str) -> None:
         print(f'- Key {repr(key)} already set to requested value {current_value}')
         sys.exit(0)
     print('*** Warning *** Warning *** Warning **')
-    print('* Changing fields in a GGUF file can damagage it. If you are positive then type YES:')
+    print('* Changing fields in a GGUF file can damage it. If you are positive then type YES:')
     response = input('YES, I am sure> ')
     if response != 'YES':
         print("You didn't enter YES. Okay then, see ya!")
