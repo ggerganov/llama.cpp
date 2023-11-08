@@ -393,12 +393,12 @@ jobs:
         shell: bash
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
-          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+            echo "name=0.${BUILD_NUMBER}.0" >> $GITHUB_OUTPUT
           else
             SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
-            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+            SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+            echo "name=${SAFE_NAME}-0.${BUILD_NUMBER}.0-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -450,12 +450,12 @@ jobs:
         shell: bash
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
-          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+            echo "name=0.${BUILD_NUMBER}.0" >> $GITHUB_OUTPUT
           else
             SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
-            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+            SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+            echo "name=${SAFE_NAME}-0.${BUILD_NUMBER}.0-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Pack artifacts
@@ -527,12 +527,12 @@ jobs:
         shell: bash
         run: |
           BUILD_NUMBER="$(git rev-list --count HEAD)"
-          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
           if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
-            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+            echo "name=0.${BUILD_NUMBER}.0" >> $GITHUB_OUTPUT
           else
             SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
-            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+            SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+            echo "name=${SAFE_NAME}-0.${BUILD_NUMBER}.0-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
       - name: Download artifacts
