@@ -1,4 +1,4 @@
-import gguf
+import gguf  # noqa: F401
 
 # TODO: add tests
 

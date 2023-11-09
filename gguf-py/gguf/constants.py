@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from enum import IntEnum, StrEnum, auto
-from typing import Any, Type
+from typing import Any
 
 #
 # constants
