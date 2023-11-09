@@ -62,7 +62,8 @@ class ReaderTensor(NamedTuple):
 
 
 class GGUFReader:
-    byte_order: Literal['I' | 'S' | '<'] = 'I'
+    # I - same as host, S - swapped
+    byte_order: Literal['I' | 'S'] = 'I'
     alignment: int = GGUF_DEFAULT_ALIGNMENT
 
     # Note: Internal helper, API may change.
@@ -87,7 +88,9 @@ class GGUFReader:
             raise ValueError('GGUF magic invalid')
         offs += 4
         temp_version = self._get(offs, np.uint32)
-        if temp_version[0] > 2000:
+        if temp_version[0] & 65535 == 0:
+            # If we get 0 here that means it's (probably) a GGUF file created for
+            # the opposite byte order of the machine this script is running on.
             self.byte_order = 'S'
             temp_version = temp_version.newbyteorder(self.byte_order)
         version = temp_version[0]
