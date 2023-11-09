@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 93
+Current version: 94
 -Concedo
 -->
 
@@ -3173,6 +3173,8 @@ Current version: 93
 	const oai_submit_endpoint = "/completions";
 	const oai_submit_endpoint_turbo = "/chat/completions";
 
+	const oai_image_endpoint_full = "https://api.openai.com/v1/images/generations";
+
 	const scale_submit_endpoint = "https://dashboard.scale.com/spellbook/api/v2/deploy/"
 
 	const claude_submit_endpoint = "/complete";
@@ -3223,6 +3225,7 @@ Current version: 93
 	var anote_strength = 320; //distance from end
 	var newlineaftermemory = true;
 	var current_wi = []; //each item stores a wi object.
+	var wi_insertlocation = 0; //after memory
 	var wi_searchdepth = 0; //search everything
 	var generateimagesinterval = 650; //if generated images is enabled, it will trigger after every 600 new characters in context.
 	var nextgeneratedimagemilestone = generateimagesinterval; //used to keep track of when to generate the next image
@@ -3263,6 +3266,7 @@ Current version: 93
 		home_cluster: text_hordes[0].baseurl, //which horde does this api key belongs to
 		saved_oai_key: "", //do not ever share this in save files!
 		saved_oai_addr: default_oai_base, //do not ever share this in save files!
+		saved_dalle_key: "",
 		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
@@ -3288,10 +3292,11 @@ Current version: 93
 		persist_session: true,
 		speech_synth: 0, //0 is disabled
 		beep_on: false,
+		narrate_both_sides: false,
 		image_styles: "",
 		grammar:"",
 		tokenstreammode: (localflag?1:0), //0=off,1=pollstream,2=sse
-		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111
+		generate_images_mode: (localflag?0:1), //0=off, 1=horde, 2=a1111, 3=dalle
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
@@ -3847,7 +3852,6 @@ Current version: 93
 		let prompt = splits[0];
 		let negprompt = (splits.length > 1 ? splits[1] : "");
 		let parsedseed = Math.floor(Math.random() * 99999999);
-		let sampler = req_payload.params.sampler_name;
 		let tiling = false;
 
 		//first, if we're using the wrong model, switch the model
@@ -3930,6 +3934,65 @@ Current version: 93
 		},false);
 	}
 
+	function set_dalle_key()
+	{
+		inputBox("Enter DALL-E API Key.\n\nNote: DALL-E is known to rephrase and rewrite submitted image prompts before generating, for censorship purposes. There is nothing Kobold Lite can do about that. ","DALL-E API Key",localsettings.saved_dalle_key,"Input DALL-E API Key", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_dalle_key = userinput.trim();
+			}
+		},false);
+	}
+
+	function generate_dalle_image(req_payload, onImagesDone)
+	{
+		//split the prompt
+		let splits = req_payload.prompt.split("###");
+		let prompt = splits[0].trim();
+
+		let dalle_payload = {
+			"model": "dall-e-3",
+			"prompt": prompt,
+			"n": 1,
+			"size": "1024x1024",
+			"response_format":"b64_json",
+		}
+
+		//remove all null fields
+		dalle_payload = Object.fromEntries(Object.entries(dalle_payload).filter(([_, v]) => v != null));
+
+		let gen_endpoint = oai_image_endpoint_full;
+		console.log(dalle_payload);
+
+		fetch(gen_endpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'Authorization': 'Bearer ' + localsettings.saved_dalle_key
+			},
+			body: JSON.stringify(dalle_payload),
+		})
+		.then(x => x.json())
+		.then(resp => {
+			console.log(resp);
+			if(resp.data && resp.data.length>0)
+			{
+				onImagesDone(resp.data[0].b64_json);
+			}
+			else
+			{
+				console.log("Generation Error!");
+				onImagesDone(null);
+			}
+
+		}).catch((error) => {
+			console.log("Generation Error: " + error);
+			onImagesDone(null);
+		});
+
+	}
+
 	function get_cursor_position() {
 		let editor = document.getElementById("gametext");
 
@@ -3994,24 +4057,24 @@ Current version: 93
 
 	function is_using_kcpp_with_streaming()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.29") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.30") >= 0);
 	}
 	function is_using_kcpp_with_sse() //need 1.39 for multibyte fix
 	{
 		let browsersupported = (self.TransformStream!=null && self.TextDecoderStream!=null && self.WritableStream!=null);
-		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.39") > 0);
+		return (browsersupported && custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.40") >= 0);
 	}
 	function is_using_kcpp_with_mirostat()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.36") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.37") >= 0);
 	}
 	function is_using_kcpp_with_grammar()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.43") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.44") >= 0);
 	}
 	function is_using_kcpp_with_added_memory()
 	{
-		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.48.2") > 0);
+		return (custom_kobold_endpoint!="" && koboldcpp_version && koboldcpp_version!="" && compare_version_str(koboldcpp_version, "1.49") >= 0);
 	}
 
 	//0 is none, 1 is pseudostreaming, 2 is true poll-streaming, 3 is sse-streaming
@@ -4328,6 +4391,7 @@ Current version: 93
 		new_save_storyobj.extrastopseq = extrastopseq;
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
+		new_save_storyobj.wiinsertlocation = wi_insertlocation;
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -4335,6 +4399,7 @@ Current version: 93
 			new_save_storyobj.savedsettings.my_api_key = "0000000000";
 			new_save_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
 			new_save_storyobj.savedsettings.saved_oai_key = "";
+			new_save_storyobj.savedsettings.saved_dalle_key = "";
 			new_save_storyobj.savedsettings.saved_oai_addr = "";
 			new_save_storyobj.savedsettings.saved_claude_key = "";
 			new_save_storyobj.savedsettings.saved_claude_addr = "";
@@ -4544,6 +4609,9 @@ Current version: 93
 				if (storyobj.wisearchdepth) {
 					wi_searchdepth = storyobj.wisearchdepth;
 				}
+				if (storyobj.wiinsertlocation) {
+					wi_insertlocation = storyobj.wiinsertlocation;
+				}
 			} else {
 				//v2 load
 				if(storyobj.prompt!="")
@@ -4609,6 +4677,7 @@ Current version: 93
 					let tmphc = localsettings.home_cluster;
 					let tmp_oai1 = localsettings.saved_oai_key;
 					let tmp_oai2 = localsettings.saved_oai_addr;
+					let tmp_oai3 = localsettings.saved_dalle_key;
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
@@ -4636,6 +4705,7 @@ Current version: 93
 					localsettings.home_cluster = tmphc;
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
+					localsettings.saved_dalle_key = tmp_oai3;
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
@@ -5744,14 +5814,16 @@ Current version: 93
 
 	function select_custom_oai_model()
 	{
-		inputBox("Enter custom OpenAI model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
+		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		inputBox("Enter custom "+(isOpenrouter?"OpenAI":"OpenRouter")+" model name","Custom Model Name",localsettings.saved_oai_custommodel,"", ()=>{
 			let coai = getInputBoxValue().trim();
-			let dropdown = document.getElementById("custom_oai_model");
+			let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
+			let mdlopt = (isOpenrouter?"custom_openrouter_model_option":"custom_oai_model_option");
 			if(coai!="")
 			{
-				document.getElementById("custom_oai_model_option").value = coai;
-				document.getElementById("custom_oai_model_option").innerText = coai;
-				document.getElementById("custom_oai_model_option").style.display = "";
+				document.getElementById(mdlopt).value = coai;
+				document.getElementById(mdlopt).innerText = coai;
+				document.getElementById(mdlopt).style.display = "";
 				dropdown.selectedIndex = dropdown.options.length - 1;
 			}
 			oai_model_change();
@@ -5759,10 +5831,11 @@ Current version: 93
 	}
 	function oai_model_change()
 	{
-		let dropdown = document.getElementById("custom_oai_model");
+		let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+		let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 		let non_completions = (dropdown.value.includes("text-davinci-003") || dropdown.value.includes("text-davinci-002")
 		|| dropdown.value.includes("text-davinci-001") || dropdown.value.includes("gpt-3.5-turbo-instruct") || dropdown.value == "davinci");
-		if(dropdown.selectedIndex==dropdown.options.length-1)
+		if(isOpenrouter || dropdown.selectedIndex==dropdown.options.length-1)
 		{
 			document.getElementById("useoaichatcompl").checked = true;
 		} else {
@@ -5793,7 +5866,8 @@ Current version: 93
 			console.log(data);
 			if (!data.error && data.data && data.data.length > 0)
 			{
-				let dropdown = document.getElementById("custom_oai_model");
+				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
 				var lastOption = dropdown.lastElementChild;
 				for (var i = dropdown.options.length - 1; i >= 0; i--) {
 					var option = dropdown.options[i];
@@ -5831,6 +5905,8 @@ Current version: 93
 		document.getElementById("scalecustom").classList.add("hidden");
 		document.getElementById("claudecustom").classList.add("hidden");
 		document.getElementById("palmcustom").classList.add("hidden");
+		document.getElementById("custom_oai_model").classList.add("hidden");
+		document.getElementById("custom_openrouter_model").classList.add("hidden");
 		if(epchoice==0)
 		{
 			document.getElementById("koboldcustom").classList.remove("hidden");
@@ -5846,6 +5922,7 @@ Current version: 93
 			{
 				document.getElementById("oaidesc").classList.add("hidden");
 				document.getElementById("openrouterdesc").classList.remove("hidden");
+				document.getElementById("custom_openrouter_model").classList.remove("hidden");
 				document.getElementById("custom_oai_endpoint").value = default_openrouter_base;
 				document.getElementById("custom_oai_endpoint").classList.add("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_openrouter_key;
@@ -5853,13 +5930,14 @@ Current version: 93
 			else
 			{
 				document.getElementById("oaidesc").classList.remove("hidden");
+				document.getElementById("custom_oai_model").classList.remove("hidden");
 				document.getElementById("openrouterdesc").classList.add("hidden");
 				document.getElementById("custom_oai_endpoint").classList.remove("hidden");
 				document.getElementById("custom_oai_key").value = localsettings.saved_oai_key;
 				document.getElementById("custom_oai_endpoint").value = (localsettings.saved_oai_addr?localsettings.saved_oai_addr:default_oai_base);
 
 			}
-
+			oai_model_change();
 			togglejailbreak();
 		}
 		else if(epchoice==2)
@@ -6082,6 +6160,7 @@ Current version: 93
 				{
 					localsettings.saved_oai_key = custom_oai_key;
 					localsettings.saved_oai_addr = custom_oai_endpoint;
+					localsettings.saved_dalle_key = custom_oai_key;
 				}else{
 					localsettings.saved_openrouter_key = custom_oai_key;
 				}
@@ -6090,7 +6169,9 @@ Current version: 93
 				{
 					document.getElementById("jailbreakprompttext").value = defaultoaijailbreak;
 				}
-				custom_oai_model = document.getElementById("custom_oai_model").value.trim();
+				let isOpenrouter = (document.getElementById("customapidropdown").value==5);
+				let dropdown = (isOpenrouter?document.getElementById("custom_openrouter_model"):document.getElementById("custom_oai_model"));
+				custom_oai_model = dropdown.value.trim();
 				localsettings.saved_oai_custommodel = custom_oai_model;
 				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": custom_oai_model, "count": 1 }];
 				selected_workers = [];
@@ -6922,6 +7003,7 @@ Current version: 93
 		document.getElementById("ttsselect").innerHTML = ttshtml;
 		document.getElementById("ttsselect").value = localsettings.speech_synth;
 		document.getElementById("beep_on").checked = localsettings.beep_on;
+		document.getElementById("narrate_both_sides").checked = localsettings.narrate_both_sides;
 		toggle_opmode();
 
 		//sd models display
@@ -7098,6 +7180,7 @@ Current version: 93
 
 		localsettings.speech_synth = document.getElementById("ttsselect").value;
 		localsettings.beep_on = (document.getElementById("beep_on").checked?true:false);
+		localsettings.narrate_both_sides = (document.getElementById("narrate_both_sides").checked?true:false);
 		localsettings.auto_ctxlen = (document.getElementById("auto_ctxlen").checked ? true : false);
 		localsettings.auto_genamt = (document.getElementById("auto_genamt").checked ? true : false);
 
@@ -7215,9 +7298,11 @@ Current version: 93
 		if(document.getElementById("generate_images_mode").value==0)
 		{
 			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 		}else if(document.getElementById("generate_images_mode").value==1){
 			document.getElementById("generate_images_model").classList.remove("hidden");
+			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 			if(!image_models_fetched)
 			{
@@ -7227,10 +7312,15 @@ Current version: 93
 					update_horde_sdmodels();
 				});
 			}
-		}else{
+		}else if(document.getElementById("generate_images_mode").value==2){
 			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_dalle_container").classList.add("hidden");
 			document.getElementById("generate_images_local_model_container").classList.remove("hidden");
 			connect_to_a1111(silent);
+		}else if(document.getElementById("generate_images_mode").value==3){
+			document.getElementById("generate_images_model").classList.add("hidden");
+			document.getElementById("generate_images_dalle_container").classList.remove("hidden");
+			document.getElementById("generate_images_local_model_container").classList.add("hidden");
 		}
 	}
 
@@ -7506,6 +7596,7 @@ Current version: 93
 		extrastopseq = "";
 		anote_strength = 320;
 		wi_searchdepth = 0;
+		wi_insertlocation = 0;
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
@@ -7753,19 +7844,23 @@ Current version: 93
 	function btn_addimg_longpress_start()
 	{
 		addimgLongPressTimer = setTimeout(()=>{
-			inputBox("Enter a prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
-				let userinput = getInputBoxValue();
-				if(userinput.trim()!="")
-				{
-					var sentence = userinput.trim().substring(0, 300);
-					do_manual_gen_image(sentence);
-				}
-			},false);
+			popup_manual_image();
 		}, 2000);
 	}
 	function btn_addimg_longpress_end()
 	{
 		clearTimeout(addimgLongPressTimer);
+	}
+	function popup_manual_image()
+	{
+		inputBox("Tip: You can generate images manually by long-pressing the 'Add Img' button.\n\nEnter a prompt to generate an image with.","Generate Image Manually","","Enter a Prompt",()=>{
+			let userinput = getInputBoxValue();
+			if(userinput.trim()!="")
+			{
+				var sentence = userinput.trim().substring(0, 300);
+				do_manual_gen_image(sentence);
+			}
+		},false);
 	}
 
 	function do_manual_gen_image(sentence)
@@ -7792,6 +7887,8 @@ Current version: 93
 				nextgeneratedimagemilestone = tclen + generateimagesinterval;
 				do_manual_gen_image(sentence);
 			}
+		}else{
+			popup_manual_image();
 		}
 	}
 
@@ -7807,9 +7904,12 @@ Current version: 93
 			idle_timer = 0;
 			idle_triggered_counter = 0;
 			if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
-				let utterance = new window.SpeechSynthesisUtterance(newgen);
-				utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
-				window.speechSynthesis.speak(utterance);
+				if(localsettings.narrate_both_sides)
+				{
+					let utterance = new window.SpeechSynthesisUtterance(newgen);
+					utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
+					window.speechSynthesis.speak(utterance);
+				}
 			}
 
 			if (localsettings.opmode == 4)
@@ -8092,6 +8192,7 @@ Current version: 93
 				wimatch_context = wimatch_context.toLowerCase();
 			}
 
+			let wistr = "";
 			if (current_wi.length > 0) {
 				for (var x = 0; x < current_wi.length; ++x) {
 					let wi = current_wi[x];
@@ -8131,10 +8232,11 @@ Current version: 93
 					}
 
 					if (shoulduse) {
-						truncated_memory += wi.content + "\n";
+						wistr += wi.content + "\n";
 					}
 				}
 			}
+
 
 			//we clip the authors note if its too long
 			let truncated_anote = current_anotetemplate.replace("<|>", current_anote);
@@ -8143,6 +8245,15 @@ Current version: 93
 			if (current_anote.length == 0) {
 				//if there's no authors note at all, don't include the template
 				truncated_anote = "";
+			}
+
+			if(wi_insertlocation>0)
+			{
+				truncated_anote = wistr + truncated_anote;
+			}
+			else
+			{
+				truncated_memory += wistr;
 			}
 
 			//now we resize the context such that the memory and authors note can fit inside
@@ -8350,12 +8461,12 @@ Current version: 93
 				submit_payload.quiet = !showlog;
 
 				//for vesion 1.2.2 and later, send stopper tokens for chat and instruct
-				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.1") > 0) {
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.2") >= 0) {
 					submit_payload.stop_sequence = get_stop_sequences();
 				}
 
 				//version 1.2.4 and later supports unban tokens
-				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.3") > 0)
+				if (kobold_endpoint_version && kobold_endpoint_version != "" && compare_version_str(kobold_endpoint_version, "1.2.4") >= 0)
 				{
 					submit_payload.use_default_badwordsids = determine_if_ban_eos(input_was_empty);
 				}
@@ -8777,7 +8888,7 @@ Current version: 93
 			"r2": false
 		}
 
-		if(localsettings.generate_images_mode==1)
+		if(localsettings.generate_images_mode==1) //horde
 		{
 			fetch(stablehorde_submit_endpoint, {
 				method: 'POST', // or 'PUT'
@@ -8807,7 +8918,9 @@ Current version: 93
 				console.error('Error:', error);
 				msgbox("Image generation error: " + error);
 			});
-		} else {
+		}
+		else if(localsettings.generate_images_mode==2) //a1111
+		{
 			let desired_model = document.getElementById("generate_images_local_model").value;
 			genimg_payload.models = [desired_model];
 			let imgid = "A111img"+(Math.floor(10000 + Math.random() * 90000)).toString();
@@ -8828,6 +8941,34 @@ Current version: 93
 					msgbox("Image Generation Failed!\n\nPlease make sure A1111 is running and properly configured!\nIn your local install of Automatic1111 WebUi, modify webui-user.bat and add these flags to enable API access:\n\nset COMMANDLINE_ARGS= --api --listen --cors-allow-origins=*\n");
 				}
 			});
+		}
+		else if(localsettings.generate_images_mode==3) //dalle
+		{
+			if(localsettings.saved_dalle_key=="")
+			{
+				msgbox("Error: A valid DALL-E Key is required to generate images with DALL-E.\nThis is usually the same as your OpenAI API key, but can be customized in settings.","Invalid DALL-E Key");
+			}
+			else
+			{
+				let imgid = "DALLEimg"+(Math.floor(10000 + Math.random() * 90000)).toString();
+				let nimgtag = "[<|p|" + imgid + "|p|>]";
+				gametext_arr.push(nimgtag);
+				image_db[imgid] = { done: false, queue: "Generating", result: "", alt:sentence, local:true };
+				generate_dalle_image(genimg_payload,(outputimg)=>{
+					if(outputimg)
+					{
+						//console.log(outputimg);
+						let origImg = "data:image/jpeg;base64," + outputimg;
+						compressImage(origImg, (newDataUri) => {
+							image_db[imgid].done = true;
+							image_db[imgid].result = newDataUri;
+						}, true);
+					}else{
+						image_db[imgid].queue = "Failed";
+						msgbox("Image Generation Failed!\n\nPlease make sure your OpenAI key is set correctly and you are allowed to use DALL-E.\n");
+					}
+				});
+			}
 		}
 	}
 
@@ -9046,6 +9187,7 @@ Current version: 93
 			}
 		}
 
+		let gentxtspeak = gentxt;
 		if (pending_context_preinjection != "") {
 			if(gentxt!="" && gentxt[0]!=" " && localsettings.opmode==3)
 			{
@@ -9056,8 +9198,13 @@ Current version: 93
 			pending_context_preinjection = "";
 		}
 
-		if (localsettings.speech_synth > 0 && 'speechSynthesis' in window) {
-			let utterance = new window.SpeechSynthesisUtterance(gentxt);
+		if (localsettings.speech_synth > 0 && 'speechSynthesis' in window)
+		{
+			if(localsettings.narrate_both_sides)
+			{
+				gentxtspeak = gentxt;
+			}
+			let utterance = new window.SpeechSynthesisUtterance(gentxtspeak);
 			utterance.voice = window.speechSynthesis.getVoices()[localsettings.speech_synth - 1];
 			window.speechSynthesis.speak(utterance);
 		}
@@ -10321,6 +10468,7 @@ Current version: 93
 		}
 		localsettings.case_sensitive_wi = (document.getElementById("case_sensitive_wi").checked?true:false);
 		wi_searchdepth = document.getElementById("wi_searchdepth").value;
+		wi_insertlocation = document.getElementById("wi_insertlocation").value;
 	}
 
 	let backup_wi_obj = [];
@@ -10381,7 +10529,7 @@ Current version: 93
 		selectionhtml += "</table>"
 		wilist.innerHTML = selectionhtml;
 		document.getElementById("wi_searchdepth").value = wi_searchdepth;
-
+		document.getElementById("wi_insertlocation").value = wi_insertlocation;
 	}
 
 	var backLongPressTimer = null;
@@ -11386,6 +11534,49 @@ Current version: 93
 					<option value="gpt-4-32k">gpt-4-32k</option>
 					<option style="display:none;" id="custom_oai_model_option" value="custom">[Custom]</option>
 				</select>
+				<select style="padding:4px;display:inline;width:calc(100% - 220px)" class="form-control hidden" id="custom_openrouter_model" onchange="oai_model_change()">
+					<option value="openai/gpt-3.5-turbo">openai/gpt-3.5-turbo</option>
+					<option value="openai/gpt-3.5-turbo-1106">openai/gpt-3.5-turbo-1106</option>
+					<option value="openai/gpt-3.5-turbo-0301">openai/gpt-3.5-turbo-0301</option>
+					<option value="openai/gpt-3.5-turbo-16k">openai/gpt-3.5-turbo-16k</option>
+					<option value="openai/gpt-4-1106-preview">openai/gpt-4-1106-preview</option>
+					<option value="openai/gpt-4">openai/gpt-4</option>
+					<option value="openai/gpt-4-0314">openai/gpt-4-0314</option>
+					<option value="openai/gpt-4-32k">openai/gpt-4-32k</option>
+					<option value="openai/gpt-4-32k-0314">openai/gpt-4-32k-0314</option>
+					<option value="openai/text-davinci-002">openai/text-davinci-002</option>
+					<option value="openai/gpt-3.5-turbo-instruct">openai/gpt-3.5-turbo-instruct</option>
+					<option value="google/palm-2-chat-bison">google/palm-2-chat-bison</option>
+					<option value="google/palm-2-codechat-bison">google/palm-2-codechat-bison</option>
+					<option value="google/palm-2-chat-bison-32k">google/palm-2-chat-bison-32k</option>
+					<option value="google/palm-2-codechat-bison-32k">google/palm-2-codechat-bison-32k</option>
+					<option value="meta-llama/llama-2-13b-chat">meta-llama/llama-2-13b-chat</option>
+					<option value="meta-llama/llama-2-70b-chat">meta-llama/llama-2-70b-chat</option>
+					<option value="nousresearch/nous-hermes-llama2-13b">nousresearch/nous-hermes-llama2-13b</option>
+					<option value="nousresearch/nous-hermes-llama2-70b">nousresearch/nous-hermes-llama2-70b</option>
+					<option value="meta-llama/codellama-34b-instruct">meta-llama/codellama-34b-instruct</option>
+					<option value="phind/phind-codellama-34b">phind/phind-codellama-34b</option>
+					<option value="jondurbin/airoboros-l2-70b">jondurbin/airoboros-l2-70b</option>
+					<option value="migtissera/synthia-70b">migtissera/synthia-70b</option>
+					<option value="mistralai/mistral-7b-instruct" selected="selected">mistralai/mistral-7b-instruct</option>
+					<option value="open-orca/mistral-7b-openorca">open-orca/mistral-7b-openorca</option>
+					<option value="teknium/openhermes-2-mistral-7b">teknium/openhermes-2-mistral-7b</option>
+					<option value="pygmalionai/mythalion-13b">pygmalionai/mythalion-13b</option>
+					<option value="undi95/remm-slerp-l2-13b">undi95/remm-slerp-l2-13b</option>
+					<option value="gryphe/mythomax-l2-13b">gryphe/mythomax-l2-13b</option>
+					<option value="xwin-lm/xwin-lm-70b">xwin-lm/xwin-lm-70b</option>
+					<option value="gryphe/mythomax-l2-13b-8k">gryphe/mythomax-l2-13b-8k</option>
+					<option value="huggingfaceh4/zephyr-7b-beta">huggingfaceh4/zephyr-7b-beta</option>
+					<option value="anthropic/claude-2">anthropic/claude-2</option>
+					<option value="anthropic/claude-instant-v1">anthropic/claude-instant-v1</option>
+					<option value="anthropic/claude-v1">anthropic/claude-v1</option>
+					<option value="anthropic/claude-1.2">anthropic/claude-1.2</option>
+					<option value="anthropic/claude-instant-v1-100k">anthropic/claude-instant-v1-100k</option>
+					<option value="anthropic/claude-v1-100k">anthropic/claude-v1-100k</option>
+					<option value="anthropic/claude-instant-1.0">anthropic/claude-instant-1.0</option>
+					<option value="mancer/weaver">mancer/weaver</option>
+					<option style="display:none;" id="custom_openrouter_model_option" value="custom">[Custom]</option>
+				</select>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaifetchlist" onclick="oai_fetch_models()">Fetch List</button>
 				<button type="button" class="btn btn-primary" style="display:inline;width:105px;" id="oaiusecustom" onclick="select_custom_oai_model()">Use Custom</button>
 				<input type="checkbox" id="oaiaddversion" onchange="" checked>
@@ -11818,6 +12009,7 @@ Current version: 93
 								<option value="0">[Disabled]</option>
 								<option value="1">AI Horde</option>
 								<option value="2">Local A1111</option>
+								<option value="3">OpenAI DALL-E</option>
 							</select>
 							<input list="sdmodels" class="form-control mdlpicker hidden" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
 							<datalist id="sdmodels">
@@ -11828,6 +12020,9 @@ Current version: 93
 								<option value="">[None]</option>
 							</select>
 							<button type="button" class="btn btn-primary" onclick="set_a1111_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
+							</div>
+							<div id="generate_images_dalle_container" class="settinglabel hidden">
+								<button id="generate_images_dalle_setkey" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_key()">Set DALL-E Key</button>
 							</div>
 
 							<div id="genimgopt" class="">
@@ -11857,6 +12052,10 @@ Current version: 93
 							<div class="justifyleft settingsmall">TTS <span class="helpicon">?<span class="helptext">Enable Text-To-Speech to have your story automatically read to you.</span></span></div>
 							<select class="form-control" id="ttsselect" style="height:20px;padding:0;margin:0px 0 0;">
 							</select>
+						</div>
+						<div class="settinglabel">
+							<div class="justifyleft settingsmall"  title="If unchecked, only speak AI replies, not other text.">Narrate Both Sides </div>
+						   <input type="checkbox" id="narrate_both_sides" style="margin:0px 0 0;">
 						</div>
 						<div class="settinglabel">
 							<div class="justifyleft settingsmall"  title="Play a sound when generation is complete">Beep on Done </div>
@@ -12049,10 +12248,18 @@ Current version: 93
 			<div class="wilist" id="wilist">
 
 			</div>
+
+			<div class="settinglabel" style="padding: 4px;">
+				<div class="justifyleft settingsmall">WI Insert Location <span class="helpicon">?<span
+					class="helptext">Controls where the world info should be inserted</span></span></div>
+			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_insertlocation">
+				<option value="0">After Memory</option>
+				<option value="1">Before A/N</option>
+			</select></div>
 			<div class="settinglabel" style="padding: 4px;">
 				<div class="justifyleft settingsmall">WI Search Depth <span class="helpicon">?<span
 					class="helptext">Controls how far back in the text to search for World Info Keys</span></span></div>
-			<select style="height:16px;padding:0px;margin:0px 4px 0; width:80px;font-size:10px;" class="form-control" id="wi_searchdepth">
+			<select style="height:16px;padding:0px;margin:0px 4px 0; width:90px;font-size:10px;" class="form-control" id="wi_searchdepth">
 				<option value="0">Full Context</option>
 				<option value="1024">Last 1024</option>
 				<option value="512">Last 512</option>
