@@ -61,7 +61,7 @@ class GGUFReader:
     alignment: int = GGUF_DEFAULT_ALIGNMENT
 
     # Note: Internal helper, API may change.
-    gguf_scalar_to_np: Dict[GGUFValueType, npt.DTypeLike] = {
+    gguf_scalar_to_np: dict[GGUFValueType, type[np.generic]] = {
         GGUFValueType.UINT8:   np.uint8,
         GGUFValueType.INT8:    np.int8,
         GGUFValueType.UINT16:  np.uint16,
