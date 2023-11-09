@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from gguf import GGUFReader, GGUFValueType  # noqa: E402
 
 
+# For more information about what field.parts and field.data represent,
+# please see the comments in the modify_gguf.py example.
 def dump_gguf(filename: str) -> None:
     print(f'* Loading: {filename}')
     reader = GGUFReader(filename, 'r')

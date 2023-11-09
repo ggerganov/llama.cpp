@@ -1,8 +1,12 @@
+#
+# GGUF file reading/modification support. For API usage information,
+# please see examples/modify_gguf.py and examples/dump_gguf.py
+#
 from __future__ import annotations
 
 import os
 from collections import OrderedDict
-from typing import Any, Dict, Literal, NamedTuple, TypeVar, Union
+from typing import Any, Literal, NamedTuple, TypeVar, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -22,6 +26,7 @@ from gguf.constants import (
     GGMLQuantizationType,
     GGUFValueType,
 )
+
 
 READER_SUPPORTED_VERSIONS = [2, GGUF_VERSION]
 
