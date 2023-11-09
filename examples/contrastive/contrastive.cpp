@@ -11,7 +11,7 @@ int main(int argc, char ** argv) {
     gpt_params params_expert;
     gpt_params params_amateur;
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s EXPERT_MODEL_PATH AMATEUR_MODEL_PATH [PROMPT] [alpha] [beta]\n" , argv[0]);
+        printf("usage: %s EXPERT_MODEL_PATH AMATEUR_MODEL_PATH [PROMPT] [alpha] [beta]\n", argv[0]);
         return 1;
     }
 
@@ -62,12 +62,12 @@ int main(int argc, char ** argv) {
 
 
     if (model_expert == NULL) {
-        fprintf(stderr , "%s: error: unable to load expert model\n" , __func__);
+        fprintf(stderr, "%s: error: unable to load expert model\n", __func__);
         return 1;
     }
 
     if (model_amateur == NULL) {
-        fprintf(stderr , "%s: error: unable to load amateur model\n" , __func__);
+        fprintf(stderr, "%s: error: unable to load amateur model\n", __func__);
         return 1;
     }
 
@@ -83,12 +83,12 @@ int main(int argc, char ** argv) {
     llama_context * ctx_amateur = llama_new_context_with_model(model_amateur, ctx_params);
 
     if (ctx_expert == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context for expert\n" , __func__);
+        fprintf(stderr, "%s: error: failed to create the llama_context for expert\n", __func__);
         return 1;
     }
 
     if (ctx_amateur == NULL) {
-        fprintf(stderr , "%s: error: failed to create the llama_context for amateur\n" , __func__);
+        fprintf(stderr, "%s: error: failed to create the llama_context for amateur\n", __func__);
         return 1;
     }
 
@@ -174,7 +174,6 @@ int main(int argc, char ** argv) {
             // is it an end of stream?
             if (new_token_id_expert == llama_token_eos(model_expert) || n_cur == n_len) {
                 LOG_TEE("\n");
-
                 break;
             }
 
@@ -194,11 +193,11 @@ int main(int argc, char ** argv) {
 
         // evaluate the current batch with the transformer model
         if (llama_decode(ctx_expert, batch)) {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
+            fprintf(stderr, "%s : failed to eval, return code 1\n", __func__);
             return 1;
         }
         if (llama_decode(ctx_amateur, batch)) {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
+            fprintf(stderr, "%s : failed to eval, return code 1\n", __func__);
             return 1;
         }
     }
