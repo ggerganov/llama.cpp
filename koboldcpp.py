@@ -1162,6 +1162,11 @@ def show_new_gui():
             if fsize>10000000: #dont bother with models < 10mb
                 mem = MaxMemory[0]
                 sizeperlayer = fsize*0.05714
+                cs = int(contextsize_text[context_var.get()])
+                if cs and cs > 4096:
+                    sizeperlayer *= 1.2
+                elif cs and cs > 2048:
+                    sizeperlayer *= 1.1
                 layerlimit = int(min(200,mem/sizeperlayer))
                 old_gui_layers_untouched = gui_layers_untouched
                 gui_layers_zeroed = gpulayers_var.get()=="" or gpulayers_var.get()=="0"
