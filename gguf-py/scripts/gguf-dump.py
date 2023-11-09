@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
+import argparse
+import os
 import sys
 from pathlib import Path
 
 # Necessary to load the local gguf package
-sys.path.insert(0, str(Path(__file__).parent.parent))
+if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf import GGUFReader, GGUFValueType  # noqa: E402
 
 
 # For more information about what field.parts and field.data represent,
 # please see the comments in the modify_gguf.py example.
-def dump_gguf(filename: str) -> None:
-    print(f'* Loading: {filename}')
-    reader = GGUFReader(filename, 'r')
+def dump_metadata(reader: GGUFReader, dump_tensors: bool = True) -> None:
     print(f'\n* Dumping {len(reader.fields)} key/value pair(s)')
     for n, field in enumerate(reader.fields.values(), 1):
         if not field.types:
@@ -30,16 +31,23 @@ def dump_gguf(filename: str) -> None:
             elif field.types[0] in reader.gguf_scalar_to_np:
                 print(' = {0}'.format(field.parts[-1][0]), end = '')
         print()
-
+    if not dump_tensors:
+        return
     print(f'\n* Dumping {len(reader.tensors)} tensor(s)')
     for n, tensor in enumerate(reader.tensors, 1):
-
         prettydims = ', '.join('{0:5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
         print(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Dump GGUF file metadata")
+    parser.add_argument("model",        type=str,            help="GGUF format model filename")
+    parser.add_argument("--no-tensors", action="store_true", help="Don't dump tensor metadata")
+    args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
+    print(f'* Loading: {args.model}')
+    reader = GGUFReader(args.model, 'r')
+    dump_metadata(reader, not args.no_tensors)
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('dump_gguf: Error: Specify an input file', file = sys.stderr)
-        sys.exit(1)
-    dump_gguf(sys.argv[1])
+    main()

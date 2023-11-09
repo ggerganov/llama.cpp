@@ -1,6 +1,6 @@
 #
 # GGUF file reading/modification support. For API usage information,
-# please see examples/modify_gguf.py and examples/dump_gguf.py
+# please see the files scripts/ for some fairly simple examples.
 #
 from __future__ import annotations
 

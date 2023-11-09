@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
 
 import numpy as np
 
-if "NO_LOCAL_GGUF" not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / "gguf-py"))
+# Necessary to load the local gguf package
+if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import gguf
 
 
-def convert_byteorder(filename: str, order: str) -> None:
-    if order not in ("big", "little", "native"):
-        raise ValueError(f"Bad order parameter {order}")
-    reader = gguf.GGUFReader(filename, "r+")
+def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None:
     if np.uint32(1) == np.uint32(1).newbyteorder("<"):
         # Host is little endian
         host_endian = "little"
@@ -28,7 +28,7 @@ def convert_byteorder(filename: str, order: str) -> None:
         file_endian = swapped_endian
     else:
         file_endian = host_endian
-    if order == "native":
+    if args.order == "native":
         order = host_endian
     print(f"* Host is {host_endian.upper()} endian, GGUF file seems to be {file_endian.upper()} endian")
     if file_endian == order:
@@ -43,10 +43,14 @@ def convert_byteorder(filename: str, order: str) -> None:
         ):
             raise ValueError(f"Cannot handle type {tensor.tensor_type.name} for tensor {repr(tensor.name)}")
     print(f"* Preparing to convert from {file_endian.upper()} to {order.upper()}")
+    if args.dry_run:
+        return
     print("\n*** Warning *** Warning *** Warning **")
     print("* This conversion process may damage the file. Ensure you have a backup.")
+    if order != host_endian:
+        print("* Requested endian differs from host, you will not be able to load the model on this machine.")
     print("* The file will be modified immediately, so if conversion fails or is interrupted")
-    print("* the file will be corrupted. If you are positive then type YES:")
+    print("* the file will be corrupted. Enter exactly YES if you are positive you want to proceed:")
     response = input("YES, I am sure> ")
     if response != "YES":
         print("You didn't enter YES. Okay then, see ya!")
@@ -85,11 +89,29 @@ def convert_byteorder(filename: str, order: str) -> None:
     print("* Completion")
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Convert GGUF file byte order")
+    parser.add_argument(
+        "model",
+        type=str,
+        help="GGUF format model filename",
+    )
+    parser.add_argument(
+        "order",
+        type=str,
+        choices=['big','little','native'],
+        help="Requested byte order",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Don't actually change anything"
+    )
+    args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
+    print(f'* Loading: {args.model}')
+    reader = gguf.GGUFReader(args.model, 'r' if args.dry_run else 'r+')
+    convert_byteorder(reader, args)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(
-            "convert_endian: Error: Missing arguments. Syntax: modify_gguf.py <filename> <little | big | native>",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    convert_byteorder(sys.argv[1], sys.argv[2])
+    main()
