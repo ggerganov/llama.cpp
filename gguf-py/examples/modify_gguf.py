@@ -34,7 +34,10 @@ def change_gguf(reader: GGUFReader, key: str, value: str) -> None:
 
 if __name__ == '__main__':
     if len(sys.argv) < 4:
-        print('modify_gguf: Error: Missing arguments. Syntax: modify_gguf.py <filename> <key> <value>', file = sys.stderr)
+        print(
+            'modify_gguf: Error: Missing arguments. Syntax: modify_gguf.py <filename> <key> <value>',
+            file = sys.stderr,
+        )
         sys.exit(1)
     print(f'* Loading: {sys.argv[1]}')
     reader = GGUFReader(sys.argv[1], 'r+')
