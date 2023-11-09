@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf import GGUFReader  # noqa: E402
 
+
 def change_gguf(reader: GGUFReader, key: str, value: str) -> None:
     field = reader.get_field(key)
     if field is None:
@@ -31,6 +32,7 @@ def change_gguf(reader: GGUFReader, key: str, value: str) -> None:
         sys.exit(0)
     field.parts[field.data[0]][0] = new_value
     print('* Field changed. Successful completion.')
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 4:

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf import GGUFReader, GGUFValueType  # noqa: E402
 
+
 def dump_gguf(filename: str) -> None:
     print(f'* Loading: {filename}')
     reader = GGUFReader(filename, 'r')
@@ -33,6 +34,7 @@ def dump_gguf(filename: str) -> None:
 
         prettydims = ', '.join('{0:5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
         print(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

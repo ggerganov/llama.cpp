@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf import GGUFWriter  # noqa: E402
 
+
 # Example usage:
 def writer_example() -> None:
     # Example usage with a file
@@ -34,4 +35,6 @@ def writer_example() -> None:
 
     gguf_writer.close()
 
-writer_example()
+
+if __name__ == '__main__':
+    writer_example()
