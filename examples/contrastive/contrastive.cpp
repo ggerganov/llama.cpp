@@ -11,7 +11,7 @@ int main(int argc, char ** argv) {
     gpt_params params_expert;
     gpt_params params_amateur;
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s EXPERT_MODEL_PATH AMATEUR_MODEL_PATH [PROMPT]\n" , argv[0]);
+        printf("usage: %s EXPERT_MODEL_PATH AMATEUR_MODEL_PATH [PROMPT] [alpha] [beta]\n" , argv[0]);
         return 1;
     }
 
@@ -26,6 +26,17 @@ int main(int argc, char ** argv) {
     if (argc >= 4) {
         params_expert.prompt = argv[3];
         params_amateur.prompt = argv[3];
+    }
+
+    float alpha = 0.1;
+    float beta = 0.5;
+
+    if(argc >= 5){
+        alpha = std::stof(argv[4]);
+    }
+
+    if(argc >= 6){
+        beta = std::stof(argv[5]);
     }
 
     if (params_expert.prompt.empty()) {
@@ -64,7 +75,6 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed  = 1234;
     ctx_params.n_ctx = 2048;
     ctx_params.n_threads = params_expert.n_threads;
     ctx_params.n_threads_batch = params_expert.n_threads_batch == -1 ? params_expert.n_threads : params_expert.n_threads_batch;
@@ -138,10 +148,6 @@ int main(int argc, char ** argv) {
     int n_decode = 0;
 
     const auto t_main_start = ggml_time_us();
-
-    float alpha = 0.1;
-    float beta = 0.5;
-
     while (n_cur <= n_len) {
         // sample the next token
         {
