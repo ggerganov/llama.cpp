@@ -178,6 +178,13 @@ else
 	MK_CPPFLAGS += -DNDEBUG
 endif
 
+
+ifdef LLAMA_LTO
+	MK_CFLAGS   += -flto
+	MK_CXXFLAGS += -flto
+endif
+
+
 ifdef LLAMA_SANITIZE_THREAD
 	MK_CFLAGS   += -fsanitize=thread -g
 	MK_CXXFLAGS += -fsanitize=thread -g
