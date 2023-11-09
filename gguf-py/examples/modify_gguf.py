@@ -5,7 +5,7 @@ from pathlib import Path
 # Necessary to load the local gguf package
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gguf import GGUFReader # noqa: E402
+from gguf import GGUFReader  # noqa: E402
 
 def change_gguf(reader: GGUFReader, key: str, value: str) -> None:
     field = reader.get_field(key)
