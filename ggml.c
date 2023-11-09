@@ -28,6 +28,8 @@
 #include <unistd.h>
 #endif
 
+#include "ggml-cuda.h"
+
 #if defined(_MSC_VER)
 // disable "possible loss of data" to avoid hundreds of casts
 // we should just be careful :)
