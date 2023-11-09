@@ -31,11 +31,11 @@ int main(int argc, char ** argv) {
     float alpha = 0.1;
     float beta = 0.5;
 
-    if(argc >= 5){
+    if (argc >= 5) {
         alpha = std::stof(argv[4]);
     }
 
-    if(argc >= 6){
+    if (argc >= 6) {
         beta = std::stof(argv[5]);
     }
 
@@ -117,8 +117,6 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s", llama_token_to_piece(ctx_expert, id).c_str());
     }
 
-    fflush(stderr);
-
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
 
@@ -160,7 +158,7 @@ int main(int argc, char ** argv) {
 
             for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
                 float cd_logit = std::numeric_limits<float>::lowest();
-                if(logits_expert[token_id] > alpha){
+                if (logits_expert[token_id] > alpha) {
                     cd_logit = (1+beta)*logits_expert[token_id] - beta*logits_amateur[token_id];
                 }
                 candidates.emplace_back(llama_token_data{ token_id, cd_logit, 0.0f });
@@ -178,7 +176,6 @@ int main(int argc, char ** argv) {
             }
 
             LOG_TEE("%s", llama_token_to_piece(ctx_expert, new_token_id_expert).c_str());
-            fflush(stdout);
 
             // prepare the next batch
             llama_batch_clear(batch);
