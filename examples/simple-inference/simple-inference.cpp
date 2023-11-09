@@ -409,11 +409,8 @@ bool gen_ctx::init_batches() {
 #ifndef LLAMA_NO_SEQREP_SAMPLER
         seqrep_rewind_slot & rw_slot = bs.rewind_state.get_rewind_slot(0);
         rw_slot.ctx_sampling = llama_sampling_init(params.sparams);
-        // llama_sampling_cp(bs.ctx_sampling, rw_slot.ctx_sampling);
-        // bs.rewind_state.set_logits_slot(ctx, 0, (prompt_size - 1) % params.n_batch);
 #endif
         ctxs_seq.push_back(bs);
-        // if (i > 0) llama_kv_cache_seq_cp(ctx, 0, i, 0, prompt_size);
     }
     if (!ctxs_seq.empty()) {
         focused_sequence = ctxs_seq.size() - 1;
