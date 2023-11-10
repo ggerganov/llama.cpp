@@ -46,8 +46,8 @@ class SpecialVocab:
                 file = sys.stderr,
             )
         for typ, tokid in self.special_token_ids.items():
-            handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
-            if handler is None:
+            id_handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
+            if id_handler is None:
                 print(
                     f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping',
                     file = sys.stderr,
@@ -55,11 +55,18 @@ class SpecialVocab:
                 continue
             if not quiet:
                 print(f'gguf: Setting special token type {typ} to {tokid}')
-            handler(tokid)
-        for typ, add in self.add_special_token.items():
+            id_handler(tokid)
+        for typ, value in self.add_special_token.items():
+            add_handler: Callable[[bool], None] | None = getattr(gw, f'add_add_{typ}_token', None)
+            if add_handler is None:
+                print(
+                    f'gguf: WARNING: No handler for add_{typ}_token with value {value} - skipping',
+                    file = sys.stderr,
+                )
+                continue
             if not quiet:
-                print(f'gguf: Setting add special token type {typ} to {add}')
-            gw.add_bool(f'tokenizer.ggml.add_{typ}_token', add)
+                print(f'gguf: Setting add_{typ}_token to {value}')
+            add_handler(value)
 
     def _load(self, path: Path) -> None:
         self._try_load_from_tokenizer_json(path)

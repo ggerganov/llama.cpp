@@ -66,6 +66,8 @@ class Keys:
         UNK_ID     = "tokenizer.ggml.unknown_token_id"
         SEP_ID     = "tokenizer.ggml.seperator_token_id"
         PAD_ID     = "tokenizer.ggml.padding_token_id"
+        ADD_BOS    = "tokenizer.ggml.add_bos_token"
+        ADD_EOS    = "tokenizer.ggml.add_eos_token"
         HF_JSON    = "tokenizer.huggingface.json"
         RWKV       = "tokenizer.rwkv.world"
 
