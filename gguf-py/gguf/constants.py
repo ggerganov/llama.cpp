@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from enum import IntEnum, StrEnum, auto
+from enum import Enum, IntEnum, auto
 from typing import Any
 
 #
@@ -17,68 +17,57 @@ GGUF_DEFAULT_ALIGNMENT = 32
 #
 
 
-class GeneralKeys(StrEnum):
-    ARCHITECTURE         = "general.architecture"
-    QUANTIZATION_VERSION = "general.quantization_version"
-    ALIGNMENT            = "general.alignment"
-    NAME                 = "general.name"
-    AUTHOR               = "general.author"
-    URL                  = "general.url"
-    DESCRIPTION          = "general.description"
-    LICENSE              = "general.license"
-    SOURCE_URL           = "general.source.url"
-    SOURCE_HF_REPO       = "general.source.huggingface.repository"
-    FILE_TYPE            = "general.file_type"
-
-
-class AttentionKeys(StrEnum):
-    HEAD_COUNT        = "{arch}.attention.head_count"
-    HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
-    MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
-    CLAMP_KQV         = "{arch}.attention.clamp_kqv"
-    LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
-    LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
-
-
-class RopeKeys(StrEnum):
-    DIMENSION_COUNT      = "{arch}.rope.dimension_count"
-    FREQ_BASE            = "{arch}.rope.freq_base"
-    SCALING_TYPE         = "{arch}.rope.scaling.type"
-    SCALING_FACTOR       = "{arch}.rope.scaling.factor"
-    SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
-    SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
-
-
-class TokenizerKeys(StrEnum):
-    MODEL      = "tokenizer.ggml.model"
-    LIST       = "tokenizer.ggml.tokens"
-    TOKEN_TYPE = "tokenizer.ggml.token_type"
-    SCORES     = "tokenizer.ggml.scores"
-    MERGES     = "tokenizer.ggml.merges"
-    BOS_ID     = "tokenizer.ggml.bos_token_id"
-    EOS_ID     = "tokenizer.ggml.eos_token_id"
-    UNK_ID     = "tokenizer.ggml.unknown_token_id"
-    SEP_ID     = "tokenizer.ggml.seperator_token_id"
-    PAD_ID     = "tokenizer.ggml.padding_token_id"
-    HF_JSON    = "tokenizer.huggingface.json"
-    RWKV       = "tokenizer.rwkv.world"
-
-
-class LLMKeys(StrEnum):
-    CONTEXT_LENGTH        = "{arch}.context_length"
-    EMBEDDING_LENGTH      = "{arch}.embedding_length"
-    BLOCK_COUNT           = "{arch}.block_count"
-    FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
-    USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
-    TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
-
-
 class Keys:
-    GENERAL   = GeneralKeys
-    LLM       = LLMKeys
-    ATTENTION = AttentionKeys
-    ROPE      = RopeKeys
-    TOKENIZER = TokenizerKeys
+    class General:
+        ARCHITECTURE         = "general.architecture"
+        QUANTIZATION_VERSION = "general.quantization_version"
+        ALIGNMENT            = "general.alignment"
+        NAME                 = "general.name"
+        AUTHOR               = "general.author"
+        URL                  = "general.url"
+        DESCRIPTION          = "general.description"
+        LICENSE              = "general.license"
+        SOURCE_URL           = "general.source.url"
+        SOURCE_HF_REPO       = "general.source.huggingface.repository"
+        FILE_TYPE            = "general.file_type"
+
+    class LLM:
+        CONTEXT_LENGTH        = "{arch}.context_length"
+        EMBEDDING_LENGTH      = "{arch}.embedding_length"
+        BLOCK_COUNT           = "{arch}.block_count"
+        FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
+        USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
+        TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
+
+    class Attention:
+        HEAD_COUNT        = "{arch}.attention.head_count"
+        HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
+        MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
+        CLAMP_KQV         = "{arch}.attention.clamp_kqv"
+        LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
+        LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
+
+    class Rope:
+        DIMENSION_COUNT      = "{arch}.rope.dimension_count"
+        FREQ_BASE            = "{arch}.rope.freq_base"
+        SCALING_TYPE         = "{arch}.rope.scaling.type"
+        SCALING_FACTOR       = "{arch}.rope.scaling.factor"
+        SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
+        SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
+
+    class Tokenizer:
+        MODEL      = "tokenizer.ggml.model"
+        LIST       = "tokenizer.ggml.tokens"
+        TOKEN_TYPE = "tokenizer.ggml.token_type"
+        SCORES     = "tokenizer.ggml.scores"
+        MERGES     = "tokenizer.ggml.merges"
+        BOS_ID     = "tokenizer.ggml.bos_token_id"
+        EOS_ID     = "tokenizer.ggml.eos_token_id"
+        UNK_ID     = "tokenizer.ggml.unknown_token_id"
+        SEP_ID     = "tokenizer.ggml.seperator_token_id"
+        PAD_ID     = "tokenizer.ggml.padding_token_id"
+        HF_JSON    = "tokenizer.huggingface.json"
+        RWKV       = "tokenizer.rwkv.world"
 
 
 #
@@ -343,7 +332,7 @@ class TokenType(IntEnum):
     BYTE         = 6
 
 
-class RopeScalingType(StrEnum):
+class RopeScalingType(Enum):
     NONE   = 'none'
     LINEAR = 'linear'
     YARN   = 'yarn'
@@ -428,17 +417,17 @@ GGML_QUANT_SIZES = {
 # Aliases for backward compatibility.
 
 # general
-KEY_GENERAL_ARCHITECTURE         = Keys.GENERAL.ARCHITECTURE
-KEY_GENERAL_QUANTIZATION_VERSION = Keys.GENERAL.QUANTIZATION_VERSION
-KEY_GENERAL_ALIGNMENT            = Keys.GENERAL.ALIGNMENT
-KEY_GENERAL_NAME                 = Keys.GENERAL.NAME
-KEY_GENERAL_AUTHOR               = Keys.GENERAL.AUTHOR
-KEY_GENERAL_URL                  = Keys.GENERAL.URL
-KEY_GENERAL_DESCRIPTION          = Keys.GENERAL.DESCRIPTION
-KEY_GENERAL_LICENSE              = Keys.GENERAL.LICENSE
-KEY_GENERAL_SOURCE_URL           = Keys.GENERAL.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO       = Keys.GENERAL.SOURCE_HF_REPO
-KEY_GENERAL_FILE_TYPE            = Keys.GENERAL.FILE_TYPE
+KEY_GENERAL_ARCHITECTURE         = Keys.General.ARCHITECTURE
+KEY_GENERAL_QUANTIZATION_VERSION = Keys.General.QUANTIZATION_VERSION
+KEY_GENERAL_ALIGNMENT            = Keys.General.ALIGNMENT
+KEY_GENERAL_NAME                 = Keys.General.NAME
+KEY_GENERAL_AUTHOR               = Keys.General.AUTHOR
+KEY_GENERAL_URL                  = Keys.General.URL
+KEY_GENERAL_DESCRIPTION          = Keys.General.DESCRIPTION
+KEY_GENERAL_LICENSE              = Keys.General.LICENSE
+KEY_GENERAL_SOURCE_URL           = Keys.General.SOURCE_URL
+KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
+KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
 KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
@@ -449,31 +438,31 @@ KEY_USE_PARALLEL_RESIDUAL = Keys.LLM.USE_PARALLEL_RESIDUAL
 KEY_TENSOR_DATA_LAYOUT    = Keys.LLM.TENSOR_DATA_LAYOUT
 
 # attention
-KEY_ATTENTION_HEAD_COUNT        = Keys.ATTENTION.HEAD_COUNT
-KEY_ATTENTION_HEAD_COUNT_KV     = Keys.ATTENTION.HEAD_COUNT_KV
-KEY_ATTENTION_MAX_ALIBI_BIAS    = Keys.ATTENTION.MAX_ALIBI_BIAS
-KEY_ATTENTION_CLAMP_KQV         = Keys.ATTENTION.CLAMP_KQV
-KEY_ATTENTION_LAYERNORM_EPS     = Keys.ATTENTION.LAYERNORM_EPS
-KEY_ATTENTION_LAYERNORM_RMS_EPS = Keys.ATTENTION.LAYERNORM_RMS_EPS
+KEY_ATTENTION_HEAD_COUNT        = Keys.Attention.HEAD_COUNT
+KEY_ATTENTION_HEAD_COUNT_KV     = Keys.Attention.HEAD_COUNT_KV
+KEY_ATTENTION_MAX_ALIBI_BIAS    = Keys.Attention.MAX_ALIBI_BIAS
+KEY_ATTENTION_CLAMP_KQV         = Keys.Attention.CLAMP_KQV
+KEY_ATTENTION_LAYERNORM_EPS     = Keys.Attention.LAYERNORM_EPS
+KEY_ATTENTION_LAYERNORM_RMS_EPS = Keys.Attention.LAYERNORM_RMS_EPS
 
 # RoPE
-KEY_ROPE_DIMENSION_COUNT      = Keys.ROPE.DIMENSION_COUNT
-KEY_ROPE_FREQ_BASE            = Keys.ROPE.FREQ_BASE
-KEY_ROPE_SCALING_TYPE         = Keys.ROPE.SCALING_TYPE
-KEY_ROPE_SCALING_FACTOR       = Keys.ROPE.SCALING_FACTOR
-KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.ROPE.SCALING_ORIG_CTX_LEN
-KEY_ROPE_SCALING_FINETUNED    = Keys.ROPE.SCALING_FINETUNED
+KEY_ROPE_DIMENSION_COUNT      = Keys.Rope.DIMENSION_COUNT
+KEY_ROPE_FREQ_BASE            = Keys.Rope.FREQ_BASE
+KEY_ROPE_SCALING_TYPE         = Keys.Rope.SCALING_TYPE
+KEY_ROPE_SCALING_FACTOR       = Keys.Rope.SCALING_FACTOR
+KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.Rope.SCALING_ORIG_CTX_LEN
+KEY_ROPE_SCALING_FINETUNED    = Keys.Rope.SCALING_FINETUNED
 
 # tokenization
-KEY_TOKENIZER_MODEL      = Keys.TOKENIZER.MODEL
-KEY_TOKENIZER_LIST       = Keys.TOKENIZER.LIST
-KEY_TOKENIZER_TOKEN_TYPE = Keys.TOKENIZER.TOKEN_TYPE
-KEY_TOKENIZER_SCORES     = Keys.TOKENIZER.SCORES
-KEY_TOKENIZER_MERGES     = Keys.TOKENIZER.MERGES
-KEY_TOKENIZER_BOS_ID     = Keys.TOKENIZER.BOS_ID
-KEY_TOKENIZER_EOS_ID     = Keys.TOKENIZER.EOS_ID
-KEY_TOKENIZER_UNK_ID     = Keys.TOKENIZER.UNK_ID
-KEY_TOKENIZER_SEP_ID     = Keys.TOKENIZER.SEP_ID
-KEY_TOKENIZER_PAD_ID     = Keys.TOKENIZER.PAD_ID
-KEY_TOKENIZER_HF_JSON    = Keys.TOKENIZER.HF_JSON
-KEY_TOKENIZER_RWKV       = Keys.TOKENIZER.RWKV
+KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
+KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
+KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
+KEY_TOKENIZER_MERGES     = Keys.Tokenizer.MERGES
+KEY_TOKENIZER_BOS_ID     = Keys.Tokenizer.BOS_ID
+KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
+KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
+KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
+KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
+KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
+KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV

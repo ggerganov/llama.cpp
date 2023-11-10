@@ -278,132 +278,120 @@ class GGUFWriter:
         self.fout.close()
 
     def add_architecture(self) -> None:
-        self.add_string(Keys.GENERAL.ARCHITECTURE, self.arch)
+        self.add_string(Keys.General.ARCHITECTURE, self.arch)
 
     def add_author(self, author: str) -> None:
-        self.add_string(Keys.GENERAL.AUTHOR, author)
+        self.add_string(Keys.General.AUTHOR, author)
 
     def add_tensor_data_layout(self, layout: str) -> None:
-        self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.value.format(arch=self.arch), layout)
+        self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_url(self, url: str) -> None:
-        self.add_string(Keys.GENERAL.URL, url)
+        self.add_string(Keys.General.URL, url)
 
     def add_description(self, description: str) -> None:
-        self.add_string(Keys.GENERAL.DESCRIPTION, description)
+        self.add_string(Keys.General.DESCRIPTION, description)
 
     def add_source_url(self, url: str) -> None:
-        self.add_string(Keys.GENERAL.SOURCE_URL, url)
+        self.add_string(Keys.General.SOURCE_URL, url)
 
     def add_source_hf_repo(self, repo: str) -> None:
-        self.add_string(Keys.GENERAL.SOURCE_HF_REPO, repo)
+        self.add_string(Keys.General.SOURCE_HF_REPO, repo)
 
     def add_file_type(self, ftype: int) -> None:
-        self.add_uint32(Keys.GENERAL.FILE_TYPE, ftype)
+        self.add_uint32(Keys.General.FILE_TYPE, ftype)
 
     def add_name(self, name: str) -> None:
-        self.add_string(Keys.GENERAL.NAME, name)
+        self.add_string(Keys.General.NAME, name)
 
     def add_quantization_version(self, quantization_version: GGMLQuantizationType) -> None:
         self.add_uint32(
-            Keys.GENERAL.QUANTIZATION_VERSION, quantization_version)
+            Keys.General.QUANTIZATION_VERSION, quantization_version)
 
     def add_custom_alignment(self, alignment: int) -> None:
         self.data_alignment = alignment
-        self.add_uint32(Keys.GENERAL.ALIGNMENT, alignment)
+        self.add_uint32(Keys.General.ALIGNMENT, alignment)
 
     def add_context_length(self, length: int) -> None:
-        self.add_uint32(
-            Keys.LLM.CONTEXT_LENGTH.value.format(arch=self.arch), length)
+        self.add_uint32(Keys.LLM.CONTEXT_LENGTH.format(arch=self.arch), length)
 
     def add_embedding_length(self, length: int) -> None:
-        self.add_uint32(
-            Keys.LLM.EMBEDDING_LENGTH.value.format(arch=self.arch), length)
+        self.add_uint32(Keys.LLM.EMBEDDING_LENGTH.format(arch=self.arch), length)
 
     def add_block_count(self, length: int) -> None:
-        self.add_uint32(
-            Keys.LLM.BLOCK_COUNT.value.format(arch=self.arch), length)
+        self.add_uint32(Keys.LLM.BLOCK_COUNT.format(arch=self.arch), length)
 
     def add_feed_forward_length(self, length: int) -> None:
-        self.add_uint32(
-            Keys.LLM.FEED_FORWARD_LENGTH.value.format(arch=self.arch), length)
+        self.add_uint32(Keys.LLM.FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool) -> None:
-        self.add_bool(
-            Keys.LLM.USE_PARALLEL_RESIDUAL.value.format(arch=self.arch), use)
+        self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
 
     def add_head_count(self, count: int) -> None:
-        self.add_uint32(
-            Keys.ATTENTION.HEAD_COUNT.value.format(arch=self.arch), count)
+        self.add_uint32(Keys.Attention.HEAD_COUNT.format(arch=self.arch), count)
 
     def add_head_count_kv(self, count: int) -> None:
-        self.add_uint32(
-            Keys.ATTENTION.HEAD_COUNT_KV.value.format(arch=self.arch), count)
+        self.add_uint32(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
 
     def add_max_alibi_bias(self, bias: float) -> None:
-        self.add_float32(
-            Keys.ATTENTION.MAX_ALIBI_BIAS.value.format(arch=self.arch), bias)
+        self.add_float32(Keys.Attention.MAX_ALIBI_BIAS.format(arch=self.arch), bias)
 
     def add_clamp_kqv(self, value: float) -> None:
-        self.add_float32(
-            Keys.ATTENTION.CLAMP_KQV.value.format(arch=self.arch), value)
+        self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
 
     def add_layer_norm_eps(self, value: float) -> None:
-        self.add_float32(
-            Keys.ATTENTION.LAYERNORM_EPS.value.format(arch=self.arch), value)
+        self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
     def add_layer_norm_rms_eps(self, value: float) -> None:
-        self.add_float32(
-            Keys.ATTENTION.LAYERNORM_RMS_EPS.value.format(arch=self.arch), value)
+        self.add_float32(Keys.Attention.LAYERNORM_RMS_EPS.format(arch=self.arch), value)
 
     def add_rope_dimension_count(self, count: int) -> None:
-        self.add_uint32(
-            Keys.ROPE.DIMENSION_COUNT.value.format(arch=self.arch), count)
+        self.add_uint32(Keys.Rope.DIMENSION_COUNT.format(arch=self.arch), count)
 
     def add_rope_freq_base(self, value: float) -> None:
-        self.add_float32(Keys.ROPE.FREQ_BASE.value.format(arch=self.arch), value)
+        self.add_float32(Keys.Rope.FREQ_BASE.format(arch=self.arch), value)
 
     def add_rope_scaling_type(self, value: RopeScalingType) -> None:
-        self.add_string(Keys.ROPE.SCALING_TYPE.value.format(arch=self.arch), value)
+        self.add_string(Keys.Rope.SCALING_TYPE.format(arch=self.arch), value.value)
 
     def add_rope_scaling_factor(self, value: float) -> None:
-        self.add_float32(Keys.ROPE.SCALING_FACTOR.value.format(arch=self.arch), value)
+        self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
 
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
-        self.add_uint32(Keys.ROPE.SCALING_ORIG_CTX_LEN.value.format(arch=self.arch), value)
+        self.add_uint32(Keys.Rope.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)
 
     def add_rope_scaling_finetuned(self, value: bool) -> None:
-        self.add_bool(Keys.ROPE.SCALING_FINETUNED.value.format(arch=self.arch), value)
+        self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
 
     def add_tokenizer_model(self, model: str) -> None:
-        self.add_string(Keys.TOKENIZER.MODEL, model)
+        self.add_string(Keys.Tokenizer.MODEL, model)
 
     def add_token_list(self, tokens: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
-        self.add_array(Keys.TOKENIZER.LIST, tokens)
+        self.add_array(Keys.Tokenizer.LIST, tokens)
 
     def add_token_merges(self, merges: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
-        self.add_array(Keys.TOKENIZER.MERGES, merges)
+        self.add_array(Keys.Tokenizer.MERGES, merges)
 
     def add_token_types(self, types: Sequence[TokenType] | Sequence[int]) -> None:
-        self.add_array(Keys.TOKENIZER.TOKEN_TYPE, types)
+        self.add_array(Keys.Tokenizer.TOKEN_TYPE, types)
 
     def add_token_scores(self, scores: Sequence[float]) -> None:
-        self.add_array(Keys.TOKENIZER.SCORES, scores)
+        self.add_array(Keys.Tokenizer.SCORES, scores)
 
     def add_bos_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.TOKENIZER.BOS_ID, id)
+        self.add_uint32(Keys.Tokenizer.BOS_ID, id)
 
     def add_eos_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.TOKENIZER.EOS_ID, id)
+        self.add_uint32(Keys.Tokenizer.EOS_ID, id)
 
     def add_unk_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.TOKENIZER.UNK_ID, id)
+        self.add_uint32(Keys.Tokenizer.UNK_ID, id)
 
     def add_sep_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.TOKENIZER.SEP_ID, id)
+        self.add_uint32(Keys.Tokenizer.SEP_ID, id)
 
     def add_pad_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.TOKENIZER.PAD_ID, id)
+        self.add_uint32(Keys.Tokenizer.PAD_ID, id)
 
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
