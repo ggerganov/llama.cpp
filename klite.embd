@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 94
+Current version: 95
 -Concedo
 -->
 
@@ -3168,6 +3168,7 @@ Current version: 94
 	const koboldcpp_abort_endpoint = "/api/extra/abort";
 	const koboldcpp_check_endpoint = "/api/extra/generate/check";
 	const koboldcpp_truemaxctxlen_endpoint = "/api/extra/true_max_context_length";
+	const koboldcpp_preloadstory_endpoint = "/api/extra/preloadstory";
 
 	const oai_models_endpoint = "/models";
 	const oai_submit_endpoint = "/completions";
@@ -6092,6 +6093,28 @@ Current version: 94
 											console.log("Failed to get true max ctx: " + error);
 										});
 
+										//and check if there's a kcpp savefile preloaded
+										let urls5 = [
+											apply_proxy_url(tmpep + koboldcpp_preloadstory_endpoint),
+										];
+										Promise.all(urls5.map(url => fetch(url)
+										.then(response => response.json())))
+										.then(values5 => {
+											let tmpstory = values5[0];
+											let is_kai = !(tmpstory.prompt==null);
+											if(is_kai)
+											{
+												let safe_to_overwrite = (gametext_arr.length == 0 && current_memory == "" && current_anote == "" && current_wi.length == 0 && redo_arr.length == 0);
+												if (localsettings.persist_session && !safe_to_overwrite) {
+													console.log("Preload story: Unsafe to overwrite");
+												} else {
+													kai_json_load(tmpstory, false);
+												}
+											}
+										}).catch(error => {
+											console.log("Failed to get preloaded story: " + error);
+										});
+
 									}else{
 										console.log("Unknown KoboldCpp Check Response: " + data);
 									}
@@ -7233,7 +7256,8 @@ Current version: 94
 		toggle_invert_colors();
 
 		hide_popups();
-		render_gametext(); //need to always autosave, so that we can switch back to non persistent sessions
+		autosave();//need to always autosave, so that we can switch back to non persistent sessions
+		render_gametext(false);
 	}
 
 	function toggle_instruct_tag_format()

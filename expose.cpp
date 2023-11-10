@@ -217,6 +217,9 @@ extern "C"
     int get_last_token_count() {
         return last_token_count;
     }
+    int get_total_gens() {
+        return total_gens;
+    }
     int get_last_stop_reason() {
         return (int)last_stop_reason;
     }

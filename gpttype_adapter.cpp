@@ -39,6 +39,7 @@ bool generation_finished;
 float last_process_time = 0;
 float last_eval_time = 0;
 int last_token_count = 0;
+int total_gens = 0;
 stop_reason last_stop_reason = stop_reason::INVALID;
 std::vector<std::string> generated_tokens;
 
@@ -597,8 +598,8 @@ void PurgeMissingTokens(llama_context * ctx, std::vector<int> &current_context_t
     //if passed, save beginning of LCQ from old ctx as p1
     //remove all tokens from old ctx between p0 and p1, updating both arrays and kv, then continue as normal
 
-    const int ShortfallThreshold = 200 + (nctx/40); //dont trigger shifting if the distance between trimstart and currhead < this
-    const int SlackAllowance = 50 + (nctx/80); //in case the end text is slightly modified, be forgiving
+    const int ShortfallThreshold = 200 + (nctx/20); //dont trigger shifting if the distance between trimstart and currhead < this
+    const int SlackAllowance = 50 + (nctx/60); //in case the end text is slightly modified, be forgiving
 
     int trimstart = 0;
     int new_tokens_len = new_context_tokens.size();
@@ -1955,6 +1956,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     last_eval_time = pt2;
     last_process_time = pt1;
     last_token_count = realnpredict;
+    total_gens += 1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 
     return output;
