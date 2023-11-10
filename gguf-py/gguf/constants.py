@@ -18,59 +18,59 @@ GGUF_DEFAULT_ALIGNMENT = 32
 
 
 class GeneralKeys(StrEnum):
-    ARCHITECTURE:         str = "general.architecture"
-    QUANTIZATION_VERSION: str = "general.quantization_version"
-    ALIGNMENT:            str = "general.alignment"
-    NAME:                 str = "general.name"
-    AUTHOR:               str = "general.author"
-    URL:                  str = "general.url"
-    DESCRIPTION:          str = "general.description"
-    LICENSE:              str = "general.license"
-    SOURCE_URL:           str = "general.source.url"
-    SOURCE_HF_REPO:       str = "general.source.huggingface.repository"
-    FILE_TYPE:            str = "general.file_type"
+    ARCHITECTURE         = "general.architecture"
+    QUANTIZATION_VERSION = "general.quantization_version"
+    ALIGNMENT            = "general.alignment"
+    NAME                 = "general.name"
+    AUTHOR               = "general.author"
+    URL                  = "general.url"
+    DESCRIPTION          = "general.description"
+    LICENSE              = "general.license"
+    SOURCE_URL           = "general.source.url"
+    SOURCE_HF_REPO       = "general.source.huggingface.repository"
+    FILE_TYPE            = "general.file_type"
 
 
 class AttentionKeys(StrEnum):
-    HEAD_COUNT:        str = "{arch}.attention.head_count"
-    HEAD_COUNT_KV:     str = "{arch}.attention.head_count_kv"
-    MAX_ALIBI_BIAS:    str = "{arch}.attention.max_alibi_bias"
-    CLAMP_KQV:         str = "{arch}.attention.clamp_kqv"
-    LAYERNORM_EPS:     str = "{arch}.attention.layer_norm_epsilon"
-    LAYERNORM_RMS_EPS: str = "{arch}.attention.layer_norm_rms_epsilon"
+    HEAD_COUNT        = "{arch}.attention.head_count"
+    HEAD_COUNT_KV     = "{arch}.attention.head_count_kv"
+    MAX_ALIBI_BIAS    = "{arch}.attention.max_alibi_bias"
+    CLAMP_KQV         = "{arch}.attention.clamp_kqv"
+    LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
+    LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
 
 
 class RopeKeys(StrEnum):
-    DIMENSION_COUNT:      str = "{arch}.rope.dimension_count"
-    FREQ_BASE:            str = "{arch}.rope.freq_base"
-    SCALING_TYPE:         str = "{arch}.rope.scaling.type"
-    SCALING_FACTOR:       str = "{arch}.rope.scaling.factor"
-    SCALING_ORIG_CTX_LEN: str = "{arch}.rope.scaling.original_context_length"
-    SCALING_FINETUNED:    str = "{arch}.rope.scaling.finetuned"
+    DIMENSION_COUNT      = "{arch}.rope.dimension_count"
+    FREQ_BASE            = "{arch}.rope.freq_base"
+    SCALING_TYPE         = "{arch}.rope.scaling.type"
+    SCALING_FACTOR       = "{arch}.rope.scaling.factor"
+    SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
+    SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
 
 
 class TokenizerKeys(StrEnum):
-    MODEL:      str = "tokenizer.ggml.model"
-    LIST:       str = "tokenizer.ggml.tokens"
-    TOKEN_TYPE: str = "tokenizer.ggml.token_type"
-    SCORES:     str = "tokenizer.ggml.scores"
-    MERGES:     str = "tokenizer.ggml.merges"
-    BOS_ID:     str = "tokenizer.ggml.bos_token_id"
-    EOS_ID:     str = "tokenizer.ggml.eos_token_id"
-    UNK_ID:     str = "tokenizer.ggml.unknown_token_id"
-    SEP_ID:     str = "tokenizer.ggml.seperator_token_id"
-    PAD_ID:     str = "tokenizer.ggml.padding_token_id"
-    HF_JSON:    str = "tokenizer.huggingface.json"
-    RWKV:       str = "tokenizer.rwkv.world"
+    MODEL      = "tokenizer.ggml.model"
+    LIST       = "tokenizer.ggml.tokens"
+    TOKEN_TYPE = "tokenizer.ggml.token_type"
+    SCORES     = "tokenizer.ggml.scores"
+    MERGES     = "tokenizer.ggml.merges"
+    BOS_ID     = "tokenizer.ggml.bos_token_id"
+    EOS_ID     = "tokenizer.ggml.eos_token_id"
+    UNK_ID     = "tokenizer.ggml.unknown_token_id"
+    SEP_ID     = "tokenizer.ggml.seperator_token_id"
+    PAD_ID     = "tokenizer.ggml.padding_token_id"
+    HF_JSON    = "tokenizer.huggingface.json"
+    RWKV       = "tokenizer.rwkv.world"
 
 
 class LLMKeys(StrEnum):
-    CONTEXT_LENGTH:        str = "{arch}.context_length"
-    EMBEDDING_LENGTH:      str = "{arch}.embedding_length"
-    BLOCK_COUNT:           str = "{arch}.block_count"
-    FEED_FORWARD_LENGTH:   str = "{arch}.feed_forward_length"
-    USE_PARALLEL_RESIDUAL: str = "{arch}.use_parallel_residual"
-    TENSOR_DATA_LAYOUT:    str = "{arch}.tensor_data_layout"
+    CONTEXT_LENGTH        = "{arch}.context_length"
+    EMBEDDING_LENGTH      = "{arch}.embedding_length"
+    BLOCK_COUNT           = "{arch}.block_count"
+    FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
+    USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
+    TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
 
 
 class Keys:
@@ -87,42 +87,42 @@ class Keys:
 
 
 class MODEL_ARCH(IntEnum):
-    LLAMA:     int = auto()
-    FALCON:    int = auto()
-    BAICHUAN:  int = auto()
-    GPT2:      int = auto()
-    GPTJ:      int = auto()
-    GPTNEOX:   int = auto()
-    MPT:       int = auto()
-    STARCODER: int = auto()
-    PERSIMMON: int = auto()
-    REFACT:    int = auto()
-    BERT:      int = auto()
-    BLOOM:     int = auto()
+    LLAMA     = auto()
+    FALCON    = auto()
+    BAICHUAN  = auto()
+    GPT2      = auto()
+    GPTJ      = auto()
+    GPTNEOX   = auto()
+    MPT       = auto()
+    STARCODER = auto()
+    PERSIMMON = auto()
+    REFACT    = auto()
+    BERT      = auto()
+    BLOOM     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
-    TOKEN_EMBD:      int = auto()
-    TOKEN_EMBD_NORM: int = auto()
-    TOKEN_TYPES:     int = auto()
-    POS_EMBD:        int = auto()
-    OUTPUT:          int = auto()
-    OUTPUT_NORM:     int = auto()
-    ROPE_FREQS:      int = auto()
-    ATTN_Q:          int = auto()
-    ATTN_K:          int = auto()
-    ATTN_V:          int = auto()
-    ATTN_QKV:        int = auto()
-    ATTN_OUT:        int = auto()
-    ATTN_NORM:       int = auto()
-    ATTN_NORM_2:     int = auto()
-    ATTN_ROT_EMBD:   int = auto()
-    FFN_GATE:        int = auto()
-    FFN_DOWN:        int = auto()
-    FFN_UP:          int = auto()
-    FFN_NORM:        int = auto()
-    ATTN_Q_NORM:     int = auto()
-    ATTN_K_NORM:     int = auto()
+    TOKEN_EMBD      = auto()
+    TOKEN_EMBD_NORM = auto()
+    TOKEN_TYPES     = auto()
+    POS_EMBD        = auto()
+    OUTPUT          = auto()
+    OUTPUT_NORM     = auto()
+    ROPE_FREQS      = auto()
+    ATTN_Q          = auto()
+    ATTN_K          = auto()
+    ATTN_V          = auto()
+    ATTN_QKV        = auto()
+    ATTN_OUT        = auto()
+    ATTN_NORM       = auto()
+    ATTN_NORM_2     = auto()
+    ATTN_ROT_EMBD   = auto()
+    FFN_GATE        = auto()
+    FFN_DOWN        = auto()
+    FFN_UP          = auto()
+    FFN_NORM        = auto()
+    ATTN_Q_NORM     = auto()
+    ATTN_K_NORM     = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -428,52 +428,52 @@ GGML_QUANT_SIZES = {
 # Aliases for backward compatibility.
 
 # general
-KEY_GENERAL_ARCHITECTURE:         str = Keys.GENERAL.ARCHITECTURE
-KEY_GENERAL_QUANTIZATION_VERSION: str = Keys.GENERAL.QUANTIZATION_VERSION
-KEY_GENERAL_ALIGNMENT:            str = Keys.GENERAL.ALIGNMENT
-KEY_GENERAL_NAME:                 str = Keys.GENERAL.NAME
-KEY_GENERAL_AUTHOR:               str = Keys.GENERAL.AUTHOR
-KEY_GENERAL_URL:                  str = Keys.GENERAL.URL
-KEY_GENERAL_DESCRIPTION:          str = Keys.GENERAL.DESCRIPTION
-KEY_GENERAL_LICENSE:              str = Keys.GENERAL.LICENSE
-KEY_GENERAL_SOURCE_URL:           str = Keys.GENERAL.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO:       str = Keys.GENERAL.SOURCE_HF_REPO
-KEY_GENERAL_FILE_TYPE:            str = Keys.GENERAL.FILE_TYPE
+KEY_GENERAL_ARCHITECTURE         = Keys.GENERAL.ARCHITECTURE
+KEY_GENERAL_QUANTIZATION_VERSION = Keys.GENERAL.QUANTIZATION_VERSION
+KEY_GENERAL_ALIGNMENT            = Keys.GENERAL.ALIGNMENT
+KEY_GENERAL_NAME                 = Keys.GENERAL.NAME
+KEY_GENERAL_AUTHOR               = Keys.GENERAL.AUTHOR
+KEY_GENERAL_URL                  = Keys.GENERAL.URL
+KEY_GENERAL_DESCRIPTION          = Keys.GENERAL.DESCRIPTION
+KEY_GENERAL_LICENSE              = Keys.GENERAL.LICENSE
+KEY_GENERAL_SOURCE_URL           = Keys.GENERAL.SOURCE_URL
+KEY_GENERAL_SOURCE_HF_REPO       = Keys.GENERAL.SOURCE_HF_REPO
+KEY_GENERAL_FILE_TYPE            = Keys.GENERAL.FILE_TYPE
 
 # LLM
-KEY_CONTEXT_LENGTH:        str = Keys.LLM.CONTEXT_LENGTH
-KEY_EMBEDDING_LENGTH:      str = Keys.LLM.EMBEDDING_LENGTH
-KEY_BLOCK_COUNT:           str = Keys.LLM.BLOCK_COUNT
-KEY_FEED_FORWARD_LENGTH:   str = Keys.LLM.FEED_FORWARD_LENGTH
-KEY_USE_PARALLEL_RESIDUAL: str = Keys.LLM.USE_PARALLEL_RESIDUAL
-KEY_TENSOR_DATA_LAYOUT:    str = Keys.LLM.TENSOR_DATA_LAYOUT
+KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
+KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
+KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT
+KEY_FEED_FORWARD_LENGTH   = Keys.LLM.FEED_FORWARD_LENGTH
+KEY_USE_PARALLEL_RESIDUAL = Keys.LLM.USE_PARALLEL_RESIDUAL
+KEY_TENSOR_DATA_LAYOUT    = Keys.LLM.TENSOR_DATA_LAYOUT
 
 # attention
-KEY_ATTENTION_HEAD_COUNT:        str = Keys.ATTENTION.HEAD_COUNT
-KEY_ATTENTION_HEAD_COUNT_KV:     str = Keys.ATTENTION.HEAD_COUNT_KV
-KEY_ATTENTION_MAX_ALIBI_BIAS:    str = Keys.ATTENTION.MAX_ALIBI_BIAS
-KEY_ATTENTION_CLAMP_KQV:         str = Keys.ATTENTION.CLAMP_KQV
-KEY_ATTENTION_LAYERNORM_EPS:     str = Keys.ATTENTION.LAYERNORM_EPS
-KEY_ATTENTION_LAYERNORM_RMS_EPS: str = Keys.ATTENTION.LAYERNORM_RMS_EPS
+KEY_ATTENTION_HEAD_COUNT        = Keys.ATTENTION.HEAD_COUNT
+KEY_ATTENTION_HEAD_COUNT_KV     = Keys.ATTENTION.HEAD_COUNT_KV
+KEY_ATTENTION_MAX_ALIBI_BIAS    = Keys.ATTENTION.MAX_ALIBI_BIAS
+KEY_ATTENTION_CLAMP_KQV         = Keys.ATTENTION.CLAMP_KQV
+KEY_ATTENTION_LAYERNORM_EPS     = Keys.ATTENTION.LAYERNORM_EPS
+KEY_ATTENTION_LAYERNORM_RMS_EPS = Keys.ATTENTION.LAYERNORM_RMS_EPS
 
 # RoPE
-KEY_ROPE_DIMENSION_COUNT:      str = Keys.ROPE.DIMENSION_COUNT
-KEY_ROPE_FREQ_BASE:            str = Keys.ROPE.FREQ_BASE
-KEY_ROPE_SCALING_TYPE:         str = Keys.ROPE.SCALING_TYPE
-KEY_ROPE_SCALING_FACTOR:       str = Keys.ROPE.SCALING_FACTOR
-KEY_ROPE_SCALING_ORIG_CTX_LEN: str = Keys.ROPE.SCALING_ORIG_CTX_LEN
-KEY_ROPE_SCALING_FINETUNED:    str = Keys.ROPE.SCALING_FINETUNED
+KEY_ROPE_DIMENSION_COUNT      = Keys.ROPE.DIMENSION_COUNT
+KEY_ROPE_FREQ_BASE            = Keys.ROPE.FREQ_BASE
+KEY_ROPE_SCALING_TYPE         = Keys.ROPE.SCALING_TYPE
+KEY_ROPE_SCALING_FACTOR       = Keys.ROPE.SCALING_FACTOR
+KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.ROPE.SCALING_ORIG_CTX_LEN
+KEY_ROPE_SCALING_FINETUNED    = Keys.ROPE.SCALING_FINETUNED
 
 # tokenization
-KEY_TOKENIZER_MODEL:      str = Keys.TOKENIZER.MODEL
-KEY_TOKENIZER_LIST:       str = Keys.TOKENIZER.LIST
-KEY_TOKENIZER_TOKEN_TYPE: str = Keys.TOKENIZER.TOKEN_TYPE
-KEY_TOKENIZER_SCORES:     str = Keys.TOKENIZER.SCORES
-KEY_TOKENIZER_MERGES:     str = Keys.TOKENIZER.MERGES
-KEY_TOKENIZER_BOS_ID:     str = Keys.TOKENIZER.BOS_ID
-KEY_TOKENIZER_EOS_ID:     str = Keys.TOKENIZER.EOS_ID
-KEY_TOKENIZER_UNK_ID:     str = Keys.TOKENIZER.UNK_ID
-KEY_TOKENIZER_SEP_ID:     str = Keys.TOKENIZER.SEP_ID
-KEY_TOKENIZER_PAD_ID:     str = Keys.TOKENIZER.PAD_ID
-KEY_TOKENIZER_HF_JSON:    str = Keys.TOKENIZER.HF_JSON
-KEY_TOKENIZER_RWKV:       str = Keys.TOKENIZER.RWKV
+KEY_TOKENIZER_MODEL      = Keys.TOKENIZER.MODEL
+KEY_TOKENIZER_LIST       = Keys.TOKENIZER.LIST
+KEY_TOKENIZER_TOKEN_TYPE = Keys.TOKENIZER.TOKEN_TYPE
+KEY_TOKENIZER_SCORES     = Keys.TOKENIZER.SCORES
+KEY_TOKENIZER_MERGES     = Keys.TOKENIZER.MERGES
+KEY_TOKENIZER_BOS_ID     = Keys.TOKENIZER.BOS_ID
+KEY_TOKENIZER_EOS_ID     = Keys.TOKENIZER.EOS_ID
+KEY_TOKENIZER_UNK_ID     = Keys.TOKENIZER.UNK_ID
+KEY_TOKENIZER_SEP_ID     = Keys.TOKENIZER.SEP_ID
+KEY_TOKENIZER_PAD_ID     = Keys.TOKENIZER.PAD_ID
+KEY_TOKENIZER_HF_JSON    = Keys.TOKENIZER.HF_JSON
+KEY_TOKENIZER_RWKV       = Keys.TOKENIZER.RWKV
