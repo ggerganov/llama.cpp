@@ -583,7 +583,7 @@ From the unzipped folder, open a terminal/cmd window here and place a pre-conver
 
 ### Memory/Disk Requirements
 
-As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
+	As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
 | Model | Original size | Quantized size (4-bit) |
 |------:|--------------:|-----------------------:|

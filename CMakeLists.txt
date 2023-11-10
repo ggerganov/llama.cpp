@@ -1,7 +1,26 @@
 cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
 
+if (NOT MSVC)
+    set(cuda_flags -Wno-pedantic)
+endif()
+
+set(LLAMA_CUBLAS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(LLAMA_CUDA_F16 ON)
+set(LLAMA_ACCELERATE ON)
+set(LLAMA_K_QUANTS ON)
+
+#-DLLAMA_NATIVE=off
+set(LLAMA_AVX ON)
+set(LLAMA_AVX2 OFF)
+set(LLAMA_AVX512 OFF)
+set(LLAMA_FMA OFF)
+set(LLAMA_F16C OFF)
+set(CMAKE_CUDA_FLAGS "--verbose") #
+set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
+set(CUDACXX /usr/local/cuda-12.2/bin/nvcc)
+#GGML_USE_CUBLAS
 
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -77,9 +96,9 @@ endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
-option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
+option(LLAMA_BLAS                            "llama: use BLAS"                                  ON)
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
-option(LLAMA_CUBLAS                          "llama: use CUDA"                                  OFF)
+option(LLAMA_CUBLAS                          "llama: use CUDA"                                  ON)
 #option(LLAMA_CUDA_CUBLAS                     "llama: use cuBLAS for prompt processing"          OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(LLAMA_CUDA_FORCE_MMQ                  "llama: use mmq kernels instead of cuBLAS"         OFF)
@@ -230,7 +249,12 @@ if (LLAMA_BLAS)
 
         message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
         add_compile_options(${BLAS_LINKER_FLAGS})
-        add_compile_definitions(GGML_USE_OPENBLAS)
+
+	# from https://github.com/NVIDIA/cutlass
+	make_directory("${PROJECT_BINARY_DIR}/nvcc_tmp")
+	set(cuda_flags --keep "SHELL:--keep-dir ${PROJECT_BINARY_DIR}/nvcc_tmp" ${cuda_flags})
+
+	#        add_compile_definitions(GGML_USE_OPENBLAS)
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
@@ -272,6 +296,7 @@ if (LLAMA_CUBLAS)
         endif()
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+
         if (DEFINED LLAMA_CUDA_DMMV_Y)
             add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_DMMV_Y}) # for backwards compatibility
         endif()
@@ -420,23 +445,23 @@ if (LLAMA_ALL_WARNINGS)
         # todo : msvc
     endif()
 
-    set(c_flags   ${c_flags}   ${warning_flags})
-    set(cxx_flags ${cxx_flags} ${warning_flags})
+    set(c_flags   ${c_flags} -save-temps --verbose  ${warning_flags})
+    set(cxx_flags ${cxx_flags} -save-temps --verbose ${warning_flags})
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${host_cxx_flags}>")
 
 endif()
 
-if (NOT MSVC)
-    set(cuda_flags -Wno-pedantic)
-endif()
 set(cuda_flags ${cxx_flags} -use_fast_math ${cuda_flags})
 
 list(JOIN host_cxx_flags " " cuda_host_flags)  # pass host compiler flags as a single argument
 if (NOT cuda_host_flags STREQUAL "")
     set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_host_flags})
 endif()
+
+# 
+set(cuda_flags --verbose -G  ${cuda_flags})
 
 add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
 
@@ -476,6 +501,8 @@ if (NOT MSVC)
             add_link_options(-static-libgcc -static-libstdc++)
         endif()
     endif()
+    add_link_options("-Wl,-Map=${TARGET}.map")
+
     if (LLAMA_GPROF)
         add_compile_options(-pg)
     endif()
