@@ -14,51 +14,19 @@ if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 
 from gguf import GGUFReader, GGUFValueType  # noqa: E402
 
 
-# For more information about what field.parts and field.data represent,
-# please see the comments in the modify_gguf.py example.
-def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
+def get_file_host_endian(reader: GGUFReader) -> tuple[str, str]:
     host_endian = 'LITTLE' if np.uint32(1) == np.uint32(1).newbyteorder("<") else 'BIG'
     if reader.byte_order == 'S':
         file_endian = 'BIG' if host_endian == 'LITTLE' else 'LITTLE'
     else:
         file_endian = host_endian
-    if args.json:
-        import json
-        metadata: dict[str, Any] = {}
-        tensors: dict[str, Any] = {}
-        result = {
-            "filename": args.model,
-            "endian": file_endian,
-            "metadata": metadata,
-            "tensors": tensors,
-        }
-        for field in reader.fields.values():
-            curr: dict[str, Any] = {
-                "type": field.types[0].name if field.types else 'UNKNOWN',
-                "offset": field.offset,
-            }
-            metadata[field.name] = curr
-            if field.types[:1] == [GGUFValueType.ARRAY]:
-                curr["array_types"] = [t.name for t in field.types][1:]
-                if not args.json_array:
-                    continue
-                itype = field.types[-1]
-                if itype == GGUFValueType.STRING:
-                    curr["value"] = [str(bytes(field.parts[idx]), encoding="utf-8") for idx in field.data]
-                else:
-                    curr["value"] = [pv for idx in field.data for pv in field.parts[idx].tolist()],
-            elif field.types[0] == GGUFValueType.STRING:
-                curr["value"] = str(bytes(field.parts[-1]), encoding="utf-8")
-            else:
-                curr["value"] = field.parts[-1].tolist()[0]
-        for tensor in reader.tensors:
-            tensors[tensor.name] = {
-                "shape": tensor.shape.tolist(),
-                "type": tensor.tensor_type.name,
-                "offset": tensor.field.offset,
-            }
-        json.dump(result, sys.stdout)
-        return
+    return (host_endian, file_endian)
+
+
+# For more information about what field.parts and field.data represent,
+# please see the comments in the modify_gguf.py example.
+def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
+    host_endian, file_endian = get_file_host_endian(reader)
     print(f'* File is {file_endian} endian, script is running on a {host_endian} endian host.')
     print(f'\n* Dumping {len(reader.fields)} key/value pair(s)')
     for n, field in enumerate(reader.fields.values(), 1):
@@ -85,6 +53,47 @@ def dump_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
         print(f'  {n:5}: {tensor.n_elements:10} | {prettydims} | {tensor.tensor_type.name:7} | {tensor.name}')
 
 
+def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
+    import json
+    host_endian, file_endian = get_file_host_endian(reader)
+    metadata: dict[str, Any] = {}
+    tensors: dict[str, Any] = {}
+    result = {
+        "filename": args.model,
+        "endian": file_endian,
+        "metadata": metadata,
+        "tensors": tensors,
+    }
+    for idx, field in enumerate(reader.fields.values()):
+        curr: dict[str, Any] = {
+            "index": idx,
+            "type": field.types[0].name if field.types else 'UNKNOWN',
+            "offset": field.offset,
+        }
+        metadata[field.name] = curr
+        if field.types[:1] == [GGUFValueType.ARRAY]:
+            curr["array_types"] = [t.name for t in field.types][1:]
+            if not args.json_array:
+                continue
+            itype = field.types[-1]
+            if itype == GGUFValueType.STRING:
+                curr["value"] = [str(bytes(field.parts[idx]), encoding="utf-8") for idx in field.data]
+            else:
+                curr["value"] = [pv for idx in field.data for pv in field.parts[idx].tolist()],
+        elif field.types[0] == GGUFValueType.STRING:
+            curr["value"] = str(bytes(field.parts[-1]), encoding="utf-8")
+        else:
+            curr["value"] = field.parts[-1].tolist()[0]
+    for idx, tensor in enumerate(reader.tensors):
+        tensors[tensor.name] = {
+            "index": idx,
+            "shape": tensor.shape.tolist(),
+            "type": tensor.tensor_type.name,
+            "offset": tensor.field.offset,
+        }
+    json.dump(result, sys.stdout)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Dump GGUF file metadata")
     parser.add_argument("model",           type=str,            help="GGUF format model filename")
@@ -95,7 +104,10 @@ def main() -> None:
     if not args.json:
         print(f'* Loading: {args.model}')
     reader = GGUFReader(args.model, 'r')
-    dump_metadata(reader, args)
+    if args.json:
+        dump_metadata_json(reader, args)
+    else:
+        dump_metadata(reader, args)
 
 
 if __name__ == '__main__':
