@@ -179,6 +179,7 @@ int main(int argc, char ** argv) {
             }
 
             LOG_TEE("%s", llama_token_to_piece(ctx_expert, new_token_id_expert).c_str());
+            fflush(stdout);
 
             // prepare the next batch
             llama_batch_clear(batch);
