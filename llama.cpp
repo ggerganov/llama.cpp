@@ -579,16 +579,16 @@ static int8_t llama_rope_scaling_type_from_string(const std::string & name) {
 
 static std::string gguf_data_to_str(enum gguf_type type, const void * data, int i) {
     switch (type) {
-        case GGUF_TYPE_UINT8:   return format("%u", ((const uint8_t *)data)[i]);
-        case GGUF_TYPE_INT8:    return format("%d", ((const int8_t *)data)[i]);
-        case GGUF_TYPE_UINT16:  return format("%u", ((const uint16_t *)data)[i]);
-        case GGUF_TYPE_INT16:   return format("%d", ((const int16_t *)data)[i]);
-        case GGUF_TYPE_UINT32:  return format("%u", ((const uint32_t *)data)[i]);
-        case GGUF_TYPE_INT32:   return format("%d", ((const int32_t *)data)[i]);
-        case GGUF_TYPE_UINT64:  return format("%" PRIu64, ((const uint64_t *)data)[i]);
-        case GGUF_TYPE_INT64:   return format("%" PRId64, ((const int64_t *)data)[i]);
-        case GGUF_TYPE_FLOAT32: return format("%f", ((const float *)data)[i]);
-        case GGUF_TYPE_FLOAT64: return format("%f", ((const double *)data)[i]);
+        case GGUF_TYPE_UINT8:   return std::to_string(((const uint8_t  *)data)[i]);
+        case GGUF_TYPE_INT8:    return std::to_string(((const int8_t   *)data)[i]);
+        case GGUF_TYPE_UINT16:  return std::to_string(((const uint16_t *)data)[i]);
+        case GGUF_TYPE_INT16:   return std::to_string(((const int16_t  *)data)[i]);
+        case GGUF_TYPE_UINT32:  return std::to_string(((const uint32_t *)data)[i]);
+        case GGUF_TYPE_INT32:   return std::to_string(((const int32_t  *)data)[i]);
+        case GGUF_TYPE_UINT64:  return std::to_string(((const uint64_t *)data)[i]);
+        case GGUF_TYPE_INT64:   return std::to_string(((const int64_t  *)data)[i]);
+        case GGUF_TYPE_FLOAT32: return std::to_string(((const float    *)data)[i]);
+        case GGUF_TYPE_FLOAT64: return std::to_string(((const double   *)data)[i]);
         case GGUF_TYPE_BOOL:    return ((const bool *)data)[i] ? "true" : "false";
         default:                return format("unknown type %d", type);
     }
