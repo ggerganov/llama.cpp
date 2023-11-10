@@ -1112,11 +1112,15 @@ def do_dump_model(model_plus: ModelPlus) -> None:
 
 
 def main(args_in: list[str] | None = None) -> None:
+    output_choices = ["f32", "f16"]
+    if np.uint32(1) == np.uint32(1).newbyteorder("<"):
+        # We currently only support Q8_0 output on little endian systems.
+        output_choices.append("q8_0")
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
     parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outtype",     choices=["f32", "f16", "q8_0"], help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
+    parser.add_argument("--outtype",     choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
