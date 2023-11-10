@@ -4209,7 +4209,7 @@ struct llm_build_context {
                 struct ggml_tensor * Kcur = ggml_concat(ctx0, krotated, kpass);
                 cb(Kcur, "Kcur", il);
 
-                struct ggml_tensor * Q = ggml_cont(ctx0, ggml_permute(ctx0, Qcur, 1, 2, 0, 3));
+                struct ggml_tensor * Q = ggml_cont(ctx0, ggml_permute(ctx0, Qcur, 2, 1, 0, 3));
                 cb(Q, "Q", il);
 
                 Kcur = ggml_cont(ctx0, ggml_permute(ctx0, Kcur, 2, 1, 0, 3));
