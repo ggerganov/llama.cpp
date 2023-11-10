@@ -6,780 +6,810 @@
    <meta name="viewport" content="width=device-width, initial-scale=1">
    <title>KoboldCpp API Documentation</title>
 
+   <!-- schema -->
    <script>
-   let spec = {
-         "components": {
-            "schemas": {
-               "BasicError": {
-                  "properties": {
-                     "msg": {
-                        "type": "string"
-                     },
-                     "type": {
-                        "type": "string"
-                     }
-                  },
-                  "required": [
-                     "msg",
-                     "type"
-                  ],
-                  "type": "object"
-               },
-               "BasicResult": {
-                  "properties": {
-                     "result": {
-                        "$ref": "#/components/schemas/BasicResultInner"
-                     }
-                  },
-                  "required": [
-                     "result"
-                  ],
-                  "type": "object"
-               },
-               "BasicResultInner": {
-                  "properties": {
-                     "result": {
-                        "type": "string"
-                     }
-                  },
-                  "required": [
-                     "result"
-                  ],
-                  "type": "object"
-               },
-               "GenerationInput": {
-                  "properties": {
-                     "max_context_length": {
-                        "description": "Maximum number of tokens to send to the model.",
-                        "minimum": 1,
-                        "type": "integer"
-                     },
-                     "max_length": {
-                        "description": "Number of tokens to generate.",
-                        "minimum": 1,
-                        "type": "integer"
-                     },
-                     "prompt": {
-                        "description": "This is the submission.",
-                        "type": "string"
-                     },
-                     "rep_pen": {
-                        "description": "Base repetition penalty value.",
-                        "minimum": 1,
-                        "type": "number"
-                     },
-                     "rep_pen_range": {
-                        "description": "Repetition penalty range.",
-                        "minimum": 0,
-                        "type": "integer"
-                     },
-                     "sampler_order": {
-                        "description": "Sampler order to be used. If N is the length of this array, then N must be greater than or equal to 6 and the array must be a permutation of the first N non-negative integers.",
-                        "items": {
-                           "type": "integer"
-                        },
-                        "minItems": 6,
-                        "type": "array"
-                     },
-                     "sampler_seed": {
-                        "description": "RNG seed to use for sampling. If not specified, the global RNG will be used.",
-                        "maximum": 999999,
-                        "minimum": 1,
-                        "type": "integer"
-                     },
-                     "stop_sequence": {
-                        "description": "An array of string sequences where the API will stop generating further tokens. The returned text WILL contain the stop sequence.",
-                        "items": {
+      let spec = {
+            "components": {
+               "schemas": {
+                  "BasicError": {
+                     "properties": {
+                        "msg": {
                            "type": "string"
                         },
-                        "type": "array"
-                     },
-                     "temperature": {
-                        "description": "Temperature value.",
-                        "exclusiveMinimum": 0,
-                        "type": "number"
-                     },
-                     "tfs": {
-                        "description": "Tail free sampling value.",
-                        "maximum": 1,
-                        "minimum": 0,
-                        "type": "number"
-                     },
-                     "top_a": {
-                        "description": "Top-a sampling value.",
-                        "minimum": 0,
-                        "type": "number"
-                     },
-                     "top_k": {
-                        "description": "Top-k sampling value.",
-                        "minimum": 0,
-                        "type": "integer"
-                     },
-                     "top_p": {
-                        "description": "Top-p sampling value.",
-                        "maximum": 1,
-                        "minimum": 0,
-                        "type": "number"
-                     },
-                     "min_p": {
-                        "description": "Min-p sampling value.",
-                        "maximum": 1,
-                        "minimum": 0,
-                        "type": "number"
-                     },
-                     "typical": {
-                        "description": "Typical sampling value.",
-                        "maximum": 1,
-                        "minimum": 0,
-                        "type": "number"
-                     },
-                     "use_default_badwordsids": {
-                        "default": false,
-                        "description": "If true, prevents the EOS token from being generated (Ban EOS). For unbantokens, set this to false.",
-                        "type": "boolean"
-                     },
-                     "mirostat": {
-                        "description": "KoboldCpp ONLY. Sets the mirostat mode, 0=disabled, 1=mirostat_v1, 2=mirostat_v2",
-                        "minimum": 0,
-                        "maximum": 2,
-                        "type": "number"
-                     },
-                     "mirostat_tau": {
-                        "description": "KoboldCpp ONLY. Mirostat tau value.",
-                        "exclusiveMinimum": 0,
-                        "type": "number"
-                     },
-                     "mirostat_eta": {
-                        "description": "KoboldCpp ONLY. Mirostat eta value.",
-                        "exclusiveMinimum": 0,
-                        "type": "number"
-                     },
-                     "genkey": {
-                        "description": "KoboldCpp ONLY. A unique genkey set by the user. When checking a polled-streaming request, use this key to be able to fetch pending text even if multiuser is enabled.",
-                        "type": "string"
-                     },
-                     "grammar": {
-                        "description": "KoboldCpp ONLY. A string containing the GBNF grammar to use.",
-                        "type": "string"
-                     },
-                     "grammar_retain_state": {
-                        "default": false,
-                        "description": "KoboldCpp ONLY. If true, retains the previous generation's grammar state, otherwise it is reset on new generation.",
-                        "type": "boolean"
-                     },
-                     "memory": {
-                        "description": "KoboldCpp ONLY. If set, forcefully appends this string to the beginning of any submitted prompt text. If resulting context exceeds the limit, forcefully overwrites text from the beginning of the main prompt until it can fit. Useful to guarantee full memory insertion even when you cannot determine exact token count.",
-                        "type": "string"
-                     },
-                      "trim_stop": {
-                        "default": false,
-                        "description": "KoboldCpp ONLY. If true, also removes detected stop_sequences from the output and truncates all text after them. Does not work with SSE streaming.",
-                        "type": "boolean"
-                     }
-                  },
-                  "required": [
-                     "prompt"
-                  ],
-                  "type": "object"
-               },
-               "GenerationOutput": {
-                  "properties": {
-                     "results": {
-                        "description": "Array of generated outputs.",
-                        "items": {
-                           "$ref": "#/components/schemas/GenerationResult"
-                        },
-                        "type": "array"
-                     }
-                  },
-                  "required": [
-                     "results"
-                  ],
-                  "type": "object"
-               },
-               "GenerationResult": {
-                  "properties": {
-                     "text": {
-                        "description": "Generated output as plain text.",
-                        "type": "string"
-                     }
-                  },
-                  "required": [
-                     "text"
-                  ],
-                  "type": "object"
-               },
-               "MaxContextLengthSetting": {
-                  "properties": {
-                     "value": {
-                        "minimum": 8,
-                        "type": "integer"
-                     }
-                  },
-                  "required": [
-                     "value"
-                  ],
-                  "type": "object"
-               },
-               "MaxLengthSetting": {
-                  "properties": {
-                     "value": {
-                        "minimum": 1,
-                        "type": "integer"
-                     }
-                  },
-                  "required": [
-                     "value"
-                  ],
-                  "type": "object"
-               },
-               "ServerBusyError": {
-                  "properties": {
-                     "detail": {
-                        "$ref": "#/components/schemas/BasicError"
-                     }
-                  },
-                  "required": [
-                     "detail"
-                  ],
-                  "type": "object"
-               },
-               "ValueResult": {
-                  "properties": {
-                     "value": {
-                        "type": "integer"
-                     }
-                  },
-                  "required": [
-                     "value"
-                  ],
-                  "type": "object"
-               },
-               "KcppVersion": {
-                  "properties": {
-                     "result": {
-                        "type": "string"
-                     },
-                     "version": {
-                        "type": "string"
-                     }
-                  },
-                  "required": [
-                     "version"
-                  ],
-                  "type": "object"
-               },
-               "KcppPerf": {
-                  "properties": {
-                     "last_process": {
-                        "type": "number",
-                        "description": "Last processing time in seconds."
-                     },
-                     "last_eval": {
-                        "type": "number",
-                        "description": "Last evaluation time in seconds."
-                     },
-                     "last_token_count": {
-                        "type": "integer",
-                        "description": "Last token count."
-                     },
-                     "stop_reason": {
-                        "type": "integer",
-                        "description": "Reason the generation stopped. INVALID=-1, OUT_OF_TOKENS=0, EOS_TOKEN=1, CUSTOM_STOPPER=2"
-                     },
-                     "queue": {
-                        "type": "integer",
-                        "description": "Length of generation queue."
-                     },
-                     "idle": {
-                        "type": "integer",
-                        "description": "Status of backend, busy or idle."
-                     }
-                  },
-                  "required": [
-                     "version"
-                  ],
-                  "type": "object"
-               }
-            }
-         },
-         "info": {
-            "title": "KoboldCpp API",
-            "version": "1.46"
-         },
-         "openapi": "3.0.3",
-         "paths": {
-            "/v1/config/max_context_length": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "value": 2048
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/MaxContextLengthSetting"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Retrieve the current max context length setting value that horde sees",
-                  "tags": [
-                     "v1"
-                  ]
-               }
-            },
-            "/v1/config/max_length": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "value": 80
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/MaxLengthSetting"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Retrieve the current max length (amount to generate) setting value",
-                  "tags": [
-                     "v1"
-                  ]
-               }
-            },
-            "/v1/generate": {
-               "post": {
-                  "description": "Generates text given a prompt and generation settings.\n\nUnspecified values are set to defaults.",
-                  "requestBody": {
-                     "content": {
-                        "application/json": {
-                           "example": {
-                              "prompt": "Niko the kobold stalked carefully down the alley, his small scaly figure obscured by a dusky cloak that fluttered lightly in the cold winter breeze.",
-                              "temperature": 0.5,
-                              "top_p": 0.9
-                           },
-                           "schema": {
-                              "$ref": "#/components/schemas/GenerationInput"
-                           }
+                        "type": {
+                           "type": "string"
                         }
                      },
-                     "required": true
+                     "required": [
+                        "msg",
+                        "type"
+                     ],
+                     "type": "object"
                   },
-                  "responses": {
-                     "200": {
+                  "BasicResult": {
+                     "properties": {
+                        "result": {
+                           "$ref": "#/components/schemas/BasicResultInner"
+                        }
+                     },
+                     "required": [
+                        "result"
+                     ],
+                     "type": "object"
+                  },
+                  "BasicResultInner": {
+                     "properties": {
+                        "result": {
+                           "type": "string"
+                        }
+                     },
+                     "required": [
+                        "result"
+                     ],
+                     "type": "object"
+                  },
+                  "GenerationInput": {
+                     "properties": {
+                        "max_context_length": {
+                           "description": "Maximum number of tokens to send to the model.",
+                           "minimum": 1,
+                           "type": "integer"
+                        },
+                        "max_length": {
+                           "description": "Number of tokens to generate.",
+                           "minimum": 1,
+                           "type": "integer"
+                        },
+                        "prompt": {
+                           "description": "This is the submission.",
+                           "type": "string"
+                        },
+                        "rep_pen": {
+                           "description": "Base repetition penalty value.",
+                           "minimum": 1,
+                           "type": "number"
+                        },
+                        "rep_pen_range": {
+                           "description": "Repetition penalty range.",
+                           "minimum": 0,
+                           "type": "integer"
+                        },
+                        "sampler_order": {
+                           "description": "Sampler order to be used. If N is the length of this array, then N must be greater than or equal to 6 and the array must be a permutation of the first N non-negative integers.",
+                           "items": {
+                              "type": "integer"
+                           },
+                           "minItems": 6,
+                           "type": "array"
+                        },
+                        "sampler_seed": {
+                           "description": "RNG seed to use for sampling. If not specified, the global RNG will be used.",
+                           "maximum": 999999,
+                           "minimum": 1,
+                           "type": "integer"
+                        },
+                        "stop_sequence": {
+                           "description": "An array of string sequences where the API will stop generating further tokens. The returned text WILL contain the stop sequence.",
+                           "items": {
+                              "type": "string"
+                           },
+                           "type": "array"
+                        },
+                        "temperature": {
+                           "description": "Temperature value.",
+                           "exclusiveMinimum": 0,
+                           "type": "number"
+                        },
+                        "tfs": {
+                           "description": "Tail free sampling value.",
+                           "maximum": 1,
+                           "minimum": 0,
+                           "type": "number"
+                        },
+                        "top_a": {
+                           "description": "Top-a sampling value.",
+                           "minimum": 0,
+                           "type": "number"
+                        },
+                        "top_k": {
+                           "description": "Top-k sampling value.",
+                           "minimum": 0,
+                           "type": "integer"
+                        },
+                        "top_p": {
+                           "description": "Top-p sampling value.",
+                           "maximum": 1,
+                           "minimum": 0,
+                           "type": "number"
+                        },
+                        "min_p": {
+                           "description": "Min-p sampling value.",
+                           "maximum": 1,
+                           "minimum": 0,
+                           "type": "number"
+                        },
+                        "typical": {
+                           "description": "Typical sampling value.",
+                           "maximum": 1,
+                           "minimum": 0,
+                           "type": "number"
+                        },
+                        "use_default_badwordsids": {
+                           "default": false,
+                           "description": "If true, prevents the EOS token from being generated (Ban EOS). For unbantokens, set this to false.",
+                           "type": "boolean"
+                        },
+                        "mirostat": {
+                           "description": "KoboldCpp ONLY. Sets the mirostat mode, 0=disabled, 1=mirostat_v1, 2=mirostat_v2",
+                           "minimum": 0,
+                           "maximum": 2,
+                           "type": "number"
+                        },
+                        "mirostat_tau": {
+                           "description": "KoboldCpp ONLY. Mirostat tau value.",
+                           "exclusiveMinimum": 0,
+                           "type": "number"
+                        },
+                        "mirostat_eta": {
+                           "description": "KoboldCpp ONLY. Mirostat eta value.",
+                           "exclusiveMinimum": 0,
+                           "type": "number"
+                        },
+                        "genkey": {
+                           "description": "KoboldCpp ONLY. A unique genkey set by the user. When checking a polled-streaming request, use this key to be able to fetch pending text even if multiuser is enabled.",
+                           "type": "string"
+                        },
+                        "grammar": {
+                           "description": "KoboldCpp ONLY. A string containing the GBNF grammar to use.",
+                           "type": "string"
+                        },
+                        "grammar_retain_state": {
+                           "default": false,
+                           "description": "KoboldCpp ONLY. If true, retains the previous generation's grammar state, otherwise it is reset on new generation.",
+                           "type": "boolean"
+                        },
+                        "memory": {
+                           "description": "KoboldCpp ONLY. If set, forcefully appends this string to the beginning of any submitted prompt text. If resulting context exceeds the limit, forcefully overwrites text from the beginning of the main prompt until it can fit. Useful to guarantee full memory insertion even when you cannot determine exact token count.",
+                           "type": "string"
+                        },
+                         "trim_stop": {
+                           "default": false,
+                           "description": "KoboldCpp ONLY. If true, also removes detected stop_sequences from the output and truncates all text after them. Does not work with SSE streaming.",
+                           "type": "boolean"
+                        }
+                     },
+                     "required": [
+                        "prompt"
+                     ],
+                     "type": "object"
+                  },
+                  "GenerationOutput": {
+                     "properties": {
+                        "results": {
+                           "description": "Array of generated outputs.",
+                           "items": {
+                              "$ref": "#/components/schemas/GenerationResult"
+                           },
+                           "type": "array"
+                        }
+                     },
+                     "required": [
+                        "results"
+                     ],
+                     "type": "object"
+                  },
+                  "GenerationResult": {
+                     "properties": {
+                        "text": {
+                           "description": "Generated output as plain text.",
+                           "type": "string"
+                        }
+                     },
+                     "required": [
+                        "text"
+                     ],
+                     "type": "object"
+                  },
+                  "MaxContextLengthSetting": {
+                     "properties": {
+                        "value": {
+                           "minimum": 8,
+                           "type": "integer"
+                        }
+                     },
+                     "required": [
+                        "value"
+                     ],
+                     "type": "object"
+                  },
+                  "MaxLengthSetting": {
+                     "properties": {
+                        "value": {
+                           "minimum": 1,
+                           "type": "integer"
+                        }
+                     },
+                     "required": [
+                        "value"
+                     ],
+                     "type": "object"
+                  },
+                  "ServerBusyError": {
+                     "properties": {
+                        "detail": {
+                           "$ref": "#/components/schemas/BasicError"
+                        }
+                     },
+                     "required": [
+                        "detail"
+                     ],
+                     "type": "object"
+                  },
+                  "ValueResult": {
+                     "properties": {
+                        "value": {
+                           "type": "integer"
+                        }
+                     },
+                     "required": [
+                        "value"
+                     ],
+                     "type": "object"
+                  },
+                  "KcppVersion": {
+                     "properties": {
+                        "result": {
+                           "type": "string"
+                        },
+                        "version": {
+                           "type": "string"
+                        }
+                     },
+                     "required": [
+                        "version"
+                     ],
+                     "type": "object"
+                  },
+                  "KcppPerf": {
+                     "properties": {
+                        "last_process": {
+                           "type": "number",
+                           "description": "Last processing time in seconds."
+                        },
+                        "last_eval": {
+                           "type": "number",
+                           "description": "Last evaluation time in seconds."
+                        },
+                        "last_token_count": {
+                           "type": "integer",
+                           "description": "Last token count."
+                        },
+                        "total_gens": {
+                           "type": "integer",
+                           "description": "Total requests generated since startup."
+                        },
+                        "stop_reason": {
+                           "type": "integer",
+                           "description": "Reason the generation stopped. INVALID=-1, OUT_OF_TOKENS=0, EOS_TOKEN=1, CUSTOM_STOPPER=2"
+                        },
+                        "queue": {
+                           "type": "integer",
+                           "description": "Length of generation queue."
+                        },
+                        "idle": {
+                           "type": "integer",
+                           "description": "Status of backend, busy or idle."
+                        }
+                     },
+                     "required": [
+                        "version"
+                     ],
+                     "type": "object"
+                  }
+               }
+            },
+            "info": {
+               "title": "KoboldCpp API",
+               "version": "1.46"
+            },
+            "openapi": "3.0.3",
+            "paths": {
+               "/v1/config/max_context_length": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "value": 2048
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/MaxContextLengthSetting"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Retrieve the current max context length setting value that horde sees",
+                     "tags": [
+                        "v1"
+                     ]
+                  }
+               },
+               "/v1/config/max_length": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "value": 80
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/MaxLengthSetting"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Retrieve the current max length (amount to generate) setting value",
+                     "tags": [
+                        "v1"
+                     ]
+                  }
+               },
+               "/v1/generate": {
+                  "post": {
+                     "description": "Generates text given a prompt and generation settings.\n\nUnspecified values are set to defaults.",
+                     "requestBody": {
                         "content": {
                            "application/json": {
                               "example": {
-                                 "results": [
-                                    {
-                                       "text": " Holding up his tail to keep it from dragging in the dirty snow that covered the cobblestone, he waited patiently for the butcher to turn his attention from his stall so that he could pilfer his next meal: a tender-looking chicken."
+                                 "prompt": "Niko the kobold stalked carefully down the alley, his small scaly figure obscured by a dusky cloak that fluttered lightly in the cold winter breeze.",
+                                 "temperature": 0.5,
+                                 "top_p": 0.9
+                              },
+                              "schema": {
+                                 "$ref": "#/components/schemas/GenerationInput"
+                              }
+                           }
+                        },
+                        "required": true
+                     },
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "results": [
+                                       {
+                                          "text": " Holding up his tail to keep it from dragging in the dirty snow that covered the cobblestone, he waited patiently for the butcher to turn his attention from his stall so that he could pilfer his next meal: a tender-looking chicken."
+                                       }
+                                    ]
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/GenerationOutput"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        },
+                        "503": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "detail": {
+                                       "msg": "Server is busy; please try again later.",
+                                       "type": "service_unavailable"
                                     }
-                                 ]
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/GenerationOutput"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     },
-                     "503": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "detail": {
-                                    "msg": "Server is busy; please try again later.",
-                                    "type": "service_unavailable"
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/ServerBusyError"
                                  }
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/ServerBusyError"
                               }
-                           }
-                        },
-                        "description": "Server is busy"
-                     }
-                  },
-                  "summary": "Generate text with a specified prompt",
-                  "tags": [
-                     "v1"
-                  ]
-               }
-            },
-            "/v1/info/version": {
-               "get": {
-                  "description": "Returns the matching *KoboldAI* (United) version of the API that you are currently using. This is not the same as the KoboldCpp API version - this is used to feature match against KoboldAI United.",
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "result": "1.2.5"
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/BasicResult"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Current KoboldAI United API version",
-                  "tags": [
-                     "v1"
-                  ]
-               }
-            },
-            "/v1/model": {
-               "get": {
-                  "description": "Gets the current model display name, set with hordeconfig.",
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "result": "koboldcpp/airoboros-l2-7b-2.2"
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/BasicResult"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Retrieve the current model string from hordeconfig",
-                  "tags": [
-                     "v1"
-                  ]
-               }
-            },
-            "/extra/true_max_context_length": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "value": 2048
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/MaxContextLengthSetting"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Retrieve the actual max context length setting value set from the launcher",
-                  "description": "Retrieve the actual max context length setting value set from the launcher",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/version": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "result": "KoboldCpp",
-                                 "version": "1.46"
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/KcppVersion"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "description": "Retrieve the KoboldCpp backend version",
-                  "summary": "Retrieve the KoboldCpp backend version",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/perf": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "last_process": 5.0,
-                                 "last_eval": 7.0,
-                                 "last_token_count": 80,
-                                 "stop_reason": 1,
-                                 "queue": 0,
-                                 "idle": 1
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/KcppPerf"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "description": "Retrieve the KoboldCpp recent performance information",
-                  "summary": "Retrieve the KoboldCpp recent performance information",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/generate/stream": {
-               "post": {
-                  "description": "Generates text given a prompt and generation settings, with SSE streaming.\n\nUnspecified values are set to defaults.\n\nSSE streaming establishes a persistent connection, returning ongoing process in the form of message events.\n\n``` \nevent: message\ndata: {data}\n\n```",
-                  "requestBody": {
-                     "content": {
-                        "application/json": {
-                           "example": {
-                              "prompt": "Niko the kobold stalked carefully down the alley, his small scaly figure obscured by a dusky cloak that fluttered lightly in the cold winter breeze.",
-                              "temperature": 0.5,
-                              "top_p": 0.9
                            },
-                           "schema": {
-                              "$ref": "#/components/schemas/GenerationInput"
-                           }
+                           "description": "Server is busy"
                         }
                      },
-                     "required": true
-                  },
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "results": [
-                                    {
-                                       "text": " Holding up his tail to keep it from dragging in the dirty snow that covered the cobblestone, he waited patiently for the butcher to turn his attention from his stall so that he could pilfer his next meal: a tender-looking chicken."
-                                    }
-                                 ]
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/GenerationOutput"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     },
-                     "503": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "detail": {
-                                    "msg": "Server is busy; please try again later.",
-                                    "type": "service_unavailable"
-                                 }
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/ServerBusyError"
-                              }
-                           }
-                        },
-                        "description": "Server is busy"
-                     }
-                  },
-                  "summary": "Generate text with a specified prompt. SSE streamed results.",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/generate/check": {
-               "get": {
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "results": [
-                                    {
-                                       "text": ", my name is Nik"
-                                    }
-                                 ]
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/GenerationOutput"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Poll the incomplete results of the currently ongoing text generation.",
-                  "description": "Poll the incomplete results of the currently ongoing text generation. Will not work when multiple requests are in queue.",
-                  "tags": [
-                     "extra"
-                  ]
+                     "summary": "Generate text with a specified prompt",
+                     "tags": [
+                        "v1"
+                     ]
+                  }
                },
-               "post": {
-                  "description": "Poll the incomplete results of the currently ongoing text generation. A unique genkey previously submitted allows polling even in multiuser mode.",
-                  "requestBody": {
-                     "content": {
-                        "application/json": {
-                           "example": {
-                              "genkey": "KCPP2342"
-                           },
-                           "schema": {
-                              "properties": {
-                                 "genkey": {
-                                    "type": "string",
-                                    "description": "A unique key used to identify this generation while it is in progress."
+               "/v1/info/version": {
+                  "get": {
+                     "description": "Returns the matching *KoboldAI* (United) version of the API that you are currently using. This is not the same as the KoboldCpp API version - this is used to feature match against KoboldAI United.",
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "result": "1.2.5"
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/BasicResult"
                                  }
-                              },
-                              "type": "object"
-                           }
+                              }
+                           },
+                           "description": "Successful request"
                         }
                      },
-                     "required": false
-                  },
-                  "responses": {
-                     "200": {
+                     "summary": "Current KoboldAI United API version",
+                     "tags": [
+                        "v1"
+                     ]
+                  }
+               },
+               "/v1/model": {
+                  "get": {
+                     "description": "Gets the current model display name, set with hordeconfig.",
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "result": "koboldcpp/airoboros-l2-7b-2.2"
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/BasicResult"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Retrieve the current model string from hordeconfig",
+                     "tags": [
+                        "v1"
+                     ]
+                  }
+               },
+               "/extra/true_max_context_length": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "value": 2048
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/MaxContextLengthSetting"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Retrieve the actual max context length setting value set from the launcher",
+                     "description": "Retrieve the actual max context length setting value set from the launcher",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/version": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "result": "KoboldCpp",
+                                    "version": "1.46"
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/KcppVersion"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "description": "Retrieve the KoboldCpp backend version",
+                     "summary": "Retrieve the KoboldCpp backend version",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/preloadstory": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "prompt": "Hello world",
+                                    "memory": "Some text",
+                                    "authorsnote": "",
+                                    "actions": [],
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "description": "Retrieves the KoboldCpp preloaded story, --preloadstory configures a prepared story json save file to be hosted on the server, which frontends (such as Kobold Lite) can access over the API.",
+                     "summary": "Retrieves the KoboldCpp preloaded story",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/perf": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "last_process": 5.0,
+                                    "last_eval": 7.0,
+                                    "last_token_count": 80,
+                                    "stop_reason": 1,
+                                    "queue": 0,
+                                    "total_gens": 3,
+                                    "idle": 1
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/KcppPerf"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "description": "Retrieve the KoboldCpp recent performance information",
+                     "summary": "Retrieve the KoboldCpp recent performance information",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/generate/stream": {
+                  "post": {
+                     "description": "Generates text given a prompt and generation settings, with SSE streaming.\n\nUnspecified values are set to defaults.\n\nSSE streaming establishes a persistent connection, returning ongoing process in the form of message events.\n\n``` \nevent: message\ndata: {data}\n\n```",
+                     "requestBody": {
                         "content": {
                            "application/json": {
                               "example": {
-                                 "results": [
-                                    {
-                                       "text": ", my name is Nik"
+                                 "prompt": "Niko the kobold stalked carefully down the alley, his small scaly figure obscured by a dusky cloak that fluttered lightly in the cold winter breeze.",
+                                 "temperature": 0.5,
+                                 "top_p": 0.9
+                              },
+                              "schema": {
+                                 "$ref": "#/components/schemas/GenerationInput"
+                              }
+                           }
+                        },
+                        "required": true
+                     },
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "results": [
+                                       {
+                                          "text": " Holding up his tail to keep it from dragging in the dirty snow that covered the cobblestone, he waited patiently for the butcher to turn his attention from his stall so that he could pilfer his next meal: a tender-looking chicken."
+                                       }
+                                    ]
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/GenerationOutput"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        },
+                        "503": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "detail": {
+                                       "msg": "Server is busy; please try again later.",
+                                       "type": "service_unavailable"
                                     }
-                                 ]
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/GenerationOutput"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Poll the incomplete results of the currently ongoing text generation. Supports multiuser mode.",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/tokencount": {
-               "post": {
-                  "description": "Counts the number of tokens in a string.",
-                  "requestBody": {
-                     "content": {
-                        "application/json": {
-                           "example": {
-                              "prompt": "Hello, my name is Niko."
-                           },
-                           "schema": {
-                              "properties": {
-                                 "prompt": {
-                                    "type": "string",
-                                    "description": "The string to be tokenized."
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/ServerBusyError"
                                  }
-                              },
-                              "type": "object"
-                           }
+                              }
+                           },
+                           "description": "Server is busy"
                         }
                      },
-                     "required": true
+                     "summary": "Generate text with a specified prompt. SSE streamed results.",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/generate/check": {
+                  "get": {
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "results": [
+                                       {
+                                          "text": ", my name is Nik"
+                                       }
+                                    ]
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/GenerationOutput"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Poll the incomplete results of the currently ongoing text generation.",
+                     "description": "Poll the incomplete results of the currently ongoing text generation. Will not work when multiple requests are in queue.",
+                     "tags": [
+                        "extra"
+                     ]
                   },
-                  "responses": {
-                     "200": {
+                  "post": {
+                     "description": "Poll the incomplete results of the currently ongoing text generation. A unique genkey previously submitted allows polling even in multiuser mode.",
+                     "requestBody": {
                         "content": {
                            "application/json": {
                               "example": {
-                                 "value": 11
-                              },
-                              "schema": {
-                                 "$ref": "#/components/schemas/ValueResult"
-                              }
-                           }
-                        },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Counts the number of tokens in a string.",
-                  "tags": [
-                     "extra"
-                  ]
-               }
-            },
-            "/extra/abort": {
-               "post": {
-                  "description": "Aborts the currently ongoing text generation. Does not work when multiple requests are in queue.",
-                  "requestBody": {
-                     "content": {
-                        "application/json": {
-                           "example": {
-                              "genkey": "KCPP2342"
-                           },
-                           "schema": {
-                              "properties": {
-                                 "genkey": {
-                                    "type": "string",
-                                    "description": "A unique key used to identify this generation while it is in progress."
-                                 }
-                              },
-                              "type": "object"
-                           }
-                        }
-                     },
-                     "required": false
-                  },
-                  "responses": {
-                     "200": {
-                        "content": {
-                           "application/json": {
-                              "example": {
-                                 "success": true
+                                 "genkey": "KCPP2342"
                               },
                               "schema": {
                                  "properties": {
-                                    "success": {
-                                       "type": "boolean",
-                                       "description": "Whether the abort was successful."
+                                    "genkey": {
+                                       "type": "string",
+                                       "description": "A unique key used to identify this generation while it is in progress."
                                     }
-                                 }
+                                 },
+                                 "type": "object"
                               }
                            }
                         },
-                        "description": "Successful request"
-                     }
-                  },
-                  "summary": "Aborts the currently ongoing text generation.",
-                  "tags": [
-                     "extra"
-                  ]
+                        "required": false
+                     },
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "results": [
+                                       {
+                                          "text": ", my name is Nik"
+                                       }
+                                    ]
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/GenerationOutput"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Poll the incomplete results of the currently ongoing text generation. Supports multiuser mode.",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/tokencount": {
+                  "post": {
+                     "description": "Counts the number of tokens in a string.",
+                     "requestBody": {
+                        "content": {
+                           "application/json": {
+                              "example": {
+                                 "prompt": "Hello, my name is Niko."
+                              },
+                              "schema": {
+                                 "properties": {
+                                    "prompt": {
+                                       "type": "string",
+                                       "description": "The string to be tokenized."
+                                    }
+                                 },
+                                 "type": "object"
+                              }
+                           }
+                        },
+                        "required": true
+                     },
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "value": 11
+                                 },
+                                 "schema": {
+                                    "$ref": "#/components/schemas/ValueResult"
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Counts the number of tokens in a string.",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
+               },
+               "/extra/abort": {
+                  "post": {
+                     "description": "Aborts the currently ongoing text generation. Does not work when multiple requests are in queue.",
+                     "requestBody": {
+                        "content": {
+                           "application/json": {
+                              "example": {
+                                 "genkey": "KCPP2342"
+                              },
+                              "schema": {
+                                 "properties": {
+                                    "genkey": {
+                                       "type": "string",
+                                       "description": "A unique key used to identify this generation while it is in progress."
+                                    }
+                                 },
+                                 "type": "object"
+                              }
+                           }
+                        },
+                        "required": false
+                     },
+                     "responses": {
+                        "200": {
+                           "content": {
+                              "application/json": {
+                                 "example": {
+                                    "success": true
+                                 },
+                                 "schema": {
+                                    "properties": {
+                                       "success": {
+                                          "type": "boolean",
+                                          "description": "Whether the abort was successful."
+                                       }
+                                    }
+                                 }
+                              }
+                           },
+                           "description": "Successful request"
+                        }
+                     },
+                     "summary": "Aborts the currently ongoing text generation.",
+                     "tags": [
+                        "extra"
+                     ]
+                  }
                }
-            }
-         },
-         "servers": [
-            {
-               "url": "/api"
-            }
-         ],
-         "tags": [
-            {
-               "description": "KoboldAI United compatible API core endpoints",
-               "name": "v1"
             },
-            {
-               "description": "Extended API unique to KoboldCpp",
-               "name": "extra"
-            }
-         ]
-      };
+            "servers": [
+               {
+                  "url": "/api"
+               }
+            ],
+            "tags": [
+               {
+                  "description": "KoboldAI United compatible API core endpoints",
+                  "name": "v1"
+               },
+               {
+                  "description": "Extended API unique to KoboldCpp",
+                  "name": "extra"
+               }
+            ]
+         };
    </script>
 
    <style>
