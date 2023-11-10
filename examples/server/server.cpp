@@ -1560,6 +1560,13 @@ struct llama_server_context
                     if (!slot.params.cache_prompt)
                     {
                         llama_sampling_reset(slot.ctx_sampling);
+                        // if input prompt is too big, truncate it
+                        if (slot.num_prompt_tokens >= slot.n_ctx)
+                        {
+                            slot.num_prompt_tokens = slot.n_ctx - 1;
+                            prompt_tokens = std::vector<llama_token>(prompt_tokens.end() - slot.num_prompt_tokens, prompt_tokens.end());
+                            slot.truncated = true;
+                        }
 
                         slot.n_past = 0;
                         slot.num_prompt_tokens_processed = slot.num_prompt_tokens;
