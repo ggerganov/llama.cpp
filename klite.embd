@@ -3261,6 +3261,7 @@ Current version: 95
 	var lastcheckgenkey = ""; //for checking polled-streaming unique id when generating in kcpp
 	var globalabortcontroller = null;
 	var passed_ai_warning_local = false;
+	var filecomments = "";
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -4612,6 +4613,9 @@ Current version: 95
 				}
 				if (storyobj.wiinsertlocation) {
 					wi_insertlocation = storyobj.wiinsertlocation;
+				}
+				if (storyobj.filecomments) {
+					filecomments = storyobj.filecomments;
 				}
 			} else {
 				//v2 load
@@ -7631,6 +7635,7 @@ Current version: 95
 		last_token_budget = "";
 		last_known_filename = "saved_story.json";
 		groupchat_removals = [];
+		filecomments = "";
 		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -9960,7 +9965,8 @@ Current version: 95
 
 				document.getElementById("gametext").innerHTML = "Welcome to <span class=\"color_cyan\">KoboldAI Lite</span>!<br>You are using the models <span class=\"color_green\">"
 					+ selmodelstr + "</span>" + (selected_workers.length == 0 ? "" : (" (Pinned to " + selected_workers.length + " worker IDs)"))
-					+ "." + whorun +".<br><br><b><span class=\"color_orange\">"+ nowmode +" Selected</span></b> - Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>";
+					+ "." + whorun +".<br><br><b><span class=\"color_orange\">"+ nowmode +" Selected</span></b> - Enter a prompt below to begin!" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"document.getElementById('loadfileinput').click()\">load a <b>JSON File</b> or a <b>Character Card</b> here.</a>" + "<br>Or, <a href=\"#\" class=\"color_blueurl\" onclick=\"display_scenarios()\">select a <b>Quick Start Scenario</b> here.</a><br>"+
+					(filecomments!=""?("<br><em>File Comments: "+escapeHtml(filecomments)+"</em>"):"");
 			}
 
 			//kick out of edit mode
