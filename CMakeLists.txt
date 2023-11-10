@@ -347,42 +347,39 @@ if (LLAMA_CLBLAST)
 endif()
 
 if (LLAMA_HIPBLAS)
-    list(APPEND CMAKE_PREFIX_PATH /opt/rocm)
+    cmake_minimum_required(VERSION 3.21) # HIP language support requires 3.21
+    cmake_policy(VERSION 3.21.3...3.27)
 
-    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CC=/opt/rocm/llvm/bin/clang")
-    endif()
-    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
-        message(WARNING "Only LLVM is supported for HIP, hint: CXX=/opt/rocm/llvm/bin/clang++")
-    endif()
-
-    find_package(hip)
+    find_package(HIP)
     find_package(hipblas)
     find_package(rocblas)
 
-    if (${hipblas_FOUND} AND ${hip_FOUND})
-        message(STATUS "HIP and hipBLAS found")
+    if (${HIP_FOUND} AND ${hipblas_FOUND} AND ${rocblas_FOUND})
+        message(STATUS "hipBLAS found")
+
+        if (NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+            set(CMAKE_HIP_ARCHITECTURES "native")
+        endif()
+        message(STATUS "Using HIP architectures: ${CMAKE_HIP_ARCHITECTURES}")
+
+        enable_language(HIP)
+
+        set(GGML_HEADERS_HIP ggml-cuda.h)
+        set(GGML_SOURCES_HIP ggml-cuda.cu)
+
+        set_source_files_properties(${GGML_SOURCES_HIP} PROPERTIES LANGUAGE HIP)
+
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
-        add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
-        if (BUILD_SHARED_LIBS)
-            set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        endif()
-        if (LLAMA_CUDA_FORCE_DMMV)
-            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_DMMV)
-        endif()
-        if (LLAMA_CUDA_FORCE_MMQ)
-            target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_FORCE_MMQ)
-        endif()
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
-        target_compile_definitions(ggml-rocm PRIVATE GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
-        target_compile_definitions(ggml-rocm PRIVATE K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
-        set_source_files_properties(ggml-cuda.cu PROPERTIES LANGUAGE CXX)
-        target_link_libraries(ggml-rocm PRIVATE hip::device PUBLIC hip::host roc::rocblas roc::hipblas)
+
+        add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
+        add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
+        add_compile_definitions(K_QUANTS_PER_ITERATION=${LLAMA_CUDA_KQUANTS_ITER})
 
         if (LLAMA_STATIC)
             message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
         endif()
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ggml-rocm)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} roc::hipblas roc::rocblas)
     else()
         message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
     endif()
@@ -642,6 +639,7 @@ add_library(ggml OBJECT
             ggml-quants.h
             ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_HIP} ${GGML_HEADERS_HIP}
             ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
@@ -721,7 +719,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Llama)
 
 set(GGML_PUBLIC_HEADERS "ggml.h"
-        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_CUDA}" "${GGML_HEADERS_OPENCL}" "${GGML_HEADERS_HIP}"
         "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
