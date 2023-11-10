@@ -17,7 +17,7 @@ def minimal_example(filename: str) -> None:
     if field is None:
         return
     part_index = field.data[0]
-    field.parts[part_index][0] = 2 # Set tokenizer.ggml.bos_token_id to 2
+    field.parts[part_index][0] = 2  # Set tokenizer.ggml.bos_token_id to 2
     #
     # So what's this field.data thing? It's helpful because field.parts contains
     # _every_ part of the GGUF field. For example, tokenizer.ggml.bos_token_id consists
@@ -48,8 +48,10 @@ def set_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
     # look like [GGUFValueType.ARRAY, GGUFValueType.UINT32]
     handler = reader.gguf_scalar_to_np.get(field.types[0]) if field.types else None
     if handler is None:
-        print(f'! This tool only supports changing simple values, {repr(args.key)} has unsupported type {field.types}',
-            file = sys.stderr)
+        print(
+            f'! This tool only supports changing simple values, {repr(args.key)} has unsupported type {field.types}',
+            file = sys.stderr,
+        )
         sys.exit(1)
     current_value = field.parts[field.data[0]][0]
     new_value = handler(args.value)

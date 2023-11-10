@@ -92,20 +92,16 @@ def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None
 def main() -> None:
     parser = argparse.ArgumentParser(description="Convert GGUF file byte order")
     parser.add_argument(
-        "model",
-        type=str,
+        "model", type=str,
         help="GGUF format model filename",
     )
     parser.add_argument(
-        "order",
-        type=str,
-        choices=['big','little','native'],
+        "order", type=str, choices=['big', 'little', 'native'],
         help="Requested byte order",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Don't actually change anything"
+        "--dry-run", action="store_true",
+        help="Don't actually change anything",
     )
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
     print(f'* Loading: {args.model}')
