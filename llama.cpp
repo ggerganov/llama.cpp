@@ -3118,14 +3118,6 @@ static void llm_load_tensors(
                         ggml_backend_type backend_norm;
                         ggml_backend_type backend_output;
 
-                        // Don't allow for offloading of more than 33 layers.
-                        // Offloading 34 layers causes model to respond with letter 'E'
-                        // Offloading 35 layers doesn't work because of missing cuda implementation for rope:
-                        // GGML_ASSERT: ggml-cuda.cu:6402: ne00 == n_dims && "ne00 != n_dims is not implemented for CUDA yet"
-                        if (n_gpu_layers > 33) {
-                            n_gpu_layers = 33;
-                        }
-
                         if (n_gpu_layers > int(n_layer)) {
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
@@ -4323,7 +4315,7 @@ struct llm_build_context {
                 struct ggml_tensor * Kcur = ggml_concat(ctx0, krotated, kpass);
                 cb(Kcur, "Kcur", il);
 
-                struct ggml_tensor * Q = ggml_cont(ctx0, ggml_permute(ctx0, Qcur, 2, 1, 0, 3));
+                struct ggml_tensor * Q = ggml_cont(ctx0, ggml_permute(ctx0, Qcur, 1, 2, 0, 3));
                 cb(Q, "Q", il);
 
                 Kcur = ggml_cont(ctx0, ggml_permute(ctx0, Kcur, 2, 1, 0, 3));
@@ -4791,20 +4783,6 @@ struct llm_build_context {
                 Kcur = ggml_cont(ctx0, ggml_permute(ctx0, Kcur, 2, 1, 0, 3));
                 cb(Kcur, "Kcur", il);
 
-                // Qcur = ggml_rope_custom(
-                //     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos,
-                //     hparams.n_rot, 2, 0, n_orig_ctx, freq_base, freq_scale,
-                //     ext_factor, attn_factor, beta_fast, beta_slow
-                // );
-                // cb(Qcur, "Qcur", il);
-
-                // Kcur = ggml_rope_custom(
-                //     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos,
-                //     hparams.n_rot, 2, 0, n_orig_ctx, freq_base, freq_scale,
-                //     ext_factor, attn_factor, beta_fast, beta_slow
-                // );
-                // cb(Kcur, "Kcur", il);
-
                 llm_build_kv_store(ctx0, hparams, kv_self, gf, Kcur, Vcur, n_ctx, n_tokens, kv_head, cb, il);
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
@@ -5025,8 +5003,6 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
 };
 
 static llm_offload_trie k_offload_func_trie(k_offload_map);
-
-
 
 static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
