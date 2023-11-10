@@ -79,7 +79,7 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
             if itype == GGUFValueType.STRING:
                 curr["value"] = [str(bytes(field.parts[idx]), encoding="utf-8") for idx in field.data]
             else:
-                curr["value"] = [pv for idx in field.data for pv in field.parts[idx].tolist()],
+                curr["value"] = [pv for idx in field.data for pv in field.parts[idx].tolist()]
         elif field.types[0] == GGUFValueType.STRING:
             curr["value"] = str(bytes(field.parts[-1]), encoding="utf-8")
         else:
