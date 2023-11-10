@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
 
 import numpy as np
-from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+from sentencepiece import SentencePieceProcessor
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
@@ -328,7 +328,7 @@ class BpeVocab:
 
     def bpe_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.bpe_tokenizer
-        from transformers.models.gpt2 import tokenization_gpt2  # type: ignore[import]
+        from transformers.models.gpt2 import tokenization_gpt2
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.items()}
 
         for i, _ in enumerate(tokenizer):
