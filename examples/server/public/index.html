@@ -160,6 +160,11 @@
       height: 10em;
     }
 
+    [contenteditable] {
+      display: inline-block;
+      white-space: pre-wrap;
+      outline: 0px solid transparent;
+    }
 
     @keyframes loading-bg-wipe {
       0% {
@@ -462,18 +467,23 @@
       }, "{{char}}");
     }
 
-    const runCompletion = async () => {
+    const runCompletion = () => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      await runLlama(prompt, {
+      runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
-      }, "");
+      }, "").finally(() => {
+        session.value.prompt = session.value.transcript.map(([_, data]) =>
+          Array.isArray(data) ? data.map(msg => msg.content).join('') : data
+        ).join('');
+        session.value.transcript = [];
+      })
     }
 
     const stop = (e) => {
@@ -573,6 +583,7 @@
         }
       }, [messages])
 
+      const isCompletionMode = session.value.type === 'completion'
       const chatLine = ([user, data], index) => {
         let message
         const isArrayMessage = Array.isArray(data)
@@ -582,20 +593,31 @@
           const text = isArrayMessage ?
             data.map(msg => msg.content).join('').replace(/^\s+/, '') :
             data;
-          message = html`<${Markdownish} text=${template(text)} />`
+          message = isCompletionMode ?
+            text :
+            html`<${Markdownish} text=${template(text)} />`
         }
         if (user) {
           return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
         } else {
-          return html`<p key=${index}>${message}</p>`
+          return isCompletionMode ?
+            html`<span key=${index}>${message}</span>` :
+            html`<p key=${index}>${message}</p>`
         }
       };
 
+      const handleCompletionEdit = (e) => {
+        session.value.prompt = e.target.innerText;
+        session.value.transcript = [];
+      }
+
       return html`
-        <section id="chat" ref=${container}>
+        <div id="chat" ref=${container} key=${messages.length}>
           <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-          ${messages.flatMap(chatLine)}
-        </section>`;
+          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
+            ${messages.flatMap(chatLine)}
+          </span>
+        </div>`;
     };
 
     const ConfigForm = (props) => {
