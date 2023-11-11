@@ -166,7 +166,7 @@ class Model:
             return RefactModel
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
-        if model_architecture == "StableLMEpochForCausalLM":
+        if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return StableLMModel
         return Model
 
