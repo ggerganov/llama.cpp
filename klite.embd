@@ -12,7 +12,7 @@ Current version: 95
 
 <script>
 	const urlParams = new URLSearchParams(window.location.search);
-	const localflag = true;
+	const localflag = false;
 	const STORAGE_PREFIX = (localflag?"e_":"")+"kaihordewebui_";
 </script>
 
@@ -3015,12 +3015,17 @@ Current version: 95
 						msgbox("Error while submitting prompt: Server appears to be busy.");
 					}
 				},
-				abort(e) {
-					retry_preserve_last = true;
+				abort(error) {
+
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
-					msgbox("Error while submitting prompt: " + error);
+
+					if(error.name!="AbortError") //aborts are silent. slightly diff logic
+					{
+						msgbox("Error while submitting prompt: " + error);
+						retry_preserve_last = true;
+					}
 				},
 			}));
 		})
@@ -3276,6 +3281,7 @@ Current version: 95
 		saved_kai_addr: "", //do not ever share this in save files!
 		saved_oai_jailbreak: "", //customized oai system prompt
 		saved_oai_custommodel: "", //customized oai custom model
+		prev_custom_endpoint_type: 0, //show a reconnect box to custom endpoint if needed. 0 is horde, otherwise its dropdown value+1
 
 		autoscroll: true, //automatically scroll to bottom on render
 		trimsentences: true, //trim to last punctuation
@@ -3509,6 +3515,16 @@ Current version: 95
 					import_compressed_story(loadedstorycompressed,true); //use the same compressed format as shared stories and import it
 					import_props_into_object(localsettings,loadedsettings);
 					console.log("Loaded local settings and story");
+
+					//offer to reconnect
+					let pending_eptype = localsettings.prev_custom_endpoint_type;
+					if(!localflag && pending_eptype>0)
+					{
+						msgboxYesNo("Reconnect to previous custom endpoint?","Custom Endpoint Reconnect",()=>{
+							document.getElementById("customapidropdown").value = (pending_eptype - 1).toString();
+							display_custom_endpoint();
+						},null);
+					}
 				}
 				if(loadedsettings && !loadedsettings.persist_session)
 				{
@@ -9941,13 +9957,13 @@ Current version: 95
 				{
 					whorun = "<br>You're using the Spellbook by Scale AI API";
 				}
-				else if(custom_palm_key!="")
-				{
-					whorun = "<br>You're using the PaLM API";
-				}
 				else if(custom_claude_key!="")
 				{
 					whorun = "<br>You're using the Claude API";
+				}
+				else if(custom_palm_key!="")
+				{
+					whorun = "<br>You're using the PaLM API";
 				}
 				else {
 					whorun = "<br>There are <span class=\"color_orange\">" + selected_models.reduce((s, a) => s + a.count, 0) + "</span> <a class=\"color_green\" href=\"#\" onclick=\"get_and_show_workers()\">volunteer(s)</a> running selected models with a total queue length of <span class=\"color_orange\">"+ selected_models.reduce((s, a) => s + a.queued, 0) + "</span> tokens";
@@ -10400,9 +10416,39 @@ Current version: 95
 		}
 	}
 
+	function update_prev_custom_endpoint_type()
+	{
+		localsettings.prev_custom_endpoint_type = 0;
+		if (custom_kobold_endpoint != "") {
+			localsettings.prev_custom_endpoint_type = 1;
+		}
+		else if(custom_oai_key!="")
+		{
+			localsettings.prev_custom_endpoint_type = 2;
+			if(custom_oai_endpoint.toLowerCase().includes("openrouter.ai"))
+			{
+				localsettings.prev_custom_endpoint_type = 6;
+			}
+		}
+		else if(custom_scale_key!="")
+		{
+			localsettings.prev_custom_endpoint_type = 3;
+		}
+		else if(custom_claude_key!="")
+		{
+			localsettings.prev_custom_endpoint_type = 4;
+		}
+		else if(custom_palm_key!="")
+		{
+			localsettings.prev_custom_endpoint_type = 5;
+		}
+
+	}
+
 	function autosave() {
 		//autosave
 		try {
+			update_prev_custom_endpoint_type();
 			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
 				let compressedstory = generate_compressed_story(true, true, true);
