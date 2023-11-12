@@ -185,7 +185,7 @@ int main(int argc, char ** argv) {
 
                 const auto t_pp_start = ggml_time_us();
 
-                llama_kv_cache_tokens_rm(ctx, -1, -1);
+                llama_kv_cache_clear(ctx);
 
                 if (!decode_helper(ctx, batch, ctx_params.n_batch)) {
                     LOG_TEE("%s: llama_decode() failed\n", __func__);

@@ -129,6 +129,13 @@ int main(int argc, char * argv[]) {
         ggml_type type = (ggml_type) i;
         ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
 
+        // deprecated - skip
+        if (qfns.blck_size == 0) {
+            continue;
+        }
+
+        printf("Testing %s\n", ggml_type_name((ggml_type) i));
+
         if (qfns.from_float && qfns.to_float) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             const float max_quantization_error =

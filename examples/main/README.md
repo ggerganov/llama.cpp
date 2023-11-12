@@ -142,7 +142,7 @@ The `--ctx-size` option allows you to set the size of the prompt context used by
 
 ### Extended Context Size
 
-Some fine-tuned models have extened the context length by scaling RoPE. For example, if the original pretrained model have a context length (max sequence length) of 4096 (4k) and the fine-tuned model have 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
+Some fine-tuned models have extended the context length by scaling RoPE. For example, if the original pre-trained model have a context length (max sequence length) of 4096 (4k) and the fine-tuned model have 32k. That is a scaling factor of 8, and should work by setting the above `--ctx-size` to 32768 (32k) and `--rope-scale` to 8.
 
 -   `--rope-scale N`: Where N is the linear scaling factor used by the fine-tuned model.
 
@@ -207,6 +207,14 @@ Example usage: `--top-k 30`
 Top-p sampling, also known as nucleus sampling, is another text generation method that selects the next token from a subset of tokens that together have a cumulative probability of at least p. This method provides a balance between diversity and quality by considering both the probabilities of tokens and the number of tokens to sample from. A higher value for top-p (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text. The default value is 0.9.
 
 Example usage: `--top-p 0.95`
+
+### Min P Sampling
+
+-   `--min-p N`: Sets a minimum base probability threshold for token selection (default: 0.05).
+
+The Min-P sampling method was designed as an alternative to Top-P, and aims to ensure a balance of quality and variety. The parameter *p* represents the minimum probability for a token to be considered, relative to the probability of the most likely token. For example, with *p*=0.05 and the most likely token having a probability of 0.9, logits with a value less than 0.045 are filtered out.
+
+Example usage: `--min-p 0.05`
 
 ### Tail Free Sampling (TFS)
 
