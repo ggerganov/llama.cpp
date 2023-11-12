@@ -4712,20 +4712,20 @@ struct llm_build_context {
                 cb(Vcur, "Vcur", il);
 
                 // RoPE the first n_rot of q/k, pass the other half, and concat.
-                struct ggml_tensor * qrot = ggml_view_3d(
+                struct ggml_tensor * qrot = ggml_cont(ctx0, ggml_view_3d(
                         ctx0, tmpq, hparams.n_rot, n_head, n_tokens,
                         ggml_element_size(tmpq) * n_embd_head,
                         ggml_element_size(tmpq) * n_embd_head * n_head,
                         0
-                        );
+                        ));
                 cb(qrot, "qrot", il);
 
-                struct ggml_tensor * krot = ggml_view_3d(
+                struct ggml_tensor * krot = ggml_cont(ctx0, ggml_view_3d(
                         ctx0, tmpk, hparams.n_rot, n_head, n_tokens,
                         ggml_element_size(tmpk) * n_embd_head,
                         ggml_element_size(tmpk) * n_embd_head * n_head_kv,
                         0
-                        );
+                        ));
                 cb(krot, "krot", il);
 
                 // get the second half of tmpq, e.g tmpq[n_rot:, :, :]
