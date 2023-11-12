@@ -1273,7 +1273,8 @@ static float make_qkx2_quants(int n, int nmax, const float * restrict x, const f
     float max = x[0];
     float sum_w = weights[0];
     float sum_x = sum_w * x[0];
-    for (int i = 1; i < n; ++i) {
+    // Mark i as volatile to prevent the -O3 optimizer from unrolling this loop and breaking MacOS Sonoma quantization
+    for (volatile int i = 1; i < n; ++i) {
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
         float w = weights[i];
