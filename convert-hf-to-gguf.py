@@ -201,7 +201,7 @@ class Model:
             return gguf.MODEL_ARCH.REFACT
         if arch == "PersimmonForCausalLM":
             return gguf.MODEL_ARCH.PERSIMMON
-        if arch == "StableLMEpochForCausalLM":
+        if arch in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return gguf.MODEL_ARCH.STABLELM
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
