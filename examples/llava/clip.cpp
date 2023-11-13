@@ -664,7 +664,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 // measure mem requirement and allocate
     {
         static const size_t tensor_alignment = 32;
-        new_clip->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
+        new_clip->buf_compute.resize(ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead());
         new_clip->alloc = ggml_allocr_new_measure(tensor_alignment);
         clip_image_f32_batch batch;
         batch.size = 1;
