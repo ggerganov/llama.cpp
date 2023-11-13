@@ -57,9 +57,9 @@ class GGUFWriter:
         self.endianess = endianess
         self.offset_tensor = 0
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
-        self.kv_data = b""
+        self.kv_data = bytearray()
         self.kv_data_count = 0
-        self.ti_data = b""
+        self.ti_data = bytearray()
         self.ti_data_count = 0
         self.use_temp_file = use_temp_file
         self.temp_file = None
