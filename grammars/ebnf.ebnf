@@ -10,8 +10,7 @@ identifier ::= letter ( letter | digit | "_" )
 #| "\f" | "\b"
 S ::= ( " " | "\n" | "\t" | "\r"  )
 
-terminal ::= "'" character - "'"  ( character - "'" )  "'"
-           #| '"'  character - '"'  ( character - '"' )  '"'
+terminal ::= "'" character  "'"  ( character  "'" )  "'"
 
 terminator ::= (";" | ".")
 
