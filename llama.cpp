@@ -2877,6 +2877,13 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
+#ifdef GGML_USE_CUBLAS
+                            if (n_gpu_layers > int(n_layer + 1)) {
+                                LLAMA_LOG_ERROR("%s: CUDA backend missing Persimmon CUDA ops, can offload at most %ld layers. See: https://github.com/ggerganov/llama.cpp/issues/4038\n",
+                                    __func__, n_layer + 1);
+                                throw std::runtime_error("Persimmon CUDA offload failed");
+                            }
+#endif
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
