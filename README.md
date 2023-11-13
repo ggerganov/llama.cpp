@@ -10,7 +10,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- ⚠️ **Upcoming change that might break functionality. Help with testing is needed:** https://github.com/ggerganov/llama.cpp/pull/3912
+- *No hot topics atm. Open to suggestions about what is hot today*
 
 ----
 
