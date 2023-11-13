@@ -27,6 +27,7 @@ namespace grammar_parser {
     static uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
         uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
         auto result = state.symbol_ids.insert(std::make_pair(std::string(src, len), next_id));
+	fprintf(stderr, "added id %s with id %d\n",src,next_id);
         return result.first->second;
     }
 
@@ -41,8 +42,11 @@ namespace grammar_parser {
             uint32_t      rule_id,
             const std::vector<llama_grammar_element> & rule) {
         if (state.rules.size() <= rule_id) {
+	  fprintf(stderr, "resize id %d\n",rule_id);
             state.rules.resize(rule_id + 1);
         }
+
+	fprintf(stderr, "adding rule id %d\n",rule_id);
         state.rules[rule_id] = rule;
     }
 
