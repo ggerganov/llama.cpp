@@ -1273,12 +1273,12 @@ static float make_qkx2_quants(int n, int nmax, const float * restrict x, const f
     float max = x[0];
     float sum_w = weights[0];
     float sum_x = sum_w * x[0];
-+#if defined(__APPLE__) && defined(__clang_major__) && __clang_major__ >= 15
-+    // use 'volatile' to prevent unroll and work around a bug in Apple clang 15.x.x
-+    for (volatile int i = 1; i < n; ++i) {
-+#else
-     for (int i = 1; i < n; ++i) {
-+#endif
+    #if defined(__APPLE__) && defined(__clang_major__) && __clang_major__ >= 15
+      // use 'volatile' to prevent unroll and work around a bug in Apple clang 15.x.x with -O3 flag
+      for (volatile int i = 1; i < n; ++i) {
+    #else
+      for (int i = 1; i < n; ++i) {
+    #endif
         if (x[i] < min) min = x[i];
         if (x[i] > max) max = x[i];
         float w = weights[i];
