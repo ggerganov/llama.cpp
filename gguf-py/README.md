@@ -11,6 +11,16 @@ as an example for its usage.
 pip install gguf
 ```
 
+## API Examples/Simple Tools
+
+[examples/writer.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/examples/writer.py) — Generates `example.gguf` in the current directory to demonstrate generating a GGUF file. Note that this file cannot be used as a model.
+
+[scripts/gguf-dump.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/scripts/gguf-dump.py) — Dumps a GGUF file's metadata to the console.
+
+[scripts/gguf-set-metadata.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/scripts/gguf-set-metadata.py) — Allows changing simple metadata values in a GGUF file by key.
+
+[scripts/gguf-convert-endian.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/scripts/gguf-convert-endian.py) — Allows converting the endianness of GGUF files.
+
 ## Development
 Maintainers who participate in development of this package are advised to install it in editable mode:
 
