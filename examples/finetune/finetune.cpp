@@ -548,35 +548,35 @@ static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, fl
     struct random_normal_distribution * rnd = init_random_normal_distribution(seed, mean, std, min, max);
 
     randomize_tensor_normal(lora->tok_embeddings_a, rnd);
-    randomize_tensor_normal(lora->tok_embeddings_b, rnd);
+    zero_tensor(lora->tok_embeddings_b);
     randomize_tensor_normal(lora->norm_a,           rnd);
-    randomize_tensor_normal(lora->norm_b,           rnd);
+    zero_tensor(lora->norm_b);
     randomize_tensor_normal(lora->output_a,         rnd);
-    randomize_tensor_normal(lora->output_b,         rnd);
+    zero_tensor(lora->output_b);
 
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = lora->layers[i];
         randomize_tensor_normal(layer.attention_norm_a, rnd);
-        randomize_tensor_normal(layer.attention_norm_b, rnd);
+        zero_tensor(layer.attention_norm_b);
 
         randomize_tensor_normal(layer.wq_a, rnd);
-        randomize_tensor_normal(layer.wq_b, rnd);
+        zero_tensor(layer.wq_b);
         randomize_tensor_normal(layer.wk_a, rnd);
-        randomize_tensor_normal(layer.wk_b, rnd);
+        zero_tensor(layer.wk_b);
         randomize_tensor_normal(layer.wv_a, rnd);
-        randomize_tensor_normal(layer.wv_b, rnd);
+        zero_tensor(layer.wv_b);
         randomize_tensor_normal(layer.wo_a, rnd);
-        randomize_tensor_normal(layer.wo_b, rnd);
+        zero_tensor(layer.wo_b);
 
         randomize_tensor_normal(layer.ffn_norm_a, rnd);
-        randomize_tensor_normal(layer.ffn_norm_b, rnd);
+        zero_tensor(layer.ffn_norm_b);
 
         randomize_tensor_normal(layer.w1_a, rnd);
-        randomize_tensor_normal(layer.w1_b, rnd);
+        zero_tensor(layer.w1_b);
         randomize_tensor_normal(layer.w2_a, rnd);
-        randomize_tensor_normal(layer.w2_b, rnd);
+        zero_tensor(layer.w2_b);
         randomize_tensor_normal(layer.w3_a, rnd);
-        randomize_tensor_normal(layer.w3_b, rnd);
+        zero_tensor(layer.w3_b);
     }
 
     free_random_normal_distribution(rnd);

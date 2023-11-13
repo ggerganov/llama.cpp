@@ -127,6 +127,7 @@ struct random_uniform_distribution * init_random_uniform_distribution(int seed, 
 void free_random_normal_distribution (struct random_normal_distribution  * rnd);
 void free_random_uniform_distribution(struct random_uniform_distribution * rnd);
 
+struct ggml_tensor * zero_tensor             (struct ggml_tensor * tensor);
 struct ggml_tensor * randomize_tensor_normal (struct ggml_tensor * tensor, struct random_normal_distribution * rnd);
 struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd);
 
