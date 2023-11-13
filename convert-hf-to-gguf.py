@@ -169,6 +169,30 @@ class Model:
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
         return Model
+    
+    @staticmethod
+    def from_model_name(model_name: str):
+        if model_name == "StableLMEpoch":
+            return StableLMModel
+        if model_name == "GPTNeoX":
+            return GPTNeoXModel
+        if model_name == "Bloom":
+            return BloomModel
+        if model_name == "MPT":
+            return MPTModel
+        if model_name in ("Baichuan", "BaiChuan"):
+            return BaichuanModel
+        if model_name in ("Falcon", "RW"):
+            return FalconModel
+        if model_name == "GPTBigCode":
+            return StarCoderModel
+        if model_name == "GPTRefact":
+            return RefactModel
+        if model_name == "Persimmon":
+            return PersimmonModel
+        if model_name == "DeepseekCoder":
+            return DeepseekCoderModel
+        return Model
 
     def _is_model_safetensors(self) -> bool:
         return Model.count_model_parts(self.dir_model, ".safetensors") > 0
@@ -201,6 +225,8 @@ class Model:
             return gguf.MODEL_ARCH.REFACT
         if arch == "PersimmonForCausalLM":
             return gguf.MODEL_ARCH.PERSIMMON
+        if arch == "LlamaForCausalLM":
+            return gguf.MODEL_ARCH.LLAMA
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -823,6 +849,68 @@ class PersimmonModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
+class DeepseekCoderModel(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        head_count = self.hparams["num_attention_heads"]
+        head_count_kv = self.hparams.get("num_key_value_heads", head_count)
+        ctx_length = self.hparams["max_position_embeddings"]
+
+        self.gguf_writer.add_name("deepseek_coder")
+        self.gguf_writer.add_context_length(ctx_length)
+        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
+        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count(head_count)
+        self.gguf_writer.add_head_count_kv(head_count_kv)
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
+
+        if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
+            if self.hparams["rope_scaling"].get("type") == "linear":
+                self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+                self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
+
+    def set_vocab(self):
+        dir_model = self.dir_model
+        hparams = self.hparams
+        tokens: list[bytearray] = []
+        toktypes: list[int] = []
+
+        from transformers import AutoTokenizer  # type: ignore[attr-defined]
+        tokenizer = AutoTokenizer.from_pretrained(dir_model)
+        vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
+        assert max(tokenizer.vocab.values()) < vocab_size
+
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
+        added_vocab = tokenizer.get_added_vocab()
+        special_tokens = tokenizer.all_special_tokens
+        for i in range(vocab_size):
+            if i not in reverse_vocab:
+                pad_token = f"[PAD{i}]".encode('utf-8')
+                tokens.append(bytearray(pad_token))
+                toktypes.append(gguf.TokenType.USER_DEFINED)
+            elif reverse_vocab[i] in added_vocab:
+                tokens.append(reverse_vocab[i])
+                if reverse_vocab[i] in special_tokens:
+                    toktypes.append(gguf.TokenType.CONTROL)
+                else:
+                    toktypes.append(gguf.TokenType.USER_DEFINED)
+            else:
+                tokens.append(reverse_vocab[i])
+                toktypes.append(gguf.TokenType.NORMAL)
+
+        self.gguf_writer.add_tokenizer_model("deepseek_coder")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    
+
+    
 
 ###### CONVERSION LOGIC ######
 
@@ -845,6 +933,7 @@ def parse_args() -> argparse.Namespace:
         "model", type=Path,
         help="directory containing model file",
     )
+    parser.add_argument("--model-name", type=str, default=None, help="name of the model")
 
     return parser.parse_args()
 
@@ -871,7 +960,7 @@ print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
-model_class = Model.from_model_architecture(hparams["architectures"][0])
+model_class = Model.from_model_name(args.model_name) if args.model_name else Model.from_model_architecture(hparams["architectures"][0])
 model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
 print("Set model parameters")
