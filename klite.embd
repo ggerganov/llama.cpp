@@ -2945,6 +2945,7 @@ Current version: 95
 				if(error.name!="AbortError") //aborts are silent
 				{
 					msgbox("Error while submitting prompt: " + error);
+					retry_preserve_last = false;
 				}else{
 					retry_preserve_last = true;
 				}
@@ -3025,16 +3026,23 @@ Current version: 95
 					{
 						msgbox("Error while submitting prompt: " + error);
 						retry_preserve_last = true;
+					}else{
+						retry_preserve_last = false;
 					}
 				},
 			}));
 		})
 		.catch((error) => {
-			retry_preserve_last = true;
 			console.error('Error:', error);
 			clear_poll_flags();
 			render_gametext();
-			msgbox("Error while submitting prompt: " + error);
+			if(error.name!="AbortError") //aborts are silent. slightly diff logic
+			{
+				msgbox("Error while submitting prompt: " + error);
+				retry_preserve_last = true;
+			}else{
+				retry_preserve_last = false;
+			}
 		});
 	}
 
@@ -7309,6 +7317,10 @@ Current version: 95
 				document.getElementById('instruct_starttag').value = "<|im_end|>\\n<|im_start|>user\\n";
 				document.getElementById('instruct_endtag').value = "<|im_end|>\\n<|im_start|>assistant\\n";
 				break;
+			case "7": //Input & Output
+				document.getElementById('instruct_starttag').value = "\\n{{[INPUT]}}\\n";
+				document.getElementById('instruct_endtag').value = "\\n{{[OUTPUT]}}\\n";
+				break;
 			default:
 				break;
 		}
@@ -7832,6 +7844,12 @@ Current version: 95
 		//flush any streaming text first
 		if(is_using_custom_ep() && pending_response_id!="" && synchro_pending_stream!="")
 		{
+			//apply a short delay of 1s before button reenables
+			allow_reenable_submitbtn_timestamp = performance.now() + 500;
+			setTimeout(()=>{
+				update_submit_button(true);
+			}, 1000);
+
 			synchro_polled_response = synchro_pending_stream;
 			poll_in_progress = false;
 			horde_poll_nearly_completed = false;
@@ -9257,6 +9275,7 @@ Current version: 95
 		if(gentxt!="")
 		{
 			gametext_arr.push(gentxt);
+			retry_preserve_last = false;
 		}else{
 			retry_preserve_last = true; //do not delete last message if retry is hit
 		}
@@ -9517,6 +9536,7 @@ Current version: 95
 							{
 								handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 							}
+							retry_preserve_last = false;
 						}else{
 							retry_preserve_last = true;
 						}
@@ -9850,6 +9870,7 @@ Current version: 95
 		}
 	}
 
+	var allow_reenable_submitbtn_timestamp = performance.now();
 	function update_submit_button(full_update)
 	{
 		if (perfdata == null) {
@@ -9870,7 +9891,7 @@ Current version: 95
 				document.getElementById("btnsend").innerHTML = "No AI<br>Loaded";
 			}
 		}
-		else if (pending_response_id == "") {
+		else if (pending_response_id == "" && performance.now() >= allow_reenable_submitbtn_timestamp) {
 			if(full_update)
 			{
 				document.getElementById("btnsend").disabled = false;
@@ -10614,7 +10635,7 @@ Current version: 95
 		backLongPressTimer = setTimeout(()=>{
 
 		console.log("Clear story");
-		if (pending_response_id == "" && gametext_arr.length > 0) {
+		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
 			last_reply_was_empty = false;
 			while(gametext_arr.length > 0)
 			{
@@ -10641,7 +10662,7 @@ Current version: 95
 		clearTimeout(backLongPressTimer);
 	}
 	function btn_back() {
-		if (pending_response_id == "" && gametext_arr.length > 0) {
+		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && gametext_arr.length > 0) {
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			if(retry_prev_text!="")
@@ -10665,7 +10686,7 @@ Current version: 95
 		redoLongPressTimer = setTimeout(()=>{
 
 		console.log("Redo All story");
-		if (pending_response_id == "" && redo_arr.length > 0) {
+		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && redo_arr.length > 0) {
 			last_reply_was_empty = false;
 			retry_preserve_last = false;
 			while(redo_arr.length > 0)
@@ -10685,7 +10706,7 @@ Current version: 95
 		clearTimeout(redoLongPressTimer);
 	}
 	function btn_redo() {
-		if (pending_response_id == "") {
+		if (!document.getElementById("btnsend").disabled && pending_response_id == "") {
 			if (redo_arr.length > 0) {
 				last_reply_was_empty = false;
 				retry_prev_text = "";
@@ -10705,7 +10726,7 @@ Current version: 95
 	}
 
 	function btn_retry() {
-		if (pending_response_id == "" && (gametext_arr.length > 1 ||
+		if (!document.getElementById("btnsend").disabled && pending_response_id == "" && (gametext_arr.length > 1 ||
 		(gametext_arr.length > 0 && (current_memory != "" || current_anote != "")))) {
 			last_reply_was_empty = false;
 			let boxtextstash = document.getElementById("input_text").value;
@@ -11952,6 +11973,7 @@ Current version: 95
 								<option value="4">Llama 2 Chat</option>
 								<option value="5">Q & A</option>
 								<option value="6">ChatML</option>
+								<option value="7">Input Output</option>
 							</select>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
