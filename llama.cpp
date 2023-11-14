@@ -76,6 +76,7 @@
 #include <sstream>
 #include <thread>
 #include <unordered_map>
+#include <iostream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -2266,7 +2267,12 @@ static void llm_load_vocab(
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
         } else if (tokenizer_name == "gpt2" || tokenizer_name == "deepseek_coder") {
-            vocab.type = LLAMA_VOCAB_TYPE_BPE;
+            if(tokenizer_name == "gpt2"){
+                vocab.type = LLAMA_VOCAB_TYPE_BPE;
+            }
+            else if (tokenizer_name == "deepseek_coder"){
+                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
+            }
 
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
@@ -2463,7 +2469,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     // hparams
     LLAMA_LOG_INFO("%s: format           = %s\n",     __func__, llama_file_version_name(ml.fver));
     LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch).c_str());
-    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
+    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : (vocab.type ==LLAMA_VOCAB_TYPE_BPE ? "BPE" : "DEEPSEEKCODER")); // TODO: fix
     LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
     LLAMA_LOG_INFO("%s: n_ctx_train      = %u\n",     __func__, hparams.n_ctx_train);
@@ -5342,6 +5348,7 @@ static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
         auto buf = token_data.text.substr(3, 2);
         return strtol(buf.c_str(), NULL, 16);
     }
+    case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
     case LLAMA_VOCAB_TYPE_BPE: {
         GGML_ASSERT(false);
         return unicode_to_bytes_bpe(token_data.text);
@@ -5358,6 +5365,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
         const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
         return vocab.token_to_id.at(buf);
     }
+    case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
     case LLAMA_VOCAB_TYPE_BPE: {
         return vocab.token_to_id.at(bytes_to_unicode_bpe(ch));
     }
@@ -5554,7 +5562,11 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
-        auto word_collection = bpe_gpt2_preprocess(text);
+        std::vector<std::string> word_collection;
+        if(vocab.type == LLAMA_VOCAB_TYPE_BPE)
+            word_collection = bpe_gpt2_preprocess(text);
+        else if(vocab.type==LLAMA_VOCAB_TYPE_DEEPSEEKCODER)
+            word_collection = bpe_deepseek_coder_preprocess(text);
 
         symbols_final.clear();
 
@@ -5681,26 +5693,9 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
-
-        std::vector<std::string> bpe_words;
-        std::vector<std::string> bpe_encoded_words;
-        // convert input string to wstring
-        std::wstring input = from_utf8(text);
-        std::wstring regex = from_utf8(gpt2_regex);
-        std::wregex expr(regex);
-        // std::wsmatch m;
-        // // use regex match to get where to split the test string
-        int array[] = {-1,0};
-        std::wsregex_token_iterator iter(input.begin(), input.end(),  expr, array);
-        std::wsregex_token_iterator end;
-        for ( ; iter != end; ++iter){
-                if ((*iter).length()>0){
-                    bpe_words.push_back(to_utf8(*iter));
-                }
-            }
-        // convert each word to utf8
-        for (std::string & word : bpe_words) {
+    std::vector<std::string> byte_encoding_process(const std::vector<std::string> &bpe_words){
+        std::vector<std::string>bpe_encoded_words;
+        for (auto word : bpe_words) {
             std::string text_utf = "";
             auto utf_word =  codepoints_from_utf8(word);
             for (size_t i = 0; i < utf_word.size(); ++i)
@@ -5712,6 +5707,80 @@ private:
             }
             bpe_encoded_words.emplace_back(encoded_token);
         }
+        return bpe_encoded_words;
+    }
+
+    std::vector<std::string> regex_preprocess(const std::vector<std::string> &input, const std::string & regex_expr){
+        std::regex expr(regex_expr);
+        std::vector<std::string> bpe_words;
+        // std::wsmatch m;
+        // // use regex match to get where to split the test string
+        for(auto& text:input){
+            std::cregex_iterator it(text.data(), text.data() + text.size(), expr);
+            std::cregex_iterator end;
+
+            // Print the matches
+            unsigned int start_idx = 0;
+            while (it != end) {
+                std::cmatch match = *it;
+                std::string match_str = match.str();
+                if(match.position()>start_idx){
+                    bpe_words.emplace_back(text.substr(start_idx, match.position()-start_idx));
+                }
+                bpe_words.emplace_back(match_str);
+                start_idx = match.position() + match.length();
+                ++it;
+            }
+            if(start_idx < text.size()){
+                bpe_words.emplace_back(text.substr(start_idx, text.size()-start_idx));
+            }
+        }
+
+        return bpe_words;
+    }
+    std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) {
+
+        std::vector<std::string> bpe_words = {text};
+
+        for(auto & regex_expr : gpt2_regex){
+            bpe_words = regex_preprocess(bpe_words, regex_expr);
+        }
+
+        std::vector<std::string> bpe_encoded_words = byte_encoding_process(bpe_words);
+
+        return bpe_encoded_words;
+    }
+
+    std::vector<std::string> bpe_deepseek_coder_preprocess(const std::string & text) {
+
+        std::vector<std::string> bpe_words;
+        std::wstring wtext = from_utf8(text);
+
+        // extract all cjk characters
+        std::wregex expr(L"[\u4e00-\u9fa5\u0800-\u4e00\uac00-\ud7ff]+");
+        std::wcregex_iterator it(wtext.data(), wtext.data() + wtext.size(), expr);
+        std::wcregex_iterator end;
+
+        unsigned int start_idx = 0;
+        while (it != end) {
+            std::wcmatch match = *it;
+            std::wstring match_str = match.str();
+            if(match.position()>start_idx){
+                bpe_words.emplace_back(to_utf8(wtext.substr(start_idx, match.position()-start_idx)));
+            }
+            bpe_words.emplace_back(to_utf8(match_str));
+            start_idx = match.position() + match.length();
+            ++it;
+        }
+        if(start_idx < wtext.size()){
+            bpe_words.emplace_back(to_utf8(wtext.substr(start_idx, wtext.size()-start_idx)));
+        }
+
+        for(auto & regex_expr : deepseek_coder_regex){
+            bpe_words = regex_preprocess(bpe_words, regex_expr);
+        }
+
+        std::vector<std::string> bpe_encoded_words = byte_encoding_process(bpe_words);
 
         return bpe_encoded_words;
     }
@@ -5903,6 +5972,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     }
                 }
             } break;
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE:
             {
                 for (const auto & fragment: fragment_buffer)
@@ -8972,6 +9042,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             }
             break;
         }
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
         case LLAMA_VOCAB_TYPE_BPE: {
             if (llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
