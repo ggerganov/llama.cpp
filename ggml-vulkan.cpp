@@ -11,6 +11,7 @@
 
 // These are generated at build time by cmake custom command
 #include "shaderop_scale.h"
+#include "shaderop_scale_8.h"
 #include "shaderop_add.h"
 #include "shaderop_addrow.h"
 #include "shaderop_mul.h"
@@ -724,8 +725,12 @@ void ggml_vk_scale(kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& out,
                    uint32_t inOff, uint32_t outOff,
                    uint32_t size, float scale) {
-    const static auto spirv = getSpirvShader(kp::shader_data::op_scale_comp_spv,
-        kp::shader_data::op_scale_comp_spv_len);
+    const static auto spirv_1 = getSpirvShader(
+        kp::shader_data::op_scale_comp_spv, kp::shader_data::op_scale_comp_spv_len
+    );
+    const static auto spirv_8 = getSpirvShader(
+        kp::shader_data::op_scale_8_comp_spv, kp::shader_data::op_scale_8_comp_spv_len
+    );
 
     struct PushConstants {
         uint32_t inOff, outOff;
@@ -735,11 +740,19 @@ void ggml_vk_scale(kp::Sequence& seq,
         scale
     };
 
+    const auto * spirv = &spirv_1;
+    std::string name(__func__);
+    if (size % 8 == 0) {
+        size /= 8;
+        name += "_8";
+        spirv = &spirv_8;
+    }
+
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {size}, {}, {pushConsts});
-    else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
+    if (!komputeManager()->hasAlgorithm(name)) {
+        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, *spirv, {size}, {}, {pushConsts});
+    } else {
+        s_algo = komputeManager()->getAlgorithm(name);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({size});
         s_algo->setPushConstants<PushConstants>({pushConsts});
@@ -1416,9 +1429,7 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                 case GGML_OP_SCALE:
                     {
                         const float scale = *(const float *) src1->data;
-                        int64_t n = ggml_nelements(dst);
-                        GGML_ASSERT(n % 8 == 0);
-                        ggml_vk_scale(seq, id_src0, id_dst, off_src0, off_dst, n/8, scale);
+                        ggml_vk_scale(seq, id_src0, id_dst, off_src0, off_dst, ggml_nelements(dst), scale);
                     } break;
                 case GGML_OP_UNARY:
                     {

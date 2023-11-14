@@ -476,6 +476,7 @@ if (LLAMA_KOMPUTE)
         # Compile our shaders
         compile_shader(SOURCES
           kompute/op_scale.comp
+          kompute/op_scale_8.comp
           kompute/op_add.comp
           kompute/op_addrow.comp
           kompute/op_mul.comp
@@ -508,6 +509,7 @@ if (LLAMA_KOMPUTE)
         # Create a custom target for our generated shaders
         add_custom_target(generated_shaders DEPENDS
           shaderop_scale.h
+          shaderop_scale_8.h
           shaderop_add.h
           shaderop_addrow.h
           shaderop_mul.h
