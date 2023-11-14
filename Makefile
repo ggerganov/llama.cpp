@@ -241,7 +241,7 @@ endif
 
 # this version of Apple ld64 is buggy
 ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
-	MK_CPPFLAGS += -DBUGGY_APPLE_LINKER
+	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
 endif
 
 # OS specific

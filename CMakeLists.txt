@@ -464,7 +464,7 @@ execute_process(
     ERROR_VARIABLE output
 )
 if (output MATCHES "dyld-1015\.7")
-    add_compile_definitions(-DBUGGY_APPLE_LINKER)
+    add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
 endif()
 
 # Architecture specific
