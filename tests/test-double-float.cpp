@@ -4,7 +4,7 @@
 
 #undef NDEBUG
 #include <cassert>
-#if !defined(__riscv) && !defined(__s390__)
+#if !defined(__riscv) && !defined(__s390__) && !defined(__ARM_NEON)
 #include <immintrin.h>
 #endif
 #include <cmath>

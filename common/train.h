@@ -44,6 +44,7 @@ struct train_params_common {
     int n_batch;
     int n_gradient_accumulation;
     int n_epochs;
+    int n_gpu_layers;
 
     bool custom_n_ctx;
 

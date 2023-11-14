@@ -149,6 +149,7 @@ struct task_server {
     task_type type;
     json data;
     bool infill_mode = false;
+    bool embedding_mode = false;
 };
 
 struct task_result {
@@ -371,6 +372,7 @@ struct llama_client_slot
     std::vector<completion_token_output> generated_token_probs;
 
     bool infill = false;
+    bool embedding = false;
     bool has_next_token = true;
     bool truncated = false;
     bool stopped_eos = false;
@@ -454,7 +456,7 @@ struct llama_client_slot
     }
 
     void release() {
-        if (state == PROCESSING)
+        if (state == IDLE || state == PROCESSING)
         {
             t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
             command = RELEASE;
@@ -754,6 +756,7 @@ struct llama_server_context
         }
 
         slot->params.antiprompt.clear();
+
         const auto &stop = data.find("stop");
         if (stop != data.end() && stop->is_array())
         {
@@ -856,7 +859,7 @@ struct llama_server_context
 
     void kv_cache_clear() {
         // clear the entire KV cache
-        llama_kv_cache_tokens_rm(ctx, -1, -1);
+        llama_kv_cache_clear(ctx);
         clean_kv_cache = false;
     }
 
@@ -867,7 +870,7 @@ struct llama_server_context
 
         kv_cache_clear();
 
-        for (int32_t i = 0; i < batch.n_tokens; ++i)
+        for (int i = 0; i < (int) system_tokens.size(); ++i)
         {
             llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
         }
@@ -894,16 +897,8 @@ struct llama_server_context
         {
             slot.release();
         }
-        wait_all_are_idle();
-        all_slots_are_idle = true;
 
-        // wait until system prompt load
         system_need_update = true;
-        while (system_need_update)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        }
-        // system prompt loaded, continue
     }
 
     void process_system_prompt_data(const json &sys_props) {
@@ -914,26 +909,6 @@ struct llama_server_context
         if (slots.size() > 0)
         {
             notify_system_prompt_changed();
-        }
-        else
-        {
-            system_need_update = true;
-        }
-    }
-
-    void wait_all_are_idle() {
-        bool wait = true;
-        while (wait)
-        {
-            wait = false;
-            for (auto &slot : slots)
-            {
-                if (!slot.available())
-                {
-                    wait = true;
-                    break;
-                }
-            }
         }
     }
 
@@ -965,7 +940,6 @@ struct llama_server_context
                     slot.has_next_token = false;
                 }
                 stop_pos = pos;
-
             }
         }
 
@@ -1272,13 +1246,14 @@ struct llama_server_context
         queue_results.push_back(res);
     }
 
-    int request_completion(json data, bool infill)
+    int request_completion(json data, bool infill, bool embedding)
     {
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
         task.data = data;
         task.infill_mode = infill;
+        task.embedding_mode = embedding;
         task.type = COMPLETION_TASK;
         queue_tasks.push_back(task);
         return task.id;
@@ -1404,7 +1379,7 @@ struct llama_server_context
                     {
                         LOG_TEE("slot unavailable\n");
                         // send error result
-                        send_error(task.id, "slot unavaliable");
+                        send_error(task.id, "slot unavailable");
                         return;
                     }
 
@@ -1416,6 +1391,7 @@ struct llama_server_context
                     slot->reset();
 
                     slot->infill = task.infill_mode;
+                    slot->embedding = task.embedding_mode;
                     slot->task_id = task.id;
 
                     if (!launch_slot_with_data(slot, task.data))
@@ -1444,7 +1420,7 @@ struct llama_server_context
         process_tasks();
 
         // update the system prompt wait until all slots are idle state
-        if (system_need_update)
+        if (system_need_update && all_slots_are_idle)
         {
             LOG_TEE("updating system prompt\n");
             update_system_prompt();
@@ -1498,7 +1474,7 @@ struct llama_server_context
         for (auto & slot : slots)
         {
             // release the slot
-            if (slot.state == PROCESSING && slot.command == RELEASE)
+            if (slot.command == RELEASE)
             {
                 slot.state = IDLE;
                 slot.command = NONE;
@@ -1509,7 +1485,7 @@ struct llama_server_context
                 continue;
             }
 
-            if (slot.state == IDLE || slot.command == RELEASE)
+            if (slot.state == IDLE)
             {
                 continue;
             }
@@ -1530,6 +1506,17 @@ struct llama_server_context
         {
             for (auto & slot : slots)
             {
+                const bool has_prompt = slot.prompt.is_array() || (slot.prompt.is_string() && !slot.prompt.get<std::string>().empty()) || !slot.images.empty();
+
+                // empty prompt passed -> release the slot and send empty response
+                if (slot.state == IDLE && slot.command == LOAD_PROMPT && !has_prompt)
+                {
+                    slot.release();
+                    slot.print_timings();
+                    send_final_response(slot);
+                    continue;
+                }
+
                 // need process the prompt
                 if (slot.state == IDLE && slot.command == LOAD_PROMPT)
                 {
@@ -1712,7 +1699,7 @@ struct llama_server_context
                 }
 
                 // prompt evaluated for embedding
-                if (params.embedding)
+                if (slot.embedding)
                 {
                     send_embedding(slot);
                     slot.release();
@@ -1749,8 +1736,8 @@ struct llama_server_context
                 if (!process_token(result, slot))
                 {
                     slot.release();
-                    send_final_response(slot);
                     slot.print_timings();
+                    send_final_response(slot);
                 }
 
                 slot.i_batch = -1;
@@ -1766,15 +1753,16 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("usage: %s [options]\n", argv0);
     printf("\n");
     printf("options:\n");
-    printf("  -h, --help            show this help message and exit\n");
-    printf("  -v, --verbose         verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    printf("  -t N, --threads N     number of threads to use during computation (default: %d)\n", params.n_threads);
-    printf("  -c N, --ctx-size N    size of the prompt context (default: %d)\n", params.n_ctx);
-    printf("  --rope-freq-base N    RoPE base frequency (default: loaded from model)\n");
-    printf("  --rope-freq-scale N   RoPE frequency scaling factor (default: loaded from model)\n");
-    printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
-    printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
+    printf("  -h, --help                show this help message and exit\n");
+    printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
+    printf("  -t N,  --threads N        number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
+    printf("  -c N,  --ctx-size N       size of the prompt context (default: %d)\n", params.n_ctx);
+    printf("  --rope-freq-base N        RoPE base frequency (default: loaded from model)\n");
+    printf("  --rope-freq-scale N       RoPE frequency scaling factor (default: loaded from model)\n");
+    printf("  -b N,  --batch-size N     batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
+    printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_mlock_supported())
     {
         printf("  --mlock               force system to keep model in RAM rather than swapping or compressing\n");
@@ -1923,6 +1911,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.n_threads = std::stoi(argv[i]);
+        }
+        else if (arg == "--threads-batch" || arg == "-tb")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            params.n_threads_batch = std::stoi(argv[i]);
         }
         else if (arg == "-b" || arg == "--batch-size")
         {
@@ -2281,11 +2278,11 @@ int main(int argc, char **argv)
     svr.Post("/completion", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = json::parse(req.body);
-                const int task_id = llama.request_completion(data, false);
+                const int task_id = llama.request_completion(data, false, false);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
-                    if(!result.error && result.stop) {
+                    if (!result.error && result.stop) {
                         res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
                     }
                     else
@@ -2312,7 +2309,7 @@ int main(int argc, char **argv)
                                 {
                                     return false;
                                 }
-                                if(result.stop) {
+                                if (result.stop) {
                                     break;
                                 }
                             } else {
@@ -2336,7 +2333,7 @@ int main(int argc, char **argv)
     svr.Post("/infill", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = json::parse(req.body);
-                const int task_id = llama.request_completion(data, true);
+                const int task_id = llama.request_completion(data, true, false);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
@@ -2440,7 +2437,7 @@ int main(int argc, char **argv)
                 {
                     prompt = "";
                 }
-                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false);
+                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true);
                 task_result result = llama.next_result(task_id);
                 return res.set_content(result.result_json.dump(), "application/json");
             });
