@@ -10,6 +10,7 @@
 *.gcno
 *.gcda
 *.dot
+*.bat
 *.metallib
 .DS_Store
 .build/
@@ -44,6 +45,7 @@ models-mnt
 /infill
 /libllama.so
 /llama-bench
+/llava
 /main
 /metal
 /perplexity
@@ -55,6 +57,7 @@ models-mnt
 /server
 /simple
 /batched
+/batched-bench
 /export-lora
 /finetune
 /speculative

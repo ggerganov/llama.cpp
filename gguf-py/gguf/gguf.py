@@ -19,8 +19,9 @@ import numpy as np
 #
 
 GGUF_MAGIC             = 0x46554747
-GGUF_VERSION           = 2
+GGUF_VERSION           = 3
 GGUF_DEFAULT_ALIGNMENT = 32
+
 
 # general
 KEY_GENERAL_ARCHITECTURE         = "general.architecture"
@@ -88,29 +89,31 @@ class MODEL_ARCH(IntEnum):
     PERSIMMON     : int = auto()
     REFACT        : int = auto()
     BERT          : int = auto()
+    BLOOM         : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
-    TOKEN_EMBD   : int = auto()
-    TOKEN_TYPES  : int = auto()
-    POS_EMBD     : int = auto()
-    OUTPUT       : int = auto()
-    OUTPUT_NORM  : int = auto()
-    ROPE_FREQS   : int = auto()
-    ATTN_Q       : int = auto()
-    ATTN_K       : int = auto()
-    ATTN_V       : int = auto()
-    ATTN_QKV     : int = auto()
-    ATTN_OUT     : int = auto()
-    ATTN_NORM    : int = auto()
-    ATTN_NORM_2  : int = auto()
-    ATTN_ROT_EMBD: int = auto()
-    FFN_GATE     : int = auto()
-    FFN_DOWN     : int = auto()
-    FFN_UP       : int = auto()
-    FFN_NORM     : int = auto()
-    ATTN_Q_NORM  : int = auto()
-    ATTN_K_NORM  : int = auto()
+    TOKEN_EMBD      : int = auto()
+    TOKEN_EMBD_NORM : int = auto()
+    TOKEN_TYPES     : int = auto()
+    POS_EMBD        : int = auto()
+    OUTPUT          : int = auto()
+    OUTPUT_NORM     : int = auto()
+    ROPE_FREQS      : int = auto()
+    ATTN_Q          : int = auto()
+    ATTN_K          : int = auto()
+    ATTN_V          : int = auto()
+    ATTN_QKV        : int = auto()
+    ATTN_OUT        : int = auto()
+    ATTN_NORM       : int = auto()
+    ATTN_NORM_2     : int = auto()
+    ATTN_ROT_EMBD   : int = auto()
+    FFN_GATE        : int = auto()
+    FFN_DOWN        : int = auto()
+    FFN_UP          : int = auto()
+    FFN_NORM        : int = auto()
+    ATTN_Q_NORM     : int = auto()
+    ATTN_K_NORM     : int = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -125,29 +128,31 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.PERSIMMON:      "persimmon",
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
+    MODEL_ARCH.BLOOM:          "bloom",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
-    MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-    MODEL_TENSOR.TOKEN_TYPES:   "token_types",
-    MODEL_TENSOR.POS_EMBD:      "position_embd",
-    MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-    MODEL_TENSOR.OUTPUT:        "output",
-    MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
-    MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-    MODEL_TENSOR.ATTN_NORM_2:   "blk.{bid}.attn_norm_2",
-    MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
-    MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
-    MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
-    MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
-    MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-    MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
-    MODEL_TENSOR.ATTN_Q_NORM:   "blk.{bid}.attn_q_norm",
-    MODEL_TENSOR.ATTN_K_NORM:   "blk.{bid}.attn_k_norm",
-    MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-    MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
-    MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-    MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+    MODEL_TENSOR.TOKEN_EMBD:      "token_embd",
+    MODEL_TENSOR.TOKEN_EMBD_NORM: "token_embd_norm",
+    MODEL_TENSOR.TOKEN_TYPES:     "token_types",
+    MODEL_TENSOR.POS_EMBD:        "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:     "output_norm",
+    MODEL_TENSOR.OUTPUT:          "output",
+    MODEL_TENSOR.ROPE_FREQS:      "rope_freqs",
+    MODEL_TENSOR.ATTN_NORM:       "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:     "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:        "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:          "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:          "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:          "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:        "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD:   "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.ATTN_Q_NORM:     "blk.{bid}.attn_q_norm",
+    MODEL_TENSOR.ATTN_K_NORM:     "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.FFN_NORM:        "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:        "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:          "blk.{bid}.ffn_up",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -282,6 +287,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.BLOOM: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.GPT2: [
         # TODO
     ],
@@ -311,6 +328,7 @@ class TensorNameMap:
             "gpt_neox.embed_in",                        # gptneox
             "transformer.wte",                          # gpt2 gpt-j mpt refact
             "transformer.word_embeddings",              # falcon
+            "word_embeddings",                          # bloom
             "model.embed_tokens",                       # llama-hf
             "tok_embeddings",                           # llama-pth
             "embeddings.word_embeddings",               # bert
@@ -320,6 +338,11 @@ class TensorNameMap:
         # Token type embeddings
         MODEL_TENSOR.TOKEN_TYPES: (
             "embeddings.token_type_embeddings",  # bert
+        ),
+
+        # Normalization of token embeddings
+        MODEL_TENSOR.TOKEN_EMBD_NORM: (
+            "word_embeddings_layernorm",  # bloom
         ),
 
         # Position embeddings
@@ -332,7 +355,7 @@ class TensorNameMap:
         MODEL_TENSOR.OUTPUT: (
             "embed_out",                # gptneox
             "lm_head",                  # gpt2 mpt falcon llama-hf baichuan
-            "output",                   # llama-pth
+            "output",                   # llama-pth bloom
             "word_embeddings_for_head", # persimmon
         ),
 
@@ -344,7 +367,7 @@ class TensorNameMap:
             "norm",                                   # llama-pth
             "embeddings.LayerNorm",                   # bert
             "transformer.norm_f",                     # mpt
-            "ln_f",                                   # refact
+            "ln_f",                                   # refact bloom
             "language_model.encoder.final_layernorm", # persimmon
         ),
 
@@ -361,6 +384,7 @@ class TensorNameMap:
             "transformer.h.{bid}.ln_1",                            # gpt2 gpt-j refact
             "transformer.blocks.{bid}.norm_1",                     # mpt
             "transformer.h.{bid}.input_layernorm",                 # falcon7b
+            "h.{bid}.input_layernorm",                             # bloom
             "transformer.h.{bid}.ln_mlp",                          # falcon40b
             "model.layers.{bid}.input_layernorm",                  # llama-hf
             "layers.{bid}.attention_norm",                         # llama-pth
@@ -379,6 +403,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.c_attn",                                    # gpt2
             "transformer.blocks.{bid}.attn.Wqkv",                                 # mpt
             "transformer.h.{bid}.self_attention.query_key_value",                 # falcon
+            "h.{bid}.self_attention.query_key_value",                             # bloom
             "language_model.encoder.layers.{bid}.self_attention.query_key_value", # persimmon
         ),
 
@@ -412,6 +437,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.c_proj",                         # gpt2 refact
             "transformer.blocks.{bid}.attn.out_proj",                  # mpt
             "transformer.h.{bid}.self_attention.dense",                # falcon
+            "h.{bid}.self_attention.dense",                            # bloom
             "model.layers.{bid}.self_attn.o_proj",                     # llama-hf
             "layers.{bid}.attention.wo",                               # llama-pth
             "encoder.layer.{bid}.attention.output.dense",              # bert
@@ -429,6 +455,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_NORM: (
             "gpt_neox.layers.{bid}.post_attention_layernorm",               # gptneox
             "transformer.h.{bid}.ln_2",                                     # gpt2 refact
+            "h.{bid}.post_attention_layernorm",                             # bloom
             "transformer.blocks.{bid}.norm_2",                              # mpt
             "model.layers.{bid}.post_attention_layernorm",                  # llama-hf
             "layers.{bid}.ffn_norm",                                        # llama-pth
@@ -442,6 +469,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.c_fc",                          # gpt2
             "transformer.blocks.{bid}.ffn.up_proj",                  # mpt
             "transformer.h.{bid}.mlp.dense_h_to_4h",                 # falcon
+            "h.{bid}.mlp.dense_h_to_4h",                             # bloom
             "model.layers.{bid}.mlp.up_proj",                        # llama-hf refact
             "layers.{bid}.feed_forward.w3",                          # llama-pth
             "encoder.layer.{bid}.intermediate.dense",                # bert
@@ -461,6 +489,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.c_proj",                        # gpt2 refact
             "transformer.blocks.{bid}.ffn.down_proj",                # mpt
             "transformer.h.{bid}.mlp.dense_4h_to_h",                 # falcon
+            "h.{bid}.mlp.dense_4h_to_h",                             # bloom
             "model.layers.{bid}.mlp.down_proj",                      # llama-hf
             "layers.{bid}.feed_forward.w2",                          # llama-pth
             "encoder.layer.{bid}.output.dense",                      # bert
@@ -569,6 +598,10 @@ class GGMLQuantizationType(IntEnum):
     Q6_K = 14
     Q8_K = 15
 
+class GGUFEndian(IntEnum):
+    LITTLE = 0
+    BIG = 1
+
 
 class GGUFValueType(IntEnum):
     UINT8   = 0
@@ -616,18 +649,41 @@ class GGUFWriter:
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None = None
     tensors: list[tuple[np.ndarray[Any, Any], int]]
 
-    def __init__(self, path: os.PathLike[str] | str, arch: str, use_temp_file = True):
+    @property
+    def pack_prefix(self):
+        if self.endianess==GGUFEndian.LITTLE:
+            return "<"
+        else:
+            return ">"
+
+    def __init__(self, path: os.PathLike[str] | str, arch: str, use_temp_file = True, endianess=GGUFEndian.LITTLE):
         self.fout = open(path, "wb")
         self.arch = arch
+        self.endianess = endianess
+        self._simple_value_packing = {
+            GGUFValueType.UINT8:   f"{self.pack_prefix}B",
+            GGUFValueType.INT8:    f"{self.pack_prefix}b",
+            GGUFValueType.UINT16:  f"{self.pack_prefix}H",
+            GGUFValueType.INT16:   f"{self.pack_prefix}h",
+            GGUFValueType.UINT32:  f"{self.pack_prefix}I",
+            GGUFValueType.INT32:   f"{self.pack_prefix}i",
+            GGUFValueType.FLOAT32: f"{self.pack_prefix}f",
+            GGUFValueType.UINT64:  f"{self.pack_prefix}Q",
+            GGUFValueType.INT64:   f"{self.pack_prefix}q",
+            GGUFValueType.FLOAT64: f"{self.pack_prefix}d",
+            GGUFValueType.BOOL:    "?" ,
+        }
         self.add_architecture()
         self.use_temp_file = use_temp_file
         self.tensors = []
+        endianess_str = "Big Endian" if self.endianess == GGUFEndian.BIG else "Little Endian"
+        print(f"This gguf file is for {endianess_str} only")
 
     def write_header_to_file(self):
         self.fout.write(struct.pack("<I", GGUF_MAGIC))
-        self.fout.write(struct.pack("<I", GGUF_VERSION))
-        self.fout.write(struct.pack("<Q", self.ti_data_count))
-        self.fout.write(struct.pack("<Q", self.kv_data_count))
+        self.fout.write(struct.pack(f"{self.pack_prefix}I", GGUF_VERSION))
+        self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.ti_data_count))
+        self.fout.write(struct.pack(f"{self.pack_prefix}Q", self.kv_data_count))
         self.flush()
 #        print("tensors " + str(self.ti_data_count) + " kv " + str(self.kv_data_count))
 
@@ -699,25 +755,12 @@ class GGUFWriter:
         self.add_key(key)
         self.add_val(val, GGUFValueType.ARRAY)
 
-    _simple_value_packing = {
-        GGUFValueType.UINT8:   "<B",
-        GGUFValueType.INT8:    "<b",
-        GGUFValueType.UINT16:  "<H",
-        GGUFValueType.INT16:   "<h",
-        GGUFValueType.UINT32:  "<I",
-        GGUFValueType.INT32:   "<i",
-        GGUFValueType.FLOAT32: "<f",
-        GGUFValueType.UINT64:  "<Q",
-        GGUFValueType.INT64:   "<q",
-        GGUFValueType.FLOAT64: "<d",
-        GGUFValueType.BOOL:    "?" ,
-    }
     def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True):
         if vtype is None:
             vtype = GGUFValueType.get_type(val)
 
         if add_vtype:
-            self.kv_data += struct.pack("<I", vtype)
+            self.kv_data += struct.pack(f"{self.pack_prefix}I", vtype)
             self.kv_data_count += 1
 
         pack_fmt = self._simple_value_packing.get(vtype)
@@ -725,14 +768,14 @@ class GGUFWriter:
             self.kv_data += struct.pack(pack_fmt, val)
         elif vtype == GGUFValueType.STRING:
             encoded_val = val.encode("utf8") if isinstance(val, str) else val
-            self.kv_data += struct.pack("<Q", len(encoded_val))
+            self.kv_data += struct.pack(f"{self.pack_prefix}Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and len(val) > 0:
             ltype = GGUFValueType.get_type(val[0])
             if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
                 raise ValueError("All items in a GGUF array should be of the same type")
-            self.kv_data += struct.pack("<I", ltype)
-            self.kv_data += struct.pack("<Q", len(val))
+            self.kv_data += struct.pack(f"{self.pack_prefix}I", ltype)
+            self.kv_data += struct.pack(f"{self.pack_prefix}Q", len(val))
             for item in val:
                 self.add_val(item, add_vtype=False)
         else:
@@ -746,22 +789,24 @@ class GGUFWriter:
         assert raw_dtype is not None or tensor_dtype in (np.float32, np.float16), "Only F32 and F16 tensors are supported for now"
 
         encoded_name = name.encode("utf8")
-        self.ti_data += struct.pack("<Q", len(encoded_name))
+        self.ti_data += struct.pack(f"{self.pack_prefix}Q", len(encoded_name))
         self.ti_data += encoded_name
         n_dims = len(tensor_shape)
-        self.ti_data += struct.pack("<I", n_dims)
+        self.ti_data += struct.pack(f"{self.pack_prefix}I", n_dims)
         for i in range(n_dims):
-            self.ti_data += struct.pack("<Q", tensor_shape[n_dims - 1 - i])
+            self.ti_data += struct.pack(f"{self.pack_prefix}Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             dtype = GGMLQuantizationType.F32 if tensor_dtype == np.float32 else GGMLQuantizationType.F16
         else:
             dtype = raw_dtype
-        self.ti_data += struct.pack("<I", dtype)
-        self.ti_data += struct.pack("<Q", self.offset_tensor)
+        self.ti_data += struct.pack(f"{self.pack_prefix}I", dtype)
+        self.ti_data += struct.pack(f"{self.pack_prefix}Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
         self.ti_data_count += 1
 
     def add_tensor(self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None, raw_dtype: GGMLQuantizationType | None = None):
+        if self.endianess == GGUFEndian.BIG:
+            tensor.byteswap(inplace=True)
         if self.use_temp_file and self.temp_file is None:
             fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256*1024*1024)
             fp.seek(0)
@@ -787,6 +832,8 @@ class GGUFWriter:
             fp.write(bytes([0] * pad))
 
     def write_tensor_data(self, tensor: np.ndarray[Any, Any]):
+        if self.endianess==GGUFEndian.BIG:
+            tensor.byteswap(inplace=True)
         self.write_padding(self.fout, self.fout.tell())
         tensor.tofile(self.fout)
         self.write_padding(self.fout, tensor.nbytes)
@@ -940,12 +987,15 @@ class SpecialVocab:
     merges: list[str] = []
     special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
     special_token_ids: dict[str, int] = {}
+    n_vocab: int | None = None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
         special_token_types: tuple[str, ...] | None = None,
+        n_vocab: int | None = None,
     ):
         self.special_token_ids = {}
+        self.n_vocab = n_vocab
         self.load_merges = load_merges
         if special_token_types is not None:
             self.special_token_types = special_token_types
@@ -954,6 +1004,16 @@ class SpecialVocab:
     def _load(self, path: Path) -> None:
         if not self._try_load_from_tokenizer_json(path):
             self._try_load_from_config_json(path)
+
+    def _set_special_token(self, typ: str, tid: Any):
+        if not isinstance(tid, int) or tid < 0:
+            return
+        if self.n_vocab is None or tid < self.n_vocab:
+            self.special_token_ids[typ] = tid
+            return
+        print(f'gguf: WARNING: Special token type {typ}, id {tid} out of range, must be under {self.n_vocab} - skipping',
+            file = sys.stderr)
+
 
     def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
@@ -982,10 +1042,11 @@ class SpecialVocab:
                 tc_content = entry_content
             else:
                 continue
-            for maybe_token_id in (atok.get('id') for atok in added_tokens if atok.get('content') == tc_content):
-                if isinstance(maybe_token_id, int) and maybe_token_id >= 0:
-                    self.special_token_ids[typ] = maybe_token_id
-                break
+            # We only need the first match here.
+            maybe_token_id = next((
+                atok.get('id') for atok in added_tokens
+                if atok.get('content') == tc_content), None)
+            self._set_special_token(typ, maybe_token_id)
         return True
 
     def _try_load_from_config_json(self, path: Path) -> bool:
@@ -995,21 +1056,21 @@ class SpecialVocab:
         with open(config_file, encoding = 'utf-8') as f:
             config = json.load(f)
         for typ in self.special_token_types:
-            maybe_token_id = config.get(f'{typ}_token_id')
-            if isinstance(maybe_token_id, int) and maybe_token_id >= 0:
-                self.special_token_ids[typ] = maybe_token_id
+            self._set_special_token(typ, config.get(f'{typ}_token_id'))
         return True
 
-    def add_to_gguf(self, gw: GGUFWriter) -> None:
+    def add_to_gguf(self, gw: GGUFWriter, quiet: bool = False) -> None:
         if len(self.merges) > 0:
-            print(f'gguf: Adding {len(self.merges)} merge(s).')
+            if not quiet:
+                print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
         for typ, tokid in self.special_token_ids.items():
             handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
             if handler is None:
-                print(f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping')
+                print(f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping', file = sys.stderr)
                 continue
-            print(f'gguf: Setting special token type {typ} to {tokid}')
+            if not quiet:
+                print(f'gguf: Setting special token type {typ} to {tokid}')
             handler(tokid)
 
     def __repr__(self) -> str:

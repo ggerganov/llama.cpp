@@ -1,10 +1,10 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.5
 
 import PackageDescription
 
 #if arch(arm) || arch(arm64)
 let platforms: [SupportedPlatform]? = [
-    .macOS(.v11),
+    .macOS(.v12),
     .iOS(.v14),
     .watchOS(.v4),
     .tvOS(.v14)
@@ -41,12 +41,13 @@ let package = Package(
                 "ggml.c",
                 "llama.cpp",
                 "ggml-alloc.c",
+                "ggml-backend.c",
                 "k_quants.c",
             ] + additionalSources,
             resources: resources,
             publicHeadersPath: "spm-headers",
             cSettings: [
-                .unsafeFlags(["-Wno-shorten-64-to-32"]),
+                .unsafeFlags(["-Wno-shorten-64-to-32", "-O3", "-DNDEBUG"]),
                 .define("GGML_USE_K_QUANTS"),
                 .define("GGML_USE_ACCELERATE")
                 // NOTE: NEW_LAPACK will required iOS version 16.4+

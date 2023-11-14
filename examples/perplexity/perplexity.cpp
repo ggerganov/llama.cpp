@@ -227,7 +227,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(ctx);
+                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
             const auto batch_logits = llama_get_logits(ctx);
@@ -350,7 +350,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
             // add BOS token for the first batch of each chunk
             if (add_bos && j == 0) {
-                tokens[batch_start] = llama_token_bos(ctx);
+                tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
             if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {

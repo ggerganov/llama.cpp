@@ -31,6 +31,7 @@ llama_test_executable (test-tokenizer-1-llama test-tokenizer-1-llama.cpp ${CMAKE
 llama_build_executable(test-tokenizer-1-bpe.cpp)
 llama_test_executable (test-tokenizer-1-falcon test-tokenizer-1-bpe.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-falcon.gguf)
 llama_test_executable(test-tokenizer-1-aquila test-tokenizer-1-bpe.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-aquila.gguf)
+llama_test_executable(test-tokenizer-1-mpt test-tokenizer-1-bpe.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../models/ggml-vocab-mpt.gguf)
 llama_build_and_test_executable(test-grammar-parser.cpp)
 llama_build_and_test_executable(test-llama-grammar.cpp)
 llama_build_and_test_executable(test-grad0.cpp) # SLOW
