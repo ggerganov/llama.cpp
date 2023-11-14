@@ -1460,17 +1460,6 @@ static bool train_params_parse(int argc, char ** argv, struct train_params * par
             }
             params->n_rank_w3 = std::stoi(argv[i]);
             params->custom_n_rank_w3 = true;
-        } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
-            params->common.n_gpu_layers = std::stoi(argv[i]);
-#else
-            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
-            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
-#endif
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             train_print_usage(argc, argv, &default_params);

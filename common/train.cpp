@@ -1136,6 +1136,7 @@ void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train
     fprintf(stderr, "  --adam-beta2 N             AdamW beta2 in interval [0,1). How much to smooth the second moment of gradients. (default %f)\n", params->adam_beta2);
     fprintf(stderr, "  --adam-gclip N             AdamW gradient clipping. Disabled when zero. (default %f)\n", params->adam_gclip);
     fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
+    fprintf(stderr, "  -ngl N, --n-gpu-layers N   Number of model layers to offload to GPU (default %d)", params->n_gpu_layers);
     fprintf(stderr, "\n");
 }
 
@@ -1355,6 +1356,17 @@ bool consume_common_train_arg(
             return true;
         }
         params->adam_gclip = std::stof(argv[i]);
+    } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
+            if (++i >= argc) {
+                *invalid_param = true;
+                return true;
+            }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
+            params->n_gpu_layers = std::stoi(argv[i]);
+#else
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
     } else if (arg == "-h" || arg == "--help") {
         params->print_usage = true;
         return true;
