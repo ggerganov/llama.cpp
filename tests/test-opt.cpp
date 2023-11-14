@@ -109,10 +109,11 @@ int main(void) {
     struct ggml_tensor * d  = ggml_sub(ctx, c, ab);
     struct ggml_tensor * e  = ggml_sum(ctx, ggml_sqr(ctx, d));
 
-    struct ggml_cgraph ge = ggml_build_forward(e);
-    ggml_graph_reset(&ge);
+    struct ggml_cgraph * ge = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, true);
+    ggml_build_forward_expand(ge, e);
+    ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
 
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
@@ -121,9 +122,9 @@ int main(void) {
 
     ggml_opt(ctx, opt_params, e);
 
-    ggml_graph_reset(&ge);
+    ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
 
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);

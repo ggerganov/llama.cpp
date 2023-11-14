@@ -1,51 +1,20 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-alloc.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
-    struct ggml_backend;
+
+    //
+    // Backend buffer
+    //
+
     struct ggml_backend_buffer;
-
-    // type-erased backend-specific types / wrappers
-    typedef void * ggml_backend_context_t;
-    typedef void * ggml_backend_graph_plan_t;
-    typedef void * ggml_backend_buffer_context_t;
-
-    // avoid accessing internals of these types
-    typedef struct ggml_backend        * ggml_backend_t;
     typedef struct ggml_backend_buffer * ggml_backend_buffer_t;
 
-    //
-    // backend buffer
-    //
-
-    struct ggml_backend_buffer_i {
-        void   (*free_buffer)   (ggml_backend_buffer_t buffer);
-        void * (*get_base)      (ggml_backend_buffer_t buffer); // get base pointer
-        size_t (*get_alloc_size)(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // pre-allocation callback
-        void   (*init_tensor)   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // post-allocation callback
-        void   (*free_tensor)   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // pre-free callback
-    };
-
-    // TODO: hide behind API
-    struct ggml_backend_buffer {
-        struct ggml_backend_buffer_i iface;
-
-        ggml_backend_t                backend;
-        ggml_backend_buffer_context_t context;
-
-        size_t size;
-    };
-
     // backend buffer functions
-    GGML_API ggml_backend_buffer_t ggml_backend_buffer_init(
-            struct ggml_backend                  * backend,
-            struct ggml_backend_buffer_i           iface,
-                   ggml_backend_buffer_context_t   context,
-                   size_t                          size);
-
     GGML_API void   ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
     GGML_API size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
     GGML_API void * ggml_backend_buffer_get_base      (ggml_backend_buffer_t buffer);
@@ -55,50 +24,13 @@ extern "C" {
     GGML_API void   ggml_backend_buffer_free_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
 
     //
-    // backend
+    // Backend
     //
 
-    struct ggml_backend_i {
-        const char * (*get_name)(ggml_backend_t backend);
+    struct ggml_backend;
+    typedef struct ggml_backend * ggml_backend_t;
+    typedef void * ggml_backend_graph_plan_t;
 
-        void (*free)(ggml_backend_t backend);
-
-        // buffer allocation
-        ggml_backend_buffer_t (*alloc_buffer)(ggml_backend_t backend, size_t size);
-
-        // get buffer alignment
-        size_t (*get_alignment)(ggml_backend_t backend);
-
-        // tensor data access
-        // these functions can be asynchronous, helper functions are provided for synchronous access that automatically call synchronize
-        void (*set_tensor_async)(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
-        void (*get_tensor_async)(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
-        void (*synchronize)     (ggml_backend_t backend);
-
-        // (optional) copy tensor between different backends, allow for single-copy tranfers
-        void (*cpy_tensor_from)(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
-        void (*cpy_tensor_to)  (ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
-
-        // compute graph with a plan
-        ggml_backend_graph_plan_t (*graph_plan_create) (ggml_backend_t backend, struct ggml_cgraph * cgraph);
-        void                      (*graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
-        void                      (*graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
-
-        // compute graph without a plan
-        void (*graph_compute)(ggml_backend_t backend, struct ggml_cgraph * cgraph);
-
-        // check if the backend supports an operation
-        bool (*supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
-    };
-
-    // TODO: hide behind API
-    struct ggml_backend {
-        struct ggml_backend_i iface;
-
-        ggml_backend_context_t context;
-    };
-
-    // backend helper functions
     GGML_API ggml_backend_t ggml_get_backend(const struct ggml_tensor * tensor);
 
     GGML_API const char * ggml_backend_name(ggml_backend_t backend);
@@ -133,10 +65,71 @@ extern "C" {
     GGML_API ggml_backend_t ggml_backend_cpu_init(void);
 
     GGML_API bool ggml_backend_is_cpu(ggml_backend_t backend);
-
     GGML_API void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads);
 
+    // Create a backend buffer from an existing pointer
     GGML_API ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(ggml_backend_t backend_cpu, void * ptr, size_t size);
+
+
+    //
+    // Backend scheduler
+    //
+
+    // The backend scheduler allows for multiple backends to be used together
+    // Handles compute buffer allocation, assignment of tensors to backends, and copying of tensors between backends
+    // The backends are selected based on:
+    // - the backend that supports the operation
+    // - the location of the pre-allocated tensors (e.g. the weights)
+    /*
+      Example usage:
+
+        sched = ggml_backend_sched_new({backend_gpu, backend_gpu2, backend_cpu}, num_backends);
+        // sched is initialized with measure allocators and cannot be used until allocated with a measure graph
+
+        // initialize buffers from a measure graph
+        measure_graph = build_graph(sched); // use the allocr to allocate inputs as needed
+
+        // in build_graph:
+        build_graph(...) {
+            // allocating tensors in a specific backend (optional, recommended: pre-allocate inputs in a different buffer)
+            alloc_cpu = ggml_backend_sched_get_allocr(sched, backend_cpu);
+            ggml_allocr_alloc(alloc_cpu, tensor);
+
+            // manually assigning nodes to a backend (optional, shouldn't be needed in most cases)
+            struct ggml_tensor * node = ggml_mul_mat(ctx, ...);
+            ggml_backend_sched_set_node_backend(sched, node, backend_gpu);
+        }
+
+        // allocate backend buffers from measure graph
+        ggml_backend_sched_init_measure(sched, measure_graph);
+
+        // the scheduler is now ready to compute graphs
+
+        // compute
+        graph = build_graph(sched);
+        ggml_backend_sched_graph_compute(sched, graph);
+    */
+
+    struct ggml_backend_sched;
+    typedef struct ggml_backend_sched * ggml_backend_sched_t;
+
+    // Initialize a backend scheduler
+    GGML_API ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_backends);
+
+    GGML_API void ggml_backend_sched_free(ggml_backend_sched_t sched);
+
+    // Initialize backend buffers from a measure graph
+    GGML_API void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgraph * measure_graph);
+
+    GGML_API ggml_tallocr_t        ggml_backend_sched_get_tallocr(ggml_backend_sched_t sched, ggml_backend_t backend);
+    GGML_API ggml_backend_buffer_t ggml_backend_sched_get_buffer (ggml_backend_sched_t sched, ggml_backend_t backend);
+
+    GGML_API void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend);
+
+    // Allocate a graph on the backend scheduler
+    GGML_API void ggml_backend_sched_graph_compute(
+            ggml_backend_sched_t sched,
+            struct ggml_cgraph * graph);
 
 #ifdef  __cplusplus
 }

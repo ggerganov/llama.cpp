@@ -90,6 +90,19 @@ void process_escapes(std::string& input) {
                 case '\'': input[output_idx++] = '\''; break;
                 case '\"': input[output_idx++] = '\"'; break;
                 case '\\': input[output_idx++] = '\\'; break;
+                case 'x':
+                    // Handle \x12, etc
+                    if (input_idx + 2 < input_len) {
+                        const char x[3] = { input[input_idx + 1], input[input_idx + 2], 0 };
+                        char *err_p = nullptr;
+                        const long val = std::strtol(x, &err_p, 16);
+                        if (err_p == x + 2) {
+                            input_idx += 2;
+                            input[output_idx++] = char(val);
+                            break;
+                        }
+                    }
+                    // fall through
                 default:   input[output_idx++] = '\\';
                            input[output_idx++] = input[input_idx]; break;
             }
@@ -403,6 +416,18 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_sequences = std::stoi(argv[i]);
+        } else if (arg == "--p-accept" || arg == "-pa") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.p_accept = std::stof(argv[i]);
+        } else if (arg == "--p-split" || arg == "-ps") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.p_split = std::stof(argv[i]);
         } else if (arg == "-m" || arg == "--model") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -778,6 +803,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     printf("  -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
     printf("  -ns N, --sequences N  number of sequences to decode (default: %d)\n", params.n_sequences);
+    printf("  -pa N, --p-accept N   speculative decoding accept probability (default: %.1f)\n", (double)params.p_accept);
+    printf("  -ps N, --p-split N    speculative decoding split probability (default: %.1f)\n", (double)params.p_split);
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA. see examples/llava/README.md\n");
     printf("  --image IMAGE_FILE    path to an image file. use with multimodal models\n");
