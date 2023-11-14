@@ -127,7 +127,14 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
         fclose(file);
         return false;
     }
-    fread(buffer, 1, fileSize, file); // Read the file into the buffer
+    errno = 0;
+    size_t ret = fread(buffer, 1, fileSize, file); // Read the file into the buffer
+    if (ferror(file)) {
+        die_fmt("read error: %s", strerror(errno));
+    }
+    if (ret != (size_t) fileSize) {
+        die("unexpectedly reached end of file");
+    }
     fclose(file); // Close the file
 
     *bytesOut = buffer;
