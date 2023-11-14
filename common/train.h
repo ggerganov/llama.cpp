@@ -9,6 +9,8 @@
 #include "ggml.h"
 #include "llama.h"
 
+#define LLAMA_TRAIN_MAX_NODES 16384
+
 typedef std::string mt19937_state;
 
 struct train_state {
