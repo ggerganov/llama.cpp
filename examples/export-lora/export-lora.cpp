@@ -240,7 +240,7 @@ static struct lora_data * load_lora(struct lora_info * info) {
     }
 
     struct ggml_init_params params_ggml;
-    params_ggml.mem_size   = ggml_tensor_overhead() * GGML_MAX_NODES;
+    params_ggml.mem_size   = ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE;
     params_ggml.mem_buffer = NULL;
     params_ggml.no_alloc   = true;
     result->ctx = ggml_init(params_ggml);
@@ -334,7 +334,7 @@ static bool apply_lora(struct ggml_tensor * tensor, struct lora_data * lora, int
     float scaling = lora->info.scale * (float)lora->lora_alpha / (float)lora->lora_r;
 
     struct ggml_init_params params;
-    params.mem_size   = GGML_OBJECT_SIZE + GGML_GRAPH_SIZE + ggml_tensor_overhead()*4 + GGML_MEM_ALIGN*5;
+    params.mem_size   = GGML_OBJECT_SIZE + ggml_graph_overhead() + ggml_tensor_overhead()*4 + GGML_MEM_ALIGN*5;
     params.mem_buffer = NULL;
     params.no_alloc   = true;
     struct ggml_context * ctx = NULL;
