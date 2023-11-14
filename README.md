@@ -93,6 +93,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+- [X] [StableLM-3b-4e1t](https://github.com/ggerganov/llama.cpp/pull/3586)
 
 
 **Bindings:**
