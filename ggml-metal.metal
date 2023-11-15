@@ -1277,10 +1277,9 @@ kernel void kernel_rope(
         for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
             for (int64_t ic = 2*tiitg; ic < n_dims; ic += 2*tptg.x) {
 
-                // simplified from `(ib * n_dims + ic) * inv_ndims`
-                const float cur_rot = inv_ndims*ic - ib;
+                const int64_t cur_rot = ib * n_dims + ic;
 
-                const float theta = theta_0 * pow(freq_base, cur_rot);
+                const float theta = theta_0 * pow(freq_base, inv_ndims*cur_rot);
                 float cos_theta, sin_theta;
                 rope_yarn(theta, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
