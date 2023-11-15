@@ -81,7 +81,7 @@ struct ggml_tensor * zero_tensor(struct ggml_tensor * tensor) {
             for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
                 for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
                     float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-					*dst = 0.0f;
+                    *dst = 0.0f;
                 }
             }
             break;
@@ -90,7 +90,7 @@ struct ggml_tensor * zero_tensor(struct ggml_tensor * tensor) {
                 for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
                     for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
                         float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2]);
-						*dst = 0.0f;
+                        *dst = 0.0f;
                     }
                 }
             }
@@ -101,7 +101,7 @@ struct ggml_tensor * zero_tensor(struct ggml_tensor * tensor) {
                     for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
                         for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
                             float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3]);
-							*dst = 0.0f;
+                            *dst = 0.0f;
                         }
                     }
                 }
