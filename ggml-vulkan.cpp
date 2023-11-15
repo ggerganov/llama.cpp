@@ -1195,8 +1195,8 @@ void ggml_vk_rope(
     const std::shared_ptr<kp::Tensor>& inB,
     const std::shared_ptr<kp::Tensor>& out,
     uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
-    ggml_type src0t, int32_t n_dims, int32_t mode,
-    float freq_base, float freq_scale,
+    ggml_type src0t, int32_t n_dims, int32_t mode, int32_t n_orig_ctx,
+    float freq_base, float freq_scale, float ext_factor, float attn_factor, float beta_fast, float beta_slow,
     int32_t ne01, int32_t ne02, int32_t ne03,
     uint32_t nb00, uint32_t nb01, uint32_t nb02, uint32_t nb03,
     int32_t ne0,
@@ -1224,15 +1224,15 @@ void ggml_vk_rope(
 
     struct PushConstants {
         uint32_t inAOff, inBOff, outOff;
-        int32_t n_dims, mode;
-        float freq_base, freq_scale;
+        int32_t n_dims, mode, n_orig_ctx;
+        float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
         uint32_t nb00, nb01, nb02, nb03;
         int32_t ne0;
         uint32_t nb0, nb1, nb2, nb3;
     } pushConsts {
         safe_divide(inAOff, type_size), safe_divide(inBOff, 4), safe_divide(outOff, type_size),
-        n_dims, mode,
-        freq_base, freq_scale,
+        n_dims, mode, n_orig_ctx,
+        freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow,
         nb00, nb01, nb02, nb03,
         ne0,
         nb0, nb1, nb2, nb3
@@ -1545,13 +1545,23 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                         GGML_ASSERT(ne10 == ne02);
                         GGML_ASSERT(src0t == dstt);
                         // const int n_past = ((int32_t *) dst->op_params)[0];
-                        const int n_dims = ((int32_t *) dst->op_params)[1];
-                        const int mode   = ((int32_t *) dst->op_params)[2];
-                        float freq_base;
-                        float freq_scale;
-                        memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
-                        memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
-                        ggml_vk_rope(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, freq_base, freq_scale, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3);
+                        const int n_dims     = ((int32_t *) dst->op_params)[1];
+                        const int mode       = ((int32_t *) dst->op_params)[2];
+                        // skip 3, n_ctx used in GLM RoPE, unimplemented in Vulkan
+                        const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
+
+                        float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
+                        memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
+                        memcpy(&freq_scale,  (int32_t *) dst->op_params +  6, sizeof(float));
+                        memcpy(&ext_factor,  (int32_t *) dst->op_params +  7, sizeof(float));
+                        memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
+                        memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
+                        memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
+                        ggml_vk_rope(
+                            seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, n_orig_ctx,
+                            freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow,
+                            ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3
+                        );
                     } break;
                 case GGML_OP_DUP:
                 case GGML_OP_CPY:

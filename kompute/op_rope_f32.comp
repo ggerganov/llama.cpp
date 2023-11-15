@@ -8,33 +8,11 @@
 
 #version 450
 
-#include "common.comp"
-
-// TODO: use a local size of 32 or more (Metal uses 1024)
-layout(local_size_x = 1) in;
+#include "rope_common.comp"
 
 layout(binding = 0) buffer restrict readonly  tensorInA { float inA[]; };
 layout(binding = 1) buffer restrict readonly  tensorInB { int   inB[]; };
 layout(binding = 2) buffer restrict writeonly tensorOut { float out_[]; };
-
-layout (push_constant) uniform parameter {
-    uint inAOff;
-    uint inBOff;
-    uint outOff;
-    int n_dims;
-    int mode;
-    float freq_base;
-    float freq_scale;
-    uint nb00;
-    uint nb01;
-    uint nb02;
-    uint nb03;
-    int ne0;
-    uint nb0;
-    uint nb1;
-    uint nb2;
-    uint nb3;
-} pcs;
 
 void main() {
     const uint i3 = gl_WorkGroupID.z;
@@ -42,16 +20,20 @@ void main() {
     const uint i1 = gl_WorkGroupID.x;
 
     const bool is_neox = (pcs.mode & 2) != 0;
+
+    float corr_dims[2];
+    rope_yarn_corr_dims(pcs.n_dims, pcs.n_orig_ctx, pcs.freq_base, pcs.beta_fast, pcs.beta_slow, corr_dims);
+
     const float theta_scale = pow(pcs.freq_base, -2.0/pcs.n_dims);
 
     const int p = inB[pcs.inBOff + i2];
 
-    float theta = pcs.freq_scale * float(p);
+    float theta = float(p);
 
     if (!is_neox) {
         for (uint i0 = 0; i0 < pcs.ne0; i0 += 2) {
-            const float cos_theta = cos(theta);
-            const float sin_theta = sin(theta);
+            float cos_theta, sin_theta;
+            rope_yarn(theta, pcs.freq_scale, corr_dims, i0, pcs.ext_factor, pcs.attn_factor, cos_theta, sin_theta);
 
             theta *= theta_scale;
 
@@ -68,8 +50,10 @@ void main() {
         const float inv_ndims = -1.f/pcs.n_dims;
         for (uint ib = 0; ib < pcs.ne0/pcs.n_dims; ++ib) {
             for (uint ic = 0; ic < pcs.n_dims; ic += 2) {
-                const float cos_theta = cos(theta);
-                const float sin_theta = sin(theta);
+                const uint cur_rot = ib * pcs.n_dims + ic;
+
+                float cos_theta, sin_theta;
+                rope_yarn(theta, pcs.freq_scale, corr_dims, cur_rot, pcs.ext_factor, pcs.attn_factor, cos_theta, sin_theta);
 
                 theta *= theta_scale;
 
