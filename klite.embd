@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 95
+Current version: 96
 -Concedo
 -->
 
@@ -3187,7 +3187,7 @@ Current version: 95
 	const oai_submit_endpoint = "/completions";
 	const oai_submit_endpoint_turbo = "/chat/completions";
 
-	const oai_image_endpoint_full = "https://api.openai.com/v1/images/generations";
+	const default_oai_image_endpoint = "/images/generations";
 
 	const scale_submit_endpoint = "https://dashboard.scale.com/spellbook/api/v2/deploy/"
 
@@ -3282,6 +3282,7 @@ Current version: 95
 		saved_oai_key: "", //do not ever share this in save files!
 		saved_oai_addr: default_oai_base, //do not ever share this in save files!
 		saved_dalle_key: "",
+		saved_dalle_url: (default_oai_base + "/v1" + default_oai_image_endpoint),
 		saved_openrouter_key: "",
 		saved_claude_key: "", //do not ever share this in save files!
 		saved_claude_addr: default_claude_base, //do not ever share this in save files!
@@ -3970,6 +3971,18 @@ Current version: 95
 			}
 		},false);
 	}
+	function set_dalle_url()
+	{
+		inputBox("Enter DALL-E API URL.\n\nNote: DALL-E is known to rephrase and rewrite submitted image prompts before generating, for censorship purposes. There is nothing Kobold Lite can do about that. ","DALL-E API URL",localsettings.saved_dalle_url,"Input DALL-E API URL", ()=>{
+			let userinput = getInputBoxValue();
+			userinput = userinput.trim();
+			if (userinput != null && userinput!="") {
+				localsettings.saved_dalle_url = userinput.trim();
+			}else{
+				localsettings.saved_dalle_url = (default_oai_base + "/v1" + default_oai_image_endpoint);
+			}
+		},false);
+	}
 
 	function generate_dalle_image(req_payload, onImagesDone)
 	{
@@ -3988,7 +4001,7 @@ Current version: 95
 		//remove all null fields
 		dalle_payload = Object.fromEntries(Object.entries(dalle_payload).filter(([_, v]) => v != null));
 
-		let gen_endpoint = oai_image_endpoint_full;
+		let gen_endpoint = localsettings.saved_dalle_url;
 		console.log(dalle_payload);
 
 		fetch(gen_endpoint, {
@@ -4426,6 +4439,7 @@ Current version: 95
 			new_save_storyobj.savedsettings.home_cluster = text_hordes[0].baseurl;
 			new_save_storyobj.savedsettings.saved_oai_key = "";
 			new_save_storyobj.savedsettings.saved_dalle_key = "";
+			new_save_storyobj.savedsettings.saved_dalle_url = "";
 			new_save_storyobj.savedsettings.saved_oai_addr = "";
 			new_save_storyobj.savedsettings.saved_claude_key = "";
 			new_save_storyobj.savedsettings.saved_claude_addr = "";
@@ -4707,6 +4721,7 @@ Current version: 95
 					let tmp_oai1 = localsettings.saved_oai_key;
 					let tmp_oai2 = localsettings.saved_oai_addr;
 					let tmp_oai3 = localsettings.saved_dalle_key;
+					let tmp_oai4 = localsettings.saved_dalle_url;
 					let tmp_or1 = localsettings.saved_openrouter_key;
 					let tmp_claude1 = localsettings.saved_claude_key;
 					let tmp_claude2 = localsettings.saved_claude_addr;
@@ -4735,6 +4750,7 @@ Current version: 95
 					localsettings.saved_oai_key = tmp_oai1;
 					localsettings.saved_oai_addr = tmp_oai2;
 					localsettings.saved_dalle_key = tmp_oai3;
+					localsettings.saved_dalle_url = tmp_oai4;
 					localsettings.saved_openrouter_key = tmp_or1;
 					localsettings.saved_claude_key = tmp_claude1;
 					localsettings.saved_claude_addr = tmp_claude2;
@@ -6212,6 +6228,7 @@ Current version: 95
 					localsettings.saved_oai_key = custom_oai_key;
 					localsettings.saved_oai_addr = custom_oai_endpoint;
 					localsettings.saved_dalle_key = custom_oai_key;
+					localsettings.saved_dalle_url = custom_oai_endpoint + default_oai_image_endpoint;
 				}else{
 					localsettings.saved_openrouter_key = custom_oai_key;
 				}
@@ -9007,9 +9024,9 @@ Current version: 95
 		}
 		else if(localsettings.generate_images_mode==3) //dalle
 		{
-			if(localsettings.saved_dalle_key=="")
+			if(localsettings.saved_dalle_key=="" || localsettings.saved_dalle_url=="")
 			{
-				msgbox("Error: A valid DALL-E Key is required to generate images with DALL-E.\nThis is usually the same as your OpenAI API key, but can be customized in settings.","Invalid DALL-E Key");
+				msgbox("Error: A valid DALL-E URL and Key is required to generate images with DALL-E.\nThis is usually the same as your OpenAI API key, but can be customized in settings.","Invalid DALL-E Key");
 			}
 			else
 			{
@@ -12120,7 +12137,10 @@ Current version: 95
 							<button type="button" class="btn btn-primary" onclick="set_a1111_endpoint()" style="height: 20px; padding: 0px 2px; margin: 0px 0px 0px 3px;">⚙️</button>
 							</div>
 							<div id="generate_images_dalle_container" class="settinglabel hidden">
-								<button id="generate_images_dalle_setkey" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_key()">Set DALL-E Key</button>
+								<table width="100%"><tr>
+								<td><button id="generate_images_dalle_setkey" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_url()">Set URL</button></td>
+								<td><button id="generate_images_dalle_seturl" type="button" class="btn btn-primary" style="width:100%; padding:2px 3px;margin-top:2px;font-size:11px;" onclick="set_dalle_key()">Set Key</button></td>
+								</tr></table>
 							</div>
 
 							<div id="genimgopt" class="">
