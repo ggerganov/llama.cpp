@@ -1835,18 +1835,18 @@ struct llama_model_loader {
         throw std::runtime_error(format("request for key id %d with unhandled result type: %s", kid, typeid(T).name()));
     }
 
-    template<> void gk_set(int k, uint8_t     & r) { r = gguf_get_val_u8  (ctx_gguf, k); }
-    template<> void gk_set(int k, uint16_t    & r) { r = gguf_get_val_u16 (ctx_gguf, k); }
-    template<> void gk_set(int k, uint32_t    & r) { r = gguf_get_val_u32 (ctx_gguf, k); }
-    template<> void gk_set(int k, uint64_t    & r) { r = gguf_get_val_u64 (ctx_gguf, k); }
-    template<> void gk_set(int k, int8_t      & r) { r = gguf_get_val_i8  (ctx_gguf, k); }
-    template<> void gk_set(int k, int16_t     & r) { r = gguf_get_val_i16 (ctx_gguf, k); }
-    template<> void gk_set(int k, int32_t     & r) { r = gguf_get_val_i32 (ctx_gguf, k); }
-    template<> void gk_set(int k, int64_t     & r) { r = gguf_get_val_i64 (ctx_gguf, k); }
-    template<> void gk_set(int k, float       & r) { r = gguf_get_val_f32 (ctx_gguf, k); }
-    template<> void gk_set(int k, double      & r) { r = gguf_get_val_f64 (ctx_gguf, k); }
-    template<> void gk_set(int k, bool        & r) { r = gguf_get_val_bool(ctx_gguf, k); }
-    template<> void gk_set(int k, std::string & r) { r = std::string(gguf_get_val_str(ctx_gguf, k)); }
+    void gk_set(int k, uint8_t     & r) { r = gguf_get_val_u8  (ctx_gguf, k); }
+    void gk_set(int k, uint16_t    & r) { r = gguf_get_val_u16 (ctx_gguf, k); }
+    void gk_set(int k, uint32_t    & r) { r = gguf_get_val_u32 (ctx_gguf, k); }
+    void gk_set(int k, uint64_t    & r) { r = gguf_get_val_u64 (ctx_gguf, k); }
+    void gk_set(int k, int8_t      & r) { r = gguf_get_val_i8  (ctx_gguf, k); }
+    void gk_set(int k, int16_t     & r) { r = gguf_get_val_i16 (ctx_gguf, k); }
+    void gk_set(int k, int32_t     & r) { r = gguf_get_val_i32 (ctx_gguf, k); }
+    void gk_set(int k, int64_t     & r) { r = gguf_get_val_i64 (ctx_gguf, k); }
+    void gk_set(int k, float       & r) { r = gguf_get_val_f32 (ctx_gguf, k); }
+    void gk_set(int k, double      & r) { r = gguf_get_val_f64 (ctx_gguf, k); }
+    void gk_set(int k, bool        & r) { r = gguf_get_val_bool(ctx_gguf, k); }
+    void gk_set(int k, std::string & r) { r = std::string(gguf_get_val_str(ctx_gguf, k)); }
 
     template<typename T>
     typename std::enable_if<std::is_integral<T>::value, void>::type
