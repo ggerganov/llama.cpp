@@ -331,7 +331,7 @@ class VocabLoader:
             self.spm = SentencePieceProcessor(str(path_candidate))
             print(self.spm.vocab_size(), self.vocab_size_base)
         else:
-            self.spm
+            self.spm = None
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
