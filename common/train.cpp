@@ -68,51 +68,6 @@ void free_random_uniform_distribution(struct random_uniform_distribution * rnd) 
     free(rnd);
 }
 
-struct ggml_tensor * zero_tensor(struct ggml_tensor * tensor) {
-    float scale = 1.0f; // xavier
-    switch (tensor->n_dims) {
-        case 1:
-            for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
-                float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0]);
-                *dst = 0.0f;
-            }
-            break;
-        case 2:
-            for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
-                for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
-                    float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1]);
-                    *dst = 0.0f;
-                }
-            }
-            break;
-        case 3:
-            for (int i2 = 0; i2 < tensor->ne[2]; i2++) {
-                for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
-                    for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
-                        float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2]);
-                        *dst = 0.0f;
-                    }
-                }
-            }
-            break;
-        case 4:
-            for (int i3 = 0; i3 < tensor->ne[3]; i3++) {
-                for (int i2 = 0; i2 < tensor->ne[2]; i2++) {
-                    for (int i1 = 0; i1 < tensor->ne[1]; i1++) {
-                        for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
-                            float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3]);
-                            *dst = 0.0f;
-                        }
-                    }
-                }
-            }
-            break;
-        default:
-            die("Unsupported tensor->n_dims");
-    };
-    return tensor;
-}
-
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
     switch (tensor->n_dims) {
