@@ -569,21 +569,6 @@ struct LLM_TN {
 // gguf helpers
 //
 
-#define GGUF_GET_KEY(ctx, dst, func, type, req, key) \
-do { \
-    const std::string skey(key); \
-    const int kid = gguf_find_key(ctx, skey.c_str()); \
-    if (kid >= 0) { \
-        enum gguf_type ktype = gguf_get_kv_type(ctx, kid); \
-        if (ktype != (type)) { \
-            throw std::runtime_error(format("key %s has wrong type: %s", skey.c_str(), gguf_type_name(ktype))); \
-        } \
-        (dst) = func(ctx, kid); \
-    } else if (req) { \
-        throw std::runtime_error(format("key not found in model: %s", skey.c_str())); \
-    } \
-} while (0)
-
 static std::map<int8_t, std::string> LLAMA_ROPE_SCALING_TYPES = {
     { LLAMA_ROPE_SCALING_NONE,   "none"   },
     { LLAMA_ROPE_SCALING_LINEAR, "linear" },
@@ -1712,20 +1697,33 @@ struct llama_model_loader {
     llama_fver  fver;
 
     std::unique_ptr<llama_mmap> mapping;
+    std::unordered_map<std::string, struct llama_model_kv_override> kv_overrides;
 
     struct gguf_context * ctx_gguf = NULL;
     struct ggml_context * ctx_meta = NULL;
 
-    llama_model_loader(const std::string & fname, bool use_mmap) : file(fname.c_str(), "rb") {
+    std::string arch_name;
+    LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
+
+    llama_model_loader(const std::string & fname, bool use_mmap, const struct llama_model_kv_override * param_overrides_p) : file(fname.c_str(), "rb") {
         struct gguf_init_params params = {
             /*.no_alloc = */ true,
             /*.ctx      = */ &ctx_meta,
         };
 
+        if (param_overrides_p != nullptr) {
+            for (const struct llama_model_kv_override *p = param_overrides_p; p->key[0] != 0; p++) {
+                kv_overrides.insert({std::string(p->key), *p});
+            }
+        }
+
         ctx_gguf = gguf_init_from_file(fname.c_str(), params);
         if (!ctx_gguf) {
             throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
         }
+
+        get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
+        llm_kv = LLM_KV(llm_arch_from_string(arch_name));
 
         n_kv      = gguf_get_n_kv(ctx_gguf);
         n_tensors = gguf_get_n_tensors(ctx_gguf);
@@ -1828,19 +1826,149 @@ struct llama_model_loader {
         }
     }
 
+    private:
+    template <typename T> struct gk_get_arrlen  { T & output; };
+    template <typename TI, typename TO> struct gk_set_literal { TI & input; TO & output; };
+    template <typename T>
+    void gk_set(int kid, T & result) {
+        (void)result;
+        throw std::runtime_error(format("request for key id %d with unhandled result type: %s", kid, typeid(T).name()));
+    }
+
+    template<> void gk_set(int k, uint8_t     & r) { r = gguf_get_val_u8  (ctx_gguf, k); }
+    template<> void gk_set(int k, uint16_t    & r) { r = gguf_get_val_u16 (ctx_gguf, k); }
+    template<> void gk_set(int k, uint32_t    & r) { r = gguf_get_val_u32 (ctx_gguf, k); }
+    template<> void gk_set(int k, uint64_t    & r) { r = gguf_get_val_u64 (ctx_gguf, k); }
+    template<> void gk_set(int k, int8_t      & r) { r = gguf_get_val_i8  (ctx_gguf, k); }
+    template<> void gk_set(int k, int16_t     & r) { r = gguf_get_val_i16 (ctx_gguf, k); }
+    template<> void gk_set(int k, int32_t     & r) { r = gguf_get_val_i32 (ctx_gguf, k); }
+    template<> void gk_set(int k, int64_t     & r) { r = gguf_get_val_i64 (ctx_gguf, k); }
+    template<> void gk_set(int k, float       & r) { r = gguf_get_val_f32 (ctx_gguf, k); }
+    template<> void gk_set(int k, double      & r) { r = gguf_get_val_f64 (ctx_gguf, k); }
+    template<> void gk_set(int k, bool        & r) { r = gguf_get_val_bool(ctx_gguf, k); }
+    template<> void gk_set(int k, std::string & r) { r = std::string(gguf_get_val_str(ctx_gguf, k)); }
+
+    template<typename T>
+    typename std::enable_if<std::is_integral<T>::value, void>::type
+    gk_set(int k, struct gk_get_arrlen<T> & r) { r.output = gguf_get_arr_n(ctx_gguf, k); }
+
+    template<typename TI, typename TO>
+    void gk_set_lit(TI i, TO o) {
+        (void)i; (void)o;
+        throw std::runtime_error(format("gk_set_lit can't handle types: in=%s, out=%s",
+            typeid(TI).name(), typeid(TO).name()));
+    }
+
+    template<typename T>
+    typename std::enable_if<std::is_integral<T>::value, void>::type
+    gk_set_lit(const int64_t & i, T & o) { o = T(i); }
+
+    template<typename T>
+    typename std::enable_if<std::is_floating_point<T>::value, void>::type
+    gk_set_lit(const double & i, T & o) { o = T(i); }
+
+    template<typename T>
+    void gk_set_lit(const T & i, T & o) { o = i; }
+
+    public:
+    template<typename T>
+    bool get_key(const std::string & key, T & result, const bool required = false) {
+        const auto & tt = typeid(T);
+        enum gguf_type gt = GGUF_TYPE_COUNT;
+        enum llama_model_kv_override_type ot = LLAMA_KV_OVERRIDE_INT;
+        bool is_signed = false, can_override = true;
+        if (tt == typeid(uint8_t)) {
+            gt = GGUF_TYPE_UINT8;
+        } else if (tt == typeid(uint16_t)) {
+            gt = GGUF_TYPE_UINT16;
+        } else if (tt == typeid(uint32_t)) {
+            gt = GGUF_TYPE_UINT32;
+        } else if (tt == typeid(uint64_t)) {
+            gt = GGUF_TYPE_UINT64;
+        } else if (tt == typeid(int8_t)) {
+            is_signed = true;
+            gt = GGUF_TYPE_INT8;
+        } else if (tt == typeid(int16_t)) {
+            is_signed = true;
+            gt = GGUF_TYPE_INT16;
+        } else if (tt == typeid(int32_t)) {
+            is_signed = true;
+            gt = GGUF_TYPE_INT32;
+        } else if (tt == typeid(int64_t)) {
+            is_signed = true;
+            gt = GGUF_TYPE_INT64;
+        } else if (tt == typeid(float)) {
+            is_signed = true;
+            gt = GGUF_TYPE_FLOAT32;
+            ot = LLAMA_KV_OVERRIDE_FLOAT;
+        } else if (tt == typeid(double)) {
+            is_signed = true;
+            gt = GGUF_TYPE_FLOAT64;
+            ot = LLAMA_KV_OVERRIDE_FLOAT;
+        } else if (tt == typeid(bool)) {
+            gt = GGUF_TYPE_BOOL;
+            ot = LLAMA_KV_OVERRIDE_BOOL;
+        } else if (tt == typeid(std::string)) {
+            can_override = false;
+            gt = GGUF_TYPE_STRING;
+        } else {
+            throw std::runtime_error(format("request for key '%s' with unknown result type: %s", key.c_str(), tt.name()));
+        }
+
+        if (can_override) {
+            auto it = kv_overrides.find(key);
+            if (it != kv_overrides.end()) {
+                struct llama_model_kv_override & po = it->second;
+                if (po.tag != ot) {
+                    // Bad type
+                } else if (ot == LLAMA_KV_OVERRIDE_INT && po.int_value < 0 && !is_signed) {
+                    // Out of range
+                } else {
+                    switch (po.tag) {
+                        case LLAMA_KV_OVERRIDE_INT: gk_set_lit(po.int_value, result); break;
+                        case LLAMA_KV_OVERRIDE_FLOAT: gk_set_lit(po.float_value, result); break;
+                        case LLAMA_KV_OVERRIDE_BOOL: gk_set_lit(po.bool_value, result); break;
+                        default: GGML_ASSERT(false && "Impossible: Unhandled override tag type");
+                    }
+                    return true;
+                }
+            }
+        }
+
+        const int kid = gguf_find_key(ctx_gguf, key.c_str());
+        if (kid < 0) {
+            if (required) {
+                throw std::runtime_error(format("key not found in model: %s", key.c_str()));
+            }
+            return false;
+        }
+
+        const enum gguf_type ktype = gguf_get_kv_type(ctx_gguf, kid);
+        if (ktype == GGUF_TYPE_ARRAY && ot == LLAMA_KV_OVERRIDE_INT) {
+            gk_get_arrlen<T> arrlen = {result};
+            gk_set(kid, arrlen);
+            return true;
+        }
+        if (ktype != gt) {
+            throw std::runtime_error(format("key %s has wrong type %s but expected type %s",
+                key.c_str(), gguf_type_name(ktype), gguf_type_name(gt)));
+        }
+        gk_set(kid, result);
+
+        return true;
+    }
+
+    template<typename T>
+    bool get_key(const enum llm_kv kid, T & result, const bool required = false) {
+        return get_key(llm_kv(kid), result, required);
+    }
+
     std::string get_arch_name() const {
-        const auto kv = LLM_KV(LLM_ARCH_UNKNOWN);
-
-        std::string arch_name;
-        GGUF_GET_KEY(ctx_gguf, arch_name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_ARCHITECTURE));
-
         return arch_name;
     }
 
     enum llm_arch get_arch() const {
-        const std::string arch_name = get_arch_name();
-
-        return llm_arch_from_string(arch_name);
+        return llm_kv.arch;
     }
 
     const char * get_tensor_name(int i) const {
@@ -2087,49 +2215,44 @@ static void llm_load_arch(llama_model_loader & ml, llama_model & model) {
 static void llm_load_hparams(
         llama_model_loader & ml,
         llama_model & model) {
-    struct gguf_context * ctx = ml.ctx_gguf;
-
-    const auto kv = LLM_KV(model.arch);
-
     auto & hparams = model.hparams;
 
     // get general kv
-    GGUF_GET_KEY(ctx, model.name, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_GENERAL_NAME));
+    ml.get_key(LLM_KV_GENERAL_NAME, model.name, false);
 
     // get hparams kv
-    GGUF_GET_KEY(ctx, hparams.n_vocab,        gguf_get_arr_n,   GGUF_TYPE_ARRAY,  true, kv(LLM_KV_TOKENIZER_LIST));
-    GGUF_GET_KEY(ctx, hparams.n_ctx_train,    gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_CONTEXT_LENGTH));
-    GGUF_GET_KEY(ctx, hparams.n_embd,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_EMBEDDING_LENGTH));
-    GGUF_GET_KEY(ctx, hparams.n_ff,           gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_FEED_FORWARD_LENGTH));
-    GGUF_GET_KEY(ctx, hparams.n_head,         gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_ATTENTION_HEAD_COUNT));
-    GGUF_GET_KEY(ctx, hparams.n_layer,        gguf_get_val_u32, GGUF_TYPE_UINT32, true, kv(LLM_KV_BLOCK_COUNT));
+    ml.get_key(LLM_KV_TOKENIZER_LIST,       hparams.n_vocab,     true);
+    ml.get_key(LLM_KV_CONTEXT_LENGTH,       hparams.n_ctx_train, true);
+    ml.get_key(LLM_KV_EMBEDDING_LENGTH,     hparams.n_embd,      true);
+    ml.get_key(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff,        true);
+    ml.get_key(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head,      true);
+    ml.get_key(LLM_KV_BLOCK_COUNT,          hparams.n_layer,     true);
 
     // n_head_kv is optional, default to n_head
     hparams.n_head_kv = hparams.n_head;
-    GGUF_GET_KEY(ctx, hparams.n_head_kv, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ATTENTION_HEAD_COUNT_KV));
+    ml.get_key(LLM_KV_ATTENTION_HEAD_COUNT_KV, hparams.n_head_kv, false);
 
-    hparams.rope_finetuned = false;
-    GGUF_GET_KEY(ctx, hparams.rope_finetuned, gguf_get_val_bool, GGUF_TYPE_BOOL, false,
-                 kv(LLM_KV_ROPE_SCALING_FINETUNED));
+    bool rope_finetuned = false;
+    ml.get_key(LLM_KV_ROPE_SCALING_FINETUNED, rope_finetuned, false);
+    hparams.rope_finetuned = rope_finetuned;
 
     hparams.n_yarn_orig_ctx = hparams.n_ctx_train;
-    GGUF_GET_KEY(ctx, hparams.n_yarn_orig_ctx, gguf_get_val_u32, GGUF_TYPE_UINT32, false,
-                 kv(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN));
+    ml.get_key(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN, hparams.n_yarn_orig_ctx, false);
 
     // rope_freq_base (optional)
     hparams.rope_freq_base_train = 10000.0f;
-    GGUF_GET_KEY(ctx, hparams.rope_freq_base_train, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
+    ml.get_key(LLM_KV_ROPE_FREQ_BASE, hparams.rope_freq_base_train, false);
 
     std::string rope_scaling("linear");
-    GGUF_GET_KEY(ctx, rope_scaling, gguf_get_val_str, GGUF_TYPE_STRING, false, kv(LLM_KV_ROPE_SCALING_TYPE));
+    ml.get_key(LLM_KV_ROPE_SCALING_TYPE, rope_scaling, false);
     hparams.rope_scaling_type_train = llama_rope_scaling_type_from_string(rope_scaling);
     GGML_ASSERT(hparams.rope_scaling_type_train != LLAMA_ROPE_SCALING_UNSPECIFIED);
 
     // rope_freq_scale (inverse of the kv) is optional
     float ropescale = 0.0f;
-    GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALING_FACTOR));
+    ml.get_key(LLM_KV_ROPE_SCALING_FACTOR, ropescale, false);
     if (ropescale == 0.0f) { // try the old key name
-        GGUF_GET_KEY(ctx, ropescale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+        ml.get_key(LLM_KV_ROPE_SCALE_LINEAR, ropescale, false);
     }
     hparams.rope_freq_scale_train = ropescale == 0.0f ? 1.0f : 1.0f/ropescale;
 
@@ -2137,7 +2260,7 @@ static void llm_load_hparams(
     {
         hparams.n_rot = hparams.n_embd / hparams.n_head;
 
-        GGUF_GET_KEY(ctx, hparams.n_rot, gguf_get_val_u32, GGUF_TYPE_UINT32, false, kv(LLM_KV_ROPE_DIMENSION_COUNT));
+        ml.get_key(LLM_KV_ROPE_DIMENSION_COUNT, hparams.n_rot, false);
 
         if (model.arch == LLM_ARCH_LLAMA || model.arch == LLM_ARCH_FALCON) {
             if (hparams.n_rot != hparams.n_embd / hparams.n_head) {
@@ -2152,7 +2275,7 @@ static void llm_load_hparams(
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps, true);
 
                 switch (hparams.n_layer) {
                     case 26: model.type = e_model::MODEL_3B; break;
@@ -2166,7 +2289,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_FALCON:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, true);
 
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_7B; break;
@@ -2176,7 +2299,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_BAICHUAN:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps, true);
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = e_model::MODEL_13B; break;
@@ -2185,7 +2308,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_STARCODER:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, true);
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1B; break;
                     case 36: model.type = e_model::MODEL_3B; break;
@@ -2196,7 +2319,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_PERSIMMON:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, true);
                 switch (hparams.n_layer) {
                     case 36: model.type = e_model::MODEL_8B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
@@ -2204,7 +2327,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_REFACT:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps, true);
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_1B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
@@ -2212,7 +2335,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_BLOOM:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, true);
 
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1B; break;
@@ -2227,9 +2350,9 @@ static void llm_load_hparams(
             {
                 hparams.f_clamp_kqv = 0.0f;
 
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
-                GGUF_GET_KEY(ctx, hparams.f_clamp_kqv, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_CLAMP_KQV));
-                GGUF_GET_KEY(ctx, hparams.f_max_alibi_bias, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_MAX_ALIBI_BIAS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,  hparams.f_norm_eps,       true);
+                ml.get_key(LLM_KV_ATTENTION_CLAMP_KQV,      hparams.f_clamp_kqv,      false);
+                ml.get_key(LLM_KV_ATTENTION_MAX_ALIBI_BIAS, hparams.f_max_alibi_bias, true);
 
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_7B; break;
@@ -2239,7 +2362,7 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_STABLELM:
             {
-                GGUF_GET_KEY(ctx, hparams.f_norm_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, true, kv(LLM_KV_ATTENTION_LAYERNORM_EPS));
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps, true);
 
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_3B; break;
@@ -2287,7 +2410,7 @@ static void llm_load_vocab(
     {
         std::string tokenizer_name;
 
-        GGUF_GET_KEY(ctx, tokenizer_name, gguf_get_val_str, GGUF_TYPE_STRING, true, kv(LLM_KV_TOKENIZER_MODEL));
+        ml.get_key(LLM_KV_TOKENIZER_MODEL, tokenizer_name, true);
 
         if (tokenizer_name == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
@@ -2377,16 +2500,17 @@ static void llm_load_vocab(
         };
         for (const auto & it : special_token_types) {
             const std::string & key = kv(std::get<0>(it));
-            int32_t & id = std::get<1>(it), old_id = id;
+            int32_t & id = std::get<1>(it);
 
-            GGUF_GET_KEY(ctx, id, gguf_get_val_u32, GGUF_TYPE_UINT32, false, key);
-            // Must be >= -1 and < vocab size. Since the key is unsigned, -1
-            // can only come from the default value, so there's no point in
-            // validating that.
-            if (size_t(id + 1) > vocab.id_to_token.size()) {
-                LLAMA_LOG_WARN("%s: bad special token: '%s' = %d, using default id %d\n",
-                    __func__, key.c_str(), id, old_id);
-                id = old_id;
+            uint32_t new_id;
+            if (!ml.get_key(std::get<0>(it), new_id, false)) {
+                continue;
+            }
+            if (new_id >= vocab.id_to_token.size()) {
+                LLAMA_LOG_WARN("%s: bad special token: '%s' = %ud, using default id %d\n",
+                    __func__, key.c_str(), new_id, id);
+            } else {
+                id = new_id;
             }
         }
     }
@@ -3260,7 +3384,7 @@ static void llm_load_tensors(
 
 static bool llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
     try {
-        llama_model_loader ml(fname, params.use_mmap);
+        llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
 
@@ -7759,7 +7883,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     constexpr bool use_mmap = false;
 #endif
 
-    llama_model_loader ml(fname_inp, use_mmap);
+    llama_model_loader ml(fname_inp, use_mmap, NULL);
     if (ml.use_mmap) {
         ml.mapping.reset(new llama_mmap(&ml.file, /* prefetch */ 0, ggml_is_numa()));
     }
@@ -8055,7 +8179,7 @@ static int llama_apply_lora_from_file_internal(
     std::vector<uint8_t> base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
-        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true));
+        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/NULL));
 
         size_t ctx_size;
         size_t mmapped_size;
@@ -8286,6 +8410,7 @@ struct llama_model_params llama_model_default_params() {
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
+        /*.kv_overrides                =*/ nullptr,
     };
 
 #ifdef GGML_USE_METAL
