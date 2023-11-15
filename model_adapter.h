@@ -55,7 +55,6 @@ struct FileFormatExtraMeta
 {
     int n_ctx_train = 2048;
     int fileversion = 0;
-    float freq_base_train = 0;
 };
 
 enum ModelLoadResult

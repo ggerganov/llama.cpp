@@ -697,10 +697,12 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     //determine rope scaling params
     float rope_freq_scale = 1.0f;
     float rope_freq_base = 10000.0f;
+    bool overwriteRope = false;
     if(inputs.rope_freq_scale>0.0f)
     {
         rope_freq_scale = inputs.rope_freq_scale;
         rope_freq_base = inputs.rope_freq_base;
+        overwriteRope = true;
         printf("Using Custom RoPE scaling (scale:%.3f, base:%.1f).\n",rope_freq_scale,rope_freq_base);
     }
     else
@@ -722,13 +724,9 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             rope_freq_base = (effectivenctx <= 2048 ? 10000.0f : (effectivenctx <= 3072 ? 26000.0f : (effectivenctx <= 4096 ? 32000.0f : (effectivenctx <= 6144 ? 54000.0f :
             (effectivenctx <= 8192 ? 82684.0f : (effectivenctx <= 12288 ? 140000.0f : (effectivenctx <= 16384 ? 200000.0f : (effectivenctx <= 24576 ? 320000.0f : 440000.0f))))))));
 
-            if(file_format_meta.freq_base_train > rope_freq_base)
-            {
-                rope_freq_base = file_format_meta.freq_base_train;
-            }
         }
 
-        printf("Using automatic RoPE scaling (scale:%.3f, base:%.1f)\n",rope_freq_scale,rope_freq_base);
+        printf("Using automatic RoPE scaling. If the model has customized RoPE settings, they will be used directly instead!\n");
     }
     gptj_ctx_v3.hparams.rope_freq_scale = neox_ctx_v3.hparams.rope_freq_scale = rope_freq_scale;
     gptj_ctx_v3.hparams.rope_freq_base = neox_ctx_v3.hparams.rope_freq_base = rope_freq_base;
@@ -903,8 +901,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
         #endif
         model_params.main_gpu = cu_parseinfo_maindevice;
-        llama_ctx_params.rope_freq_base = rope_freq_base;
-        llama_ctx_params.rope_freq_scale = rope_freq_scale;
+
         llama_ctx_params.n_batch = blasbatchsize;
         llama_ctx_params.n_threads = n_threads;
         llama_ctx_params.n_threads_batch = n_blasthreads;
@@ -932,6 +929,28 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         }
 
         llama_model * llamamodel = llama_load_model_from_file(modelname.c_str(), model_params);
+        if(overwriteRope)
+        {
+            llama_ctx_params.rope_freq_base = rope_freq_base;
+            llama_ctx_params.rope_freq_scale = rope_freq_scale;
+        }
+        else
+        {
+            //if the model modifes rope in any way, use the model values. Otherwise, use our automatic ones
+            if(llamamodel->hparams.rope_freq_base_train!=10000.0f ||
+            llamamodel->hparams.rope_freq_scale_train!=1.0f ||
+            llamamodel->hparams.rope_scaling_type_train==2)
+            {
+                printf("Automatic RoPE Scaling: Using model internal values.\n");
+            }
+            else
+            {
+                llama_ctx_params.rope_freq_base = rope_freq_base;
+                llama_ctx_params.rope_freq_scale = rope_freq_scale;
+                printf("Automatic RoPE Scaling: Using (scale:%.3f, base:%.1f).\n", rope_freq_scale, rope_freq_base);
+            }
+        }
+
         llama_ctx_v4 = llama_new_context_with_model(llamamodel, llama_ctx_params);
 
         if (llama_ctx_v4 == NULL)

@@ -388,7 +388,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.49"
+KcppVersion = "1.50"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -1452,7 +1452,7 @@ def show_new_gui():
                 labels[idx].grid_forget()
         if usehorde_var.get()==1 and (horde_name_var.get()=="koboldcpp" or horde_name_var.get()=="") and model_var.get()!="":
             basefile = os.path.basename(model_var.get())
-            horde_name_var.set(os.path.splitext(basefile)[0])
+            horde_name_var.set(sanitize_string(os.path.splitext(basefile)[0]))
 
     makecheckbox(network_tab, "Configure for Horde", usehorde_var, 6, command=togglehorde)
     togglehorde(1,1,1)

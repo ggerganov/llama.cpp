@@ -290,14 +290,6 @@ void print_tok_vec(std::vector<float> &embd)
             }
             int filever = gguf_get_version(ctx);
             fileformatmeta->fileversion = filever;
-
-            //try to adapt if the rope_freq_base_train exceeds the auto one
-            fkey = modelarch+".rope.freq_base";
-            keyidx = gguf_find_key(ctx, fkey.c_str());
-            if (keyidx != -1) {
-                float fbt = gguf_get_val_f32(ctx, keyidx);
-                fileformatmeta->freq_base_train = (fbt > 1.0f ? fbt : 0.0f);
-            }
         }
         gguf_free(ctx);
     }
