@@ -6,6 +6,8 @@
  * this software. Except as expressly granted in the SOM license, all rights are reserved by Nomic, Inc.
  */
 
+// TODO: implement multi-simd softmax (llama.cpp commit e16b9fa4)
+
 #version 450
 
 #include "common.comp"
