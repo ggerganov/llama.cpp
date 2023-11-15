@@ -690,6 +690,7 @@ def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
                               data_base_path=pickle_paths[0][:-4],
                               zip_file=zf)
     model = unpickler.load()
+    if 'model' in model: model = model['model']
     as_dict = dict(model.items())
     return ModelPlus(model=as_dict, paths=[path], format='torch', vocab=None)
 
