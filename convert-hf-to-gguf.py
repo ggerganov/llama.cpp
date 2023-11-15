@@ -150,8 +150,6 @@ class Model:
 
     @staticmethod
     def from_model_architecture(model_architecture):
-        if model_architecture == "StableLMEpochForCausalLM":
-            return StableLMModel
         if model_architecture == "GPTNeoXForCausalLM":
             return GPTNeoXModel
         if model_architecture == "BloomForCausalLM":
@@ -168,6 +166,8 @@ class Model:
             return RefactModel
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
+        if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
+            return StableLMModel
         return Model
     
     @staticmethod
@@ -227,6 +227,8 @@ class Model:
             return gguf.MODEL_ARCH.PERSIMMON
         if arch == "LlamaForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
+        if arch in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
+            return gguf.MODEL_ARCH.STABLELM
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -318,15 +320,6 @@ class Model:
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
-
-
-class StableLMModel(Model):
-    def set_gguf_parameters(self):
-        super().set_gguf_parameters()
-        self.gguf_writer.add_rope_dimension_count(
-            int(self.hparams["rope_pct"] * (self.hparams["hidden_size"] // self.hparams["num_attention_heads"])),
-        )
-        self.gguf_writer.add_layer_norm_eps(1e-5)
 
 
 class GPTNeoXModel(Model):
@@ -911,6 +904,21 @@ class DeepseekCoderModel(Model):
     
 
     
+
+class StableLMModel(Model):
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(dir_model.name)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"]*(hparams["hidden_size"] // hparams["num_attention_heads"])))
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
+        self.gguf_writer.add_layer_norm_eps(1e-5)
 
 ###### CONVERSION LOGIC ######
 
