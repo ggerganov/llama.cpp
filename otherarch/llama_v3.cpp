@@ -3457,6 +3457,7 @@ struct llama_v3_context * llama_v3_new_context_with_model(
 #ifdef LLAMA_V3_USE_ALLOCATOR
         {
             static const size_t tensor_alignment = 32;
+            static const size_t GGML_MAX_NODES = 4096;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
             ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
@@ -3849,9 +3850,10 @@ int llama_v3_apply_lora_from_file_internal(const struct llama_v3_model & model, 
                 ggml_set_name(r, "r_cpy");
             }
 
-            struct ggml_cgraph gf = ggml_build_forward(r);
+            struct ggml_cgraph * gf = ggml_new_graph(lora_ctx);
+            ggml_build_forward_expand(gf, r);
 
-            llv3_graph_compute_helper(work_buffer, &gf, n_threads);
+            llv3_graph_compute_helper(work_buffer, gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
