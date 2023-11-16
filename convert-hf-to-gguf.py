@@ -851,7 +851,6 @@ class PersimmonModel(Model):
 class DeepseekCoderModel(Model):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
-        print(self.dir_model.name)
         head_count = self.hparams["num_attention_heads"]
         head_count_kv = self.hparams.get("num_key_value_heads", head_count)
         self.gguf_writer.add_head_count(head_count)
