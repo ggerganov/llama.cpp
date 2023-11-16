@@ -2300,10 +2300,10 @@ static void llm_load_vocab(
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
         } else if (tokenizer_name == "gpt2" || tokenizer_name == "deepseek_coder") {
-            if(tokenizer_name == "gpt2"){
+            if(tokenizer_name == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
             }
-            else if (tokenizer_name == "deepseek_coder"){
+            else if (tokenizer_name == "deepseek_coder") {
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
             }
 
@@ -2502,7 +2502,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     // hparams
     LLAMA_LOG_INFO("%s: format           = %s\n",     __func__, llama_file_version_name(ml.fver));
     LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch).c_str());
-    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : (vocab.type ==LLAMA_VOCAB_TYPE_BPE ? "BPE" : "DEEPSEEKCODER")); // TODO: fix
+    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : (vocab.type == LLAMA_VOCAB_TYPE_BPE ? "BPE" : "DEEPSEEKCODER")); // TODO: fix
     LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
     LLAMA_LOG_INFO("%s: n_ctx_train      = %u\n",     __func__, hparams.n_ctx_train);
@@ -5984,7 +5984,7 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> byte_encoding_process(const std::vector<std::string> &bpe_words){
+    std::vector<std::string> byte_encoding_process(const std::vector<std::string> &bpe_words) {
         std::vector<std::string>bpe_encoded_words;
         for (auto word : bpe_words) {
             std::string text_utf = "";
@@ -6001,12 +6001,12 @@ private:
         return bpe_encoded_words;
     }
 
-    std::vector<std::string> regex_preprocess(const std::vector<std::string> &input, const std::string & regex_expr){
+    std::vector<std::string> regex_preprocess(const std::vector<std::string> &input, const std::string & regex_expr) {
         std::regex expr(regex_expr);
         std::vector<std::string> bpe_words;
         // std::wsmatch m;
         // // use regex match to get where to split the test string
-        for(auto& text:input){
+        for(auto& text:input) {
             std::cregex_iterator it(text.data(), text.data() + text.size(), expr);
             std::cregex_iterator end;
 
@@ -6015,14 +6015,14 @@ private:
             while (it != end) {
                 std::cmatch match = *it;
                 std::string match_str = match.str();
-                if(match.position()>start_idx){
+                if(match.position()>start_idx) {
                     bpe_words.emplace_back(text.substr(start_idx, match.position()-start_idx));
                 }
                 bpe_words.emplace_back(match_str);
                 start_idx = match.position() + match.length();
                 ++it;
             }
-            if(start_idx < text.size()){
+            if(start_idx < text.size()) {
                 bpe_words.emplace_back(text.substr(start_idx, text.size()-start_idx));
             }
         }
@@ -6033,7 +6033,7 @@ private:
 
         std::vector<std::string> bpe_words = {text};
 
-        for(auto & regex_expr : gpt2_regex){
+        for(auto & regex_expr : gpt2_regex) {
             bpe_words = regex_preprocess(bpe_words, regex_expr);
         }
 
@@ -6056,18 +6056,18 @@ private:
         while (it != end) {
             std::wcmatch match = *it;
             std::wstring match_str = match.str();
-            if(match.position()>start_idx){
+            if(match.position()>start_idx) {
                 bpe_words.emplace_back(to_utf8(wtext.substr(start_idx, match.position()-start_idx)));
             }
             bpe_words.emplace_back(to_utf8(match_str));
             start_idx = match.position() + match.length();
             ++it;
         }
-        if(start_idx < wtext.size()){
+        if(start_idx < wtext.size()) {
             bpe_words.emplace_back(to_utf8(wtext.substr(start_idx, wtext.size()-start_idx)));
         }
 
-        for(auto & regex_expr : deepseek_coder_regex){
+        for(auto & regex_expr : deepseek_coder_regex) {
             bpe_words = regex_preprocess(bpe_words, regex_expr);
         }
 

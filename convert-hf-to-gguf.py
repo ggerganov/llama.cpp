@@ -166,32 +166,37 @@ class Model:
             return RefactModel
         if model_architecture == "PersimmonForCausalLM":
             return PersimmonModel
+        if model_architecture == "LlamaForCausalLM":
+            return DeepseekCoderModel
         if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return StableLMModel
         return Model
     
     @staticmethod
     def from_model_name(model_name: str):
-        if model_name == "StableLMEpoch":
+        model_name_lower = model_name.lower()
+        if model_name_lower == "stablelmepoch":
             return StableLMModel
-        if model_name == "GPTNeoX":
+        if model_name_lower == "gptneox":
             return GPTNeoXModel
-        if model_name == "Bloom":
+        if model_name_lower == "bloom":
             return BloomModel
-        if model_name == "MPT":
+        if model_name_lower == "mpt":
             return MPTModel
-        if model_name in ("Baichuan", "BaiChuan"):
+        if model_name_lower in ("baichuan", "baichuan"):
             return BaichuanModel
-        if model_name in ("Falcon", "RW"):
+        if model_name_lower in ("falcon", "rw"):
             return FalconModel
-        if model_name == "GPTBigCode":
+        if model_name_lower == "gptbigcode":
             return StarCoderModel
-        if model_name == "GPTRefact":
+        if model_name_lower == "gptrefact":
             return RefactModel
-        if model_name == "Persimmon":
+        if model_name_lower == "persimmon":
             return PersimmonModel
-        if model_name == "DeepseekCoder":
+        if model_name_lower == "deepseekcoder":
             return DeepseekCoderModel
+        if model_name_lower == "stablelm":
+            return StableLMModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -232,7 +237,7 @@ class Model:
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
-    def _set_vocab_gpt2(self):
+    def _set_vocab_gpt2(self, tokenizer_model:str = "gpt2"):
         dir_model = self.dir_model
         hparams = self.hparams
         tokens: list[bytearray] = []
@@ -261,7 +266,7 @@ class Model:
                 tokens.append(reverse_vocab[i])
                 toktypes.append(gguf.TokenType.NORMAL)
 
-        self.gguf_writer.add_tokenizer_model("gpt2")
+        self.gguf_writer.add_tokenizer_model(tokenizer_model)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
 
@@ -842,20 +847,15 @@ class PersimmonModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
+
 class DeepseekCoderModel(Model):
     def set_gguf_parameters(self):
-        block_count = self.hparams["num_hidden_layers"]
+        super().set_gguf_parameters()
+        print(self.dir_model.name)
         head_count = self.hparams["num_attention_heads"]
         head_count_kv = self.hparams.get("num_key_value_heads", head_count)
-        ctx_length = self.hparams["max_position_embeddings"]
-
-        self.gguf_writer.add_name("deepseek_coder")
-        self.gguf_writer.add_context_length(ctx_length)
-        self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
-        self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
         self.gguf_writer.add_head_count(head_count)
+        self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
@@ -866,43 +866,7 @@ class DeepseekCoderModel(Model):
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
     def set_vocab(self):
-        dir_model = self.dir_model
-        hparams = self.hparams
-        tokens: list[bytearray] = []
-        toktypes: list[int] = []
-
-        from transformers import AutoTokenizer  # type: ignore[attr-defined]
-        tokenizer = AutoTokenizer.from_pretrained(dir_model)
-        vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
-        assert max(tokenizer.vocab.values()) < vocab_size
-
-        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
-        added_vocab = tokenizer.get_added_vocab()
-        special_tokens = tokenizer.all_special_tokens
-        for i in range(vocab_size):
-            if i not in reverse_vocab:
-                pad_token = f"[PAD{i}]".encode('utf-8')
-                tokens.append(bytearray(pad_token))
-                toktypes.append(gguf.TokenType.USER_DEFINED)
-            elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                if reverse_vocab[i] in special_tokens:
-                    toktypes.append(gguf.TokenType.CONTROL)
-                else:
-                    toktypes.append(gguf.TokenType.USER_DEFINED)
-            else:
-                tokens.append(reverse_vocab[i])
-                toktypes.append(gguf.TokenType.NORMAL)
-
-        self.gguf_writer.add_tokenizer_model("deepseek_coder")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(dir_model, load_merges=True)
-        special_vocab.add_to_gguf(self.gguf_writer)
-
-    
-
+        self._set_vocab_gpt2("deepseek_coder")
     
 
 class StableLMModel(Model):
