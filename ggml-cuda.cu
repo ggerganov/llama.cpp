@@ -6273,7 +6273,6 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q8_0:
             return 64;
         case GGML_TYPE_F16:
-            return 1;
         case GGML_TYPE_F32:
             return 1;
         case GGML_TYPE_Q2_K:
