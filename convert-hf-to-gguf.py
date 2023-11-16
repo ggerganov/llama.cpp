@@ -193,7 +193,7 @@ class Model:
             return gguf.MODEL_ARCH.MPT
         if arch in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
             return gguf.MODEL_ARCH.BAICHUAN
-        if arch == "FalconForCausalLM":
+        if arch in ("FalconForCausalLM", "RWForCausalLM"):
             return gguf.MODEL_ARCH.FALCON
         if arch == "GPTBigCodeForCausalLM":
             return gguf.MODEL_ARCH.STARCODER
