@@ -5841,7 +5841,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     }
 #ifdef DEBUG_CUDA_MALLOC
     fprintf(stderr, "%s: %d buffers, max_size = %u MB, tot_size = %u MB, requested %u MB\n", __func__, nnz,
-            (uint32_t)(max_size/1e6), (uint32_t)(tot_size/1e6), (uint32_t)(size/1e6));
+            (uint32_t)(max_size/1024/1024), (uint32_t)(tot_size/1024/1024), (uint32_t)(size/1024/1024));
 #endif
     void * ptr;
     size_t look_ahead_size = (size_t) (1.05 * size);
@@ -5979,7 +5979,7 @@ void * ggml_cuda_host_malloc(size_t size) {
         // This can fixed the OOM error in WSL.
         cudaGetLastError();
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
-            size/1e6, cudaGetErrorString(err));
+            size/1024.0/1024.0, cudaGetErrorString(err));
         return nullptr;
     }
 
