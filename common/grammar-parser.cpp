@@ -51,7 +51,7 @@ namespace grammar_parser {
     }
 
     static bool is_word_char(char c) {
-        return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
+        return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || c == '_' || ('0' <= c && c <= '9');
     }
 
     static std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
