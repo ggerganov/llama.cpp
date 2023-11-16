@@ -22,6 +22,8 @@ set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
 set(CUDACXX /usr/local/cuda-12.2/bin/nvcc)
 #GGML_USE_CUBLAS
 
+set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
