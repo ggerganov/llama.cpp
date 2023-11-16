@@ -157,82 +157,82 @@ struct block_q6_K
 
 # Dequant functions
 shader_f16_dequant_func = """
-#define DEQUANT_FUNC f16vec2 v = f16vec2(x[ib + 0], x[ib + 1]);
+#define DEQUANT_FUNC f16vec2 v = f16vec2(data_a[ib + 0], data_a[ib + 1]);
 """
 shader_f16_dequant_func_compat = """
-#define DEQUANT_FUNC vec2 v = vec2(x[ib + 0], x[ib + 1]);
+#define DEQUANT_FUNC vec2 v = vec2(data_a[ib + 0], data_a[ib + 1]);
 """
 
 shader_q4_0_dequant_func = """
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-const uint8_t vui = x[ib].qs[iqs]; \
+#define DEQUANT_FUNC const float16_t d = data_a[ib].d; \
+const uint8_t vui = data_a[ib].qs[iqs]; \
 f16vec2 v = f16vec2(vui & 0xF, vui >> 4); \
 v = (v - 8.0hf)*d;
 """
 shader_q4_0_dequant_func_compat = """
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-const uint vui = uint(x[ib].qs[iqs]); \
+#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
+const uint vui = uint(data_a[ib].qs[iqs]); \
 vec2 v = vec2(vui & 0xF, vui >> 4); \
 v = (v - 8.0f)*d;
 """
 
 shader_q4_1_dequant_func = """
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-const float16_t m = x[ib].m; \
-const uint8_t vui = x[ib].qs[iqs]; \
+#define DEQUANT_FUNC const float16_t d = data_a[ib].d; \
+const float16_t m = data_a[ib].m; \
+const uint8_t vui = data_a[ib].qs[iqs]; \
 f16vec2 v = f16vec2(vui & 0xF, vui >> 4); \
 v = v*d + m;
 """
 shader_q4_1_dequant_func_compat = """
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-const float m = float(x[ib].m); \
-const uint vui = uint(x[ib].qs[iqs]); \
+#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
+const float m = float(data_a[ib].m); \
+const uint vui = uint(data_a[ib].qs[iqs]); \
 vec2 v = vec2(vui & 0xF, vui >> 4); \
 v = v*d + m;
 """
 
 shader_q5_0_dequant_func = """
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-const uint uint_qh = uint(x[ib].qh[1]) << 16 | x[ib].qh[0]; \
+#define DEQUANT_FUNC const float16_t d = data_a[ib].d; \
+const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0]; \
 const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
-const uint8_t vui = x[ib].qs[iqs]; \
+const uint8_t vui = data_a[ib].qs[iqs]; \
 f16vec2 v = f16vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
 v = (v - 16.0hf) * d;
 """
 shader_q5_0_dequant_func_compat = """
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-const uint uint_qh = uint(x[ib].qh[1]) << 16 | x[ib].qh[0]; \
+#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
+const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0]; \
 const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
-const uint vui = uint(x[ib].qs[iqs]); \
+const uint vui = uint(data_a[ib].qs[iqs]); \
 vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
 v = (v - 16.0f) * d;
 """
 
 shader_q5_1_dequant_func = """
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-const float16_t m = x[ib].m; \
-const ivec2 qh = ivec2(((x[ib].qh >> iqs) << 4) & 0x10, (x[ib].qh >> (iqs + 12)) & 0x10); \
-const uint8_t vui = x[ib].qs[iqs]; \
+#define DEQUANT_FUNC const float16_t d = data_a[ib].d; \
+const float16_t m = data_a[ib].m; \
+const ivec2 qh = ivec2(((data_a[ib].qh >> iqs) << 4) & 0x10, (data_a[ib].qh >> (iqs + 12)) & 0x10); \
+const uint8_t vui = data_a[ib].qs[iqs]; \
 f16vec2 v = f16vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
 v = v*d + m;
 """
 shader_q5_1_dequant_func_compat = """
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-const float m = float(x[ib].m); \
-const ivec2 qh = ivec2(((x[ib].qh >> iqs) << 4) & 0x10, (x[ib].qh >> (iqs + 12)) & 0x10); \
-const uint vui = uint(x[ib].qs[iqs]); \
+#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
+const float m = float(data_a[ib].m); \
+const ivec2 qh = ivec2(((data_a[ib].qh >> iqs) << 4) & 0x10, (data_a[ib].qh >> (iqs + 12)) & 0x10); \
+const uint vui = uint(data_a[ib].qs[iqs]); \
 vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
 v = v*d + m;
 """
 
 shader_q8_0_dequant_func = """
-#define DEQUANT_FUNC const float16_t d = x[ib].d; \
-f16vec2 v = f16vec2(x[ib].qs[iqs], x[ib].qs[iqs + 1]); \
+#define DEQUANT_FUNC const float16_t d = data_a[ib].d; \
+f16vec2 v = f16vec2(data_a[ib].qs[iqs], data_a[ib].qs[iqs + 1]); \
 v = v * d;
 """
 shader_q8_0_dequant_func_compat = """
-#define DEQUANT_FUNC const float d = float(x[ib].d); \
-vec2 v = vec2(int(x[ib].qs[iqs]), int(x[ib].qs[iqs + 1])); \
+#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
+vec2 v = vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])); \
 v = v * d;
 """
 
@@ -309,12 +309,12 @@ void main() {
     int pos_a = ir * BM * p.stride_a / LOAD_VEC + start_k / LOAD_VEC;
     int pos_b = ic * BN * p.stride_b / LOAD_VEC + start_k / LOAD_VEC;
 
-    FLOAT_TYPE sums[WMITER * TM * WNITER * TN];
+    float sums[WMITER * TM * WNITER * TN];
     FLOAT_TYPE cache_a[WMITER * TM];
     FLOAT_TYPE cache_b[WNITER * TN];
 
     [[unroll]] for (int i = 0; i < WMITER*TM*WNITER*TN; i++) {
-        sums[i] = FLOAT_TYPE(0.0f);
+        sums[i] = 0.0f;
     }
 
     [[unroll]] for (int block = start_k; block < end_k; block += BK) {
@@ -391,7 +391,7 @@ void main() {
                 [[unroll]] for (int wsir = 0; wsir < WMITER; wsir++) {
                     [[unroll]] for (int cc = 0; cc < TN; cc++) {
                         [[unroll]] for (int cr = 0; cr < TM; cr++) {
-                            sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr] += FLOAT_TYPE(cache_a[wsir * TM + cr]) * FLOAT_TYPE(cache_b[wsic * TN + cc]);
+                            sums[(wsic * TN + cc) * (WMITER * TM) + wsir * TM + cr] += float(cache_a[wsir * TM + cr]) * float(cache_b[wsic * TN + cc]);
                         }
                     }
                 }
@@ -466,8 +466,8 @@ dequant_head = """#version 450
 dequant_body = """
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -498,8 +498,8 @@ void main() {
     [[unroll]] for (int iqs = 0; iqs < QUANT_K/QUANT_R; iqs += step) {
         DEQUANT_FUNC
 
-        y[col * p.stride_b + row*QUANT_K + iqs + 0       ] = D_TYPE(v.x);
-        y[col * p.stride_b + row*QUANT_K + iqs + y_offset] = D_TYPE(v.y);
+        data_b[col * p.stride_b + row*QUANT_K + iqs + 0       ] = D_TYPE(v.x);
+        data_b[col * p.stride_b + row*QUANT_K + iqs + y_offset] = D_TYPE(v.y);
     }
 }
 """
@@ -508,8 +508,8 @@ void main() {
 dequant_q2_K_body = """
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -534,22 +534,22 @@ void main() {
         const int y_idx = i * QUANT_K + 128 * ip + il;
 
         const int ql_idx = 32 * ip + il;
-        const uint8_t qs = x[i].qs[32 * ip + il];
+        const uint8_t qs = data_a[i].qs[32 * ip + il];
 
-        FLOAT_TYPE dall = FLOAT_TYPE(x[i].d.x);
-        FLOAT_TYPE dmin = FLOAT_TYPE(x[i].d.y);
-        y[y_idx +  0] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+0] & 0xF) * ((qs >> 0) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+0] >> 4));
-        y[y_idx + 32] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+2] & 0xF) * ((qs >> 2) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+2] >> 4));
-        y[y_idx + 64] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+4] & 0xF) * ((qs >> 4) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+4] >> 4));
-        y[y_idx + 96] = D_TYPE(dall * FLOAT_TYPE((x[i].scales[is+6] & 0xF) * ((qs >> 6) & 3)) - dmin * FLOAT_TYPE(x[i].scales[is+6] >> 4));
+        FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
+        FLOAT_TYPE dmin = FLOAT_TYPE(data_a[i].d.y);
+        data_b[y_idx +  0] = D_TYPE(dall * FLOAT_TYPE((data_a[i].scales[is+0] & 0xF) * ((qs >> 0) & 3)) - dmin * FLOAT_TYPE(data_a[i].scales[is+0] >> 4));
+        data_b[y_idx + 32] = D_TYPE(dall * FLOAT_TYPE((data_a[i].scales[is+2] & 0xF) * ((qs >> 2) & 3)) - dmin * FLOAT_TYPE(data_a[i].scales[is+2] >> 4));
+        data_b[y_idx + 64] = D_TYPE(dall * FLOAT_TYPE((data_a[i].scales[is+4] & 0xF) * ((qs >> 4) & 3)) - dmin * FLOAT_TYPE(data_a[i].scales[is+4] >> 4));
+        data_b[y_idx + 96] = D_TYPE(dall * FLOAT_TYPE((data_a[i].scales[is+6] & 0xF) * ((qs >> 6) & 3)) - dmin * FLOAT_TYPE(data_a[i].scales[is+6] >> 4));
     }
 }
 """
 dequant_q3_K_body = """
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -577,18 +577,18 @@ void main() {
         const int is = 8*n + 2*j + is0;
         const int shift = 2*j;
 
-        const int8_t us = int8_t(is <  4 ? (x[i].scales[is-0] & 0xF) | (((x[i].scales[is+8] >> 0) & 3) << 4) :
-                                 is <  8 ? (x[i].scales[is-0] & 0xF) | (((x[i].scales[is+4] >> 2) & 3) << 4) :
-                                 is < 12 ? (x[i].scales[is-8] >>  4) | (((x[i].scales[is+0] >> 4) & 3) << 4) :
-                                           (x[i].scales[is-8] >>  4) | (((x[i].scales[is-4] >> 6) & 3) << 4));
-        const FLOAT_TYPE d_all = FLOAT_TYPE(x[i].d);
+        const int8_t us = int8_t(is <  4 ? (data_a[i].scales[is-0] & 0xF) | (((data_a[i].scales[is+8] >> 0) & 3) << 4) :
+                                 is <  8 ? (data_a[i].scales[is-0] & 0xF) | (((data_a[i].scales[is+4] >> 2) & 3) << 4) :
+                                 is < 12 ? (data_a[i].scales[is-8] >>  4) | (((data_a[i].scales[is+0] >> 4) & 3) << 4) :
+                                           (data_a[i].scales[is-8] >>  4) | (((data_a[i].scales[is-4] >> 6) & 3) << 4));
+        const FLOAT_TYPE d_all = FLOAT_TYPE(data_a[i].d);
         const FLOAT_TYPE dl    = d_all * FLOAT_TYPE(us - 32);
 
         const int y_idx = i * QUANT_K + 128 * n + 32 * j;
         const int qs_idx = 32*n;
 
         for (int l = l0; l < l0 + 4; ++l) {
-            y[y_idx + l] = D_TYPE(dl * FLOAT_TYPE(int8_t((x[i].qs[qs_idx + l] >> shift) & 3) - (((x[i].hmask[l] & m) != 0) ? 0 : 4)));
+            data_b[y_idx + l] = D_TYPE(dl * FLOAT_TYPE(int8_t((data_a[i].qs[qs_idx + l] >> shift) & 3) - (((data_a[i].hmask[l] & m) != 0) ? 0 : 4)));
         }
     }
 }
@@ -596,8 +596,8 @@ void main() {
 dequant_q4_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -620,8 +620,8 @@ void main() {
         const int is = 2 * il;
         const int n = 4;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(x[i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(x[i].d.y);
+        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[i].d.y);
 
         const int y_idx = i * QUANT_K + 64 * il + n * ir;
         const int qs_idx = 32*il + n * ir;
@@ -629,28 +629,28 @@ void main() {
         uint8_t sc;
         uint8_t m;
         if (is < 4) {
-            sc = uint8_t(x[i].scales[is] & 63);
-            m  = uint8_t(x[i].scales[is + 4] & 63);
+            sc = uint8_t(data_a[i].scales[is] & 63);
+            m  = uint8_t(data_a[i].scales[is + 4] & 63);
         } else {
-            sc = uint8_t((x[i].scales[is + 4] & 0xF) | ((x[i].scales[is - 4] >> 6) << 4));
-            m  = uint8_t((x[i].scales[is + 4] >>  4) | ((x[i].scales[is    ] >> 6) << 4));
+            sc = uint8_t((data_a[i].scales[is + 4] & 0xF) | ((data_a[i].scales[is - 4] >> 6) << 4));
+            m  = uint8_t((data_a[i].scales[is + 4] >>  4) | ((data_a[i].scales[is    ] >> 6) << 4));
         }
         const FLOAT_TYPE d1 = dall * sc;
         const FLOAT_TYPE m1 = dmin * m;
 
         if (is < 4) {
-            sc = uint8_t(x[i].scales[is + 1] & 63);
-            m  = uint8_t(x[i].scales[is + 5] & 63);
+            sc = uint8_t(data_a[i].scales[is + 1] & 63);
+            m  = uint8_t(data_a[i].scales[is + 5] & 63);
         } else {
-            sc = uint8_t((x[i].scales[is + 5] & 0xF) | ((x[i].scales[is - 3] >> 6) << 4));
-            m  = uint8_t((x[i].scales[is + 5] >>  4) | ((x[i].scales[is + 1] >> 6) << 4));
+            sc = uint8_t((data_a[i].scales[is + 5] & 0xF) | ((data_a[i].scales[is - 3] >> 6) << 4));
+            m  = uint8_t((data_a[i].scales[is + 5] >>  4) | ((data_a[i].scales[is + 1] >> 6) << 4));
         }
         const FLOAT_TYPE d2 = dall * sc;
         const FLOAT_TYPE m2 = dmin * m;
 
         [[unroll]] for (int l = 0; l < n; ++l) {
-            y[y_idx + l     ] = D_TYPE(d1 * FLOAT_TYPE(x[i].qs[qs_idx + l] & 0xF) - m1);
-            y[y_idx + l + 32] = D_TYPE(d2 * FLOAT_TYPE(x[i].qs[qs_idx + l] >>  4) - m2);
+            data_b[y_idx + l     ] = D_TYPE(d1 * FLOAT_TYPE(data_a[i].qs[qs_idx + l] & 0xF) - m1);
+            data_b[y_idx + l + 32] = D_TYPE(d2 * FLOAT_TYPE(data_a[i].qs[qs_idx + l] >>  4) - m2);
         }
     }
 }
@@ -658,8 +658,8 @@ void main() {
 dequant_q5_K_body = """
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -681,8 +681,8 @@ void main() {
         const int ir = tid % 16;
         const int is = 2 * il;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(x[i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(x[i].d.y);
+        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[i].d.y);
 
         const int y_idx = i * QUANT_K + 64 * il + 2 * ir;
         const int qs_idx = 32*il + 2 * ir;
@@ -691,39 +691,39 @@ void main() {
         uint8_t sc;
         uint8_t m;
         if (is < 4) {
-            sc = uint8_t(x[i].scales[is] & 63);
-            m  = uint8_t(x[i].scales[is + 4] & 63);
+            sc = uint8_t(data_a[i].scales[is] & 63);
+            m  = uint8_t(data_a[i].scales[is + 4] & 63);
         } else {
-            sc = uint8_t((x[i].scales[is + 4] & 0xF) | ((x[i].scales[is - 4] >> 6) << 4));
-            m  = uint8_t((x[i].scales[is + 4] >>  4) | ((x[i].scales[is    ] >> 6) << 4));
+            sc = uint8_t((data_a[i].scales[is + 4] & 0xF) | ((data_a[i].scales[is - 4] >> 6) << 4));
+            m  = uint8_t((data_a[i].scales[is + 4] >>  4) | ((data_a[i].scales[is    ] >> 6) << 4));
         }
         const FLOAT_TYPE d1 = dall * sc;
         const FLOAT_TYPE m1 = dmin * m;
 
         if (is < 4) {
-            sc = uint8_t(x[i].scales[is + 1] & 63);
-            m  = uint8_t(x[i].scales[is + 5] & 63);
+            sc = uint8_t(data_a[i].scales[is + 1] & 63);
+            m  = uint8_t(data_a[i].scales[is + 5] & 63);
         } else {
-            sc = uint8_t((x[i].scales[is + 5] & 0xF) | ((x[i].scales[is - 3] >> 6) << 4));
-            m  = uint8_t((x[i].scales[is + 5] >>  4) | ((x[i].scales[is + 1] >> 6) << 4));
+            sc = uint8_t((data_a[i].scales[is + 5] & 0xF) | ((data_a[i].scales[is - 3] >> 6) << 4));
+            m  = uint8_t((data_a[i].scales[is + 5] >>  4) | ((data_a[i].scales[is + 1] >> 6) << 4));
         }
         const FLOAT_TYPE d2 = dall * sc;
         const FLOAT_TYPE m2 = dmin * m;
 
         const uint8_t hm1 = uint8_t(1 << (2 * il    ));
         const uint8_t hm2 = uint8_t(1 << (2 * il + 1));
-        y[y_idx     ] = D_TYPE(d1 * FLOAT_TYPE((x[i].qs[qs_idx    ] & 0xF) + (((x[i].qh[qh_idx    ] & hm1) != 0) ? 16 : 0)) - m1);
-        y[y_idx +  1] = D_TYPE(d1 * FLOAT_TYPE((x[i].qs[qs_idx + 1] & 0xF) + (((x[i].qh[qh_idx + 1] & hm1) != 0) ? 16 : 0)) - m1);
-        y[y_idx + 32] = D_TYPE(d2 * FLOAT_TYPE((x[i].qs[qs_idx    ]  >> 4) + (((x[i].qh[qh_idx    ] & hm2) != 0) ? 16 : 0)) - m2);
-        y[y_idx + 33] = D_TYPE(d2 * FLOAT_TYPE((x[i].qs[qs_idx + 1]  >> 4) + (((x[i].qh[qh_idx + 1] & hm2) != 0) ? 16 : 0)) - m2);
+        data_b[y_idx     ] = D_TYPE(d1 * FLOAT_TYPE((data_a[i].qs[qs_idx    ] & 0xF) + (((data_a[i].qh[qh_idx    ] & hm1) != 0) ? 16 : 0)) - m1);
+        data_b[y_idx +  1] = D_TYPE(d1 * FLOAT_TYPE((data_a[i].qs[qs_idx + 1] & 0xF) + (((data_a[i].qh[qh_idx + 1] & hm1) != 0) ? 16 : 0)) - m1);
+        data_b[y_idx + 32] = D_TYPE(d2 * FLOAT_TYPE((data_a[i].qs[qs_idx    ]  >> 4) + (((data_a[i].qh[qh_idx    ] & hm2) != 0) ? 16 : 0)) - m2);
+        data_b[y_idx + 33] = D_TYPE(d2 * FLOAT_TYPE((data_a[i].qs[qs_idx + 1]  >> 4) + (((data_a[i].qh[qh_idx + 1] & hm2) != 0) ? 16 : 0)) - m2);
     }
 }
 """
 dequant_q6_K_body = """
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) writeonly buffer D {D_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_b[];};
 
 layout (push_constant) uniform parameter
 {
@@ -747,14 +747,14 @@ void main() {
         const int y_idx = i * QUANT_K + 128 * ip + il;
 
         const int ql_idx = 64 * ip + il;
-        const uint8_t qh = x[i].qh[32 * ip + il];
+        const uint8_t qh = data_a[i].qh[32 * ip + il];
 
-        const FLOAT_TYPE d = FLOAT_TYPE(x[i].d);
+        const FLOAT_TYPE d = FLOAT_TYPE(data_a[i].d);
 
-        y[y_idx +  0] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 0] * (int8_t((x[i].ql[ql_idx +  0] & 0xF) | (((qh >> 0) & 3) << 4)) - 32)));
-        y[y_idx + 32] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 2] * (int8_t((x[i].ql[ql_idx + 32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32)));
-        y[y_idx + 64] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 4] * (int8_t((x[i].ql[ql_idx +  0] >>  4) | (((qh >> 4) & 3) << 4)) - 32)));
-        y[y_idx + 96] = D_TYPE(d * FLOAT_TYPE(x[i].scales[is + 6] * (int8_t((x[i].ql[ql_idx + 32] >>  4) | (((qh >> 6) & 3) << 4)) - 32)));
+        data_b[y_idx +  0] = D_TYPE(d * FLOAT_TYPE(data_a[i].scales[is + 0] * (int8_t((data_a[i].ql[ql_idx +  0] & 0xF) | (((qh >> 0) & 3) << 4)) - 32)));
+        data_b[y_idx + 32] = D_TYPE(d * FLOAT_TYPE(data_a[i].scales[is + 2] * (int8_t((data_a[i].ql[ql_idx + 32] & 0xF) | (((qh >> 2) & 3) << 4)) - 32)));
+        data_b[y_idx + 64] = D_TYPE(d * FLOAT_TYPE(data_a[i].scales[is + 4] * (int8_t((data_a[i].ql[ql_idx +  0] >>  4) | (((qh >> 4) & 3) << 4)) - 32)));
+        data_b[y_idx + 96] = D_TYPE(d * FLOAT_TYPE(data_a[i].scales[is + 6] * (int8_t((data_a[i].ql[ql_idx + 32] >>  4) | (((qh >> 6) & 3) << 4)) - 32)));
     }
 }
 """
@@ -770,8 +770,8 @@ mul_mat_vec_head = """#version 450
 mul_mat_vec_body = """
 layout(local_size_x = QUANT_K, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -799,8 +799,8 @@ void main() {
         DEQUANT_FUNC
 
         // matrix multiplication
-        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(y[iybs + iqs + 0]);
-        tmp[tid] += FLOAT_TYPE(v.y) * FLOAT_TYPE(y[iybs + iqs + y_offset]);
+        tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[iybs + iqs + 0]);
+        tmp[tid] += FLOAT_TYPE(v.y) * FLOAT_TYPE(data_b[iybs + iqs + y_offset]);
     }
 
     // sum up partial sums and write back result
@@ -821,8 +821,8 @@ void main() {
 mul_mat_vec_q2_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -856,28 +856,28 @@ void main() {
     [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
         const int y_idx = i * QUANT_K + y_offset;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(x[ib0 + i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(x[ib0 + i].d.y);
+        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
 
         FLOAT_TYPE sum1 = FLOAT_TYPE(0.0);
         FLOAT_TYPE sum2 = FLOAT_TYPE(0.0);
         for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
-            sum1 += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 0] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 0) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 1] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 0) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 2) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 3] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 2) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 4] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 4) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 5] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 4) & 3)
-                  + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 6] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l + 0] >> 6) & 3)
-                  + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 7] & 0xF) * FLOAT_TYPE((x[ib0 + i].qs[q_offset + l +16] >> 6) & 3);
-            sum2 += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 0] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 1] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 2] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 3] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 4] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 5] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 6] >> 4) & 0xF)
-                  + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE((x[ib0 + i].scales[s_offset + 7] >> 4) & 0xF);
+            sum1 += FLOAT_TYPE(data_b[y_idx + l +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 0) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 0) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 2) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 2) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 4) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 4) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l + 0] >> 6) & 3)
+                  + FLOAT_TYPE(data_b[y_idx + l +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7] & 0xF) * FLOAT_TYPE((data_a[ib0 + i].qs[q_offset + l +16] >> 6) & 3);
+            sum2 += FLOAT_TYPE(data_b[y_idx + l +  0]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 0] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 16]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 1] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 32]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 2] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 48]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 3] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 64]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 4] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 80]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 5] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l + 96]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 6] >> 4) & 0xF)
+                  + FLOAT_TYPE(data_b[y_idx + l +112]) * FLOAT_TYPE((data_a[ib0 + i].scales[s_offset + 7] >> 4) & 0xF);
         }
         tmp[16 * ix + tid] += dall * sum1 - dmin * sum2;
     }
@@ -898,8 +898,8 @@ void main() {
 mul_mat_vec_q3_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -936,18 +936,18 @@ void main() {
     [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
         const int y_idx = i * QUANT_K + y_offset;
 
-        const FLOAT_TYPE d = FLOAT_TYPE(x[ib0 + i].d);
+        const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
         FLOAT_TYPE sum = FLOAT_TYPE(0.0);
         for (int l = 0; l < K_QUANTS_PER_ITERATION; ++l) {
-            sum += FLOAT_TYPE(y[y_idx + l +  0]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[0] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 8] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ]     ) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 0)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 32]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[2] >> s_shift) & 0xF) | ((x[ib0 + i].scales[10] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 2) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 1)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 64]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[4] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 8] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 4) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 2)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 96]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[6] >> s_shift) & 0xF) | ((x[ib0 + i].scales[10] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l   ] >> 6) & 3) - (((x[ib0 + i].hmask[l0 + l   ] & (m << 3)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 16]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[1] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 9] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16]     ) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 0)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 48]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[3] >> s_shift) & 0xF) | ((x[ib0 + i].scales[11] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 2) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 1)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l + 80]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[5] >> s_shift) & 0xF) | ((x[ib0 + i].scales[ 9] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 4) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 2)) != 0) ? 0 : 4))
-                 + FLOAT_TYPE(y[y_idx + l +112]) * FLOAT_TYPE(int8_t(((x[ib0 + i].scales[7] >> s_shift) & 0xF) | ((x[ib0 + i].scales[11] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((x[ib0 + i].qs[q_offset + l+16] >> 6) & 3) - (((x[ib0 + i].hmask[l0 + l+16] & (m << 3)) != 0) ? 0 : 4));
+            sum += FLOAT_TYPE(data_b[y_idx + l +  0]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[0] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 32]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[2] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 64]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[4] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 8] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 96]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[6] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[10] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l   ] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l   ] & (m << 3)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 16]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[1] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16]     ) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 0)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 48]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[3] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 0) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 2) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 1)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l + 80]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[5] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[ 9] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 4) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 2)) != 0) ? 0 : 4))
+                 + FLOAT_TYPE(data_b[y_idx + l +112]) * FLOAT_TYPE(int8_t(((data_a[ib0 + i].scales[7] >> s_shift) & 0xF) | ((data_a[ib0 + i].scales[11] >> (s_shift + 2) & 0x3) << 4)) - 32) * FLOAT_TYPE(((data_a[ib0 + i].qs[q_offset + l+16] >> 6) & 3) - (((data_a[ib0 + i].hmask[l0 + l+16] & (m << 3)) != 0) ? 0 : 4));
         }
         tmp[16 * ix + tid] += d * sum;
     }
@@ -968,8 +968,8 @@ void main() {
 mul_mat_vec_q4_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -1007,67 +1007,67 @@ void main() {
         const int y1_idx = i * QUANT_K + y_offset;
         const int y2_idx = y1_idx + 128;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(x[ib0 + i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(x[ib0 + i].d.y);
+        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
 
-        const uint8_t sc0 = uint8_t(  x[ib0 + i].scales[v_im * 2    ]       & 0x3f);
-        const uint8_t sc1 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 1]       & 0x3f);
-        const uint8_t sc2 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 4]       & 0x3f);
-        const uint8_t sc3 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 5]       & 0x3f);
-        const uint8_t sc4 = uint8_t(( x[ib0 + i].scales[v_im * 2 + 8]       & 0x0f) | ((x[ib0 + i].scales[v_im * 2    ] & 0xc0) >> 2));
-        const uint8_t sc5 = uint8_t(( x[ib0 + i].scales[v_im * 2 + 9]       & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 1] & 0xc0) >> 2));
-        const uint8_t sc6 = uint8_t(((x[ib0 + i].scales[v_im * 2 + 8] >> 4) & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 4] & 0xc0) >> 2));
-        const uint8_t sc7 = uint8_t(((x[ib0 + i].scales[v_im * 2 + 9] >> 4) & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 5] & 0xc0) >> 2));
+        const uint8_t sc0 = uint8_t(  data_a[ib0 + i].scales[v_im * 2    ]       & 0x3f);
+        const uint8_t sc1 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 1]       & 0x3f);
+        const uint8_t sc2 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 4]       & 0x3f);
+        const uint8_t sc3 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 5]       & 0x3f);
+        const uint8_t sc4 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 8]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2    ] & 0xc0) >> 2));
+        const uint8_t sc5 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 9]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 1] & 0xc0) >> 2));
+        const uint8_t sc6 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 8] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 4] & 0xc0) >> 2));
+        const uint8_t sc7 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 9] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 5] & 0xc0) >> 2));
 
 #if K_QUANTS_PER_ITERATION == 2
-        const uint8_t q4_0  = uint8_t(x[ib0 + i].qs[q_offset     ] & 0xf);
-        const uint8_t q4_1  = uint8_t(x[ib0 + i].qs[q_offset +  1] & 0xf);
-        const uint8_t q4_2  = uint8_t(x[ib0 + i].qs[q_offset +  2] & 0xf);
-        const uint8_t q4_3  = uint8_t(x[ib0 + i].qs[q_offset +  3] & 0xf);
-        const uint8_t q4_4  = uint8_t(x[ib0 + i].qs[q_offset     ]  >> 4);
-        const uint8_t q4_5  = uint8_t(x[ib0 + i].qs[q_offset +  1]  >> 4);
-        const uint8_t q4_6  = uint8_t(x[ib0 + i].qs[q_offset +  2]  >> 4);
-        const uint8_t q4_7  = uint8_t(x[ib0 + i].qs[q_offset +  3]  >> 4);
-        const uint8_t q4_8  = uint8_t(x[ib0 + i].qs[q_offset + 64] & 0xf);
-        const uint8_t q4_9  = uint8_t(x[ib0 + i].qs[q_offset + 65] & 0xf);
-        const uint8_t q4_10 = uint8_t(x[ib0 + i].qs[q_offset + 66] & 0xf);
-        const uint8_t q4_11 = uint8_t(x[ib0 + i].qs[q_offset + 67] & 0xf);
-        const uint8_t q4_12 = uint8_t(x[ib0 + i].qs[q_offset + 64]  >> 4);
-        const uint8_t q4_13 = uint8_t(x[ib0 + i].qs[q_offset + 65]  >> 4);
-        const uint8_t q4_14 = uint8_t(x[ib0 + i].qs[q_offset + 66]  >> 4);
-        const uint8_t q4_15 = uint8_t(x[ib0 + i].qs[q_offset + 67]  >> 4);
+        const uint8_t q4_0  = uint8_t(data_a[ib0 + i].qs[q_offset     ] & 0xf);
+        const uint8_t q4_1  = uint8_t(data_a[ib0 + i].qs[q_offset +  1] & 0xf);
+        const uint8_t q4_2  = uint8_t(data_a[ib0 + i].qs[q_offset +  2] & 0xf);
+        const uint8_t q4_3  = uint8_t(data_a[ib0 + i].qs[q_offset +  3] & 0xf);
+        const uint8_t q4_4  = uint8_t(data_a[ib0 + i].qs[q_offset     ]  >> 4);
+        const uint8_t q4_5  = uint8_t(data_a[ib0 + i].qs[q_offset +  1]  >> 4);
+        const uint8_t q4_6  = uint8_t(data_a[ib0 + i].qs[q_offset +  2]  >> 4);
+        const uint8_t q4_7  = uint8_t(data_a[ib0 + i].qs[q_offset +  3]  >> 4);
+        const uint8_t q4_8  = uint8_t(data_a[ib0 + i].qs[q_offset + 64] & 0xf);
+        const uint8_t q4_9  = uint8_t(data_a[ib0 + i].qs[q_offset + 65] & 0xf);
+        const uint8_t q4_10 = uint8_t(data_a[ib0 + i].qs[q_offset + 66] & 0xf);
+        const uint8_t q4_11 = uint8_t(data_a[ib0 + i].qs[q_offset + 67] & 0xf);
+        const uint8_t q4_12 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
+        const uint8_t q4_13 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
+        const uint8_t q4_14 = uint8_t(data_a[ib0 + i].qs[q_offset + 66]  >> 4);
+        const uint8_t q4_15 = uint8_t(data_a[ib0 + i].qs[q_offset + 67]  >> 4);
 
-        const FLOAT_TYPE sx = FLOAT_TYPE(y[y1_idx] * q4_0 + y[y1_idx + 1] * q4_1 + y[y1_idx + 2] * q4_2 + y[y1_idx + 3] * q4_3);
-        const FLOAT_TYPE sy = FLOAT_TYPE(y[y1_idx + 32] * q4_4 + y[y1_idx + 33] * q4_5 + y[y1_idx + 34] * q4_6 + y[y1_idx + 35] * q4_7);
-        const FLOAT_TYPE sz = FLOAT_TYPE(y[y2_idx] * q4_8 + y[y2_idx + 1] * q4_9 + y[y2_idx + 2] * q4_10 + y[y2_idx + 3] * q4_11);
-        const FLOAT_TYPE sw = FLOAT_TYPE(y[y2_idx + 32] * q4_12 + y[y2_idx + 33] * q4_13 + y[y2_idx + 34] * q4_14 + y[y2_idx + 35] * q4_15);
+        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[y1_idx] * q4_0 + data_b[y1_idx + 1] * q4_1 + data_b[y1_idx + 2] * q4_2 + data_b[y1_idx + 3] * q4_3);
+        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[y1_idx + 32] * q4_4 + data_b[y1_idx + 33] * q4_5 + data_b[y1_idx + 34] * q4_6 + data_b[y1_idx + 35] * q4_7);
+        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[y2_idx] * q4_8 + data_b[y2_idx + 1] * q4_9 + data_b[y2_idx + 2] * q4_10 + data_b[y2_idx + 3] * q4_11);
+        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[y2_idx + 32] * q4_12 + data_b[y2_idx + 33] * q4_13 + data_b[y2_idx + 34] * q4_14 + data_b[y2_idx + 35] * q4_15);
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            y[y1_idx    ] * sc2 + y[y1_idx + 32] * sc3 + y[y2_idx    ] * sc6 + y[y2_idx + 32] * sc7
-          + y[y1_idx + 1] * sc2 + y[y1_idx + 33] * sc3 + y[y2_idx + 1] * sc6 + y[y2_idx + 33] * sc7
-          + y[y1_idx + 2] * sc2 + y[y1_idx + 34] * sc3 + y[y2_idx + 2] * sc6 + y[y2_idx + 34] * sc7
-          + y[y1_idx + 3] * sc2 + y[y1_idx + 35] * sc3 + y[y2_idx + 3] * sc6 + y[y2_idx + 35] * sc7
+            data_b[y1_idx    ] * sc2 + data_b[y1_idx + 32] * sc3 + data_b[y2_idx    ] * sc6 + data_b[y2_idx + 32] * sc7
+          + data_b[y1_idx + 1] * sc2 + data_b[y1_idx + 33] * sc3 + data_b[y2_idx + 1] * sc6 + data_b[y2_idx + 33] * sc7
+          + data_b[y1_idx + 2] * sc2 + data_b[y1_idx + 34] * sc3 + data_b[y2_idx + 2] * sc6 + data_b[y2_idx + 34] * sc7
+          + data_b[y1_idx + 3] * sc2 + data_b[y1_idx + 35] * sc3 + data_b[y2_idx + 3] * sc6 + data_b[y2_idx + 35] * sc7
         );
         tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * sc0 + sy * sc1 + sz * sc4 + sw * sc5) - dmin * smin);
 #else
-        const uint8_t q4_0 = uint8_t(x[ib0 + i].qs[q_offset     ] & 0xf);
-        const uint8_t q4_1 = uint8_t(x[ib0 + i].qs[q_offset +  1] & 0xf);
-        const uint8_t q4_2 = uint8_t(x[ib0 + i].qs[q_offset     ]  >> 4);
-        const uint8_t q4_3 = uint8_t(x[ib0 + i].qs[q_offset +  1]  >> 4);
-        const uint8_t q4_4 = uint8_t(x[ib0 + i].qs[q_offset + 64] & 0xf);
-        const uint8_t q4_5 = uint8_t(x[ib0 + i].qs[q_offset + 65] & 0xf);
-        const uint8_t q4_6 = uint8_t(x[ib0 + i].qs[q_offset + 64]  >> 4);
-        const uint8_t q4_7 = uint8_t(x[ib0 + i].qs[q_offset + 65]  >> 4);
+        const uint8_t q4_0 = uint8_t(data_a[ib0 + i].qs[q_offset     ] & 0xf);
+        const uint8_t q4_1 = uint8_t(data_a[ib0 + i].qs[q_offset +  1] & 0xf);
+        const uint8_t q4_2 = uint8_t(data_a[ib0 + i].qs[q_offset     ]  >> 4);
+        const uint8_t q4_3 = uint8_t(data_a[ib0 + i].qs[q_offset +  1]  >> 4);
+        const uint8_t q4_4 = uint8_t(data_a[ib0 + i].qs[q_offset + 64] & 0xf);
+        const uint8_t q4_5 = uint8_t(data_a[ib0 + i].qs[q_offset + 65] & 0xf);
+        const uint8_t q4_6 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
+        const uint8_t q4_7 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
 
-        const FLOAT_TYPE sx = FLOAT_TYPE(y[y1_idx     ] * q4_0  + y[y1_idx +  1] * q4_1);
-        const FLOAT_TYPE sy = FLOAT_TYPE(y[y1_idx + 32] * q4_2  + y[y1_idx + 33] * q4_3);
-        const FLOAT_TYPE sz = FLOAT_TYPE(y[y2_idx     ] * q4_4  + y[y2_idx +  1] * q4_5);
-        const FLOAT_TYPE sw = FLOAT_TYPE(y[y2_idx + 32] * q4_6 + y[y2_idx + 33] * q4_7);
+        const FLOAT_TYPE sx = FLOAT_TYPE(data_b[y1_idx     ] * q4_0  + data_b[y1_idx +  1] * q4_1);
+        const FLOAT_TYPE sy = FLOAT_TYPE(data_b[y1_idx + 32] * q4_2  + data_b[y1_idx + 33] * q4_3);
+        const FLOAT_TYPE sz = FLOAT_TYPE(data_b[y2_idx     ] * q4_4  + data_b[y2_idx +  1] * q4_5);
+        const FLOAT_TYPE sw = FLOAT_TYPE(data_b[y2_idx + 32] * q4_6 + data_b[y2_idx + 33] * q4_7);
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            y[y1_idx] * sc2 + y[y1_idx + 32] * sc3 + y[y2_idx] * sc6 + y[y2_idx + 32] * sc7
-          + y[y1_idx + 1] * sc2 + y[y1_idx + 33] * sc3 + y[y2_idx + 1] * sc6 + y[y2_idx + 33] * sc7
+            data_b[y1_idx] * sc2 + data_b[y1_idx + 32] * sc3 + data_b[y2_idx] * sc6 + data_b[y2_idx + 32] * sc7
+          + data_b[y1_idx + 1] * sc2 + data_b[y1_idx + 33] * sc3 + data_b[y2_idx + 1] * sc6 + data_b[y2_idx + 33] * sc7
         );
 
-        tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * FLOAT_TYPE(x[ib0 + i].scales[v_im] & 0x3f) + sy * FLOAT_TYPE(x[ib0 + i].scales[v_im + 1] & 0x3f) + sz * FLOAT_TYPE((x[ib0 + i].scales[v_im + 4] & 0x0f) | ((x[ib0 + i].scales[v_im] & 0xc0) >> 2)) + sw * FLOAT_TYPE((x[ib0 + i].scales[v_im + 5] & 0x0f) | ((x[ib0 + i].scales[v_im + 1] & 0xc0) >> 2))) - dmin * smin);
+        tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * FLOAT_TYPE(data_a[ib0 + i].scales[v_im] & 0x3f) + sy * FLOAT_TYPE(data_a[ib0 + i].scales[v_im + 1] & 0x3f) + sz * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 4] & 0x0f) | ((data_a[ib0 + i].scales[v_im] & 0xc0) >> 2)) + sw * FLOAT_TYPE((data_a[ib0 + i].scales[v_im + 5] & 0x0f) | ((data_a[ib0 + i].scales[v_im + 1] & 0xc0) >> 2))) - dmin * smin);
 #endif
     }
 
@@ -1087,8 +1087,8 @@ void main() {
 mul_mat_vec_q5_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -1126,62 +1126,62 @@ void main() {
         const int y1_idx = i * QUANT_K + y_offset;
         const int y2_idx = y1_idx + 128;
 
-        const FLOAT_TYPE dall = FLOAT_TYPE(x[ib0 + i].d.x);
-        const FLOAT_TYPE dmin = FLOAT_TYPE(x[ib0 + i].d.y);
+        const FLOAT_TYPE dall = FLOAT_TYPE(data_a[ib0 + i].d.x);
+        const FLOAT_TYPE dmin = FLOAT_TYPE(data_a[ib0 + i].d.y);
 
-        const uint8_t sc0 = uint8_t(  x[ib0 + i].scales[v_im * 2    ]       & 0x3f);
-        const uint8_t sc1 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 1]       & 0x3f);
-        const uint8_t sc2 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 4]       & 0x3f);
-        const uint8_t sc3 = uint8_t(  x[ib0 + i].scales[v_im * 2 + 5]       & 0x3f);
-        const uint8_t sc4 = uint8_t(( x[ib0 + i].scales[v_im * 2 + 8]       & 0x0f) | ((x[ib0 + i].scales[v_im * 2    ] & 0xc0) >> 2));
-        const uint8_t sc5 = uint8_t(( x[ib0 + i].scales[v_im * 2 + 9]       & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 1] & 0xc0) >> 2));
-        const uint8_t sc6 = uint8_t(((x[ib0 + i].scales[v_im * 2 + 8] >> 4) & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 4] & 0xc0) >> 2));
-        const uint8_t sc7 = uint8_t(((x[ib0 + i].scales[v_im * 2 + 9] >> 4) & 0x0f) | ((x[ib0 + i].scales[v_im * 2 + 5] & 0xc0) >> 2));
+        const uint8_t sc0 = uint8_t(  data_a[ib0 + i].scales[v_im * 2    ]       & 0x3f);
+        const uint8_t sc1 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 1]       & 0x3f);
+        const uint8_t sc2 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 4]       & 0x3f);
+        const uint8_t sc3 = uint8_t(  data_a[ib0 + i].scales[v_im * 2 + 5]       & 0x3f);
+        const uint8_t sc4 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 8]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2    ] & 0xc0) >> 2));
+        const uint8_t sc5 = uint8_t(( data_a[ib0 + i].scales[v_im * 2 + 9]       & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 1] & 0xc0) >> 2));
+        const uint8_t sc6 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 8] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 4] & 0xc0) >> 2));
+        const uint8_t sc7 = uint8_t(((data_a[ib0 + i].scales[v_im * 2 + 9] >> 4) & 0x0f) | ((data_a[ib0 + i].scales[v_im * 2 + 5] & 0xc0) >> 2));
 
-        const uint8_t q4_0  = uint8_t(x[ib0 + i].qs[q_offset     ] & 0xf);
-        const uint8_t q4_1  = uint8_t(x[ib0 + i].qs[q_offset +  1] & 0xf);
-        const uint8_t q4_2  = uint8_t(x[ib0 + i].qs[q_offset + 16] & 0xf);
-        const uint8_t q4_3  = uint8_t(x[ib0 + i].qs[q_offset + 17] & 0xf);
-        const uint8_t q4_4  = uint8_t(x[ib0 + i].qs[q_offset     ]  >> 4);
-        const uint8_t q4_5  = uint8_t(x[ib0 + i].qs[q_offset +  1]  >> 4);
-        const uint8_t q4_6  = uint8_t(x[ib0 + i].qs[q_offset + 16]  >> 4);
-        const uint8_t q4_7  = uint8_t(x[ib0 + i].qs[q_offset + 17]  >> 4);
-        const uint8_t q4_8  = uint8_t(x[ib0 + i].qs[q_offset + 64] & 0xf);
-        const uint8_t q4_9  = uint8_t(x[ib0 + i].qs[q_offset + 65] & 0xf);
-        const uint8_t q4_10 = uint8_t(x[ib0 + i].qs[q_offset + 80] & 0xf);
-        const uint8_t q4_11 = uint8_t(x[ib0 + i].qs[q_offset + 81] & 0xf);
-        const uint8_t q4_12 = uint8_t(x[ib0 + i].qs[q_offset + 64]  >> 4);
-        const uint8_t q4_13 = uint8_t(x[ib0 + i].qs[q_offset + 65]  >> 4);
-        const uint8_t q4_14 = uint8_t(x[ib0 + i].qs[q_offset + 80]  >> 4);
-        const uint8_t q4_15 = uint8_t(x[ib0 + i].qs[q_offset + 81]  >> 4);
+        const uint8_t q4_0  = uint8_t(data_a[ib0 + i].qs[q_offset     ] & 0xf);
+        const uint8_t q4_1  = uint8_t(data_a[ib0 + i].qs[q_offset +  1] & 0xf);
+        const uint8_t q4_2  = uint8_t(data_a[ib0 + i].qs[q_offset + 16] & 0xf);
+        const uint8_t q4_3  = uint8_t(data_a[ib0 + i].qs[q_offset + 17] & 0xf);
+        const uint8_t q4_4  = uint8_t(data_a[ib0 + i].qs[q_offset     ]  >> 4);
+        const uint8_t q4_5  = uint8_t(data_a[ib0 + i].qs[q_offset +  1]  >> 4);
+        const uint8_t q4_6  = uint8_t(data_a[ib0 + i].qs[q_offset + 16]  >> 4);
+        const uint8_t q4_7  = uint8_t(data_a[ib0 + i].qs[q_offset + 17]  >> 4);
+        const uint8_t q4_8  = uint8_t(data_a[ib0 + i].qs[q_offset + 64] & 0xf);
+        const uint8_t q4_9  = uint8_t(data_a[ib0 + i].qs[q_offset + 65] & 0xf);
+        const uint8_t q4_10 = uint8_t(data_a[ib0 + i].qs[q_offset + 80] & 0xf);
+        const uint8_t q4_11 = uint8_t(data_a[ib0 + i].qs[q_offset + 81] & 0xf);
+        const uint8_t q4_12 = uint8_t(data_a[ib0 + i].qs[q_offset + 64]  >> 4);
+        const uint8_t q4_13 = uint8_t(data_a[ib0 + i].qs[q_offset + 65]  >> 4);
+        const uint8_t q4_14 = uint8_t(data_a[ib0 + i].qs[q_offset + 80]  >> 4);
+        const uint8_t q4_15 = uint8_t(data_a[ib0 + i].qs[q_offset + 81]  >> 4);
 
         const FLOAT_TYPE sx = FLOAT_TYPE(
-            y[y1_idx     ] * (q4_0 + (((x[ib0 + i].qh[l0     ] & hm1) != 0) ? 16 : 0))
-          + y[y1_idx +  1] * (q4_1 + (((x[ib0 + i].qh[l0 +  1] & hm1) != 0) ? 16 : 0))
-          + y[y1_idx + 16] * (q4_2 + (((x[ib0 + i].qh[l0 + 16] & hm1) != 0) ? 16 : 0))
-          + y[y1_idx + 17] * (q4_3 + (((x[ib0 + i].qh[l0 + 17] & hm1) != 0) ? 16 : 0))
+            data_b[y1_idx     ] * (q4_0 + (((data_a[ib0 + i].qh[l0     ] & hm1) != 0) ? 16 : 0))
+          + data_b[y1_idx +  1] * (q4_1 + (((data_a[ib0 + i].qh[l0 +  1] & hm1) != 0) ? 16 : 0))
+          + data_b[y1_idx + 16] * (q4_2 + (((data_a[ib0 + i].qh[l0 + 16] & hm1) != 0) ? 16 : 0))
+          + data_b[y1_idx + 17] * (q4_3 + (((data_a[ib0 + i].qh[l0 + 17] & hm1) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sy = FLOAT_TYPE(
-            y[y1_idx + 32] * (q4_4 + (((x[ib0 + i].qh[l0     ] & (hm1 << 1)) != 0) ? 16 : 0))
-          + y[y1_idx + 33] * (q4_5 + (((x[ib0 + i].qh[l0 +  1] & (hm1 << 1)) != 0) ? 16 : 0))
-          + y[y1_idx + 48] * (q4_6 + (((x[ib0 + i].qh[l0 + 16] & (hm1 << 1)) != 0) ? 16 : 0))
-          + y[y1_idx + 49] * (q4_7 + (((x[ib0 + i].qh[l0 + 17] & (hm1 << 1)) != 0) ? 16 : 0))
+            data_b[y1_idx + 32] * (q4_4 + (((data_a[ib0 + i].qh[l0     ] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[y1_idx + 33] * (q4_5 + (((data_a[ib0 + i].qh[l0 +  1] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[y1_idx + 48] * (q4_6 + (((data_a[ib0 + i].qh[l0 + 16] & (hm1 << 1)) != 0) ? 16 : 0))
+          + data_b[y1_idx + 49] * (q4_7 + (((data_a[ib0 + i].qh[l0 + 17] & (hm1 << 1)) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sz = FLOAT_TYPE(
-            y[y2_idx     ] * (q4_8  + (((x[ib0 + i].qh[l0     ] & hm2) != 0) ? 16 : 0))
-          + y[y2_idx +  1] * (q4_9  + (((x[ib0 + i].qh[l0 +  1] & hm2) != 0) ? 16 : 0))
-          + y[y2_idx + 16] * (q4_10 + (((x[ib0 + i].qh[l0 + 16] & hm2) != 0) ? 16 : 0))
-          + y[y2_idx + 17] * (q4_11 + (((x[ib0 + i].qh[l0 + 17] & hm2) != 0) ? 16 : 0))
+            data_b[y2_idx     ] * (q4_8  + (((data_a[ib0 + i].qh[l0     ] & hm2) != 0) ? 16 : 0))
+          + data_b[y2_idx +  1] * (q4_9  + (((data_a[ib0 + i].qh[l0 +  1] & hm2) != 0) ? 16 : 0))
+          + data_b[y2_idx + 16] * (q4_10 + (((data_a[ib0 + i].qh[l0 + 16] & hm2) != 0) ? 16 : 0))
+          + data_b[y2_idx + 17] * (q4_11 + (((data_a[ib0 + i].qh[l0 + 17] & hm2) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE sw = FLOAT_TYPE(
-            y[y2_idx + 32] * (q4_12 + (((x[ib0 + i].qh[l0     ] & (hm2 << 1)) != 0) ? 16 : 0))
-          + y[y2_idx + 33] * (q4_13 + (((x[ib0 + i].qh[l0 +  1] & (hm2 << 1)) != 0) ? 16 : 0))
-          + y[y2_idx + 48] * (q4_14 + (((x[ib0 + i].qh[l0 + 16] & (hm2 << 1)) != 0) ? 16 : 0))
-          + y[y2_idx + 49] * (q4_15 + (((x[ib0 + i].qh[l0 + 17] & (hm2 << 1)) != 0) ? 16 : 0))
+            data_b[y2_idx + 32] * (q4_12 + (((data_a[ib0 + i].qh[l0     ] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[y2_idx + 33] * (q4_13 + (((data_a[ib0 + i].qh[l0 +  1] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[y2_idx + 48] * (q4_14 + (((data_a[ib0 + i].qh[l0 + 16] & (hm2 << 1)) != 0) ? 16 : 0))
+          + data_b[y2_idx + 49] * (q4_15 + (((data_a[ib0 + i].qh[l0 + 17] & (hm2 << 1)) != 0) ? 16 : 0))
         );
         const FLOAT_TYPE smin = FLOAT_TYPE(
-            (y[y1_idx] + y[y1_idx + 1] + y[y1_idx + 16] + y[y1_idx + 17]) * sc2 + (y[y1_idx + 32] + y[y1_idx + 33] + y[y1_idx + 48] + y[y1_idx + 49]) * sc3
-          + (y[y2_idx] + y[y2_idx + 1] + y[y2_idx + 16] + y[y2_idx + 17]) * sc6 + (y[y2_idx + 32] + y[y2_idx + 33] + y[y2_idx + 48] + y[y2_idx + 49]) * sc7
+            (data_b[y1_idx] + data_b[y1_idx + 1] + data_b[y1_idx + 16] + data_b[y1_idx + 17]) * sc2 + (data_b[y1_idx + 32] + data_b[y1_idx + 33] + data_b[y1_idx + 48] + data_b[y1_idx + 49]) * sc3
+          + (data_b[y2_idx] + data_b[y2_idx + 1] + data_b[y2_idx + 16] + data_b[y2_idx + 17]) * sc6 + (data_b[y2_idx + 32] + data_b[y2_idx + 33] + data_b[y2_idx + 48] + data_b[y2_idx + 49]) * sc7
         );
         tmp[16 * ix + tid] += FLOAT_TYPE(dall * (sx * sc0 + sy * sc1 + sz * sc4 + sw * sc5) - dmin * smin);
     }
@@ -1202,8 +1202,8 @@ void main() {
 mul_mat_vec_q6_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE x[];};
-layout (binding = 1) readonly buffer B {B_TYPE y[];};
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
@@ -1245,25 +1245,25 @@ void main() {
     [[unroll]] for (int i = ix; i < num_blocks_per_row; i += K_QUANTS_PER_ITERATION) {
         const int y_idx    = i * QUANT_K + y_offset;
 
-        const FLOAT_TYPE d = FLOAT_TYPE(x[ib0 + i].d);
+        const FLOAT_TYPE d = FLOAT_TYPE(data_a[ib0 + i].d);
 
 #if K_QUANTS_PER_ITERATION == 1
-        FLOAT_TYPE sum = FLOAT_TYPE(y[y_idx +  0]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset +  0] & 0xF) | ((x[ib0 + i].qh[qh_offset +  0] & 0x03) << 4)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 16]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 1]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 16] & 0xF) | ((x[ib0 + i].qh[qh_offset + 16] & 0x03) << 4)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 32] & 0xF) | ((x[ib0 + i].qh[qh_offset +  0] & 0x0c) << 2)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 48]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 3]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 48] & 0xF) | ((x[ib0 + i].qh[qh_offset + 16] & 0x0c) << 2)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 64]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset +  0]  >> 4) | ((x[ib0 + i].qh[qh_offset +  0] & 0x30) >> 0)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 80]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 5]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 16]  >> 4) | ((x[ib0 + i].qh[qh_offset + 16] & 0x30) >> 0)) - 32)
-                       + FLOAT_TYPE(y[y_idx + 96]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 32]  >> 4) | ((x[ib0 + i].qh[qh_offset +  0] & 0xc0) >> 2)) - 32)
-                       + FLOAT_TYPE(y[y_idx +112]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 7]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + 48]  >> 4) | ((x[ib0 + i].qh[qh_offset + 16] & 0xc0) >> 2)) - 32);
+        FLOAT_TYPE sum = FLOAT_TYPE(data_b[y_idx +  0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x03) << 4)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 16]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 1]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x03) << 4)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32] & 0xF) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x0c) << 2)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 48]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 3]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48] & 0xF) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x0c) << 2)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset +  0]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0x30) >> 0)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 80]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 5]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 16]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0x30) >> 0)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx + 96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 32]  >> 4) | ((data_a[ib0 + i].qh[qh_offset +  0] & 0xc0) >> 2)) - 32)
+                       + FLOAT_TYPE(data_b[y_idx +112]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 7]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + 48]  >> 4) | ((data_a[ib0 + i].qh[qh_offset + 16] & 0xc0) >> 2)) - 32);
         tmp[16 * ix + tid] += sum;
 #else
         FLOAT_TYPE sum = FLOAT_TYPE(0.0);
         [[unroll]] for (int l = 0; l < 4; ++l) {
-            sum += FLOAT_TYPE(y[y_idx + l+ 0]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+ 0] & 0xF) | (((x[ib0 + i].qh[qh_offset + l] >> 0) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(y[y_idx + l+32]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((x[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(y[y_idx + l+64]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+ 0]  >> 4) | (((x[ib0 + i].qh[qh_offset + l] >> 4) & 3) << 4)) - 32)
-                 + FLOAT_TYPE(y[y_idx + l+96]) * FLOAT_TYPE(x[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((x[ib0 + i].ql[ql_offset + l+32]  >> 4) | (((x[ib0 + i].qh[qh_offset + l] >> 6) & 3) << 4)) - 32);
+            sum += FLOAT_TYPE(data_b[y_idx + l+ 0]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 0]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 0) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[y_idx + l+32]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 2]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32] & 0xF) | (((data_a[ib0 + i].qh[qh_offset + l] >> 2) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[y_idx + l+64]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 4]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+ 0]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 4) & 3) << 4)) - 32)
+                 + FLOAT_TYPE(data_b[y_idx + l+96]) * FLOAT_TYPE(data_a[ib0 + i].scales[s_offset + 6]) * d * FLOAT_TYPE(int8_t((data_a[ib0 + i].ql[ql_offset + l+32]  >> 4) | (((data_a[ib0 + i].qh[qh_offset + l] >> 6) & 3) << 4)) - 32);
         }
         tmp[16 * ix + tid] += sum;
 #endif
@@ -1311,151 +1311,118 @@ void main() {
 }
 """
 
-# MUL F32
-mul_f32_src = """#version 450
-
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-
-layout (binding = 0) buffer X {X_TYPE data_x[];};
-layout (binding = 1) buffer Y {Y_TYPE data_y[];};
-layout (binding = 2) buffer D {D_TYPE data_d[];};
-
-layout (push_constant) uniform parameter
-{
-    int M;
-    int N;
-    int stride_x;
-    int stride_y;
-    int stride_d;
-    int x_offset;
-    int y_offset;
-    int d_offset;
-    float scale;
-} p;
-
-void main() {
-    const int x = int(gl_GlobalInvocationID.x);
-    const int y = int(gl_GlobalInvocationID.y);
-
-    if (x >= p.M || y >= p.N) {
-        return;
-    }
-
-    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) * D_TYPE(data_y[p.y_offset + x]);
-}
-"""
-
-# ADD
-add_head = """
+generic_head = """
 #version 450
 
 #extension GL_EXT_shader_16bit_storage : require
 """
 
-add_body = """
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-layout (binding = 0) buffer X {X_TYPE data_x[];};
-layout (binding = 1) buffer Y {Y_TYPE data_y[];};
-layout (binding = 2) buffer D {D_TYPE data_d[];};
+# MUL F32
+mul_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
 
 layout (push_constant) uniform parameter
 {
-    int M;
-    int N;
-    int stride_x;
-    int stride_y;
-    int stride_d;
-    int x_offset;
-    int y_offset;
-    int d_offset;
-    float scale;
+    int KX;
+    int KY;
+    float param;
 } p;
 
 void main() {
-    const int x = int(gl_GlobalInvocationID.x);
-    const int y = int(gl_GlobalInvocationID.y);
+    const int idx = int(gl_GlobalInvocationID.x);
 
-    if (x >= p.M || y >= p.N) {
+    if (idx >= p.KX) {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(FLOAT_TYPE(data_x[p.x_offset + y * p.stride_x + x]) + FLOAT_TYPE(data_y[p.y_offset + x]));
+    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(data_b[idx % p.KY]));
+}
+"""
+
+# ADD
+add_body = """
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
+
+layout (push_constant) uniform parameter
+{
+    int KX;
+    int KY;
+    float param;
+} p;
+
+void main() {
+    const int idx = int(gl_GlobalInvocationID.x);
+
+    if (idx >= p.KX) {
+        return;
+    }
+
+    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) + FLOAT_TYPE(data_b[idx % p.KY]));
 }
 """
 
 # SCALE
-scale_src = """#version 450
+scale_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
-
-layout (binding = 0) buffer X {X_TYPE data_x[];};
-layout (binding = 1) buffer D {D_TYPE data_d[];};
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
 
 layout (push_constant) uniform parameter
 {
-    int M;
-    int N;
-    int stride_x;
-    int stride_y;
-    int stride_d;
-    int x_offset;
-    int y_offset;
-    int d_offset;
-    float scale;
+    int KX;
+    int KY;
+    float param;
 } p;
 
 void main() {
-    const int x = int(gl_GlobalInvocationID.x);
-    const int y = int(gl_GlobalInvocationID.y);
+    const int idx = int(gl_GlobalInvocationID.x);
 
-    if (x >= p.M || y >= p.N) {
+    if (idx >= p.KX) {
         return;
     }
 
-    data_d[p.d_offset + y * p.stride_d + x] = D_TYPE(data_x[p.x_offset + y * p.stride_x + x]) * D_TYPE(p.scale);
+    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(p.param));
 }
 """
 
 # GET_ROWS
-get_rows_head = """#version 450
-
+get_rows_body = """
 #extension GL_EXT_control_flow_attributes : enable
-#extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
-"""
 
-get_rows_body = """layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) buffer X {A_TYPE x[];};
-layout (binding = 1) buffer Y {int y[];};
-layout (binding = 2) buffer D {D_TYPE dst[];};
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer Y {int data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (push_constant) uniform parameter
 {
     int M;
     int N;
-    int stride_x;
-    int stride_y;
-    int stride_d;
-    int x_offset;
-    int y_offset;
-    int d_offset;
-    float scale;
+    float param;
 } p;
 
 void main() {
     const int col = int(gl_GlobalInvocationID.x) * 2;
     const int row = int(gl_GlobalInvocationID.y);
 
-    if (col >= p.M) {
+    if (col >= p.N) {
         return;
     }
 
-    const int r = y[row];
+    const int r = data_b[row];
 
-    // copy x[r*p.M + col] to dst[row*p.M + col]
-    const int xi = r*p.M + col;
-    const int di = row*p.M + col;
+    // copy data_a[r*p.N + col] to dst[row*p.M + col]
+    const int xi = r*p.N + col;
+    const int di = row*p.N + col;
 
     const int ib = xi/QUANT_K; // block index
     const int iqs = (xi%QUANT_K)/QUANT_R; // quant index
@@ -1466,6 +1433,53 @@ void main() {
 
     dst[iybs + iqs + 0]        = D_TYPE(v.x);
     dst[iybs + iqs + y_offset] = D_TYPE(v.y);
+}
+"""
+
+rms_norm_body = """
+#extension GL_EXT_control_flow_attributes : enable
+#define BLOCK_SIZE 512
+
+layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+layout (push_constant) uniform parameter
+{
+    int M;
+    int N;
+    float param;
+} p;
+
+shared FLOAT_TYPE sum[BLOCK_SIZE];
+
+void main() {
+    const uint row = uint(gl_WorkGroupID.x);
+    const uint tid = uint(gl_LocalInvocationID.x);
+
+    sum[tid] = FLOAT_TYPE(0.0f); // partial sum for thread in warp
+
+    [[unroll]] for (uint col = tid; col < p.M; col += BLOCK_SIZE) {
+        const FLOAT_TYPE xi = FLOAT_TYPE(data_a[row*p.M + col]);
+        sum[tid] += xi * xi;
+    }
+
+    // sum up partial sums and write back result
+    barrier();
+    [[unroll]] for (int s = BLOCK_SIZE / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sum[tid] += sum[tid + s];
+        }
+        barrier();
+    }
+
+    const FLOAT_TYPE mean = sum[0] / FLOAT_TYPE(p.M);
+    const FLOAT_TYPE scale = inversesqrt(mean + FLOAT_TYPE(p.param));
+
+    for (uint col = tid; col < p.M; col += BLOCK_SIZE) {
+        data_d[row*p.M + col] = D_TYPE(scale * FLOAT_TYPE(data_a[row*p.M + col]));
+    }
 }
 """
 
@@ -1582,7 +1596,7 @@ async def main():
             vec_type = "vec4"
 
         stream = []
-        stream.extend((mulmat_head, shader_float_type, mulmat_body));
+        stream.extend((mulmat_head, shader_float_type, mulmat_body))
         tasks.append(string_to_spv("matmul_f32_l", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f32_m", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
         tasks.append(string_to_spv("matmul_f32_s", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
@@ -1608,9 +1622,9 @@ async def main():
         tasks.append(string_to_spv("f32_to_f16", f32_to_f16_src, {}, fp16))
 
         for i in range(0, VK_NUM_TYPES):
-            stream.clear();
+            stream.clear()
 
-            stream.extend((dequant_head, shader_int8_ext, shader_float_type));
+            stream.extend((dequant_head, shader_int8_ext, shader_float_type))
 
             if i == GGML_TYPE_F16:
                 stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, dequant_body))
@@ -1641,7 +1655,7 @@ async def main():
 
         # mul mat vec
         for i in range(0, VK_NUM_TYPES):
-            stream.clear();
+            stream.clear()
             stream.extend((mul_mat_vec_head, shader_int8_ext, shader_float_type))
 
             if i == GGML_TYPE_F16:
@@ -1674,8 +1688,8 @@ async def main():
 
         # get_rows
         for i in range(0, VK_NUM_TYPES):
-            stream.clear();
-            stream.extend((get_rows_head, shader_int8_ext, shader_float_type))
+            stream.clear()
+            stream.extend((generic_head, shader_int8_ext, shader_float_type))
 
             if i == GGML_TYPE_F16:
                 stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, get_rows_body))
@@ -1696,20 +1710,19 @@ async def main():
             tasks.append(string_to_spv(f"get_rows_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float"}, fp16))
 
         # add
-        stream.clear();
-
-        stream.extend((add_head, shader_float_type, add_body))
-        tasks.append(string_to_spv("add_f32", "".join(stream), {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
-
-        stream.clear();
-        stream.extend((add_head, shader_float_type, add_body))
-        tasks.append(string_to_spv("add_f16_f32_f16", "".join(stream), {"X_TYPE": "float16_t", "Y_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
+        stream.clear()
+        stream.extend((generic_head, shader_float_type, add_body))
+        tasks.append(string_to_spv("add_f32", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("add_f16_f32_f16", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
 
         # Static shaders
         tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
-        tasks.append(string_to_spv("mul_f32", mul_f32_src, {"X_TYPE": "float", "Y_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("mul_f32", f"{generic_head}\n{shader_float_type}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-        tasks.append(string_to_spv("scale_f32", scale_src, {"X_TYPE": "float", "D_TYPE": "float"}, fp16))
+        tasks.append(string_to_spv("scale_f32", f"{generic_head}\n{shader_float_type}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float"}, fp16))
+
+    # Shaders where precision is needed, so no fp16 version
+    tasks.append(string_to_spv("rms_norm_f32", f"{generic_head}\n{shader_f32}\n{rms_norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
 
     await asyncio.gather(*tasks)
 
