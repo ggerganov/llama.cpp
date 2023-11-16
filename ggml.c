@@ -18073,7 +18073,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     {
         ctx->kv = malloc(ctx->header.n_kv * sizeof(struct gguf_kv));
 
-        for (uint32_t i = 0; i < ctx->header.n_kv; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
 
             //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
@@ -18120,7 +18120,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                             case GGUF_TYPE_STRING:
                                 {
                                     kv->value.arr.data = malloc(kv->value.arr.n * sizeof(struct gguf_str));
-                                    for (uint32_t j = 0; j < kv->value.arr.n; ++j) {
+                                    for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
                                         ok = ok && gguf_fread_str(file, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
                                     }
                                 } break;
@@ -18148,7 +18148,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     {
         ctx->infos = malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
 
-        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
 
             for (int j = 0; j < GGML_MAX_DIMS; ++j) {
@@ -18195,7 +18195,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     // compute the total size of the data section, taking into account the alignment
     {
         ctx->size = 0;
-        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
 
             const int64_t ne =
@@ -18264,7 +18264,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ggml_set_no_alloc(ctx_data, true);
 
         // create the tensors
-        for (uint32_t i = 0; i < ctx->header.n_tensors; ++i) {
+        for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             const int64_t ne[GGML_MAX_DIMS] = {
                 ctx->infos[i].ne[0],
                 ctx->infos[i].ne[1],
