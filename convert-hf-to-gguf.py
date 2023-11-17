@@ -20,13 +20,11 @@ from collections import OrderedDict
 if TYPE_CHECKING:
     from torch import Tensor
 
+# hard code because we don't want to use the pypi module
 #if 'NO_LOCAL_GGUF' not in os.environ:
 sys.path.insert(0, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-#archs = [n.name for n in gguf.MODEL_ARCH] + ['DISTILBERT']
-#gguf.MODEL_ARCH = IntEnum('MODEL_ARCH',archs)
-#gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.DISTILBERT] = "distilbert"
 ###### MODEL DEFINITIONS ######
 
 class SentencePieceTokenTypes(IntEnum):
