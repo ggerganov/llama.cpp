@@ -985,6 +985,16 @@ struct llama_server_context
                 slot.multibyte_pending = 0;
             }
         }
+        else if (token_str.size() == 2)
+        {
+            const char c0 = token_str[0];
+            const char c1 = token_str[1];
+            if (((c0 & 0xF0) == 0xE0) && ((c1 & 0xC0) == 0x80))
+            {
+                slot.multibyte_pending = 1;
+                // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+            }
+        }
 
         if (slot.multibyte_pending == 0)
         {
