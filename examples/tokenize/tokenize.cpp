@@ -12,8 +12,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    auto model_path = argv[1];
-    auto prompt = argv[2];
+    const char * model_path = argv[1];
+    const char * prompt     = argv[2];
 
     const bool printing_ids = argc > 3 && std::string(argv[3]) == "--ids";
 
@@ -36,7 +36,7 @@ int main(int argc, char ** argv) {
         if (printing_ids) {
             printf("%d\n", tokens[i]);
         } else {
-            printf("%6d -> '%s'\n", tokens[i], llama_token_to_piece(ctx, tokens[i]).c_str());    
+            printf("%6d -> '%s'\n", tokens[i], llama_token_to_piece(ctx, tokens[i]).c_str());
         }
     }
 
