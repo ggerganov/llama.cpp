@@ -501,6 +501,7 @@ struct llama_server_context
     bool multimodal         = false;
     bool clean_kv_cache     = true;
     bool all_slots_are_idle = false;
+    bool add_bos_token      = true;
 
     int32_t id_gen;
     int32_t n_ctx;  // total context for all clients / slots
@@ -572,6 +573,8 @@ struct llama_server_context
         }
 
         n_ctx = llama_n_ctx(ctx);
+
+        add_bos_token = llama_should_add_bos_token(model);
 
         return true;
     }
@@ -864,7 +867,7 @@ struct llama_server_context
     }
 
     void update_system_prompt() {
-        system_tokens = ::llama_tokenize(ctx, system_prompt, true);
+        system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
 
         llama_batch_clear(batch);
 
@@ -1552,7 +1555,7 @@ struct llama_server_context
                     }
                     else
                     {
-                        prompt_tokens = tokenize(slot.prompt, system_prompt.empty());  // add BOS if there isn't system prompt
+                        prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
                     }
 
                     slot.num_prompt_tokens = prompt_tokens.size();
@@ -1629,7 +1632,7 @@ struct llama_server_context
                     const bool has_images = process_images(slot);
 
                     // process the prefix of first image
-                    std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, true) : prompt_tokens;
+                    std::vector<llama_token> prefix_tokens = has_images ? tokenize(slot.images[0].prefix_prompt, add_bos_token) : prompt_tokens;
                     for (; slot.n_past < (int) prefix_tokens.size(); ++slot.n_past)
                     {
                        llama_batch_add(batch, prefix_tokens[slot.n_past], system_tokens.size() + slot.n_past, { slot.id }, false);
