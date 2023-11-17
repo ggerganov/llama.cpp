@@ -1194,6 +1194,7 @@ void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const cha
     if (!data_str.empty() && (std::isspace(data_str[0]) || std::isspace(data_str.back()))) {
         data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
         data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
+        data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");
         data_str = "\"" + data_str + "\"";
         fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
         return;
