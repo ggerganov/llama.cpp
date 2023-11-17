@@ -1042,10 +1042,10 @@ static void ggml_offload_nop(struct ggml_tensor * tensor) {
 
 static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(),false);
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(),false);
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
         GGML_ASSERT(check == -n_tokens);
     }
     else {
@@ -9341,7 +9341,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
     return llama_token_to_piece(model, token, buf, length, false);
 }   
 // does not write null-terminator to buf
-int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length, bool print_all_types=false) {
+int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length, bool print_all_types = false) {
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
