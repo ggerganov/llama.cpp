@@ -91,30 +91,31 @@ class MODEL_ARCH(IntEnum):
     BERT      = auto()
     BLOOM     = auto()
     STABLELM  = auto()
-
+    DISTILBERT = auto()
 
 class MODEL_TENSOR(IntEnum):
-    TOKEN_EMBD      = auto()
-    TOKEN_EMBD_NORM = auto()
-    TOKEN_TYPES     = auto()
-    POS_EMBD        = auto()
-    OUTPUT          = auto()
-    OUTPUT_NORM     = auto()
-    ROPE_FREQS      = auto()
-    ATTN_Q          = auto()
-    ATTN_K          = auto()
-    ATTN_V          = auto()
-    ATTN_QKV        = auto()
-    ATTN_OUT        = auto()
-    ATTN_NORM       = auto()
-    ATTN_NORM_2     = auto()
-    ATTN_ROT_EMBD   = auto()
-    FFN_GATE        = auto()
-    FFN_DOWN        = auto()
-    FFN_UP          = auto()
-    FFN_NORM        = auto()
-    ATTN_Q_NORM     = auto()
-    ATTN_K_NORM     = auto()
+    TOKEN_EMBD          = auto()
+    TOKEN_EMBD_NORM     = auto()
+    TOKEN_TYPES         = auto()
+    POS_EMBD            = auto()
+    OUTPUT              = auto()
+    OUTPUT_NORM         = auto()
+    ROPE_FREQS          = auto()
+    ATTN_Q              = auto()
+    ATTN_K              = auto()
+    ATTN_V              = auto()
+    ATTN_QKV            = auto()
+    ATTN_OUT            = auto()
+    ATTN_NORM           = auto()
+    ATTN_NORM_2         = auto()
+    ATTN_ROT_EMBD       = auto()
+    FFN_GATE            = auto()
+    FFN_DOWN            = auto()
+    FFN_UP              = auto()
+    FFN_NORM            = auto()
+    ATTN_Q_NORM         = auto()
+    ATTN_K_NORM         = auto()
+    OUTPUT_LAYER_NORM   = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -131,30 +132,32 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
+    MODEL_ARCH.DISTILBERT:     "distilbert"
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
-    MODEL_TENSOR.TOKEN_EMBD:      "token_embd",
-    MODEL_TENSOR.TOKEN_EMBD_NORM: "token_embd_norm",
-    MODEL_TENSOR.TOKEN_TYPES:     "token_types",
-    MODEL_TENSOR.POS_EMBD:        "position_embd",
-    MODEL_TENSOR.OUTPUT_NORM:     "output_norm",
-    MODEL_TENSOR.OUTPUT:          "output",
-    MODEL_TENSOR.ROPE_FREQS:      "rope_freqs",
-    MODEL_TENSOR.ATTN_NORM:       "blk.{bid}.attn_norm",
-    MODEL_TENSOR.ATTN_NORM_2:     "blk.{bid}.attn_norm_2",
-    MODEL_TENSOR.ATTN_QKV:        "blk.{bid}.attn_qkv",
-    MODEL_TENSOR.ATTN_Q:          "blk.{bid}.attn_q",
-    MODEL_TENSOR.ATTN_K:          "blk.{bid}.attn_k",
-    MODEL_TENSOR.ATTN_V:          "blk.{bid}.attn_v",
-    MODEL_TENSOR.ATTN_OUT:        "blk.{bid}.attn_output",
-    MODEL_TENSOR.ATTN_ROT_EMBD:   "blk.{bid}.attn_rot_embd",
-    MODEL_TENSOR.ATTN_Q_NORM:     "blk.{bid}.attn_q_norm",
-    MODEL_TENSOR.ATTN_K_NORM:     "blk.{bid}.attn_k_norm",
-    MODEL_TENSOR.FFN_NORM:        "blk.{bid}.ffn_norm",
-    MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
-    MODEL_TENSOR.FFN_DOWN:        "blk.{bid}.ffn_down",
-    MODEL_TENSOR.FFN_UP:          "blk.{bid}.ffn_up",
+    MODEL_TENSOR.TOKEN_EMBD:        "token_embd",
+    MODEL_TENSOR.TOKEN_EMBD_NORM:   "token_embd_norm",
+    MODEL_TENSOR.TOKEN_TYPES:       "token_types",
+    MODEL_TENSOR.POS_EMBD:          "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:       "output_norm",
+    MODEL_TENSOR.OUTPUT:            "output",
+    MODEL_TENSOR.ROPE_FREQS:        "rope_freqs",
+    MODEL_TENSOR.ATTN_NORM:         "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:       "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:          "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:            "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:            "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:            "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:          "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD:     "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.ATTN_Q_NORM:       "blk.{bid}.attn_q_norm",
+    MODEL_TENSOR.ATTN_K_NORM:       "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.FFN_NORM:          "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_GATE:          "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:          "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:            "blk.{bid}.ffn_up",
+    MODEL_TENSOR.OUTPUT_LAYER_NORM: "blk.{bid}.output_norm"
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -185,6 +188,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.DISTILBERT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.OUTPUT_LAYER_NORM, 
+        MODEL_TENSOR.OUTPUT,
+    ],
+
     MODEL_ARCH.FALCON: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,

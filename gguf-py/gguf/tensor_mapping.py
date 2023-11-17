@@ -4,7 +4,6 @@ from typing import Sequence
 
 from .constants import MODEL_ARCH, MODEL_TENSOR, MODEL_TENSORS, TENSOR_NAMES
 
-
 class TensorNameMap:
     mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
         # Token embeddings
@@ -27,6 +26,7 @@ class TensorNameMap:
         # Normalization of token embeddings
         MODEL_TENSOR.TOKEN_EMBD_NORM: (
             "word_embeddings_layernorm",  # bloom
+            "embeddings.LayerNorm",       # distilbert
         ),
 
         # Position embeddings
@@ -41,7 +41,8 @@ class TensorNameMap:
             "lm_head",                   # gpt2 mpt falcon llama-hf baichuan
             "output",                    # llama-pth bloom
             "word_embeddings_for_head",  # persimmon
-        ),
+            "linear.weight",             # sbert / distilbery
+            ),
 
         # Output norm
         MODEL_TENSOR.OUTPUT_NORM: (
@@ -49,11 +50,11 @@ class TensorNameMap:
             "transformer.ln_f",                        # gpt2 gpt-j falcon
             "model.norm",                              # llama-hf baichuan
             "norm",                                    # llama-pth
-            "embeddings.LayerNorm",                    # bert
+         #   "embeddings.LayerNorm",                    # bert
             "transformer.norm_f",                      # mpt
             "ln_f",                                    # refact bloom
             "language_model.encoder.final_layernorm",  # persimmon
-        ),
+            ),
 
         # Rope frequencies
         MODEL_TENSOR.ROPE_FREQS: (
@@ -75,7 +76,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.LayerNorm",       # bert
             "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
             "model.layers.{bid}.ln1",                               # yi
-        ),
+            ),
 
         # Attention norm 2
         MODEL_TENSOR.ATTN_NORM_2: (
@@ -98,7 +99,8 @@ class TensorNameMap:
             "layers.{bid}.attention.wq",                 # llama-pth
             "encoder.layer.{bid}.attention.self.query",  # bert
             "transformer.h.{bid}.attn.q_proj",           # gpt-j
-        ),
+            "transformer.layer.{bid}.attention.q_lin",   #distilbert
+            ),
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
@@ -106,6 +108,7 @@ class TensorNameMap:
             "layers.{bid}.attention.wk",               # llama-pth
             "encoder.layer.{bid}.attention.self.key",  # bert
             "transformer.h.{bid}.attn.k_proj",         # gpt-j
+            "transformer.layer.{bid}.attention.k_lin", #distilbert
         ),
 
         # Attention value
@@ -114,6 +117,7 @@ class TensorNameMap:
             "layers.{bid}.attention.wv",                 # llama-pth
             "encoder.layer.{bid}.attention.self.value",  # bert
             "transformer.h.{bid}.attn.v_proj",           # gpt-j
+            "transformer.layer.{bid}.attention.v_lin",   # distilbert
         ),
 
         # Attention output
@@ -128,7 +132,8 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.dense",                # bert
             "transformer.h.{bid}.attn.out_proj",                         # gpt-j
             "language_model.encoder.layers.{bid}.self_attention.dense",  # persimmon
-        ),
+            "transformer.layer.{bid}.attention.out_lin",                 # distilbert
+            ),
 
         # Rotary embeddings
         MODEL_TENSOR.ATTN_ROT_EMBD: (
@@ -147,7 +152,8 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.LayerNorm",                          # bert
             "language_model.encoder.layers.{bid}.post_attention_layernorm",  # persimmon
             "model.layers.{bid}.ln2",                                        # yi
-        ),
+            "transformer.layer.{bid}.sa_layer_norm",                         #distilbert
+            ),
 
         # Feed-forward up
         MODEL_TENSOR.FFN_UP: (
@@ -161,6 +167,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.intermediate.dense",                 # bert
             "transformer.h.{bid}.mlp.fc_in",                          # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
+            "transformer.layer.{bid}.ffn.lin1"                        # distil
         ),
 
         # Feed-forward gate
@@ -181,7 +188,8 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.dense",                       # bert
             "transformer.h.{bid}.mlp.fc_out",                         # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h",  # persimmon
-        ),
+            "transformer.layer.{bid}.ffn.lin2",                       # distilbert
+            ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
             "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
@@ -194,6 +202,12 @@ class TensorNameMap:
         MODEL_TENSOR.ROPE_FREQS: (
             "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq",  # persimmon
         ),
+
+        # Output norm
+        MODEL_TENSOR.OUTPUT_LAYER_NORM: (
+            "transformer.layer.{bid}.output_layer_norm",             # distilbert
+            ),
+
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
@@ -216,8 +230,8 @@ class TensorNameMap:
                 for key in keys:
                     key = key.format(bid = bid)
                     self.mapping[key] = (tensor, tensor_name)
-
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
+        print("getting ", key)
         result = self.mapping.get(key)
         if result is not None:
             return result
@@ -241,6 +255,7 @@ class TensorNameMap:
         return result[0]
 
     def __getitem__(self, key: str) -> str:
+        #print ("getting", key)
         try:
             return self.mapping[key][1]
         except KeyError:
