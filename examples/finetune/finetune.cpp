@@ -548,35 +548,35 @@ static void randomize_lora(struct my_llama_lora * lora, int seed, float mean, fl
     struct random_normal_distribution * rnd = init_random_normal_distribution(seed, mean, std, min, max);
 
     randomize_tensor_normal(lora->tok_embeddings_a, rnd);
-    randomize_tensor_normal(lora->tok_embeddings_b, rnd);
+    ggml_set_zero(lora->tok_embeddings_b);
     randomize_tensor_normal(lora->norm_a,           rnd);
-    randomize_tensor_normal(lora->norm_b,           rnd);
+    ggml_set_zero(lora->norm_b);
     randomize_tensor_normal(lora->output_a,         rnd);
-    randomize_tensor_normal(lora->output_b,         rnd);
+    ggml_set_zero(lora->output_b);
 
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = lora->layers[i];
         randomize_tensor_normal(layer.attention_norm_a, rnd);
-        randomize_tensor_normal(layer.attention_norm_b, rnd);
+        ggml_set_zero(layer.attention_norm_b);
 
         randomize_tensor_normal(layer.wq_a, rnd);
-        randomize_tensor_normal(layer.wq_b, rnd);
+        ggml_set_zero(layer.wq_b);
         randomize_tensor_normal(layer.wk_a, rnd);
-        randomize_tensor_normal(layer.wk_b, rnd);
+        ggml_set_zero(layer.wk_b);
         randomize_tensor_normal(layer.wv_a, rnd);
-        randomize_tensor_normal(layer.wv_b, rnd);
+        ggml_set_zero(layer.wv_b);
         randomize_tensor_normal(layer.wo_a, rnd);
-        randomize_tensor_normal(layer.wo_b, rnd);
+        ggml_set_zero(layer.wo_b);
 
         randomize_tensor_normal(layer.ffn_norm_a, rnd);
-        randomize_tensor_normal(layer.ffn_norm_b, rnd);
+        ggml_set_zero(layer.ffn_norm_b);
 
         randomize_tensor_normal(layer.w1_a, rnd);
-        randomize_tensor_normal(layer.w1_b, rnd);
+        ggml_set_zero(layer.w1_b);
         randomize_tensor_normal(layer.w2_a, rnd);
-        randomize_tensor_normal(layer.w2_b, rnd);
+        ggml_set_zero(layer.w2_b);
         randomize_tensor_normal(layer.w3_a, rnd);
-        randomize_tensor_normal(layer.w3_b, rnd);
+        ggml_set_zero(layer.w3_b);
     }
 
     free_random_normal_distribution(rnd);
