@@ -254,7 +254,6 @@ class TensorNameMap:
         return result[0]
 
     def __getitem__(self, key: str) -> str:
-        #print ("getting", key)
         try:
             return self.mapping[key][1]
         except KeyError:
