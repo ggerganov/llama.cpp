@@ -254,7 +254,7 @@ class Model:
         special_vocab.add_to_gguf(self.gguf_writer)
 
 
-def _set_vocab_sentencepiece(self):
+    def _set_vocab_sentencepiece(self):
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
