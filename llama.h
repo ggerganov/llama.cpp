@@ -550,7 +550,8 @@ extern "C" {
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
-                                  int    length);
+                                  int    length,
+                                  bool   print_all_types);
 
     //
     // Grammar
