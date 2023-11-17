@@ -1708,15 +1708,6 @@ namespace GGUFMeta {
     template<> struct GKV_Base<double      >: GKV_Base_Type<double,       GGUF_TYPE_FLOAT64, gguf_get_val_f64 > {};
     template<> struct GKV_Base<const char *>: GKV_Base_Type<const char *, GGUF_TYPE_STRING,  gguf_get_val_str > {};
 
-    struct GetArrayLen{int value;};
-    template<> struct GKV_Base<GetArrayLen> {
-        public:
-        static constexpr gguf_type gt = GGUF_TYPE_ARRAY;
-        static GetArrayLen getter(const gguf_context *ctx, const int k) {
-            return GetArrayLen{gguf_get_arr_n(ctx, k)};
-        }
-    };
-
     struct ArrayInfo{
         const gguf_type gt;
         const size_t length;
