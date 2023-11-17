@@ -231,7 +231,6 @@ class TensorNameMap:
                     key = key.format(bid = bid)
                     self.mapping[key] = (tensor, tensor_name)
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
-        print("getting ", key)
         result = self.mapping.get(key)
         if result is not None:
             return result

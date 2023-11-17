@@ -16,7 +16,6 @@ import numpy as np
 import torch
 from collections import OrderedDict
 
-#TYPE_CHECKING = False
 if TYPE_CHECKING:
     from torch import Tensor
 
@@ -86,9 +85,6 @@ class Model:
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        print ("-------------------")
-        for tt,_ in self.get_tensors():
-            print(tt)
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
