@@ -1708,6 +1708,14 @@ namespace GGUFMeta {
     template<> struct GKV_Base<double      >: GKV_Base_Type<double,       GGUF_TYPE_FLOAT64, gguf_get_val_f64 > {};
     template<> struct GKV_Base<const char *>: GKV_Base_Type<const char *, GGUF_TYPE_STRING,  gguf_get_val_str > {};
 
+    template<> struct GKV_Base<std::string> {
+        static constexpr gguf_type gt = GGUF_TYPE_STRING;
+
+        static std::string getter(const gguf_context * ctx, const int kid) {
+            return gguf_get_val_str(ctx, kid);
+        }
+    };
+
     struct ArrayInfo{
         const gguf_type gt;
         const size_t length;
@@ -1740,9 +1748,6 @@ namespace GGUFMeta {
             }
             return GKV::getter(ctx, k);
         }
-
-        // This can't be uncommented.
-        // template<typename OT> static bool try_override(OT & target, const struct llama_model_kv_override *override) = delete;
 
         template<typename OT>
         static typename std::enable_if<std::is_same<OT, bool>::value, bool>::type
@@ -1786,6 +1791,14 @@ namespace GGUFMeta {
             return true;
         }
 
+        template<typename OT>
+        static typename std::enable_if<std::is_same<OT, std::string>::value, bool>::type
+        try_override(T & target, const struct llama_model_kv_override *override) {
+            (void)target;
+            (void)override;
+            return false; // cannot override str
+        }
+
         static bool set(const gguf_context * ctx, const int k, T & target, const struct llama_model_kv_override *override = nullptr) {
             if (try_override<T>(target, override)) {
                 return true;
@@ -1806,25 +1819,6 @@ namespace GGUFMeta {
         template <typename TT>
         static bool set(const gguf_context * ctx, const std::string & key, TT & target, const struct llama_model_kv_override *override = nullptr) {
             return GKV<TT>::set(ctx, key.c_str(), target, override);
-        }
-    };
-
-    template<>
-    class GKV<std::string>: public GKV_Base<const char *> {
-        using BT = const char *;
-        public:
-        static bool set(const gguf_context * ctx, const int k, std::string & target, const struct llama_model_kv_override *override = nullptr) {
-            (void)override;
-            target = std::string(GKV<BT>::get_kv(ctx, k));
-            return true;
-        }
-
-        static bool set(const gguf_context * ctx, const char * key, std::string & target, const struct llama_model_kv_override *override = nullptr) {
-            return GKV<BT>::set(ctx, key, target, override);
-        }
-
-        static bool set(const gguf_context * ctx, const std::string & key, std::string & target, const struct llama_model_kv_override *override = nullptr) {
-            return GKV<BT>::set(ctx, key, target, override);
         }
     };
 }
