@@ -5,7 +5,7 @@
 #include <string.h>
 #include <assert.h>
 #include <float.h>
-
+#include <stdio.h>
 #ifdef __ARM_NEON
 
 // if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
@@ -2419,6 +2419,7 @@ static inline __m128i get_scale_shuffle(int i) {
 #endif
 
 void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
+  //fprintf(stderr, "%s: n:%d s:%f vx:%p vy:%p\n", __func__, n,*s, vx, vy);
     const int qk = QK8_0;
     const int nb = n / qk;
 

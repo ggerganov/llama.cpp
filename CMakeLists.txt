@@ -22,6 +22,9 @@ set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
 set(CUDACXX /usr/local/cuda-12.2/bin/nvcc)
 #GGML_USE_CUBLAS
 
+#set(CMAKE_EXE_LINKER_FLAGS -pg)
+#set(CMAKE_SHARED_LINKER_FLAGS -pg)
+
 set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
     
 if (NOT XCODE AND NOT MSVC AND NOT CMAKE_BUILD_TYPE)
@@ -447,8 +450,8 @@ if (LLAMA_ALL_WARNINGS)
         # todo : msvc
     endif()
 
-    set(c_flags   ${c_flags} -save-temps --verbose  ${warning_flags})
-    set(cxx_flags ${cxx_flags} -save-temps --verbose ${warning_flags})
+    set(c_flags   ${c_flags}  -save-temps --verbose  ${warning_flags})
+    set(cxx_flags ${cxx_flags}  -save-temps --verbose ${warning_flags})
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${host_cxx_flags}>")
@@ -506,7 +509,7 @@ if (NOT MSVC)
     add_link_options("-Wl,-Map=${TARGET}.map")
 
     if (LLAMA_GPROF)
-        add_compile_options(-pg)
+      add_compile_options(-pg)
     endif()
 endif()
 

@@ -6365,7 +6365,7 @@ static void ggml_compute_forward_dup_f16(
                 GGML_ASSERT(false); // TODO: implement
             }
         } else {
-            //printf("%s: this is not optimal - fix me\n", __func__);
+	  printf("%s: this is not optimal - fix me\n", __func__);
 
             if (dst->type == GGML_TYPE_F32) {
                 size_t id = 0;
@@ -6612,7 +6612,7 @@ static void ggml_compute_forward_dup_f32(
                 GGML_ASSERT(false); // TODO: implement
             }
         } else {
-            //printf("%s: this is not optimal - fix me\n", __func__);
+	  printf("%s: this is not optimal - fix me\n", __func__);
 
             if (dst->type == GGML_TYPE_F32) {
                 size_t id = 0;
@@ -9390,6 +9390,7 @@ static void ggml_compute_forward_mul_mat(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
               struct ggml_tensor * dst) {
+
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -9427,7 +9428,8 @@ static void ggml_compute_forward_mul_mat(
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
-
+    fprintf(stderr, "%s: params_type:%d src0:%p ->data %p src1:%p ->data %p\n", __func__, params->type,  (void*)src0, src0->data, (void*)src1, src1->data);
+  
 #if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
@@ -9484,7 +9486,7 @@ static void ggml_compute_forward_mul_mat(
             }
         }
 
-        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
+        printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
     }
@@ -9518,7 +9520,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = ne11*ne12*ne13; // src1 rows
 
-    //printf("nr0 = %lld, nr1 = %lld\n", nr0, nr1);
+    printf("nr0 = %lld, nr1 = %lld\n", nr0, nr1);
 
     // distribute the thread work across the inner or outer loop based on which one is larger
 
@@ -9537,7 +9539,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t ir110 = dr1*ith1;
     const int64_t ir111 = MIN(ir110 + dr1, nr1);
 
-    //printf("ir010 = %6lld, ir011 = %6lld, ir110 = %6lld, ir111 = %6lld\n", ir010, ir011, ir110, ir111);
+    printf("ir010 = %6lld, ir011 = %6lld, ir110 = %6lld, ir111 = %6lld\n", ir010, ir011, ir110, ir111);
 
     // threads with no work simply yield (not sure if it helps)
     if (ir010 >= ir011 || ir110 >= ir111) {
