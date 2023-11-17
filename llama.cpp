@@ -91,7 +91,7 @@
 #define LLAMA_ATTRIBUTE_FORMAT(...)
 #endif
 
-#define LLAMA_MAX_NODES 4096
+#define LLAMA_MAX_NODES 8192
 
 //
 // logging
