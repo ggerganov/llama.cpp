@@ -8,12 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
-		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS"; }; };
+		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS -O3"; }; };
 		542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */; };
-		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL"; }; };
+		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL -O3"; }; };
 		542EA0A62AC872A100A8AEE9 /* k_quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A52AC872A100A8AEE9 /* k_quants.c */; };
 		549479CB2AC9E16000E0F78B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 549479CA2AC9E16000E0F78B /* Metal.framework */; };
-		549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 549479C52AC9E0F200E0F78B /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc -DGGML_SWIFT -DGGML_USE_METAL"; }; };
+		549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 549479C52AC9E0F200E0F78B /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc -DGGML_SWIFT -DGGML_USE_METAL -O3"; }; };
 		8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */; };
 		8A1C83792AC328BD0096AF73 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83782AC328BD0096AF73 /* ContentView.swift */; };
 		8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8A1C837A2AC328BE0096AF73 /* Assets.xcassets */; };
