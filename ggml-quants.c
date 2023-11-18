@@ -19,7 +19,7 @@
 #ifdef __wasm_simd128__
 #include <wasm_simd128.h>
 #else
-#ifdef __POWER9_VECTOR__
+#if defined(__POWER9_VECTOR__) || defined(__powerpc64__)
 #include <altivec.h>
 #undef bool
 #define bool _Bool

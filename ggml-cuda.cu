@@ -88,6 +88,8 @@
 #define CC_OFFSET_AMD 1000000
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
 
+#define GGML_CUDA_MAX_NODES 8192
+
 // define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
 // on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
 // for large computational tasks. the drawback is that this requires some extra amount of VRAM:
@@ -5965,7 +5967,7 @@ void * ggml_cuda_host_malloc(size_t size) {
         // The allocation error can be bypassed. A null ptr will assigned out of this function.
         // This can fixed the OOM error in WSL.
         cudaGetLastError();
-        fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
+        fprintf(stderr, "WARNING: failed to allocate %.2f MiB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
         return nullptr;
     }
@@ -6343,6 +6345,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q8_0:
             return max_compute_capability >= CC_RDNA2 ? 128 : 64;
         case GGML_TYPE_F16:
+        case GGML_TYPE_F32:
             return 1;
         case GGML_TYPE_Q2_K:
             return max_compute_capability >= CC_RDNA2 ? 128 : 32;
@@ -6365,6 +6368,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q8_0:
             return 64;
         case GGML_TYPE_F16:
+        case GGML_TYPE_F32:
             return 1;
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
@@ -7719,7 +7723,7 @@ static void ggml_cuda_alibi(const ggml_tensor * src0, const ggml_tensor * src1, 
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_alibi);
 }
 
-void ggml_cuda_im2col(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+static void ggml_cuda_im2col(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_im2col);
 }
 
@@ -7834,11 +7838,11 @@ static size_t g_temp_tensor_extra_index = 0;
 
 static ggml_tensor_extra_gpu * ggml_cuda_alloc_temp_tensor_extra() {
     if (g_temp_tensor_extras == nullptr) {
-        g_temp_tensor_extras = new ggml_tensor_extra_gpu[GGML_DEFAULT_GRAPH_SIZE];
+        g_temp_tensor_extras = new ggml_tensor_extra_gpu[GGML_CUDA_MAX_NODES];
     }
 
     size_t alloc_index = g_temp_tensor_extra_index;
-    g_temp_tensor_extra_index = (g_temp_tensor_extra_index + 1) % GGML_DEFAULT_GRAPH_SIZE;
+    g_temp_tensor_extra_index = (g_temp_tensor_extra_index + 1) % GGML_CUDA_MAX_NODES;
     ggml_tensor_extra_gpu * extra = &g_temp_tensor_extras[alloc_index];
     memset(extra, 0, sizeof(*extra));
 
@@ -8169,11 +8173,11 @@ struct ggml_backend_buffer_context_cuda {
 
     ggml_tensor_extra_gpu * ggml_cuda_alloc_temp_tensor_extra() {
         if (temp_tensor_extras == nullptr) {
-            temp_tensor_extras = new ggml_tensor_extra_gpu[GGML_DEFAULT_GRAPH_SIZE];
+            temp_tensor_extras = new ggml_tensor_extra_gpu[GGML_CUDA_MAX_NODES];
         }
 
         size_t alloc_index = temp_tensor_extra_index;
-        temp_tensor_extra_index = (temp_tensor_extra_index + 1) % GGML_DEFAULT_GRAPH_SIZE;
+        temp_tensor_extra_index = (temp_tensor_extra_index + 1) % GGML_CUDA_MAX_NODES;
         ggml_tensor_extra_gpu * extra = &temp_tensor_extras[alloc_index];
         memset(extra, 0, sizeof(*extra));
 
