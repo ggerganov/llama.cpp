@@ -1653,39 +1653,6 @@ async def main():
 
             tasks.append(string_to_spv(f"dequant_{type_names[i]}", "".join(stream), {"D_TYPE": "float16_t"}, fp16))
 
-        # mul mat vec
-        for i in range(0, VK_NUM_TYPES):
-            stream.clear()
-            stream.extend((mul_mat_vec_head, shader_int8_ext, shader_float_type))
-
-            if i == GGML_TYPE_F16:
-                stream.extend((shader_f16_defines, shader_f16_dequant_func_compat if not fp16 else shader_f16_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q4_0:
-                stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat if not fp16 else shader_q4_0_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q4_1:
-                stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat if not fp16 else shader_q4_1_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q5_0:
-                stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat if not fp16 else shader_q5_0_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q5_1:
-                stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat if not fp16 else shader_q5_1_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q8_0:
-                stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat if not fp16 else shader_q8_0_dequant_func, mul_mat_vec_body))
-            elif i == GGML_TYPE_Q2_K:
-                stream.extend((shader_q2_K_defines, mul_mat_vec_q2_K_body))
-            elif i == GGML_TYPE_Q3_K:
-                stream.extend((shader_q3_K_defines, mul_mat_vec_q3_K_body))
-            elif i == GGML_TYPE_Q4_K:
-                stream.extend((shader_q4_K_defines, mul_mat_vec_q4_K_body))
-            elif i == GGML_TYPE_Q5_K:
-                stream.extend((shader_q5_K_defines, mul_mat_vec_q5_K_body))
-            elif i == GGML_TYPE_Q6_K:
-                stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
-            else:
-                continue
-
-            tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
-            tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
-
         # get_rows
         for i in range(0, VK_NUM_TYPES):
             stream.clear()
@@ -1722,6 +1689,41 @@ async def main():
         tasks.append(string_to_spv("scale_f32", f"{generic_head}\n{shader_float_type}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float"}, fp16))
 
     # Shaders where precision is needed, so no fp16 version
+
+    # mul mat vec
+    for i in range(0, VK_NUM_TYPES):
+        stream.clear()
+        stream.extend((mul_mat_vec_head, shader_int8_ext, shader_f32))
+
+        if i == GGML_TYPE_F16:
+            stream.extend((shader_f16_defines, shader_f16_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q4_0:
+            stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q4_1:
+            stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q5_0:
+            stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q5_1:
+            stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q8_0:
+            stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func_compat, mul_mat_vec_body))
+        elif i == GGML_TYPE_Q2_K:
+            stream.extend((shader_q2_K_defines, mul_mat_vec_q2_K_body))
+        elif i == GGML_TYPE_Q3_K:
+            stream.extend((shader_q3_K_defines, mul_mat_vec_q3_K_body))
+        elif i == GGML_TYPE_Q4_K:
+            stream.extend((shader_q4_K_defines, mul_mat_vec_q4_K_body))
+        elif i == GGML_TYPE_Q5_K:
+            stream.extend((shader_q5_K_defines, mul_mat_vec_q5_K_body))
+        elif i == GGML_TYPE_Q6_K:
+            stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
+        else:
+            continue
+
+        tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
+        tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
+
+    # RMS Norm
     tasks.append(string_to_spv("rms_norm_f32", f"{generic_head}\n{shader_f32}\n{rms_norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
 
     await asyncio.gather(*tasks)
