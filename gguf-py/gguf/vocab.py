@@ -13,6 +13,7 @@ class SpecialVocab:
     merges: list[str]
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
+    chat_template: str | None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
@@ -67,6 +68,10 @@ class SpecialVocab:
             if not quiet:
                 print(f'gguf: Setting add_{typ}_token to {value}')
             add_handler(value)
+        if self.chat_template is not None:
+            if not quiet:
+                print(f'gguf: Setting chat_template to {self.chat_template}')
+            gw.add_chat_template(self.chat_template)
 
     def _load(self, path: Path) -> None:
         self._try_load_from_tokenizer_json(path)
@@ -156,6 +161,7 @@ class SpecialVocab:
                 None,
             )
             self._set_special_token(typ, maybe_token_id)
+        self.chat_template = tokenizer_config.get('chat_template')
         return True
 
     def _try_load_from_config_json(self, path: Path) -> bool:

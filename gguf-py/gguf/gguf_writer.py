@@ -399,6 +399,9 @@ class GGUFWriter:
     def add_add_eos_token(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_EOS, value)
 
+    def add_chat_template(self, value: str) -> None:
+        self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
+
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
         if not skip_pack_prefix:
