@@ -117,17 +117,18 @@ class SpecialVocab:
 
     def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
-        if not tokenizer_file.is_file():
-            return False
-        with open(tokenizer_file, encoding = 'utf-8') as f:
-            tokenizer = json.load(f)
-        if self.load_merges:
-            merges = tokenizer.get('model', {}).get('merges')
-            if isinstance(merges, list) and merges and isinstance(merges[0], str):
-                self.merges = merges
+        if tokenizer_file.is_file():
+            with open(tokenizer_file, encoding = 'utf-8') as f:
+                tokenizer = json.load(f)
+            if self.load_merges:
+                merges = tokenizer.get('model', {}).get('merges')
+                if isinstance(merges, list) and merges and isinstance(merges[0], str):
+                    self.merges = merges
+            added_tokens = tokenizer.get('added_tokens', {})
+        else:
+            added_tokens = {}
         tokenizer_config_file = path / 'tokenizer_config.json'
-        added_tokens = tokenizer.get('added_tokens')
-        if added_tokens is None or not tokenizer_config_file.is_file():
+        if not tokenizer_config_file.is_file():
             return True
         with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
@@ -135,6 +136,10 @@ class SpecialVocab:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
                 self.add_special_token[typ] = add_entry
+            if not added_tokens:
+                # We will need this to get the content for the token, so if it's empty
+                # may as well just give up.
+                continue
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry
