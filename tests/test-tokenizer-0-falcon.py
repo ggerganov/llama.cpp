@@ -1,7 +1,5 @@
 # tests with BPE tokenizer
 
-import os
-import sys
 import argparse
 
 from transformers import AutoTokenizer
