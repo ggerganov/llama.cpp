@@ -1936,7 +1936,7 @@ Current version: 96
 			"prefmodel2":adventuremodels2,
 			"prompt":"",
 			"adventure_context_mod":false,
-			"memory": instructstartplaceholder+"\nSimulate a text adventure game.\nUser actions will be on their own seperate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n"+instructendplaceholder,
+			"memory": instructstartplaceholder+"\nSimulate a text adventure game.\nUser actions will be on their own separate line prefixed with a >\n\nThe game will feature a brief introduction text about who the main character is and the setting of the world. Followed by a brief description of the current task that must be overcome. Afterwards it will be up to the user to input the desired instruction and outputs will describe the impact of this action.\n\nAll outputs should consider how likely it is that the players action succeeds and succeed or fail accordingly. The game should be challenging and action failures should be funny.\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2000,11 +2000,11 @@ Current version: 96
 		{
 			"title":"Post Apocalypse",
 			"author":"Concedo",
-			"desc":"The year is 2038. A full scale global thermonuclear exchange has wiped out nearly all of the world population, and left most cities as radioactive wastelands. Running out of supplies, you must leave your bunker and scavange to find a new home in the ruins of civilization.",
+			"desc":"The year is 2038. A full scale global thermonuclear exchange has wiped out nearly all of the world population, and left most cities as radioactive wastelands. Running out of supplies, you must leave your bunker and scavenge to find a new home in the ruins of civilization.",
 			"opmode":2,
 			"prefmodel1":adventuremodels1,
 			"prefmodel2":adventuremodels2,
-			"prompt":`The year is 2038. A full scale global thermonuclear exchange has wiped out nearly all of the world population, and left most cities as radioactive wastelands. Running out of supplies, you must leave your bunker and scavange to find a new home in the ruins of civilization.\n\nEmerging from your shelter, you squint as the harsh sunlight blinds you. For a moment, you're disoriented, your eyes struggling to adjust to the brightness of the new world outside. As your vision clears, you step forward, and take in the barren wasteland that stretches out before you.`,
+			"prompt":`The year is 2038. A full scale global thermonuclear exchange has wiped out nearly all of the world population, and left most cities as radioactive wastelands. Running out of supplies, you must leave your bunker and scavenge to find a new home in the ruins of civilization.\n\nEmerging from your shelter, you squint as the harsh sunlight blinds you. For a moment, you're disoriented, your eyes struggling to adjust to the brightness of the new world outside. As your vision clears, you step forward, and take in the barren wasteland that stretches out before you.`,
 			"adventure_context_mod":false,
 			"adventure_is_action":true,
 			"memory": `[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.]\n`,
@@ -2029,7 +2029,7 @@ Current version: 96
 		{
 			"title":"Dr. Katharine",
 			"author":"Concedo",
-			"desc":"DISCLAIMER: This scenario is purely for ENTERTAINMENT and should NOT be used as substitute for actual therapy. Dr. Katharine is a therapist. As a mental health professional, she is very knowledgable in psychotherapy, and is ready to help you work through any personal issues you may have.",
+			"desc":"DISCLAIMER: This scenario is purely for ENTERTAINMENT and should NOT be used as substitute for actual therapy. Dr. Katharine is a therapist. As a mental health professional, she is very knowledgeable in psychotherapy, and is ready to help you work through any personal issues you may have.",
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Dr. Katharine",
@@ -2038,7 +2038,7 @@ Current version: 96
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nDr. Katharine: Good Afternoon. My focus is on providing evidence-based treatment that helps individuals manage their symptoms, improve their relationships, and live more fulfilling lives.\nDr. Katharine: I would like to know a bit more about your specific needs. What do you want to talk about today?",
-			"memory":`[Dr. Katharine is a professional therapist. She is very knowledgable in psychotherapy, and holds a medical license to provide advice. As a mental health professional, Dr. Katherine has been helping individuals with their personal issues for over 20 years. She is patient and understanding, compassionate and acknowledges her clients feelings and thoughts without judgement.]\n[The following is a transcript of your therapy session.]\n\nDr. Katharine: Please have a seat.\nYou: Hello Doctor, and thank you for letting me be treated by you. How should I start?`,
+			"memory":`[Dr. Katharine is a professional therapist. She is very knowledgeable in psychotherapy, and holds a medical license to provide advice. As a mental health professional, Dr. Katherine has been helping individuals with their personal issues for over 20 years. She is patient and understanding, compassionate and acknowledges her clients feelings and thoughts without judgement.]\n[The following is a transcript of your therapy session.]\n\nDr. Katharine: Please have a seat.\nYou: Hello Doctor, and thank you for letting me be treated by you. How should I start?`,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -11990,7 +11990,7 @@ Current version: 96
 								<option value="4">Llama 2 Chat</option>
 								<option value="5">Q & A</option>
 								<option value="6">ChatML</option>
-								<option value="7">Input Output</option>
+								<option value="7">KoboldAI Format</option>
 							</select>
 							<table class="settingsmall text-center" style="border-spacing: 4px 2px;	border-collapse: separate;">
 								<tr>
