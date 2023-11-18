@@ -25,6 +25,7 @@ class SpecialVocab:
         self.n_vocab = n_vocab
         self.load_merges = load_merges
         self.merges = []
+        self.chat_template = None
         if special_token_types is not None:
             self.special_token_types = special_token_types
         else:
