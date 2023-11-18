@@ -20,7 +20,7 @@ actor LlamaContext {
         self.model = model
         self.context = context
         self.tokens_list = []
-        self.batch = llama_batch_init(512, 0)
+        self.batch = llama_batch_init(512, 0, 1)
     }
     
     deinit {
