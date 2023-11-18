@@ -342,6 +342,12 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 
+ifneq ($(filter ppc64le%,$(UNAME_M)),)
+	MK_CFLAGS   += -mcpu=powerpc64le
+	MK_CXXFLAGS += -mcpu=powerpc64le
+	CUDA_POWER_ARCH = 1
+endif
+
 else
 	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
@@ -392,6 +398,8 @@ else
 endif #LLAMA_CUDA_NVCC
 ifdef CUDA_DOCKER_ARCH
 	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else ifdef CUDA_POWER_ARCH
+	NVCCFLAGS +=
 else
 	NVCCFLAGS += -arch=native
 endif # CUDA_DOCKER_ARCH

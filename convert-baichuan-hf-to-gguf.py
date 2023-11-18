@@ -6,11 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import struct
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-import itertools
 import numpy as np
 import torch
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]

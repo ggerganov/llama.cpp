@@ -301,6 +301,23 @@ extern "C" {
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
 
+    // Functions to access the model's GGUF metadata scalar values
+    // - The functions return the length of the string on success, or -1 on failure
+    // - The output string is always null-terminated and cleared on failure
+    // - GGUF array values are not supported by these functions
+
+    // Get metadata value as a string by key name
+    LLAMA_API int llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
+
+    // Get the number of metadata key/value pairs
+    LLAMA_API int llama_model_meta_count(const struct llama_model * model);
+
+    // Get metadata key name by index
+    LLAMA_API int llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+
+    // Get metadata value as a string by index
+    LLAMA_API int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
 

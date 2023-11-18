@@ -5840,7 +5840,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
         return ptr;
     }
 #ifdef DEBUG_CUDA_MALLOC
-    fprintf(stderr, "%s: %d buffers, max_size = %u MB, tot_size = %u MB, requested %u MB\n", __func__, nnz,
+    fprintf(stderr, "%s: %d buffers, max_size = %u MiB, tot_size = %u MiB, requested %u MiB\n", __func__, nnz,
             (uint32_t)(max_size/1024/1024), (uint32_t)(tot_size/1024/1024), (uint32_t)(size/1024/1024));
 #endif
     void * ptr;
@@ -5978,7 +5978,7 @@ void * ggml_cuda_host_malloc(size_t size) {
         // The allocation error can be bypassed. A null ptr will assigned out of this function.
         // This can fixed the OOM error in WSL.
         cudaGetLastError();
-        fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
+        fprintf(stderr, "WARNING: failed to allocate %.2f MiB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
         return nullptr;
     }
@@ -6356,6 +6356,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q8_0:
             return max_compute_capability >= CC_RDNA2 ? 128 : 64;
         case GGML_TYPE_F16:
+        case GGML_TYPE_F32:
             return 1;
         case GGML_TYPE_Q2_K:
             return max_compute_capability >= CC_RDNA2 ? 128 : 32;
@@ -6378,6 +6379,7 @@ static int64_t get_row_rounding(ggml_type type) {
         case GGML_TYPE_Q8_0:
             return 64;
         case GGML_TYPE_F16:
+        case GGML_TYPE_F32:
             return 1;
         case GGML_TYPE_Q2_K:
         case GGML_TYPE_Q3_K:
