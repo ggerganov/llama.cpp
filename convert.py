@@ -298,7 +298,7 @@ class Params:
 
 
 class VocabLoader:
-    def __init__(self, fname_tokenizer: Path) -> None:
+    def __init__(self, params: Params, fname_tokenizer: Path) -> None:
         try:
             from transformers import AutoTokenizer
         except ImportError as e:
@@ -309,10 +309,18 @@ class VocabLoader:
 
         self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
         vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.vocab.items()}
-
-        self.added_tokens_list = [tok for tok in self.tokenizer.get_added_vocab()]
-        self.added_tokens_dict = dict(self.tokenizer.get_added_vocab())
-        self.added_tokens_ids = set(self.tokenizer.get_added_vocab().values())
+        
+        self.added_tokens_list = []
+        self.added_tokens_dict = dict()
+        self.added_tokens_ids = set()
+        
+        for tok, tokidx in self.tokenizer.get_added_vocab().items():
+            if tokidx >= params.n_vocab or toksize < self.tokenizer.vocab_size:
+                continue
+                
+            self.added_tokens_list.append(tok)
+            self.added_tokens_dict[tok] = tokidx
+            self.added_tokens_ids.add(tokidx)
         
         self.unk_token_id = self.tokenizer.unk_token_id
         self.specials = {
@@ -321,8 +329,8 @@ class VocabLoader:
         }
         print(self.specials)
         self.special_ids = set(self.tokenizer.all_special_ids)
-        self.vocab_size_base: int = len(vocab_set)
-        self.vocab_size: int = len(vocab_set)
+        self.vocab_size_base: int = self.tokenizer.vocab_size
+        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
         self.fname_tokenizer = fname_tokenizer
         
         vocab_file = "tokenizer.model"
@@ -374,7 +382,6 @@ class VocabLoader:
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         
         for text in self.added_tokens_list:
-            
             if text in self.specials:
                 
                 toktype = self.get_token_type(self.specials[text])
@@ -1095,14 +1102,14 @@ def vocab_check_and_append_path(path: Path, vocab_file: str) -> bool:
     return path
 
 
-def load_vocab(path: Path) -> Vocab:
+def load_vocab(params: Params, path: Path) -> Vocab:
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
     # a directory, it might be the model directory, and tokenizer.model might
     # be in the parent of that.
             
     print(f"Loading vocab file '{path}'")
 
-    return VocabLoader(path)
+    return VocabLoader(params, path)
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
@@ -1183,7 +1190,7 @@ def main(args_in: list[str] | None = None) -> None:
         if not args.outfile:
             raise ValueError("need --outfile if using --vocab-only")
         # FIXME: Try to respect vocab_dir somehow?
-        vocab = load_vocab(args.vocab_dir or args.model)
+        vocab = load_vocab(params, args.vocab_dir or args.model)
         special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
                                           load_merges = True,
                                           n_vocab = vocab.vocab_size)
@@ -1197,7 +1204,7 @@ def main(args_in: list[str] | None = None) -> None:
         vocab = model_plus.vocab
     else:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
-        vocab = load_vocab(vocab_dir)
+        vocab = load_vocab(params, vocab_dir)
 
     # FIXME: Try to respect vocab_dir somehow?
     print(f"Vocab info: {vocab}")
