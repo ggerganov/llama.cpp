@@ -1871,6 +1871,7 @@ struct llama_model_loader {
                 if (value.size() > MAX_VALUE_LEN) {
                     value = format("%s...", value.substr(0, MAX_VALUE_LEN - 3).c_str());
                 }
+                replace_all(value, "\n", "\\n");
 
                 LLAMA_LOG_INFO("%s: - kv %3d: %42s %-16s = %s\n", __func__, i, name, type_name.c_str(), value.c_str());
             }
