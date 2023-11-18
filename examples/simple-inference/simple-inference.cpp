@@ -305,12 +305,12 @@ bool gen_ctx::init_model() {
 }
 
 bool gen_ctx::init_prompt() {
-    const bool add_bos = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = llama_should_add_bos_token(model);
     LOG("add_bos: %d\n", add_bos);
 
     if (!params.prompt.empty()) {
         LOG("tokenize the prompt\n");
-        prompt_tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
+        prompt_tokens = ::llama_tokenize(ctx, params.prompt, add_bos, true);
     }
 
     LOG("prompt: \"%s\"\n", log_tostr(params.prompt));
@@ -578,6 +578,7 @@ void gen_ctx::handle_seq(seq_ctx & sctx) {
             sctx.chunks.back().tokens.push_back(sctx.last_sampled);
             if (sctx.last_sampled == llama_token_eos(model) || sctx.n_remain == 0) {
                 sctx.state = SEQ_DONE;
+                llama_kv_cache_seq_rm(ctx, sctx.seq_id, -1, -1);
                 sctx.batch_idx = -1;
                 // printf(" [end of text]\n");
                 // break;
