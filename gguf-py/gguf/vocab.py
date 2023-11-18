@@ -137,6 +137,14 @@ class SpecialVocab:
             return True
         with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
+        chat_template = tokenizer_config.get('chat_template')
+        if chat_template is None or isinstance(chat_template, str):
+            self.chat_template = chat_template
+        else:
+            print(
+                f'gguf: WARNING: Bad type for chat_template field in {tokenizer_config_file!r} - ignoring',
+                file = sys.stderr
+            )
         for typ in self.special_token_types:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
@@ -161,7 +169,6 @@ class SpecialVocab:
                 None,
             )
             self._set_special_token(typ, maybe_token_id)
-        self.chat_template = tokenizer_config.get('chat_template')
         return True
 
     def _try_load_from_config_json(self, path: Path) -> bool:
