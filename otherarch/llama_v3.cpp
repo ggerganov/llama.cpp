@@ -3457,7 +3457,7 @@ struct llama_v3_context * llama_v3_new_context_with_model(
 #ifdef LLAMA_V3_USE_ALLOCATOR
         {
             static const size_t tensor_alignment = 32;
-            static const size_t GGML_MAX_NODES = 4096;
+            static const size_t GGML_MAX_NODES = 8192;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
             ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
