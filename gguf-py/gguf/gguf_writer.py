@@ -221,7 +221,7 @@ class GGUFWriter:
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
         if self.use_temp_file and self.temp_file is None:
-            fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256*1024*1024)
+            fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256 * 1024 * 1024)
             fp.seek(0)
             self.temp_file = fp
 
