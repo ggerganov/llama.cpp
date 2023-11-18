@@ -56,6 +56,16 @@
 static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUANTS_PER_ITERATION must be 1 or 2");
 #endif
 
+#define VK_CHECK(err, msg)                                          \
+    do {                                                            \
+        vk::Result err_ = (err);                                    \
+        if (err_ != vk::Result::eSuccess) {                         \
+            fprintf(stderr, "ggml_vulkan: %s error %d at %s:%d\n",  \
+                #err, err_, __FILE__, __LINE__);                    \
+            exit(1);                                                \
+        }                                                           \
+    } while (0)
+
 typedef void (*ggml_vk_func_t)(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
 
 struct vk_buffer {
@@ -436,7 +446,7 @@ static void ggml_vk_submit(vk_queue& q, std::vector<vk_sequence>& sequences, vk:
             });
             tl_submit_infos[idx].sType = vk::StructureType::eTimelineSemaphoreSubmitInfo;
             tl_submit_infos[idx].pNext = nullptr;
-            submit_infos.push_back({
+            vk::SubmitInfo si{
                 (uint32_t) submission.wait_semaphores.size(),
                 tl_wait_semaphores[idx].data(),
                 stage_flags[idx].data(),
@@ -444,8 +454,9 @@ static void ggml_vk_submit(vk_queue& q, std::vector<vk_sequence>& sequences, vk:
                 &submission.buffer,
                 (uint32_t) submission.signal_semaphores.size(),
                 tl_signal_semaphores[idx].data(),
-                &tl_submit_infos[idx],
-            });
+            };
+            si.setPNext(&tl_submit_infos[idx]);
+            submit_infos.push_back(si);
         }
     }
 
@@ -519,8 +530,10 @@ static vk_semaphore * ggml_vk_create_binary_semaphore() {
 #ifdef VK_DEBUG
     std::cerr << "ggml_vk_create_timeline_semaphore()" << std::endl;
 #endif
-    vk::SemaphoreTypeCreateInfo info{ vk::SemaphoreType::eBinary, 0 };
-    vk::Semaphore semaphore = vk_device.device.createSemaphore(vk::SemaphoreCreateInfo{ {}, &info });
+    vk::SemaphoreTypeCreateInfo tci{ vk::SemaphoreType::eBinary, 0 };
+    vk::SemaphoreCreateInfo ci{};
+    ci.setPNext(&tci);
+    vk::Semaphore semaphore = vk_device.device.createSemaphore(ci);
     vk_gc.semaphores.push_back({ semaphore, 0 });
     return &vk_gc.semaphores[vk_gc.semaphores.size() - 1];
 }
@@ -530,8 +543,10 @@ static vk_semaphore * ggml_vk_create_timeline_semaphore() {
     std::cerr << "ggml_vk_create_timeline_semaphore()" << std::endl;
 #endif
     if (vk_semaphore_idx >= vk_gc.tl_semaphores.size()) {
-        vk::SemaphoreTypeCreateInfo info{ vk::SemaphoreType::eTimeline, 0 };
-        vk::Semaphore semaphore = vk_device.device.createSemaphore(vk::SemaphoreCreateInfo{ {}, &info });
+        vk::SemaphoreTypeCreateInfo tci{ vk::SemaphoreType::eTimeline, 0 };
+        vk::SemaphoreCreateInfo ci{};
+        ci.setPNext(&tci);
+        vk::Semaphore semaphore = vk_device.device.createSemaphore(ci);
         vk_gc.tl_semaphores.push_back({ semaphore, 0 });
         return &vk_gc.tl_semaphores[vk_semaphore_idx++];
     }
@@ -941,7 +956,7 @@ std::cerr << "ggml_vulkan: Validation layers enabled" << std::endl;
     VkPhysicalDeviceFeatures2 device_features2;
     device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device_features2.pNext = nullptr;
-    device_features2.features = device_features;
+    device_features2.features = (VkPhysicalDeviceFeatures)device_features;
 
     VkPhysicalDeviceVulkan11Features vk11_features;
     vk11_features.pNext = nullptr;
@@ -1405,7 +1420,7 @@ static void ggml_vk_buffer_write_2d(vk_buffer* dst, size_t offset, const void * 
         vk::Fence fence = vk_device.device.createFence({});
         std::vector<vk_sequence> s = { ggml_vk_buffer_write_2d_async(dst, offset, src, spitch, width, height, q, {}, {}, nullptr) };
         ggml_vk_submit(q, s, fence);
-        vk::resultCheck(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_write_2d waitForFences");
+        VK_CHECK(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_write_2d waitForFences");
     }
 }
 
@@ -1509,7 +1524,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
             vkCmdCopyBuffer(s[0][0].buffer, src->buffer, buf->buffer, 1, &buf_copy);
             s[0][0].buffer.end();
             ggml_vk_submit(q, s, fence);
-            vk::resultCheck(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read waitForFences");
+            VK_CHECK(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read waitForFences");
             return;
         }
 
@@ -1538,7 +1553,7 @@ static void ggml_vk_buffer_read(vk_buffer* src, size_t offset, void * dst, size_
                                    1,
                                    &cmd_buffer);
         q.queue.submit({ submit_info }, fence);
-        vk::resultCheck(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read staging waitForFences");
+        VK_CHECK(vk_device.device.waitForFences({ fence }, true, uint64_t(-1)), "vk_buffer_read staging waitForFences");
         vk_device.device.destroyFence(fence);
         memcpy(dst, src->sb_read->ptr, size);
     }
@@ -2824,7 +2839,7 @@ bool ggml_vk_compute_forward(ggml_compute_params * params, ggml_tensor * tensor)
         ggml_vk_submit(vk_device.transfer_queues[1], extra->out_seqs, vk_fence);
     }
 
-    vk::resultCheck(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "ggml_vk_compute_forward waitForFences");
+    VK_CHECK(vk_device.device.waitForFences({ vk_fence }, true, uint64_t(-1)), "ggml_vk_compute_forward waitForFences");
     vk_device.device.resetFences({ vk_fence });
 
     return true;
