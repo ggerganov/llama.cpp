@@ -200,6 +200,10 @@ std::string llama_detokenize_bpe(
                          llama_context * ctx,
         const std::vector<llama_token> & tokens);
 
+// Uses the value from the model metadata if possible, otherwise
+// defaults to true when model type is SPM, otherwise false.
+bool llama_should_add_bos_token(const llama_model * model);
+
 //
 // YAML utils
 //

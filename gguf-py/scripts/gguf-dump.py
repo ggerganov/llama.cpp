@@ -86,13 +86,14 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
             curr["value"] = str(bytes(field.parts[-1]), encoding="utf-8")
         else:
             curr["value"] = field.parts[-1].tolist()[0]
-    for idx, tensor in enumerate(reader.tensors):
-        tensors[tensor.name] = {
-            "index": idx,
-            "shape": tensor.shape.tolist(),
-            "type": tensor.tensor_type.name,
-            "offset": tensor.field.offset,
-        }
+    if not args.no_tensors:
+        for idx, tensor in enumerate(reader.tensors):
+            tensors[tensor.name] = {
+                "index": idx,
+                "shape": tensor.shape.tolist(),
+                "type": tensor.tensor_type.name,
+                "offset": tensor.field.offset,
+            }
     json.dump(result, sys.stdout)
 
 
