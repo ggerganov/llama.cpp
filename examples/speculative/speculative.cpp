@@ -96,7 +96,7 @@ int main(int argc, char ** argv) {
 
 
     // Tokenize the prompt
-    const bool add_bos = llama_vocab_type(llama_get_model(ctx_tgt)) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = llama_should_add_bos_token(model_tgt);
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> inp;
