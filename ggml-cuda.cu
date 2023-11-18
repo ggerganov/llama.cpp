@@ -6023,7 +6023,7 @@ void ggml_cuda_host_free(void * ptr) {
     CUDA_CHECK(cudaFreeHost(ptr));
 }
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 cudaError_t ggml_cuda_cpy_tensor_2d(
     void * dst, const struct ggml_tensor * src, int64_t i3, int64_t i2, int64_t i1_low, int64_t i1_high, cudaStream_t stream) {
@@ -6370,7 +6370,7 @@ inline void ggml_cuda_op_mul_mat_q(
     (void) src1_ddf_i;
 }
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 int64_t get_row_rounding(ggml_type type) {
     int64_t min_compute_capability = INT_MAX;
@@ -6908,7 +6908,7 @@ inline void ggml_cuda_op_clamp(
     (void) src1_dd;
 }
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const ggml_cuda_op_flatten_t op) {
     const int64_t nrows0 = ggml_nrows(src0);
@@ -7382,7 +7382,7 @@ bool ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_te
             (ne0 >= 32 && ne1 >= 32 && ne10 >= 32);
 }
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst){
     GGML_ASSERT(ggml_is_permuted(src0) && ggml_is_permuted(src1));
@@ -7890,7 +7890,7 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
     delete extra;
 }
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 ggml_tensor_extra_gpu * g_temp_tensor_extras = nullptr;
 size_t g_temp_tensor_extra_index = 0;
@@ -8206,7 +8206,7 @@ void ggml_cuda_get_device_description(int device, char * description, size_t des
 struct ggml_backend_context_cuda {
 };
 
-START_ANONYMOUS_NAMESPACE
+namespace {
 
 const char * ggml_backend_cuda_name(ggml_backend_t backend) {
     return GGML_CUDA_NAME;
