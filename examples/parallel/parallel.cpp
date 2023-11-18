@@ -1,8 +1,6 @@
 // A basic application simulating a server with multiple clients.
 // The clients submite requests to the server and they are processed in parallel.
 
-#include "build-info.h"
-
 #include "common.h"
 #include "llama.h"
 
@@ -10,6 +8,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <ctime>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
@@ -50,6 +49,12 @@ static std::vector<std::string> k_prompts = {
 };
 
 struct client {
+    ~client() {
+        if (ctx_sampling) {
+            llama_sampling_free(ctx_sampling);
+        }
+    }
+
     int32_t id = 0;
 
     llama_seq_id seq_id = -1;
@@ -67,8 +72,28 @@ struct client {
     std::string prompt;
     std::string response;
 
-    std::vector<llama_token> tokens_prev;
+    struct llama_sampling_context * ctx_sampling = nullptr;
 };
+
+static void print_date_time() {
+    std::time_t current_time = std::time(nullptr);
+    std::tm* local_time = std::localtime(&current_time);
+    char buffer[80];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", local_time);
+
+    printf("\n\033[35mrun parameters as at %s\033[0m\n", buffer);
+}
+
+// Define a split string function to ...
+static std::vector<std::string> split_string(const std::string& input, char delimiter) {
+    std::vector<std::string> tokens;
+    std::istringstream stream(input);
+    std::string token;
+    while (std::getline(stream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
 
 int main(int argc, char ** argv) {
     srand(1234);
@@ -104,22 +129,34 @@ int main(int argc, char ** argv) {
     params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
+    // load the prompts from an external file if there are any
+    if (params.prompt.empty()) {
+        printf("\n\033[32mNo new questions so proceed with build-in defaults.\033[0m\n");
+    } else {
+        // Output each line of the input params.prompts vector and copy to k_prompts
+        int index = 0;
+        printf("\n\033[32mNow printing the external prompt file %s\033[0m\n\n", params.prompt_file.c_str());
+
+        std::vector<std::string> prompts = split_string(params.prompt, '\n');
+        for (const auto& prompt : prompts) {
+            k_prompts.resize(index + 1);
+            k_prompts[index] = prompt;
+            index++;
+            printf("%3d prompt: %s\n", index, prompt.c_str());
+        }
+    }
+
     fprintf(stderr, "\n\n");
     fflush(stderr);
 
-    const int n_ctx   = llama_n_ctx(ctx);
-    const int n_vocab = llama_n_vocab(model);
+    const int n_ctx = llama_n_ctx(ctx);
 
     std::vector<client> clients(n_clients);
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.tokens_prev.resize(std::max(256, params.n_predict));
-        std::fill(client.tokens_prev.begin(), client.tokens_prev.end(), 0);
+        client.ctx_sampling = llama_sampling_init(params.sparams);
     }
-
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
 
     std::vector<llama_token> tokens_system;
     tokens_system = ::llama_tokenize(ctx, k_system, true);
@@ -129,7 +166,7 @@ int main(int argc, char ** argv) {
 
     // the max batch size is as large as the context to handle cases where we get very long input prompt from multiple
     // users. regardless of the size, the main loop will chunk the batch into a maximum of params.n_batch tokens at a time
-    llama_batch batch = llama_batch_init(params.n_ctx, 0);
+    llama_batch batch = llama_batch_init(n_ctx, 0, 1);
 
     int32_t n_total_prompt = 0;
     int32_t n_total_gen    = 0;
@@ -144,13 +181,8 @@ int main(int argc, char ** argv) {
     {
         LOG_TEE("%s: Evaluating the system prompt ...\n", __func__);
 
-        batch.n_tokens = n_tokens_system;
-
-        for (int32_t i = 0; i < batch.n_tokens; ++i) {
-            batch.token[i]  = tokens_system[i];
-            batch.pos[i]    = i;
-            batch.seq_id[i] = 0;
-            batch.logits[i] = false;
+        for (int32_t i = 0; i < n_tokens_system; ++i) {
+            llama_batch_add(batch, tokens_system[i], i, { 0 }, false);
         }
 
         if (llama_decode(ctx, batch) != 0) {
@@ -169,7 +201,7 @@ int main(int argc, char ** argv) {
     LOG_TEE("Processing requests ...\n\n");
 
     while (true) {
-        batch.n_tokens = 0;
+        llama_batch_clear(batch);
 
         // decode any currently ongoing sequences
         for (auto & client : clients) {
@@ -177,15 +209,11 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
-            batch.token [batch.n_tokens] = client.sampled;
-            batch.pos   [batch.n_tokens] = n_tokens_system + client.n_prompt + client.n_decoded;
-            batch.seq_id[batch.n_tokens] = client.id;
-            batch.logits[batch.n_tokens] = true;
-
-            client.n_decoded += 1;
             client.i_batch = batch.n_tokens;
 
-            batch.n_tokens += 1;
+            llama_batch_add(batch, client.sampled, n_tokens_system + client.n_prompt + client.n_decoded, { client.id }, true);
+
+            client.n_decoded += 1;
         }
 
         if (batch.n_tokens == 0) {
@@ -210,18 +238,14 @@ int main(int argc, char ** argv) {
                     client.prompt   = client.input + "\nAssistant:";
                     client.response = "";
 
-                    std::fill(client.tokens_prev.begin(), client.tokens_prev.end(), 0);
+                    llama_sampling_reset(client.ctx_sampling);
 
                     // do not prepend BOS because we have a system prompt!
                     std::vector<llama_token> tokens_prompt;
                     tokens_prompt = ::llama_tokenize(ctx, client.prompt, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
-                        batch.token [batch.n_tokens] = tokens_prompt[i];
-                        batch.pos   [batch.n_tokens] = i + n_tokens_system;
-                        batch.seq_id[batch.n_tokens] = client.id;
-                        batch.logits[batch.n_tokens] = false;
-                        batch.n_tokens += 1;
+                        llama_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id }, false);
                     }
 
                     // extract the logits only for the last token
@@ -233,7 +257,7 @@ int main(int argc, char ** argv) {
                     client.n_decoded = 0;
                     client.i_batch   = batch.n_tokens - 1;
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
+                    LOG_TEE("\033[31mClient %3d, seq %4d, started decoding ...\033[0m\n", client.id, client.seq_id);
 
                     g_seq_id += 1;
 
@@ -264,11 +288,12 @@ int main(int argc, char ** argv) {
 
             llama_batch batch_view = {
                 n_tokens,
-                batch.token  + i,
+                batch.token    + i,
                 nullptr,
-                batch.pos    + i,
-                batch.seq_id + i,
-                batch.logits + i,
+                batch.pos      + i,
+                batch.n_seq_id + i,
+                batch.seq_id   + i,
+                batch.logits   + i,
                 0, 0, 0, // unused
             };
 
@@ -301,7 +326,9 @@ int main(int argc, char ** argv) {
                 //printf("client %d, seq %d, token %d, pos %d, batch %d\n",
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
-                const llama_token id = llama_sample_token(ctx, NULL, NULL, params, client.tokens_prev, candidates, client.i_batch - i);
+                const llama_token id = llama_sampling_sample(client.ctx_sampling, ctx, NULL, client.i_batch - i);
+
+                llama_sampling_accept(client.ctx_sampling, ctx, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -309,11 +336,8 @@ int main(int argc, char ** argv) {
                     client.t_start_gen = ggml_time_us();
                 }
 
-                // remember which tokens were sampled - used for repetition penalties during sampling
-                client.tokens_prev.erase(client.tokens_prev.begin());
-                client.tokens_prev.push_back(id);
-
                 const std::string token_str = llama_token_to_piece(ctx, id);
+
                 client.response += token_str;
                 client.sampled = id;
 
@@ -321,7 +345,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (id == llama_token_eos(ctx) ||
+                        (id == llama_token_eos(model) ||
                          (params.n_predict > 0 && client.n_decoded + client.n_prompt >= params.n_predict) ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {
@@ -336,8 +360,8 @@ int main(int argc, char ** argv) {
 
                     const auto t_main_end = ggml_time_us();
 
-                    LOG_TEE("\033[1mClient %3d, seq %4d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \n\nInput:    %s\nResponse: %s\n\n",
-                            client.id, client.seq_id, client.n_prompt, client.n_decoded,
+                    LOG_TEE("\033[31mClient %3d, seq %3d/%3d, prompt %4d t, response %4d t, time %5.2f s, speed %5.2f t/s, cache miss %d \033[0m \nInput:    %s\n\033[35mResponse: %s\033[0m\n\n",
+                            client.id, client.seq_id, n_seq, client.n_prompt, client.n_decoded,
                             (t_main_end - client.t_start_prompt) / 1e6,
                             (double) (client.n_prompt + client.n_decoded) / (t_main_end - client.t_start_prompt) * 1e6,
                             n_cache_miss,
@@ -357,13 +381,21 @@ int main(int argc, char ** argv) {
 
     const auto t_main_end = ggml_time_us();
 
-    LOG_TEE("\n\n");
+    print_date_time();
+
+    LOG_TEE("\n%s: n_parallel = %d, n_sequences = %d, cont_batching = %d, system tokens = %d\n", __func__, n_clients, n_seq, cont_batching, n_tokens_system);
+    if (params.prompt_file.empty()) {
+        params.prompt_file = "used built-in defaults";
+    }
+    LOG_TEE("External prompt file: \033[32m%s\033[0m\n", params.prompt_file.c_str());
+    LOG_TEE("Model and path used:  \033[32m%s\033[0m\n\n", params.model.c_str());
+
     LOG_TEE("Total prompt tokens: %6d, speed: %5.2f t/s\n", n_total_prompt, (double) (n_total_prompt              ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total gen tokens:    %6d, speed: %5.2f t/s\n", n_total_gen,    (double) (n_total_gen                 ) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Total speed (AVG):   %6s  speed: %5.2f t/s\n", "",             (double) (n_total_prompt + n_total_gen) / (t_main_end - t_main_start) * 1e6);
     LOG_TEE("Cache misses:        %6d\n", n_cache_miss);
 
-    LOG_TEE("\n\n");
+    LOG_TEE("\n");
 
     llama_print_timings(ctx);
 

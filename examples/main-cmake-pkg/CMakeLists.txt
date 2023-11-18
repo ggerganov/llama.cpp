@@ -16,6 +16,8 @@ add_library(common OBJECT
     ${_common_path}/console.cpp
     ${_common_path}/grammar-parser.h
     ${_common_path}/grammar-parser.cpp
+    ${_common_path}/sampling.h
+    ${_common_path}/sampling.cpp
     )
 
 # WARNING: because build-info.h is auto-generated, it will only

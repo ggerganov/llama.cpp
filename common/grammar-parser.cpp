@@ -399,7 +399,7 @@ namespace grammar_parser {
     void print_grammar(FILE * file, const parse_state & state) {
         try {
             std::map<uint32_t, std::string> symbol_id_names;
-            for (auto kv : state.symbol_ids) {
+            for (const auto & kv : state.symbol_ids) {
                 symbol_id_names[kv.second] = kv.first;
             }
             for (size_t i = 0, end = state.rules.size(); i < end; i++) {
