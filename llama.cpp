@@ -9339,7 +9339,8 @@ static std::string llama_decode_text(const std::string & text) {
 // does not write null-terminator to buf
 int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length) {
     return llama_token_to_piece(model, token, buf, length, false);
-}   
+}
+
 // does not write null-terminator to buf
 int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length, bool print_all_types = false) {
     if (0 <= token && token < llama_n_vocab(model)) {
