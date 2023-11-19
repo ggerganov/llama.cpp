@@ -64,6 +64,7 @@ models-mnt
 /speculative
 /parallel
 /train-text-from-scratch
+/tokenize
 /vdot
 /common/build-info.cpp
 arm_neon.h
