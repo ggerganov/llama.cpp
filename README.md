@@ -214,7 +214,7 @@ cd llama.cpp
 
 ### Build
 
-In order to build llama.cpp you have different options.
+In order to build llama.cpp you have three different options.
 
 - Using `make`:
   - On Linux or MacOS:
@@ -320,7 +320,7 @@ mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 
 ### BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently various different implementations of it:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently several different implementations of it:
 
 - #### Accelerate Framework:
 
