@@ -307,15 +307,19 @@ class VocabLoader:
                 "You can install it with `pip install transformers`."
             ) from e
 
-        self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer))
-        vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.vocab.items()}
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer), trust_remote_code=True)
+            vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.get_vocab().items()}
+        except:
+            self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer), use_fast=False, trust_remote_code=True)
+            vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.get_vocab().items()}
         
         self.added_tokens_list = []
         self.added_tokens_dict = dict()
         self.added_tokens_ids = set()
         
-        for tok, tokidx in self.tokenizer.get_added_vocab().items():
-            if tokidx >= params.n_vocab or toksize < self.tokenizer.vocab_size:
+        for tok, tokidx in sorted(self.tokenizer.get_added_vocab().items(), key=lambda x: x[1]):
+            if tokidx >= params.n_vocab or tokidx < self.tokenizer.vocab_size:
                 continue
                 
             self.added_tokens_list.append(tok)
@@ -324,7 +328,7 @@ class VocabLoader:
         
         self.unk_token_id = self.tokenizer.unk_token_id
         self.specials = {
-            tok: self.tokenizer.vocab[tok]
+            tok: self.tokenizer.get_vocab()[tok]
             for tok in self.tokenizer.all_special_tokens
         }
         print(self.specials)
@@ -343,7 +347,7 @@ class VocabLoader:
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
-        reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.vocab.items()}
+        reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.get_vocab().items()}
         special_ids = set(tokenizer.all_special_ids)
         
         for i in range(self.vocab_size_base):
