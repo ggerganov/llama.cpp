@@ -2368,6 +2368,17 @@ int main(int argc, char **argv)
                                     break;
                                 }
                             } else {
+                                const std::string str =
+                                "error: " +
+                                result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                                "\n\n";
+                                LOG_VERBOSE("data stream", {
+                                    { "to_send", str }
+                                });
+                                if (!sink.write(str.c_str(), str.size()))
+                                {
+                                    return false;
+                                }
                                 break;
                             }
                         }
