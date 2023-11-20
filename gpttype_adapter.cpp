@@ -1950,7 +1950,9 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                     remaining_tokens = 0;
                     if(debugmode!=-1)
                     {
-                        printf("\n(Stop sequence triggered: <%s>)", matched.c_str());
+                        auto match_clean = matched;
+                        replace_all(match_clean, "\n", "\\n");
+                        printf("\n(Stop sequence triggered: %s)", match_clean.c_str());
                     }
                     last_stop_reason = stop_reason::CUSTOM_STOPPER;
                     break;
