@@ -13651,7 +13651,19 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     if (tensor->op == GGML_OP_NONE) {
         return;
     }
+    if (tensor->src[1]) {
+      fprintf(stderr, "JSON: { \"bop\":%d, \"src\":\"%s\",\"src2\":\"%s\",\"dst\":\"%s\"}\n",
+	    tensor->op,
+	    tensor->src[0]->name,
+	    tensor->src[1]->name,
+	    tensor->name);
+    } else {
+      fprintf(stderr, "JSON: { \"uop\":%d, \"src\":\"%s\",\"dst\":\"%s\"}\n",
+	    tensor->op,
+	    tensor->src[0]->name,
+	    tensor->name);
 
+      }
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
     if (skip_cpu) {
