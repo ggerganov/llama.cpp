@@ -700,7 +700,7 @@ struct rwkv_graph {
     struct ggml_tensor * tokens;
 
     // ggml_cgraph is so large that it can cause stack overflows if not stored on the heap
-    std::unique_ptr<struct ggml_cgraph> cgraph;
+    ggml_cgraph * cgraph;
 
     size_t pre_logits_nodes;
     size_t pre_logits_leafs;
@@ -1520,13 +1520,13 @@ struct rwkv_context * rwkv_new_context_impl(std::shared_ptr<struct rwkv_instance
     serial_graph.ctx = graph_future_ctx;
     RWKV_ASSERT_NULL_MSG(RWKV_ERROR_CTX | RWKV_ERROR_ALLOC, serial_graph.ctx.ctx, "Failed to allocate serial graph context");
     serial_graph.tokens = ggml_new_i32(serial_graph.ctx.ctx, 0);
-    serial_graph.cgraph.reset(new(std::nothrow) struct ggml_cgraph());
+    serial_graph.cgraph = ggml_new_graph(serial_graph.ctx.ctx);
     RWKV_ASSERT_NULL_MSG(RWKV_ERROR_ALLOC, serial_graph.cgraph, "Failed to allocate serial graph");
 
     RWKV_ASSERT_NULL(RWKV_ERROR_GRAPH, rwkv_build_serial_graph(
         serial_graph.ctx.ctx, instance->model,
         serial_graph.tokens, inputs.get(), outputs.get(), logits,
-        serial_graph.cgraph.get(),
+        serial_graph.cgraph,
         &serial_graph.pre_logits_nodes, &serial_graph.pre_logits_leafs, &serial_graph.post_logits_nodes, &serial_graph.post_logits_leafs
     ));
 
@@ -1638,7 +1638,7 @@ bool rwkv_eval(struct rwkv_context * ctx, const int n_threads, const uint32_t to
         ctx->serial_graph.cgraph->n_leafs = ctx->serial_graph.post_logits_leafs;
     }
 
-    kcpp_graph_compute_helper(ctx->serial_graph.cgraph.get(),n_threads);
+    kcpp_graph_compute_helper(ctx->serial_graph.cgraph,n_threads);
     rwkv_get_outputs(ctx, state_out, logits_out);
 
     return true;
@@ -1698,13 +1698,13 @@ bool rwkv_eval_sequence(struct rwkv_context * ctx, const int n_threads, const ui
         sequence_graph.ctx = graph_future_ctx;
         RWKV_ASSERT_FALSE_MSG(RWKV_ERROR_CTX | RWKV_ERROR_ALLOC, sequence_graph.ctx.ctx, "Failed to allocate sequence graph context");
         sequence_graph.tokens = ggml_new_tensor_1d(sequence_graph.ctx.ctx, GGML_TYPE_I32, sequence_len);
-        sequence_graph.cgraph.reset(new(std::nothrow) struct ggml_cgraph());
+        sequence_graph.cgraph = ggml_new_graph(sequence_graph.ctx.ctx);
         RWKV_ASSERT_FALSE_MSG(RWKV_ERROR_ALLOC, sequence_graph.cgraph, "Failed to allocate sequence graph");
 
         RWKV_ASSERT_FALSE(RWKV_ERROR_GRAPH, rwkv_build_sequence_graph(
             sequence_graph.ctx.ctx, ctx->instance->model,
             sequence_graph.tokens, ctx->input_layers.get(), ctx->output_layers.get(), ctx->logits,
-            sequence_graph.cgraph.get(),
+            sequence_graph.cgraph,
             &sequence_graph.pre_logits_nodes, &sequence_graph.pre_logits_leafs, &sequence_graph.post_logits_nodes, &sequence_graph.post_logits_leafs
         ));
 
@@ -1726,7 +1726,7 @@ bool rwkv_eval_sequence(struct rwkv_context * ctx, const int n_threads, const ui
             ctx->sequence_graph.cgraph->n_leafs = ctx->sequence_graph.post_logits_leafs;
         }
 
-        kcpp_graph_compute_helper(ctx->sequence_graph.cgraph.get(),n_threads);
+        kcpp_graph_compute_helper(ctx->sequence_graph.cgraph,n_threads);
         rwkv_get_outputs(ctx, state_out, logits_out);
     }
 

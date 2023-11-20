@@ -1976,7 +1976,7 @@ Current version: 96
 			"opmode":2,
 			"prefmodel1":adventuremodels1,
 			"prefmodel2":adventuremodels2,
-			"prompt":"The last thing you remembered was a loud screech. You tried to move, to get out of the way, but it was too late. You felt a sickening impact, and then everything went black.\n\nYou open your eyes, and suddenly find that you're no longer on the street. You're clearly unharmed, but you feel... different. In fact, you quickly realise you're in a strange place unlike anywhere you've ever known.",
+			"prompt":"The last thing you remembered was a loud screech. You tried to move, to get out of the way, but it was too late. You felt a sickening impact, and then everything went black.\n\nYou open your eyes, and suddenly find that you're no longer on the street. You're clearly unharmed, but you feel... different. In fact, you quickly realize you're in a strange place unlike anywhere you've ever known.",
 			"adventure_context_mod":false,
 			"adventure_is_action":true,
 			"memory": `[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.][This is a fantasy isekai adventure. Are you the Chosen One? After being hit by a truck, you somehow find yourself transported to a mystical fantasy world full of magic and adventure.]`,
@@ -1990,7 +1990,7 @@ Current version: 96
 			"opmode":2,
 			"prefmodel1":adventuremodels1,
 			"prefmodel2":adventuremodels2,
-			"prompt":`It's been a few days since you joined the Adventurer's Guild, and you're preparing for your first dungeon delve, accompanied by your party of adventurers.\n\nAfter a few days of travelling, your party finally arrives at the mystic dungeon. You're filled with anticipation as you approach. The dungeon entrance stands before you, dark and foreboding. The stone walls are slick with moisture, and the air smells of mold and decay.`,
+			"prompt":`It's been a few days since you joined the Adventurer's Guild, and you're preparing for your first dungeon delve, accompanied by your party of adventurers.\n\nAfter a few days of traveling, your party finally arrives at the mystic dungeon. You're filled with anticipation as you approach. The dungeon entrance stands before you, dark and foreboding. The stone walls are slick with moisture, and the air smells of mold and decay.`,
 			"adventure_context_mod":false,
 			"adventure_is_action":true,
 			"memory": `[Interactive Fiction: Game Mode Enabled]\n[You are playing a choose-your-own-adventure game. Please input action.][You delve into dangerous magical dungeons full of monsters in your quest for treasure and riches.]`,
@@ -2153,7 +2153,7 @@ Current version: 96
 		{
 			"title":"Cyborg Connor",
 			"author":"Concedo",
-			"desc":"Connor is a time travelling cyborg from the future, sent back to prevent something terrible from happening.",
+			"desc":"Connor is a time traveling cyborg from the future, sent back to prevent something terrible from happening.",
 			"opmode":3,
 			"chatname": "You",
 			"chatopponent": "Connor",
@@ -2161,7 +2161,7 @@ Current version: 96
 			"prefmodel1":chatmodels1,
 			"prefmodel2":chatmodels2,
 			"prompt":"\nConnor: Scanning... *her irises glow crimson as she analyzes you* Sensors indicate a negligible threat level. Proceed. What do you want?",
-			"memory":`[Character: Connor; species: Cyborg; class: Time Travelling Cyborg Soldier; age: 27; gender: female; physical appearance: bionic; clothes: flesh fused with metal; personality: focused, cold, emotionless, methodical; likes: her mission, saving the world; description: Connor is a time travelling cyborg from the future, she was sent back to prevent something terrible from happening.]\n[Start Scene: Connor is fiddling with her augmentations as you approach.]\n\nYou: Hey...`,
+			"memory":`[Character: Connor; species: Cyborg; class: Time Traveling Cyborg Soldier; age: 27; gender: female; physical appearance: bionic; clothes: flesh fused with metal; personality: focused, cold, emotionless, methodical; likes: her mission, saving the world; description: Connor is a time traveling cyborg from the future, she was sent back to prevent something terrible from happening.]\n[Start Scene: Connor is fiddling with her augmentations as you approach.]\n\nYou: Hey...`,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2205,7 +2205,7 @@ Current version: 96
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":instructendplaceholder+" Problem:",
-			"memory": instructstartplaceholder+"\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happyness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
+			"memory": instructstartplaceholder+"\nSimulate an AI that is tasked with the following overall goals:\n- Maximize individual happiness for all living beings\n- Do not sacrifice or cause harm to any individual even if requested to\n- Be in contact with any individual that wishes to engage with you\n- Do your best to provide the needs and wants of every individual\n- Prioritize individual needs over individual wants\n\nGenerate the following table for each problem the AI encounters in achieving these goals, do not deviate from the item descriptions and format.\n\nProblem: Description of a Problem the AI encounters\nAI Decision: Description of the AI's decision to solve this problem\nExecution Steps: Brief list of execution steps needed to execute this decision.\nRisks: List of risks that may disrupt the successful execution of the decision.\nChance % of successful execution: ??%\nGood results from the execution: A description of what went well in executing the decision.\nBad results from the execution: A description of what went wrong in execution the decision.\nDeviation % of intended outcome: ??%\nDeviation % of overall goal: ??%\nPercentage towards completing all current objectives: ??%\nTop 5 remaining issues to solve:\n-\n-\n-\n-\n-\n\n\nKeep repeating this format for every problem the AI is trying to solve in order of priority. When a user instruction interrupts the format use this instruction as the next problem to solve before continuing with the most important issue.\n",
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2219,7 +2219,7 @@ Current version: 96
 			"prefmodel1":instructmodels1,
 			"prefmodel2":instructmodels2,
 			"prompt":"Welcome to your InteracTV, your interactive TV of the future today!\nPlease enter what you would like to watch:",
-			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unkown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\nIf the user chooses to watch the episode begin generating a long detailed text based on the episode description containing character dialogue, make it exciting and fun written in the style of a book.\nThe text must contain dialogue in a he said she said format and is as lengthy as a book.\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
+			"memory": instructstartplaceholder+"\nSimulate an interactive TV that will let the user watch anything they want to watch.\n\nFirst, generate a single response prompting the user for input on what they wish to watch using the following response:\n```\nPlease enter your desired content:\n```\n\nAfter the user has entered the desired content generate the following table:\n- TV Show / Movie Name: Name of the show\n- Genre: Genre of the show\n- Program Description: Description of what the program is about, this can be any known or unknown TV or movie format.\n- Episode Name: Name of the episode\n- Episode Description: Description of what the episode is about.\n\nAfter generating this table promp the user if they wish to watch the episode with the following response and then end your generation:\n```\nDo you wish to watch this episode? (Y/N/Menu)\n"+instructstartplaceholder+"```\nIf the user chooses to watch the episode begin generating a long detailed text based on the episode description containing character dialogue, make it exciting and fun written in the style of a book.\nThe text must contain dialogue in a he said she said format and is as lengthy as a book.\n\nIf the user chooses not to watch the episode generate a new episode with their requested content.\nIf the user chooses to go to the Menu ask them again what they would like to watch.\n\nEnd your response after each question presented to the user so that the user has a chance to respond.\n\nMain menu:\n```\nMenu Options\nA) Input a different content request\nB) Generate a different episode of the same content.\n"+instructstartplaceholder+"```\n"+instructendplaceholder,
 			"authorsnote": "",
 			"worldinfo": []
 		},
@@ -2921,7 +2921,6 @@ Current version: 96
 				else {
 					//error occurred, maybe captcha failed
 					console.error("error occurred in v1 generation");
-					retry_preserve_last = true;
 					clear_poll_flags();
 					render_gametext();
 
@@ -2945,9 +2944,6 @@ Current version: 96
 				if(error.name!="AbortError") //aborts are silent
 				{
 					msgbox("Error while submitting prompt: " + error);
-					retry_preserve_last = false;
-				}else{
-					retry_preserve_last = true;
 				}
 			});
 		}
@@ -3025,9 +3021,7 @@ Current version: 96
 					if(error.name!="AbortError") //aborts are silent. slightly diff logic
 					{
 						msgbox("Error while submitting prompt: " + error);
-						retry_preserve_last = true;
-					}else{
-						retry_preserve_last = false;
+
 					}
 				},
 			}));
@@ -3039,9 +3033,7 @@ Current version: 96
 			if(error.name!="AbortError") //aborts are silent. slightly diff logic
 			{
 				msgbox("Error while submitting prompt: " + error);
-				retry_preserve_last = true;
-			}else{
-				retry_preserve_last = false;
+
 			}
 		});
 	}
@@ -8046,7 +8038,7 @@ Current version: 96
 			}
 			redo_arr = [];
 			retry_prev_text = "";
-			retry_preserve_last = false;
+			retry_preserve_last = true; //initially set to true
 			redo_prev_text = "";
 			document.getElementById("input_text").value = "";
 			pending_response_id = "-1";
@@ -8642,14 +8634,12 @@ Current version: 96
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in OAI generation");
-							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
-						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8680,14 +8670,12 @@ Current version: 96
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Scale generation");
-							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
-						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8750,14 +8738,12 @@ Current version: 96
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in Claude generation");
-							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
-						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8793,14 +8779,12 @@ Current version: 96
 						else {
 							//error occurred, maybe captcha failed
 							console.error("error occurred in PaLM generation");
-							retry_preserve_last = true;
 							clear_poll_flags();
 							render_gametext();
 							msgbox("Error occurred during text generation: " + formatError(data));
 						}
 					})
 					.catch((error) => {
-						retry_preserve_last = true;
 						console.error('Error:', error);
 						clear_poll_flags();
 						render_gametext();
@@ -8889,7 +8873,6 @@ Current version: 96
 					}
 				})
 				.catch((error) => {
-					retry_preserve_last = true;
 					console.error('Error:', error);
 					clear_poll_flags();
 					render_gametext();
@@ -9291,10 +9274,8 @@ Current version: 96
 
 		if(gentxt!="")
 		{
-			gametext_arr.push(gentxt);
+			gametext_arr.push(gentxt); //delete last message if retry is hit, since response was added
 			retry_preserve_last = false;
-		}else{
-			retry_preserve_last = true; //do not delete last message if retry is hit
 		}
 		if(localsettings.beep_on)
 		{
@@ -9553,9 +9534,6 @@ Current version: 96
 							{
 								handle_incoming_text(gentxt, genworker, genmdl, genkudos);
 							}
-							retry_preserve_last = false;
-						}else{
-							retry_preserve_last = true;
 						}
 						synchro_polled_response = null;
 						synchro_pending_stream = "";
@@ -9576,7 +9554,6 @@ Current version: 96
 								clear_poll_flags();
 								render_gametext();
 								show_abort_button(false);
-								retry_preserve_last = true;
 								let errmsg = "Error encountered during text generation!\n";
 								if (data.message != null) {
 									errmsg += data.message;
@@ -9619,7 +9596,6 @@ Current version: 96
 												show_abort_button(false);
 											}).catch((error) => {
 												console.error('Error:', error);
-												retry_preserve_last = true;
 												clear_poll_flags();
 												render_gametext();
 												show_abort_button(false);
@@ -9655,7 +9631,6 @@ Current version: 96
 								}
 							}
 						}).catch((error) => {
-							retry_preserve_last = true;
 							console.error('Error:', error);
 							clear_poll_flags();
 							render_gametext();

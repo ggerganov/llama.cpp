@@ -88,6 +88,7 @@ enum e_model3 {
 
 static const size_t kB3 = 1024;
 static const size_t MB3 = 1024*1024;
+static const size_t GGML_MAX_NODES = 8192;
 
 // computed for n_ctx == 2048
 // TODO: dynamically determine these sizes
@@ -1484,7 +1485,7 @@ static struct ggml_cgraph * llama_v3_build_graph(
 
     struct ggml_context * ctx0 = ggml_init(params);
 
-    ggml_cgraph * gf = ggml_new_graph(ctx0);
+    ggml_cgraph * gf = ggml_new_graph_custom(ctx0, GGML_MAX_NODES, false);
 
     struct ggml_tensor * cur;
     struct ggml_tensor * inpL;
@@ -3457,7 +3458,6 @@ struct llama_v3_context * llama_v3_new_context_with_model(
 #ifdef LLAMA_V3_USE_ALLOCATOR
         {
             static const size_t tensor_alignment = 32;
-            static const size_t GGML_MAX_NODES = 8192;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
             ctx->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
 
@@ -4019,7 +4019,7 @@ void llama_v3_copy_state_data_internal(struct llama_v3_context * ctx, llama_v3_d
             const size_t elt_size = ggml_element_size(kv_self.k);
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
-            ggml_cgraph gf{};
+            ggml_cgraph * gf = ggml_new_graph(cpy_ctx);
 
             ggml_tensor * kout3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             std::vector<uint8_t> kout3d_data(ggml_nbytes(kout3d), 0);
@@ -4037,9 +4037,9 @@ void llama_v3_copy_state_data_internal(struct llama_v3_context * ctx, llama_v3_d
                 kv_ntok, n_embd, n_layer,
                 elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
 
-            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, k3d, kout3d));
-            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, v3d, vout3d));
-            llv3_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
+            ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, k3d, kout3d));
+            ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, v3d, vout3d));
+            llv3_graph_compute_helper(ctx->work_buffer, gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
 
@@ -4129,7 +4129,7 @@ size_t llama_v3_set_state_data(struct llama_v3_context * ctx, uint8_t * src) {
             const size_t elt_size = ggml_element_size(kv_self.k);
 
             ggml_context * cpy_ctx = ggml_init({ 4096, NULL, /* no_alloc */ true });
-            ggml_cgraph gf{};
+            ggml_cgraph * gf = ggml_new_graph(cpy_ctx);
 
             ggml_tensor * kin3d = ggml_new_tensor_3d(cpy_ctx, kv_self.k->type, n_embd, kv_ntok, n_layer);
             kin3d->data = (void *) inp;
@@ -4147,9 +4147,9 @@ size_t llama_v3_set_state_data(struct llama_v3_context * ctx, uint8_t * src) {
                 kv_ntok, n_embd, n_layer,
                 elt_size*n_ctx, elt_size*n_ctx*n_embd, 0);
 
-            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, kin3d, k3d));
-            ggml_build_forward_expand(&gf, ggml_cpy(cpy_ctx, vin3d, v3d));
-            llv3_graph_compute_helper(ctx->work_buffer, &gf, /*n_threads*/ 1);
+            ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, kin3d, k3d));
+            ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, vin3d, v3d));
+            llv3_graph_compute_helper(ctx->work_buffer, gf, /*n_threads*/ 1);
 
             ggml_free(cpy_ctx);
         }
