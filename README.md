@@ -426,7 +426,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     mkdir build
     cd build
-    cmake -DCMAKE_BUILD_TYPE=Release -G "Ninja" -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=1 -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+    cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
     cmake --build .
     ```
     Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
