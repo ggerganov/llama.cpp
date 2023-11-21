@@ -124,11 +124,11 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 }
 
 int main(int /*argc*/, const char ** /*argv*/) {
-    struct ggml_init_params params = {
+  struct ggml_init_params params(
         /* .mem_size   = */ 128*1024*1024,
         /* .mem_buffer = */ NULL,
-        /* .no_alloc   = */ false,
-    };
+        /* .no_alloc   = */ false
+				 );
 
     std::vector<uint8_t> work_buffer;
 

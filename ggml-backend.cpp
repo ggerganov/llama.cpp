@@ -25,10 +25,10 @@ ggml_backend_buffer_t ggml_backend_buffer_init(
     GGML_ASSERT(iface.get_base != NULL);
 
     (*buffer) = (struct ggml_backend_buffer) {
-        /* .interface = */ iface,
-        /* .backend   = */ backend,
-        /* .context   = */ context,
-        /* .size      = */ size,
+      .iface =  iface,
+        .backend   =  backend,
+	.context   =  context,
+	.size      = size,
     };
 
     return buffer;
@@ -586,11 +586,14 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     memset(sched->node_copies,   0, sizeof(sched->node_copies[0])   * hash_size);
     sched->n_splits = 0;
 
-    struct ggml_init_params params = {
-        /*.mem_size =   */ sizeof(sched->context_buffer),
-        /*.mem_buffer = */ sched->context_buffer,
-        /*.no_alloc =   */ true
-    };
+    struct ggml_init_params params(
+				   //.mem_size =
+				   sizeof(sched->context_buffer),
+				   //.mem_buffer =
+				   sched->context_buffer,
+				   //.no_alloc =
+				   true
+				   );
 
     if (sched->ctx != NULL) {
         ggml_free(sched->ctx);

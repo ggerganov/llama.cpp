@@ -33,8 +33,16 @@
 
 using json = nlohmann::json;
 
-struct server_params
+struct server_params : refl::attr::usage::type
 {
+  
+  server_params():
+    hostname( "127.0.0.1"),
+    public_path(public_path),
+    port(port),
+    read_timeout(read_timeout),
+    write_timeout( 600) {};
+  
     std::string hostname = "127.0.0.1";
     std::string public_path = "examples/server/public";
     int32_t port = 8080;
@@ -543,6 +551,28 @@ struct llama_server_context
     std::vector<task_multi>  queue_multitasks;
     std::mutex mutex_tasks; // also guards id_gen, and queue_multitasks
     std::mutex mutex_results;
+  llama_server_context():
+    model(nullptr),
+    ctx(nullptr),
+    clp_ctx(nullptr),
+    params(params),
+    batch(batch),
+    multimodal(false),
+    clean_kv_cache( true),
+    all_slots_are_idle( false),
+    add_bos_token(  true),
+    //int32_t id_gen;
+    //int32_t n_ctx;  // total context for all clients / slots
+    system_need_update(false){}
+    //std::string              system_prompt;
+    //std::vector<llama_token> system_tokens;
+    //std::string name_user;      // this should be the antiprompt
+    //std::string name_assistant;
+    //std::vector<llama_client_slot> slots;
+    //std::vector<task_server> queue_tasks;
+    //std::vector<task_result> queue_results;
+    //std::mutex mutex_tasks;
+    //std::mutex mutex_results;
 
     ~llama_server_context()
     {
@@ -1402,7 +1432,7 @@ struct llama_server_context
             for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
             {
                 const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
-                llama_batch batch_view = {
+                llama_batch batch_view(
                     n_tokens,
                     batch.token    + i,
                     nullptr,
@@ -1410,8 +1440,8 @@ struct llama_server_context
                     batch.n_seq_id + i,
                     batch.seq_id   + i,
                     batch.logits   + i,
-                    0, 0, 0, // unused
-                };
+                    0, 0, 0 // unused
+		    );
                 if (llama_decode(ctx, batch_view))
                 {
                     LOG_TEE("%s : failed to eval\n", __func__);
@@ -1818,17 +1848,18 @@ struct llama_server_context
         for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch)
         {
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
-            llama_batch batch_view =
-            {
-                n_tokens,
-                batch.token    + i,
-                nullptr,
-                batch.pos      + i,
-                batch.n_seq_id + i,
-                batch.seq_id   + i,
-                batch.logits   + i,
-                0, 0, 0, // unused
-            };
+            llama_batch batch_view(
+				   /* .n_tokens= */n_tokens,
+                /* .token= */batch.token    + i,
+                /* .embd= */nullptr,
+                /* .pos= */batch.pos      + i,
+                /* .n_seq_id= */batch.n_seq_id + i,
+                /* .seq_id= */batch.seq_id   + i,
+                /* .logits= */batch.logits   + i,
+                /* .all_pos_0= */.0,
+		/* .all_pos_1= */0,
+		/* .all_seq_id= */0 // unused
+		);
 
             const int ret = llama_decode(ctx, batch_view);
             if (ret != 0)
@@ -1875,7 +1906,10 @@ struct llama_server_context
                     slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
                 }
 
-                llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
+                llama_token_data_array cur_p(
+					     slot.ctx_sampling->cur.data(),
+					     slot.ctx_sampling->cur.size(),
+					     false );
                 result.tok = id;
 
                 const int32_t n_probs = slot.sparams.n_probs;
@@ -3067,4 +3101,4 @@ int main(int argc, char **argv)
 
     llama_backend_free();
     return 0;
-}
+} 

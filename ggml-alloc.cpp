@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include "ggml-internal.hpp"
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MAX_FREE_BLOCKS 256
+
 
 //#define GGML_ALLOCATOR_DEBUG
 
@@ -24,28 +24,7 @@ static size_t aligned_offset(const void * buffer, size_t offset, size_t alignmen
     return offset + align;
 }
 
-struct free_block {
-    void * addr;
-    size_t size;
-};
 
-struct ggml_tallocr {
-    struct ggml_backend_buffer * buffer;
-    bool buffer_owned;
-    void * base;
-    size_t alignment;
-
-    int n_free_blocks;
-    struct free_block free_blocks[MAX_FREE_BLOCKS];
-
-    size_t max_size;
-
-    bool measure;
-
-#ifdef GGML_ALLOCATOR_DEBUG
-    struct ggml_tensor * allocated_tensors[1024];
-#endif
-};
 
 #ifdef GGML_ALLOCATOR_DEBUG
 static void add_allocated_tensor(ggml_tallocr_t alloc, struct ggml_tensor * tensor) {
@@ -333,33 +312,20 @@ size_t ggml_tallocr_max_size(ggml_tallocr_t alloc) {
 
 // graph allocator
 
-struct hash_node {
-    int n_children;
-    int n_views;
-};
-
-struct ggml_gallocr {
-    ggml_tallocr_t talloc;
-    struct ggml_hash_set hash_set;
-    struct hash_node * hash_values;
-    size_t hash_values_size;
-    ggml_tallocr_t * hash_allocs;
-    int * parse_seq;
-    int parse_seq_len;
-};
-
 ggml_gallocr_t ggml_gallocr_new(void) {
     ggml_gallocr_t galloc = (ggml_gallocr_t)malloc(sizeof(struct ggml_gallocr));
 
+    ggml_hash_set hs = {.size=0, .keys=NULL};
     *galloc = (struct ggml_gallocr) {
-        /*.talloc           = */ NULL,
-        /*.hash_set         = */ {0},
-        /*.hash_values      = */ NULL,
-        /*.hash_values_size = */ 0,
-        /*.hash_allocs      = */ NULL,
-        /*.parse_seq        = */ NULL,
-        /*.parse_seq_len    = */ 0,
+      .talloc           =  NULL,
+      .hash_set  =hs,
+      .hash_values      =  NULL,
+      .hash_values_size =  0,
+      .hash_allocs      =  NULL,
+      .parse_seq        =  NULL,
+      .parse_seq_len    =  0,
     };
+    //((*galloc).hash_set)[0]         =  0;
 
     return galloc;
 }
@@ -698,16 +664,12 @@ void ggml_gallocr_alloc_graph_n(ggml_gallocr_t galloc, struct ggml_cgraph * grap
 
 // legacy API wrapper
 
-struct ggml_allocr {
-    ggml_tallocr_t talloc;
-    ggml_gallocr_t galloc;
-};
 
 static ggml_allocr_t ggml_allocr_new_impl(ggml_tallocr_t talloc) {
     ggml_allocr_t alloc = (ggml_allocr_t)malloc(sizeof(struct ggml_allocr));
     *alloc = (struct ggml_allocr) {
-        /*.talloc = */ talloc,
-        /*.galloc = */ ggml_gallocr_new(),
+      .talloc =  talloc,
+      .galloc =  ggml_gallocr_new(),
     };
     return alloc;
 }

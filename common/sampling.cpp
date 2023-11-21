@@ -181,7 +181,7 @@ llama_token llama_sampling_sample(
     cur.clear();
 
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+      cur.emplace_back(llama_token_data(token_id, logits[token_id], 0.0f));
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };

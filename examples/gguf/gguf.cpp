@@ -40,11 +40,14 @@ static bool gguf_ex_write(const std::string & fname) {
     gguf_set_arr_data(ctx, "some.parameter.arr.f32", GGUF_TYPE_FLOAT32, std::vector<float>{ 3.145f, 2.718f, 1.414f, }.data(), 3);
     gguf_set_arr_str (ctx, "some.parameter.arr.str",                    std::vector<const char *>{ "hello", "world", "!" }.data(), 3);
 
-    struct ggml_init_params params = {
-        /*.mem_size   =*/ 128ull*1024ull*1024ull,
-        /*.mem_buffer =*/ NULL,
-        /*.no_alloc   =*/ false,
-    };
+    struct ggml_init_params params(
+      //.mem_size   =
+				   128ull*1024ull*1024ull,
+				   //.mem_buffer =
+				   NULL,
+				   //.no_alloc   =
+				   false
+				   );
 
     struct ggml_context * ctx_data = ggml_init(params);
 
@@ -86,10 +89,12 @@ static bool gguf_ex_write(const std::string & fname) {
 
 // just read tensor info
 static bool gguf_ex_read_0(const std::string & fname) {
-    struct gguf_init_params params = {
-        /*.no_alloc = */ false,
-        /*.ctx      = */ NULL,
-    };
+  struct gguf_init_params params (
+      //.no_alloc =
+      false,
+      //.ctx      =
+      NULL
+      );
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 
@@ -146,10 +151,12 @@ static bool gguf_ex_read_0(const std::string & fname) {
 static bool gguf_ex_read_1(const std::string & fname) {
     struct ggml_context * ctx_data = NULL;
 
-    struct gguf_init_params params = {
-        /*.no_alloc = */ false,
-        /*.ctx      = */ &ctx_data,
-    };
+    struct gguf_init_params params (
+				    //.no_alloc =
+				    false,
+				    //.ctx      =
+				    &ctx_data
+				    );
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
 

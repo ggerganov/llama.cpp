@@ -124,10 +124,15 @@ int main(int argc, char ** argv) {
             candidates.reserve(n_vocab);
 
             for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-                candidates.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
+	      candidates.emplace_back(llama_token_data( token_id,
+							logits[token_id],
+							0.0f ));
             }
 
-            llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+            llama_token_data_array candidates_p(
+						candidates.data(),
+						candidates.size(),
+						false );
 
             // sample the most likely token
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
