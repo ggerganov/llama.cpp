@@ -1037,3 +1037,52 @@ nm  /mnt/data1/2023/11/09/llama.cpp/build/bin/main  >main.nm
 
 grep libcuda report7.gron  -C10 > cudareport.txt
 grep -C1000 libcuda report7.jq > cuda.txt
+
+
+
+(gpt_params &) @0x7fffffffc960: {seed = 1700596789, n_threads = 12, 
+  n_threads_batch = -1, n_predict = -1, n_ctx = 512, n_batch = 512, n_keep = 0, 
+  n_draft = 16, n_chunks = -1, n_parallel = 1, n_sequences = 1, p_accept = 0.5, 
+  p_split = 0.100000001, n_gpu_layers = -1, n_gpu_layers_draft = -1, main_gpu = 0, 
+  tensor_split = {0 <repeats 16 times>}, n_beams = 0, rope_freq_base = 0, 
+--Type <RET> for more, q to quit, c to continue without paging--
+  rope_freq_scale = 0, yarn_ext_factor = -1, yarn_attn_factor = 1, 
+  yarn_beta_fast = 32, yarn_beta_slow = 1, yarn_orig_ctx = 0, 
+  rope_scaling_type = -1 '\377', sparams = {n_prev = 64, n_probs = 0, top_k = 40, 
+    top_p = 0.949999988, min_p = 0.0500000007, tfs_z = 1, typical_p = 1, 
+    temp = 0.800000012, penalty_last_n = 64, penalty_repeat = 1.10000002, 
+--Type <RET> for more, q to quit, c to continue without paging--
+    penalty_freq = 0, penalty_present = 0, mirostat = 0, mirostat_tau = 5, 
+    mirostat_eta = 0.100000001, penalize_nl = true, grammar = "", 
+    cfg_negative_prompt = "", cfg_scale = 1, 
+    logit_bias = std::unordered_map with 0 elements}, 
+  model = "/home/mdupont/.ollama/models/mistral", model_draft = "", 
+--Type <RET> for more, q to quit, c to continue without paging--
+  model_alias = "unknown", prompt = "", prompt_file = "", path_prompt_cache = "", 
+  input_prefix = "", input_suffix = "", 
+  antiprompt = std::vector of length 0, capacity 0, logdir = "", 
+  lora_adapter = std::vector of length 0, capacity 0, lora_base = "", ppl_stride = 0, 
+  ppl_output_type = 0, hellaswag = false, hellaswag_tasks = 400, mul_mat_q = true, 
+--Type <RET> for more, q to quit, c to continue without paging--
+  memory_f16 = true, random_prompt = false, use_color = false, interactive = false, 
+  chatml = false, prompt_cache_all = false, prompt_cache_ro = false, 
+  embedding = false, escape = false, interactive_first = false, 
+  multiline_input = false, simple_io = false, cont_batching = false, 
+  input_prefix_bos = false, ignore_eos = false, instruct = false, logits_all = false, 
+--Type <RET> for more, q to quit, c to continue without paging--
+  use_mmap = true, use_mlock = false, numa = false, verbose_prompt = false, 
+  infill = false, mmproj = "", image = ""}
+(gdb)
+
+	    llama_model * model  = llama_load_model_from_file(params.model.c_str(), mparams);
+
+	        at /home/mdupont/experiments/llama.cpp/ggml.cpp:18561
+18561	                ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
+
+
+p *ctx
+$14 = {header = {magic = "GGUF", version = 2, n_tensors = 291, n_kv = 20}, 
+  kv = 0x555556ffc2f0, infos = 0x55555716d5f0, alignment = 0, offset = 0, size = 0, 
+  data = 0x0}
+(gdb)
+l
