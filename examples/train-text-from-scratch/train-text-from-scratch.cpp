@@ -311,7 +311,8 @@ static struct ggml_tensor * llama_build_train_graphs(
         const  bool             enable_flash_attn,
         const  bool             enable_checkpointing) {
 
-    ggml_set_scratch(ctx, { 0, 0, nullptr, });
+  assert(0);
+  //ggml_set_scratch(ctx, { 0, 0, nullptr, });
     const int n_past = 0;
     const int N = n_tokens;
     const auto & hparams = model->hparams;

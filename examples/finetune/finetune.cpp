@@ -598,7 +598,9 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         const  bool             enable_flash_attn,
         const  bool             enable_checkpointing) {
 
-    ggml_set_scratch(ctx, { 0, 0, nullptr, });
+  //FIXME
+  assert(0);
+  //ggml_set_scratch(ctx, { 0, 0, nullptr, });
     const int n_past = 0;
     const int N = n_tokens;
     const auto & hparams  = model->hparams;

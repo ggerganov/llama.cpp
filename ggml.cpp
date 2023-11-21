@@ -2244,12 +2244,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         {
             const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
-	    // TODOFIXME
-            // g_state = (struct ggml_state) {
-	    //    struct ggml_context_container contexts[64];
-            ///g_state.contexts[0][0] = 0 ;
-            g_state.numa.n_nodes = 0;
-	    g_state.numa.total_cpus = 0;
+            g_state = ggml_state();
+
 	   
 	    
 	    
@@ -2302,18 +2298,18 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
-    // FIXME
-    // *ctx = (struct ggml_context) {
-    //     /*.mem_size           =*/ mem_size,
-    //     /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
-    //     /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
-    //     /*.no_alloc           =*/ params.no_alloc,
-    //     /*.no_alloc_save      =*/ params.no_alloc,
-    //     /*.n_objects          =*/ 0,
-    //     /*.objects_begin      =*/ NULL,
-    //     /*.objects_end        =*/ NULL,
-    //     /*.scratch            =*/ { 0, 0, NULL, },
-    //     /*.scratch_save       =*/ { 0, 0, NULL, },
+
+    (*ctx).mem_size           = mem_size;
+    (*ctx).mem_buffer         = params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
+      (*ctx).mem_buffer_owned   = params.mem_buffer ? false : true;
+    (*ctx).no_alloc           = params.no_alloc;
+    (*ctx).no_alloc_save      = params.no_alloc;
+    (*ctx).n_objects          = 0;
+    (*ctx).objects_begin      = NULL;
+    (*ctx).objects_end        = NULL;
+    ggml_scratch a;
+    (*ctx).scratch            = a;
+    (*ctx).scratch_save       = a;
     // };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
@@ -2449,14 +2445,11 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
         assert(false);
         return NULL;
     }
-
-    // FIXME
-    // *obj_new = (struct ggml_object) {
-    //     .offs = cur_end + GGML_OBJECT_SIZE,
-    //     .size = size_needed,
-    //     .next = NULL,
-    //     .type = type,
-    // };
+    //*obj_new = //(struct ggml_object) {
+    (*obj_new).offs = cur_end + GGML_OBJECT_SIZE;
+    (*obj_new).size = size_needed;
+    (*obj_new).next = NULL;
+    (*obj_new).type = type;
 
     ggml_assert_aligned(mem_buffer + obj_new->offs);
 
@@ -2528,29 +2521,30 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
-    // FIXME
+
     // *result = (struct ggml_tensor) {
-    //     /*.type         =*/ type,
-    //     /*.backend      =*/ GGML_BACKEND_CPU,
-    //     /*.buffer       =*/ NULL,
-    //     /*.n_dims       =*/ n_dims,
-    //     /*.ne           =*/ { 1, 1, 1, 1 },
-    //     /*.nb           =*/ { 0, 0, 0, 0 },
-    //     /*.op           =*/ GGML_OP_NONE,
-    //     /*.op_params    =*/ { 0 },
-    //     /*.is_param     =*/ false,
-    //     /*.grad         =*/ NULL,
-    //     /*.src          =*/ { NULL },
-    //     /*.perf_runs    =*/ 0,
-    //     /*.perf_cycles  =*/ 0,
-    //     /*.perf_time_us =*/ 0,
-    //     /*.view_src     =*/ view_src,
-    //     /*.view_offs    =*/ view_offs,
-    //     /*.data         =*/ obj_alloc_size > 0 ? (void *)(result + 1) : data,
-    //     /*.name         =*/ { 0 },
-    //     /*.extra        =*/ NULL,
-    //     /*.padding      =*/ { 0 },
-    // };
+    (*result).type         = type;
+    (*result).backend      = GGML_BACKEND_CPU;
+    (*result).buffer       = NULL;
+    (*result).n_dims       = n_dims;
+    for (int i =0; i < 4; i++){
+      (*result).ne[i] = 1;
+      (*result).nb[i] = 0;
+    }
+    (*result).op           = GGML_OP_NONE;
+    (*result).op_params[0]    =  0 ;
+    (*result).is_param     = false;
+    (*result).grad         = NULL;
+    (*result).src[0]          =  NULL ;
+    (*result).perf_runs    = 0;
+    (*result).perf_cycles  = 0;
+    (*result).perf_time_us = 0;
+    (*result).view_src     = view_src;
+    (*result).view_offs    = view_offs;
+    (*result).data         =obj_alloc_size > 0 ? (void *)(result + 1) : data;
+    (*result).name[0]         = 0 ;
+    (*result).extra        = NULL;
+    (*result).padding[0]      =  0 ;
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
     //ggml_assert_aligned(result->data);
@@ -15591,20 +15585,19 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
         (grads ? (char *)(grads_ptr + size) : (char *)(hash_keys_ptr + hash_size)) - (char *)cgraph));
 
     memset(hash_keys_ptr, 0, hash_size * sizeof(struct ggml_tensor *));
-    // FIXME
-    // *cgraph = (struct ggml_cgraph) {
-    //     /*.size         =*/ size,
-    //     /*.n_nodes      =*/ 0,
-    //     /*.n_leafs      =*/ 0,
-    //     /*.nodes        =*/ nodes_ptr,
-    //     /*.grads        =*/ grads_ptr,
-    //     /*.leafs        =*/ leafs_ptr,
-    //     /*.hash_table   =*/ { hash_size, hash_keys_ptr },
-    //     /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
-    //     /*.perf_runs    =*/ 0,
-    //     /*.perf_cycles  =*/ 0,
-    //     /*.perf_time_us =*/ 0,
-    // };
+
+    (*cgraph).size         = size;
+    (*cgraph).n_nodes      = 0;
+    (*cgraph).n_leafs      = 0;
+    (*cgraph).nodes        = nodes_ptr;
+    (*cgraph).grads        = grads_ptr;
+    (*cgraph).leafs        = leafs_ptr;
+    //(*cgraph).hash_table   = { hash_size, hash_keys_ptr };
+    (*cgraph).order        = GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT;
+    (*cgraph).perf_runs    = 0;
+    (*cgraph).perf_cycles  = 0;
+    (*cgraph).perf_time_us = 0;
+
 
     return cgraph;
 }
@@ -15619,17 +15612,17 @@ struct ggml_cgraph * ggml_graph_view(struct ggml_context * ctx, struct ggml_cgra
     struct ggml_cgraph * cgraph = (struct ggml_cgraph *) ((char *) ctx->mem_buffer + obj->offs);
 
     // *cgraph = (struct ggml_cgraph) {
-    //     /*.size         =*/ 0,
-    //     /*.n_nodes      =*/ i1 - i0,
-    //     /*.n_leafs      =*/ 0,
-    //     /*.nodes        =*/ cgraph0->nodes + i0,
-    //     /*.grads        =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
-    //     /*.leafs        =*/ NULL,
-    //     /*.hash_table   =*/ { 0, NULL },
-    //     /*.order        =*/ cgraph0->order,
-    //     /*.perf_runs    =*/ 0,
-    //     /*.perf_cycles  =*/ 0,
-    //     /*.perf_time_us =*/ 0,
+    (*cgraph).size         = 0;
+    (*cgraph).n_nodes      = i1 - i0;
+    (*cgraph).n_leafs      = 0;
+    (*cgraph).nodes        = cgraph0->nodes + i0;
+    (*cgraph).grads        = cgraph0->grads ? cgraph0->grads + i0 : NULL;
+    (*cgraph).leafs        = NULL;
+    //(*cgraph).hash_table   = { 0, NULL };
+    (*cgraph).order        = cgraph0->order;
+    (*cgraph).perf_runs    = 0;
+    (*cgraph).perf_cycles  = 0;
+    (*cgraph).perf_time_us = 0;
     // };
 
     return cgraph;
@@ -16395,14 +16388,12 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     // create thread pool
     if (n_threads > 1) {
         for (int j = 1; j < n_threads; ++j) {
-	  // FIXME
-            // workers[j] = (struct ggml_compute_state) {
-            //     .thrd   = 0,
-            //     .ith = j,
-            //     .shared = &state_shared,
-            // };
+	  // workers[j] = (struct ggml_compute_state) {
+	  workers[j].thrd   = 0;
+	  workers[j].ith = j;
+	  workers[j].shared = &state_shared;
 
-            const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+	  const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
             GGML_ASSERT(rc == 0);
             UNUSED(rc);
         }
@@ -16719,12 +16710,12 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         // create the data context
         {
             const size_t overhead = 1*ggml_tensor_overhead();
-
+	    GGML_ASSERT(0);
 	    // FIXME
             struct ggml_init_params params;// = {
-            //     .mem_size   = fsize + overhead,
-            //     .mem_buffer = NULL,
-            //     .no_alloc   = false,
+            params.mem_size   = fsize + overhead,
+            params.mem_buffer = NULL,
+            params.no_alloc   = false,
             // };
 
             *ctx_data = ggml_init(params);
@@ -16777,12 +16768,10 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             const size_t overhead = (n_leafs + n_nodes)*ggml_tensor_overhead() + ggml_graph_overhead_custom(graph_size, false);
 
-	    // FIXME
             struct ggml_init_params params;// = {
-            //     .mem_size   = size_eval + overhead,
-            //     .mem_buffer = NULL,
-            //     .no_alloc   = true,
-            // };
+            params.mem_size   = size_eval + overhead,
+            params.mem_buffer = NULL,
+            params.no_alloc   = true,
 
             *ctx_eval = ggml_init(params);
 
@@ -17545,7 +17534,7 @@ static enum ggml_opt_result linesearch_backtracking(
             } else {
                 if(params->lbfgs.linesearch == GGML_LINESEARCH_BACKTRACKING_WOLFE) {
                     // regular Wolfe conditions
-                    return count;
+		  return (ggml_opt_result)count;
                 }
 
                 if(dg > -params->lbfgs.wolfe*dginit) {
@@ -17623,7 +17612,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     float * gp = (float*)opt->lbfgs.gp->data; // previous gradient
     float * d  = (float*)opt->lbfgs.d->data;  // search direction
 
-    float * pf = params.past > 0 ? opt->lbfgs.pf->data : NULL; // past function values
+    float * pf = params.past > 0 ? (float*)opt->lbfgs.pf->data : NULL; // past function values
 
     const int n_accum = MAX(1, params.n_gradient_accumulation);
     const float accum_norm = 1.0f / (float) n_accum;
@@ -17847,67 +17836,62 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
     switch (type) {
         case GGML_OPT_ADAM:
             {
-	      // FIXME
-                // result = (struct ggml_opt_params) {
-                //     .type       = GGML_OPT_ADAM,
-                //     .graph_size = GGML_DEFAULT_GRAPH_SIZE,
-                //     .n_threads  = 1, // FIXME: GGML_DEFAULT_N_THREADS ?
-                //     .past       = 0,
-                //     .delta      = 1e-5f,
 
-                //     .max_no_improvement = 100,
+	      // result = (struct ggml_opt_params) {
+	      result.type       = GGML_OPT_ADAM;
+	      result.graph_size = GGML_DEFAULT_GRAPH_SIZE;
+	      result.n_threads  = 1; // FIXME: GGML_DEFAULT_N_THREADS ?
+	      result.past       = 0;
+	      result.delta      = 1e-5f;
 
-                //     .print_forward_graph  = true,
-                //     .print_backward_graph = true,
+                result.max_no_improvement = 100;
 
-                //     .n_gradient_accumulation = 1,
+                result.print_forward_graph  = true;
+                result.print_backward_graph = true;
 
-                //     .adam = {
-                //         .n_iter = 10000,
-                //         .sched  = 1.000f,
-                //         .decay  = 0.0f,
-                //         .decay_min_ndim = 2,
-                //         .alpha  = 0.001f,
-                //         .beta1  = 0.9f,
-                //         .beta2  = 0.999f,
-                //         .eps    = 1e-8f,
-                //         .eps_f  = 1e-5f,
-                //         .eps_g  = 1e-3f,
-                //         .gclip  = 0.0f,
+                result.n_gradient_accumulation = 1;
+
+                // result.adam = {
+		  result.adam.n_iter = 10000;
+		  result.adam.sched  = 1.000f;
+                result.adam.decay  = 0.0f;
+                result.adam.decay_min_ndim = 2;
+                result.adam.alpha  = 0.001f;
+                result.adam.beta1  = 0.9f;
+                result.adam.beta2  = 0.999f;
+                result.adam.eps    = 1e-8f;
+                result.adam.eps_f  = 1e-5f;
+                result.adam.eps_g  = 1e-3f;
+                result.adam.gclip  = 0.0f;
                 //     },
                 // };
             } break;
         case GGML_OPT_LBFGS:
 	  break;
 	  //{
+
 	      // TODO FIXME
                 // result = (struct ggml_opt_params) {
-                //     .type       = GGML_OPT_LBFGS,
-                //     .graph_size = GGML_DEFAULT_GRAPH_SIZE,
-                //     .n_threads  = 1,
-                //     .past       = 0,
-                //     .delta      = 1e-5f,
-		
-                //     .max_no_improvement = 0,
-
-                //     .print_forward_graph  = true,
-                //     .print_backward_graph = true,
-
-                //     .n_gradient_accumulation = 1,
-
-                //     .lbfgs = {
-                //         .m              = 6,
-                //         .n_iter         = 100,
-                //         .max_linesearch = 20,
-
-                //         .eps      = 1e-5f,
-                //         .ftol     = 1e-4f,
-                //         .wolfe    = 0.9f,
-                //         .min_step = 1e-20f,
-                //         .max_step = 1e+20f,
-
-                //         .linesearch = GGML_LINESEARCH_DEFAULT,
-		
+	  result.type       = GGML_OPT_LBFGS;
+	  result.graph_size = GGML_DEFAULT_GRAPH_SIZE;
+	  result.n_threads  = 1;
+	  result.past       = 0;
+	  result.delta      = 1e-5f	;	
+	  result.max_no_improvement = 0;
+	  result.print_forward_graph  = true;
+	  result.print_backward_graph = true;
+	  result.n_gradient_accumulation = 1;
+	  
+	  result.lbfgs.m              = 6;
+	  result.lbfgs.n_iter         = 100;
+	  result.lbfgs.max_linesearch = 20;
+	  result.lbfgs.eps      = 1e-5f;
+	  result.lbfgs.ftol     = 1e-4f;
+	  result.lbfgs.wolfe    = 0.9f;
+	  result.lbfgs.min_step = 1e-20f;
+	  result.lbfgs.max_step = 1e+20f;
+	  result.lbfgs.linesearch = GGML_LINESEARCH_DEFAULT;
+	  
                 //     }
 	      //};
             //} break;
@@ -18648,11 +18632,9 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
 	// FIXME
         struct ggml_init_params pdata;
-	// = {
-        //     .mem_size   = mem_size,
-        //     .mem_buffer = NULL,
-        //     .no_alloc   = params.no_alloc,
-        // };
+        pdata.mem_size   = mem_size,
+        pdata.mem_buffer = NULL,
+        pdata.no_alloc   = params.no_alloc,
 
         *params.ctx = ggml_init(pdata);
 
@@ -18684,7 +18666,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         // create the tensors
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             const int64_t ne[GGML_MAX_DIMS] = {
-	      (int64_t)ctx->infos[i].ne[0],// FIXME narrowing
+	      (int64_t)ctx->infos[i].ne[0],
 	      (int64_t)ctx->infos[i].ne[1],
 	      (int64_t)ctx->infos[i].ne[2],
 	      (int64_t)ctx->infos[i].ne[3],
