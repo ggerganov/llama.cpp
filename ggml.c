@@ -1586,7 +1586,7 @@ inline static void ggml_vec_argmax_f32(const int n, int * s, const float * x) {
 // data types
 //
 
-static const char * GGML_OP_NAME[GGML_OP_COUNT + 2] = {
+static const char * GGML_OP_NAME[GGML_OP_COUNT] = {
     "NONE",
 
     "DUP",
@@ -1664,8 +1664,6 @@ static const char * GGML_OP_NAME[GGML_OP_COUNT + 2] = {
 
     "CROSS_ENTROPY_LOSS",
     "CROSS_ENTROPY_LOSS_BACK",
-    "",
-    "",
 };
 
 static_assert(GGML_OP_COUNT == 68, "GGML_OP_COUNT != 68");
