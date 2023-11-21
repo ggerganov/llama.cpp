@@ -1,3 +1,7 @@
+
+//https://github.com/Neargye/magic_enum.git
+#include <magic_enum.hpp>
+
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
@@ -86,7 +90,13 @@ static int sched_yield (void) {
 }
 #else
 #include <pthread.h>
+//#include <stdatomic.h>
+#ifdef __cplusplus
+#include <atomic>
+using namespace std;
+#else
 #include <stdatomic.h>
+#endif
 
 typedef void * thread_ret_t;
 
@@ -409,195 +419,195 @@ int64_t ggml_cycles_per_ms(void) {
 
 static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 
-static void ggml_vec_dot_f32(const int n, float * restrict s, const float * restrict x, const float * restrict y);
-static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t * restrict x, ggml_fp16_t * restrict y);
+static void ggml_vec_dot_f32(const int n, float * __restrict__ s, const float * __restrict__ x, const float * __restrict__ y);
+static void ggml_vec_dot_f16(const int n, float * __restrict__ s, ggml_fp16_t * __restrict__ x, ggml_fp16_t * __restrict__ y);
 
 static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
-    [GGML_TYPE_I8] = {
-        .type_name                = "i8",
-        .blck_size                = 1,
-        .type_size                = sizeof(int8_t),
-        .is_quantized             = false,
-    },
-    [GGML_TYPE_I16] = {
-        .type_name                = "i16",
-        .blck_size                = 1,
-        .type_size                = sizeof(int16_t),
-        .is_quantized             = false,
-    },
-    [GGML_TYPE_I32] = {
-        .type_name                = "i32",
-        .blck_size                = 1,
-        .type_size                = sizeof(int32_t),
-        .is_quantized             = false,
-    },
-    [GGML_TYPE_F32] = {
-        .type_name                = "f32",
-        .blck_size                = 1,
-        .type_size                = sizeof(float),
-        .is_quantized             = false,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
-        .vec_dot_type             = GGML_TYPE_F32,
-    },
-    [GGML_TYPE_F16] = {
-        .type_name                = "f16",
-        .blck_size                = 1,
-        .type_size                = sizeof(ggml_fp16_t),
-        .is_quantized             = false,
-        .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
-        .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
-        .from_float_reference     = (ggml_from_float_t) ggml_fp32_to_fp16_row,
-        .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f16,
-        .vec_dot_type             = GGML_TYPE_F16,
-    },
-    [GGML_TYPE_Q4_0] = {
-        .type_name                = "q4_0",
-        .blck_size                = QK4_0,
-        .type_size                = sizeof(block_q4_0),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_0,
-        .from_float               = quantize_row_q4_0,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q4_0_reference,
-        .vec_dot                  = ggml_vec_dot_q4_0_q8_0,
-        .vec_dot_type             = GGML_TYPE_Q8_0,
-    },
-    [GGML_TYPE_Q4_1] = {
-        .type_name                = "q4_1",
-        .blck_size                = QK4_1,
-        .type_size                = sizeof(block_q4_1),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_1,
-        .from_float               = quantize_row_q4_1,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q4_1_reference,
-        .vec_dot                  = ggml_vec_dot_q4_1_q8_1,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
-    },
-    [4] = { // GGML_TYPE_Q4_2
-        .type_name                = "DEPRECATED",
-        .blck_size                = 0,
-        .type_size                = 0,
-        .is_quantized             = false,
-        .to_float                 = NULL,
-        .from_float               = NULL,
-        .from_float_reference     = NULL,
-        .vec_dot                  = NULL,
-        .vec_dot_type             = GGML_TYPE_COUNT,
-    },
-    [5] = { // GGML_TYPE_Q4_3
-        .type_name                = "DEPRECATED",
-        .blck_size                = 0,
-        .type_size                = 0,
-        .is_quantized             = false,
-        .to_float                 = NULL,
-        .from_float               = NULL,
-        .from_float_reference     = NULL,
-        .vec_dot                  = NULL,
-        .vec_dot_type             = GGML_TYPE_COUNT,
-    },
-    [GGML_TYPE_Q5_0] = {
-        .type_name                = "q5_0",
-        .blck_size                = QK5_0,
-        .type_size                = sizeof(block_q5_0),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_0,
-        .from_float               = quantize_row_q5_0,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q5_0_reference,
-        .vec_dot                  = ggml_vec_dot_q5_0_q8_0,
-        .vec_dot_type             = GGML_TYPE_Q8_0,
-    },
-    [GGML_TYPE_Q5_1] = {
-        .type_name                = "q5_1",
-        .blck_size                = QK5_1,
-        .type_size                = sizeof(block_q5_1),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_1,
-        .from_float               = quantize_row_q5_1,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q5_1_reference,
-        .vec_dot                  = ggml_vec_dot_q5_1_q8_1,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
-    },
-    [GGML_TYPE_Q8_0] = {
-        .type_name                = "q8_0",
-        .blck_size                = QK8_0,
-        .type_size                = sizeof(block_q8_0),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q8_0,
-        .from_float               = quantize_row_q8_0,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q8_0_reference,
-        .vec_dot                  = ggml_vec_dot_q8_0_q8_0,
-        .vec_dot_type             = GGML_TYPE_Q8_0,
-    },
-    [GGML_TYPE_Q8_1] = {
-        .type_name                = "q8_1",
-        .blck_size                = QK8_1,
-        .type_size                = sizeof(block_q8_1),
-        .is_quantized             = true,
-        .from_float               = quantize_row_q8_1,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q8_1_reference,
-        .vec_dot_type             = GGML_TYPE_Q8_1,
-    },
-    [GGML_TYPE_Q2_K] = {
-        .type_name                = "q2_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q2_K),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q2_K,
-        .from_float               = quantize_row_q2_K,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q2_K_reference,
-        .vec_dot                  = ggml_vec_dot_q2_K_q8_K,
-        .vec_dot_type             = GGML_TYPE_Q8_K,
-    },
-    [GGML_TYPE_Q3_K] = {
-        .type_name                = "q3_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q3_K),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q3_K,
-        .from_float               = quantize_row_q3_K,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q3_K_reference,
-        .vec_dot                  = ggml_vec_dot_q3_K_q8_K,
-        .vec_dot_type             = GGML_TYPE_Q8_K,
-    },
-    [GGML_TYPE_Q4_K] = {
-        .type_name                = "q4_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q4_K),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q4_K,
-        .from_float               = quantize_row_q4_K,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q4_K_reference,
-        .vec_dot                  = ggml_vec_dot_q4_K_q8_K,
-        .vec_dot_type             = GGML_TYPE_Q8_K,
-    },
-    [GGML_TYPE_Q5_K] = {
-        .type_name                = "q5_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q5_K),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q5_K,
-        .from_float               = quantize_row_q5_K,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q5_K_reference,
-        .vec_dot                  = ggml_vec_dot_q5_K_q8_K,
-        .vec_dot_type             = GGML_TYPE_Q8_K,
-    },
-    [GGML_TYPE_Q6_K] = {
-        .type_name                = "q6_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q6_K),
-        .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_q6_K,
-        .from_float               = quantize_row_q6_K,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q6_K_reference,
-        .vec_dot                  = ggml_vec_dot_q6_K_q8_K,
-        .vec_dot_type             = GGML_TYPE_Q8_K,
-    },
-    [GGML_TYPE_Q8_K] = {
-        .type_name                = "q8_K",
-        .blck_size                = QK_K,
-        .type_size                = sizeof(block_q8_K),
-        .is_quantized             = true,
-        .from_float               = quantize_row_q8_K,
-    }
+    // [GGML_TYPE_I8] = {
+    //     .type_name                = "i8",
+    //     .blck_size                = 1,
+    //     .type_size                = sizeof(int8_t),
+    //     .is_quantized             = false,
+    // },
+    // [GGML_TYPE_I16] = {
+    //     .type_name                = "i16",
+    //     .blck_size                = 1,
+    //     .type_size                = sizeof(int16_t),
+    //     .is_quantized             = false,
+    // },
+    // [GGML_TYPE_I32] = {
+    //     .type_name                = "i32",
+    //     .blck_size                = 1,
+    //     .type_size                = sizeof(int32_t),
+    //     .is_quantized             = false,
+    // },
+    // [GGML_TYPE_F32] = {
+    //     .type_name                = "f32",
+    //     .blck_size                = 1,
+    //     .type_size                = sizeof(float),
+    //     .is_quantized             = false,
+    //     .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f32,
+    //     .vec_dot_type             = GGML_TYPE_F32,
+    // },
+    // [GGML_TYPE_F16] = {
+    //     .type_name                = "f16",
+    //     .blck_size                = 1,
+    //     .type_size                = sizeof(ggml_fp16_t),
+    //     .is_quantized             = false,
+    //     .to_float                 = (ggml_to_float_t) ggml_fp16_to_fp32_row,
+    //     .from_float               = (ggml_from_float_t) ggml_fp32_to_fp16_row,
+    //     .from_float_reference     = (ggml_from_float_t) ggml_fp32_to_fp16_row,
+    //     .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_f16,
+    //     .vec_dot_type             = GGML_TYPE_F16,
+    // },
+    // [GGML_TYPE_Q4_0] = {
+    //     .type_name                = "q4_0",
+    //     .blck_size                = QK4_0,
+    //     .type_size                = sizeof(block_q4_0),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q4_0,
+    //     .from_float               = quantize_row_q4_0,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q4_0_reference,
+    //     .vec_dot                  = ggml_vec_dot_q4_0_q8_0,
+    //     .vec_dot_type             = GGML_TYPE_Q8_0,
+    // },
+    // [GGML_TYPE_Q4_1] = {
+    //     .type_name                = "q4_1",
+    //     .blck_size                = QK4_1,
+    //     .type_size                = sizeof(block_q4_1),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q4_1,
+    //     .from_float               = quantize_row_q4_1,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q4_1_reference,
+    //     .vec_dot                  = ggml_vec_dot_q4_1_q8_1,
+    //     .vec_dot_type             = GGML_TYPE_Q8_1,
+    // },
+    // [4] = { // GGML_TYPE_Q4_2
+    //     .type_name                = "DEPRECATED",
+    //     .blck_size                = 0,
+    //     .type_size                = 0,
+    //     .is_quantized             = false,
+    //     .to_float                 = NULL,
+    //     .from_float               = NULL,
+    //     .from_float_reference     = NULL,
+    //     .vec_dot                  = NULL,
+    //     .vec_dot_type             = GGML_TYPE_COUNT,
+    // },
+    // [5] = { // GGML_TYPE_Q4_3
+    //     .type_name                = "DEPRECATED",
+    //     .blck_size                = 0,
+    //     .type_size                = 0,
+    //     .is_quantized             = false,
+    //     .to_float                 = NULL,
+    //     .from_float               = NULL,
+    //     .from_float_reference     = NULL,
+    //     .vec_dot                  = NULL,
+    //     .vec_dot_type             = GGML_TYPE_COUNT,
+    // },
+    // [GGML_TYPE_Q5_0] = {
+    //     .type_name                = "q5_0",
+    //     .blck_size                = QK5_0,
+    //     .type_size                = sizeof(block_q5_0),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q5_0,
+    //     .from_float               = quantize_row_q5_0,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q5_0_reference,
+    //     .vec_dot                  = ggml_vec_dot_q5_0_q8_0,
+    //     .vec_dot_type             = GGML_TYPE_Q8_0,
+    // },
+    // [GGML_TYPE_Q5_1] = {
+    //     .type_name                = "q5_1",
+    //     .blck_size                = QK5_1,
+    //     .type_size                = sizeof(block_q5_1),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q5_1,
+    //     .from_float               = quantize_row_q5_1,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q5_1_reference,
+    //     .vec_dot                  = ggml_vec_dot_q5_1_q8_1,
+    //     .vec_dot_type             = GGML_TYPE_Q8_1,
+    // },
+    // [GGML_TYPE_Q8_0] = {
+    //     .type_name                = "q8_0",
+    //     .blck_size                = QK8_0,
+    //     .type_size                = sizeof(block_q8_0),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q8_0,
+    //     .from_float               = quantize_row_q8_0,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q8_0_reference,
+    //     .vec_dot                  = ggml_vec_dot_q8_0_q8_0,
+    //     .vec_dot_type             = GGML_TYPE_Q8_0,
+    // },
+    // [GGML_TYPE_Q8_1] = {
+    //     .type_name                = "q8_1",
+    //     .blck_size                = QK8_1,
+    //     .type_size                = sizeof(block_q8_1),
+    //     .is_quantized             = true,
+    //     .from_float               = quantize_row_q8_1,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q8_1_reference,
+    //     .vec_dot_type             = GGML_TYPE_Q8_1,
+    // },
+    // [GGML_TYPE_Q2_K] = {
+    //     .type_name                = "q2_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q2_K),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q2_K,
+    //     .from_float               = quantize_row_q2_K,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q2_K_reference,
+    //     .vec_dot                  = ggml_vec_dot_q2_K_q8_K,
+    //     .vec_dot_type             = GGML_TYPE_Q8_K,
+    // },
+    // [GGML_TYPE_Q3_K] = {
+    //     .type_name                = "q3_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q3_K),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q3_K,
+    //     .from_float               = quantize_row_q3_K,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q3_K_reference,
+    //     .vec_dot                  = ggml_vec_dot_q3_K_q8_K,
+    //     .vec_dot_type             = GGML_TYPE_Q8_K,
+    // },
+    // [GGML_TYPE_Q4_K] = {
+    //     .type_name                = "q4_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q4_K),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q4_K,
+    //     .from_float               = quantize_row_q4_K,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q4_K_reference,
+    //     .vec_dot                  = ggml_vec_dot_q4_K_q8_K,
+    //     .vec_dot_type             = GGML_TYPE_Q8_K,
+    // },
+    // [GGML_TYPE_Q5_K] = {
+    //     .type_name                = "q5_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q5_K),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q5_K,
+    //     .from_float               = quantize_row_q5_K,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q5_K_reference,
+    //     .vec_dot                  = ggml_vec_dot_q5_K_q8_K,
+    //     .vec_dot_type             = GGML_TYPE_Q8_K,
+    // },
+    // [GGML_TYPE_Q6_K] = {
+    //     .type_name                = "q6_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q6_K),
+    //     .is_quantized             = true,
+    //     .to_float                 = (ggml_to_float_t) dequantize_row_q6_K,
+    //     .from_float               = quantize_row_q6_K,
+    //     .from_float_reference     = (ggml_from_float_t) quantize_row_q6_K_reference,
+    //     .vec_dot                  = ggml_vec_dot_q6_K_q8_K,
+    //     .vec_dot_type             = GGML_TYPE_Q8_K,
+    // },
+    // [GGML_TYPE_Q8_K] = {
+    //     .type_name                = "q8_K",
+    //     .blck_size                = QK_K,
+    //     .type_size                = sizeof(block_q8_K),
+    //     .is_quantized             = true,
+    //     .from_float               = quantize_row_q8_K,
+    // }
 };
 
 // For internal test use
@@ -1160,7 +1170,7 @@ inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)   
 inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
 inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
 
-static void ggml_vec_dot_f32(const int n, float * restrict s, const float * restrict x, const float * restrict y) {
+static void ggml_vec_dot_f32(const int n, float * __restrict__ s, const float * __restrict__ x, const float * __restrict__ y) {
 #ifdef GGML_SIMD
     float sumf = 0.0f;
     const int np = (n & ~(GGML_F32_STEP - 1));
@@ -1197,7 +1207,7 @@ static void ggml_vec_dot_f32(const int n, float * restrict s, const float * rest
     *s = sumf;
 }
 
-static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t * restrict x, ggml_fp16_t * restrict y) {
+static void ggml_vec_dot_f16(const int n, float * __restrict__ s, ggml_fp16_t * __restrict__ x, ggml_fp16_t * __restrict__ y) {
     ggml_float sumf = 0.0;
 
 #if defined(GGML_SIMD)
@@ -1235,10 +1245,10 @@ static void ggml_vec_dot_f16(const int n, float * restrict s, ggml_fp16_t * rest
 
 // compute GGML_VEC_DOT_UNROLL dot products at once
 // xs - x row stride in bytes
-inline static void ggml_vec_dot_f16_unroll(const int n, const int xs, float * restrict s, void * restrict xv, ggml_fp16_t * restrict y) {
+inline static void ggml_vec_dot_f16_unroll(const int n, const int xs, float * __restrict__ s, void * __restrict__ xv, ggml_fp16_t * __restrict__ y) {
     ggml_float sumf[GGML_VEC_DOT_UNROLL] = { 0.0 };
 
-    ggml_fp16_t * restrict x[GGML_VEC_DOT_UNROLL];
+    ggml_fp16_t * __restrict__ x[GGML_VEC_DOT_UNROLL];
 
     for (int i = 0; i < GGML_VEC_DOT_UNROLL; ++i) {
         x[i] = (ggml_fp16_t *) ((char *) xv + i*xs);
@@ -1288,7 +1298,7 @@ inline static void ggml_vec_dot_f16_unroll(const int n, const int xs, float * re
     }
 }
 
-inline static void ggml_vec_mad_f32(const int n, float * restrict y, const float * restrict x, const float v) {
+inline static void ggml_vec_mad_f32(const int n, float * __restrict__ y, const float * __restrict__ x, const float v) {
 #if defined(GGML_SIMD)
     const int np = (n & ~(GGML_F32_STEP - 1));
 
@@ -1320,10 +1330,10 @@ inline static void ggml_vec_mad_f32(const int n, float * restrict y, const float
 }
 
 // xs and vs are byte strides of x and v
-inline static void ggml_vec_mad_f32_unroll(const int n, const int xs, const int vs, float * restrict y, const float * restrict xv, const float * restrict vv) {
+inline static void ggml_vec_mad_f32_unroll(const int n, const int xs, const int vs, float * __restrict__ y, const float * __restrict__ xv, const float * __restrict__ vv) {
 
-    const float * restrict x[GGML_VEC_MAD_UNROLL];
-    const float * restrict v[GGML_VEC_MAD_UNROLL];
+    const float * __restrict__ x[GGML_VEC_MAD_UNROLL];
+    const float * __restrict__ v[GGML_VEC_MAD_UNROLL];
 
     for (int i = 0; i < GGML_VEC_MAD_UNROLL; ++i) {
         x[i] = (const float *) ((const char *) xv + i*xs);
@@ -1808,12 +1818,31 @@ struct ggml_context {
 
     struct ggml_scratch scratch;
     struct ggml_scratch scratch_save;
+
+  ggml_context():
+    mem_size(0),
+    mem_buffer(0),
+    mem_buffer_owned(0),
+    no_alloc(0),
+    no_alloc_save(0),
+    n_objects(0),
+    objects_begin(0),
+    objects_end(0),
+    scratch(),
+    scratch_save()
+  {
+    
+  }
 };
 
 struct ggml_context_container {
     bool used;
 
     struct ggml_context context;
+
+  ggml_context_container(): used(0),context(){
+    
+  }
 };
 
 //
@@ -1841,6 +1870,11 @@ struct ggml_numa_nodes {
 struct ggml_state {
     struct ggml_context_container contexts[GGML_MAX_CONTEXTS];
     struct ggml_numa_nodes numa;
+
+  ggml_state():contexts(), numa()
+  {
+    
+  }
 };
 
 // global state
@@ -2176,17 +2210,18 @@ static inline int ggml_up(int n, int m) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ggml_context * ggml_init(struct ggml_init_params params) {
-    // make this function thread safe
-    ggml_critical_section_start();
+  struct ggml_context * ctx = NULL;
+  static bool is_first_call = true;
+  // make this function thread safe
+  ggml_critical_section_start();
+  
 
-    static bool is_first_call = true;
-
-    if (is_first_call) {
-        // initialize time system (required on Windows)
-        ggml_time_init();
-
-        // initialize GELU, Quick GELU, SILU and EXP F32 tables
-        {
+  if (is_first_call) {
+    // initialize time system (required on Windows)
+    ggml_time_init();
+    
+    // initialize GELU, Quick GELU, SILU and EXP F32 tables
+    {
             const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
             ggml_fp16_t ii;
@@ -2209,13 +2244,15 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
         {
             const uint64_t t_start = ggml_time_us(); UNUSED(t_start);
 
-            g_state = (struct ggml_state) {
-                /*.contexts =*/ { { 0 } },
-                /*.numa =*/ {
-                    .n_nodes = 0,
-                    .total_cpus = 0,
-                },
-            };
+	    // TODOFIXME
+            // g_state = (struct ggml_state) {
+	    //    struct ggml_context_container contexts[64];
+            ///g_state.contexts[0][0] = 0 ;
+            g_state.numa.n_nodes = 0;
+	    g_state.numa.total_cpus = 0;
+	   
+	    
+	    
 
             for (int i = 0; i < GGML_MAX_CONTEXTS; ++i) {
                 g_state.contexts[i].used = false;
@@ -2238,7 +2275,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     }
 
     // find non-used context in g_state
-    struct ggml_context * ctx = NULL;
+    
 
     for (int i = 0; i < GGML_MAX_CONTEXTS; i++) {
         if (!g_state.contexts[i].used) {
@@ -2265,18 +2302,19 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
 
-    *ctx = (struct ggml_context) {
-        /*.mem_size           =*/ mem_size,
-        /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
-        /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
-        /*.no_alloc           =*/ params.no_alloc,
-        /*.no_alloc_save      =*/ params.no_alloc,
-        /*.n_objects          =*/ 0,
-        /*.objects_begin      =*/ NULL,
-        /*.objects_end        =*/ NULL,
-        /*.scratch            =*/ { 0, 0, NULL, },
-        /*.scratch_save       =*/ { 0, 0, NULL, },
-    };
+    // FIXME
+    // *ctx = (struct ggml_context) {
+    //     /*.mem_size           =*/ mem_size,
+    //     /*.mem_buffer         =*/ params.mem_buffer ? params.mem_buffer : GGML_ALIGNED_MALLOC(mem_size),
+    //     /*.mem_buffer_owned   =*/ params.mem_buffer ? false : true,
+    //     /*.no_alloc           =*/ params.no_alloc,
+    //     /*.no_alloc_save      =*/ params.no_alloc,
+    //     /*.n_objects          =*/ 0,
+    //     /*.objects_begin      =*/ NULL,
+    //     /*.objects_end        =*/ NULL,
+    //     /*.scratch            =*/ { 0, 0, NULL, },
+    //     /*.scratch_save       =*/ { 0, 0, NULL, },
+    // };
 
     GGML_ASSERT(ctx->mem_buffer != NULL);
 
@@ -2402,7 +2440,7 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
     // align to GGML_MEM_ALIGN
     size_t size_needed = GGML_PAD(size, GGML_MEM_ALIGN);
 
-    char * const mem_buffer = ctx->mem_buffer;
+    char * const mem_buffer = (char*)ctx->mem_buffer;
     struct ggml_object * const obj_new = (struct ggml_object *)(mem_buffer + cur_end);
 
     if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
@@ -2412,12 +2450,13 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
         return NULL;
     }
 
-    *obj_new = (struct ggml_object) {
-        .offs = cur_end + GGML_OBJECT_SIZE,
-        .size = size_needed,
-        .next = NULL,
-        .type = type,
-    };
+    // FIXME
+    // *obj_new = (struct ggml_object) {
+    //     .offs = cur_end + GGML_OBJECT_SIZE,
+    //     .size = size_needed,
+    //     .next = NULL,
+    //     .type = type,
+    // };
 
     ggml_assert_aligned(mem_buffer + obj_new->offs);
 
@@ -2475,7 +2514,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
                 return NULL;
             }
 
-            data = (char * const) ctx->scratch.data + ctx->scratch.offs;
+            data = (void*)(((char *)ctx->scratch.data) + ctx->scratch.offs);
 
             ctx->scratch.offs += data_size;
         } else {
@@ -2489,29 +2528,29 @@ static struct ggml_tensor * ggml_new_tensor_impl(
     // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
-
-    *result = (struct ggml_tensor) {
-        /*.type         =*/ type,
-        /*.backend      =*/ GGML_BACKEND_CPU,
-        /*.buffer       =*/ NULL,
-        /*.n_dims       =*/ n_dims,
-        /*.ne           =*/ { 1, 1, 1, 1 },
-        /*.nb           =*/ { 0, 0, 0, 0 },
-        /*.op           =*/ GGML_OP_NONE,
-        /*.op_params    =*/ { 0 },
-        /*.is_param     =*/ false,
-        /*.grad         =*/ NULL,
-        /*.src          =*/ { NULL },
-        /*.perf_runs    =*/ 0,
-        /*.perf_cycles  =*/ 0,
-        /*.perf_time_us =*/ 0,
-        /*.view_src     =*/ view_src,
-        /*.view_offs    =*/ view_offs,
-        /*.data         =*/ obj_alloc_size > 0 ? (void *)(result + 1) : data,
-        /*.name         =*/ { 0 },
-        /*.extra        =*/ NULL,
-        /*.padding      =*/ { 0 },
-    };
+    // FIXME
+    // *result = (struct ggml_tensor) {
+    //     /*.type         =*/ type,
+    //     /*.backend      =*/ GGML_BACKEND_CPU,
+    //     /*.buffer       =*/ NULL,
+    //     /*.n_dims       =*/ n_dims,
+    //     /*.ne           =*/ { 1, 1, 1, 1 },
+    //     /*.nb           =*/ { 0, 0, 0, 0 },
+    //     /*.op           =*/ GGML_OP_NONE,
+    //     /*.op_params    =*/ { 0 },
+    //     /*.is_param     =*/ false,
+    //     /*.grad         =*/ NULL,
+    //     /*.src          =*/ { NULL },
+    //     /*.perf_runs    =*/ 0,
+    //     /*.perf_cycles  =*/ 0,
+    //     /*.perf_time_us =*/ 0,
+    //     /*.view_src     =*/ view_src,
+    //     /*.view_offs    =*/ view_offs,
+    //     /*.data         =*/ obj_alloc_size > 0 ? (void *)(result + 1) : data,
+    //     /*.name         =*/ { 0 },
+    //     /*.extra        =*/ NULL,
+    //     /*.padding      =*/ { 0 },
+    // };
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
     //ggml_assert_aligned(result->data);
@@ -2630,7 +2669,7 @@ struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value) {
     const int nc    = tensor->ne[0];
     const size_t n1 = tensor->nb[1];
 
-    char * const data = tensor->data;
+    char * const data = (char*)tensor->data;
 
     switch (tensor->type) {
         case GGML_TYPE_I8:
@@ -2682,7 +2721,7 @@ struct ggml_tensor * ggml_set_f32(struct ggml_tensor * tensor, float value) {
     const int nc    = tensor->ne[0];
     const size_t n1 = tensor->nb[1];
 
-    char * const data = tensor->data;
+    char * const data = (char*)tensor->data;
 
     switch (tensor->type) {
         case GGML_TYPE_I8:
@@ -2792,6 +2831,43 @@ int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i) {
     }
 
     return 0.0f;
+}
+
+void ggml_tensor_checksum(const struct ggml_tensor * tensor);
+void ggml_tensor_checksum(const struct ggml_tensor * tensor) {
+  const int64_t ne = ggml_nelements(tensor) ;
+  float fmin=0;
+  float ffirst=0;
+  float fmax=0;
+  float fsum=0;
+
+  for (int64_t j = 0; j < ne; ++j) {
+    float f = ggml_get_f32_1d(tensor, j);
+    if (j ==0) {
+      ffirst = f;
+      fmin = f;
+      fmax = f;
+    }
+    fsum += f;
+    if (f < fmin){
+      fmin = f;
+    }
+    if (f >fmax){
+      fmax = f;
+    }    
+  }
+
+  auto type_name = magic_enum::enum_name(tensor->type);
+// color_name
+  fprintf(stderr, "JSON: { \"cnt\":%ld, \"first\":%f,\"max\":%f,\"min\":%f,\"sum\":%f, \"name\":\"%s\", \"type\":\"%s\"}\n",
+	  ne,
+	  ffirst,
+	  fmax,
+	  fmin,
+	  fsum,
+	  tensor->name,
+	  std::string(type_name).c_str()
+	  );
 }
 
 void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
@@ -2911,17 +2987,30 @@ float ggml_get_f32_1d(const struct ggml_tensor * tensor, int i) {
                 GGML_ASSERT(tensor->nb[0] == sizeof(ggml_fp16_t));
                 return GGML_FP16_TO_FP32(((ggml_fp16_t *)(tensor->data))[i]);
             }
-        case GGML_TYPE_F32:
-            {
-                GGML_ASSERT(tensor->nb[0] == sizeof(float));
-                return ((float *)(tensor->data))[i];
-            }
-        default:
-            {
-                GGML_ASSERT(false);
-            }
-    }
 
+    case GGML_TYPE_Q2_K:
+    case GGML_TYPE_Q3_K:
+    case GGML_TYPE_Q4_0:
+    case GGML_TYPE_Q4_1:
+    case GGML_TYPE_Q4_K:
+    case GGML_TYPE_Q5_0:
+    case GGML_TYPE_Q5_1:
+    case GGML_TYPE_Q5_K:
+    case GGML_TYPE_Q6_K:
+    case GGML_TYPE_Q8_0:
+    case GGML_TYPE_Q8_1:
+    case GGML_TYPE_Q8_K:
+    case GGML_TYPE_F32:
+      {
+	//GGML_ASSERT(tensor->nb[0] == sizeof(float));
+	return ((float *)(tensor->data))[i];
+      }
+      
+    default:
+      {
+	GGML_ASSERT(false);
+      }
+    }
     return 0.0f;
 }
 
@@ -3063,7 +3152,7 @@ struct ggml_tensor * ggml_view_tensor(
 struct ggml_tensor * ggml_get_first_tensor(struct ggml_context * ctx) {
     struct ggml_object * obj = ctx->objects_begin;
 
-    char * const mem_buffer = ctx->mem_buffer;
+    char * const mem_buffer = (char*)ctx->mem_buffer;
 
     while (obj != NULL) {
         if (obj->type == GGML_OBJECT_TENSOR) {
@@ -3080,7 +3169,7 @@ struct ggml_tensor * ggml_get_next_tensor(struct ggml_context * ctx, struct ggml
     struct ggml_object * obj = (struct ggml_object *) ((char *)tensor - GGML_OBJECT_SIZE);
     obj = obj->next;
 
-    char * const mem_buffer = ctx->mem_buffer;
+    char * const mem_buffer = (char*)ctx->mem_buffer;
 
     while (obj != NULL) {
         if (obj->type == GGML_OBJECT_TENSOR) {
@@ -3096,7 +3185,7 @@ struct ggml_tensor * ggml_get_next_tensor(struct ggml_context * ctx, struct ggml
 struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name) {
     struct ggml_object * obj = ctx->objects_begin;
 
-    char * const mem_buffer = ctx->mem_buffer;
+    char * const mem_buffer = (char*)ctx->mem_buffer;
 
     while (obj != NULL) {
         if (obj->type == GGML_OBJECT_TENSOR) {
@@ -3292,7 +3381,7 @@ static struct ggml_tensor * ggml_acc_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
-    int32_t params[] = { nb1, nb2, nb3, offset, inplace ? 1 : 0 };
+    int32_t params[] = { (int32_t)nb1, (int32_t)nb2, (int32_t)nb3, (int32_t)offset, inplace ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ACC;
@@ -4145,7 +4234,7 @@ static struct ggml_tensor * ggml_set_impl(
     // make a view of the destination
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
-    int32_t params[] = { nb1, nb2, nb3, offset, inplace ? 1 : 0 };
+    int32_t params[] = { (int32_t)nb1,(int32_t) nb2, (int32_t)nb3, (int32_t)offset, inplace ? 1 : 0 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_SET;
@@ -5402,7 +5491,7 @@ struct ggml_tensor * ggml_pool_2d(
     };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 3, ne);
 
-    int32_t params[] = { op, k0, k1, s0, s1, p0, p1 };
+    int32_t params[] = { op, k0, k1, s0, s1, (int32_t)p0, (int32_t)p1 };
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op = GGML_OP_POOL_2D;
@@ -6365,7 +6454,7 @@ static void ggml_compute_forward_dup_f16(
                 GGML_ASSERT(false); // TODO: implement
             }
         } else {
-            //printf("%s: this is not optimal - fix me\n", __func__);
+	  printf("%s: this is not optimal - fix me\n", __func__);
 
             if (dst->type == GGML_TYPE_F32) {
                 size_t id = 0;
@@ -6612,7 +6701,7 @@ static void ggml_compute_forward_dup_f32(
                 GGML_ASSERT(false); // TODO: implement
             }
         } else {
-            //printf("%s: this is not optimal - fix me\n", __func__);
+	  printf("%s: this is not optimal - fix me\n", __func__);
 
             if (dst->type == GGML_TYPE_F32) {
                 size_t id = 0;
@@ -8262,7 +8351,7 @@ static void ggml_compute_forward_repeat_back_f32(
     GGML_ASSERT(nb00 == sizeof(float));
 
     if (ggml_is_contiguous(dst)) {
-        ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
+      ggml_vec_set_f32(ne0*ne1*ne2*ne3, (float*)dst->data, 0);
     } else {
         for         (int k3 = 0; k3 < ne3; k3++) {
             for     (int k2 = 0; k2 < ne2; k2++) {
@@ -9390,6 +9479,7 @@ static void ggml_compute_forward_mul_mat(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
               struct ggml_tensor * dst) {
+
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -9427,7 +9517,8 @@ static void ggml_compute_forward_mul_mat(
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
-
+    fprintf(stderr, "%s: params_type:%d src0:%p ->data %p src1:%p ->data %p\n", __func__, params->type,  (const void*)src0, src0->data, (const void*)src1, src1->data);
+  
 #if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
@@ -9484,7 +9575,7 @@ static void ggml_compute_forward_mul_mat(
             }
         }
 
-        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
+        printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
     }
@@ -9492,7 +9583,7 @@ static void ggml_compute_forward_mul_mat(
 
     if (params->type == GGML_TASK_INIT) {
         if (src1->type != vec_dot_type) {
-            char * wdata = params->wdata;
+	  char * wdata = (char*)params->wdata;
             const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
 
             for (int64_t i13 = 0; i13 < ne13; ++i13) {
@@ -9518,7 +9609,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = ne11*ne12*ne13; // src1 rows
 
-    //printf("nr0 = %lld, nr1 = %lld\n", nr0, nr1);
+    printf("nr0 = %ld, nr1 = %ld\n", nr0, nr1);
 
     // distribute the thread work across the inner or outer loop based on which one is larger
 
@@ -9537,7 +9628,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t ir110 = dr1*ith1;
     const int64_t ir111 = MIN(ir110 + dr1, nr1);
 
-    //printf("ir010 = %6lld, ir011 = %6lld, ir110 = %6lld, ir111 = %6lld\n", ir010, ir011, ir110, ir111);
+    printf("ir010 = %6ld, ir011 = %6ld, ir110 = %6ld, ir111 = %6ld\n", ir010, ir011, ir110, ir111);
 
     // threads with no work simply yield (not sure if it helps)
     if (ir010 >= ir011 || ir110 >= ir111) {
@@ -9646,7 +9737,7 @@ static void ggml_compute_forward_out_prod_f32(
             return;
         }
 #endif
-        ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
+        ggml_vec_set_f32(ne0*ne1*ne2*ne3, (float*)dst->data, 0);
         return;
     }
 
@@ -9829,7 +9920,7 @@ static void ggml_compute_forward_out_prod_q_f32(
     // TODO: #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CLBLAST)
 
     if (params->type == GGML_TASK_INIT) {
-        ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
+      ggml_vec_set_f32(ne0*ne1*ne2*ne3, (float*)dst->data, 0);
         return;
     }
 
@@ -11843,7 +11934,7 @@ static void ggml_compute_forward_pool_1d(
               struct ggml_tensor * dst) {
 
     const int32_t * opts = (const int32_t *)dst->op_params;
-    enum ggml_op_pool op = opts[0];
+    enum ggml_op_pool op = (ggml_op_pool)opts[0];
     const int k0 = opts[1];
     const int s0 = opts[2];
     const int p0 = opts[3];
@@ -11867,7 +11958,7 @@ static void ggml_compute_forward_pool_2d(
     }
 
     const int32_t * opts = (const int32_t *)dst->op_params;
-    enum ggml_op_pool op = opts[0];
+    enum ggml_op_pool op = (ggml_op_pool)opts[0];
     const int k0 = opts[1];
     const int k1 = opts[2];
     const int s0 = opts[3];
@@ -13696,6 +13787,105 @@ static void ggml_compute_forward_cross_entropy_loss_back(
 
 /////////////////////////////////
 
+/* const char *  ggml_op_name_table [] =  {  */
+/*   "GGML_OP_NONE", */
+/*   "GGML_OP_DUP", */
+/*   "GGML_OP_ADD", */
+/*   "GGML_OP_ADD1", */
+/*   "GGML_OP_ACC", */
+/*   "GGML_OP_SUB", */
+/*   "GGML_OP_MUL", */
+/*   "GGML_OP_DIV", */
+/*   "GGML_OP_SQR", */
+/*   "GGML_OP_SQRT", */
+/*   "GGML_OP_LOG", */
+/*   "GGML_OP_SUM", */
+/*   "GGML_OP_SUM_ROWS", */
+/*   "GGML_OP_MEAN", */
+/*   "GGML_OP_ARGMAX", */
+/*         "GGML_OP_REPEAT", */
+/*         "GGML_OP_REPEAT_BACK", */
+/*         "GGML_OP_CONCAT", */
+/*         "GGML_OP_SILU_BACK", */
+/*         "GGML_OP_NORM", */
+/*         "GGML_OP_RMS_NORM", */
+/*         "GGML_OP_RMS_NORM_BACK", */
+/*         "GGML_OP_GROUP_NORM", */
+/*         "GGML_OP_MUL_MAT", */
+/*         "GGML_OP_OUT_PROD", */
+/*         "GGML_OP_SCALE", */
+/*         "GGML_OP_SET", */
+/*         "GGML_OP_CPY", */
+/*         "GGML_OP_CONT", */
+/*         "GGML_OP_RESHAPE", */
+/*         "GGML_OP_VIEW", */
+/*         "GGML_OP_PERMUTE", */
+/*         "GGML_OP_TRANSPOSE", */
+/*         "GGML_OP_GET_ROWS", */
+/*         "GGML_OP_GET_ROWS_BACK", */
+/*         "GGML_OP_DIAG", */
+/*         "GGML_OP_DIAG_MASK_INF", */
+/*         "GGML_OP_DIAG_MASK_ZERO", */
+/*         "GGML_OP_SOFT_MAX", */
+/*         "GGML_OP_SOFT_MAX_BACK", */
+/*         "GGML_OP_ROPE", */
+/*         "GGML_OP_ROPE_BACK", */
+/*         "GGML_OP_ALIBI", */
+/*         "GGML_OP_CLAMP", */
+/*         "GGML_OP_CONV_TRANSPOSE_1D", */
+/*         "GGML_OP_IM2COL", */
+/*         "GGML_OP_CONV_TRANSPOSE_2D", */
+/*         "GGML_OP_POOL_1D", */
+/*         "GGML_OP_POOL_2D", */
+/*         "GGML_OP_UPSCALE", */
+/*         "GGML_OP_FLASH_ATTN", */
+/*         "GGML_OP_FLASH_FF", */
+/*         "GGML_OP_FLASH_ATTN_BACK", */
+/*         "GGML_OP_WIN_PART", */
+/*         "GGML_OP_WIN_UNPART", */
+/*         "GGML_OP_GET_REL_POS", */
+/*         "GGML_OP_ADD_REL_POS", */
+/*         "GGML_OP_UNARY", */
+/*         "GGML_OP_MAP_UNARY", */
+/*         "GGML_OP_MAP_BINARY", */
+/*         "GGML_OP_MAP_CUSTOM1_F32", */
+/*         "GGML_OP_MAP_CUSTOM2_F32", */
+/*         "GGML_OP_MAP_CUSTOM3_F32", */
+/*         "GGML_OP_MAP_CUSTOM1", */
+/*         "GGML_OP_MAP_CUSTOM2", */
+/*         "GGML_OP_MAP_CUSTOM3", */
+/*         "GGML_OP_CROSS_ENTROPY_LOSS", */
+/*         "GGML_OP_CROSS_ENTROPY_LOSS_BACK", */
+/*         "GGML_OP_COUNT", */
+/*     }; */
+
+    /* enum ggml_unary_op { */
+    /*     GGML_UNARY_OP_ABS, */
+    /*     GGML_UNARY_OP_SGN, */
+    /*     GGML_UNARY_OP_NEG, */
+    /*     GGML_UNARY_OP_STEP, */
+    /*     GGML_UNARY_OP_TANH, */
+    /*     GGML_UNARY_OP_ELU, */
+    /*     GGML_UNARY_OP_RELU, */
+    /*     GGML_UNARY_OP_GELU, */
+    /*     GGML_UNARY_OP_GELU_QUICK, */
+    /*     GGML_UNARY_OP_SILU, */
+    /*     GGML_UNARY_OP_LEAKY */
+    /* }; */
+
+    /* enum ggml_object_type { */
+    /*     GGML_OBJECT_TENSOR, */
+    /*     GGML_OBJECT_GRAPH, */
+    /*     GGML_OBJECT_WORK_BUFFER */
+    /* }; */
+
+    /* enum ggml_log_level { */
+    /*     GGML_LOG_LEVEL_ERROR = 2, */
+    /*     GGML_LOG_LEVEL_WARN = 3, */
+    /*     GGML_LOG_LEVEL_INFO = 4 */
+    /* }; */
+
+
 static void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
     GGML_ASSERT(params);
 
@@ -13703,10 +13893,100 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         return;
     }
 
+    // float fmin1=0;
+    // //    float ffirst1=0;
+    // float fmax1=0;
+    // float fsum1=0;
+
+    // float fmin0=0;
+    // float ffirst0=0;
+    // float fmax0=0;
+    // float fsum0=0;
+
+    // float fmin2=0;
+    // float ffirst2=0;
+    // float fmax2=0;
+    // float fsum2=0;
+
+    // int64_t elem_src = ggml_nelements(tensor->src[0]);
+    // int64_t elem_src1 = 0; //ggml_nelements(tensor->src[1]);
+    
+    // if (tensor->src[0]) {
+    //   const size_t size = ggml_nbytes(tensor->src[0])/sizeof(float);
+    //   for (size_t i = 0; i <size; i++){       
+    // 	float f = *( ((float*)(tensor->src[0]->data))+i);
+    //   }
+    // }
+    
+    // if (tensor->src[1]) {
+    //    elem_src1 = ggml_nelements(tensor->src[1]);
+    //   const size_t size = ggml_nbytes(tensor->src[1])/sizeof(float);
+    //   for (size_t i = 0; i <size; i++){       
+    // 	float f = *( ((float*)(tensor->src[1]->data))+i);
+    // 	if (i ==0) {
+    // 	  ffirst1 = f;
+    // 	  fmin1 = f;
+    // 	  fmax1 = f;
+    // 	}
+    // 	fsum1 += f;
+    // 	if (f < fmin1){
+    // 	  fmin1 = f;
+    // 	}
+    // 	if (f >fmax1){
+    // 	  fmax1 = f;
+    // 	}
+    //   }
+    //}
+
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
     if (skip_cpu) {
-        return;
+
+      if (tensor->src[1]) {
+	ggml_tensor_checksum(tensor->src[0]);
+	ggml_tensor_checksum(tensor->src[1]);
+	ggml_tensor_checksum(tensor);
+	
+	/* fprintf(stderr, "JSON:{\"bop\":\"%s\",\"src\":\"%s\",\"src2\":\"%s\",\"cnt1\":%ld,\"first1\":%f,\"max1\":%f,\"min1\":%f,\"sum1\":%f,\"cnt2\":%ld,\"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f,\"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f,\"dst\":\"%s\"}\n", */
+	/*     ggml_op_name_table[tensor->op], */
+	/*     tensor->src[0]->name, */
+	/*     tensor->src[1]->name, */
+	/*     elem_src, */
+	/*     ffirst0, */
+	/*     fmax0, */
+	/*     fmin0, */
+	/*     fsum0, */
+	    
+	/*     elem_src1, */
+	/*     ffirst1, */
+	/*     fmax1, */
+	/*     fmin1, */
+	/*     fsum1, */
+
+	/*     ffirst2, */
+	/*     fmax2, */
+	/*     fmin2, */
+	/*     fsum2, */
+
+	/*     tensor->name); */
+      }  else {
+	ggml_tensor_checksum(tensor->src[0]);
+	ggml_tensor_checksum(tensor);
+	/* fprintf(stderr, "JSON: { \"uop\":%d, \"src\":\"%s\", \"cnt1\":%ld, \"first1\":%f,\"max1\":%f,\"min1\":%f,\"sum1\":%f, \"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f, \"dst\":\"%s\"}\n", */
+	/* 	tensor->op, */
+	/* 	tensor->src[0]->name, */
+	/* 	elem_src, */
+	/* 	ffirst0, */
+	/* 	fmax0, */
+	/* 	fmin0, */
+	/* 	fsum0,	       */
+	/* 	ffirst2, */
+	/* 	fmax2, */
+	/* 	fmin2, */
+	/* 	fsum2, */
+	/* 	tensor->name); */
+      }
+      return;
     }
     GGML_ASSERT(tensor->src[0] == NULL || tensor->src[0]->backend == GGML_BACKEND_CPU);
     GGML_ASSERT(tensor->src[1] == NULL || tensor->src[1]->backend == GGML_BACKEND_CPU);
@@ -14016,6 +14296,82 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+    
+    // now report
+    // int64_t elem_dst = ggml_nelements(tensor);
+
+    // const size_t size = ggml_nbytes(tensor)/sizeof(float);
+    
+    // for (size_t i = 0; i <size; i++){       
+    // 	float f = *( ((float*)(tensor->data))+i);
+    // 	if (i ==0) {
+    // 	  ffirst2 = f;
+    // 	  fmin2 = f;
+    // 	  fmax2 = f;
+    // 	}
+    // 	fsum2 += f;
+    // 	if (f < fmin2){
+    // 	  fmin2 = f;
+    // 	}
+    // 	if (f >fmax2){
+    // 	  fmax2 = f;
+    // 	}
+    //   }
+    
+    if (tensor->src[1]) {
+      	ggml_tensor_checksum(tensor->src[0]);
+	ggml_tensor_checksum(tensor->src[1]);
+	ggml_tensor_checksum(tensor);
+
+    /* fprintf(stderr, "JSON:{\"bop\":\"%s\",\"src\":\"%s\",\"src2\":\"%s\",\"cnt1\":%ld,\"first1\":%f,\"max1\":%f,\"min1\":%f,\"sum1\":%f,\"cnt2\":%ld,\"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f,\"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f,\"cnt2\":%ld,\"dst\":\"%s\"}\n", */
+    /* 	    ggml_op_name_table[tensor->op], */
+    /* 	    tensor->src[0]->name, */
+    /* 	    tensor->src[1]->name, */
+    /* 	    elem_src, */
+    /* 	    ffirst0, */
+    /* 	    fmax0, */
+    /* 	    fmin0, */
+    /* 	    fsum0, */
+	    
+    /* 	    elem_src1, */
+    /* 	    ffirst1, */
+    /* 	    fmax1, */
+    /* 	    fmin1, */
+    /* 	    fsum1, */
+
+    /* 	    ffirst2, */
+    /* 	    fmax2, */
+    /* 	    fmin2, */
+    /* 	    fsum2, */
+
+    /* 	    elem_dst, */
+    /* 	    tensor->name); */
+
+
+    } else {
+      	ggml_tensor_checksum(tensor->src[0]);
+	ggml_tensor_checksum(tensor);
+
+      /* fprintf(stderr, "JSON: { \"uop\":%d, \"src\":\"%s\", \"cnt1\":%ld, \"first1\":%f,\"max1\":%f,\"min1\":%f,\"sum1\":%f, \"first2\":%f,\"max2\":%f,\"min2\":%f,\"sum2\":%f,\"cnt2\":%ld,\"dst\":\"%s\"}\n", */
+      /* 	      tensor->op, */
+      /* 	      tensor->src[0]->name, */
+      /* 	      // src */
+      /* 	      elem_src, */
+      /* 	      ffirst0, */
+      /* 	      fmax0, */
+      /* 	      fmin0, */
+      /* 	      fsum0, */
+
+      /* 	      // dest */
+      /* 	      ffirst2, */
+      /* 	      fmax2, */
+      /* 	      fmin2, */
+      /* 	      fsum2, */
+      /* 	      elem_dst, */
+      /* 	      tensor->name); */
+
+      }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -14098,7 +14454,7 @@ static struct ggml_hash_set ggml_hash_set_new(size_t size) {
     size = ggml_hash_size(size);
     struct ggml_hash_set result;
     result.size = size;
-    result.keys = malloc(sizeof(struct ggml_tensor *) * size);
+    result.keys = (ggml_tensor **)malloc(sizeof(struct ggml_tensor *) * size);
     memset(result.keys, 0, sizeof(struct ggml_tensor *) * size);
     return result;
 }
@@ -14113,9 +14469,9 @@ struct hash_map {
 };
 
 static struct hash_map * ggml_new_hash_map(size_t size) {
-    struct hash_map * result = malloc(sizeof(struct hash_map));
+  struct hash_map * result = (hash_map *)malloc(sizeof(struct hash_map));
     result->set = ggml_hash_set_new(size);
-    result->vals = malloc(sizeof(struct ggml_tensor *) * result->set.size);
+    result->vals = (ggml_tensor **)malloc(sizeof(struct ggml_tensor *) * result->set.size);
     memset(result->vals, 0, sizeof(struct ggml_tensor *) * result->set.size);
     return result;
 }
@@ -15235,20 +15591,20 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
         (grads ? (char *)(grads_ptr + size) : (char *)(hash_keys_ptr + hash_size)) - (char *)cgraph));
 
     memset(hash_keys_ptr, 0, hash_size * sizeof(struct ggml_tensor *));
-
-    *cgraph = (struct ggml_cgraph) {
-        /*.size         =*/ size,
-        /*.n_nodes      =*/ 0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ nodes_ptr,
-        /*.grads        =*/ grads_ptr,
-        /*.leafs        =*/ leafs_ptr,
-        /*.hash_table   =*/ { hash_size, hash_keys_ptr },
-        /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
-        /*.perf_runs    =*/ 0,
-        /*.perf_cycles  =*/ 0,
-        /*.perf_time_us =*/ 0,
-    };
+    // FIXME
+    // *cgraph = (struct ggml_cgraph) {
+    //     /*.size         =*/ size,
+    //     /*.n_nodes      =*/ 0,
+    //     /*.n_leafs      =*/ 0,
+    //     /*.nodes        =*/ nodes_ptr,
+    //     /*.grads        =*/ grads_ptr,
+    //     /*.leafs        =*/ leafs_ptr,
+    //     /*.hash_table   =*/ { hash_size, hash_keys_ptr },
+    //     /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
+    //     /*.perf_runs    =*/ 0,
+    //     /*.perf_cycles  =*/ 0,
+    //     /*.perf_time_us =*/ 0,
+    // };
 
     return cgraph;
 }
@@ -15262,19 +15618,19 @@ struct ggml_cgraph * ggml_graph_view(struct ggml_context * ctx, struct ggml_cgra
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_GRAPH, obj_size);
     struct ggml_cgraph * cgraph = (struct ggml_cgraph *) ((char *) ctx->mem_buffer + obj->offs);
 
-    *cgraph = (struct ggml_cgraph) {
-        /*.size         =*/ 0,
-        /*.n_nodes      =*/ i1 - i0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ cgraph0->nodes + i0,
-        /*.grads        =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
-        /*.leafs        =*/ NULL,
-        /*.hash_table   =*/ { 0, NULL },
-        /*.order        =*/ cgraph0->order,
-        /*.perf_runs    =*/ 0,
-        /*.perf_cycles  =*/ 0,
-        /*.perf_time_us =*/ 0,
-    };
+    // *cgraph = (struct ggml_cgraph) {
+    //     /*.size         =*/ 0,
+    //     /*.n_nodes      =*/ i1 - i0,
+    //     /*.n_leafs      =*/ 0,
+    //     /*.nodes        =*/ cgraph0->nodes + i0,
+    //     /*.grads        =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
+    //     /*.leafs        =*/ NULL,
+    //     /*.hash_table   =*/ { 0, NULL },
+    //     /*.order        =*/ cgraph0->order,
+    //     /*.perf_runs    =*/ 0,
+    //     /*.perf_cycles  =*/ 0,
+    //     /*.perf_time_us =*/ 0,
+    // };
 
     return cgraph;
 }
@@ -16039,11 +16395,12 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     // create thread pool
     if (n_threads > 1) {
         for (int j = 1; j < n_threads; ++j) {
-            workers[j] = (struct ggml_compute_state) {
-                .thrd   = 0,
-                .ith = j,
-                .shared = &state_shared,
-            };
+	  // FIXME
+            // workers[j] = (struct ggml_compute_state) {
+            //     .thrd   = 0,
+            //     .ith = j,
+            //     .shared = &state_shared,
+            // };
 
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
             GGML_ASSERT(rc == 0);
@@ -16363,11 +16720,12 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             const size_t overhead = 1*ggml_tensor_overhead();
 
-            struct ggml_init_params params = {
-                .mem_size   = fsize + overhead,
-                .mem_buffer = NULL,
-                .no_alloc   = false,
-            };
+	    // FIXME
+            struct ggml_init_params params;// = {
+            //     .mem_size   = fsize + overhead,
+            //     .mem_buffer = NULL,
+            //     .no_alloc   = false,
+            // };
 
             *ctx_data = ggml_init(params);
 
@@ -16419,11 +16777,12 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             const size_t overhead = (n_leafs + n_nodes)*ggml_tensor_overhead() + ggml_graph_overhead_custom(graph_size, false);
 
-            struct ggml_init_params params = {
-                .mem_size   = size_eval + overhead,
-                .mem_buffer = NULL,
-                .no_alloc   = true,
-            };
+	    // FIXME
+            struct ggml_init_params params;// = {
+            //     .mem_size   = size_eval + overhead,
+            //     .mem_buffer = NULL,
+            //     .no_alloc   = true,
+            // };
 
             *ctx_eval = ggml_init(params);
 
@@ -16631,7 +16990,7 @@ void ggml_graph_print(const struct ggml_cgraph * cgraph) {
             continue;
         }
 
-        GGML_PRINT("perf_total_per_op_us[%16s] = %7.3f ms\n", ggml_op_name(i), (double) perf_total_per_op_us[i] / 1000.0);
+        GGML_PRINT("perf_total_per_op_us[%16s] = %7.3f ms\n", ggml_op_name((ggml_op)i), (double) perf_total_per_op_us[i] / 1000.0);
     }
 
     GGML_PRINT("========================================\n");
@@ -16903,11 +17262,11 @@ static enum ggml_opt_result ggml_opt_adam(
     const int n_accum = MAX(1, params.n_gradient_accumulation);
     const float accum_norm = 1.0f / (float) n_accum;
 
-    float * g  = opt->adam.g->data;  // gradients
-    float * m  = opt->adam.m->data;  // first moment
-    float * v  = opt->adam.v->data;  // second moment
+    float * g  = (float*)opt->adam.g->data;  // gradients
+    float * m  = (float*)opt->adam.m->data;  // first moment
+    float * v  = (float*)opt->adam.v->data;  // second moment
 
-    float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
+    float * pf = params.past > 0 ? (float *)opt->adam.pf->data : NULL; // past function values
 
     struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads);
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
@@ -17175,7 +17534,7 @@ static enum ggml_opt_result linesearch_backtracking(
         } else {
             // Armijo condition is satisfied
             if (params->lbfgs.linesearch == GGML_LINESEARCH_BACKTRACKING_ARMIJO) {
-                return count;
+	      return (ggml_opt_result)count;
             }
 
             ggml_vec_dot_f32(nx, &dg, g, d);
@@ -17193,7 +17552,7 @@ static enum ggml_opt_result linesearch_backtracking(
                     width = dec;
                 } else {
                     // strong Wolfe condition (GGML_LINESEARCH_BACKTRACKING_STRONG_WOLFE)
-                    return count;
+		  return (ggml_opt_result)count;
                 }
             }
         }
@@ -17258,11 +17617,11 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_WORK_BUFFER, cplan.work_size);
     cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
 
-    float * x  = opt->lbfgs.x->data;  // current parameters
-    float * xp = opt->lbfgs.xp->data; // previous parameters
-    float * g  = opt->lbfgs.g->data;  // current gradient
-    float * gp = opt->lbfgs.gp->data; // previous gradient
-    float * d  = opt->lbfgs.d->data;  // search direction
+    float * x  = (float*)opt->lbfgs.x->data;  // current parameters
+    float * xp = (float*)opt->lbfgs.xp->data; // previous parameters
+    float * g  = (float*)opt->lbfgs.g->data;  // current gradient
+    float * gp = (float*)opt->lbfgs.gp->data; // previous gradient
+    float * d  = (float*)opt->lbfgs.d->data;  // search direction
 
     float * pf = params.past > 0 ? opt->lbfgs.pf->data : NULL; // past function values
 
@@ -17277,10 +17636,10 @@ static enum ggml_opt_result ggml_opt_lbfgs(
     ggml_opt_get_params(np, ps, x);
 
     // the L-BFGS memory
-    float * lm_alpha = opt->lbfgs.lmal->data;
-    float * lm_ys    = opt->lbfgs.lmys->data;
-    float * lm_s     = opt->lbfgs.lms->data;
-    float * lm_y     = opt->lbfgs.lmy->data;
+    float * lm_alpha = (float*)opt->lbfgs.lmal->data;
+    float * lm_ys    = (float*)opt->lbfgs.lmys->data;
+    float * lm_s     = (float*)opt->lbfgs.lms->data;
+    float * lm_y     = (float*)opt->lbfgs.lmy->data;
 
     bool cancel = false;
 
@@ -17377,7 +17736,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             ggml_vec_cpy_f32(nx, x, xp);
             ggml_vec_cpy_f32(nx, g, gp);
 
-            return ls;
+            return (ggml_opt_result)ls;
         }
 
         opt->loss_after = fx;
@@ -17488,66 +17847,70 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
     switch (type) {
         case GGML_OPT_ADAM:
             {
-                result = (struct ggml_opt_params) {
-                    .type       = GGML_OPT_ADAM,
-                    .graph_size = GGML_DEFAULT_GRAPH_SIZE,
-                    .n_threads  = 1, // FIXME: GGML_DEFAULT_N_THREADS ?
-                    .past       = 0,
-                    .delta      = 1e-5f,
+	      // FIXME
+                // result = (struct ggml_opt_params) {
+                //     .type       = GGML_OPT_ADAM,
+                //     .graph_size = GGML_DEFAULT_GRAPH_SIZE,
+                //     .n_threads  = 1, // FIXME: GGML_DEFAULT_N_THREADS ?
+                //     .past       = 0,
+                //     .delta      = 1e-5f,
 
-                    .max_no_improvement = 100,
+                //     .max_no_improvement = 100,
 
-                    .print_forward_graph  = true,
-                    .print_backward_graph = true,
+                //     .print_forward_graph  = true,
+                //     .print_backward_graph = true,
 
-                    .n_gradient_accumulation = 1,
+                //     .n_gradient_accumulation = 1,
 
-                    .adam = {
-                        .n_iter = 10000,
-                        .sched  = 1.000f,
-                        .decay  = 0.0f,
-                        .decay_min_ndim = 2,
-                        .alpha  = 0.001f,
-                        .beta1  = 0.9f,
-                        .beta2  = 0.999f,
-                        .eps    = 1e-8f,
-                        .eps_f  = 1e-5f,
-                        .eps_g  = 1e-3f,
-                        .gclip  = 0.0f,
-                    },
-                };
+                //     .adam = {
+                //         .n_iter = 10000,
+                //         .sched  = 1.000f,
+                //         .decay  = 0.0f,
+                //         .decay_min_ndim = 2,
+                //         .alpha  = 0.001f,
+                //         .beta1  = 0.9f,
+                //         .beta2  = 0.999f,
+                //         .eps    = 1e-8f,
+                //         .eps_f  = 1e-5f,
+                //         .eps_g  = 1e-3f,
+                //         .gclip  = 0.0f,
+                //     },
+                // };
             } break;
         case GGML_OPT_LBFGS:
-            {
-                result = (struct ggml_opt_params) {
-                    .type       = GGML_OPT_LBFGS,
-                    .graph_size = GGML_DEFAULT_GRAPH_SIZE,
-                    .n_threads  = 1,
-                    .past       = 0,
-                    .delta      = 1e-5f,
+	  break;
+	  //{
+	      // TODO FIXME
+                // result = (struct ggml_opt_params) {
+                //     .type       = GGML_OPT_LBFGS,
+                //     .graph_size = GGML_DEFAULT_GRAPH_SIZE,
+                //     .n_threads  = 1,
+                //     .past       = 0,
+                //     .delta      = 1e-5f,
+		
+                //     .max_no_improvement = 0,
 
-                    .max_no_improvement = 0,
+                //     .print_forward_graph  = true,
+                //     .print_backward_graph = true,
 
-                    .print_forward_graph  = true,
-                    .print_backward_graph = true,
+                //     .n_gradient_accumulation = 1,
 
-                    .n_gradient_accumulation = 1,
+                //     .lbfgs = {
+                //         .m              = 6,
+                //         .n_iter         = 100,
+                //         .max_linesearch = 20,
 
-                    .lbfgs = {
-                        .m              = 6,
-                        .n_iter         = 100,
-                        .max_linesearch = 20,
+                //         .eps      = 1e-5f,
+                //         .ftol     = 1e-4f,
+                //         .wolfe    = 0.9f,
+                //         .min_step = 1e-20f,
+                //         .max_step = 1e+20f,
 
-                        .eps      = 1e-5f,
-                        .ftol     = 1e-4f,
-                        .wolfe    = 0.9f,
-                        .min_step = 1e-20f,
-                        .max_step = 1e+20f,
-
-                        .linesearch = GGML_LINESEARCH_DEFAULT,
-                    },
-                };
-            } break;
+                //         .linesearch = GGML_LINESEARCH_DEFAULT,
+		
+                //     }
+	      //};
+            //} break;
     }
 
     return result;
@@ -17632,11 +17995,11 @@ enum ggml_opt_result ggml_opt(
         struct ggml_tensor * f) {
     bool free_ctx = false;
     if (ctx == NULL) {
-        struct ggml_init_params params_ctx = {
-            .mem_size   = 16*1024*1024,
-            .mem_buffer = NULL,
-            .no_alloc   = false,
-        };
+      struct ggml_init_params params_ctx;// = {
+          //   .mem_size   = 16*1024*1024,
+        //     .mem_buffer = NULL,
+        //     .no_alloc   = false,
+        // };
 
         ctx = ggml_init(params_ctx);
         if (ctx == NULL) {
@@ -17718,7 +18081,7 @@ size_t ggml_quantize_q4_0(const float * src, void * dst, int n, int k, int64_t *
     const int nb = k / QK4_0;
 
     for (int b = 0; b < n; b += k) {
-        block_q4_0 * restrict y = (block_q4_0 *) dst + b/QK4_0;
+        block_q4_0 * __restrict__ y = (block_q4_0 *) dst + b/QK4_0;
 
         quantize_row_q4_0_reference(src + b, y, k);
 
@@ -17741,7 +18104,7 @@ size_t ggml_quantize_q4_1(const float * src, void * dst, int n, int k, int64_t *
     const int nb = k / QK4_1;
 
     for (int b = 0; b < n; b += k) {
-        block_q4_1 * restrict y = (block_q4_1 *) dst + b/QK4_1;
+        block_q4_1 * __restrict__ y = (block_q4_1 *) dst + b/QK4_1;
 
         quantize_row_q4_1_reference(src + b, y, k);
 
@@ -17764,7 +18127,7 @@ size_t ggml_quantize_q5_0(const float * src, void * dst, int n, int k, int64_t *
     const int nb = k / QK5_0;
 
     for (int b = 0; b < n; b += k) {
-        block_q5_0 * restrict y = (block_q5_0 *)dst + b/QK5_0;
+        block_q5_0 * __restrict__ y = (block_q5_0 *)dst + b/QK5_0;
 
         quantize_row_q5_0_reference(src + b, y, k);
 
@@ -17794,7 +18157,7 @@ size_t ggml_quantize_q5_1(const float * src, void * dst, int n, int k, int64_t *
     const int nb = k / QK5_1;
 
     for (int b = 0; b < n; b += k) {
-        block_q5_1 * restrict y = (block_q5_1 *)dst + b/QK5_1;
+        block_q5_1 * __restrict__ y = (block_q5_1 *)dst + b/QK5_1;
 
         quantize_row_q5_1_reference(src + b, y, k);
 
@@ -17824,7 +18187,7 @@ size_t ggml_quantize_q8_0(const float * src, void * dst, int n, int k, int64_t *
     const int nb = k / QK8_0;
 
     for (int b = 0; b < n; b += k) {
-        block_q8_0 * restrict y = (block_q8_0 *)dst + b/QK8_0;
+        block_q8_0 * __restrict__ y = (block_q8_0 *)dst + b/QK8_0;
 
         quantize_row_q8_0_reference(src + b, y, k);
 
@@ -17929,36 +18292,36 @@ struct gguf_str {
 };
 
 static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
-    [GGUF_TYPE_UINT8]   = sizeof(uint8_t),
-    [GGUF_TYPE_INT8]    = sizeof(int8_t),
-    [GGUF_TYPE_UINT16]  = sizeof(uint16_t),
-    [GGUF_TYPE_INT16]   = sizeof(int16_t),
-    [GGUF_TYPE_UINT32]  = sizeof(uint32_t),
-    [GGUF_TYPE_INT32]   = sizeof(int32_t),
-    [GGUF_TYPE_FLOAT32] = sizeof(float),
-    [GGUF_TYPE_BOOL]    = sizeof(bool),
-    [GGUF_TYPE_STRING]  = sizeof(struct gguf_str),
-    [GGUF_TYPE_UINT64]  = sizeof(uint64_t),
-    [GGUF_TYPE_INT64]   = sizeof(int64_t),
-    [GGUF_TYPE_FLOAT64] = sizeof(double),
-    [GGUF_TYPE_ARRAY]   = 0, // undefined
+  // [GGUF_TYPE_UINT8]   = sizeof(uint8_t),
+  // [GGUF_TYPE_INT8]    = sizeof(int8_t),
+  // [GGUF_TYPE_UINT16]  = sizeof(uint16_t),
+  // [GGUF_TYPE_INT16]   = sizeof(int16_t),
+  // [GGUF_TYPE_UINT32]  = sizeof(uint32_t),
+  // [GGUF_TYPE_INT32]   = sizeof(int32_t),
+  // [GGUF_TYPE_FLOAT32] = sizeof(float),
+  // [GGUF_TYPE_BOOL]    = sizeof(bool),
+  // [GGUF_TYPE_STRING]  = sizeof(struct gguf_str),
+  // [GGUF_TYPE_UINT64]  = sizeof(uint64_t),
+  // [GGUF_TYPE_INT64]   = sizeof(int64_t),
+  // [GGUF_TYPE_FLOAT64] = sizeof(double),
+  // [GGUF_TYPE_ARRAY]   = 0, // undefined
 };
 static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
 static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
-    [GGUF_TYPE_UINT8]   = "u8",
-    [GGUF_TYPE_INT8]    = "i8",
-    [GGUF_TYPE_UINT16]  = "u16",
-    [GGUF_TYPE_INT16]   = "i16",
-    [GGUF_TYPE_UINT32]  = "u32",
-    [GGUF_TYPE_INT32]   = "i32",
-    [GGUF_TYPE_FLOAT32] = "f32",
-    [GGUF_TYPE_BOOL]    = "bool",
-    [GGUF_TYPE_STRING]  = "str",
-    [GGUF_TYPE_ARRAY]   = "arr",
-    [GGUF_TYPE_UINT64]  = "u64",
-    [GGUF_TYPE_INT64]   = "i64",
-    [GGUF_TYPE_FLOAT64] = "f64",
+    // [GGUF_TYPE_UINT8]   = "u8",
+    // [GGUF_TYPE_INT8]    = "i8",
+    // [GGUF_TYPE_UINT16]  = "u16",
+    // [GGUF_TYPE_INT16]   = "i16",
+    // [GGUF_TYPE_UINT32]  = "u32",
+    // [GGUF_TYPE_INT32]   = "i32",
+    // [GGUF_TYPE_FLOAT32] = "f32",
+    // [GGUF_TYPE_BOOL]    = "bool",
+    // [GGUF_TYPE_STRING]  = "str",
+    // [GGUF_TYPE_ARRAY]   = "arr",
+    // [GGUF_TYPE_UINT64]  = "u64",
+    // [GGUF_TYPE_INT64]   = "i64",
+    // [GGUF_TYPE_FLOAT64] = "f64",
 };
 static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
@@ -18040,14 +18403,14 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
 
     bool ok = true;
 
-    ok = ok && gguf_fread_el(file, &p->n,    sizeof(p->n), offset); p->data = calloc(p->n + 1, 1);
+    ok = ok && gguf_fread_el(file, &p->n,    sizeof(p->n), offset); p->data = (char*)calloc(p->n + 1, 1);
     ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
 
     return ok;
 }
 
 struct gguf_context * gguf_init_empty(void) {
-    struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
+  struct gguf_context * ctx = (gguf_context*)GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
     memcpy(ctx->header.magic, GGUF_MAGIC, sizeof(ctx->header.magic));
     ctx->header.version   = GGUF_VERSION;
@@ -18092,7 +18455,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     bool ok = true;
 
-    struct gguf_context * ctx = GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
+    struct gguf_context * ctx = (gguf_context*)GGML_ALIGNED_MALLOC(sizeof(struct gguf_context));
 
     // read the header
     {
@@ -18124,7 +18487,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the kv pairs
     {
-        ctx->kv = malloc(ctx->header.n_kv * sizeof(struct gguf_kv));
+      ctx->kv = (gguf_kv*)malloc(ctx->header.n_kv * sizeof(struct gguf_kv));
 
         for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
@@ -18199,7 +18562,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the tensor infos
     {
-        ctx->infos = malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+      ctx->infos = (gguf_tensor_info*)malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
 
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
@@ -18283,11 +18646,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             (ctx->header.n_tensors    )*ggml_tensor_overhead() :
             (ctx->header.n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
 
-        struct ggml_init_params pdata = {
-            .mem_size   = mem_size,
-            .mem_buffer = NULL,
-            .no_alloc   = params.no_alloc,
-        };
+	// FIXME
+        struct ggml_init_params pdata;
+	// = {
+        //     .mem_size   = mem_size,
+        //     .mem_buffer = NULL,
+        //     .no_alloc   = params.no_alloc,
+        // };
 
         *params.ctx = ggml_init(pdata);
 
@@ -18319,10 +18684,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         // create the tensors
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             const int64_t ne[GGML_MAX_DIMS] = {
-                ctx->infos[i].ne[0],
-                ctx->infos[i].ne[1],
-                ctx->infos[i].ne[2],
-                ctx->infos[i].ne[3],
+	      (int64_t)ctx->infos[i].ne[0],// FIXME narrowing
+	      (int64_t)ctx->infos[i].ne[1],
+	      (int64_t)ctx->infos[i].ne[2],
+	      (int64_t)ctx->infos[i].ne[3],
             };
 
             struct ggml_tensor * cur = ggml_new_tensor(ctx_data, ctx->infos[i].type, ctx->infos[i].n_dims, ne);
@@ -18603,7 +18968,7 @@ static int gguf_get_or_add_key(struct gguf_context * ctx, const char * key) {
 
     const int n_kv = gguf_get_n_kv(ctx);
 
-    ctx->kv = realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
+    ctx->kv = (gguf_kv*)realloc(ctx->kv, (n_kv + 1) * sizeof(struct gguf_kv));
     ctx->kv[n_kv].key.n    = strlen(key);
     ctx->kv[n_kv].key.data = strdup(key);
     ctx->header.n_kv++;
@@ -18739,7 +19104,7 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
             case GGUF_TYPE_ARRAY:
                 {
                     if (src->kv[i].value.arr.type == GGUF_TYPE_STRING) {
-                        const char ** data = malloc(src->kv[i].value.arr.n*sizeof(char *));
+		      const char ** data = (const char **)malloc(src->kv[i].value.arr.n*sizeof(char *));
                         for (uint32_t j = 0; j < src->kv[i].value.arr.n; j++) {
                             data[j] = ((struct gguf_str *)src->kv[i].value.arr.data)[j].data;
                         }
@@ -18760,7 +19125,7 @@ void gguf_add_tensor(
              struct gguf_context * ctx,
         const struct ggml_tensor * tensor) {
     const int idx = ctx->header.n_tensors;
-    ctx->infos = realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
+    ctx->infos = (gguf_tensor_info*)realloc(ctx->infos, (idx + 1)*sizeof(struct gguf_tensor_info));
 
     ctx->infos[idx].name.n    = strlen(tensor->name);
     ctx->infos[idx].name.data = strdup(tensor->name);

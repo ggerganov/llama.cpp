@@ -1494,6 +1494,7 @@ static bool llama_kv_cache_init(
                          ggml_type   wtype,
                           uint32_t   n_ctx,
                                int   n_gpu_layers) {
+  fprintf(stderr, "GPULAYERS '%d'\n", n_gpu_layers);
     const uint32_t n_embd  = hparams.n_embd_gqa();
     const uint32_t n_layer = hparams.n_layer;
 
@@ -1531,6 +1532,7 @@ static bool llama_kv_cache_init(
     (void) n_gpu_layers;
 
 #ifdef GGML_USE_CUBLAS
+    fprintf(stderr, "USE CUBLAS\n");
     if (ggml_cublas_loaded()) {
         size_t vram_kv_cache = 0;
 
@@ -1548,6 +1550,8 @@ static bool llama_kv_cache_init(
             LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MiB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
         }
     }
+   #else
+    fprintf(stderr, "NO USE CUBLAS\n");
 #endif
 
     return true;
@@ -2065,6 +2069,7 @@ struct llama_model_loader {
                     break;
 #ifdef GGML_USE_CUBLAS
                 case GGML_BACKEND_GPU:
+		  
                 case GGML_BACKEND_GPU_SPLIT:
                     // old code:
                     //ggml_cuda_transform_tensor(lt.data, lt.ggml_tensor);
@@ -2741,9 +2746,11 @@ static void llm_load_tensors(
                         model.output      = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights00 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights01 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -2774,6 +2781,7 @@ static void llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights03 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.wq)       + ggml_nbytes(layer.wk)       +
                                 ggml_nbytes(layer.wv)        + ggml_nbytes(layer.wo)       + ggml_nbytes(layer.ffn_norm) +
@@ -2807,9 +2815,11 @@ static void llm_load_tensors(
                         model.output      = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights04 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights05 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -2840,6 +2850,7 @@ static void llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights06 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.wq)       + ggml_nbytes(layer.wk)       +
                                 ggml_nbytes(layer.wv)        + ggml_nbytes(layer.wo)       + ggml_nbytes(layer.ffn_norm) +
@@ -2878,10 +2889,13 @@ static void llm_load_tensors(
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights07 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
+			  fprintf(stderr, "vram_weights08 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm_b);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights09 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -2906,7 +2920,9 @@ static void llm_load_tensors(
                             layer.attn_norm_2_b = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, backend);
 
                             if (backend == GGML_BACKEND_GPU) {
+			      fprintf(stderr, "vram_weights10 '%ld'\n", vram_weights);
                                 vram_weights += ggml_nbytes(layer.attn_norm_2);
+			      fprintf(stderr, "vram_weights11 '%ld'\n", vram_weights);
                                 vram_weights += ggml_nbytes(layer.attn_norm_2_b);
                             }
                         }
@@ -2918,6 +2934,7 @@ static void llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights12 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
                                 ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.wo)          +
@@ -2955,10 +2972,12 @@ static void llm_load_tensors(
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights13 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
                             vram_weights += ggml_nbytes(model.output_norm_b);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights14 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -2994,6 +3013,7 @@ static void llm_load_tensors(
                         layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),           {n_ff}, backend);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights15 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
                                 ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.bqkv)        +
@@ -3039,10 +3059,13 @@ static void llm_load_tensors(
                         model.output         = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights16 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
+			  fprintf(stderr, "vram_weights17 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm_b);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights18 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -3105,10 +3128,13 @@ static void llm_load_tensors(
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights19 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
+			  fprintf(stderr, "vram_weights20 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm_b);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights21 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -3144,6 +3170,7 @@ static void llm_load_tensors(
                         layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff},           backend);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights22 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
                                 ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.bqkv)        +
@@ -3182,9 +3209,11 @@ static void llm_load_tensors(
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
 
                         if (backend_norm == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights23 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output_norm);
                         }
                         if (backend_output == GGML_BACKEND_GPU_SPLIT) {
+			  fprintf(stderr, "vram_weights24 '%ld'\n", vram_weights);
                             vram_weights += ggml_nbytes(model.output);
                         }
                     }
@@ -3211,6 +3240,7 @@ static void llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
+			  fprintf(stderr, "vram_weights25 '%ld'\n", vram_weights);
                             vram_weights +=
                                 ggml_nbytes(layer.attn_norm) +
                                 ggml_nbytes(layer.wqkv)      +
@@ -5588,8 +5618,8 @@ static int llama_decode_internal(
 
     // plot the computation graph in dot format (for debugging purposes)
     //if (n_past%100 == 0) {
-    //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
-    //}
+    //ggml_graph_dump_dot(gf, NULL, "llama.dot");
+	//}
 
     // extract logits
     // TODO: do not compute and extract logits if only embeddings are needed

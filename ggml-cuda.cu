@@ -7623,12 +7623,12 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 #endif
 
     // debug helpers
-    //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
-    //printf("      %8d %8d %8d %8d\n", src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3]);
-    //printf("src1: %8d %8d %8d %8d\n", src1->ne[0], src1->ne[1], src1->ne[2], src1->ne[3]);
-    //printf("      %8d %8d %8d %8d\n", src1->nb[0], src1->nb[1], src1->nb[2], src1->nb[3]);
-    //printf("src0 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name);
-    //printf("src1 is contiguous %d, transposed %d, type = %s, name = %s\n", ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name);
+           // printf("JSON: { \"data\":{ \"src0\": { \"%s\" :{ \"ne\" : [ %8d, %8d, %8d, %8d ],	   \"nb\" : [ %8d, %8d, %8d, %8d ], \"contiguous\":\"%d\", \"transposed\":\"%d\", \"type\": \"%s\", \"name\" : \"%s\"}}, \"src1\": { \"%s\" :{ \"ne\" : [ %8d, %8d, %8d, %8d ],	   \"nb\" : [ %8d, %8d, %8d, %8d ], \"contiguous\":\"%d\", \"transposed\":\"%d\", \"type\": \"%s\", \"name\" : \"%s\"}}, \"dst\" : { \"%s\" :{ \"ne\" : [ %8d, %8d, %8d, %8d ],	   \"nb\" : [ %8d, %8d, %8d, %8d ], \"contiguous\":\"%d\", \"transposed\":\"%d\", \"type\": \"%s\", \"name\" : \"%s\"}}}}\n",
+	   // src0->name, src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3], src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3],
+	   // ggml_is_contiguous(src0), ggml_is_transposed(src0), ggml_type_name(src0->type), src0->name,
+	   // src1->name, src1->ne[0], src1->ne[1], src1->ne[2], src1->ne[3], src1->nb[0], src1->nb[1], src1->nb[2], src1->nb[3], ggml_is_contiguous(src1), ggml_is_transposed(src1), ggml_type_name(src1->type), src1->name,
+	   // dst->name, dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], dst->nb[0], dst->nb[1], dst->nb[2], dst->nb[3], ggml_is_contiguous(dst), ggml_is_transposed(dst), ggml_type_name(dst->type), dst->name
+	   // );
 
     if (!split && all_on_device && !use_tensor_cores && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
         // KQ single-batch
@@ -8056,9 +8056,9 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
 
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
-#ifndef NDEBUG
+
             fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = %d, src1->ne[3] = %d - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
-#endif
+
             return false;
         }
     }

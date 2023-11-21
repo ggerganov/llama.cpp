@@ -571,6 +571,12 @@ extern "C" {
         size_t offs;
         size_t size;
         void * data;
+
+      ggml_scratch()
+      : offs(0),
+	  size(0),
+	  data(0)
+      {}
     };
 
     struct ggml_init_params {

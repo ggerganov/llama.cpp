@@ -1,0 +1,1039 @@
+This readme is showing how to use mistral using llama.cpp and cuda profiling nsys to collect data.
+
+#+begin_src sh :results verbatim :exports both
+  /home/mdupont/2023/11/07/nvidia-cuda-toolkit-11.5.1/amd64/cuda_cuobjdump/bin/cuobjdump --dump-ptx  ./build/bin/main  > ./build/bin/main.ptx
+#end_example
+  
+  Now to run llama.cpp with model downloaded from ollama we can do it like this
+
+#+begin_src sh :results verbatim :exports both
+      sudo /opt/nvidia/nsight-systems/2023.2.3/bin/nsys profile --show-output=true --trace=cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,mpi,oshmem,ucx,osrt,cudnn,opengl,opengl-annotations,openacc,openmp,nvvideo --sample=process-tree  --cudabacktrace=all   ./build/bin/main -m ~/.ollama/models/blobs/sha256:6ae28029995007a3ee8d0b8556d50f3b59b831074cf19c84de87acf51fb54054  -f prompt.org
+#+end_src
+
+#+RESULTS:
+#+begin_example
+This readme is showing how to use mistral using llama.cpp and cuda profiling nsys to collect data.
+
+,#+begin_src sh :results verbatim :exports both
+  /home/mdupont/2023/11/07/nvidia-cuda-toolkit-11.5.1/amd64/cuda_cuobjdump/bin/cuobjdump --dump-ptx  ./build/bin/main > ./build/bin/main.ptx
+#end_example
+  
+  Now to run llama.cpp with model downloaded from ollama we can do it like this
+
+,#+begin_src sh :results verbatim :exports both
+      sudo /opt/nvidia/nsight-systems/2023.2.3/bin/nsys profile --show-output=true --trace=cuda,nvtx,cublas,cublas-verbose,cusparse,cusparse-verbose,mpi,oshmem,ucx,osrt,cudnn,opengl,opengl-annotations,openacc,openmp,nvvideo --sample=process-tree  --cudabacktrace=all   ./build/bin/main -m ~/.ollama/models/blobs/sha256:6ae28029995007a3ee8d0b8556d50f3b59b831074cf19c84de87acf51fb54054    -f README.org
+,#+end_src
+
+  Here we can see the data collected by nsys:
+
+  ,#+begin_example data
+  ===nsys===
+  ====/path/to/bin/main===
+
+  ===Profile Summary=====
+    Total Samples = 30956
+    Sample Rate = 16.102757 Hz
+
+    CPU Samples:
+      Instructions Executed = 6469108233
+      Flops Executed = 6145482438.736761
+      Floats Executed = 20133734308.689648
+      Memory Accesses = 309559
+      Register Accesses = 102771
+      Branch Taken = 149
+      Branch Missed = 378
+      Static Branchs Executed = 17
+      Dynamic Branchs Executed = 5
+    GPU Samples:
+      Instructions Executed = 163111268848
+      Flops Executed = 15056925654.22184
+      Floats Executed = 20133734308.689648
+      Memory Accesses = 172190
+      Register Accesses = 43252
+      Branch Taken = 29
+      Branch Missed = 393
+      Static Branchs Executed = 2
+      Dynamic Branchs Executed = 6
+    ===Profile Details===== 
+  ====/path/to/bin/main===
+  ====Total Samples=====
+    Instructions Executed = 179422513688
+    Flops Executed = 30190359948.90951
+    Floats Executed = 20133734308.689648
+    Memory Accesses = 481749
+    Register Accesses = 146023
+    Branch Taken = 162
+    Branch Missed = 415
+    Static Branchs Executed = 17
+    Dynamic Branchs Executed = 5
+    ====Instruction Details=====
+    <Insert detailed instruction breakdown here>
+    ====Memory Access Details=====
+    <Insert detailed memory access breakdown here>
+    ====Register Access Details=====
+    <Insert detailed register access breakdown here>
+    ====Branching Details=====
+    <Insert detailed branching breakdown here>
+  ====/path/to/bin/main===
+  ====Function Calls=====
+    Function Name | Samples | Flops Executed
+    <Insert function name, sample count, and flop execution count here>
+  ====Function Returns=====
+    Function Name | Samples | Flops Executed
+    <Insert function name, sample count, and flop execution count here>
+  ====Code Coverage=====
+    <Insert code coverage breakdown here>
+  ====Heap Usage=====
+    <Insert heap usage breakdown here>
+  ====Stack Usage=====
+    <Insert stack usage breakdown here>
+#include <iostream>
+#include <vector>
+#include "gtest/gtest.h"
+using namespace testing;
+class TestMyCode : public Test {
+protected:
+  // Set up any needed data or environment variables before each test case.
+};
+TEST_F(TestMyCode, TestCase1) {
+  // Test code for TestCase1 goes here.
+}
+TEST_F(TestMyCode, TestCase2) {
+  // Test code for TestCase2 goes here.
+}
+int main() {
+  InitGoogleTest();
+  RunAllTests(new MySuite());
+  CleanUpGoogleTest();
+  return EXIT_SUCCESS;
+}Generating '/tmp/nsys-report-d862.qdstrm'
+[1/1] [0%                          ] report7.nsys-rep[1/1] [0%                          ] report7.nsys-rep[1/1] [===========50%              ] report7.nsys-rep[1/1] [========================100%] report7.nsys-rep[1/1] [0%                          ] report7.nsys-rep[1/1] [5%                          ] report7.nsys-rep[1/1] [7%                          ] report7.nsys-rep[1/1] [9%                          ] report7.nsys-rep[1/1] [10%                         ] report7.nsys-rep[1/1] [12%                         ] report7.nsys-rep[1/1] [14%                         ] report7.nsys-rep[1/1] [=15%                        ] report7.nsys-rep[1/1] [=17%                        ] report7.nsys-rep[1/1] [==19%                       ] report7.nsys-rep[1/1] [==21%                       ] report7.nsys-rep[1/1] [===22%                      ] report7.nsys-rep[1/1] [===24%                      ] report7.nsys-rep[1/1] [====26%                     ] report7.nsys-rep[1/1] [====27%                     ] report7.nsys-rep[1/1] [=====29%                    ] report7.nsys-rep[1/1] [=====31%                    ] report7.nsys-rep[1/1] [=====32%                    ] report7.nsys-rep[1/1] [======34%                   ] report7.nsys-rep[1/1] [=======36%                  ] report7.nsys-rep[1/1] [=======37%                  ] report7.nsys-rep[1/1] [=======39%                  ] report7.nsys-rep[1/1] [========41%                 ] report7.nsys-rep[1/1] [========42%                 ] report7.nsys-rep[1/1] [=========44%                ] report7.nsys-rep[1/1] [=========45%                ] report7.nsys-rep[1/1] [==========47%               ] report7.nsys-rep[1/1] [==========48%               ] report7.nsys-rep[1/1] [==========49%               ] report7.nsys-rep[1/1] [===========50%              ] report7.nsys-rep[1/1] [===========51%              ] report7.nsys-rep[1/1] [===========52%              ] report7.nsys-rep[1/1] [===========53%              ] report7.nsys-rep[1/1] [============54%             ] report7.nsys-rep[1/1] [============55%             ] report7.nsys-rep[1/1] [============56%             ] report7.nsys-rep[1/1] [============57%             ] report7.nsys-rep[1/1] [=============58%            ] report7.nsys-rep[1/1] [=============59%            ] report7.nsys-rep[1/1] [=============60%            ] report7.nsys-rep[1/1] [==============61%           ] report7.nsys-rep[1/1] [==============62%           ] report7.nsys-rep[1/1] [==============63%           ] report7.nsys-rep[1/1] [==============64%           ] report7.nsys-rep[1/1] [===============65%          ] report7.nsys-rep[1/1] [===============66%          ] report7.nsys-rep[1/1] [===============67%          ] report7.nsys-rep[1/1] [================68%         ] report7.nsys-rep[1/1] [================69%         ] report7.nsys-rep[1/1] [================70%         ] report7.nsys-rep[1/1] [================71%         ] report7.nsys-rep[1/1] [=================72%        ] report7.nsys-rep[1/1] [=================73%        ] report7.nsys-rep[1/1] [=================74%        ] report7.nsys-rep[1/1] [==================75%       ] report7.nsys-rep[1/1] [==================76%       ] report7.nsys-rep[1/1] [==================77%       ] report7.nsys-rep[1/1] [==================78%       ] report7.nsys-rep[1/1] [===================79%      ] report7.nsys-rep[1/1] [===================80%      ] report7.nsys-rep[1/1] [===================81%      ] report7.nsys-rep[1/1] [===================82%      ] report7.nsys-rep[1/1] [====================83%     ] report7.nsys-rep[1/1] [====================84%     ] report7.nsys-rep[1/1] [====================85%     ] report7.nsys-rep[1/1] [=====================86%    ] report7.nsys-rep[1/1] [=====================87%    ] report7.nsys-rep[1/1] [=====================88%    ] report7.nsys-rep[1/1] [=====================89%    ] report7.nsys-rep[1/1] [======================90%   ] report7.nsys-rep[1/1] [======================91%   ] report7.nsys-rep[1/1] [======================92%   ] report7.nsys-rep[1/1] [=======================93%  ] report7.nsys-rep[1/1] [=======================94%  ] report7.nsys-rep[1/1] [=======================95%  ] report7.nsys-rep[1/1] [=======================96%  ] report7.nsys-rep[1/1] [========================97% ] report7.nsys-rep[1/1] [========================98% ] report7.nsys-rep[1/1] [========================99% ] report7.nsys-rep[1/1] [========================100%] report7.nsys-rep[1/1] [========================100%] report7.nsys-rep
+Generated:
+    /mnt/data1/2023/11/09/llama.cpp/report7.nsys-rep
+#+end_example
+Log start
+main: build = 1503 (5519834)
+main: built with cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0 for x86_64-linux-gnu
+main: seed  = 1699536977
+ggml_init_cublas: GGML_CUDA_FORCE_MMQ:   no
+ggml_init_cublas: CUDA_USE_TENSOR_CORES: yes
+ggml_init_cublas: found 1 CUDA devices:
+  Device 0: NVIDIA GeForce RTX 3080 Ti, compute capability 8.6
+llama_model_loader: loaded meta data with 20 key-value pairs and 291 tensors from /home/mdupont/.ollama/models/blobs/sha256:6ae28029995007a3ee8d0b8556d50f3b59b831074cf19c84de87acf51fb54054 (version GGUF V2)
+llama_model_loader: - tensor    0:                token_embd.weight q4_0     [  4096, 32000,     1,     1 ]
+llama_model_loader: - tensor    1:              blk.0.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor    2:              blk.0.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor    3:              blk.0.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor    4:         blk.0.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor    5:            blk.0.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor    6:              blk.0.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor    7:            blk.0.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor    8:           blk.0.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor    9:            blk.0.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   10:              blk.1.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   11:              blk.1.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   12:              blk.1.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   13:         blk.1.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   14:            blk.1.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   15:              blk.1.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   16:            blk.1.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   17:           blk.1.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   18:            blk.1.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   19:              blk.2.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   20:              blk.2.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   21:              blk.2.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   22:         blk.2.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   23:            blk.2.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   24:              blk.2.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   25:            blk.2.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   26:           blk.2.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   27:            blk.2.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   28:              blk.3.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   29:              blk.3.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   30:              blk.3.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   31:         blk.3.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   32:            blk.3.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   33:              blk.3.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   34:            blk.3.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   35:           blk.3.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   36:            blk.3.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   37:              blk.4.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   38:              blk.4.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   39:              blk.4.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   40:         blk.4.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   41:            blk.4.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   42:              blk.4.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   43:            blk.4.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   44:           blk.4.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   45:            blk.4.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   46:              blk.5.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   47:              blk.5.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   48:              blk.5.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   49:         blk.5.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   50:            blk.5.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   51:              blk.5.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   52:            blk.5.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   53:           blk.5.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   54:            blk.5.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   55:              blk.6.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   56:              blk.6.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   57:              blk.6.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   58:         blk.6.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   59:            blk.6.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   60:              blk.6.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   61:            blk.6.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   62:           blk.6.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   63:            blk.6.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   64:              blk.7.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   65:              blk.7.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   66:              blk.7.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   67:         blk.7.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   68:            blk.7.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   69:              blk.7.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   70:            blk.7.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   71:           blk.7.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   72:            blk.7.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   73:              blk.8.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   74:              blk.8.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   75:              blk.8.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   76:         blk.8.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   77:            blk.8.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   78:              blk.8.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   79:            blk.8.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   80:           blk.8.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   81:            blk.8.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   82:              blk.9.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   83:              blk.9.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   84:              blk.9.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   85:         blk.9.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   86:            blk.9.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   87:              blk.9.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   88:            blk.9.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   89:           blk.9.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   90:            blk.9.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   91:             blk.10.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   92:             blk.10.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   93:             blk.10.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor   94:        blk.10.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor   95:           blk.10.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   96:             blk.10.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor   97:           blk.10.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor   98:          blk.10.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor   99:           blk.10.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  100:             blk.11.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  101:             blk.11.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  102:             blk.11.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  103:        blk.11.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  104:           blk.11.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  105:             blk.11.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  106:           blk.11.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  107:          blk.11.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  108:           blk.11.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  109:             blk.12.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  110:             blk.12.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  111:             blk.12.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  112:        blk.12.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  113:           blk.12.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  114:             blk.12.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  115:           blk.12.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  116:          blk.12.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  117:           blk.12.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  118:             blk.13.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  119:             blk.13.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  120:             blk.13.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  121:        blk.13.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  122:           blk.13.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  123:             blk.13.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  124:           blk.13.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  125:          blk.13.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  126:           blk.13.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  127:             blk.14.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  128:             blk.14.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  129:             blk.14.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  130:        blk.14.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  131:           blk.14.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  132:             blk.14.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  133:           blk.14.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  134:          blk.14.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  135:           blk.14.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  136:             blk.15.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  137:             blk.15.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  138:             blk.15.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  139:        blk.15.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  140:           blk.15.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  141:             blk.15.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  142:           blk.15.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  143:          blk.15.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  144:           blk.15.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  145:             blk.16.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  146:             blk.16.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  147:             blk.16.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  148:        blk.16.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  149:           blk.16.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  150:             blk.16.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  151:           blk.16.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  152:          blk.16.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  153:           blk.16.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  154:             blk.17.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  155:             blk.17.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  156:             blk.17.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  157:        blk.17.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  158:           blk.17.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  159:             blk.17.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  160:           blk.17.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  161:          blk.17.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  162:           blk.17.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  163:             blk.18.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  164:             blk.18.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  165:             blk.18.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  166:        blk.18.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  167:           blk.18.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  168:             blk.18.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  169:           blk.18.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  170:          blk.18.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  171:           blk.18.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  172:             blk.19.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  173:             blk.19.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  174:             blk.19.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  175:        blk.19.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  176:           blk.19.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  177:             blk.19.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  178:           blk.19.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  179:          blk.19.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  180:           blk.19.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  181:             blk.20.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  182:             blk.20.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  183:             blk.20.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  184:        blk.20.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  185:           blk.20.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  186:             blk.20.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  187:           blk.20.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  188:          blk.20.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  189:           blk.20.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  190:             blk.21.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  191:             blk.21.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  192:             blk.21.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  193:        blk.21.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  194:           blk.21.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  195:             blk.21.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  196:           blk.21.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  197:          blk.21.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  198:           blk.21.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  199:             blk.22.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  200:             blk.22.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  201:             blk.22.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  202:        blk.22.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  203:           blk.22.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  204:             blk.22.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  205:           blk.22.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  206:          blk.22.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  207:           blk.22.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  208:             blk.23.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  209:             blk.23.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  210:             blk.23.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  211:        blk.23.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  212:           blk.23.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  213:             blk.23.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  214:           blk.23.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  215:          blk.23.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  216:           blk.23.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  217:             blk.24.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  218:             blk.24.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  219:             blk.24.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  220:        blk.24.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  221:           blk.24.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  222:             blk.24.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  223:           blk.24.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  224:          blk.24.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  225:           blk.24.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  226:             blk.25.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  227:             blk.25.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  228:             blk.25.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  229:        blk.25.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  230:           blk.25.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  231:             blk.25.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  232:           blk.25.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  233:          blk.25.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  234:           blk.25.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  235:             blk.26.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  236:             blk.26.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  237:             blk.26.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  238:        blk.26.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  239:           blk.26.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  240:             blk.26.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  241:           blk.26.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  242:          blk.26.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  243:           blk.26.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  244:             blk.27.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  245:             blk.27.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  246:             blk.27.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  247:        blk.27.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  248:           blk.27.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  249:             blk.27.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  250:           blk.27.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  251:          blk.27.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  252:           blk.27.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  253:             blk.28.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  254:             blk.28.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  255:             blk.28.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  256:        blk.28.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  257:           blk.28.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  258:             blk.28.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  259:           blk.28.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  260:          blk.28.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  261:           blk.28.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  262:             blk.29.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  263:             blk.29.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  264:             blk.29.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  265:        blk.29.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  266:           blk.29.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  267:             blk.29.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  268:           blk.29.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  269:          blk.29.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  270:           blk.29.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  271:             blk.30.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  272:             blk.30.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  273:             blk.30.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  274:        blk.30.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  275:           blk.30.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  276:             blk.30.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  277:           blk.30.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  278:          blk.30.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  279:           blk.30.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  280:             blk.31.attn_q.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  281:             blk.31.attn_k.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  282:             blk.31.attn_v.weight q4_0     [  4096,  1024,     1,     1 ]
+llama_model_loader: - tensor  283:        blk.31.attn_output.weight q4_0     [  4096,  4096,     1,     1 ]
+llama_model_loader: - tensor  284:           blk.31.ffn_gate.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  285:             blk.31.ffn_up.weight q4_0     [  4096, 14336,     1,     1 ]
+llama_model_loader: - tensor  286:           blk.31.ffn_down.weight q4_0     [ 14336,  4096,     1,     1 ]
+llama_model_loader: - tensor  287:          blk.31.attn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  288:           blk.31.ffn_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  289:               output_norm.weight f32      [  4096,     1,     1,     1 ]
+llama_model_loader: - tensor  290:                    output.weight q6_K     [  4096, 32000,     1,     1 ]
+llama_model_loader: - kv   0:                       general.architecture str     
+llama_model_loader: - kv   1:                               general.name str     
+llama_model_loader: - kv   2:                       llama.context_length u32     
+llama_model_loader: - kv   3:                     llama.embedding_length u32     
+llama_model_loader: - kv   4:                          llama.block_count u32     
+llama_model_loader: - kv   5:                  llama.feed_forward_length u32     
+llama_model_loader: - kv   6:                 llama.rope.dimension_count u32     
+llama_model_loader: - kv   7:                 llama.attention.head_count u32     
+llama_model_loader: - kv   8:              llama.attention.head_count_kv u32     
+llama_model_loader: - kv   9:     llama.attention.layer_norm_rms_epsilon f32     
+llama_model_loader: - kv  10:                       llama.rope.freq_base f32     
+llama_model_loader: - kv  11:                          general.file_type u32     
+llama_model_loader: - kv  12:                       tokenizer.ggml.model str     
+llama_model_loader: - kv  13:                      tokenizer.ggml.tokens arr     
+llama_model_loader: - kv  14:                      tokenizer.ggml.scores arr     
+llama_model_loader: - kv  15:                  tokenizer.ggml.token_type arr     
+llama_model_loader: - kv  16:                tokenizer.ggml.bos_token_id u32     
+llama_model_loader: - kv  17:                tokenizer.ggml.eos_token_id u32     
+llama_model_loader: - kv  18:            tokenizer.ggml.unknown_token_id u32     
+llama_model_loader: - kv  19:               general.quantization_version u32     
+llama_model_loader: - type  f32:   65 tensors
+llama_model_loader: - type q4_0:  225 tensors
+llama_model_loader: - type q6_K:    1 tensors
+llm_load_vocab: special tokens definition check successful ( 259/32000 ).
+llm_load_print_meta: format           = GGUF V2
+llm_load_print_meta: arch             = llama
+llm_load_print_meta: vocab type       = SPM
+llm_load_print_meta: n_vocab          = 32000
+llm_load_print_meta: n_merges         = 0
+llm_load_print_meta: n_ctx_train      = 32768
+llm_load_print_meta: n_embd           = 4096
+llm_load_print_meta: n_head           = 32
+llm_load_print_meta: n_head_kv        = 8
+llm_load_print_meta: n_layer          = 32
+llm_load_print_meta: n_rot            = 128
+llm_load_print_meta: n_gqa            = 4
+llm_load_print_meta: f_norm_eps       = 0.0e+00
+llm_load_print_meta: f_norm_rms_eps   = 1.0e-05
+llm_load_print_meta: f_clamp_kqv      = 0.0e+00
+llm_load_print_meta: f_max_alibi_bias = 0.0e+00
+llm_load_print_meta: n_ff             = 14336
+llm_load_print_meta: rope scaling     = linear
+llm_load_print_meta: freq_base_train  = 10000.0
+llm_load_print_meta: freq_scale_train = 1
+llm_load_print_meta: n_yarn_orig_ctx  = 32768
+llm_load_print_meta: rope_finetuned   = unknown
+llm_load_print_meta: model type       = 7B
+llm_load_print_meta: model ftype      = mostly Q4_0
+llm_load_print_meta: model params     = 7.24 B
+llm_load_print_meta: model size       = 3.83 GiB (4.54 BPW) 
+llm_load_print_meta: general.name   = mistralai
+llm_load_print_meta: BOS token = 1 '<s>'
+llm_load_print_meta: EOS token = 2 '</s>'
+llm_load_print_meta: UNK token = 0 '<unk>'
+llm_load_print_meta: LF token  = 13 '<0x0A>'
+llm_load_tensors: ggml ctx size =    0.11 MB
+llm_load_tensors: using CUDA for GPU acceleration
+llm_load_tensors: mem required  = 3917.97 MB
+llm_load_tensors: offloading 0 repeating layers to GPU
+llm_load_tensors: offloaded 0/35 layers to GPU
+llm_load_tensors: VRAM used: 0.00 MB
+..................................................................................................
+llama_new_context_with_model: n_ctx      = 512
+llama_new_context_with_model: freq_base  = 10000.0
+llama_new_context_with_model: freq_scale = 1
+llama_new_context_with_model: kv self size  =   64.00 MB
+llama_build_graph: non-view tensors processed: 740/740
+llama_new_context_with_model: compute buffer total size = 79.63 MB
+llama_new_context_with_model: VRAM scratch buffer: 73.00 MB
+llama_new_context_with_model: total VRAM used: 73.00 MB (model: 0.00 MB, context: 73.00 MB)
+
+system_info: n_threads = 12 / 24 | AVX = 1 | AVX2 = 1 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | FMA = 1 | NEON = 0 | ARM_FMA = 0 | F16C = 1 | FP16_VA = 0 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 1 | SSSE3 = 1 | VSX = 0 | 
+sampling: 
+	repeat_last_n = 64, repeat_penalty = 1.100, frequency_penalty = 0.000, presence_penalty = 0.000
+	top_k = 40, tfs_z = 1.000, top_p = 0.950, min_p = 0.050, typical_p = 1.000, temp = 0.800
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000
+generate: n_ctx = 512, n_batch = 512, n_predict = -1, n_keep = 0
+
+
+ [end of text]
+
+llama_print_timings:        load time =     245.80 ms
+llama_print_timings:      sample time =       6.71 ms /    52 runs   (    0.13 ms per token,  7748.47 tokens per second)
+llama_print_timings: prompt eval time =       0.00 ms /     1 tokens (    0.00 ms per token,      inf tokens per second)
+llama_print_timings:        eval time =    5098.77 ms /    52 runs   (   98.05 ms per token,    10.20 tokens per second)
+llama_print_timings:       total time =    5161.43 ms
+Log end
+[ Babel evaluation exited with code 0 ]
+
+
+#+begin_src sh  :results verbatim :exports both
+    /opt/nvidia/nsight-systems/2023.2.3/bin/nsys stats report7.nsys-rep 
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Generating SQLite file report7.sqlite from report7.nsys-rep
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/nvtx_sum.py]... 
+
+ ,** NVTX Range Summary (nvtx_sum):
+
+ Time (%)  Total Time (ns)  Instances   Avg (ns)     Med (ns)    Min (ns)    Max (ns)   StdDev (ns)   Style             Range          
+ --------  ---------------  ---------  -----------  -----------  ---------  ----------  -----------  -------  -------------------------
+     71.3       91,261,248      2,048     44,561.2     34,700.0     33,179  17,628,931    388,774.9  PushPop  cuBLAS:cublasSgemm_v2    
+     21.8       27,939,877        225    124,177.2     53,143.0     27,935  15,965,566  1,060,852.9  PushPop  cuBLAS:cublasGemmEx      
+      6.3        8,036,669          1  8,036,669.0  8,036,669.0  8,036,669   8,036,669          0.0  PushPop  cuBLAS:cublasCreate_v2   
+      0.6          742,488      2,273        326.7        221.0        150      18,693        509.1  PushPop  cuBLAS:cublasSetStream_v2
+      0.0            7,419          2      3,709.5      3,709.5        142       7,277      5,045.2  PushPop  cuBLAS:cublasGetProperty 
+      0.0              207          1        207.0        207.0        207         207          0.0  PushPop  cuBLAS:cublasSetMathMode 
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/osrt_sum.py]... 
+
+ ,** OS Runtime Summary (osrt_sum):
+
+ Time (%)  Total Time (ns)  Num Calls      Avg (ns)          Med (ns)         Min (ns)        Max (ns)     StdDev (ns)            Name         
+ --------  ---------------  ---------  ----------------  ----------------  --------------  --------------  ------------  ----------------------
+     49.8   98,748,705,227        995      99,244,929.9     100,207,029.0           3,076     145,062,709   9,535,006.2  poll                  
+     38.9   77,113,391,701          1  77,113,391,701.0  77,113,391,701.0  77,113,391,701  77,113,391,701           0.0  pthread_cond_wait     
+     10.8   21,505,984,622         43     500,139,177.3     500,139,962.0     500,071,147     500,199,879      31,487.9  pthread_cond_timedwait
+      0.2      408,111,147      5,966          68,406.2           1,002.5              19      66,331,209   1,803,864.3  fflush                
+      0.2      371,330,137        585         634,752.4           4,055.0             202     106,687,209   7,290,173.5  ioctl                 
+      0.1      100,181,277         29       3,454,526.8           6,438.0           1,135      93,195,838  17,278,903.4  mmap                  
+      0.0       58,243,121         12       4,853,593.4           8,691.5           2,231      58,158,033  16,786,545.6  munmap                
+      0.0        2,653,253          4         663,313.3         354,810.5             157       1,943,475     915,833.7  fwrite                
+      0.0        2,281,929     66,070              34.5              22.0              21         648,878       2,531.0  fread                 
+      0.0          831,597         27          30,799.9           6,749.0           3,478         474,236      89,505.1  mmap64                
+      0.0          599,699          9          66,633.2          38,958.0           4,556         206,867      71,500.9  sem_timedwait         
+      0.0          235,180         37           6,356.2           1,564.0             689         114,711      18,945.1  fopen                 
+      0.0          134,278        466             288.2             217.0             155          10,542         532.5  fputs                 
+      0.0          132,740          3          44,246.7          45,080.0          41,640          46,020       2,305.8  pthread_create        
+      0.0           88,594         44           2,013.5           1,668.5             861           3,993         920.3  open64                
+      0.0           26,380         29             909.7             524.0             385           3,325         826.9  fclose                
+      0.0           21,411         56             382.3              24.0              22          20,033       2,673.7  fgets                 
+      0.0           16,310         62             263.1             120.0              80           2,821         481.5  fcntl                 
+      0.0           15,596         16             974.8             764.0             145           5,352       1,249.5  read                  
+      0.0           12,287          6           2,047.8           1,692.5             618           4,230       1,338.0  open                  
+      0.0            9,178         11             834.4             570.0             301           1,485         475.1  write                 
+      0.0            7,860          2           3,930.0           3,930.0           2,653           5,207       1,806.0  socket                
+      0.0            7,589          3           2,529.7           2,328.0             775           4,486       1,863.7  pipe2                 
+      0.0            6,039          1           6,039.0           6,039.0           6,039           6,039           0.0  connect               
+      0.0            4,874          2           2,437.0           2,437.0           1,626           3,248       1,146.9  fopen64               
+      0.0            1,674          1           1,674.0           1,674.0           1,674           1,674           0.0  pthread_cond_signal   
+      0.0            1,026          7             146.6             164.0              89             212          53.8  dup                   
+      0.0              871          1             871.0             871.0             871             871           0.0  bind                  
+      0.0              415          1             415.0             415.0             415             415           0.0  listen                
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/cuda_api_sum.py]... 
+
+ ,** CUDA API Summary (cuda_api_sum):
+
+ Time (%)  Total Time (ns)  Num Calls    Avg (ns)     Med (ns)    Min (ns)     Max (ns)     StdDev (ns)                       Name                     
+ --------  ---------------  ---------  ------------  -----------  ---------  -------------  ------------  ---------------------------------------------
+     33.3    3,915,363,238        289  13,547,969.7  9,484,112.0     19,820     32,587,408  13,784,976.3  cudaDeviceSynchronize                        
+     33.3    3,915,338,614        289  13,547,884.5  9,484,033.0     19,749     32,587,319  13,784,970.8  cudaDeviceSynchronize                        
+     11.0    1,289,319,560      7,108     181,389.9      4,874.0      1,971  1,248,737,939  14,811,400.1  cudaLaunchKernel                             
+     10.9    1,288,680,251      7,108     181,300.0      4,784.0      1,922  1,248,737,696  14,811,398.3  cudaLaunchKernel                             
+      4.3      504,516,347      3,747     134,645.4      4,250.0      2,925     11,642,362     664,161.4  cudaMemcpyAsync                              
+      4.3      504,111,303      3,747     134,537.3      4,161.0      2,862     11,641,970     664,125.5  cudaMemcpyAsync                              
+      2.0      237,836,979          8  29,729,622.4      1,076.0        972    237,827,936  84,084,416.4  cudaStreamCreateWithFlags                    
+      0.2       24,762,935          4   6,190,733.8  5,975,786.0    463,322     12,348,041   6,245,573.4  cudaMallocHost                               
+      0.2       24,762,567          4   6,190,641.8  5,975,703.0    463,182     12,347,979   6,245,578.8  cudaMallocHost                               
+      0.1        9,415,273          8   1,176,909.1    147,189.5      1,509      4,594,906   1,935,033.5  cudaFreeHost                                 
+      0.1        9,410,395          8   1,176,299.4    146,459.0      1,278      4,592,920   1,934,725.0  cudaFreeHost                                 
+      0.1        7,195,101          2   3,597,550.5  3,597,550.5  1,072,705      6,122,396   3,570,670.7  cudaFree                                     
+      0.1        7,194,827          2   3,597,413.5  3,597,413.5  1,072,563      6,122,264   3,570,677.8  cudaFree                                     
+      0.1        7,147,578      1,536       4,653.4      4,177.0      3,552         58,008       2,635.3  cudaMemcpy2DAsync                            
+      0.1        6,938,748      1,536       4,517.4      4,042.0      3,425         57,847       2,634.2  cudaMemcpy2DAsync                            
+      0.0        4,765,427     13,477         353.6        256.0        150          7,184         215.8  cudaStreamGetCaptureInfo_v2_v11030           
+      0.0        2,473,305         17     145,488.5     72,327.0      2,246        539,857     166,286.6  cudaMalloc                                   
+      0.0        2,470,534         17     145,325.5     72,203.0      2,181        539,649     166,184.6  cudaMalloc                                   
+      0.0        2,469,464      2,273       1,086.4        946.0        841          4,801         417.9  cudaEventRecord                              
+      0.0        2,304,122      2,273       1,013.7        873.0        771          4,723         417.2  cudaEventRecord                              
+      0.0        1,179,270        161       7,324.7      7,423.0      5,556         11,078         902.4  cudaMemsetAsync                              
+      0.0        1,157,594        161       7,190.0      7,289.0      5,437         10,922         896.7  cudaMemsetAsync                              
+      0.0          363,729        166       2,191.1      2,186.0        730          6,634         535.8  cudaOccupancyMaxActiveBlocksPerMultiprocessor
+      0.0           93,899        766         122.6        102.0         63            553          63.3  cuGetProcAddress_v2                          
+      0.0           30,972          1      30,972.0     30,972.0     30,972         30,972           0.0  cudaGetDeviceProperties_v2_v12000            
+      0.0            9,674         18         537.4        224.0        203          4,209         947.6  cudaEventCreateWithFlags                     
+      0.0            6,163          2       3,081.5      3,081.5      2,878          3,285         287.8  cudaEventQuery                               
+      0.0            5,973          2       2,986.5      2,986.5      2,776          3,197         297.7  cudaEventQuery                               
+      0.0            1,239          3         413.0        152.0         76          1,011         519.3  cuModuleGetLoadingMode                       
+      0.0            1,162          2         581.0        581.0        400            762         256.0  cudaGetDriverEntryPoint_v11030               
+      0.0              960          2         480.0        480.0        360            600         169.7  cuInit                                       
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+
+ ,** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
+
+ Time (%)  Total Time (ns)  Instances    Avg (ns)     Med (ns)    Min (ns)    Max (ns)   StdDev (ns)                                                   Name                                                
+ --------  ---------------  ---------  ------------  -----------  ---------  ----------  ------------  ----------------------------------------------------------------------------------------------------
+     94.3    3,661,170,403        224  16,344,510.7  8,861,904.0  2,199,256  30,836,845  12,771,357.3  void dequantize_block<(int)32, (int)2, &dequantize_q4_0, __half>(const void *, T4 *, int)           
+      2.7      103,018,305        225     457,859.1    346,527.0    333,855   1,230,427     271,927.9  void dequantize_block<(int)1, (int)1, &convert_f32, __half>(const void *, T4 *, int)                
+      1.1       44,414,363        161     275,865.6    345,439.0    110,432     804,285     138,253.6  ampere_h16816gemm_256x128_ldg8_stages_32x3_tn                                                       
+      1.1       43,348,510      2,273      19,071.1      6,944.0      6,784     619,070      49,609.4  void dequantize_block<(int)1, (int)1, &convert_f16, float>(const void *, T4 *, int)                 
+      0.4       16,973,438      2,048       8,287.8      8,671.5      7,360      10,304         693.3  void cutlass::Kernel<cutlass_80_tensorop_s1688gemm_64x64_16x6_tn_align1>(T1::Params)                
+      0.1        5,584,460          1   5,584,460.0  5,584,460.0  5,584,460   5,584,460           0.0  void dequantize_block_q6_K<__half>(const void *, T1 *)                                              
+      0.1        4,481,001      2,048       2,188.0      2,271.5      1,663       3,360         484.2  void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, float, float, float, float, (bool)1, (boo…
+      0.1        1,946,648         64      30,416.4     30,176.0     29,664      34,720         977.1  ampere_h16816gemm_128x128_ldg8_stages_64x3_tn                                                       
+      0.0          340,796         64       5,324.9      5,312.0      5,184       6,048         162.5  void cublasLt::splitKreduce_kernel<(int)32, (int)16, int, __half, __half, __half, __half, (bool)1, …
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/cuda_gpu_mem_time_sum.py]... 
+
+ ,** CUDA GPU MemOps Summary (by Time) (cuda_gpu_mem_time_sum):
+
+ Time (%)  Total Time (ns)  Count  Avg (ns)   Med (ns)  Min (ns)   Max (ns)   StdDev (ns)      Operation     
+ --------  ---------------  -----  ---------  --------  --------  ----------  -----------  ------------------
+     82.7      538,012,483  3,010  178,741.7  13,488.0     5,120  11,313,305    646,615.9  [CUDA memcpy HtoD]
+     17.2      112,106,788  2,273   49,321.1  22,495.0     7,999   1,823,129    143,689.5  [CUDA memcpy DtoH]
+      0.0           66,112    161      410.6     384.0       352       1,152         82.8  [CUDA memset]     
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/cuda_gpu_mem_size_sum.py]... 
+
+ ,** CUDA GPU MemOps Summary (by Size) (cuda_gpu_mem_size_sum):
+
+ Total (MB)  Count  Avg (MB)  Med (MB)  Min (MB)  Max (MB)  StdDev (MB)      Operation     
+ ----------  -----  --------  --------  --------  --------  -----------  ------------------
+  6,729.069  3,010     2.236     0.192     0.096   107.520        6.567  [CUDA memcpy HtoD]
+  2,884.992  2,273     1.269     0.562     0.192    48.000        3.775  [CUDA memcpy DtoH]
+      0.063    161     0.000     0.000     0.000     0.002        0.000  [CUDA memset]     
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/openmp_sum.py]... 
+SKIPPED: report7.sqlite does not contain OpenMP event data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/opengl_khr_range_sum.py]... 
+SKIPPED: report7.sqlite does not contain KHR Extension (KHR_DEBUG) data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/opengl_khr_gpu_range_sum.py]... 
+SKIPPED: report7.sqlite does not contain GPU KHR Extension (KHR_DEBUG) data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/vulkan_marker_sum.py]... 
+SKIPPED: report7.sqlite does not contain Vulkan Debug Extension (Vulkan Debug Util) data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/vulkan_gpu_marker_sum.py]... 
+SKIPPED: report7.sqlite does not contain GPU Vulkan Debug Extension (GPU Vulkan Debug markers) data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/dx11_pix_sum.py]... 
+SKIPPED: report7.sqlite does not contain DX11 CPU debug markers.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/dx12_gpu_marker_sum.py]... 
+SKIPPED: report7.sqlite does not contain DX12 GPU debug markers.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/dx12_pix_sum.py]... 
+SKIPPED: report7.sqlite does not contain DX12 CPU debug markers.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/wddm_queue_sum.py]... 
+SKIPPED: report7.sqlite does not contain WDDM context data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/um_sum.py]... 
+SKIPPED: report7.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/um_total_sum.py]... 
+SKIPPED: report7.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/um_cpu_page_faults_sum.py]... 
+SKIPPED: report7.sqlite does not contain CUDA Unified Memory CPU page faults data.
+
+Processing [report7.sqlite] with [/opt/nvidia/nsight-systems/2023.2.3/host-linux-x64/reports/openacc_sum.py]... 
+SKIPPED: report7.sqlite does not contain OpenACC event data.
+
+#+end_example
+
+#+begin_src sh
+    /opt/nvidia/nsight-systems/2023.2.3/bin/nsys export -t json  report7.nsys-rep
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sh
+    /opt/nvidia/nsight-systems/2023.2.3/bin/nsys export -t hdf  report7.nsys-rep
+    /opt/nvidia/nsight-systems/2023.2.3/bin/nsys export -t json  report7.nsys-rep
+  #    jq .  ./report12.json > report12.jq
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src sh :results verbatim :exports both
+python ./reporthd5_callchains.py ./report7.h5
+#+end_src
+
+#+RESULTS:
+#+begin_example
+./report2.h5
+./report2.h5
+('0x7f70ac50663f|721|MOD:321/opt/nvidia/nsight-systems/2023.2.3/target-linux-x64/libcupti.so.12.2|DEP:0', 17)
+('0x7f70ac508958|717|MOD:321/opt/nvidia/nsight-systems/2023.2.3/target-linux-x64/libcupti.so.12.2|DEP:1', 17)
+('0x7f70af680966|722|MOD:235/usr/lib/x86_64-linux-gnu/libcuda.so.545.23.06|DEP:2', 17)
+('cudaFreeHost|636|MOD:206/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 8)
+('ggml_cuda_host_free|637|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 8)
+('llama_new_context_with_model|647|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 6)
+('llama_init_from_gpt_params(gpt_params&)|521|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 6)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 6)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 6)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 6)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 6)
+('cudaMallocHost|778|MOD:206/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 4)
+('ggml_cuda_host_malloc|779|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 4)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 4)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:7', 4)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 4)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 4)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 3)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 3)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:10', 3)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 3)
+('0x7f70d54421b0|728|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 3)
+('0x7f70d50aa9bd|729|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 3)
+('llama_free|848|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 3)
+('cublasCreate_v2|499|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 2)
+('ggml_init_cublas|422|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 2)
+('ggml_init|316|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 2)
+('llama_backend_init|317|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 2)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 2)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:11', 2)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:12', 2)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:13', 2)
+('llm_load_tensors(llama_model_loader&, llama_model&, int, int, float const*, bool, void (*)(float, votrunc|638|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 2)
+('llama_load_model_from_file|520|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 2)
+('llama_init_from_gpt_params(gpt_params&)|521|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 2)
+('0x7f70d5442978|723|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 1)
+('cublasCreate_v2|499|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 1)
+('ggml_init_cublas|422|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 1)
+('ggml_init|316|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 1)
+('llama_backend_init|317|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 1)
+('0x7f70b46e9dc8|724|MOD:215/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:3', 1)
+('0x7f70b16d9e24|725|MOD:215/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 1)
+('0x7f70b16da79b|726|MOD:215/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 1)
+('cublasLtCtxInit|510|MOD:215/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 1)
+('cublasCreate_v2|499|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:7', 1)
+('ggml_init_cublas|422|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 1)
+('ggml_init|316|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 1)
+('llama_backend_init|317|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 1)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 1)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:12', 1)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:13', 1)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:14', 1)
+('0x7f70d50aa20b|730|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('0x7f70d50aa22e|731|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('cublasCreate_v2|499|MOD:208/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('ggml_init_cublas|422|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 1)
+('ggml_init|316|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 1)
+('llama_backend_init|317|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 1)
+('main|155|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 1)
+('__libc_start_call_main|318|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:10', 1)
+('__libc_start_main@@GLIBC_2|319|MOD:169/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:11', 1)
+('_start|320|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:12', 1)
+('llama_free_model|805|MOD:192/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 1)
+#+end_example
+
+* mistral eval 
+
+This is a table of performance metrics for code that performs several operations on a GPU using NVIDIA CUDA. The operations are:
+
+* `cudaDeviceSynchronize`: This operation synchronizes the execution of all other threads on the GPU. It ensures that all threads have completed before moving on to the next operation.
+* `cudaLaunchKernel`: This operation launches a kernel function (a small CUDA program) on the GPU. In this case, two different kernels are launched, likely with different parameters or data inputs.
+* `cudaMemcpyAsync`: This operation copies memory from the CPU to the GPU or vice versa asynchronously. It does not block the execution of other threads on the GPU, allowing multiple operations to be performed concurrently.
+* `cudaStreamCreateWithFlags`: This operation creates a new CUDA stream, which is used to manage the execution of multiple operations on the GPU in parallel. In this case, a single stream is created with some flags set.
+
+
+#+begin_src sh :results verbatim :exports both
+python ./reporthd5_callchains.py ./report7.h5
+#+end_src
+
+#+RESULTS:
+#+begin_example
+./report7.h5
+./report7.h5
+('0x7fbb4530663f|697|MOD:296/opt/nvidia/nsight-systems/2023.2.3/target-linux-x64/libcupti.so.12.2|DEP:0', 15147)
+('0x7fbb45308958|693|MOD:296/opt/nvidia/nsight-systems/2023.2.3/target-linux-x64/libcupti.so.12.2|DEP:1', 15147)
+('0x7fbb48480966|698|MOD:231/usr/lib/x86_64-linux-gnu/libcuda.so.545.23.06|DEP:2', 15147)
+('0x7fbb4d5057a8|3059|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:3', 4385)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 4036)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 4036)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 4036)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:7', 4032)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 4032)
+('cudaMemcpyAsync|724|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 3747)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 2731)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 2731)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 2731)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 2731)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 2725)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:10', 2725)
+('cudaLaunchKernel|744|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 2723)
+('0x7fbb6e25d785|3070|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 2273)
+('0x7fbb6deab1d7|3071|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 2273)
+('0x7fbb6deac192|3072|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 2273)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:13', 2273)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:14', 2273)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:15', 2273)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:16', 2273)
+('void dequantize_block<1, 1, &(convert_f16(void const*, int, int, __half2&)), float>(void const*, flotrunc|2841|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 2273)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:17', 2272)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:18', 2272)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:14', 2211)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:15', 2211)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:16', 2211)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:17', 2211)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:18', 2210)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:19', 2210)
+('0x7fbb6deaa8b2|3073|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 2112)
+('0x7fbb4c77794d|3084|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 2048)
+('0x7fbb4c7db69a|3085|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 2048)
+('0x7fbb4afd0fc9|3086|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 2048)
+('0x7fbb4a4f5b71|3087|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:7', 2048)
+('0x7fbb4a62697b|3088|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:8', 2048)
+('cublasLtSSSMatmul|2823|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:9', 2048)
+('0x7fbb6de4cb15|3089|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 2048)
+('0x7fbb6de4ef46|3090|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 2048)
+('0x7fbb6df65abd|3091|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 2048)
+('cublasSgemm_v2|2827|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:13', 2048)
+('0x7fbb4ad4b256|3092|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 2048)
+('0x7fbb4afd1133|3093|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 2048)
+('0x7fbb4a4f5b71|3087|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 2048)
+('0x7fbb4a62697b|3088|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:7', 2048)
+('cublasLtSSSMatmul|2823|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:8', 2048)
+('0x7fbb6de4cb15|3089|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:9', 2048)
+('0x7fbb6de4ef46|3090|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 2048)
+('0x7fbb6df65abd|3091|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 2048)
+('cublasSgemm_v2|2827|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 2048)
+('0x7fbb6de4cb48|3094|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:7', 2048)
+('0x7fbb6de4ef46|3090|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:8', 2048)
+('0x7fbb6df65abd|3091|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:9', 2048)
+('cublasSgemm_v2|2827|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 2048)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 2048)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:12', 2048)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:13', 2048)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:14', 2048)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:15', 2048)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:16', 2048)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 1542)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 1542)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 1542)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 1539)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 1539)
+('cudaMemcpy2DAsync|2915|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 1536)
+('ggml_cuda_cpy_tensor_2d(void*, ggml_tensor const*, long, long, long, long, CUstream_st*)|2916|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 1536)
+('cudaDeviceSynchronize|2772|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 289)
+('void dequantize_block<1, 1, &(convert_f32(void const*, int, int, __half2&)), __half>(void const*, __trunc|3047|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 225)
+('0x7fbb4acae2f1|3062|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 225)
+('0x7fbb4acb0dda|3063|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:7', 225)
+('0x7fbb4a4f3471|3064|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:8', 225)
+('0x7fbb4a62af2f|3065|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:9', 225)
+('cublasLtHHHMatmul|2759|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:10', 225)
+('0x7fbb6de43905|3066|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 225)
+('0x7fbb6de45d36|3055|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 225)
+('0x7fbb6de2dfbe|3056|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:13', 225)
+('0x7fbb6e0c5ef4|3057|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:14', 225)
+('0x7fbb6e0c6380|3058|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:15', 225)
+('cublasGemmEx|3039|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:16', 225)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:17', 225)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:18', 225)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:19', 225)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:20', 225)
+('0x7fbb6de43938|3074|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:7', 225)
+('0x7fbb6de45d36|3055|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:8', 225)
+('0x7fbb6de2dfbe|3056|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:9', 225)
+('0x7fbb6e0c5ef4|3057|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 225)
+('0x7fbb6e0c6380|3058|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 225)
+('cublasGemmEx|3039|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 225)
+('void dequantize_block<32, 2, &(dequantize_q4_0(void const*, int, int, __half2&)), __half>(void consttrunc|745|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 224)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:21', 224)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:22', 224)
+('0x7fbb6de45d36|3055|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:9', 163)
+('0x7fbb6de2dfbe|3056|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 163)
+('0x7fbb6e0c5ef4|3057|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 163)
+('0x7fbb6e0c6380|3058|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 163)
+('cublasGemmEx|3039|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:13', 163)
+('0x7fbb4d503e43|3078|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:3', 161)
+('0x7fbb4acb13e3|3079|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 161)
+('0x7fbb4a4f3471|3064|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 161)
+('0x7fbb4a62af2f|3065|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 161)
+('cublasLtHHHMatmul|2759|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:7', 161)
+('0x7fbb6de43905|3066|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:8', 161)
+5('0x7fbb4d4468ad|3081|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 161)
+('0x7fbb4d4468cd|3082|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 161)
+('0x7fbb6deaa85f|3083|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 161)
+('0x7fbb4d44430d|3060|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 64)
+('0x7fbb4d44432d|3061|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 64)
+('0x7fbb4ad41fd2|3067|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 64)
+('0x7fbb4acb0e84|3068|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 64)
+('0x7fbb4a4f3471|3064|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 64)
+('0x7fbb4a62af2f|3065|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:7', 64)
+('cublasLtHHHMatmul|2759|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:8', 64)
+('0x7fbb6de43905|3066|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:9', 64)
+('0x7fbb6de45d36|3055|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:10', 64)
+('0x7fbb6de2dfbe|3056|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:11', 64)
+('0x7fbb6e0c5ef4|3057|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:12', 64)
+('0x7fbb6e0c6380|3058|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:13', 64)
+('cublasGemmEx|3039|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:14', 64)
+('ggml_cuda_op_mul_mat_cublas(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, char const*, floattrunc|746|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:15', 64)
+('ggml_cuda_op_mul_mat(ggml_tensor const*, ggml_tensor const*, ggml_tensor*, void (*)(ggml_tensor construnc|725|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:16', 64)
+('ggml_cuda_compute_forward|726|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:17', 64)
+('ggml_graph_compute_thread|637|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:18', 64)
+('start_thread|350|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:19', 63)
+('__GI___clone3|351|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:20', 63)
+('cudaMalloc|703|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 14)
+('ggml_cuda_pool_malloc(unsigned long, unsigned long*)|2855|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 14)
+('cudaFreeHost|613|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 8)
+('ggml_cuda_host_free|614|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 8)
+('llama_new_context_with_model|628|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 6)
+('llama_init_from_gpt_params(gpt_params&)|523|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 6)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 6)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 6)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 6)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 6)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 6)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 6)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 6)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:12', 6)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:13', 6)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:14', 6)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:15', 6)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:16', 6)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 5)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:12', 5)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:13', 5)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:14', 5)
+('cudaMallocHost|3009|MOD:207/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcudart.so.12.3.52|DEP:3', 4)
+('ggml_cuda_host_malloc|3010|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 4)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 4)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 4)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 4)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 4)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 4)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:7', 4)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:8', 4)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 4)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 3)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:9', 3)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:10', 3)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 3)
+('0x7fbb6e2421b0|704|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 3)
+('0x7fbb6deaa9bd|705|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 3)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 3)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 3)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 3)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:11', 3)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:12', 3)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:13', 3)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:14', 3)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:15', 3)
+('llama_free|3928|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 3)
+('cublasCreate_v2|442|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 2)
+('ggml_init_cublas|443|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 2)
+('ggml_init|291|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 2)
+('llama_backend_init|292|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 2)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 2)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:11', 2)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:12', 2)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:13', 2)
+('llm_load_tensors(llama_model_loader&, llama_model&, int, int, float const*, bool, void (*)(float, votrunc|615|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 2)
+('llama_load_model_from_file|521|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 2)
+('llama_init_from_gpt_params(gpt_params&)|523|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 2)
+('0x7fbb6e23e8db|3049|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 2)
+('0x7fbb6deaae8b|3050|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 2)
+('0x7fbb6deac55b|3051|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 2)
+('0x7fbb6de43264|3053|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:7', 2)
+('0x7fbb6de43c6c|3054|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:8', 2)
+('0x7fbb6e242978|699|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:3', 1)
+('cublasCreate_v2|442|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:4', 1)
+('ggml_init_cublas|443|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 1)
+('ggml_init|291|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 1)
+('llama_backend_init|292|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 1)
+('0x7fbb4d4e9dc8|700|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:3', 1)
+('0x7fbb4a4d9e24|701|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:4', 1)
+('0x7fbb4a4da79b|702|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:5', 1)
+('cublasLtCtxInit|456|MOD:216/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublasLt.so.12.3.2.9|DEP:6', 1)
+('cublasCreate_v2|442|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:7', 1)
+('ggml_init_cublas|443|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 1)
+('ggml_init|291|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 1)
+('llama_backend_init|292|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:10', 1)
+('0x7fbb6deaa20b|706|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('0x7fbb6deaa22e|707|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('cublasCreate_v2|442|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:5', 1)
+('ggml_init_cublas|443|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:6', 1)
+('ggml_init|291|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:7', 1)
+('llama_backend_init|292|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:8', 1)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:9', 1)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:10', 1)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:11', 1)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:12', 1)
+('0x7fbb6deaa5dc|3052|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 1)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:18', 1)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:19', 1)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:20', 1)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:21', 1)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:22', 1)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:23', 1)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:24', 1)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:25', 1)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:21', 1)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:22', 1)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:23', 1)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:24', 1)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:25', 1)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:26', 1)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:27', 1)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:28', 1)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:19', 1)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:20', 1)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:21', 1)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:22', 1)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:23', 1)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:24', 1)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:25', 1)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:26', 1)
+('ggml_graph_compute|639|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:17', 1)
+('ggml_graph_compute_helper(std::vector<unsigned char, std::allocator<unsigned char> >&, ggml_cgraph*,trunc|640|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:18', 1)
+('llama_decode_internal(llama_context&, llama_batch)|633|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:19', 1)
+('llama_decode|634|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:20', 1)
+('main|158|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:21', 1)
+('__libc_start_call_main|293|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:22', 1)
+('__libc_start_main@@GLIBC_2|294|MOD:170/usr/lib/x86_64-linux-gnu/libc.so.6|DEP:23', 1)
+('_start|295|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:24', 1)
+('0x7fbb6deaa582|3076|MOD:209/usr/local/cuda-12.3/targets/x86_64-linux/lib/libcublas.so.12.3.2.9|DEP:6', 1)
+('void dequantize_block_q6_K<__half>(void const*, __half*)|3698|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:4', 1)
+('llama_free_model|3899|MOD:193/mnt/data1/2023/11/09/llama.cpp/build/bin/main|DEP:5', 1)
+#+end_example
+
+
+nm  /mnt/data1/2023/11/09/llama.cpp/build/bin/main  >main.nm
+
+
+grep libcuda report7.gron  -C10 > cudareport.txt
+grep -C1000 libcuda report7.jq > cuda.txt

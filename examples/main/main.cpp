@@ -659,7 +659,7 @@ int main(int argc, char ** argv) {
         if (input_echo) {
             for (auto id : embd) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
-                printf("%s", token_str.c_str());
+                printf("TOKEN:%s\n", token_str.c_str());
 
                 if (embd.size() > 1) {
                     input_tokens.push_back(id);
@@ -850,6 +850,9 @@ int main(int argc, char ** argv) {
     llama_print_timings(ctx);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
+    // dont dump core
+    //int *ptr = 0; *ptr = 1;
+    
     if (ctx_guidance) { llama_free(ctx_guidance); }
     llama_free(ctx);
     llama_free_model(model);
