@@ -13,6 +13,7 @@ class SpecialVocab:
     merges: list[str]
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
+    chat_template: str | None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
@@ -24,6 +25,7 @@ class SpecialVocab:
         self.n_vocab = n_vocab
         self.load_merges = load_merges
         self.merges = []
+        self.chat_template = None
         if special_token_types is not None:
             self.special_token_types = special_token_types
         else:
@@ -67,6 +69,10 @@ class SpecialVocab:
             if not quiet:
                 print(f'gguf: Setting add_{typ}_token to {value}')
             add_handler(value)
+        if self.chat_template is not None:
+            if not quiet:
+                print(f'gguf: Setting chat_template to {self.chat_template}')
+            gw.add_chat_template(self.chat_template)
 
     def _load(self, path: Path) -> None:
         self._try_load_from_tokenizer_json(path)
@@ -117,24 +123,37 @@ class SpecialVocab:
 
     def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
-        if not tokenizer_file.is_file():
-            return False
-        with open(tokenizer_file, encoding = 'utf-8') as f:
-            tokenizer = json.load(f)
-        if self.load_merges:
-            merges = tokenizer.get('model', {}).get('merges')
-            if isinstance(merges, list) and merges and isinstance(merges[0], str):
-                self.merges = merges
+        if tokenizer_file.is_file():
+            with open(tokenizer_file, encoding = 'utf-8') as f:
+                tokenizer = json.load(f)
+            if self.load_merges:
+                merges = tokenizer.get('model', {}).get('merges')
+                if isinstance(merges, list) and merges and isinstance(merges[0], str):
+                    self.merges = merges
+            added_tokens = tokenizer.get('added_tokens', {})
+        else:
+            added_tokens = {}
         tokenizer_config_file = path / 'tokenizer_config.json'
-        added_tokens = tokenizer.get('added_tokens')
-        if added_tokens is None or not tokenizer_config_file.is_file():
+        if not tokenizer_config_file.is_file():
             return True
         with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
+        chat_template = tokenizer_config.get('chat_template')
+        if chat_template is None or isinstance(chat_template, str):
+            self.chat_template = chat_template
+        else:
+            print(
+                f'gguf: WARNING: Bad type for chat_template field in {tokenizer_config_file!r} - ignoring',
+                file = sys.stderr
+            )
         for typ in self.special_token_types:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
                 self.add_special_token[typ] = add_entry
+            if not added_tokens:
+                # We will need this to get the content for the token, so if it's empty
+                # may as well just give up.
+                continue
             entry = tokenizer_config.get(f'{typ}_token')
             if isinstance(entry, str):
                 tc_content = entry

@@ -2045,6 +2045,7 @@ extern "C" {
     GGML_API double       gguf_get_val_f64 (const struct gguf_context * ctx, int key_id);
     GGML_API bool         gguf_get_val_bool(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_val_str (const struct gguf_context * ctx, int key_id);
+    GGML_API const void * gguf_get_val_data(const struct gguf_context * ctx, int key_id);
     GGML_API int          gguf_get_arr_n   (const struct gguf_context * ctx, int key_id);
     GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_arr_str (const struct gguf_context * ctx, int key_id, int i);

@@ -220,7 +220,7 @@ class Model:
             return gguf.MODEL_ARCH.MPT
         if arch in ("BaichuanForCausalLM", "BaiChuanForCausalLM"):
             return gguf.MODEL_ARCH.BAICHUAN
-        if arch == "FalconForCausalLM":
+        if arch in ("FalconForCausalLM", "RWForCausalLM"):
             return gguf.MODEL_ARCH.FALCON
         if arch == "GPTBigCodeForCausalLM":
             return gguf.MODEL_ARCH.STARCODER
@@ -876,12 +876,13 @@ class StableLMModel(Model):
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"]*(hparams["hidden_size"] // hparams["num_attention_heads"])))
+        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"] * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
 ###### CONVERSION LOGIC ######
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a huggingface model to a GGML compatible file")

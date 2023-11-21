@@ -491,6 +491,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.interactive_first = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
+        } else if (arg == "-cml" || arg == "--chatml") {
+            params.chatml = true;
         } else if (arg == "--infill") {
             params.infill = true;
         } else if (arg == "--multiline-input") {
@@ -730,6 +732,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
+    printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     printf("  -r PROMPT, --reverse-prompt PROMPT\n");
     printf("                        halt generation at PROMPT, return control in interactive mode\n");
@@ -931,7 +934,7 @@ void llama_batch_add(
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits) {
     batch.token   [batch.n_tokens] = id;
-    batch.pos     [batch.n_tokens] = pos,
+    batch.pos     [batch.n_tokens] = pos;
     batch.n_seq_id[batch.n_tokens] = seq_ids.size();
     for (size_t i = 0; i < seq_ids.size(); ++i) {
         batch.seq_id[batch.n_tokens][i] = seq_ids[i];
@@ -1072,6 +1075,12 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
     return result;
 }
 
+bool llama_should_add_bos_token(const llama_model * model) {
+    const int add_bos = llama_add_bos_token(model);
+
+    return add_bos != -1 ? bool(add_bos) : (llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
+}
+
 //
 // YAML utils
 //
@@ -1188,6 +1197,7 @@ void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const cha
     if (!data_str.empty() && (std::isspace(data_str[0]) || std::isspace(data_str.back()))) {
         data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
         data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
+        data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");
         data_str = "\"" + data_str + "\"";
         fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
         return;
