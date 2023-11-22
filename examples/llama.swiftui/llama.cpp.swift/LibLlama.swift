@@ -82,7 +82,7 @@ actor LlamaContext {
             let i = Int(i1)
             batch.token[i] = tokens_list[i]
             batch.pos[i] = i1
-            batch.seq_id[i] = 0
+            batch.seq_id[Int(i)]![0] = 0
             batch.logits[i] = 0 // false
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
@@ -99,6 +99,8 @@ actor LlamaContext {
         
         let n_vocab = llama_n_vocab(context)
         let logits = llama_get_logits(context)
+        
+        print("n_vocab: \(n_vocab)")
         
         var candidates = Array<llama_token_data>()
         candidates.reserveCapacity(Int(n_vocab))
@@ -123,7 +125,7 @@ actor LlamaContext {
         
         batch.token[Int(batch.n_tokens)] = new_token_id
         batch.pos[Int(batch.n_tokens)] = n_cur
-        batch.seq_id[Int(batch.n_tokens)] = 0
+        batch.seq_id[Int(batch.n_tokens)]![0] = 0
         batch.logits[Int(batch.n_tokens)] = 1 // true
         
         batch.n_tokens += 1
@@ -145,7 +147,7 @@ actor LlamaContext {
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
         let n_tokens = text.count + (add_bos ? 1 : 0)
         let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-        let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos)
+        let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos, false)
         
         var swiftTokens: [llama_token] = []
         for i in 0..<tokenCount {

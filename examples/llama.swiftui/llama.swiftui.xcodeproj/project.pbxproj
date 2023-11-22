@@ -7,11 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542376072B0D9BFB008E6A1C /* ggml-quants.c */; };
+		5423760B2B0D9C4B008E6A1C /* ggml-backend.c in Sources */ = {isa = PBXBuildFile; fileRef = 5423760A2B0D9C4B008E6A1C /* ggml-backend.c */; };
 		542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS -O3"; }; };
 		542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */; };
 		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL -O3"; }; };
-		542EA0A62AC872A100A8AEE9 /* k_quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A52AC872A100A8AEE9 /* k_quants.c */; };
 		549479CB2AC9E16000E0F78B /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 549479CA2AC9E16000E0F78B /* Metal.framework */; };
 		549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */ = {isa = PBXBuildFile; fileRef = 549479C52AC9E0F200E0F78B /* ggml-metal.m */; settings = {COMPILER_FLAGS = "-fno-objc-arc -DGGML_SWIFT -DGGML_USE_METAL -O3"; }; };
 		8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1C83762AC328BD0096AF73 /* llama_swiftuiApp.swift */; };
@@ -25,14 +26,16 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		542376062B0D9BEA008E6A1C /* ggml-quants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-quants.h"; path = "../../ggml-quants.h"; sourceTree = "<group>"; };
+		542376072B0D9BFB008E6A1C /* ggml-quants.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-quants.c"; path = "../../ggml-quants.c"; sourceTree = "<group>"; };
+		542376092B0D9C40008E6A1C /* ggml-backend.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "ggml-backend.h"; path = "../../ggml-backend.h"; sourceTree = "<group>"; };
+		5423760A2B0D9C4B008E6A1C /* ggml-backend.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-backend.c"; path = "../../ggml-backend.c"; sourceTree = "<group>"; };
 		542EA09B2AC8723900A8AEE9 /* ggml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ggml.c; path = ../../ggml.c; sourceTree = "<group>"; };
 		542EA09C2AC8723900A8AEE9 /* ggml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ggml.h; path = ../../ggml.h; sourceTree = "<group>"; };
 		542EA09E2AC8725700A8AEE9 /* ggml-alloc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-alloc.h"; path = "../../ggml-alloc.h"; sourceTree = "<group>"; };
 		542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = "ggml-alloc.c"; path = "../../ggml-alloc.c"; sourceTree = "<group>"; };
 		542EA0A12AC8729100A8AEE9 /* llama.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = llama.cpp; path = ../../llama.cpp; sourceTree = "<group>"; };
 		542EA0A22AC8729100A8AEE9 /* llama.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = llama.h; path = ../../llama.h; sourceTree = "<group>"; };
-		542EA0A42AC872A100A8AEE9 /* k_quants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = k_quants.h; path = ../../k_quants.h; sourceTree = "<group>"; };
-		542EA0A52AC872A100A8AEE9 /* k_quants.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = k_quants.c; path = ../../k_quants.c; sourceTree = "<group>"; };
 		549479C52AC9E0F200E0F78B /* ggml-metal.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = "ggml-metal.m"; path = "../../ggml-metal.m"; sourceTree = "<group>"; };
 		549479C62AC9E0F200E0F78B /* ggml-metal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-metal.h"; path = "../../ggml-metal.h"; sourceTree = "<group>"; };
 		549479C82AC9E10B00E0F78B /* ggml-metal.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; name = "ggml-metal.metal"; path = "../../ggml-metal.metal"; sourceTree = "<group>"; };
@@ -66,6 +69,10 @@
 		8A08D1F62AC7383900FE6CD4 /* llama.cpp */ = {
 			isa = PBXGroup;
 			children = (
+				5423760A2B0D9C4B008E6A1C /* ggml-backend.c */,
+				542376092B0D9C40008E6A1C /* ggml-backend.h */,
+				542376062B0D9BEA008E6A1C /* ggml-quants.h */,
+				542376072B0D9BFB008E6A1C /* ggml-quants.c */,
 				549479C82AC9E10B00E0F78B /* ggml-metal.metal */,
 				549479C62AC9E0F200E0F78B /* ggml-metal.h */,
 				549479C52AC9E0F200E0F78B /* ggml-metal.m */,
@@ -75,8 +82,6 @@
 				542EA09E2AC8725700A8AEE9 /* ggml-alloc.h */,
 				542EA0A12AC8729100A8AEE9 /* llama.cpp */,
 				542EA0A22AC8729100A8AEE9 /* llama.h */,
-				542EA0A52AC872A100A8AEE9 /* k_quants.c */,
-				542EA0A42AC872A100A8AEE9 /* k_quants.h */,
 			);
 			name = llama.cpp;
 			sourceTree = "<group>";
@@ -249,6 +254,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */,
 				549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */,
 				542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */,
 				8A907F332AC7138A006146EA /* LibLlama.swift in Sources */,
@@ -256,8 +262,8 @@
 				8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */,
 				8A1C83792AC328BD0096AF73 /* ContentView.swift in Sources */,
 				8A1C83772AC328BD0096AF73 /* llama_swiftuiApp.swift in Sources */,
-				542EA0A62AC872A100A8AEE9 /* k_quants.c in Sources */,
 				542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */,
+				5423760B2B0D9C4B008E6A1C /* ggml-backend.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
