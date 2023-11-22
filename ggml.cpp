@@ -15649,7 +15649,8 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
     (*cgraph).nodes        = nodes_ptr;
     (*cgraph).grads        = grads_ptr;
     (*cgraph).leafs        = leafs_ptr;
-    //(*cgraph).hash_table   = { hash_size, hash_keys_ptr };
+    (*cgraph).visited_hash_table.size = hash_size;
+    (*cgraph).visited_hash_table.keys = hash_keys_ptr;
     (*cgraph).order        = GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT;
     (*cgraph).perf_runs    = 0;
     (*cgraph).perf_cycles  = 0;
@@ -15676,6 +15677,9 @@ struct ggml_cgraph * ggml_graph_view(struct ggml_context * ctx, struct ggml_cgra
     (*cgraph).grads        = cgraph0->grads ? cgraph0->grads + i0 : NULL;
     (*cgraph).leafs        = NULL;
     //(*cgraph).hash_table   = { 0, NULL };
+    (*cgraph).visited_hash_table.size = 0;
+    (*cgraph).visited_hash_table.keys = NULL;
+
     (*cgraph).order        = cgraph0->order;
     (*cgraph).perf_runs    = 0;
     (*cgraph).perf_cycles  = 0;
