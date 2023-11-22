@@ -82,8 +82,9 @@ actor LlamaContext {
             let i = Int(i1)
             batch.token[i] = tokens_list[i]
             batch.pos[i] = i1
+            batch.n_seq_id[Int(i)] = 1
             batch.seq_id[Int(i)]![0] = 0
-            batch.logits[i] = 0 // false
+            batch.logits[i] = 0
         }
         batch.logits[Int(batch.n_tokens) - 1] = 1 // true
         
@@ -97,11 +98,9 @@ actor LlamaContext {
     func completion_loop() -> String {
         var new_token_id: llama_token = 0
         
-        let n_vocab = llama_n_vocab(context)
-        let logits = llama_get_logits(context)
-        
-        print("n_vocab: \(n_vocab)")
-        
+        let n_vocab = llama_n_vocab(model)
+        let logits = llama_get_logits_ith(context, batch.n_tokens - 1)
+                
         var candidates = Array<llama_token_data>()
         candidates.reserveCapacity(Int(n_vocab))
         
@@ -121,14 +120,17 @@ actor LlamaContext {
         
         let new_token_str = token_to_piece(token: new_token_id)
         print(new_token_str)
-        tokens_list.append(new_token_id)
+        // tokens_list.append(new_token_id)
+        
+        batch.n_tokens = 0
         
         batch.token[Int(batch.n_tokens)] = new_token_id
         batch.pos[Int(batch.n_tokens)] = n_cur
+        batch.n_seq_id[Int(batch.n_tokens)] = 1
         batch.seq_id[Int(batch.n_tokens)]![0] = 0
         batch.logits[Int(batch.n_tokens)] = 1 // true
-        
         batch.n_tokens += 1
+        
         n_decode += 1
         
         n_cur += 1
