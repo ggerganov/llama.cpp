@@ -256,9 +256,9 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     const auto & buf_compute = ctx->buf_compute;
 
     struct ggml_init_params params = {
-        /*.mem_size =*/ buf_compute.size,
-        /*.mem_buffer =*/ buf_compute.data,
-        /*.no_alloc =*/ false,
+      .mem_size = buf_compute.size,
+      .mem_buffer = buf_compute.data,
+      .no_alloc = false,
     };
 
     params.no_alloc = true;
@@ -456,8 +456,8 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     struct ggml_context * meta = NULL;
 
     struct gguf_init_params params = {
-        /*.no_alloc = */ true,
-        /*.ctx      = */ &meta,
+      .no_alloc =  true,
+      .ctx      =  &meta,
     };
 
     struct gguf_context * ctx = gguf_init_from_file(fname, params);
@@ -553,9 +553,9 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     // load tensors
     {
         struct ggml_init_params params = {
-            /*.mem_size =*/ ctx_size,
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc =*/ false,
+	  .mem_size = ctx_size,
+	  .mem_buffer = NULL,
+          .no_alloc = false,
         };
 
         new_clip->ctx = ggml_init(params);

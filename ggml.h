@@ -1,5 +1,6 @@
 #pragma once
 
+#include<refl-cpp/refl.hpp>
 //
 // GGML Tensor Library
 //
@@ -465,7 +466,7 @@ extern "C" {
     };
 
     // ggml object
-    struct ggml_object {
+    struct ggml_object : refl::attr::usage::type {
         size_t offs;
         size_t size;
 
@@ -479,7 +480,7 @@ extern "C" {
     static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
     // n-dimensional tensor
-    struct ggml_tensor {
+    struct ggml_tensor : refl::attr::usage::type{
         enum ggml_type         type;
         enum ggml_backend_type backend;
 
@@ -524,7 +525,7 @@ extern "C" {
 
     // the compute plan that needs to be prepared for ggml_graph_compute()
     // since https://github.com/ggerganov/ggml/issues/287
-    struct ggml_cplan {
+    struct ggml_cplan : refl::attr::usage::type{
         size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
         uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
 
@@ -541,13 +542,13 @@ extern "C" {
         GGML_CGRAPH_EVAL_ORDER_COUNT
     };
 
-    struct ggml_hash_set {
+    struct ggml_hash_set : refl::attr::usage::type{
         size_t size;
         struct ggml_tensor ** keys;
     };
 
     // computation graph
-    struct ggml_cgraph {
+    struct ggml_cgraph : refl::attr::usage::type{
         int size;
         int n_nodes;
         int n_leafs;
@@ -567,7 +568,7 @@ extern "C" {
     };
 
     // scratch buffer
-    struct ggml_scratch {
+    struct ggml_scratch : refl::attr::usage::type{
         size_t offs;
         size_t size;
         void * data;
@@ -579,7 +580,7 @@ extern "C" {
       {}
     };
 
-    struct ggml_init_params {
+    struct ggml_init_params : refl::attr::usage::type{
         // memory pool
         size_t mem_size;   // bytes
         void * mem_buffer; // if NULL, memory will be allocated internally
@@ -597,7 +598,7 @@ extern "C" {
         GGML_TASK_FINALIZE,
     };
 
-    struct ggml_compute_params {
+    struct ggml_compute_params : refl::attr::usage::type{
         enum ggml_task_type type;
 
         // ith = thread index, nth = number of threads
@@ -1835,7 +1836,7 @@ extern "C" {
     //
     //   see ggml.c (ggml_opt_default_params) for default values
     //
-    struct ggml_opt_params {
+    struct ggml_opt_params : refl::attr::usage::type{
         enum ggml_opt_type type;
 
         size_t graph_size;
@@ -1865,7 +1866,7 @@ extern "C" {
         int n_gradient_accumulation;
 
         // ADAM parameters
-        struct {
+        struct ggml_adam: refl::attr::usage::type{
             int n_iter;
 
             float sched; // schedule multiplier (fixed, decay or warmup)
@@ -1881,7 +1882,7 @@ extern "C" {
         } adam;
 
         // LBFGS parameters
-        struct {
+        struct ggml_lbfgs: refl::attr::usage::type{
             int m; // number of corrections to approximate the inv. Hessian
             int n_iter;
             int max_linesearch;
@@ -1896,7 +1897,7 @@ extern "C" {
         } lbfgs;
     };
 
-    struct ggml_opt_context {
+    struct ggml_opt_context : refl::attr::usage::type{
         struct ggml_context * ctx;
         struct ggml_opt_params params;
 
@@ -1908,7 +1909,7 @@ extern "C" {
         float loss_before;
         float loss_after;
 
-        struct {
+        struct ggml_grad : refl::attr::usage::type{
             struct ggml_tensor * g;  // current gradient
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
@@ -1918,7 +1919,7 @@ extern "C" {
             int n_no_improvement;
         } adam;
 
-        struct {
+        struct ggml_params : refl::attr::usage::type{
             struct ggml_tensor * x;    // current parameters
             struct ggml_tensor * xp;   // previous parameters
             struct ggml_tensor * g;    // current gradient
@@ -2011,7 +2012,7 @@ extern "C" {
 
     struct gguf_context;
 
-    struct gguf_init_params {
+    struct gguf_init_params : refl::attr::usage::type{
         bool no_alloc;
 
         // if not NULL, create a ggml_context and allocate the tensor data in it
@@ -2148,7 +2149,7 @@ extern "C" {
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
     typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
 
-    typedef struct {
+    typedef struct ggml_something : refl::attr::usage::type{
         const char      * type_name;
         int               blck_size;
         size_t            type_size;

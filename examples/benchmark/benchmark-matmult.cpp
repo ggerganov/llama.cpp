@@ -141,9 +141,9 @@ int main(int argc, char ** argv)  {
     printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ ctx_size,
-        /*.mem_buffer =*/ NULL,
-        /* no_alloc   =*/ 0
+        .mem_size   = ctx_size,
+        .mem_buffer = NULL,
+        .no_alloc   = 0
     };
 
     ctx = ggml_init(params);

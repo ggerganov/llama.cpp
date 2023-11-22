@@ -295,8 +295,8 @@ static void init_model(struct llama_model * input, struct my_llama_model * model
     // get parameters directly from gguf file
     {
         struct gguf_init_params params = {
-            /*.no_alloc = */ false,
-            /*.ctx      = */ NULL,
+	  .no_alloc = false,
+	  .ctx      = NULL,
         };
         struct gguf_context * mctx = gguf_init_from_file(fn_model, params);
 
@@ -1709,9 +1709,9 @@ int main(int argc, char ** argv) {
 
     // context for input tensors without their data
     struct ggml_init_params ctx_input_params = {
-        ggml_tensor_overhead() * 2, // mem_size
-        NULL,                       // mem_buffer
-        true,                       // no_alloc
+      .mem_size= ggml_tensor_overhead() * 2, // mem_size
+      .mem_buffer=NULL,                       // mem_buffer
+      .no_alloc=true,                       // no_alloc
     };
     struct ggml_context * ctx_input = ggml_init(ctx_input_params);
 
@@ -1738,9 +1738,9 @@ int main(int argc, char ** argv) {
             (params.common.use_checkpointing ? 3 : 2)*(GGML_OBJECT_SIZE+ggml_graph_overhead_custom(LLAMA_TRAIN_MAX_NODES, true))
     );
     struct ggml_init_params ctx_compute_params = {
-        estimated_compute_size_wo_data, // mem_size
-        NULL,                           // mem_buffer
-        true,                           // no_alloc
+      .mem_size=estimated_compute_size_wo_data, // mem_size
+      .mem_buffer=NULL,                           // mem_buffer
+      .no_alloc=true,                           // no_alloc
     };
     struct ggml_context * ctx_compute = NULL;
 
@@ -1905,9 +1905,9 @@ int main(int argc, char ** argv) {
 
     // context for work buffer
     struct ggml_init_params ctx_work_params = {
-        max_work_size, // mem_size
-        NULL,          // mem_buffer
-        false,         // no_alloc
+      .mem_size= max_work_size, // mem_size
+      .mem_buffer = NULL,          // mem_buffer
+      .no_alloc  = false,         // no_alloc
     };
     struct ggml_context * ctx_work = ggml_init(ctx_work_params);
 

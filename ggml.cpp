@@ -2,6 +2,8 @@
 //https://github.com/Neargye/magic_enum.git
 #include <magic_enum.hpp>
 
+
+
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
@@ -16136,11 +16138,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             // all other threads are finished and spinning
             // do finalize and init here so we don't have synchronize again
             struct ggml_compute_params params = {
-                /*.type  =*/ GGML_TASK_FINALIZE,
-                /*.ith   =*/ 0,
-                /*.nth   =*/ 0,
-                /*.wsize =*/ cplan->work_size,
-                /*.wdata =*/ cplan->work_data,
+	      .type  = GGML_TASK_FINALIZE,
+	      .ith   = 0,
+	      .nth   = 0,
+	      .wsize = cplan->work_size,
+	      .wdata = cplan->work_data,
             };
 
             if (node_n != -1) {
@@ -16219,11 +16221,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         const int n_tasks = ggml_get_n_tasks(node, n_threads);
 
         struct ggml_compute_params params = {
-            /*.type  =*/ GGML_TASK_COMPUTE,
-            /*.ith   =*/ state->ith,
-            /*.nth   =*/ n_tasks,
-            /*.wsize =*/ cplan->work_size,
-            /*.wdata =*/ cplan->work_data,
+	  .type  = GGML_TASK_COMPUTE,
+	  .ith   = state->ith,
+	  .nth   = n_tasks,
+	  .wsize = cplan->work_size,
+	  .wdata = cplan->work_data,
         };
 
         if (state->ith < n_tasks) {

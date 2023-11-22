@@ -587,9 +587,9 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     sched->n_splits = 0;
 
     struct ggml_init_params params = {
-        /*.mem_size =   */ sizeof(sched->context_buffer),
-        /*.mem_buffer = */ sched->context_buffer,
-        /*.no_alloc =   */ true
+        .mem_size =   sizeof(sched->context_buffer),
+        .mem_buffer =  sched->context_buffer,
+        .no_alloc =    true
     };
 
     if (sched->ctx != NULL) {

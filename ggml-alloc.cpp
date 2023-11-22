@@ -351,15 +351,17 @@ struct ggml_gallocr {
 ggml_gallocr_t ggml_gallocr_new(void) {
     ggml_gallocr_t galloc = (ggml_gallocr_t)malloc(sizeof(struct ggml_gallocr));
 
+    ggml_hash_set hs = {.size=0, .keys=NULL};
     *galloc = (struct ggml_gallocr) {
-        /*.talloc           = */ NULL,
-        /*.hash_set         = */ {0},
-        /*.hash_values      = */ NULL,
-        /*.hash_values_size = */ 0,
-        /*.hash_allocs      = */ NULL,
-        /*.parse_seq        = */ NULL,
-        /*.parse_seq_len    = */ 0,
+      .talloc           =  NULL,
+      .hash_set  =hs,
+      .hash_values      =  NULL,
+      .hash_values_size =  0,
+      .hash_allocs      =  NULL,
+      .parse_seq        =  NULL,
+      .parse_seq_len    =  0,
     };
+    //((*galloc).hash_set)[0]         =  0;
 
     return galloc;
 }
@@ -706,8 +708,8 @@ struct ggml_allocr {
 static ggml_allocr_t ggml_allocr_new_impl(ggml_tallocr_t talloc) {
     ggml_allocr_t alloc = (ggml_allocr_t)malloc(sizeof(struct ggml_allocr));
     *alloc = (struct ggml_allocr) {
-        /*.talloc = */ talloc,
-        /*.galloc = */ ggml_gallocr_new(),
+      .talloc =  talloc,
+      .galloc =  ggml_gallocr_new(),
     };
     return alloc;
 }

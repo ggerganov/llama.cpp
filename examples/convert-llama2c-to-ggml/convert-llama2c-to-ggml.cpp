@@ -554,8 +554,8 @@ static void load_vocab(const char *filename, Config *config, struct llama_vocab 
         struct ggml_context * ctx_data = NULL;
 
         struct gguf_init_params params = {
-            /*.no_alloc = */ false,
-            /*.ctx      = */ &ctx_data,
+	  .no_alloc =  false,
+	  .ctx      =  &ctx_data,
         };
 
         struct gguf_context * ctx = gguf_init_from_file(filename, params);
