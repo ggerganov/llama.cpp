@@ -2024,7 +2024,43 @@ static inline int ggml_up(int n, int m) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+static  size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT]={};
+struct gguf_str {
+    uint64_t n;  // GGUFv2
+    char * data;
+};
+
+static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {};
+
 struct ggml_context * ggml_init(struct ggml_init_params params) {
+
+  GGUF_TYPE_SIZE[GGUF_TYPE_UINT8]   = sizeof(uint8_t);
+  GGUF_TYPE_SIZE [GGUF_TYPE_INT8]    = sizeof(int8_t);
+  GGUF_TYPE_SIZE[GGUF_TYPE_UINT16]  = sizeof(uint16_t);
+  GGUF_TYPE_SIZE [GGUF_TYPE_INT16]   = sizeof(int16_t);
+  GGUF_TYPE_SIZE [GGUF_TYPE_UINT32]  = sizeof(uint32_t);
+  GGUF_TYPE_SIZE   [GGUF_TYPE_INT32]   = sizeof(int32_t);
+  GGUF_TYPE_SIZE   [GGUF_TYPE_FLOAT32] = sizeof(float);
+  GGUF_TYPE_SIZE    [GGUF_TYPE_BOOL]    = sizeof(bool);
+  GGUF_TYPE_SIZE    [GGUF_TYPE_STRING]  = sizeof(struct gguf_str);
+  GGUF_TYPE_SIZE    [GGUF_TYPE_UINT64]  = sizeof(uint64_t);
+  GGUF_TYPE_SIZE    [GGUF_TYPE_INT64]   = sizeof(int64_t);
+    GGUF_TYPE_SIZE    [GGUF_TYPE_FLOAT64] = sizeof(double);
+    GGUF_TYPE_SIZE    [GGUF_TYPE_ARRAY]   = 0; // undefined
+    
+    GGUF_TYPE_NAME[GGUF_TYPE_UINT8]   = "u8";
+    GGUF_TYPE_NAME[GGUF_TYPE_INT8]    = "i8";
+    GGUF_TYPE_NAME[GGUF_TYPE_UINT16]  = "u16";
+    GGUF_TYPE_NAME[GGUF_TYPE_INT16]   = "i16";
+    GGUF_TYPE_NAME[GGUF_TYPE_UINT32]  = "u32";
+    GGUF_TYPE_NAME[GGUF_TYPE_INT32]   = "i32";
+    GGUF_TYPE_NAME[GGUF_TYPE_FLOAT32] = "f32";
+    GGUF_TYPE_NAME[GGUF_TYPE_BOOL]    = "bool";
+    GGUF_TYPE_NAME[GGUF_TYPE_STRING]  = "str";
+    GGUF_TYPE_NAME[GGUF_TYPE_ARRAY]   = "arr";
+    GGUF_TYPE_NAME[GGUF_TYPE_UINT64]  = "u64";
+    GGUF_TYPE_NAME[GGUF_TYPE_INT64]   = "i64";
+    GGUF_TYPE_NAME[GGUF_TYPE_FLOAT64] = "f64";
 
   type_traits[GGML_TYPE_I8] = {
         .type_name                = "i8",
@@ -18291,12 +18327,8 @@ size_t ggml_quantize_chunk(enum ggml_type type, const float * src, void * dst, i
 
 ////////////////////////////////////////////////////////////////////////////////
 
-struct gguf_str {
-    uint64_t n;  // GGUFv2
-    char * data;
-};
 
-static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
+//static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
   // [GGUF_TYPE_UINT8]   = sizeof(uint8_t),
   // [GGUF_TYPE_INT8]    = sizeof(int8_t),
   // [GGUF_TYPE_UINT16]  = sizeof(uint16_t),
@@ -18310,10 +18342,10 @@ static const size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT] = {
   // [GGUF_TYPE_INT64]   = sizeof(int64_t),
   // [GGUF_TYPE_FLOAT64] = sizeof(double),
   // [GGUF_TYPE_ARRAY]   = 0, // undefined
-};
+//};
 static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
-static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
+
     // [GGUF_TYPE_UINT8]   = "u8",
     // [GGUF_TYPE_INT8]    = "i8",
     // [GGUF_TYPE_UINT16]  = "u16",
@@ -18327,7 +18359,7 @@ static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {
     // [GGUF_TYPE_UINT64]  = "u64",
     // [GGUF_TYPE_INT64]   = "i64",
     // [GGUF_TYPE_FLOAT64] = "f64",
-};
+//};
 static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
 union gguf_value {
