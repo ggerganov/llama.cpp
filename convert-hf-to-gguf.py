@@ -51,6 +51,7 @@ class Model:
     def set_vocab(self):
         self._set_vocab_gpt2()
 
+    @torch.no_grad()
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         for part_name in self.part_names:
             print(f"gguf: loading model part '{part_name}'")
@@ -81,6 +82,7 @@ class Model:
             self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_parallel_residual(self.hparams.get("use_parallel_residual", True))
 
+    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -327,6 +329,7 @@ class BloomModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
+    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams["n_layer"]
         tensors = dict(self.get_tensors())
@@ -421,6 +424,7 @@ class MPTModel(Model):
             self.gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
         self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
 
+    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -506,6 +510,7 @@ class BaichuanModel(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
+    @torch.no_grad()
     def write_tensors(self):
         # Collect tensors from generator object
         model_kv = dict(self.get_tensors())
@@ -608,6 +613,7 @@ class FalconModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
+    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("num_hidden_layers")
         if block_count is None:
@@ -713,6 +719,7 @@ class RefactModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
+    @torch.no_grad()
     def write_tensors(self):
         hidden_dim = self.hparams["n_embd"]
         inner_dim = 4 * hidden_dim
@@ -798,6 +805,7 @@ class PersimmonModel(Model):
         # self.gguf_writer.add_bos_token_id(71013)
         # self.gguf_writer.add_eos_token_id(71013)
 
+    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
