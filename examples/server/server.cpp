@@ -65,8 +65,8 @@ static bool server_verbose = false;
 // base64 utils (TODO: move to common in the future)
 //
 
-nlohmann::json oaicompat_completion_params_parse(
-    const nlohmann::json &body);
+json oaicompat_completion_params_parse(
+    const json &body);
 std::string format_chatml(std::vector<json> messages);
 
 static const std::string base64_chars =
@@ -2245,9 +2245,9 @@ std::string format_chatml(std::vector<json> messages) {
 }
 
 /* llama.cpp completion api semantics */
-nlohmann::json oaicompat_completion_params_parse(
-    const nlohmann::json &body /* openai api json semantics */) {
-  nlohmann::json llama_params;
+json oaicompat_completion_params_parse(
+    const json &body /* openai api json semantics */) {
+  json llama_params;
 
   llama_params["__oaicompat"] = true;
 
@@ -2264,7 +2264,7 @@ nlohmann::json oaicompat_completion_params_parse(
       json_value(body, "max_tokens", -1); // Default to -1 if not provided
   llama_params["logit_bias"] = json_value(
       body, "logit_bias",
-      nlohmann::json::object()); // Default to empty object if not provided
+      json::object()); // Default to empty object if not provided
   llama_params["frequency_penalty"] = json_value(
       body, "frequency_penalty", 0.0); // Default to 0.0 if not provided
   llama_params["presence_penalty"] = json_value(
@@ -2291,7 +2291,7 @@ nlohmann::json oaicompat_completion_params_parse(
   if (llama_params.count("grammar") != 0) {
     llama_params["grammar"] = json_value(
         body, "grammar",
-        nlohmann::json::object()); // Default to empty object if not provided
+        json::object()); // Default to empty object if not provided
   }
 
   // Handle 'stop' field
