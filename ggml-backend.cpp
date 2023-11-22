@@ -25,10 +25,10 @@ ggml_backend_buffer_t ggml_backend_buffer_init(
     GGML_ASSERT(iface.get_base != NULL);
 
     (*buffer) = (struct ggml_backend_buffer) {
-        /* .interface = */ iface,
-        /* .backend   = */ backend,
-        /* .context   = */ context,
-        /* .size      = */ size,
+      .iface =  iface,
+        .backend   =  backend,
+	.context   =  context,
+	.size      = size,
     };
 
     return buffer;
