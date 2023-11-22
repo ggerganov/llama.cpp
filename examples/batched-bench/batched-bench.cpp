@@ -122,14 +122,16 @@ int main(int argc, char ** argv) {
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
 
             llama_batch batch_view = {
-                n_tokens,
-                batch.token    + i,
-                nullptr,
-                batch.pos      + i,
-                batch.n_seq_id + i,
-                batch.seq_id   + i,
-                batch.logits   + i,
-                0, 0, 0, // unused
+	      .n_tokens=n_tokens,
+	      .token=batch.token    + i,
+	      .embd=nullptr,
+	      .pos=batch.pos      + i,
+              .n_seq_id=batch.n_seq_id + i,
+	      .seq_id=batch.seq_id   + i,
+	      .logits=batch.logits   + i,
+	      .all_pos_0=0,
+	      .all_pos_1=0,
+	      .all_seq_id=0, // unused
             };
 
             const int ret = llama_decode(ctx, batch_view);

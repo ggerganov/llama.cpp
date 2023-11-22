@@ -1667,14 +1667,16 @@ struct llama_server_context
             const int32_t n_tokens = std::min(n_batch, (int32_t) (batch.n_tokens - i));
             llama_batch batch_view =
             {
-                n_tokens,
-                batch.token    + i,
-                nullptr,
-                batch.pos      + i,
-                batch.n_seq_id + i,
-                batch.seq_id   + i,
-                batch.logits   + i,
-                0, 0, 0, // unused
+                .n_tokens=n_tokens,
+                .token=batch.token    + i,
+                .embd=nullptr,
+                .pos=batch.pos      + i,
+                .n_seq_id=batch.n_seq_id + i,
+                .seq_id=batch.seq_id   + i,
+                .logits=batch.logits   + i,
+                .all_pos_0=.0,
+		.all_pos_1=0,
+		.all_seq_id=0, // unused
             };
 
             const int ret = llama_decode(ctx, batch_view);
@@ -1722,7 +1724,10 @@ struct llama_server_context
                     slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
                 }
 
-                llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
+                llama_token_data_array cur_p = {
+		  .data=slot.ctx_sampling->cur.data(),
+		  .size=slot.ctx_sampling->cur.size(),
+		  .sorted=false };
                 result.tok = id;
 
                 const int32_t n_probs = slot.sparams.n_probs;
