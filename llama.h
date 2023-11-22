@@ -361,9 +361,12 @@ extern "C" {
     // KV cache
     //
 
-    // Returns the number of tokens in the KV cache
-    LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
-            "avoid using this, it will be removed in the future, instead - count the tokens in user code");
+    // Returns the number of tokens in the KV cache (slow, use only for debug)
+    // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
+
+    // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
+    LLAMA_API int llama_get_kv_cache_used_cells(const struct llama_context * ctx);
 
     // Clear the KV cache
     LLAMA_API void llama_kv_cache_clear(
