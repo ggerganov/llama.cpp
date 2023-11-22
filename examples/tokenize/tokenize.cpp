@@ -26,7 +26,7 @@ int main(int argc, char ** argv) {
     llama_context_params ctx_params = llama_context_default_params();
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
-    const bool add_bos = true;
+    const bool add_bos = llama_should_add_bos_token(model);
 
     std::vector<llama_token> tokens;
 
