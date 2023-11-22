@@ -18476,7 +18476,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         for (uint64_t i = 0; i < ctx->header.n_kv; ++i) {
             struct gguf_kv * kv = &ctx->kv[i];
 
-            //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
+            fprintf(stderr, "%s: reading kv %d\n", __func__, i);
 
             ok = ok && gguf_fread_str(file, &kv->key,                    &offset);
             ok = ok && gguf_fread_el (file, &kv->type, sizeof(kv->type), &offset);

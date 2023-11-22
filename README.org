@@ -1085,4 +1085,13 @@ $14 = {header = {magic = "GGUF", version = 2, n_tensors = 291, n_kv = 20},
   kv = 0x555556ffc2f0, infos = 0x55555716d5f0, alignment = 0, offset = 0, size = 0, 
   data = 0x0}
 (gdb)
-l
+
+This key we can treat differently and we can imagine a template class attachd to the dynamic model or
+even a customized class for it. 
+$5 = {key = {n = 21, data = 0x555555e1cb50 "tokenizer.ggml.tokens"}, 
+  type = GGUF_TYPE_ARRAY, value = {uint8 = 0 '\000', int8 = 0 '\000', uint16 = 0, 
+    int16 = 0, uint32 = 0, int32 = 0, float32 = 0, uint64 = 0, int64 = 0, float64 = 0, 
+    bool_ = false, str = {n = 0, data = 0x0}, arr = {type = GGUF_TYPE_UINT8, n = 0, 
+      data = 0x0}}}
+
+      
