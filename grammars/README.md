@@ -55,7 +55,7 @@ The order of symbols in a sequence matter. For example, in `"1. " move " " move 
 
 Alternatives, denoted by `|`, give different sequences that are acceptable. For example, in `move ::= pawn | nonpawn | castle`, `move` can be a `pawn` move, a `nonpawn` move, or a `castle`.
 
-Parentheses `()` can be used to group sequences, which allows for embedding alternatives in a larger rule or applying repetition and optptional symbols (below) to a sequence.
+Parentheses `()` can be used to group sequences, which allows for embedding alternatives in a larger rule or applying repetition and optional symbols (below) to a sequence.
 
 ## Repetition and Optional Symbols
 
@@ -67,7 +67,7 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 Comments can be specified with `#`:
 ```
-# defines optional whitspace
+# defines optional whitespace
 ws ::= [ \t\n]+
 ```
 

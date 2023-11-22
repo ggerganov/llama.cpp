@@ -106,6 +106,14 @@ extern "C" {
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
+    enum llama_rope_scaling_type {
+        LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
+        LLAMA_ROPE_SCALING_NONE        = 0,
+        LLAMA_ROPE_SCALING_LINEAR      = 1,
+        LLAMA_ROPE_SCALING_YARN        = 2,
+        LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -167,15 +175,21 @@ extern "C" {
     };
 
     struct llama_context_params {
-        uint32_t seed;            // RNG seed, -1 for random
-        uint32_t n_ctx;           // text context, 0 = from model
-        uint32_t n_batch;         // prompt processing maximum batch size
-        uint32_t n_threads;       // number of threads to use for generation
-        uint32_t n_threads_batch; // number of threads to use for batch processing
+        uint32_t seed;              // RNG seed, -1 for random
+        uint32_t n_ctx;             // text context, 0 = from model
+        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_threads;         // number of threads to use for generation
+        uint32_t n_threads_batch;   // number of threads to use for batch processing
+        int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float rope_freq_base;  // RoPE base frequency, 0 = from model
-        float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
+        float    rope_freq_base;   // RoPE base frequency, 0 = from model
+        float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+        float    yarn_attn_factor; // YaRN magnitude scaling factor
+        float    yarn_beta_fast;   // YaRN low correction dim
+        float    yarn_beta_slow;   // YaRN high correction dim
+        uint32_t yarn_orig_ctx;    // YaRN original context size
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
@@ -286,6 +300,23 @@ extern "C" {
 
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
+
+    // Functions to access the model's GGUF metadata scalar values
+    // - The functions return the length of the string on success, or -1 on failure
+    // - The output string is always null-terminated and cleared on failure
+    // - GGUF array values are not supported by these functions
+
+    // Get metadata value as a string by key name
+    LLAMA_API int llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
+
+    // Get the number of metadata key/value pairs
+    LLAMA_API int llama_model_meta_count(const struct llama_model * model);
+
+    // Get metadata key name by index
+    LLAMA_API int llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+
+    // Get metadata value as a string by index
+    LLAMA_API int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
 
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
@@ -503,6 +534,12 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 
+    // Returns -1 if unknown, 1 for true or 0 for false.
+    LLAMA_API int         llama_add_bos_token(const struct llama_model * model);
+
+    // Returns -1 if unknown, 1 for true or 0 for false.
+    LLAMA_API int         llama_add_eos_token(const struct llama_model * model);
+
     // codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
     LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
@@ -593,6 +630,13 @@ extern "C" {
 
     /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
     LLAMA_API void llama_sample_top_p(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+                           float   p,
+                          size_t   min_keep);
+
+    /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+    LLAMA_API void llama_sample_min_p(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
                            float   p,

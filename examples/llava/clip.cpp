@@ -664,7 +664,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 // measure mem requirement and allocate
     {
         static const size_t tensor_alignment = 32;
-        new_clip->buf_compute.resize(ggml_tensor_overhead()*GGML_MAX_NODES + ggml_graph_overhead());
+        new_clip->buf_compute.resize(ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead());
         new_clip->alloc = ggml_allocr_new_measure(tensor_alignment);
         clip_image_f32_batch batch;
         batch.size = 1;
@@ -680,26 +680,44 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-clip_image_u8 * make_clip_image_u8() { return new clip_image_u8(); }
-
+clip_image_u8 * make_clip_image_u8() {
+    auto img = new clip_image_u8();
+    return img;
+}
 clip_image_f32 * make_clip_image_f32() { return new clip_image_f32(); }
 
-bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
-    int nx, ny, nc;
-    auto data = stbi_load(fname, &nx, &ny, &nc, 3);
-    if (!data) {
-        fprintf(stderr, "%s: failed to load '%s'\n", __func__, fname);
-        return false;
-    }
+void clip_image_u8_free(clip_image_u8 * img) { if (img->data) { delete[] img->data; } delete img; }
+void clip_image_f32_free(clip_image_f32 * img) { if (img->data) { delete[] img->data; } delete img; }
 
+static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
     img->ny = ny;
     img->size = nx * ny * 3;
     img->data = new uint8_t[img->size]();
     memcpy(img->data, data, img->size);
+}
 
+bool clip_image_load_from_file(const char * fname, clip_image_u8 * img) {
+    int nx, ny, nc;
+    auto data = stbi_load(fname, &nx, &ny, &nc, 3);
+    if (!data) {
+        fprintf(stderr, "%s: failed to load image '%s'\n", __func__, fname);
+        return false;
+    }
+    build_clip_img_from_data(data, nx, ny, img);
     stbi_image_free(data);
+    return true;
+}
 
+bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img) {
+    int nx, ny, nc;
+    auto data = stbi_load_from_memory(bytes, bytes_length, &nx, &ny, &nc, 3);
+    if (!data) {
+        fprintf(stderr, "%s: failed to decode image bytes\n", __func__);
+        return false;
+    }
+    build_clip_img_from_data(data, nx, ny, img);
+    stbi_image_free(data);
     return true;
 }
 
@@ -714,39 +732,40 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
     // the logic below is to pad the shorter side to the longer side with a background color: rgb(122, 116, 104)
     // see https://github.com/haotian-liu/LLaVA/blob/e854a2bf85118c504f6f16bf5c3c7c92f8fa8c6b/llava/conversation.py#L113-L156
 
-    clip_image_u8 temp; // we will keep the input image data here temporarily
+    clip_image_u8 * temp = make_clip_image_u8(); // we will keep the input image data here temporarily
     if (pad2square && img->nx != img->ny) {
         int longer_side = std::max(img->nx, img->ny);
-        temp.nx = longer_side;
-        temp.ny = longer_side;
-        temp.size = 3 * longer_side * longer_side;
-        temp.data = new uint8_t[temp.size]();
+        temp->nx = longer_side;
+        temp->ny = longer_side;
+        temp->size = 3 * longer_side * longer_side;
+        temp->data = new uint8_t[temp->size]();
         uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
 
         // fill with background color
-        for (size_t i = 0; i < temp.size; i++) {
-            temp.data[i] = bc[i % 3];
+        for (size_t i = 0; i < temp->size; i++) {
+            temp->data[i] = bc[i % 3];
         }
 
         // copy from the input image
         for (int y = 0; y < img->ny; y++) {
             for (int x = 0; x < img->nx; x++) {
                 const int i = 3 * (y * img->nx + x);
-                const int j = 3 * (y * temp.nx + x);
-                temp.data[j] = img->data[i];
-                temp.data[j+1] = img->data[i+1];
-                temp.data[j+2] = img->data[i+2];
+                const int j = 3 * (y * temp->nx + x);
+                temp->data[j] = img->data[i];
+                temp->data[j+1] = img->data[i+1];
+                temp->data[j+2] = img->data[i+2];
             }
         }
     } else {
-        temp.nx   = img->nx;
-        temp.ny   = img->ny;
-        temp.size = img->size;
-        temp.data = img->data;
+        temp->nx   = img->nx;
+        temp->ny   = img->ny;
+        temp->size = img->size;
+        temp->data = new uint8_t[temp->size]();
+        memcpy(&temp->data[0], &img->data[0], temp->size); // copy
     }
 
-    const int nx = temp.nx;
-    const int ny = temp.ny;
+    const int nx = temp->nx;
+    const int ny = temp->ny;
 
     const int nx2 = ctx->vision_model.hparams.image_size;
     const int ny2 = ctx->vision_model.hparams.image_size;
@@ -785,10 +804,10 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
                 const int j10 = 3 * (y1 * nx + x0) + c;
                 const int j11 = 3 * (y1 * nx + x1) + c;
 
-                const float v00 = temp.data[j00];
-                const float v01 = temp.data[j01];
-                const float v10 = temp.data[j10];
-                const float v11 = temp.data[j11];
+                const float v00 = temp->data[j00];
+                const float v01 = temp->data[j01];
+                const float v10 = temp->data[j10];
+                const float v11 = temp->data[j11];
 
                 const float v0 = v00 * (1.0f - dx) + v01 * dx;
                 const float v1 = v10 * (1.0f - dx) + v11 * dx;
@@ -803,6 +822,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
             }
         }
     }
+    clip_image_u8_free(temp);
 
     return true;
 }
@@ -1049,16 +1069,16 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     return true;
 }
 
-int clip_n_mmproj_embd(struct clip_ctx * ctx) {
+int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     return ctx->vision_model.mm_2_b->ne[0];
 }
 
-int clip_n_patches(struct clip_ctx * ctx) {
+int clip_n_patches(const struct clip_ctx * ctx) {
     auto & params = ctx->vision_model.hparams;
 
     return (params.image_size / params.patch_size) * (params.image_size / params.patch_size);
 }
 
-size_t clip_embd_nbytes(struct clip_ctx * ctx) {
+size_t clip_embd_nbytes(const struct clip_ctx * ctx) {
     return clip_n_patches(ctx) * clip_n_mmproj_embd(ctx) * sizeof(float);
 }

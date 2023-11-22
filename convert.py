@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
-import copy
 import enum
 import faulthandler
 import functools
-import io
 import itertools
 import json
 import math
@@ -23,14 +21,14 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Callable, Generator, Iterable, Literal, Sequence, TypeVar
+from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, TypeVar
 
 import numpy as np
-from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+from sentencepiece import SentencePieceProcessor
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
 if TYPE_CHECKING:
@@ -48,6 +46,7 @@ DEFAULT_CONCURRENCY = 8
 # data types
 #
 
+
 @dataclass(frozen=True)
 class DataType:
     name: str
@@ -57,14 +56,17 @@ class DataType:
     def elements_to_bytes(self, n_elements: int) -> int:
         return n_elements * self.dtype.itemsize
 
+
 @dataclass(frozen=True)
 class UnquantizedDataType(DataType):
     pass
+
 
 DT_F16  = UnquantizedDataType('F16', dtype = np.dtype(np.float16), valid_conversions = ['F32', 'Q8_0'])
 DT_F32  = UnquantizedDataType('F32', dtype = np.dtype(np.float32), valid_conversions = ['F16', 'Q8_0'])
 DT_I32  = UnquantizedDataType('I32', dtype = np.dtype(np.int16), valid_conversions = [])
 DT_BF16 = UnquantizedDataType('BF16', dtype = np.dtype(np.uint16), valid_conversions = ['F32', 'F16', 'Q8_0'])
+
 
 @dataclass(frozen=True)
 class QuantizedDataType(DataType):
@@ -79,6 +81,7 @@ class QuantizedDataType(DataType):
         assert n_elements % self.block_size == 0, f'Invalid number of elements {n_elements} for {self.name} with block size {self.block_size}'
         return self.quantized_dtype.itemsize * (n_elements // self.block_size)
 
+
 @dataclass(frozen=True)
 class Q8_0QuantizedDataType(QuantizedDataType):
     # Mini Q8_0 quantization in Python!
@@ -88,6 +91,7 @@ class Q8_0QuantizedDataType(QuantizedDataType):
         n_blocks = arr.size // self.block_size
         blocks = arr.reshape((n_blocks, self.block_size))
         # Much faster implementation of block quantization contributed by @Cebtenzzre
+
         def quantize_blocks_q8_0(blocks: NDArray) -> Iterable[tuple[Any, Any]]:
             d = abs(blocks).max(axis = 1) / np.float32(127)
             with np.errstate(divide = 'ignore'):
@@ -96,10 +100,11 @@ class Q8_0QuantizedDataType(QuantizedDataType):
             yield from zip(d, qs)
         return np.fromiter(quantize_blocks_q8_0(blocks), count = n_blocks, dtype = self.quantized_dtype)
 
+
 DT_Q8_0 = Q8_0QuantizedDataType('Q8_0',
-    dtype = np.dtype(np.float32), valid_conversions = [],
-    ggml_type = gguf.GGMLQuantizationType.Q8_0, block_size = 32,
-    quantized_dtype = np.dtype([('d', '<f2'), ('qs', 'i1', (32,))]))
+                                dtype = np.dtype(np.float32), valid_conversions = [],
+                                ggml_type = gguf.GGMLQuantizationType.Q8_0, block_size = 32,
+                                quantized_dtype = np.dtype([('d', '<f2'), ('qs', 'i1', (32,))]))
 
 # Quantized types skipped here because they may also map to np.float32
 NUMPY_TYPE_TO_DATA_TYPE: dict[np.dtype[Any], DataType] = {}
@@ -118,6 +123,8 @@ SAFETENSORS_DATA_TYPES: dict[str, DataType] = {
 # TODO: match this with `llama_ftype`
 # TODO: rename to LLAMAFileType
 # TODO: move to `gguf.py`
+
+
 class GGMLFileType(enum.IntEnum):
     AllF32     = 0
     MostlyF16  = 1  # except 1d tensors
@@ -130,6 +137,7 @@ class GGMLFileType(enum.IntEnum):
         # 1D tensors are always F32.
         return dt if len(tensor.shape) > 1 else DT_F32
 
+
 GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
     GGMLFileType.AllF32    : DT_F32,
     GGMLFileType.MostlyF16 : DT_F16,
@@ -139,6 +147,7 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 #
 # hparams loading
 #
+
 
 @dataclass
 class Params:
@@ -151,8 +160,11 @@ class Params:
     n_head_kv:  int
     f_norm_eps: float
 
+    rope_scaling_type: gguf.RopeScalingType | None = None
     f_rope_freq_base: float | None = None
     f_rope_scale: float | None = None
+    n_orig_ctx: int | None = None
+    rope_finetuned: bool | None = None
 
     ftype: GGMLFileType | None = None
 
@@ -166,11 +178,11 @@ class Params:
 
         # try transformer naming first
         if "model.layers.0.self_attn.q_proj.weight" in model:
-            n_layer=next(i for i in itertools.count() if f"model.layers.{i}.self_attn.q_proj.weight" not in model)
+            n_layer = next(i for i in itertools.count() if f"model.layers.{i}.self_attn.q_proj.weight" not in model)
         elif "model.layers.0.self_attn.W_pack.weight" in model:   # next: try baichuan naming
-            n_layer=next(i for i in itertools.count() if f"model.layers.{i}.self_attn.W_pack.weight" not in model)
+            n_layer = next(i for i in itertools.count() if f"model.layers.{i}.self_attn.W_pack.weight" not in model)
         else:
-            n_layer=next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
+            n_layer = next(i for i in itertools.count() if f"layers.{i}.attention.wq.weight" not in model)
 
         if n_layer < 1:
             raise Exception("failed to guess 'n_layer'. This model is unknown or unsupported.\n"
@@ -198,20 +210,20 @@ class Params:
     def loadHFTransformerJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
-        n_vocab          = config["vocab_size"]
-        n_embd           = config["hidden_size"]
-        n_layer          = config["num_hidden_layers"]
-        n_ff             = config["intermediate_size"]
-        n_head           = config["num_attention_heads"]
-        n_head_kv        = config["num_key_value_heads"] if "num_key_value_heads" in config else n_head
-        f_norm_eps       = config["rms_norm_eps"]
-        f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
-
+        rope_scaling_type = f_rope_scale = n_orig_ctx = rope_finetuned = None
         rope_scaling = config.get("rope_scaling")
-        if isinstance(rope_scaling, dict) and rope_scaling.get("type") == "linear":
-            f_rope_scale = config["rope_scaling"].get("factor")
-        else:
-            f_rope_scale = None
+
+        if rope_scaling is not None and (typ := rope_scaling.get("type")):
+            rope_factor = rope_scaling.get("factor")
+            f_rope_scale = rope_factor
+            if typ == "linear":
+                rope_scaling_type = gguf.RopeScalingType.LINEAR
+            elif typ == "yarn":
+                rope_scaling_type = gguf.RopeScalingType.YARN
+                n_orig_ctx = rope_scaling['original_max_position_embeddings']
+                rope_finetuned = rope_scaling['finetuned']
+            else:
+                raise NotImplementedError(f'Unknown rope scaling type: {typ}')
 
         if "max_sequence_length" in config:
             n_ctx = config["max_sequence_length"]
@@ -222,16 +234,19 @@ class Params:
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
 
         return Params(
-            n_vocab          = n_vocab,
-            n_embd           = n_embd,
-            n_layer          = n_layer,
-            n_ctx            = n_ctx,
-            n_ff             = n_ff,
-            n_head           = n_head,
-            n_head_kv        = n_head_kv,
-            f_norm_eps       = f_norm_eps,
-            f_rope_freq_base = f_rope_freq_base,
-            f_rope_scale     = f_rope_scale,
+            n_vocab           = config["vocab_size"],
+            n_embd            = config["hidden_size"],
+            n_layer           = config["num_hidden_layers"],
+            n_ctx             = n_ctx,
+            n_ff              = config["intermediate_size"],
+            n_head            = (n_head := config["num_attention_heads"]),
+            n_head_kv         = config.get("num_key_value_heads", n_head),
+            f_norm_eps        = config["rms_norm_eps"],
+            f_rope_freq_base  = config.get("rope_theta"),
+            rope_scaling_type = rope_scaling_type,
+            f_rope_scale      = f_rope_scale,
+            n_orig_ctx        = n_orig_ctx,
+            rope_finetuned    = rope_finetuned,
         )
 
     # LLaMA v2 70B params.json
@@ -240,17 +255,8 @@ class Params:
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
-        n_vocab          = config["vocab_size"] if "vocab_size" in config else -1
-        n_embd           = config["dim"]
-        n_layer          = config["n_layers"]
-        n_ff             = -1
-        n_head           = config["n_heads"]
-        n_head_kv        = config["n_kv_heads"] if "n_kv_heads" in config else n_head
-        f_norm_eps       = config["norm_eps"]
-        f_rope_freq_base = config["rope_theta"] if "rope_theta" in config else None
-
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
-        if f_rope_freq_base == 1000000:
+        if config.get("rope_theta") == 1000000:
             # CodeLlama
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
@@ -260,22 +266,16 @@ class Params:
             # LLaMA v1
             n_ctx = 2048
 
-        if n_vocab == -1:
-            n_vocab = model["tok_embeddings.weight"].shape[0]
-
-        if n_ff == -1:
-            n_ff = model["layers.0.feed_forward.w1.weight"].shape[0]
-
         return Params(
-            n_vocab          = n_vocab,
-            n_embd           = n_embd,
-            n_layer          = n_layer,
+            n_vocab          = config.get("vocab_size", model["tok_embeddings.weight"].shape[0]),
+            n_embd           = config["dim"],
+            n_layer          = config["n_layers"],
             n_ctx            = n_ctx,
-            n_ff             = n_ff,
-            n_head           = n_head,
-            n_head_kv        = n_head_kv,
-            f_norm_eps       = f_norm_eps,
-            f_rope_freq_base = f_rope_freq_base,
+            n_ff             = model["layers.0.feed_forward.w1.weight"].shape[0],
+            n_head           = (n_head := config["n_heads"]),
+            n_head_kv        = config.get("n_kv_heads", n_head),
+            f_norm_eps       = config["norm_eps"],
+            f_rope_freq_base = config.get("rope_theta"),
         )
 
     @staticmethod
@@ -441,13 +441,14 @@ Vocab: TypeAlias = 'VocabLoader'
 # TODO: reuse (probably move to gguf.py?)
 #
 
+
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
-    #print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
+    # print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
         n_head = n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-                .swapaxes(1, 2)
-                .reshape(weights.shape))
+            .swapaxes(1, 2)
+            .reshape(weights.shape))
 
 
 class Tensor(metaclass=ABCMeta):
@@ -528,7 +529,7 @@ class LazyTensor:
         ret = self._load()
         # Should be okay if it maps to the same numpy type?
         assert ret.data_type == self.data_type or (self.data_type.dtype == ret.data_type.dtype), \
-                (self.data_type, ret.data_type, self.description)
+            (self.data_type, ret.data_type, self.description)
         return ret
 
     def astype(self, data_type: DataType) -> LazyTensor:
@@ -616,12 +617,14 @@ def permute_lazy(lazy_tensor: LazyTensor, n_head: int, n_head_kv: int) -> LazyTe
         return lazy_tensor.load().permute(n_head, n_head_kv)
     return LazyTensor(load, lazy_tensor.shape, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
 
+
 def permute_part_lazy(lazy_tensor: LazyTensor, n_part: int, n_head: int, n_head_kv: int) -> LazyTensor:
     def load() -> Tensor:
         return lazy_tensor.load().permute_part(n_part, n_head, n_head_kv)
     s = lazy_tensor.shape.copy()
     s[0] = s[0] // 3
     return LazyTensor(load, s, lazy_tensor.data_type, f'permute({n_head}, {n_head_kv}) ' + lazy_tensor.description)
+
 
 def part_lazy(lazy_tensor: LazyTensor, n_part: int) -> LazyTensor:
     def load() -> Tensor:
@@ -718,6 +721,7 @@ def lazy_load_torch_file(outer_fp: IO[bytes], path: Path) -> ModelPlus:
                               data_base_path=pickle_paths[0][:-4],
                               zip_file=zf)
     model = unpickler.load()
+    if 'model' in model: model = model['model']
     as_dict = dict(model.items())
     return ModelPlus(model=as_dict, paths=[path], format='torch', vocab=None)
 
@@ -770,6 +774,7 @@ def lazy_load_file(path: Path) -> ModelPlus:
 
 In = TypeVar('In')
 Out = TypeVar('Out')
+
 
 def bounded_parallel_map(func: Callable[[In], Out], iterable: Iterable[In], concurrency: int, max_workers: int | None = None, use_processpool_executor: bool = False) -> Iterable[Out]:
     '''Parallel map, but with backpressure.  If the caller doesn't call `next`
@@ -830,7 +835,7 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian=gguf.GGUFEndian.LITTLE) -> None:
+    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE) -> None:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
@@ -855,8 +860,16 @@ class OutputFile:
         if params.f_rope_freq_base is not None:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
 
-        if params.f_rope_scale is not None:
-            self.gguf.add_rope_scale_linear(params.f_rope_scale)
+        if params.rope_scaling_type:
+            assert params.f_rope_scale is not None
+            self.gguf.add_rope_scaling_type(params.rope_scaling_type)
+            self.gguf.add_rope_scaling_factor(params.f_rope_scale)
+
+        if params.n_orig_ctx is not None:
+            self.gguf.add_rope_scaling_orig_ctx_len(params.n_orig_ctx)
+
+        if params.rope_finetuned is not None:
+            self.gguf.add_rope_scaling_finetuned(params.rope_finetuned)
 
         if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
@@ -873,7 +886,6 @@ class OutputFile:
 
         vocab_type = vocab.get_vocab_type()
         self.gguf.add_tokenizer_model(vocab_type)
-        
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
@@ -971,8 +983,9 @@ class OutputFile:
 
         of.close()
 
+
 def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileType:
-    wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0)+".weight"].data_type
+    wq_type = model[gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ATTN_Q].format(bid=0) +".weight"].data_type
 
     if output_type_str == "f32" or (output_type_str is None and wq_type == DT_F32):
         return GGMLFileType.AllF32
@@ -985,9 +998,11 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
 
     raise Exception(f"Unexpected combination of types: {name_to_type}")
 
+
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
     return {name: tensor.astype(output_type.type_for_tensor(name, tensor))
             for (name, tensor) in model.items()}
+
 
 def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
     tmap = gguf.TensorNameMap(ARCH, params.n_layer)
@@ -1001,7 +1016,7 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
             print(f"Permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
-           #tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
+            # tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
             print(f"Unpacking and permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
@@ -1025,6 +1040,7 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
         out[name_new] = lazy_tensor
 
     return out
+
 
 def nth_multifile_path(path: Path, n: int) -> Path | None:
     '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
@@ -1070,7 +1086,8 @@ def load_some_model(path: Path) -> ModelPlus:
     # Be extra-friendly and accept either a file or a directory:
     if path.is_dir():
         # Check if it's a set of safetensors files first
-        files = list(path.glob("model-00001-of-*.safetensors"))
+        globs = ["model-00001-of-*.safetensors", "model.safetensors"]
+        files = [file for glob in globs for file in path.glob(glob)]
         if not files:
             # Try the PyTorch patterns too, with lower priority
             globs = ["consolidated.00.pth", "pytorch_model-00001-of-*.bin", "*.pt", "pytorch_model.bin"]
@@ -1140,11 +1157,15 @@ def do_dump_model(model_plus: ModelPlus) -> None:
 
 
 def main(args_in: list[str] | None = None) -> None:
+    output_choices = ["f32", "f16"]
+    if np.uint32(1) == np.uint32(1).newbyteorder("<"):
+        # We currently only support Q8_0 output on little endian systems.
+        output_choices.append("q8_0")
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
     parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
-    parser.add_argument("--outtype",     choices=["f32", "f16", "q8_0"], help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
+    parser.add_argument("--outtype",     choices=output_choices, help="output format - note: q8_0 may be very slow (default: f16 or f32 based on input)")
     parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin)")
