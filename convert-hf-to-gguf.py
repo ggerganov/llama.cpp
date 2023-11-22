@@ -51,7 +51,6 @@ class Model:
     def set_vocab(self):
         self._set_vocab_gpt2()
 
-    @torch.no_grad()
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         for part_name in self.part_names:
             print(f"gguf: loading model part '{part_name}'")
@@ -82,7 +81,6 @@ class Model:
             self.gguf_writer.add_head_count(n_head)
         self.gguf_writer.add_parallel_residual(self.hparams.get("use_parallel_residual", True))
 
-    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -329,7 +327,6 @@ class BloomModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams["n_layer"]
         tensors = dict(self.get_tensors())
@@ -424,7 +421,6 @@ class MPTModel(Model):
             self.gguf_writer.add_clamp_kqv(self.hparams["attn_config"]["clip_qkv"])
         self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
 
-    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -510,7 +506,6 @@ class BaichuanModel(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
-    @torch.no_grad()
     def write_tensors(self):
         # Collect tensors from generator object
         model_kv = dict(self.get_tensors())
@@ -613,7 +608,6 @@ class FalconModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("num_hidden_layers")
         if block_count is None:
@@ -719,7 +713,6 @@ class RefactModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-    @torch.no_grad()
     def write_tensors(self):
         hidden_dim = self.hparams["n_embd"]
         inner_dim = 4 * hidden_dim
@@ -805,7 +798,6 @@ class PersimmonModel(Model):
         # self.gguf_writer.add_bos_token_id(71013)
         # self.gguf_writer.add_eos_token_id(71013)
 
-    @torch.no_grad()
     def write_tensors(self):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -888,20 +880,21 @@ print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
-model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
+with torch.inference_mode():
+    model_class = Model.from_model_architecture(hparams["architectures"][0])
+    model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
-print("Set model parameters")
-model_instance.set_gguf_parameters()
+    print("Set model parameters")
+    model_instance.set_gguf_parameters()
 
-print("Set model tokenizer")
-model_instance.set_vocab()
+    print("Set model tokenizer")
+    model_instance.set_vocab()
 
-if args.vocab_only:
-    print(f"Exporting model vocab to '{fname_out}'")
-    model_instance.write_vocab()
-else:
-    print(f"Exporting model to '{fname_out}'")
-    model_instance.write()
+    if args.vocab_only:
+        print(f"Exporting model vocab to '{fname_out}'")
+        model_instance.write_vocab()
+    else:
+        print(f"Exporting model to '{fname_out}'")
+        model_instance.write()
 
-print(f"Model successfully exported to '{fname_out}'")
+    print(f"Model successfully exported to '{fname_out}'")
