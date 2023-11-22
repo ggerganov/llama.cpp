@@ -6745,7 +6745,7 @@ struct llama_grammar * llama_grammar_init(
         for (pos = rules[i]; pos->type != LLAMA_GRETYPE_END; pos++) {
             vec_rules[i].push_back(*pos);
         }
-	llama_grammar_element ge = {.type=LLAMA_GRETYPE_END, .value=0};
+	llama_grammar_element ge(LLAMA_GRETYPE_END,0);
         vec_rules[i].push_back(ge);
     }
 
@@ -7398,11 +7398,11 @@ struct llama_logit_info {
       { }
     llama_token_data get_token_data(const llama_token token_id) const {
         constexpr auto p = std::numeric_limits<float>::quiet_NaN();  // never used
-	llama_token_data dd {
-	  .id = token_id,
-	  .logit = logits[token_id],
-	  .p = p
-	};
+	llama_token_data dd(
+			    token_id,
+			    logits[token_id],
+			    p
+			    );
         return dd;
     }
     // Return top k token_data by logit.

@@ -144,7 +144,7 @@ namespace grammar_parser {
                 while (*pos != '"') {
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
-                    out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
+			 out_elements.push_back(llama_grammar_element(LLAMA_GRETYPE_CHAR, char_pair.first));
                 }
                 pos = parse_space(pos + 1, is_nested);
             } else if (*pos == '[') { // char range(s)
@@ -162,11 +162,11 @@ namespace grammar_parser {
                         ? LLAMA_GRETYPE_CHAR_ALT
                         : start_type;
 
-                    out_elements.push_back({type, char_pair.first});
+                    out_elements.push_back(llama_grammar_element(type, char_pair.first));
                     if (pos[0] == '-' && pos[1] != ']') {
                         auto endchar_pair = parse_char(pos + 1);
                              pos          = endchar_pair.second;
-                        out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
+			     out_elements.push_back(llama_grammar_element(LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first));
                     }
                 }
                 pos = parse_space(pos + 1, is_nested);
@@ -175,7 +175,7 @@ namespace grammar_parser {
                 uint32_t     ref_rule_id = get_symbol_id(state, pos, name_end - pos);
                 pos = parse_space(name_end, is_nested);
                 last_sym_start = out_elements.size();
-                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, ref_rule_id});
+                out_elements.push_back(llama_grammar_element(LLAMA_GRETYPE_RULE_REF, ref_rule_id));
             } else if (*pos == '(') { // grouping
                 // parse nested alternates into synthesized rule
                 pos = parse_space(pos + 1, true);
@@ -183,7 +183,7 @@ namespace grammar_parser {
                 pos = parse_alternates(state, pos, rule_name, sub_rule_id, true);
                 last_sym_start = out_elements.size();
                 // output reference to synthesized rule
-                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
+                out_elements.push_back(llama_grammar_element(LLAMA_GRETYPE_RULE_REF, sub_rule_id));
                 if (*pos != ')') {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
@@ -219,7 +219,8 @@ namespace grammar_parser {
 
                 // in original rule, replace previous symbol with reference to generated rule
                 out_elements.resize(last_sym_start);
-                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
+		llama_grammar_element(LLAMA_GRETYPE_RULE_REF, sub_rule_id) a;
+                out_elements.push_back(a);
 
                 pos = parse_space(pos + 1, is_nested);
             } else {

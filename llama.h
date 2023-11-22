@@ -115,6 +115,13 @@ extern "C" {
     };
 
     typedef struct llama_token_data : refl::attr::usage::type{
+      llama_token_data(        llama_token id,
+			       float logit,
+			       float p):
+	id( id),
+	logit(logit),
+	p(p){
+      }
         llama_token id; // token id
         float logit;    // log-odds of the token
         float p;        // probability of the token
@@ -244,6 +251,10 @@ extern "C" {
     };
 
     typedef struct llama_grammar_element : refl::attr::usage::type{
+      llama_grammar_element(        enum llama_gretype type,
+				    uint32_t           value // Unicode code point or rule ID
+				    ):type(type), value(value){}
+      llama_grammar_element( ):type(0), value(0){}
         enum llama_gretype type;
         uint32_t           value; // Unicode code point or rule ID
     } llama_grammar_element;
