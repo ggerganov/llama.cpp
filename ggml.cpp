@@ -2886,39 +2886,39 @@ int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i) {
 
 void ggml_tensor_checksum(const struct ggml_tensor * tensor);
 void ggml_tensor_checksum(const struct ggml_tensor * tensor) {
-  const int64_t ne = ggml_nelements(tensor) ;
-  float fmin=0;
-  float ffirst=0;
-  float fmax=0;
-  float fsum=0;
+//   const int64_t ne = ggml_nelements(tensor) ;
+//   float fmin=0;
+//   float ffirst=0;
+//   float fmax=0;
+//   float fsum=0;
 
-  for (int64_t j = 0; j < ne; ++j) {
-    float f = ggml_get_f32_1d(tensor, j);
-    if (j ==0) {
-      ffirst = f;
-      fmin = f;
-      fmax = f;
-    }
-    fsum += f;
-    if (f < fmin){
-      fmin = f;
-    }
-    if (f >fmax){
-      fmax = f;
-    }    
-  }
+//   for (int64_t j = 0; j < ne; ++j) {
+//     float f = ggml_get_f32_1d(tensor, j);
+//     if (j ==0) {
+//       ffirst = f;
+//       fmin = f;
+//       fmax = f;
+//     }
+//     fsum += f;
+//     if (f < fmin){
+//       fmin = f;
+//     }
+//     if (f >fmax){
+//       fmax = f;
+//     }    
+//   }
 
-  auto type_name = magic_enum::enum_name(tensor->type);
-// color_name
-  fprintf(stderr, "JSON: { \"cnt\":%ld, \"first\":%f,\"max\":%f,\"min\":%f,\"sum\":%f, \"name\":\"%s\", \"type\":\"%s\"}\n",
-	  ne,
-	  ffirst,
-	  fmax,
-	  fmin,
-	  fsum,
-	  tensor->name,
-	  std::string(type_name).c_str()
-	  );
+//   auto type_name = magic_enum::enum_name(tensor->type);
+// // color_name
+//   fprintf(stderr, "JSON: { \"cnt\":%ld, \"first\":%f,\"max\":%f,\"min\":%f,\"sum\":%f, \"name\":\"%s\", \"type\":\"%s\"}\n",
+// 	  ne,
+// 	  ffirst,
+// 	  fmax,
+// 	  fmin,
+// 	  fsum,
+// 	  tensor->name,
+// 	  std::string(type_name).c_str()
+// 	  );
 }
 
 void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
@@ -9568,7 +9568,7 @@ static void ggml_compute_forward_mul_mat(
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
-    fprintf(stderr, "%s: params_type:%d src0:%p ->data %p src1:%p ->data %p\n", __func__, params->type,  (const void*)src0, src0->data, (const void*)src1, src1->data);
+    //fprintf(stderr, "%s: params_type:%d src0:%p ->data %p src1:%p ->data %p\n", __func__, params->type,  (const void*)src0, src0->data, (const void*)src1, src1->data);
   
 #if defined(GGML_USE_CLBLAST)
     if (ggml_cl_can_mul_mat(src0, src1, dst)) {
@@ -9626,7 +9626,7 @@ static void ggml_compute_forward_mul_mat(
             }
         }
 
-        printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
+        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 
         return;
     }
@@ -9660,7 +9660,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = ne11*ne12*ne13; // src1 rows
 
-    printf("nr0 = %ld, nr1 = %ld\n", nr0, nr1);
+    ///printf("nr0 = %ld, nr1 = %ld\n", nr0, nr1);
 
     // distribute the thread work across the inner or outer loop based on which one is larger
 
@@ -9679,7 +9679,7 @@ static void ggml_compute_forward_mul_mat(
     const int64_t ir110 = dr1*ith1;
     const int64_t ir111 = MIN(ir110 + dr1, nr1);
 
-    printf("ir010 = %6ld, ir011 = %6ld, ir110 = %6ld, ir111 = %6ld\n", ir010, ir011, ir110, ir111);
+    //printf("ir010 = %6ld, ir011 = %6ld, ir110 = %6ld, ir111 = %6ld\n", ir010, ir011, ir110, ir111);
 
     // threads with no work simply yield (not sure if it helps)
     if (ir010 >= ir011 || ir110 >= ir111) {
@@ -16534,29 +16534,29 @@ static void ggml_graph_export_leaf(const struct ggml_tensor * tensor, FILE * fou
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
-            ggml_type_name(tensor->type),
-            ggml_op_name  (tensor->op),
-            tensor->n_dims,
-            ne[0], ne[1], ne[2], ne[3],
-            nb[0], nb[1], nb[2], nb[3],
-            tensor->data,
-            tensor->name);
+    //    fprintf(fout, "%-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
+            // ggml_type_name(tensor->type),
+            // ggml_op_name  (tensor->op),
+            // tensor->n_dims,
+            // ne[0], ne[1], ne[2], ne[3],
+            // nb[0], nb[1], nb[2], nb[3],
+            // tensor->data,
+            // tensor->name);
 }
 
 static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char * arg, FILE * fout) {
     const int64_t * ne = tensor->ne;
     const size_t  * nb = tensor->nb;
 
-    fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
-            arg,
-            ggml_type_name(tensor->type),
-            ggml_op_name  (tensor->op),
-            tensor->n_dims,
-            ne[0], ne[1], ne[2], ne[3],
-            nb[0], nb[1], nb[2], nb[3],
-            tensor->data,
-            tensor->name);
+    //fprintf(fout, "%-6s %-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
+            // arg,
+            // ggml_type_name(tensor->type),
+            // ggml_op_name  (tensor->op),
+            // tensor->n_dims,
+            // ne[0], ne[1], ne[2], ne[3],
+            // nb[0], nb[1], nb[2], nb[3],
+            // tensor->data,
+            // tensor->name);
 }
 
 void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
