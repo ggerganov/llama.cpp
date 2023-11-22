@@ -18001,9 +18001,9 @@ enum ggml_opt_result ggml_opt(
     bool free_ctx = false;
     if (ctx == NULL) {
       struct ggml_init_params params_ctx;// = {
-          //   .mem_size   = 16*1024*1024,
-        //     .mem_buffer = NULL,
-        //     .no_alloc   = false,
+      params_ctx.mem_size   = 16*1024*1024;
+      params_ctx.mem_buffer = NULL;
+      params_ctx.no_alloc   = false;
         // };
 
         ctx = ggml_init(params_ctx);
