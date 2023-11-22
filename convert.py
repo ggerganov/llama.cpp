@@ -338,7 +338,7 @@ class VocabLoader:
         self.fname_tokenizer = fname_tokenizer
         
         vocab_file = "tokenizer.model"
-        path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
+        path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             self.spm = SentencePieceProcessor(str(path_candidate))
             print(self.spm.vocab_size(), self.vocab_size_base)
@@ -407,19 +407,19 @@ class VocabLoader:
     def get_vocab_type(self) -> str:
         path_candidates = []
         vocab_file = "tokenizer.model"
-        path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
+        path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "llama"
 
         path_candidates.append(path_candidate)
         vocab_file = "vocab.json"
-        path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
+        path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "gpt2"
 
         path_candidates.append(path_candidate)
         vocab_file = "tokenizer.json"
-        path_candidate = vocab_check_and_append_path(self.fname_tokenizer, vocab_file)
+        path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate:
             if not self.has_newline_token(): 
                 return "gpt2"
@@ -1091,7 +1091,7 @@ def load_some_model(path: Path) -> ModelPlus:
     return model_plus
 
 
-def vocab_check_and_append_path(path: Path, vocab_file: str) -> bool:
+def find_vocab_file_path(path: Path, vocab_file: str) -> Optional[Path]:
     path2 = path / vocab_file
     # Use `.parent` instead of /.. to handle the symlink case better.
     path3 = path.parent / vocab_file
