@@ -31,6 +31,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#include "print.hpp"
+
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static gpt_params               * g_params;
@@ -105,7 +107,9 @@ int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
-    using Td = type_descriptor<gpt_params>;
+    //using Td = type_descriptor<gpt_params>;
+    print_fields(g_params);
+
     //constexpr auto tbl = descriptor::get_attribute<gpt_params>(Td{}); 
     //constexpr auto tbl_name = REFL_MAKE_CONST_STRING(tbl.name);
 	
@@ -180,6 +184,9 @@ int main(int argc, char ** argv) {
     g_model = &model;
     g_ctx = &ctx;
 
+    print_fields(g_model);
+    print_fields(g_ctx);
+	
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
@@ -239,6 +246,8 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
+
+	
     if (params.interactive_first || params.instruct || params.chatml || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
         if (params.chatml) {
@@ -258,7 +267,7 @@ int main(int argc, char ** argv) {
         embd_inp.push_back(llama_token_bos(model));
         LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
     }
-
+    //print_fields(embd_inp);
     // Tokenize negative prompt
     std::vector<llama_token> guidance_inp;
     int guidance_offset = 0;
@@ -283,6 +292,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    //print_fields(session_tokens);
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
     if (!session_tokens.empty()) {
@@ -478,7 +488,8 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_guidance;
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
-
+    print_fields(ctx_sampling);
+    
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -487,6 +498,7 @@ int main(int argc, char ** argv) {
             int max_embd_size = n_ctx - 4;
 
             // Ensure the input doesn't exceed the context size by truncating embd if necessary.
+	    //print_fields(embd);
             if ((int) embd.size() > max_embd_size) {
                 const int skipped_tokens = (int) embd.size() - max_embd_size;
                 embd.resize(max_embd_size);
@@ -513,6 +525,7 @@ int main(int argc, char ** argv) {
                 LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
+		print_fields(ctx);
                 llama_kv_cache_seq_rm   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
                 llama_kv_cache_seq_shift(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
 

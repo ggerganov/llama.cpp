@@ -115,13 +115,8 @@ extern "C" {
     };
 
     typedef struct llama_token_data : refl::attr::usage::type{
-      llama_token_data(        llama_token id,
-			       float logit,
-			       float p):
-	id( id),
-	logit(logit),
-	p(p){
-      }
+      llama_token_data( llama_token id, float logit,     float p):
+	id( id),logit(logit),p(p){      }
         llama_token id; // token id
         float logit;    // log-odds of the token
         float p;        // probability of the token
@@ -832,5 +827,7 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 );
 
 #endif // LLAMA_API_INTERNAL
+
+template<typename T> void print_fields(const T& obj);
 
 #endif // LLAMA_H

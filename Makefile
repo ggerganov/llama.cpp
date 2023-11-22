@@ -582,7 +582,7 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
+main: examples/main/main.cpp   ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
@@ -677,6 +677,9 @@ common/build-info.cpp: $(wildcard .git/index) scripts/build-info.sh
 
 build-info.o: common/build-info.cpp
 	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
+
+#print.o: print.cpp # print.hpp
+#	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
 
 #
 # Tests
