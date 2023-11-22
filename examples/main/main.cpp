@@ -99,11 +99,16 @@ static void sigint_handler(int signo) {
     }
 }
 #endif
+using namespace refl;
 
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
+    using Td = type_descriptor<gpt_params>;
+    //constexpr auto tbl = descriptor::get_attribute<gpt_params>(Td{}); 
+    //constexpr auto tbl_name = REFL_MAKE_CONST_STRING(tbl.name);
+	
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }

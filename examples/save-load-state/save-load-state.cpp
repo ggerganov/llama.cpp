@@ -67,10 +67,10 @@ int main(int argc, char ** argv) {
         std::vector<llama_token_data> candidates;
         candidates.reserve(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates.emplace_back(llama_token_data{
-		.id=token_id,
-		.logit=logits[token_id],
-		.p=0.0f});
+	  candidates.emplace_back(llama_token_data(
+						   token_id,
+						   logits[token_id],
+						   0.0f));
         }
         llama_token_data_array candidates_p(candidates.data(), candidates.size(), false );
         auto next_token = llama_sample_token(ctx, &candidates_p);

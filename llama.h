@@ -152,6 +152,29 @@ extern "C" {
     // - logits : if zero, the logits for the respective token will not be output
     //
     typedef struct llama_batch : refl::attr::usage::type{
+
+      llama_batch(int32_t n_tokens,
+		  llama_token  *  token,
+		  float        *  embd,
+		  llama_pos    *  pos,
+		  int32_t      *  n_seq_id,
+		  llama_seq_id ** seq_id,
+		  int8_t       *  logits,
+		  llama_pos    all_pos_0,
+		  llama_pos    all_pos_1,
+		  llama_seq_id all_seq_id
+		  ) :
+	n_tokens(n_tokens),
+	token(token),
+	embd(embd),
+	pos(pos),
+	n_seq_id(n_seq_id),
+	seq_id(seq_id),
+	logits(logits),      
+	all_pos_0(all_pos_0),
+	all_pos_1(all_pos_1),
+	all_seq_id(all_seq_id) {}
+      
         int32_t n_tokens;
 
         llama_token  *  token;
@@ -254,7 +277,7 @@ extern "C" {
       llama_grammar_element(        enum llama_gretype type,
 				    uint32_t           value // Unicode code point or rule ID
 				    ):type(type), value(value){}
-      llama_grammar_element( ):type(0), value(0){}
+      llama_grammar_element( ):type(llama_gretype(0)), value(0){}
         enum llama_gretype type;
         uint32_t           value; // Unicode code point or rule ID
     } llama_grammar_element;

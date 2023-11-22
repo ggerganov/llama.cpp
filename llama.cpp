@@ -9321,18 +9321,18 @@ int llama_eval_embd(
                              int   n_past) {
     llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
 
-    llama_batch batch = {
-      .n_tokens=n_tokens,
-      .token=nullptr,
-      .embd=embd,
-      .pos=nullptr,
-      .n_seq_id=nullptr,
-      .seq_id=nullptr,
-      .logits=nullptr,
-      .all_pos_0=n_past,
-      .all_pos_1=1,
-      .all_seq_id=0
-    };
+    llama_batch batch(
+		      n_tokens,
+		      nullptr,
+		      embd,
+		      nullptr,
+		      nullptr,
+		      nullptr,
+		      nullptr,
+		      n_past,
+		      1,
+		      0
+		      );
 
     const int ret = llama_decode_internal(*ctx, batch);
     if (ret < 0) {
@@ -9352,34 +9352,32 @@ struct llama_batch llama_batch_get_one(
                  int32_t   n_tokens,
                llama_pos   pos_0,
             llama_seq_id   seq_id) {
-    llama_batch b ={
-        .n_tokens       = n_tokens,
-        .token          = tokens,
-        .embd           = nullptr,
-        .pos            = nullptr,
-        .n_seq_id       = nullptr,
-        .seq_id         = nullptr,
-        .logits         = nullptr,
-        .all_pos_0      = pos_0,
-        .all_pos_1      = 1,
-        .all_seq_id     = seq_id,
-    };
+  llama_batch b(
+		n_tokens,
+		tokens,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		pos_0,
+		1,
+		seq_id);
     return b;
 }
 
 struct llama_batch llama_batch_init(int32_t n_tokens, int32_t embd, int32_t n_seq_max) {
-    llama_batch batch = {
-      .n_tokens = 0,
-      .embd=nullptr, 
-      .pos=nullptr,
-      .n_seq_id=nullptr,
-      .seq_id=nullptr,
-      .logits=nullptr,
-      .all_pos_0=0,
-      .all_pos_1=0,
-      .all_seq_id=0
-
-    };
+  llama_batch batch(
+		    /* .n_tokens = */ 0,
+		    /* .token */  (llama_token  *)nullptr,
+		    /* .embd= */  (float        *)nullptr,
+		    /* .pos= */  (llama_pos    *)nullptr,
+		    /* .n_seq_id= */ (int32_t      *)nullptr,
+		    /* .seq_id= */  (llama_seq_id **)nullptr,
+		    /* .logits= */ (int8_t       *)nullptr,
+		    /* .all_pos_0= */ 0,
+		    /* .all_pos_1= */ 0 ,
+		    /* .all_seq_id= */ 0);
 
     if (embd) {
         batch.embd = (float *) malloc(sizeof(float) * n_tokens * embd);

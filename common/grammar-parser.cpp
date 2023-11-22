@@ -219,7 +219,7 @@ namespace grammar_parser {
 
                 // in original rule, replace previous symbol with reference to generated rule
                 out_elements.resize(last_sym_start);
-		llama_grammar_element(LLAMA_GRETYPE_RULE_REF, sub_rule_id) a;
+		llama_grammar_element a(LLAMA_GRETYPE_RULE_REF, sub_rule_id);
                 out_elements.push_back(a);
 
                 pos = parse_space(pos + 1, is_nested);
