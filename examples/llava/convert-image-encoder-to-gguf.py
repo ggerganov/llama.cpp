@@ -90,7 +90,7 @@ default_image_std = [0.26862954, 0.26130258, 0.27577711]
 ap.add_argument('--image_mean', type=float, nargs='+', help='Mean of the images for normalization (overrides processor) ', default=None)
 ap.add_argument('--image_std', type=float, nargs='+', help='Standard deviation of the images for normalization (overrides processor)', default=None)
 
-# with proper 
+# with proper
 args = ap.parse_args()
 
 
