@@ -1629,6 +1629,7 @@ static void llama_kv_cache_clear(struct llama_kv_cache & cache) {
         cache.cells[i].seq_id.clear();
     }
     cache.head = 0;
+    cache.used = 0;
 }
 
 static void llama_kv_cache_seq_rm(
