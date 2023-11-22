@@ -171,7 +171,7 @@ class Model:
         if model_architecture in ("StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM"):
             return StableLMModel
         return Model
-    
+
     @staticmethod
     def from_model_name(model_name: str):
         model_name_lower = model_name.lower()
@@ -864,7 +864,7 @@ class DeepseekCoderModel(Model):
 
     def set_vocab(self):
         self._set_vocab_gpt2("deepseek_coder")
-    
+
 
 class StableLMModel(Model):
     def set_gguf_parameters(self):
