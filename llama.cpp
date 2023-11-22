@@ -3374,14 +3374,9 @@ static bool llama_model_load(const std::string & fname, llama_model & model, con
         model.hparams.vocab_only = params.vocab_only;
 
         llm_load_arch   (ml, model);
-        std::cout<<"here 1!"<<std::endl;
         llm_load_hparams(ml, model);
-        std::cout<<"here 2!"<<std::endl;
         llm_load_vocab  (ml, model);
-        std::cout<<"here 3!"<<std::endl;
-
         llm_load_print_meta(ml, model);
-        std::cout<<"here 4!"<<std::endl;
 
         if (model.hparams.n_vocab != model.vocab.id_to_token.size()) {
             throw std::runtime_error("vocab size mismatch");
