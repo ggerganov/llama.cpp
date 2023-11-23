@@ -85,10 +85,14 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX       : int = auto()
     MPT           : int = auto()
     STARCODER     : int = auto()
+    PERSIMMON     : int = auto()
+    REFACT        : int = auto()
+    BERT          : int = auto()
 
 
 class MODEL_TENSOR(IntEnum):
     TOKEN_EMBD   : int = auto()
+    TOKEN_TYPES  : int = auto()
     POS_EMBD     : int = auto()
     OUTPUT       : int = auto()
     OUTPUT_NORM  : int = auto()
@@ -105,6 +109,8 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN     : int = auto()
     FFN_UP       : int = auto()
     FFN_NORM     : int = auto()
+    ATTN_Q_NORM  : int = auto()
+    ATTN_K_NORM  : int = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -116,78 +122,169 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
+    MODEL_ARCH.PERSIMMON:      "persimmon",
+    MODEL_ARCH.REFACT:         "refact",
+    MODEL_ARCH.BERT:           "bert",
 }
 
-MODEL_TENSOR_NAMES: dict[MODEL_ARCH, dict[MODEL_TENSOR, str]] = {
-    MODEL_ARCH.LLAMA: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
-        MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
-        MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.GPTNEOX: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.FALCON: {
-        MODEL_TENSOR.TOKEN_EMBD:  "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM: "output_norm",
-        MODEL_TENSOR.OUTPUT:      "output",
-        MODEL_TENSOR.ATTN_NORM:   "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_NORM_2: "blk.{bid}.attn_norm_2",
-        MODEL_TENSOR.ATTN_QKV:    "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:    "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_DOWN:    "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:      "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.BAICHUAN: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
-        MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
-        MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.STARCODER: {
-        MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
-        MODEL_TENSOR.POS_EMBD:      "position_embd",
-        MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
-        MODEL_TENSOR.OUTPUT:        "output",
-        MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
-        MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
-        MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
-        MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
-        MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
-        MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
-    },
-    MODEL_ARCH.GPT2: {
+TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
+    MODEL_TENSOR.TOKEN_EMBD:    "token_embd",
+    MODEL_TENSOR.TOKEN_TYPES:   "token_types",
+    MODEL_TENSOR.POS_EMBD:      "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:   "output_norm",
+    MODEL_TENSOR.OUTPUT:        "output",
+    MODEL_TENSOR.ROPE_FREQS:    "rope_freqs",
+    MODEL_TENSOR.ATTN_NORM:     "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:   "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:      "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:        "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:        "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:        "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:      "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD: "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.ATTN_Q_NORM:   "blk.{bid}.attn_q_norm",
+    MODEL_TENSOR.ATTN_K_NORM:   "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.FFN_NORM:      "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_GATE:      "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:      "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:        "blk.{bid}.ffn_up",
+}
+
+MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
+    MODEL_ARCH.LLAMA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPTNEOX: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.FALCON: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_NORM_2,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.BAICHUAN: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.STARCODER: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.BERT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_TYPES,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.MPT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPTJ: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.PERSIMMON: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.REFACT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPT2: [
         # TODO
-    },
+    ],
     # TODO
 }
 
@@ -201,6 +298,9 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
+    MODEL_ARCH.PERSIMMON: [
+        MODEL_TENSOR.ROPE_FREQS,
+    ]
 }
 
 
@@ -208,31 +308,44 @@ class TensorNameMap:
     mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
         # Token embeddings
         MODEL_TENSOR.TOKEN_EMBD: (
-            "gpt_neox.embed_in",           # gptneox
-            "transformer.wte",             # gpt2 mpt
-            "transformer.word_embeddings", # falcon
-            "model.embed_tokens",          # llama-hf
-            "tok_embeddings",              # llama-pth
+            "gpt_neox.embed_in",                        # gptneox
+            "transformer.wte",                          # gpt2 gpt-j mpt refact
+            "transformer.word_embeddings",              # falcon
+            "model.embed_tokens",                       # llama-hf
+            "tok_embeddings",                           # llama-pth
+            "embeddings.word_embeddings",               # bert
+            "language_model.embedding.word_embeddings", # persimmon
+        ),
+
+        # Token type embeddings
+        MODEL_TENSOR.TOKEN_TYPES: (
+            "embeddings.token_type_embeddings",  # bert
         ),
 
         # Position embeddings
         MODEL_TENSOR.POS_EMBD: (
-            "transformer.wpe", # gpt2
+            "transformer.wpe",                 # gpt2
+            "embeddings.position_embeddings",  # bert
         ),
 
         # Output
         MODEL_TENSOR.OUTPUT: (
-            "embed_out", # gptneox
-            "lm_head",   # gpt2 mpt falcon llama-hf baichuan
-            "output",    # llama-pth
+            "embed_out",                # gptneox
+            "lm_head",                  # gpt2 mpt falcon llama-hf baichuan
+            "output",                   # llama-pth
+            "word_embeddings_for_head", # persimmon
         ),
 
         # Output norm
         MODEL_TENSOR.OUTPUT_NORM: (
-            "gpt_neox.final_layer_norm", # gptneox
-            "transformer.ln_f",          # gpt2 falcon
-            "model.norm",                # llama-hf baichuan
-            "norm",                      # llama-pth
+            "gpt_neox.final_layer_norm",              # gptneox
+            "transformer.ln_f",                       # gpt2 gpt-j falcon
+            "model.norm",                             # llama-hf baichuan
+            "norm",                                   # llama-pth
+            "embeddings.LayerNorm",                   # bert
+            "transformer.norm_f",                     # mpt
+            "ln_f",                                   # refact
+            "language_model.encoder.final_layernorm", # persimmon
         ),
 
         # Rope frequencies
@@ -244,13 +357,15 @@ class TensorNameMap:
     block_mappings_cfg: dict[MODEL_TENSOR, tuple[str, ...]] = {
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
-            "gpt_neox.layers.{bid}.input_layernorm", # gptneox
-            "transformer.h.{bid}.ln_1",              # gpt2
-            "transformer.blocks.{bid}.norm_1",       # mpt
-            "transformer.h.{bid}.input_layernorm",   # falcon7b
-            "transformer.h.{bid}.ln_mlp",            # falcon40b
-            "model.layers.{bid}.input_layernorm",    # llama-hf
-            "layers.{bid}.attention_norm",           # llama-pth
+            "gpt_neox.layers.{bid}.input_layernorm",               # gptneox
+            "transformer.h.{bid}.ln_1",                            # gpt2 gpt-j refact
+            "transformer.blocks.{bid}.norm_1",                     # mpt
+            "transformer.h.{bid}.input_layernorm",                 # falcon7b
+            "transformer.h.{bid}.ln_mlp",                          # falcon40b
+            "model.layers.{bid}.input_layernorm",                  # llama-hf
+            "layers.{bid}.attention_norm",                         # llama-pth
+            "encoder.layer.{bid}.attention.output.LayerNorm",      # bert
+            "language_model.encoder.layers.{bid}.input_layernorm", # persimmon
         ),
 
         # Attention norm 2
@@ -260,38 +375,48 @@ class TensorNameMap:
 
         # Attention query-key-value
         MODEL_TENSOR.ATTN_QKV: (
-            "gpt_neox.layers.{bid}.attention.query_key_value",    # gptneox
-            "transformer.h.{bid}.attn.c_attn",                    # gpt2
-            "transformer.blocks.{bid}.attn.Wqkv",                 # mpt
-            "transformer.h.{bid}.self_attention.query_key_value", # falcon
+            "gpt_neox.layers.{bid}.attention.query_key_value",                    # gptneox
+            "transformer.h.{bid}.attn.c_attn",                                    # gpt2
+            "transformer.blocks.{bid}.attn.Wqkv",                                 # mpt
+            "transformer.h.{bid}.self_attention.query_key_value",                 # falcon
+            "language_model.encoder.layers.{bid}.self_attention.query_key_value", # persimmon
         ),
 
         # Attention query
         MODEL_TENSOR.ATTN_Q: (
-            "model.layers.{bid}.self_attn.q_proj", # llama-hf
-            "layers.{bid}.attention.wq",           # llama-pth
+            "model.layers.{bid}.self_attn.q_proj",       # llama-hf
+            "layers.{bid}.attention.wq",                 # llama-pth
+            "encoder.layer.{bid}.attention.self.query",  # bert
+            "transformer.h.{bid}.attn.q_proj",           # gpt-j
         ),
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
-            "model.layers.{bid}.self_attn.k_proj", # llama-hf
-            "layers.{bid}.attention.wk",           # llama-pth
+            "model.layers.{bid}.self_attn.k_proj",     # llama-hf
+            "layers.{bid}.attention.wk",               # llama-pth
+            "encoder.layer.{bid}.attention.self.key",  # bert
+            "transformer.h.{bid}.attn.k_proj",         # gpt-j
         ),
 
         # Attention value
         MODEL_TENSOR.ATTN_V: (
-            "model.layers.{bid}.self_attn.v_proj", # llama-hf
-            "layers.{bid}.attention.wv",           # llama-pth
+            "model.layers.{bid}.self_attn.v_proj",       # llama-hf
+            "layers.{bid}.attention.wv",                 # llama-pth
+            "encoder.layer.{bid}.attention.self.value",  # bert
+            "transformer.h.{bid}.attn.v_proj",           # gpt-j
         ),
 
         # Attention output
         MODEL_TENSOR.ATTN_OUT: (
-            "gpt_neox.layers.{bid}.attention.dense",    # gptneox
-            "transformer.h.{bid}.attn.c_proj",          # gpt2
-            "transformer.blocks.{bid}.attn.out_proj",   # mpt
-            "transformer.h.{bid}.self_attention.dense", # falcon
-            "model.layers.{bid}.self_attn.o_proj",      # llama-hf
-            "layers.{bid}.attention.wo",                # llama-pth
+            "gpt_neox.layers.{bid}.attention.dense",                   # gptneox
+            "transformer.h.{bid}.attn.c_proj",                         # gpt2 refact
+            "transformer.blocks.{bid}.attn.out_proj",                  # mpt
+            "transformer.h.{bid}.self_attention.dense",                # falcon
+            "model.layers.{bid}.self_attn.o_proj",                     # llama-hf
+            "layers.{bid}.attention.wo",                               # llama-pth
+            "encoder.layer.{bid}.attention.output.dense",              # bert
+            "transformer.h.{bid}.attn.out_proj",                       # gpt-j
+            "language_model.encoder.layers.{bid}.self_attention.dense" # persimmon
         ),
 
         # Rotary embeddings
@@ -302,64 +427,80 @@ class TensorNameMap:
 
         # Feed-forward norm
         MODEL_TENSOR.FFN_NORM: (
-            "gpt_neox.layers.{bid}.post_attention_layernorm", # gptneox
-            "transformer.h.{bid}.ln_2",                       # gpt2
-            "transformer.blocks.{bid}.norm_2",                # mpt
-            "model.layers.{bid}.post_attention_layernorm",    # llama-hf
-            "layers.{bid}.ffn_norm",                          # llama-pth
+            "gpt_neox.layers.{bid}.post_attention_layernorm",               # gptneox
+            "transformer.h.{bid}.ln_2",                                     # gpt2 refact
+            "transformer.blocks.{bid}.norm_2",                              # mpt
+            "model.layers.{bid}.post_attention_layernorm",                  # llama-hf
+            "layers.{bid}.ffn_norm",                                        # llama-pth
+            "encoder.layer.{bid}.output.LayerNorm",                         # bert
+            "language_model.encoder.layers.{bid}.post_attention_layernorm", # persimmon
         ),
 
         # Feed-forward up
         MODEL_TENSOR.FFN_UP: (
-            "gpt_neox.layers.{bid}.mlp.dense_h_to_4h", # gptneox
-            "transformer.h.{bid}.mlp.c_fc",            # gpt2
-            "transformer.blocks.{bid}.ffn.up_proj",    # mpt
-            "transformer.h.{bid}.mlp.dense_h_to_4h",   # falcon
-            "model.layers.{bid}.mlp.up_proj",          # llama-hf
-            "layers.{bid}.feed_forward.w3",            # llama-pth
+            "gpt_neox.layers.{bid}.mlp.dense_h_to_4h",               # gptneox
+            "transformer.h.{bid}.mlp.c_fc",                          # gpt2
+            "transformer.blocks.{bid}.ffn.up_proj",                  # mpt
+            "transformer.h.{bid}.mlp.dense_h_to_4h",                 # falcon
+            "model.layers.{bid}.mlp.up_proj",                        # llama-hf refact
+            "layers.{bid}.feed_forward.w3",                          # llama-pth
+            "encoder.layer.{bid}.intermediate.dense",                # bert
+            "transformer.h.{bid}.mlp.fc_in",                         # gpt-j
+            "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h", # persimmon
         ),
 
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
-            "model.layers.{bid}.mlp.gate_proj", # llama-hf
+            "model.layers.{bid}.mlp.gate_proj", # llama-hf refact
             "layers.{bid}.feed_forward.w1",     # llama-pth
         ),
 
         # Feed-forward down
         MODEL_TENSOR.FFN_DOWN: (
-            "gpt_neox.layers.{bid}.mlp.dense_4h_to_h", # gptneox
-            "transformer.h.{bid}.mlp.c_proj",          # gpt2
-            "transformer.blocks.{bid}.ffn.down_proj",  # mpt
-            "transformer.h.{bid}.mlp.dense_4h_to_h",   # falcon
-            "model.layers.{bid}.mlp.down_proj",        # llama-hf
-            "layers.{bid}.feed_forward.w2",            # llama-pth
+            "gpt_neox.layers.{bid}.mlp.dense_4h_to_h",               # gptneox
+            "transformer.h.{bid}.mlp.c_proj",                        # gpt2 refact
+            "transformer.blocks.{bid}.ffn.down_proj",                # mpt
+            "transformer.h.{bid}.mlp.dense_4h_to_h",                 # falcon
+            "model.layers.{bid}.mlp.down_proj",                      # llama-hf
+            "layers.{bid}.feed_forward.w2",                          # llama-pth
+            "encoder.layer.{bid}.output.dense",                      # bert
+            "transformer.h.{bid}.mlp.fc_out",                        # gpt-j
+            "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h", # persimmon
         ),
+
+        MODEL_TENSOR.ATTN_Q_NORM: (
+            "language_model.encoder.layers.{bid}.self_attention.q_layernorm",
+        ),
+
+        MODEL_TENSOR.ATTN_K_NORM: (
+            "language_model.encoder.layers.{bid}.self_attention.k_layernorm",
+        ),
+
+        MODEL_TENSOR.ROPE_FREQS: (
+            "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq", # persimmon
+        )
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]
 
-    tensor_names: dict[MODEL_TENSOR, str]
-
     def __init__(self, arch: MODEL_ARCH, n_blocks: int):
-        mapping = self.mapping = {}
-        tensor_names = self.tensor_names = MODEL_TENSOR_NAMES[arch]
+        self.mapping = {}
         for tensor, keys in self.mappings_cfg.items():
-            tensor_name = tensor_names.get(tensor)
-            if tensor_name is None:
+            if tensor not in MODEL_TENSORS[arch]:
                 continue
-            mapping[tensor_name] = (tensor, tensor_name)
+            tensor_name = TENSOR_NAMES[tensor]
+            self.mapping[tensor_name] = (tensor, tensor_name)
             for key in keys:
-                mapping[key] = (tensor, tensor_name)
+                self.mapping[key] = (tensor, tensor_name)
         for bid in range(n_blocks):
             for tensor, keys in self.block_mappings_cfg.items():
-                tensor_name = tensor_names.get(tensor)
-                if tensor_name is None:
+                if tensor not in MODEL_TENSORS[arch]:
                     continue
-                tensor_name = tensor_name.format(bid = bid)
-                mapping[tensor_name] = (tensor, tensor_name)
+                tensor_name = TENSOR_NAMES[tensor].format(bid = bid)
+                self.mapping[tensor_name] = (tensor, tensor_name)
                 for key in keys:
                     key = key.format(bid = bid)
-                    mapping[key] = (tensor, tensor_name)
+                    self.mapping[key] = (tensor, tensor_name)
 
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
         result = self.mapping.get(key)
@@ -800,22 +941,25 @@ class SpecialVocab:
     special_token_types: tuple[str, ...] = ('bos', 'eos', 'unk', 'sep', 'pad')
     special_token_ids: dict[str, int] = {}
 
-    def __init__(self, path: Path, load_merges: bool = False, special_token_types: tuple[str, ...] | None = None):
+    def __init__(
+        self, path: str | os.PathLike[str], load_merges: bool = False,
+        special_token_types: tuple[str, ...] | None = None,
+    ):
         self.special_token_ids = {}
         self.load_merges = load_merges
         if special_token_types is not None:
             self.special_token_types = special_token_types
-        self.load(path)
+        self._load(Path(path))
 
-    def load(self, path: Path):
-        if not self.try_load_from_tokenizer_json(path):
-            self.try_load_from_config_json(path)
+    def _load(self, path: Path) -> None:
+        if not self._try_load_from_tokenizer_json(path):
+            self._try_load_from_config_json(path)
 
-    def try_load_from_tokenizer_json(self, path: Path) -> bool:
+    def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
         if not tokenizer_file.is_file():
             return False
-        with open(tokenizer_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_file, encoding = 'utf-8') as f:
             tokenizer = json.load(f)
         if self.load_merges:
             merges = tokenizer.get('model', {}).get('merges')
@@ -825,7 +969,7 @@ class SpecialVocab:
         added_tokens = tokenizer.get('added_tokens')
         if added_tokens is None or not tokenizer_config_file.is_file():
             return True
-        with open(tokenizer_config_file, 'r', encoding = 'utf-8') as f:
+        with open(tokenizer_config_file, encoding = 'utf-8') as f:
             tokenizer_config = json.load(f)
         for typ in self.special_token_types:
             entry = tokenizer_config.get(f'{typ}_token')
@@ -844,11 +988,11 @@ class SpecialVocab:
                 break
         return True
 
-    def try_load_from_config_json(self, path: Path) -> bool:
+    def _try_load_from_config_json(self, path: Path) -> bool:
         config_file = path / 'config.json'
         if not config_file.is_file():
             return False
-        with open(config_file, 'r', encoding = 'utf-8') as f:
+        with open(config_file, encoding = 'utf-8') as f:
             config = json.load(f)
         for typ in self.special_token_types:
             maybe_token_id = config.get(f'{typ}_token_id')
@@ -856,7 +1000,7 @@ class SpecialVocab:
                 self.special_token_ids[typ] = maybe_token_id
         return True
 
-    def add_to_gguf(self, gw: GGUFWriter):
+    def add_to_gguf(self, gw: GGUFWriter) -> None:
         if len(self.merges) > 0:
             print(f'gguf: Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
@@ -868,8 +1012,8 @@ class SpecialVocab:
             print(f'gguf: Setting special token type {typ} to {tokid}')
             handler(tokid)
 
-    def __repr__(self):
-        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids if self.special_token_ids else "unset"}>'
+    def __repr__(self) -> str:
+        return f'<SpecialVocab with {len(self.merges)} merges and special tokens {self.special_token_ids or "unset"}>'
 
 
 # Example usage:

@@ -160,7 +160,7 @@ int main(int argc, char ** argv)
 
     int n_past = 0;
 
-    if (llama_decode(ctx, llama_batch_get_one(tokens_list.data(), tokens_list.size(), n_past, 0), params.n_threads))
+    if (llama_decode(ctx, llama_batch_get_one(tokens_list.data(), tokens_list.size(), n_past, 0)))
     {
         fprintf(stderr, "%s : failed to eval prompt.\n" , __func__ );
         return 1;
@@ -170,7 +170,7 @@ int main(int argc, char ** argv)
     beam_search_callback_data callback_data{ctx, {}};
     size_t const beam_width = static_cast<size_t>(params.n_beams);
     int const n_predict = 256;
-    llama_beam_search(ctx, beam_search_callback, &callback_data, beam_width, n_past, n_predict, params.n_threads);
+    llama_beam_search(ctx, beam_search_callback, &callback_data, beam_width, n_past, n_predict);
 
     std::cout << "\n\n";
     for (llama_token const token_id : callback_data.response) {

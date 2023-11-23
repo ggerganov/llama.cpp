@@ -40,27 +40,6 @@ static float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
-static int irand(int n) {
-    return rand()%n;
-}
-
-static void get_random_dims(int64_t * dims, int ndims) {
-    dims[0] = dims[1] = dims[2] = dims[3] = 1;
-
-    for (int i = 0; i < ndims; i++) {
-        dims[i] = 1 + irand(4);
-    }
-}
-
-static void get_random_dims_minmax(int64_t * dims, int ndims, int min, int max) {
-    dims[0] = dims[1] = dims[2] = dims[3] = 1;
-
-    for (int i = 0; i < ndims; i++) {
-        dims[i] = min + irand(max-min);
-    }
-}
-
-
 static struct ggml_tensor * get_random_tensor(
     struct ggml_context * ctx0, int ndims, int64_t ne[], float fmin, float fmax
 ) {
@@ -101,17 +80,9 @@ static struct ggml_tensor * get_random_tensor(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
-}
-
-static float get_element(const struct ggml_tensor * t, int idx) {
-    return ((float *)t->data)[idx];
-}
-
-static void set_element(struct ggml_tensor * t, int idx, float value) {
-    ((float *)t->data)[idx] = value;
 }
 
 int main(void) {
@@ -124,7 +95,7 @@ int main(void) {
     struct ggml_context * ctx = ggml_init(params);
 
     int64_t ne1[4] = {4, 128, 1, 1};
-    int64_t ne2[4] = {4, 256, 1, 1};;
+    int64_t ne2[4] = {4, 256, 1, 1};
     int64_t ne3[4] = {128, 256, 1, 1};
 
     struct ggml_tensor * a = get_random_tensor(ctx, 2, ne1, -1, +1);

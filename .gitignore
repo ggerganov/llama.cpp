@@ -10,6 +10,7 @@
 *.gcno
 *.gcda
 *.dot
+*.metallib
 .DS_Store
 .build/
 .cache/
@@ -40,11 +41,13 @@ models-mnt
 /embedding
 /gguf
 /gguf-llama-simple
+/infill
 /libllama.so
 /llama-bench
 /main
 /metal
 /perplexity
+/q8dot
 /quantize
 /quantize-stats
 /result
@@ -52,6 +55,8 @@ models-mnt
 /server
 /simple
 /batched
+/export-lora
+/finetune
 /speculative
 /parallel
 /train-text-from-scratch
@@ -87,4 +92,5 @@ tests/test-quantize-perf
 tests/test-sampling
 tests/test-tokenizer-0-llama
 tests/test-tokenizer-0-falcon
-tests/test-tokenizer-1
+tests/test-tokenizer-1-llama
+tests/test-tokenizer-1-bpe

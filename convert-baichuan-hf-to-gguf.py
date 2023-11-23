@@ -11,10 +11,13 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import itertools
-import gguf
 import numpy as np
 import torch
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
+
+if 'NO_LOCAL_GGUF' not in os.environ:
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+import gguf
 
 
 if TYPE_CHECKING:
@@ -174,8 +177,11 @@ if not tokenizer_model_file.is_file():
 print("gguf: get sentencepiece tokenizer vocab, scores and token types")
 
 tokenizer = SentencePieceProcessor(str(tokenizer_model_file))
+vocab_size = hparams.get('vocab_size')
+if vocab_size is None:
+    vocab_size = tokenizer.vocab_size()
 
-for i in range(tokenizer.vocab_size()):
+for i in range(vocab_size):
     text: bytes
     score: float
 

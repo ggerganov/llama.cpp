@@ -70,16 +70,16 @@ int main(int argc, char ** argv) {
     const auto t_enc_start = ggml_time_us();
 
     // eval the prompt with both models
-    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0), params.n_threads);
-    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0), params.n_threads);
-    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0), params.n_threads);
+    llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0));
+    llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0));
+    llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0));
 
     const auto t_enc_end = ggml_time_us();
 
     // the 2 models should have the same vocab
     const int n_ctx   = llama_n_ctx(ctx_tgt);
-    const int n_vocab = llama_n_vocab(ctx_tgt);
-    //GGML_ASSERT(n_vocab == llama_n_vocab(ctx_dft));
+    const int n_vocab = llama_n_vocab(model_tgt);
+    //GGML_ASSERT(n_vocab == llama_n_vocab(model_dft));
 
     // how many tokens to draft each time
     int n_draft = params.n_draft;
@@ -172,8 +172,8 @@ int main(int argc, char ** argv) {
                 LOG("out of drafted tokens\n");
             }
 
-            llama_kv_cache_seq_rm(ctx_dft, 0, n_past_dft, n_ctx);
-            llama_decode(ctx_dft, llama_batch_get_one(&id, 1, n_past_dft, 0), params.n_threads);
+            llama_kv_cache_seq_rm(ctx_dft, 0, n_past_dft, -1);
+            llama_decode(ctx_dft, llama_batch_get_one(&id, 1, n_past_dft, 0));
             ++n_past_dft;
 
             // heuristic for n_draft
@@ -257,8 +257,8 @@ int main(int argc, char ** argv) {
             }
 
             // evaluate the drafted token on the draft model
-            llama_kv_cache_seq_rm(ctx_dft, 0, n_past_cur, n_ctx);
-            llama_decode(ctx_dft, llama_batch_get_one(&drafted.back(), 1, n_past_cur, 0), params.n_threads);
+            llama_kv_cache_seq_rm(ctx_dft, 0, n_past_cur, -1);
+            llama_decode(ctx_dft, llama_batch_get_one(&drafted.back(), 1, n_past_cur, 0));
             ++n_past_cur;
 
             if (grammar_dft != NULL) {
@@ -267,8 +267,8 @@ int main(int argc, char ** argv) {
         }
 
         // evaluate the target model on the drafted tokens
-        llama_kv_cache_seq_rm(ctx_tgt, 0, n_past_tgt, n_ctx);
-        llama_decode(ctx_tgt, llama_batch_get_one(drafted.data(), drafted.size(), n_past_tgt, 0), params.n_threads);
+        llama_kv_cache_seq_rm(ctx_tgt, 0, n_past_tgt, -1);
+        llama_decode(ctx_tgt, llama_batch_get_one(drafted.data(), drafted.size(), n_past_tgt, 0));
         ++n_past_tgt;
 
         // the first token is always proposed by the traget model before the speculation loop

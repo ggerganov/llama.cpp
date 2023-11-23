@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "common.h"
+#include "unicode.h"
 #include "console.h"
 
 #include <cassert>
@@ -10,30 +11,6 @@
 #include <map>
 #include <vector>
 #include <locale>
-
-typedef int codepoint;
-
-static std::string codepoint_to_utf8(codepoint cp) {
-    std::string result;
-    if (0x00 <= cp && cp <= 0x7f) {
-        result.push_back(cp);
-    } else if (0x80 <= cp && cp <= 0x7ff) {
-        result.push_back(0xc0 | ((cp >> 6) & 0x1f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else if (0x800 <= cp && cp <= 0xffff) {
-        result.push_back(0xe0 | ((cp >> 12) & 0x0f));
-        result.push_back(0x80 | ((cp >> 6) & 0x3f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else if (0x10000 <= cp && cp <= 0x10ffff) {
-        result.push_back(0xf0 | ((cp >> 18) & 0x07));
-        result.push_back(0x80 | ((cp >> 12) & 0x3f));
-        result.push_back(0x80 | ((cp >> 6) & 0x3f));
-        result.push_back(0x80 | (cp & 0x3f));
-    } else {
-        throw std::invalid_argument("invalid codepoint");
-    }
-    return result;
-}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -52,18 +29,20 @@ int main(int argc, char **argv) {
 
     // load the vocab
     {
-        auto lparams = llama_context_default_params();
+        auto mparams = llama_model_default_params();
 
-        lparams.vocab_only = true;
+        mparams.vocab_only = true;
 
-        model = llama_load_model_from_file(fname.c_str(), lparams);
+        model = llama_load_model_from_file(fname.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
             return 1;
         }
 
-        ctx = llama_new_context_with_model(model, lparams);
+        auto cparams = llama_context_default_params();
+
+        ctx = llama_new_context_with_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
@@ -72,7 +51,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    GGML_ASSERT(llama_vocab_type(ctx) == LLAMA_VOCAB_TYPE_SPM);
+    GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
 
 #ifdef _WIN32
     // We need this for unicode console support
@@ -80,7 +59,7 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    const int n_vocab = llama_n_vocab(ctx);
+    const int n_vocab = llama_n_vocab(model);
 
     for (int i = 0; i < n_vocab; ++i) {
         std::string str = llama_detokenize_spm(ctx, std::vector<int>(1, i));
@@ -93,7 +72,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (codepoint cp = 0x0000; cp < 0xffff; ++cp) {
+    for (uint32_t cp = 0x0000; cp < 0xffff; ++cp) {
         if (cp < 0xd800 || cp > 0xdfff) {
             std::string str = codepoint_to_utf8(cp);
             std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
@@ -105,7 +84,7 @@ int main(int argc, char **argv) {
             }
         }
     }
-    for (codepoint cp = 0x10000; cp < 0x0010ffff; ++cp) {
+    for (uint32_t cp = 0x10000; cp < 0x0010ffff; ++cp) {
         std::string str = codepoint_to_utf8(cp);
         std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
         std::string check = llama_detokenize_spm(ctx, tokens);

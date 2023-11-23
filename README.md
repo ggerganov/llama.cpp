@@ -5,13 +5,14 @@
 [![Actions Status](https://github.com/ggerganov/llama.cpp/workflows/CI/badge.svg)](https://github.com/ggerganov/llama.cpp/actions)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-[Roadmap](https://github.com/users/ggerganov/projects/7) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
+[Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
 Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- Parallel decoding + continuous batching support incoming: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
+- ‼️ Breaking change: `rope_freq_base` and `rope_freq_scale` must be set to zero to use the model default values: [#3401](https://github.com/ggerganov/llama.cpp/pull/3401)
+- Parallel decoding + continuous batching support added: [#3228](https://github.com/ggerganov/llama.cpp/pull/3228) \
   **Devs should become familiar with the new API**
 - Local Falcon 180B inference on Mac Studio
 
@@ -92,7 +93,9 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [WizardLM](https://github.com/nlpxucan/WizardLM)
 - [X] [Baichuan-7B](https://huggingface.co/baichuan-inc/baichuan-7B) and its derivations (such as [baichuan-7b-sft](https://huggingface.co/hiyouga/baichuan-7b-sft))
 - [X] [Aquila-7B](https://huggingface.co/BAAI/Aquila-7B) / [AquilaChat-7B](https://huggingface.co/BAAI/AquilaChat-7B)
-- [X] Mistral AI v0.1
+- [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
+- [X] [Mistral AI v0.1](https://huggingface.co/mistralai/Mistral-7B-v0.1)
+- [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
 
 **Bindings:**
 
@@ -375,7 +378,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### cuBLAS
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
   - Using `make`:
     ```bash
     make LLAMA_CUBLAS=1
@@ -611,6 +614,18 @@ For more information, see [https://huggingface.co/docs/transformers/perplexity](
 The perplexity measurements in table above are done against the `wikitext2` test dataset (https://paperswithcode.com/dataset/wikitext-2), with context length of 512.
 The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 threads.
 
+#### How to run
+
+1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
+2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
+3. Output:
+```
+perplexity : calculating perplexity over 655 chunks
+24.43 seconds per pass - ETA 4.45 hours
+[1]4.5970,[2]5.1807,[3]6.0382,...
+```
+And after 4.45 hours, you will have the final perplexity.
+
 ### Interactive mode
 
 If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
@@ -661,6 +676,8 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 ```
 
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
+
+For authoring more complex JSON grammars, you can also check out https://grammar.intrinsiclabs.ai/, a browser app that lets you write TypeScript interfaces which it compiles to GBNF grammars that you can save for local use. Note that the app is built and maintained by members of the community, please file any issues or FRs on [its repo](http://github.com/intrinsiclabsai/gbnfgen) and not this one.
 
 ### Instruction mode with Alpaca
 
@@ -770,18 +787,6 @@ If your issue is with model generation quality, then please at least scan the fo
 - GPT-3.5 / InstructGPT / ChatGPT:
     - [Aligning language models to follow instructions](https://openai.com/research/instruction-following)
     - [Training language models to follow instructions with human feedback](https://arxiv.org/abs/2203.02155)
-
-#### How to run
-
-1. Download/extract: https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip?ref=salesforce-research
-2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
-3. Output:
-```
-perplexity : calculating perplexity over 655 chunks
-24.43 seconds per pass - ETA 4.45 hours
-[1]4.5970,[2]5.1807,[3]6.0382,...
-```
-And after 4.45 hours, you will have the final perplexity.
 
 ### Android
 

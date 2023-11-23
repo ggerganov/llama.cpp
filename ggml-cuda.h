@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-backend.h"
 
 #ifdef GGML_USE_HIPBLAS
 #define GGML_CUDA_NAME "ROCm"
@@ -41,6 +42,9 @@ GGML_API bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, s
 
 GGML_API int    ggml_cuda_get_device_count(void);
 GGML_API void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
+
+// backend API
+GGML_API ggml_backend_t ggml_backend_cuda_init(void); // TODO: take a list of devices to use
 
 #ifdef  __cplusplus
 }
