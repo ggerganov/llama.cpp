@@ -32,6 +32,7 @@ tokenize() {
         --silent \
         --request POST \
         --url "${API_URL}/tokenize" \
+        --header "Content-Type: application/json" \
         --data-raw "$(jq -ns --arg content "$1" '{content:$content}')" \
     | jq '.tokens[]'
 }
@@ -64,6 +65,7 @@ chat_completion() {
         --no-buffer \
         --request POST \
         --url "${API_URL}/completion" \
+        --header "Content-Type: application/json" \
         --data-raw "${DATA}")
 
     printf "\n"

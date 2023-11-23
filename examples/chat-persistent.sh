@@ -9,7 +9,7 @@ if [[ -z "${PROMPT_CACHE_FILE+x}" || -z "${CHAT_SAVE_DIR+x}" ]]; then
     exit 1
 fi
 
-MODEL="${MODEL:-./models/13B/ggml-model-q4_0.bin}"
+MODEL="${MODEL:-./models/llama-13b/ggml-model-q4_0.gguf}"
 PROMPT_TEMPLATE="${PROMPT_TEMPLATE:-./prompts/chat.txt}"
 USER_NAME="${USER_NAME:-User}"
 AI_NAME="${AI_NAME:-ChatLLaMa}"
@@ -61,9 +61,9 @@ fi
 
 if [[ ! -e "$PROMPT_CACHE_FILE" ]]; then
     echo 'Prompt cache does not exist, building...'
-    # Default batch_size to 8 here for better user feedback during initial prompt processing
+    # Default batch_size to 64 here for better user feedback during initial prompt processing
     ./main 2>>"$LOG" \
-        --batch_size 8 \
+        --batch_size 64 \
         "${OPTS[@]}" \
         --prompt-cache "$PROMPT_CACHE_FILE" \
         --file "$CUR_PROMPT_FILE" \
@@ -132,7 +132,7 @@ while read -e line; do
     # HACK get num tokens from debug message
     # TODO get both messages in one go
     if  ! session_size_msg="$(tail -n30 "$LOG" | grep -oE "$SESSION_SIZE_MSG_PATTERN")" ||
-        ! sample_time_msg="$( tail -n10 "$LOG" | grep -oE "$SAMPLE_TIME_MSG_PATTERN")"; then
+        ! sample_time_msg="$(tail -n10 "$LOG" | grep -oE "$SAMPLE_TIME_MSG_PATTERN")"; then
         echo >&2 "Couldn't get number of tokens from ./main output!"
         exit 1
     fi
