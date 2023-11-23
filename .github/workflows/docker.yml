@@ -23,18 +23,19 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COMMIT_SHA: ${{ github.sha }}
+      MODEL_URL: "https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/resolve/main/neural-chat-7b-v3-1.Q4_K_M.gguf"
     strategy:
       matrix:
         config:
-          - { tag: "light", dockerfile: ".devops/main.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "full", dockerfile: ".devops/full.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # - { tag: "light", dockerfile: ".devops/main.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # - { tag: "full", dockerfile: ".devops/full.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           # NOTE(canardletter): The CUDA builds on arm64 are very slow, so I
           #                     have disabled them for now until the reason why
           #                     is understood.
           - { tag: "light-cuda", dockerfile: ".devops/main-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "light-rocm", dockerfile: ".devops/main-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
+          # - { tag: "light-rocm", dockerfile: ".devops/main-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # - { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -59,8 +60,10 @@ jobs:
           context: .
           push: true
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
+          tags: "ghcr.io/rawsh/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
           file: ${{ matrix.config.dockerfile }}
+          build-args: |
+            MODEL_URL=${{ env.MODEL_URL }}
 
       - name: Build and push Docker image (tagged)
         uses: docker/build-push-action@v4
@@ -68,5 +71,7 @@ jobs:
           context: .
           push: ${{ github.event_name == 'push' }}
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
+          tags: "ghcr.io/rawsh/llama.cpp:${{ matrix.config.tag }}"
           file: ${{ matrix.config.dockerfile }}
+          build-args: |
+            MODEL_URL=${{ env.MODEL_URL }}
