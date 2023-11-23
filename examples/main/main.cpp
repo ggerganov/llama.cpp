@@ -184,8 +184,9 @@ int main(int argc, char ** argv) {
     g_model = &model;
     g_ctx = &ctx;
 
-    print_fields(g_model);
-    print_fields(g_ctx);
+    print_fields(*model);
+    print_fields(*ctx);
+    print_fields(*ctx_guidance);
 	
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
@@ -488,7 +489,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_guidance;
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
-    print_fields(ctx_sampling);
+    print_fields(*ctx_sampling);
     
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
@@ -525,7 +526,7 @@ int main(int argc, char ** argv) {
                 LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
-		print_fields(ctx);
+		print_fields(*ctx);
                 llama_kv_cache_seq_rm   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
                 llama_kv_cache_seq_shift(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
 

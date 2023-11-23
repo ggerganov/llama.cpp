@@ -38,56 +38,55 @@ struct ggml_context_container {
     
   }
 };
-typedef int ggml_lock_t;
-typedef pthread_t ggml_thread_t;
-typedef int ggml_lock_t;
-typedef pthread_t ggml_thread_t;
-typedef volatile LONG atomic_int;
-typedef atomic_int atomic_bool;
-typedef HANDLE pthread_t;
 
-typedef DWORD thread_ret_t;
-typedef void * thread_ret_t;
 typedef double ggml_float;
+typedef void * thread_ret_t;
 
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#define ggml_lock_lock(x)    UNUSED(x)
-#define ggml_lock_unlock(x)  UNUSED(x)
+#define MAX_FREE_BLOCKS 256
 
-#define GGML_LOCK_INITIALIZER 0
+struct free_block {
+    void * addr;
+    size_t size;
+};
 
+struct ggml_tallocr {
+    struct ggml_backend_buffer * buffer;
+    bool buffer_owned;
+    void * base;
+    size_t alignment;
 
+    int n_free_blocks;
+    struct free_block free_blocks[MAX_FREE_BLOCKS];
 
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
+    size_t max_size;
 
+    bool measure;
 
-
-//typedef pthread_spinlock_t ggml_lock_t;
-
-//#define ggml_lock_init(x) pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-//#define ggml_lock_destroy pthread_spin_destroy
-//#define ggml_lock_lock    pthread_spin_lock
-//#define ggml_lock_unlock  pthread_spin_unlock
-
-
-
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
-#define ggml_lock_lock(x)    _mm_pause()
-#else
-#define ggml_lock_lock(x)    UNUSED(x)
+#ifdef GGML_ALLOCATOR_DEBUG
+    struct ggml_tensor * allocated_tensors[1024];
 #endif
-#define ggml_lock_unlock(x)  UNUSED(x)
-
-#define GGML_LOCK_INITIALIZER 0
+};
 
 
+struct hash_node {
+    int n_children;
+    int n_views;
+};
 
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
+typedef struct ggml_tallocr * ggml_tallocr_t;
+typedef struct ggml_gallocr * ggml_gallocr_t;
 
+struct ggml_gallocr {
+    ggml_tallocr_t talloc;
+    struct ggml_hash_set hash_set;
+    struct hash_node * hash_values;
+    size_t hash_values_size;
+    ggml_tallocr_t * hash_allocs;
+    int * parse_seq;
+    int parse_seq_len;
+};
 
-
+struct ggml_allocr {
+    ggml_tallocr_t talloc;
+    ggml_gallocr_t galloc;
+};

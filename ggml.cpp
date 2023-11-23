@@ -48,6 +48,8 @@
 
 #include <windows.h>
 
+typedef volatile LONG atomic_int;
+typedef atomic_int atomic_bool;
 
 static void atomic_store(atomic_int * ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -15722,6 +15724,49 @@ void ggml_graph_clear(struct ggml_cgraph * cgraph) {
 //#define ggml_lock_unlock     os_unfair_lock_unlock
 //
 //#define GGML_LOCK_INITIALIZER OS_UNFAIR_LOCK_INIT
+
+typedef int ggml_lock_t;
+
+#define ggml_lock_init(x)    UNUSED(x)
+#define ggml_lock_destroy(x) UNUSED(x)
+#define ggml_lock_lock(x)    UNUSED(x)
+#define ggml_lock_unlock(x)  UNUSED(x)
+
+#define GGML_LOCK_INITIALIZER 0
+
+typedef pthread_t ggml_thread_t;
+
+#define ggml_thread_create pthread_create
+#define ggml_thread_join   pthread_join
+
+#else
+
+//typedef pthread_spinlock_t ggml_lock_t;
+
+//#define ggml_lock_init(x) pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
+//#define ggml_lock_destroy pthread_spin_destroy
+//#define ggml_lock_lock    pthread_spin_lock
+//#define ggml_lock_unlock  pthread_spin_unlock
+
+typedef int ggml_lock_t;
+
+#define ggml_lock_init(x)    UNUSED(x)
+#define ggml_lock_destroy(x) UNUSED(x)
+#if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
+#define ggml_lock_lock(x)    _mm_pause()
+#else
+#define ggml_lock_lock(x)    UNUSED(x)
+#endif
+#define ggml_lock_unlock(x)  UNUSED(x)
+
+#define GGML_LOCK_INITIALIZER 0
+
+typedef pthread_t ggml_thread_t;
+
+#define ggml_thread_create pthread_create
+#define ggml_thread_join   pthread_join
+
+#endif
 
 
 // Android's libc implementation "bionic" does not support setting affinity

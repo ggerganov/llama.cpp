@@ -3,6 +3,8 @@
 #include <iostream>
 //#include <refl.hpp>
 #include "llama.h"
+#include "ggml-internal.hpp"
+#include "llama-internal.hpp"
 
 REFL_TYPE(ggml_init_params )
 REFL_END
@@ -92,6 +94,12 @@ REFL_END
 
 
 REFL_TYPE(llama_sampling_context )
+REFL_FIELD( params)
+REFL_FIELD( mirostat_mu)
+REFL_FIELD( grammar)
+REFL_FIELD( parsed_grammar)
+REFL_FIELD( prev)
+REFL_FIELD( cur)
 REFL_END
 
 REFL_TYPE(llama_token_data )
@@ -148,15 +156,24 @@ REFL_TYPE(ggml_something)
   REFL_FIELD(type_name)
 REFL_END
 
-// REFL_TYPE(ggml_context)
-//   REFL_FIELD(mem_size)
-//   REFL_FIELD(mem_buffer)
-// REFL_END
+REFL_TYPE(ggml_context)
+  REFL_FIELD(mem_size)
+REFL_FIELD(mem_buffer)
+REFL_FIELD(mem_buffer_owned)
+REFL_FIELD(    no_alloc)
+REFL_FIELD(    no_alloc_save)
+REFL_FIELD(    n_objects)
+REFL_FIELD(    objects_begin)
+REFL_FIELD(    objects_end)
+REFL_FIELD(    scratch)
+REFL_FIELD(    scratch_save)
 
-//REFL_TYPE(ggml_context_container)
-//  REFL_FIELD(used)
-//  REFL_FIELD(context)
-//REFL_END
+REFL_END
+
+REFL_TYPE(ggml_context_container)
+  REFL_FIELD(used)
+  REFL_FIELD(context)
+REFL_END
 
 // REFL_TYPE(ggml_numa_node)
 //   REFL_FIELD(cpus)
@@ -340,11 +357,70 @@ REFL_END
 // REFL_END
 
 REFL_TYPE(llama_model)
-//  REFL_FIELD(type)
-//  REFL_FIELD(arch)
+  REFL_FIELD(type)
+  REFL_FIELD(arch)
+REFL_FIELD(ftype )
+
+REFL_FIELD(  name )
+
+  REFL_FIELD(   hparams )
+REFL_FIELD(    vocab)
+
+REFL_FIELD(   tok_embd)
+REFL_FIELD(   pos_embd)
+REFL_FIELD(   tok_norm)
+REFL_FIELD(   tok_norm_b)
+
+REFL_FIELD(   output_norm)
+REFL_FIELD(  output_norm_b)
+REFL_FIELD(  output)
+
+REFL_FIELD(  layers)
+
+REFL_FIELD(  n_gpu_layers)
+
+REFL_FIELD(  gguf_kv)
+  REFL_FIELD( ctx)
+  REFL_FIELD( buf)
+  REFL_FIELD( mapping)
+REFL_FIELD( mlock_buf)
+REFL_FIELD( mlock_mmap)
+REFL_FIELD( tensors_by_name)
+  REFL_FIELD( t_load_us)
+REFL_FIELD( t_start_us)
+
 REFL_END
 
 REFL_TYPE(llama_context)
+REFL_FIELD( cparams)
+//REFL_FIELD(model)
+REFL_FIELD(kv_self)
+REFL_FIELD(rng)
+REFL_FIELD(has_evaluated_once )
+REFL_FIELD( t_start_us)
+REFL_FIELD( t_load_us)
+  REFL_FIELD( t_sample_us )
+REFL_FIELD( t_p_eval_us )
+  REFL_FIELD( t_eval_us)
+REFL_FIELD( n_sample )
+REFL_FIELD( n_p_eval )
+  REFL_FIELD( n_eval  )
+REFL_FIELD(  logits)
+REFL_FIELD(  logits_all )
+REFL_FIELD(  embedding)
+REFL_FIELD(   work_buffer)
+  REFL_FIELD(   buf_compute)
+  REFL_FIELD( buf_alloc)
+REFL_FIELD( alloc )
+
+#ifdef GGML_USE_METAL
+REFL_FIELD( ctx_metal )
+#endif
+
+#ifdef GGML_USE_MPI
+REFL_FIELD( ctx_mpi )
+
+#endif
 REFL_END
 
 // REFL_TYPE(llama_model_loader)
@@ -459,7 +535,7 @@ void print_fields(const T& ) {
   //  T instance{};
   for_each(refl::reflect<T>().members, [&](auto member) {
 
-    std::cout << "MEMBER" <<     member.name.str() << "\n";
+    std::cout << "MEMBER:" <<     member.name.str() << "\n";
       
   });
 
@@ -468,7 +544,8 @@ void print_fields(const T& ) {
        //if ((refl::descriptor::is_field(member)) && (!member.has_attribute<hidden>()))) {
        //if ((refl::descriptor::is_field(member))) {
 //             // Print the member name and value
-	 std::cout << member.name << ": " << "\n";
+	 std::cout
+	   << "Auto:" << member.name << ": " << "\n";
 	 //	 refl::get(member, obj)
 	 //}
      });
