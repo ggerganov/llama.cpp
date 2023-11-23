@@ -1,3 +1,6 @@
+tt:
+	clang++ -std=c++17 ggml.cpp
+
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \

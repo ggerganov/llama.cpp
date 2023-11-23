@@ -389,9 +389,11 @@ static void export_lora(struct export_lora_params * params) {
 
     // open base model gguf, read tensors without their data
     struct ggml_context * ctx_in;
-    struct gguf_init_params params_gguf;
-    params_gguf.no_alloc = true;
-    params_gguf.ctx      = &ctx_in;
+    struct gguf_init_params params_gguf(
+					//params_gguf.no_alloc =
+					true,
+					//params_gguf.ctx      =
+					&ctx_in);
     struct gguf_context * gguf_in = gguf_init_from_file(params->fn_model_base.c_str(), params_gguf);
 
     // create new gguf

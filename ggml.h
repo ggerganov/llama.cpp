@@ -286,7 +286,7 @@
     GGML_UNUSED(prefix##3);
 
 #ifdef  __cplusplus
-extern "C" {
+//extern "C" {
 #endif
 
 #if defined(__ARM_NEON) && defined(__CUDACC__)
@@ -581,6 +581,18 @@ extern "C" {
     };
 
     struct ggml_init_params : refl::attr::usage::type{
+
+      ggml_init_params(size_t mem_size,
+		       void * mem_buffer,
+		       bool   no_alloc):
+	mem_size( mem_size),
+        mem_buffer(mem_buffer),
+        no_alloc(no_alloc){}
+      ggml_init_params():
+	mem_size(0),
+        mem_buffer(0),
+        no_alloc(0){}
+      
         // memory pool
         size_t mem_size;   // bytes
         void * mem_buffer; // if NULL, memory will be allocated internally
@@ -2013,6 +2025,8 @@ extern "C" {
     struct gguf_context;
 
     struct gguf_init_params : refl::attr::usage::type{
+      gguf_init_params(bool no_alloc, struct ggml_context ** ctx): no_alloc(no_alloc),ctx(ctx){}
+      
         bool no_alloc;
 
         // if not NULL, create a ggml_context and allocate the tensor data in it
@@ -2164,5 +2178,5 @@ extern "C" {
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
-}
+//}
 #endif

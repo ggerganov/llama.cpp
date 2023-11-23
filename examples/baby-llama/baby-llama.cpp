@@ -1527,11 +1527,14 @@ int main(int argc, char ** argv) {
     std::vector<uint8_t> work_buffer;
 
     for (int ex=0; ex<n_examples; ++ex) {
-        struct ggml_init_params params = {
-            .mem_size   = compute_size,
-            .mem_buffer = compute_addr,
-            .no_alloc   = false,
-        };
+      struct ggml_init_params params(
+				     //.mem_size   =
+				     compute_size,
+				     //.mem_buffer =
+				     compute_addr,
+				     //.no_alloc   =
+				     false
+				     );
 
         struct ggml_context * ctx0 = ggml_init(params);
 
@@ -1602,11 +1605,14 @@ int main(int argc, char ** argv) {
         }
         printf("---\n");
         for (int i=0; i<n_gen; ++i) {
-            struct ggml_init_params params = {
-                .mem_size   = compute_size,
-                .mem_buffer = compute_addr,
-                .no_alloc   = false,
-            };
+	  struct ggml_init_params params(
+					 //.mem_size   =
+					 compute_size,
+					 //.mem_buffer =
+					 compute_addr,
+					 //.no_alloc   =
+					 false
+					 );
             struct ggml_context * ctx0 = ggml_init(params);
 
             ggml_cgraph gf = {};

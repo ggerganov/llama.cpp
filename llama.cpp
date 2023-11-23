@@ -1785,10 +1785,10 @@ struct llama_model_loader {
     struct ggml_context * ctx_meta = NULL;
 
     llama_model_loader(const std::string & fname, bool use_mmap) : file(fname.c_str(), "rb") {
-	struct gguf_init_params params = {
-	  .no_alloc =  true,
-	  .ctx      =  &ctx_meta,
-	};
+      struct gguf_init_params params(
+				     /*.no_alloc =*/  true,
+				     /*.ctx      = */ &ctx_meta
+				     );
 
 	ctx_gguf = gguf_init_from_file(fname.c_str(), params);
 	if (!ctx_gguf) {
@@ -2676,11 +2676,12 @@ static void llm_load_tensors(
 	    model.mlock_buf.grow_to(model.buf.size);
 	}
 
-	struct ggml_init_params params = {
-	    .mem_size   = model.buf.size,
-	    .mem_buffer = model.buf.data,
-	    .no_alloc   = ml.use_mmap,
-	};
+	struct ggml_init_params params(
+				       model.buf.size,
+				       model.buf.data,
+				       
+
+				       ml.use_mmap				       );
 
 	model.ctx = ggml_init(params);
 	if (!model.ctx) {
@@ -3842,11 +3843,14 @@ struct llm_build_context {
         }
 
     void init() {
-        struct ggml_init_params params = {
-	  .mem_size   = buf_compute.size,
-          .mem_buffer = buf_compute.data,
-          .no_alloc   = true,
-        };
+      struct ggml_init_params params(
+				     //.mem_size   =
+				     buf_compute.size,
+				     //.mem_buffer =
+				     buf_compute.data,
+				     //.no_alloc   =
+				     true
+				     );
 
         ctx0 = ggml_init(params);
     }
@@ -8447,10 +8451,11 @@ void llama_backend_init(bool numa) {
 
     // needed to initialize f16 tables
     {
-        struct ggml_init_params params = { .mem_size = 0,
-					   .mem_buffer = NULL,
-					   .no_alloc = false
-	};
+      struct ggml_init_params params(
+				     0,
+				     NULL,
+				     false
+				     );
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
@@ -9021,11 +9026,14 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
         if (kv_buf_size) {
             const size_t elt_size = ggml_element_size(kv_self.k);
 
-	    ggml_init_params ip = {
-	      .mem_size   = 6*ggml_tensor_overhead() + ggml_graph_overhead(),
-	      .mem_buffer =NULL,
-	      .no_alloc = /* no_alloc */ true
-	    };
+	    ggml_init_params ip(
+				//.mem_size   =
+				6*ggml_tensor_overhead() + ggml_graph_overhead(),
+				//.mem_buffer =
+				NULL,
+				//.no_alloc = /* no_alloc */
+				true
+				);
 	    
             ggml_context * cpy_ctx = ggml_init( ip);
             ggml_cgraph * gf = ggml_new_graph(cpy_ctx);
@@ -9155,10 +9163,13 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
 
             const size_t elt_size = ggml_element_size(kv_self.k);
 
-	    ggml_init_params ip {
-	      .mem_size= 6*ggml_tensor_overhead() + ggml_graph_overhead(),
-	      .mem_buffer=NULL,
-	      .no_alloc=true };
+	    ggml_init_params ip(
+				//.mem_size=
+				6*ggml_tensor_overhead() + ggml_graph_overhead(),
+				//.mem_buffer=
+				NULL,
+				//.no_alloc=
+				true );
 	    
             ggml_context * cpy_ctx = ggml_init(ip);
             ggml_cgraph * gf = ggml_new_graph(cpy_ctx);

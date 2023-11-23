@@ -115,11 +115,11 @@ int main(int argc, char * argv[]) {
     generate_data(1.0, test_data2.size(), test_data2.data());
 
     // Initialize GGML, ensures float conversion tables are initialized
-    struct ggml_init_params ggml_params = {
+    struct ggml_init_params ggml_params(
         /* .mem_size   = */ 1*1024,
         /* .mem_buffer = */ NULL,
-        /* .no_alloc   = */ true,
-    };
+        /* .no_alloc   = */ true
+					);
     struct ggml_context * ctx = ggml_init(ggml_params);
 
     int num_failed = 0;

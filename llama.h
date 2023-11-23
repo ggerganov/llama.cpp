@@ -50,7 +50,7 @@
 #endif
 
 #ifdef __cplusplus
-extern "C" {
+//extern "C" {
 #endif
 
     //
@@ -189,7 +189,7 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
-    struct llama_model_params : refl::attr::usage::type{
+    struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
@@ -268,7 +268,7 @@ extern "C" {
         LLAMA_GRETYPE_CHAR_ALT       = 6,
     };
 
-    typedef struct llama_grammar_element : refl::attr::usage::type{
+    typedef struct llama_grammar_element : refl::attr::usage::type {
       llama_grammar_element(        enum llama_gretype type,
 				    uint32_t           value // Unicode code point or rule ID
 				    ):type(type), value(value){}
@@ -811,7 +811,7 @@ extern "C" {
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 
 #ifdef __cplusplus
-}
+//}
 #endif
 
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
@@ -828,6 +828,6 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 
 #endif // LLAMA_API_INTERNAL
 
-template<typename T> void print_fields(const T& obj);
+
 
 #endif // LLAMA_H

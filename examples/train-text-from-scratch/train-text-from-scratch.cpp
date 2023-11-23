@@ -600,10 +600,12 @@ static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vo
 
     // set vocab by copying from vocab_model gguf file
     {
-        struct gguf_init_params params = {
-	  .no_alloc =  false,
-	  .ctx      = NULL,
-        };
+      struct gguf_init_params params(
+	  //.no_alloc =
+	  false,
+	  //.ctx      =
+	  NULL
+				     );
         struct gguf_context * vctx = gguf_init_from_file(fn_vocab_model, params);
 
         const int token_idx = gguf_find_key(vctx, kv(LLM_KV_TOKENIZER_LIST));
@@ -745,9 +747,11 @@ static void save_checkpoint_gguf(struct gguf_context * fctx, const char * fn_voc
 
 static bool load_checkpoint_file(const char * filename, struct my_llama_model * model, struct train_state * train) {
     struct ggml_context * f_ggml_ctx;
-    struct gguf_init_params params;
-    params.no_alloc = false;
-    params.ctx = &f_ggml_ctx;
+    struct gguf_init_params params(
+				   //params.no_alloc =
+				   false,
+				   //params.ctx =
+				   &f_ggml_ctx);
     struct gguf_context * fctx = gguf_init_from_file(filename, params);
     if (fctx == NULL) {
         return false;
@@ -1085,11 +1089,14 @@ int main(int argc, char ** argv) {
     ggml_allocr * alloc = NULL;
 
     // context for input tensors without their data
-    struct ggml_init_params ctx_input_params = {
-        .mem_size = ggml_tensor_overhead() * 2, // mem_size
-        .mem_buffer = NULL,                       // mem_buffer
-        .no_alloc = true,                       // no_alloc
-    };
+    struct ggml_init_params ctx_input_params (
+					      //.mem_size =
+					      ggml_tensor_overhead() * 2, // mem_size
+					      //       .mem_buffer =
+					      NULL,                       // mem_buffer
+					      //       .no_alloc =
+					      true                       // no_alloc
+					      );
     struct ggml_context * ctx_input = ggml_init(ctx_input_params);
 
     // the input tensors
@@ -1114,11 +1121,14 @@ int main(int argc, char ** argv) {
             2*LLAMA_TRAIN_MAX_NODES*ggml_tensor_overhead() +
             (params.common.use_checkpointing ? 3 : 2)*(GGML_OBJECT_SIZE+ggml_graph_overhead_custom(LLAMA_TRAIN_MAX_NODES, true))
     );
-    struct ggml_init_params ctx_compute_params = {
-      .mem_size = estimated_compute_size_wo_data, // mem_size
-      .mem_buffer= NULL,                           // mem_buffer
-      .no_alloc = true,                           // no_alloc
-    };
+    struct ggml_init_params ctx_compute_params(
+					       //    .mem_size =
+					       estimated_compute_size_wo_data, // mem_size
+					       //.mem_buffer=
+					       NULL,                           // mem_buffer
+					       //.no_alloc =
+					       true                           // no_alloc
+					       );
     struct ggml_context * ctx_compute = NULL;
 
     struct ggml_tensor * loss   = NULL;
@@ -1267,11 +1277,14 @@ int main(int argc, char ** argv) {
     printf("%s: work_size = %zu bytes (%.1f MB)\n", __func__, max_work_size, (float) max_work_size / (1024.0f*1024.0f));
 
     // context for work buffer
-    struct ggml_init_params ctx_work_params = {
-      .mem_size= max_work_size, // 
-      .mem_buffer= NULL,          // 
-      .no_alloc=false,         // 
-    };
+    struct ggml_init_params ctx_work_params(
+					    //.mem_size=
+					    max_work_size, // 
+					    //.mem_buffer=
+					    NULL,          // 
+					    //.no_alloc=
+					    false         // 
+					    );
     struct ggml_context * ctx_work = ggml_init(ctx_work_params);
 
     int64_t t0 = ggml_time_ms();

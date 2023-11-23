@@ -16446,7 +16446,7 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
         /*.abort_callback          =*/ NULL,
         /*.abort_callback_data     =*/ NULL,
     };
-    struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
+    struct ggml_compute_state * workers = (struct ggml_compute_state *)alloca(sizeof(struct ggml_compute_state)*n_threads);
 
     // create thread pool
     if (n_threads > 1) {
@@ -16775,11 +16775,11 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
             const size_t overhead = 1*ggml_tensor_overhead();
 	    GGML_ASSERT(0);
 	    // FIXME
-            struct ggml_init_params params;// = {
-            params.mem_size   = fsize + overhead,
-            params.mem_buffer = NULL,
-            params.no_alloc   = false,
-            // };
+            struct ggml_init_params params(
+					   fsize + overhead,
+					   NULL,
+					   false);
+
 
             *ctx_data = ggml_init(params);
 
@@ -16831,10 +16831,10 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             const size_t overhead = (n_leafs + n_nodes)*ggml_tensor_overhead() + ggml_graph_overhead_custom(graph_size, false);
 
-            struct ggml_init_params params;// = {
-            params.mem_size   = size_eval + overhead,
-            params.mem_buffer = NULL,
-            params.no_alloc   = true,
+            struct ggml_init_params params(
+					   size_eval + overhead,
+NULL,
+					   true);
 
             *ctx_eval = ggml_init(params);
 
@@ -17974,7 +17974,7 @@ GGML_API void ggml_opt_init(
     opt->nx = nx;
     opt->just_initialized = true;
     if (opt->ctx == NULL) {
-        struct ggml_init_params ctx_opt_params;
+      struct ggml_init_params ctx_opt_params;
         if (opt->params.type == GGML_OPT_ADAM) {
             ctx_opt_params.mem_size = GGML_MEM_ALIGN*3 + ggml_tensor_overhead()*3 + ggml_type_size(GGML_TYPE_F32)*nx*3;
             if (opt->params.past > 0) {
@@ -18690,10 +18690,10 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             (ctx->header.n_tensors + 1)*ggml_tensor_overhead() + ctx->size;
 
 	// FIXME
-        struct ggml_init_params pdata;
-        pdata.mem_size   = mem_size,
-        pdata.mem_buffer = NULL,
-        pdata.no_alloc   = params.no_alloc,
+        struct ggml_init_params pdata(
+				      mem_size,
+				      NULL,
+				      params.no_alloc);
 
         *params.ctx = ggml_init(pdata);
 
