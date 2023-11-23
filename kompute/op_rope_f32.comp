@@ -12,13 +12,14 @@
 
 layout(local_size_x = 1) in;
 
-layout (binding = 0) readonly buffer tensorIn { float in_[]; };
-layout (binding = 1) writeonly buffer tensorOut { float out_[]; };
+layout(binding = 0) buffer restrict readonly  tensorInA { float inA[]; };
+layout(binding = 1) buffer restrict readonly  tensorInB { int   inB[]; };
+layout(binding = 2) buffer restrict writeonly tensorOut { float out_[]; };
 
 layout (push_constant) uniform parameter {
-    uint inOff;
+    uint inAOff;
+    uint inBOff;
     uint outOff;
-    uint n_past;
     int n_dims;
     int mode;
     float freq_base;
@@ -42,7 +43,7 @@ void main() {
     const bool is_neox = (pcs.mode & 2) != 0;
     const float theta_scale = pow(pcs.freq_base, -2.0/pcs.n_dims);
 
-    const uint p = ((pcs.mode & 1) == 0 ? pcs.n_past + i2 : i2);
+    const int p = inB[pcs.inBOff + i2];
 
     float theta = pcs.freq_scale * float(p);
 
@@ -53,11 +54,11 @@ void main() {
 
             theta *= theta_scale;
 
-            const uint src = uint((i3*pcs.nb03 + i2*pcs.nb02 + i1*pcs.nb01 + i0*pcs.nb00) / 4) + pcs.inOff; // Based from in
+            const uint src = uint((i3*pcs.nb03 + i2*pcs.nb02 + i1*pcs.nb01 + i0*pcs.nb00) / 4) + pcs.inAOff; // Based from in
             const uint dst_data = uint((i3*pcs.nb3  + i2*pcs.nb2  + i1*pcs.nb1  + i0*pcs.nb0) / 4) + pcs.outOff; // Based from out_
 
-            const float x0 = in_[src];
-            const float x1 = in_[src+1];
+            const float x0 = inA[src];
+            const float x1 = inA[src+1];
 
             out_[dst_data] = x0*cos_theta - x1*sin_theta;
             out_[dst_data+1] = x0*sin_theta + x1*cos_theta;
@@ -73,11 +74,11 @@ void main() {
 
                 const uint i0 = ib*pcs.n_dims + ic/2;
 
-                const uint src = uint((i3*pcs.nb03 + i2*pcs.nb02 + i1*pcs.nb01 + i0*pcs.nb00) / 4) + pcs.inOff; // Based from in
+                const uint src = uint((i3*pcs.nb03 + i2*pcs.nb02 + i1*pcs.nb01 + i0*pcs.nb00) / 4) + pcs.inAOff; // Based from in
                 const uint dst_data = uint((i3*pcs.nb3  + i2*pcs.nb2  + i1*pcs.nb1  + i0*pcs.nb0) / 4) + pcs.outOff; // Based from out_
 
-                const float x0 = in_[src];
-                const float x1 = in_[src+pcs.n_dims/2];
+                const float x0 = inA[src];
+                const float x1 = inA[src+pcs.n_dims/2];
 
                 out_[dst_data] = x0*cos_theta - x1*sin_theta;
                 out_[dst_data+pcs.n_dims/2] = x0*sin_theta + x1*cos_theta;

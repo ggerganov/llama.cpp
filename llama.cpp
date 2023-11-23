@@ -2772,8 +2772,9 @@ static struct ggml_cgraph * llm_build_llama(
     }
 
     // shift the entire K-cache if needed
+    struct ggml_tensor * K_shift = nullptr;
     if (do_rope_shift) {
-        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
         ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
@@ -3024,6 +3025,11 @@ static struct ggml_cgraph * llm_build_llama(
             ggml_vk_h2d_all(lctx.ctx_kompute);
         } else {
             ggml_vk_h2d_tensor(lctx.ctx_kompute, toDeviceTensor);
+            ggml_vk_h2d_tensor(lctx.ctx_kompute, KQ_pos);
+            ggml_vk_h2d_tensor(lctx.ctx_kompute, KQ_mask);
+            if (K_shift) {
+                ggml_vk_h2d_tensor(lctx.ctx_kompute, K_shift);
+            }
         }
     }
 #endif
@@ -3589,8 +3595,9 @@ static struct ggml_cgraph * llm_build_falcon(
     }
 
     // shift the entire K-cache if needed
+    struct ggml_tensor * K_shift = nullptr;
     if (do_rope_shift) {
-        struct ggml_tensor * K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
+        K_shift = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_ctx);
         offload_func_kq(K_shift);
         ggml_set_name(K_shift, "K_shift");
         ggml_allocr_alloc(lctx.alloc, K_shift);
@@ -3820,6 +3827,11 @@ static struct ggml_cgraph * llm_build_falcon(
             ggml_vk_h2d_all(lctx.ctx_kompute);
         } else {
             ggml_vk_h2d_tensor(lctx.ctx_kompute, toDeviceTensor);
+            ggml_vk_h2d_tensor(lctx.ctx_kompute, KQ_pos);
+            ggml_vk_h2d_tensor(lctx.ctx_kompute, KQ_mask);
+            if (K_shift) {
+                ggml_vk_h2d_tensor(lctx.ctx_kompute, K_shift);
+            }
         }
     }
 #endif

@@ -32,7 +32,8 @@
 #include "shaderop_getrows_q4_0.h"
 #include "shaderop_getrows_q4_1.h"
 #include "shaderop_getrows_q6_k.h"
-#include "shaderop_rope.h"
+#include "shaderop_rope_f16.h"
+#include "shaderop_rope_f32.h"
 #include "shaderop_cpy_f16_f16.h"
 #include "shaderop_cpy_f16_f32.h"
 #include "shaderop_cpy_f32_f16.h"
@@ -1175,51 +1176,66 @@ void ggml_vk_get_rows_q6_k(Args&&... args) {
     ggml_vk_get_rows(spirv, 1/*We access blocks unaligned*/, QK_NL, std::forward<Args>(args)...);
 }
 
-void ggml_vk_rope(kp::Sequence& seq,
-                  const std::shared_ptr<kp::Tensor>& in,
-                  const std::shared_ptr<kp::Tensor>& out,
-                  uint32_t inOff, uint32_t outOff,
-                  uint32_t n_past, int32_t n_dims, int32_t mode,
-                  float freq_base, float freq_scale,
-                  int32_t ne01, int32_t ne02, int32_t ne03,
-                  uint32_t nb00, uint32_t nb01, uint32_t nb02, uint32_t nb03,
-                  int32_t ne0,
-                  uint32_t nb0, uint32_t nb1, uint32_t nb2, uint32_t nb3) {
-    const static auto spirv = getSpirvShader(kp::shader_data::op_rope_comp_spv,
-        kp::shader_data::op_rope_comp_spv_len);
+void ggml_vk_rope(
+    kp::Sequence& seq,
+    const std::shared_ptr<kp::Tensor>& inA,
+    const std::shared_ptr<kp::Tensor>& inB,
+    const std::shared_ptr<kp::Tensor>& out,
+    uint32_t inAOff, uint32_t inBOff, uint32_t outOff,
+    ggml_type src0t, int32_t n_dims, int32_t mode,
+    float freq_base, float freq_scale,
+    int32_t ne01, int32_t ne02, int32_t ne03,
+    uint32_t nb00, uint32_t nb01, uint32_t nb02, uint32_t nb03,
+    int32_t ne0,
+    uint32_t nb0, uint32_t nb1, uint32_t nb2, uint32_t nb3
+) {
+    GGML_ASSERT(src0t == GGML_TYPE_F16 || src0t == GGML_TYPE_F32);
 
-    GGML_ASSERT(nb03%sizeof(float) == 0);
-    GGML_ASSERT(nb02%sizeof(float) == 0);
-    GGML_ASSERT(nb01%sizeof(float) == 0);
-    GGML_ASSERT(nb00%sizeof(float) == 0);
-    GGML_ASSERT(nb3%sizeof(float) == 0);
-    GGML_ASSERT(nb2%sizeof(float) == 0);
-    GGML_ASSERT(nb1%sizeof(float) == 0);
-    GGML_ASSERT(nb0%sizeof(float) == 0);
+    static const auto spirv_f16 = getSpirvShader(
+        kp::shader_data::op_rope_f16_comp_spv, kp::shader_data::op_rope_f16_comp_spv_len
+    );
+    static const auto spirv_f32 = getSpirvShader(
+        kp::shader_data::op_rope_f32_comp_spv, kp::shader_data::op_rope_f32_comp_spv_len
+    );
+
+    int type_size = src0t == GGML_TYPE_F16 ? 2 : 4;
+
+    GGML_ASSERT(nb03 % type_size == 0);
+    GGML_ASSERT(nb02 % type_size == 0);
+    GGML_ASSERT(nb01 % type_size == 0);
+    GGML_ASSERT(nb00 % type_size == 0);
+    GGML_ASSERT(nb3  % type_size == 0);
+    GGML_ASSERT(nb2  % type_size == 0);
+    GGML_ASSERT(nb1  % type_size == 0);
+    GGML_ASSERT(nb0  % type_size == 0);
 
     struct PushConstants {
-        uint32_t inOff, outOff;
-        uint32_t n_past;
+        uint32_t inAOff, inBOff, outOff;
         int32_t n_dims, mode;
         float freq_base, freq_scale;
         uint32_t nb00, nb01, nb02, nb03;
         int32_t ne0;
         uint32_t nb0, nb1, nb2, nb3;
     } pushConsts {
-        safe_divide(inOff, 4), safe_divide(outOff, 4),
-        n_past, n_dims, mode,
+        safe_divide(inAOff, type_size), safe_divide(inBOff, 4), safe_divide(outOff, type_size),
+        n_dims, mode,
         freq_base, freq_scale,
         nb00, nb01, nb02, nb03,
         ne0,
         nb0, nb1, nb2, nb3
     };
 
+    auto name = std::string(__func__) + (src0t == GGML_TYPE_F16 ? "_f16" : "_f32");
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
-        s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts});
-    else {
-        s_algo = komputeManager()->getAlgorithm(__func__);
-        s_algo->setTensors({in, out});
+    if (!komputeManager()->hasAlgorithm(name)) {
+        s_algo = komputeManager()->algorithm<float, PushConstants>(
+            name, s_kompute_context->pool.get(), {inA, inB, out},
+            src0t == GGML_TYPE_F16 ? spirv_f16 : spirv_f32,
+            {unsigned(ne01), unsigned(ne02), unsigned(ne03)}, {}, {pushConsts}
+        );
+    } else {
+        s_algo = komputeManager()->getAlgorithm(name);
+        s_algo->setTensors({inA, inB, out});
         s_algo->setWorkgroup({unsigned(ne01), unsigned(ne02), unsigned(ne03)});
         s_algo->setPushConstants<PushConstants>({pushConsts});
         s_algo->updateDescriptors(s_kompute_context->pool.get());
@@ -1506,14 +1522,16 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                     } break;
                 case GGML_OP_ROPE:
                     {
-                        const int n_past = ((int32_t *) dst->op_params)[0];
+                        GGML_ASSERT(ne10 == ne02);
+                        GGML_ASSERT(src0t == dstt);
+                        // const int n_past = ((int32_t *) dst->op_params)[0];
                         const int n_dims = ((int32_t *) dst->op_params)[1];
                         const int mode   = ((int32_t *) dst->op_params)[2];
                         float freq_base;
                         float freq_scale;
                         memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
                         memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
-                        ggml_vk_rope(seq, id_src0, id_dst, off_src0, off_dst, n_past, n_dims, mode, freq_base, freq_scale, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3);
+                        ggml_vk_rope(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, src0t, n_dims, mode, freq_base, freq_scale, ne01, ne02, ne03, nb00, nb01, nb02, nb03, ne0, nb0, nb1, nb2, nb3);
                     } break;
                 case GGML_OP_DUP:
                 case GGML_OP_CPY:

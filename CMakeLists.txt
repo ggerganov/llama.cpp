@@ -490,7 +490,8 @@ if (LLAMA_KOMPUTE)
           kompute/op_getrows_q4_0.comp
           kompute/op_getrows_q4_1.comp
           kompute/op_getrows_q6_k.comp
-          kompute/op_rope.comp
+          kompute/op_rope_f16.comp
+          kompute/op_rope_f32.comp
           kompute/op_cpy_f16_f16.comp
           kompute/op_cpy_f16_f32.comp
           kompute/op_cpy_f32_f16.comp
@@ -521,7 +522,8 @@ if (LLAMA_KOMPUTE)
           shaderop_getrows_q4_0.h
           shaderop_getrows_q4_1.h
           shaderop_getrows_q6_k.h
-          shaderop_rope.h
+          shaderop_rope_f16.h
+          shaderop_rope_f32.h
           shaderop_cpy_f16_f16.h
           shaderop_cpy_f16_f32.h
           shaderop_cpy_f32_f16.h
