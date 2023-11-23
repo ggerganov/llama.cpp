@@ -1393,8 +1393,8 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
 //
 
 void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
-    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d\n",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count);
+    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, max contiguous cells=%d @ %d\n",
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous_cells, view.max_contiguous_cells_idx);
     llama_kv_cache_view_cell * c_curr = view.cells;
     struct llama_kv_cache_view_cell_sequence * cs_curr = view.cells_sequences;
     for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
@@ -1405,14 +1405,14 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
         for (int j = 0; j < view.n_max_seq; j++) {
             if (cs_curr[j].seq_id >= 0) { seq_count++; }
         }
-        putchar(int('0' + (std::min(9, seq_count))));
+        putchar(seq_count == 0 ? '.' : ('0' + (std::min(9, seq_count))));
     }
     printf("\n=== Done dumping\n");
 }
 
 void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
-    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d\n",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count);
+    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, max contiguous cells=%d @ %d\n",
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous_cells, view.max_contiguous_cells_idx);
 
     std::unordered_map<llama_seq_id, size_t> seqs;
     llama_kv_cache_view_cell * c_curr = view.cells;

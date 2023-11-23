@@ -366,6 +366,7 @@ extern "C" {
     };
 
     struct llama_kv_cache_view_cell_sequence {
+        // Would like to have token_id here as well.
         llama_seq_id seq_id;
     };
 
@@ -374,7 +375,9 @@ extern "C" {
         int32_t n_max_seq;
         int32_t token_count;
         int32_t used_cells;
-        struct llama_kv_cache_view_cell *cells;
+        int32_t max_contiguous_cells;
+        int32_t max_contiguous_cells_idx;
+        struct llama_kv_cache_view_cell * cells;
         struct llama_kv_cache_view_cell_sequence * cells_sequences;
     };
 
