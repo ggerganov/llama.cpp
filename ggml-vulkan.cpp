@@ -1350,6 +1350,15 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             struct ggml_tensor * dst = gf->nodes[i];
             GGML_ASSERT(dst->data != nullptr);
 
+            switch (dst->op) {
+                case GGML_OP_NONE:
+                case GGML_OP_RESHAPE:
+                case GGML_OP_VIEW:
+                case GGML_OP_TRANSPOSE:
+                case GGML_OP_PERMUTE:
+                    continue; // noop -> next node
+            }
+
             const int32_t ne00 = src0 ? src0->ne[0] : 0;
             const int32_t ne01 = src0 ? src0->ne[1] : 0;
             const int32_t ne02 = src0 ? src0->ne[2] : 0;
@@ -1393,13 +1402,6 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
             const std::shared_ptr<kp::Tensor>& id_dst  = dst ? ggml_vk_get_tensor(ctx, dst, &off_dst)  : nullTensor;
 
             switch (dst->op) {
-                case GGML_OP_RESHAPE:
-                case GGML_OP_VIEW:
-                case GGML_OP_TRANSPOSE:
-                case GGML_OP_PERMUTE:
-                    {
-                        // noop
-                    } break;
                 case GGML_OP_ADD:
                     {
                         if (ggml_nelements(src1) == ne10 && ne00 % 4 == 0) {
