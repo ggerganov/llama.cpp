@@ -8805,6 +8805,95 @@ int llama_model_apply_lora_from_file(const struct llama_model * model, const cha
     }
 }
 
+struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq) {
+    struct llama_kv_cache_view result = {
+        /*.n_cells            = */ 0,
+        /*.n_max_seq          = */ n_max_seq,
+        /*.token_count        = */ 0,
+        /*.used_cells         = */ llama_get_kv_cache_used_cells(ctx),
+        /*.max_contiguous     = */ 0,
+        /*.max_contiguous_idx = */ -1,
+        /*.cells              = */ nullptr,
+        /*.cells_sequences    = */ nullptr,
+    };
+    return result;
+}
+
+void llama_kv_cache_view_free(struct llama_kv_cache_view * view) {
+    if (view->cells != nullptr) {
+        free(view->cells);
+        view->cells = nullptr;
+    }
+    if (view->cells_sequences != nullptr) {
+        free(view->cells_sequences);
+        view->cells_sequences = nullptr;
+    }
+}
+
+void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view) {
+    if (uint32_t(view->n_cells) < ctx->kv_self.size || view->cells == nullptr) {
+        view->n_cells = int32_t(ctx->kv_self.size);
+        void * p = realloc(view->cells, sizeof(struct llama_kv_cache_view_cell) * view->n_cells);
+        GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells");
+        view->cells = (struct llama_kv_cache_view_cell *)p;
+        p = realloc(view->cells_sequences, sizeof(llama_seq_id) * view->n_max_seq * view->n_cells);
+        GGML_ASSERT(p != nullptr && "Failed to alloc kv_cache_view cells sequences");
+        view->cells_sequences = (llama_seq_id *)p;
+    }
+
+    const std::vector<llama_kv_cell> & kv_cells = ctx->kv_self.cells;
+    llama_kv_cache_view_cell * c_curr = view->cells;
+    llama_seq_id * cs_curr = view->cells_sequences;
+    int32_t used_cells = 0;
+    int32_t token_count = 0;
+    int32_t curr_contig_idx = -1;
+    uint32_t max_contig = 0;
+    int32_t max_contig_idx = -1;
+
+    for (int32_t i = 0; i < int32_t(ctx->kv_self.size); i++, c_curr++, cs_curr += view->n_max_seq) {
+        const size_t curr_size = kv_cells[i].seq_id.size();
+        token_count += curr_size;
+        c_curr->pos = kv_cells[i].pos + kv_cells[i].delta;
+
+        if (curr_size > 0) {
+            if (curr_contig_idx >= 0 && uint32_t(i - curr_contig_idx) > max_contig) {
+                max_contig = i - curr_contig_idx;
+                max_contig_idx = curr_contig_idx;
+            }
+            curr_contig_idx = -1;
+        } else if (curr_contig_idx < 0) {
+            curr_contig_idx = i;
+        }
+
+        int seq_idx = 0;
+        for (const llama_seq_id it : kv_cells[i].seq_id) {
+            if (seq_idx >= view->n_max_seq) {
+                break;
+            }
+            cs_curr[seq_idx] = it;
+            seq_idx++;
+        }
+        if (seq_idx != 0) {
+            used_cells++;
+        }
+        for (; seq_idx < view->n_max_seq; seq_idx++) {
+            cs_curr[seq_idx] = -1;
+        }
+    }
+    if (curr_contig_idx >= 0 && kv_cells.size() - curr_contig_idx > max_contig) {
+        max_contig_idx = curr_contig_idx;
+        max_contig = kv_cells.size() - curr_contig_idx;
+    }
+    view->max_contiguous = max_contig;
+    view->max_contiguous_idx = max_contig_idx;
+    view->token_count = token_count;
+    view->used_cells = used_cells;
+    if (uint32_t(used_cells) != ctx->kv_self.used) {
+        LLAMA_LOG_ERROR("%s: used cells mismatch. kv_cache says %d but we calculated %d\n",
+            __func__, ctx->kv_self.used, used_cells);
+    }
+}
+
 int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     int result = 0;
 

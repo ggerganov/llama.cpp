@@ -172,6 +172,8 @@ int main(int argc, char ** argv) {
     int32_t n_total_gen    = 0;
     int32_t n_cache_miss   = 0;
 
+    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, n_clients);
+
     const auto t_main_start = ggml_time_us();
 
     LOG_TEE("%s: Simulating parallel requests from clients:\n", __func__);
@@ -201,6 +203,9 @@ int main(int argc, char ** argv) {
     LOG_TEE("Processing requests ...\n\n");
 
     while (true) {
+        llama_kv_cache_view_update(ctx, &kvc_view);
+        dump_kv_cache_view_seqs(kvc_view, 40);
+
         llama_batch_clear(batch);
 
         // decode any currently ongoing sequences

@@ -218,3 +218,13 @@ std::string get_sortable_timestamp();
 void dump_non_result_info_yaml(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
+
+//
+// KV cache utils
+//
+
+// Dump the KV cache view with the number of sequences per cell.
+void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
+
+// Dump the KV cache view showing individual sequences in each cell (long output).
+void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
