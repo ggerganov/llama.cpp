@@ -1,4 +1,5 @@
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
+#define _USE_MATH_DEFINES // For M_PI on MSVC
 
 #include "ggml-impl.h"
 #include "ggml-quants.h"
@@ -4845,8 +4846,13 @@ static struct ggml_tensor * ggml_rope_impl(
         int                   n_dims,
         int                   mode,
         int                   n_ctx,
+        int                   n_orig_ctx,
         float                 freq_base,
         float                 freq_scale,
+        float                 ext_factor,
+        float                 attn_factor,
+        float                 beta_fast,
+        float                 beta_slow,
         float                 xpos_base,
         bool                  xpos_down,
         bool                  inplace) {
@@ -4862,11 +4868,15 @@ static struct ggml_tensor * ggml_rope_impl(
 
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
 
-    int32_t params[8] = { /*n_past*/ 0, n_dims, mode, n_ctx };
-    memcpy(params + 4, &freq_base,  sizeof(float));
-    memcpy(params + 5, &freq_scale, sizeof(float));
-    memcpy(params + 6, &xpos_base,  sizeof(float));
-    memcpy(params + 7, &xpos_down,  sizeof(bool));
+    int32_t params[13] = { /*n_past*/ 0, n_dims, mode, n_ctx, n_orig_ctx };
+    memcpy(params +  5, &freq_base,    sizeof(float));
+    memcpy(params +  6, &freq_scale,   sizeof(float));
+    memcpy(params +  7, &ext_factor,   sizeof(float));
+    memcpy(params +  8, &attn_factor,  sizeof(float));
+    memcpy(params +  9, &beta_fast,    sizeof(float));
+    memcpy(params + 10, &beta_slow,    sizeof(float));
+    memcpy(params + 11, &xpos_base,    sizeof(float));
+    memcpy(params + 12, &xpos_down,    sizeof(bool));
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE;
@@ -4884,7 +4894,9 @@ struct ggml_tensor * ggml_rope(
         int                   n_dims,
         int                   mode,
         int                   n_ctx) {
-    return ggml_rope_impl(ctx, a, b, n_dims, mode, n_ctx, 10000.0f, 1.0f, 0.0f, false, false);
+    return ggml_rope_impl(
+        ctx, a, b, n_dims, mode, n_ctx, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, false, false
+    );
 }
 
 struct ggml_tensor * ggml_rope_inplace(
@@ -4894,7 +4906,9 @@ struct ggml_tensor * ggml_rope_inplace(
         int                   n_dims,
         int                   mode,
         int                   n_ctx) {
-    return ggml_rope_impl(ctx, a, b, n_dims, mode, n_ctx, 10000.0f, 1.0f, 0.0f, false, true);
+    return ggml_rope_impl(
+        ctx, a, b, n_dims, mode, n_ctx, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, false, true
+    );
 }
 
 struct ggml_tensor * ggml_rope_custom(
@@ -4904,9 +4918,17 @@ struct ggml_tensor * ggml_rope_custom(
         int                   n_dims,
         int                   mode,
         int                   n_ctx,
+        int                   n_orig_ctx,
         float                 freq_base,
-        float                 freq_scale) {
-    return ggml_rope_impl(ctx, a, b, n_dims, mode, n_ctx, freq_base, freq_scale, 0.0f, false, false);
+        float                 freq_scale,
+        float                 ext_factor,
+        float                 attn_factor,
+        float                 beta_fast,
+        float                 beta_slow) {
+    return ggml_rope_impl(
+        ctx, a, b, n_dims, mode, n_ctx, n_orig_ctx, freq_base, freq_scale,
+        ext_factor, attn_factor, beta_fast, beta_slow, 0.0f, false, false
+    );
 }
 
 struct ggml_tensor * ggml_rope_custom_inplace(
@@ -4916,9 +4938,17 @@ struct ggml_tensor * ggml_rope_custom_inplace(
         int                   n_dims,
         int                   mode,
         int                   n_ctx,
+        int                   n_orig_ctx,
         float                 freq_base,
-        float                 freq_scale) {
-    return ggml_rope_impl(ctx, a, b, n_dims, mode, n_ctx, freq_base, freq_scale, 0.0f, false, true);
+        float                 freq_scale,
+        float                 ext_factor,
+        float                 attn_factor,
+        float                 beta_fast,
+        float                 beta_slow) {
+    return ggml_rope_impl(
+        ctx, a, b, n_dims, mode, n_ctx, n_orig_ctx, freq_base, freq_scale,
+        ext_factor, attn_factor, beta_fast, beta_slow, 0.0f, false, true
+    );
 }
 
 struct ggml_tensor * ggml_rope_xpos_inplace(
@@ -4928,7 +4958,7 @@ struct ggml_tensor * ggml_rope_xpos_inplace(
         int                   n_dims,
         float                 base,
         bool                  down) {
-    return ggml_rope_impl(ctx, a, b, n_dims, 0, 0, 10000.0f, 1.0f, base, down, true);
+    return ggml_rope_impl(ctx, a, b, n_dims, 0, 0, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, base, down, true);
 }
 
 // ggml_rope_back
@@ -4940,8 +4970,13 @@ struct ggml_tensor * ggml_rope_back(
         int                   n_dims,
         int                   mode,
         int                   n_ctx,
+        int                   n_orig_ctx,
         float                 freq_base,
         float                 freq_scale,
+        float                 ext_factor,
+        float                 attn_factor,
+        float                 beta_fast,
+        float                 beta_slow,
         float                 xpos_base,
         bool                  xpos_down) {
     GGML_ASSERT(ggml_is_vector(b));
@@ -4958,11 +4993,15 @@ struct ggml_tensor * ggml_rope_back(
 
     struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
 
-    int32_t params[8] = { /*n_past*/ 0, n_dims, mode, n_ctx };
-    memcpy(params + 4, &freq_base,  sizeof(float));
-    memcpy(params + 5, &freq_scale, sizeof(float));
-    memcpy(params + 6, &xpos_base,  sizeof(float));
-    memcpy(params + 7, &xpos_down,  sizeof(bool));
+    int32_t params[13] = { /*n_past*/ 0, n_dims, mode, n_ctx, n_orig_ctx };
+    memcpy(params +  5, &freq_base,    sizeof(float));
+    memcpy(params +  6, &freq_scale,   sizeof(float));
+    memcpy(params +  7, &ext_factor,   sizeof(float));
+    memcpy(params +  8, &attn_factor,  sizeof(float));
+    memcpy(params +  9, &beta_fast,    sizeof(float));
+    memcpy(params + 10, &beta_slow,    sizeof(float));
+    memcpy(params + 11, &xpos_base,    sizeof(float));
+    memcpy(params + 12, &xpos_down,    sizeof(bool));
     ggml_set_op_params(result, params, sizeof(params));
 
     result->op   = GGML_OP_ROPE_BACK;
@@ -10901,30 +10940,75 @@ static void ggml_compute_forward_clamp(
 
 // ggml_compute_forward_rope
 
+static float rope_yarn_ramp(const float low, const float high, const int i0) {
+    const float y = (i0 / 2 - low) / MAX(0.001f, high - low);
+    return 1 - MIN(1, MAX(0, y));
+}
+
+// YaRN algorithm based on LlamaYaRNScaledRotaryEmbedding.py from https://github.com/jquesnelle/yarn
+// MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
+static void rope_yarn(
+    float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,
+    float * cos_theta, float * sin_theta
+) {
+    // Get n-d rotational scaling corrected for extrapolation
+    float theta_interp = freq_scale * theta_extrap;
+    float theta = theta_interp;
+    if (ext_factor != 0.0f) {
+        float ramp_mix = rope_yarn_ramp(corr_dims[0], corr_dims[1], i0) * ext_factor;
+        theta = theta_interp * (1 - ramp_mix) + theta_extrap * ramp_mix;
+
+        // Get n-d magnitude scaling corrected for interpolation
+        mscale *= 1.0f + 0.1f * logf(1.0f / freq_scale);
+    }
+    *cos_theta = cosf(theta) * mscale;
+    *sin_theta = sinf(theta) * mscale;
+}
+
+// Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
+// `corr_dim(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
+static float ggml_rope_yarn_corr_dim(int n_dims, int n_orig_ctx, float n_rot, float base) {
+    return n_dims * logf(n_orig_ctx / (n_rot * 2 * (float)M_PI)) / (2 * logf(base));
+}
+
+void ggml_rope_yarn_corr_dims(
+    int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]
+) {
+    // start and end correction dims
+    dims[0] = MAX(0,         floorf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_fast, freq_base)));
+    dims[1] = MIN(n_dims - 1, ceilf(ggml_rope_yarn_corr_dim(n_dims, n_orig_ctx, beta_slow, freq_base)));
+}
+
 static void ggml_compute_forward_rope_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        struct ggml_tensor * dst,
+        const bool forward) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
-    float freq_base;
-    float freq_scale;
+    float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
 
     // these two only relevant for xPos RoPE:
     float xpos_base;
     bool  xpos_down;
 
-    //const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_dims = ((int32_t *) dst->op_params)[1];
-    const int mode   = ((int32_t *) dst->op_params)[2];
-    const int n_ctx  = ((int32_t *) dst->op_params)[3];
-    memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
-    memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
-    memcpy(&xpos_base,  (int32_t *) dst->op_params + 6, sizeof(float));
-    memcpy(&xpos_down,  (int32_t *) dst->op_params + 7, sizeof(bool));
+    //const int n_past     = ((int32_t *) dst->op_params)[0];
+    const int n_dims     = ((int32_t *) dst->op_params)[1];
+    const int mode       = ((int32_t *) dst->op_params)[2];
+    const int n_ctx      = ((int32_t *) dst->op_params)[3];
+    const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
+
+    memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
+    memcpy(&freq_scale,  (int32_t *) dst->op_params +  6, sizeof(float));
+    memcpy(&ext_factor,  (int32_t *) dst->op_params +  7, sizeof(float));
+    memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
+    memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
+    memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
+    memcpy(&xpos_base,   (int32_t *) dst->op_params + 11, sizeof(float));
+    memcpy(&xpos_down,   (int32_t *) dst->op_params + 12, sizeof(bool));
 
     GGML_TENSOR_UNARY_OP_LOCALS
 
@@ -10952,9 +11036,17 @@ static void ggml_compute_forward_rope_f32(
     int ir = 0;
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float inv_ndims = -1.f/n_dims;
+    float corr_dims[2];
+    ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
+
+    // backward process uses inverse rotation by cos and sin.
+    // cos and sin build a rotation matrix, where the inverse is the transpose.
+    // this essentially just switches the sign of sin.
+    const float sin_sign = forward ? 1.0f : -1.0f;
 
     const int32_t * pos = (const int32_t *) src1->data;
 
@@ -10965,18 +11057,18 @@ static void ggml_compute_forward_rope_f32(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = freq_scale * (float)p;
+                float theta_base = (float)p;
 
                 if (is_glm) {
-                    theta = MIN(p, n_ctx - 2);
+                    theta_base = MIN(p, n_ctx - 2);
                     float block_theta = MAX(p - (n_ctx - 2), 0);
                     for (int64_t i0 = 0; i0 < ne0 / 4; i0++) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
+                        const float cos_theta = cosf(theta_base);
+                        const float sin_theta = sinf(theta_base) * sin_sign;
                         const float cos_block_theta = cosf(block_theta);
-                        const float sin_block_theta = sinf(block_theta);
+                        const float sin_block_theta = sinf(block_theta) * sin_sign;
 
-                        theta *= theta_scale;
+                        theta_base *= theta_scale;
                         block_theta *= theta_scale;
 
                         const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
@@ -10994,13 +11086,17 @@ static void ggml_compute_forward_rope_f32(
                     }
                 } else if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
+                        float cos_theta, sin_theta;
+                        rope_yarn(
+                            theta_base, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta
+                        );
+                        sin_theta *= sin_sign;
+
                         // zeta scaling for xPos only:
                         float zeta = xpos_base != 0.0f ? powf((i0 + 0.4f * ne0) / (1.4f * ne0), p / xpos_base) : 1.0f;
                         if (xpos_down) zeta = 1.0f / zeta;
 
-                        theta *= theta_scale;
+                        theta_base *= theta_scale;
 
                         const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
                               float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -11014,12 +11110,20 @@ static void ggml_compute_forward_rope_f32(
                 } else {
                     // TODO: this might be wrong for ne0 != n_dims - need double check
                     // ref:  https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt_neox/modeling_gpt_neox.py#LL251C1-L294C28
+                    theta_base *= freq_scale;
                     for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
                         for (int64_t ic = 0; ic < n_dims; ic += 2) {
-                            const float cos_theta = cosf(theta);
-                            const float sin_theta = sinf(theta);
+                            // simplified from `(ib * n_dims + ic) * inv_ndims`
+                            float cur_rot = inv_ndims * ic - ib;
 
-                            theta *= theta_scale;
+                            float cos_theta, sin_theta;
+                            rope_yarn(
+                                theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor,
+                                &cos_theta, &sin_theta
+                            );
+                            sin_theta *= sin_sign;
+
+                            theta_base *= theta_scale;
 
                             const int64_t i0 = ib*n_dims + ic/2;
 
@@ -11043,20 +11147,25 @@ static void ggml_compute_forward_rope_f16(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
+        struct ggml_tensor * dst,
+        const bool forward) {
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
-    float freq_base;
-    float freq_scale;
+    float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
 
-    //const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_dims = ((int32_t *) dst->op_params)[1];
-    const int mode   = ((int32_t *) dst->op_params)[2];
-    const int n_ctx  = ((int32_t *) dst->op_params)[3];
-    memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
-    memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
+    //const int n_past     = ((int32_t *) dst->op_params)[0];
+    const int n_dims     = ((int32_t *) dst->op_params)[1];
+    const int mode       = ((int32_t *) dst->op_params)[2];
+    const int n_ctx      = ((int32_t *) dst->op_params)[3];
+    const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
+    memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));
+    memcpy(&freq_scale,  (int32_t *) dst->op_params +  6, sizeof(float));
+    memcpy(&ext_factor,  (int32_t *) dst->op_params +  7, sizeof(float));
+    memcpy(&attn_factor, (int32_t *) dst->op_params +  8, sizeof(float));
+    memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
+    memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
     GGML_TENSOR_UNARY_OP_LOCALS
 
@@ -11084,9 +11193,17 @@ static void ggml_compute_forward_rope_f16(
     int ir = 0;
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float inv_ndims = -1.f/n_dims;
+    float corr_dims[2];
+    ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
 
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
+
+    // backward process uses inverse rotation by cos and sin.
+    // cos and sin build a rotation matrix, where the inverse is the transpose.
+    // this essentially just switches the sign of sin.
+    const float sin_sign = forward ? 1.0f : -1.0f;
 
     const int32_t * pos = (const int32_t *) src1->data;
 
@@ -11097,18 +11214,18 @@ static void ggml_compute_forward_rope_f16(
                 if (ir++ < ir0) continue;
                 if (ir   > ir1) break;
 
-                float theta = freq_scale * (float)p;
+                float theta_base = (float)p;
 
                 if (is_glm) {
-                    theta = MIN(p, n_ctx - 2);
+                    theta_base = MIN(p, n_ctx - 2);
                     float block_theta = MAX(p - (n_ctx - 2), 0);
                     for (int64_t i0 = 0; i0 < ne0 / 4; i0++) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
+                        const float cos_theta = cosf(theta_base);
+                        const float sin_theta = sinf(theta_base) * sin_sign;
                         const float cos_block_theta = cosf(block_theta);
-                        const float sin_block_theta = sinf(block_theta);
+                        const float sin_block_theta = sinf(block_theta) * sin_sign;
 
-                        theta *= theta_scale;
+                        theta_base *= theta_scale;
                         block_theta *= theta_scale;
 
                         const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
@@ -11126,10 +11243,13 @@ static void ggml_compute_forward_rope_f16(
                     }
                 } else if (!is_neox) {
                     for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
+                        float cos_theta, sin_theta;
+                        rope_yarn(
+                            theta_base, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta
+                        );
+                        sin_theta *= sin_sign;
 
-                        theta *= theta_scale;
+                        theta_base *= theta_scale;
 
                         const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
                               ggml_fp16_t * dst_data  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -11143,12 +11263,20 @@ static void ggml_compute_forward_rope_f16(
                 } else {
                     // TODO: this might be wrong for ne0 != n_dims - need double check
                     // ref:  https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt_neox/modeling_gpt_neox.py#LL251C1-L294C28
+                    theta_base *= freq_scale;
                     for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
                         for (int64_t ic = 0; ic < n_dims; ic += 2) {
-                            const float cos_theta = cosf(theta);
-                            const float sin_theta = sinf(theta);
+                            // simplified from `(ib * n_dims + ic) * inv_ndims`
+                            float cur_rot = inv_ndims * ic - ib;
 
-                            theta *= theta_scale;
+                            float cos_theta, sin_theta;
+                            rope_yarn(
+                                theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor,
+                                &cos_theta, &sin_theta
+                            );
+                            sin_theta *= sin_sign;
+
+                            theta_base *= theta_scale;
 
                             const int64_t i0 = ib*n_dims + ic/2;
 
@@ -11176,11 +11304,11 @@ void ggml_compute_forward_rope(
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
-                ggml_compute_forward_rope_f16(params, src0, src1, dst);
+                ggml_compute_forward_rope_f16(params, src0, src1, dst, true);
             } break;
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_rope_f32(params, src0, src1, dst);
+                ggml_compute_forward_rope_f32(params, src0, src1, dst, true);
             } break;
         default:
             {
@@ -11191,215 +11319,6 @@ void ggml_compute_forward_rope(
 
 // ggml_compute_forward_rope_back
 
-static void ggml_compute_forward_rope_back_f32(
-        const struct ggml_compute_params * params,
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
-
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
-
-    // y = rope(x, src1)
-    // dx = rope_back(dy, src1)
-    // src0 is dy, src1 contains options
-
-    float freq_base;
-    float freq_scale;
-
-    // these two only relevant for xPos RoPE:
-    float xpos_base;
-    bool xpos_down;
-
-    //const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_dims = ((int32_t *) dst->op_params)[1];
-    const int mode   = ((int32_t *) dst->op_params)[2];
-    const int n_ctx  = ((int32_t *) dst->op_params)[3]; UNUSED(n_ctx);
-    memcpy(&freq_base,  (int32_t *) dst->op_params + 4, sizeof(float));
-    memcpy(&freq_scale, (int32_t *) dst->op_params + 5, sizeof(float));
-    memcpy(&xpos_base,  (int32_t *) dst->op_params + 6, sizeof(float));
-    memcpy(&xpos_down,  (int32_t *) dst->op_params + 7, sizeof(bool));
-
-    GGML_TENSOR_UNARY_OP_LOCALS
-
-    //printf("ne0: %d, ne1: %d, ne2: %d, ne3: %d\n", ne0, ne1, ne2, ne3);
-    //printf("n_past = %d, ne2 = %d\n", n_past, ne2);
-
-    assert(nb0 == sizeof(float));
-
-    const int ith = params->ith;
-    const int nth = params->nth;
-
-    const int nr = ggml_nrows(dst);
-
-    // rows per thread
-    const int dr = (nr + nth - 1)/nth;
-
-    // row range for this thread
-    const int ir0 = dr*ith;
-    const int ir1 = MIN(ir0 + dr, nr);
-
-    // row index used to determine which thread to use
-    int ir = 0;
-
-    const float theta_scale = powf(freq_base, -2.0f/n_dims);
-
-    const bool is_neox = mode & 2;
-
-    const int32_t * pos = (const int32_t *) src1->data;
-
-    for (int64_t i3 = 0; i3 < ne3; i3++) {
-        for (int64_t i2 = 0; i2 < ne2; i2++) {
-            const int64_t p = pos[i2];
-            for (int64_t i1 = 0; i1 < ne1; i1++) {
-                if (ir++ < ir0) continue;
-                if (ir   > ir1) break;
-
-                float theta = freq_scale * (float)p;
-
-                if (!is_neox) {
-                    for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
-                        // zeta scaling for xPos only:
-                        float zeta = xpos_base != 0.0f ? powf((i0 + 0.4f * ne0) / (1.4f * ne0), p / xpos_base) : 1.0f;
-                        if (xpos_down) zeta = 1.0f / zeta;
-
-                        theta *= theta_scale;
-
-                        const float * const dy  = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                              float *       dx  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                        const float dy0 = dy[0];
-                        const float dy1 = dy[1];
-
-                        dx[0] =   dy0*cos_theta*zeta + dy1*sin_theta*zeta;
-                        dx[1] = - dy0*sin_theta*zeta + dy1*cos_theta*zeta;
-                    }
-                } else {
-                    for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-                        for (int64_t ic = 0; ic < n_dims; ic += 2) {
-                            const float cos_theta = cosf(theta);
-                            const float sin_theta = sinf(theta);
-
-                            theta *= theta_scale;
-
-                            const int64_t i0 = ib*n_dims + ic/2;
-
-                            const float * const dy  = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                                  float *       dx  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                            const float dy0 = dy[0];
-                            const float dy1 = dy[n_dims/2];
-
-                            dx[0]        =   dy0*cos_theta + dy1*sin_theta;
-                            dx[n_dims/2] = - dy0*sin_theta + dy1*cos_theta;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-static void ggml_compute_forward_rope_back_f16(
-        const struct ggml_compute_params * params,
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-        struct ggml_tensor * dst) {
-
-    if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
-        return;
-    }
-
-    // y = rope(x, src1)
-    // dx = rope_back(dy, src1)
-    // src0 is dy, src1 contains options
-
-    //const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_dims = ((int32_t *) dst->op_params)[1];
-    const int mode   = ((int32_t *) dst->op_params)[2];
-
-    GGML_TENSOR_UNARY_OP_LOCALS
-
-    //printf("ne0: %d, ne1: %d, ne2: %d, ne3: %d\n", ne0, ne1, ne2, ne3);
-    //printf("n_past = %d, ne2 = %d\n", n_past, ne2);
-
-    assert(nb0 == sizeof(ggml_fp16_t));
-
-    const int ith = params->ith;
-    const int nth = params->nth;
-
-    const int nr = ggml_nrows(dst);
-
-    // rows per thread
-    const int dr = (nr + nth - 1)/nth;
-
-    // row range for this thread
-    const int ir0 = dr*ith;
-    const int ir1 = MIN(ir0 + dr, nr);
-
-    // row index used to determine which thread to use
-    int ir = 0;
-
-    const float theta_scale = powf(10000.0, -2.0f/n_dims);
-
-    const bool is_neox = mode & 2;
-
-    const int32_t * pos = (const int32_t *) src1->data;
-
-    for (int64_t i3 = 0; i3 < ne3; i3++) {
-        for (int64_t i2 = 0; i2 < ne2; i2++) {
-            const int64_t p = pos[i2];
-            for (int64_t i1 = 0; i1 < ne1; i1++) {
-                if (ir++ < ir0) continue;
-                if (ir   > ir1) break;
-
-                float theta = (float)p;
-
-                if (!is_neox) {
-                    for (int64_t i0 = 0; i0 < ne0; i0 += 2) {
-                        const float cos_theta = cosf(theta);
-                        const float sin_theta = sinf(theta);
-
-                        theta *= theta_scale;
-
-                        const ggml_fp16_t * const dy  = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                              ggml_fp16_t *       dx  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                        const float dy0 = GGML_FP16_TO_FP32(dy[0]);
-                        const float dy1 = GGML_FP16_TO_FP32(dy[1]);
-
-                        dx[0] = GGML_FP32_TO_FP16( dy0*cos_theta + dy1*sin_theta);
-                        dx[1] = GGML_FP32_TO_FP16(-dy0*sin_theta + dy1*cos_theta);
-                    }
-                } else {
-                    for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-                        for (int64_t ic = 0; ic < n_dims; ic += 2) {
-                            const float cos_theta = cosf(theta);
-                            const float sin_theta = sinf(theta);
-
-                            theta *= theta_scale;
-
-                            const int64_t i0 = ib*n_dims + ic/2;
-
-                            const ggml_fp16_t * const dy  = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                                  ggml_fp16_t *       dx  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                            const float dy0 = GGML_FP16_TO_FP32(dy[0]);
-                            const float dy1 = GGML_FP16_TO_FP32(dy[n_dims/2]);
-
-                            dx[0]        = GGML_FP32_TO_FP16( dy0*cos_theta + dy1*sin_theta);
-                            dx[n_dims/2] = GGML_FP32_TO_FP16(-dy0*sin_theta + dy1*cos_theta);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 static void ggml_compute_forward_rope_back(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -11408,11 +11327,11 @@ static void ggml_compute_forward_rope_back(
     switch (src0->type) {
         case GGML_TYPE_F16:
             {
-                ggml_compute_forward_rope_back_f16(params, src0, src1, dst);
+                ggml_compute_forward_rope_f16(params, src0, src1, dst, false);
             } break;
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_rope_back_f32(params, src0, src1, dst);
+                ggml_compute_forward_rope_f32(params, src0, src1, dst, false);
             } break;
         default:
             {
@@ -15455,17 +15374,20 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                 // necessary for llama
                 if (src0->grad) {
                     //const int n_past = ((int32_t *) tensor->op_params)[0];
-                    const int n_dims = ((int32_t *) tensor->op_params)[1];
-                    const int mode   = ((int32_t *) tensor->op_params)[2];
-                    const int n_ctx  = ((int32_t *) tensor->op_params)[3];
-                    float freq_base;
-                    float freq_scale;
-                    float xpos_base;
-                    bool  xpos_down;
-                    memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
-                    memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
-                    memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
-                    memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
+                    const int n_dims     = ((int32_t *) tensor->op_params)[1];
+                    const int mode       = ((int32_t *) tensor->op_params)[2];
+                    const int n_ctx      = ((int32_t *) tensor->op_params)[3];
+                    const int n_orig_ctx = ((int32_t *) tensor->op_params)[4];
+                    float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow, xpos_base, xpos_down;
+
+                    memcpy(&freq_base,   (int32_t *) tensor->op_params +  5, sizeof(float));
+                    memcpy(&freq_scale,  (int32_t *) tensor->op_params +  6, sizeof(float));
+                    memcpy(&ext_factor,  (int32_t *) tensor->op_params +  7, sizeof(float));
+                    memcpy(&attn_factor, (int32_t *) tensor->op_params +  8, sizeof(float));
+                    memcpy(&beta_fast,   (int32_t *) tensor->op_params +  9, sizeof(float));
+                    memcpy(&beta_slow,   (int32_t *) tensor->op_params + 10, sizeof(float));
+                    memcpy(&xpos_base,   (int32_t *) tensor->op_params + 11, sizeof(float));
+                    memcpy(&xpos_down,   (int32_t *) tensor->op_params + 12, sizeof(bool));
 
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
@@ -15475,8 +15397,13 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                 n_dims,
                                 mode,
                                 n_ctx,
+                                n_orig_ctx,
                                 freq_base,
                                 freq_scale,
+                                ext_factor,
+                                attn_factor,
+                                beta_fast,
+                                beta_slow,
                                 xpos_base,
                                 xpos_down),
                             zero_table);
@@ -15486,17 +15413,20 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 if (src0->grad) {
                     //const int n_past = ((int32_t *) tensor->op_params)[0];
-                    const int n_dims = ((int32_t *) tensor->op_params)[1];
-                    const int mode   = ((int32_t *) tensor->op_params)[2];
-                    const int n_ctx  = ((int32_t *) tensor->op_params)[3];
-                    float freq_base;
-                    float freq_scale;
-                    float xpos_base;
-                    bool  xpos_down;
-                    memcpy(&freq_base,  (int32_t *) tensor->op_params + 4, sizeof(float));
-                    memcpy(&freq_scale, (int32_t *) tensor->op_params + 5, sizeof(float));
-                    memcpy(&xpos_base,  (int32_t *) tensor->op_params + 6, sizeof(float));
-                    memcpy(&xpos_down,  (int32_t *) tensor->op_params + 7, sizeof(bool));
+                    const int n_dims     = ((int32_t *) tensor->op_params)[1];
+                    const int mode       = ((int32_t *) tensor->op_params)[2];
+                    const int n_ctx      = ((int32_t *) tensor->op_params)[3];
+                    const int n_orig_ctx = ((int32_t *) tensor->op_params)[4];
+                    float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow, xpos_base, xpos_down;
+
+                    memcpy(&freq_base,   (int32_t *) tensor->op_params +  5, sizeof(float));
+                    memcpy(&freq_scale,  (int32_t *) tensor->op_params +  6, sizeof(float));
+                    memcpy(&ext_factor,  (int32_t *) tensor->op_params +  7, sizeof(float));
+                    memcpy(&attn_factor, (int32_t *) tensor->op_params +  8, sizeof(float));
+                    memcpy(&beta_fast,   (int32_t *) tensor->op_params +  9, sizeof(float));
+                    memcpy(&beta_slow,   (int32_t *) tensor->op_params + 10, sizeof(float));
+                    memcpy(&xpos_base,   (int32_t *) tensor->op_params + 11, sizeof(float));
+                    memcpy(&xpos_down,   (int32_t *) tensor->op_params + 12, sizeof(bool));
 
                     src0->grad = ggml_add_or_set(ctx,
                             src0->grad,
@@ -15506,8 +15436,13 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                 n_dims,
                                 mode,
                                 n_ctx,
+                                n_orig_ctx,
                                 freq_base,
                                 freq_scale,
+                                ext_factor,
+                                attn_factor,
+                                beta_fast,
+                                beta_slow,
                                 xpos_base,
                                 xpos_down,
                                 false),
@@ -18702,8 +18637,7 @@ static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset)
     return n == size;
 }
 
-// NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
-static bool gguf_fread_str_cur(FILE * file, struct gguf_str * p, size_t * offset) {
+static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
     p->n    = 0;
     p->data = NULL;
 
@@ -18711,19 +18645,6 @@ static bool gguf_fread_str_cur(FILE * file, struct gguf_str * p, size_t * offset
 
     ok = ok && gguf_fread_el(file, &p->n,    sizeof(p->n), offset); p->data = calloc(p->n + 1, 1);
     ok = ok && gguf_fread_el(file,  p->data, p->n,         offset);
-
-    return ok;
-}
-
-static bool gguf_fread_str_v1(FILE * file, struct gguf_str * p, size_t * offset) {
-    p->n    = 0;
-    p->data = NULL;
-
-    bool ok = true;
-
-    uint32_t n = 0;
-    ok = ok && gguf_fread_el(file, &n,       sizeof(n), offset); p->data = calloc(n + 1, 1); p->n = n;
-    ok = ok && gguf_fread_el(file,  p->data, p->n,      offset);
 
     return ok;
 }
@@ -18786,20 +18707,14 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ctx->data  = NULL;
 
         ok = ok && gguf_fread_el(file, &ctx->header.version,   sizeof(ctx->header.version),   &offset);
+        ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
+        ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
 
         if (ctx->header.version == 1) {
-            // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
-            uint32_t n_tensors = 0;
-            uint32_t n_kv      = 0;
-
-            ok = ok && gguf_fread_el(file, &n_tensors, sizeof(n_tensors), &offset);
-            ok = ok && gguf_fread_el(file, &n_kv,      sizeof(n_kv),      &offset);
-
-            ctx->header.n_tensors = n_tensors;
-            ctx->header.n_kv      = n_kv;
-        } else {
-            ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
-            ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
+            fprintf(stderr, "%s: GGUFv1 is no longer supported. please use a more up-to-date version\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
         }
 
         if (!ok) {
@@ -18808,12 +18723,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             gguf_free(ctx);
             return NULL;
         }
-    }
-
-    // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
-    bool (* gguf_fread_str)(FILE *, struct gguf_str *, size_t *) = gguf_fread_str_cur;
-    if (ctx->header.version == 1) {
-        gguf_fread_str = gguf_fread_str_v1;
     }
 
     // read the kv pairs
@@ -18846,15 +18755,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 case GGUF_TYPE_ARRAY:
                     {
                         ok = ok && gguf_fread_el(file, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
-
-                        if (ctx->header.version == 1) {
-                            // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
-                            uint32_t n = 0;
-                            ok = ok && gguf_fread_el(file, &n, sizeof(n), &offset);
-                            kv->value.arr.n = n;
-                        } else {
-                            ok = ok && gguf_fread_el(file, &kv->value.arr.n, sizeof(kv->value.arr.n), &offset);
-                        }
+                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n), &offset);
 
                         switch (kv->value.arr.type) {
                             case GGUF_TYPE_UINT8:
@@ -18913,14 +18814,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && gguf_fread_str(file, &info->name,                          &offset);
             ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
             for (uint32_t j = 0; j < info->n_dims; ++j) {
-                if (ctx->header.version == 1) {
-                    // NOTE: temporary handling of GGUFv1 >> remove after Oct 2023
-                    uint32_t t = 0;
-                    ok = ok && gguf_fread_el(file, &t, sizeof(t), &offset);
-                    info->ne[j] = t;
-                } else {
-                    ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
-                }
+                ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
             }
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);

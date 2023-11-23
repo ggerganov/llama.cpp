@@ -10,7 +10,7 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LLAMA_STANDALONE ON)
 
     # configure project version
@@ -100,39 +100,6 @@ option(LLAMA_QKK_64                          "llama: use super-block size of 64 
 option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
-
-#
-# Build info header
-#
-
-# Generate initial build-info.h
-include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
-
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-    set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.git")
-
-    # Is git submodule
-    if(NOT IS_DIRECTORY "${GIT_DIR}")
-        file(READ ${GIT_DIR} REAL_GIT_DIR_LINK)
-        string(REGEX REPLACE "gitdir: (.*)\n$" "\\1" REAL_GIT_DIR ${REAL_GIT_DIR_LINK})
-        set(GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${REAL_GIT_DIR}")
-    endif()
-
-    # Add a custom target for build-info.h
-    add_custom_target(BUILD_INFO ALL DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
-
-    # Add a custom command to rebuild build-info.h when .git/index changes
-    add_custom_command(
-        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h"
-        COMMENT "Generating build details from Git"
-        COMMAND ${CMAKE_COMMAND} -DMSVC=${MSVC} -DCMAKE_C_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION} -DCMAKE_C_COMPILER_ID=${CMAKE_C_COMPILER_ID} -DCMAKE_VS_PLATFORM_NAME=${CMAKE_VS_PLATFORM_NAME} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -P "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS "${GIT_DIR}/index"
-        VERBATIM
-    )
-else()
-    message(WARNING "Git repository not found; to enable automatic generation of build info, make sure Git is installed and the project is a Git repository.")
-endif()
 
 #
 # Compile flags
@@ -682,6 +649,10 @@ if ((${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") OR (${CMAKE_SYSTEM_PROCESSOR} MATC
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^(x86_64|i686|AMD64)$" OR "${CMAKE_GENERATOR_PLATFORM_LWR}" MATCHES "^(x86_64|i686|amd64|x64)$" )
     message(STATUS "x86 detected")
     if (MSVC)
+        # instruction set detection for MSVC only
+        if (LLAMA_NATIVE)
+            include(cmake/FindSIMD.cmake)
+        endif ()
         if (LLAMA_AVX512)
             add_compile_options($<$<COMPILE_LANGUAGE:C>:/arch:AVX512>)
             add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)

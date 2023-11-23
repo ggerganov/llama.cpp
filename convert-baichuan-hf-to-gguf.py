@@ -16,7 +16,7 @@ import torch
 from sentencepiece import SentencePieceProcessor  # type: ignore[import]
 
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
 
@@ -163,7 +163,8 @@ gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
 if "rope_scaling" in hparams and hparams["rope_scaling"] != None and "factor" in hparams["rope_scaling"]:
     if "type" in hparams["rope_scaling"]:
         if hparams["rope_scaling"]["type"] == "linear":
-            gguf_writer.add_rope_scale_linear(hparams["rope_scaling"]["factor"])
+            gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+            gguf_writer.add_rope_scaling_factor(hparams["rope_scaling"]["factor"])
 
 
 # TOKENIZATION
