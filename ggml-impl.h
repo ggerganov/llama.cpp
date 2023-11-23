@@ -39,12 +39,6 @@ extern "C" {
 #endif
 #endif
 
-#undef MIN
-#undef MAX
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
 // 16-bit float
 // on Arm, we use __fp16
 // on x86, we use uint16_t

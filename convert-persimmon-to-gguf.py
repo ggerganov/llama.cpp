@@ -9,6 +9,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
+
 def _flatten_dict(dct, tensors, prefix=None):
     assert isinstance(dct, dict)
     for key in dct.keys():
@@ -20,6 +21,7 @@ def _flatten_dict(dct, tensors, prefix=None):
         else:
             raise ValueError(type(dct[key]))
     return None
+
 
 def _get_sentencepiece_tokenizer_info(dir_model: Path):
     tokenizer_path = dir_model / 'adept_vocab.model'
@@ -53,6 +55,7 @@ def _get_sentencepiece_tokenizer_info(dir_model: Path):
         toktypes.append(toktype)
         pass
     return tokens, scores, toktypes
+
 
 def main():
     parser = argparse.ArgumentParser(description="Convert a Persimmon model from Adept (e.g. Persimmon 8b chat) to a GGML compatible file")
@@ -123,7 +126,6 @@ def main():
 
     print(f"gguf: model successfully exported to '{args.outfile}'")
     print("")
-
 
 
 if __name__ == '__main__':

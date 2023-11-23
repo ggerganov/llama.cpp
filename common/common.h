@@ -102,6 +102,7 @@ struct gpt_params {
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
@@ -121,6 +122,7 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
+    bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
 
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector
@@ -200,6 +202,10 @@ std::string llama_detokenize_bpe(
                          llama_context * ctx,
         const std::vector<llama_token> & tokens);
 
+// Uses the value from the model metadata if possible, otherwise
+// defaults to true when model type is SPM, otherwise false.
+bool llama_should_add_bos_token(const llama_model * model);
+
 //
 // YAML utils
 //
@@ -213,3 +219,13 @@ std::string get_sortable_timestamp();
 void dump_non_result_info_yaml(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
+
+//
+// KV cache utils
+//
+
+// Dump the KV cache view with the number of sequences per cell.
+void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
+
+// Dump the KV cache view showing individual sequences in each cell (long output).
+void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40);

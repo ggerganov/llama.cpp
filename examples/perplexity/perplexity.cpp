@@ -149,8 +149,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool is_spm = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
-    const bool add_bos = is_spm;
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
@@ -288,8 +287,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
-    const bool is_spm = llama_vocab_type(llama_get_model(ctx)) == LLAMA_VOCAB_TYPE_SPM;
-    const bool add_bos = is_spm;
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
     const int n_ctx = llama_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
@@ -481,7 +479,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
     fprintf(stderr, "================================= is_spm = %d\n", is_spm);
 
     // This is needed as usual for LLaMA models
-    const bool add_bos = is_spm;
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
     // Number of tasks to use when computing the score
     if ( params.hellaswag_tasks < hs_task_count  ) {

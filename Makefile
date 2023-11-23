@@ -2,7 +2,7 @@
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf llama-bench libllava.a llava-cli baby-llama beam-search  \
-	speculative infill benchmark-matmult parallel finetune export-lora tests/test-c.o
+	speculative infill tokenize benchmark-matmult parallel finetune export-lora tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
@@ -239,6 +239,11 @@ else
 	endif
 endif
 
+# this version of Apple ld64 is buggy
+ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
+	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
+endif
+
 # OS specific
 # TODO: support Windows
 ifneq '' '$(filter $(UNAME_S),Linux Darwin FreeBSD NetBSD OpenBSD Haiku)'
@@ -337,6 +342,12 @@ ifneq ($(filter ppc64%,$(UNAME_M)),)
 	endif
 endif
 
+ifneq ($(filter ppc64le%,$(UNAME_M)),)
+	MK_CFLAGS   += -mcpu=powerpc64le
+	MK_CXXFLAGS += -mcpu=powerpc64le
+	CUDA_POWER_ARCH = 1
+endif
+
 else
 	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
@@ -387,6 +398,8 @@ else
 endif #LLAMA_CUDA_NVCC
 ifdef CUDA_DOCKER_ARCH
 	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else ifdef CUDA_POWER_ARCH
+	NVCCFLAGS +=
 else
 	NVCCFLAGS += -arch=native
 endif # CUDA_DOCKER_ARCH
@@ -579,6 +592,9 @@ infill: examples/infill/infill.cpp                            ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 simple: examples/simple/simple.cpp                            ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+tokenize: examples/tokenize/tokenize.cpp                      ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 batched: examples/batched/batched.cpp                         ggml.o llama.o $(COMMON_DEPS) $(OBJS)

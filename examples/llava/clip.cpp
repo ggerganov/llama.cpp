@@ -761,7 +761,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
         temp->ny   = img->ny;
         temp->size = img->size;
         temp->data = new uint8_t[temp->size]();
-        *temp->data = *img->data; // copy
+        memcpy(&temp->data[0], &img->data[0], temp->size); // copy
     }
 
     const int nx = temp->nx;

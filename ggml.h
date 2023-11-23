@@ -403,13 +403,8 @@ extern "C" {
         GGML_OP_ROPE_BACK,
         GGML_OP_ALIBI,
         GGML_OP_CLAMP,
-        GGML_OP_CONV_1D,
-        GGML_OP_CONV_1D_STAGE_0,  // internal
-        GGML_OP_CONV_1D_STAGE_1,  // internal
         GGML_OP_CONV_TRANSPOSE_1D,
-        GGML_OP_CONV_2D,
-        GGML_OP_CONV_2D_STAGE_0, // internal
-        GGML_OP_CONV_2D_STAGE_1, // internal
+        GGML_OP_IM2COL,
         GGML_OP_CONV_TRANSPOSE_2D,
         GGML_OP_POOL_1D,
         GGML_OP_POOL_2D,
@@ -1403,6 +1398,18 @@ extern "C" {
             float                 min,
             float                 max);
 
+    GGML_API struct ggml_tensor * ggml_im2col(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int                  s0,
+            int                  s1,
+            int                  p0,
+            int                  p1,
+            int                  d0,
+            int                  d1,
+            bool                 is_2D);
+
     GGML_API struct ggml_tensor * ggml_conv_1d(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -2038,6 +2045,7 @@ extern "C" {
     GGML_API double       gguf_get_val_f64 (const struct gguf_context * ctx, int key_id);
     GGML_API bool         gguf_get_val_bool(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_val_str (const struct gguf_context * ctx, int key_id);
+    GGML_API const void * gguf_get_val_data(const struct gguf_context * ctx, int key_id);
     GGML_API int          gguf_get_arr_n   (const struct gguf_context * ctx, int key_id);
     GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_arr_str (const struct gguf_context * ctx, int key_id, int i);
