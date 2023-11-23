@@ -10,6 +10,7 @@
 
 #include "common.comp"
 
+// TODO: use a local size of 32 or more (Metal uses 1024)
 layout(local_size_x = 1) in;
 
 layout(binding = 0) buffer restrict readonly  tensorInA { float inA[]; };

@@ -847,9 +847,9 @@ void ggml_vk_norm_(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
     };
 
     std::shared_ptr<kp::Algorithm> s_algo = nullptr;
-    if (!komputeManager()->hasAlgorithm(__func__))
+    if (!komputeManager()->hasAlgorithm(__func__)) {
         s_algo = komputeManager()->algorithm<float, PushConstants>(__func__, s_kompute_context->pool.get(), {in, out}, spirv, {(uint32_t)nrows}, {}, {pushConsts});
-    else {
+    } else {
         s_algo = komputeManager()->getAlgorithm(__func__);
         s_algo->setTensors({in, out});
         s_algo->setWorkgroup({(uint32_t)nrows});
