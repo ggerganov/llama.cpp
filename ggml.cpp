@@ -48,8 +48,6 @@
 
 #include <windows.h>
 
-typedef volatile LONG atomic_int;
-typedef atomic_int atomic_bool;
 
 static void atomic_store(atomic_int * ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -64,9 +62,6 @@ static LONG atomic_fetch_sub(atomic_int * ptr, LONG dec) {
     return atomic_fetch_add(ptr, -(dec));
 }
 
-typedef HANDLE pthread_t;
-
-typedef DWORD thread_ret_t;
 static int pthread_create(pthread_t * out, void * unused, thread_ret_t(*func)(void *), void * arg) {
     (void) unused;
     HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) func, arg, 0, NULL);
@@ -100,7 +95,7 @@ using namespace std;
 #include <stdatomic.h>
 #endif
 
-typedef void * thread_ret_t;
+
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -111,6 +106,8 @@ typedef void * thread_ret_t;
 #ifdef GGML_USE_CPU_HBM
 #include <hbwmalloc.h>
 #endif
+
+#include "ggml-internal.hpp"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -281,7 +278,7 @@ inline static void * ggml_aligned_malloc(size_t size) {
 #endif
 
 // floating point type used to accumulate sums
-typedef double ggml_float;
+
 
 #undef MIN
 #undef MAX
@@ -1621,46 +1618,6 @@ static void ggml_setup_op_has_task_pass(void) {
 // ggml context
 //
 
-struct ggml_context {
-    size_t mem_size;
-    void * mem_buffer;
-    bool   mem_buffer_owned;
-    bool   no_alloc;
-    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
-
-    int    n_objects;
-
-    struct ggml_object * objects_begin;
-    struct ggml_object * objects_end;
-
-    struct ggml_scratch scratch;
-    struct ggml_scratch scratch_save;
-
-  ggml_context():
-    mem_size(0),
-    mem_buffer(0),
-    mem_buffer_owned(0),
-    no_alloc(0),
-    no_alloc_save(0),
-    n_objects(0),
-    objects_begin(0),
-    objects_end(0),
-    scratch(),
-    scratch_save()
-  {
-    
-  }
-};
-
-struct ggml_context_container {
-    bool used;
-
-    struct ggml_context context;
-
-  ggml_context_container(): used(0),context(){
-    
-  }
-};
 
 //
 // NUMA support
@@ -15766,48 +15723,6 @@ void ggml_graph_clear(struct ggml_cgraph * cgraph) {
 //
 //#define GGML_LOCK_INITIALIZER OS_UNFAIR_LOCK_INIT
 
-typedef int ggml_lock_t;
-
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#define ggml_lock_lock(x)    UNUSED(x)
-#define ggml_lock_unlock(x)  UNUSED(x)
-
-#define GGML_LOCK_INITIALIZER 0
-
-typedef pthread_t ggml_thread_t;
-
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
-
-#else
-
-//typedef pthread_spinlock_t ggml_lock_t;
-
-//#define ggml_lock_init(x) pthread_spin_init(x, PTHREAD_PROCESS_PRIVATE)
-//#define ggml_lock_destroy pthread_spin_destroy
-//#define ggml_lock_lock    pthread_spin_lock
-//#define ggml_lock_unlock  pthread_spin_unlock
-
-typedef int ggml_lock_t;
-
-#define ggml_lock_init(x)    UNUSED(x)
-#define ggml_lock_destroy(x) UNUSED(x)
-#if defined(__x86_64__) || (defined(_MSC_VER) && defined(_M_AMD64))
-#define ggml_lock_lock(x)    _mm_pause()
-#else
-#define ggml_lock_lock(x)    UNUSED(x)
-#endif
-#define ggml_lock_unlock(x)  UNUSED(x)
-
-#define GGML_LOCK_INITIALIZER 0
-
-typedef pthread_t ggml_thread_t;
-
-#define ggml_thread_create pthread_create
-#define ggml_thread_join   pthread_join
-
-#endif
 
 // Android's libc implementation "bionic" does not support setting affinity
 #if defined(__linux__) && !defined(__BIONIC__)

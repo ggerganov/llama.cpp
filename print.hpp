@@ -141,9 +141,6 @@ REFL_TYPE(ggml_opt_context)
   REFL_FIELD(ctx)
 REFL_END
 
-//REFL_TYPE(gguf_context)
-//REFL_END
-
 REFL_TYPE(gguf_init_params)
 REFL_END
 
@@ -151,12 +148,6 @@ REFL_TYPE(ggml_something)
   REFL_FIELD(type_name)
 REFL_END
 
-
-//REFL_TYPE()
-//  REFL_FIELD(d)
-//REFL_TYPE()
-
-// incomplete ttype
 // REFL_TYPE(ggml_context)
 //   REFL_FIELD(mem_size)
 //   REFL_FIELD(mem_buffer)
