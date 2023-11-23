@@ -223,5 +223,8 @@ void dump_non_result_info_yaml(
 // KV cache utils
 //
 
+// Dump the KV cache view with the number of sequences per cell.
 void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
-void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 80);
+
+// Dump the KV cache view showing individual sequences in each cell (long output).
+void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40);

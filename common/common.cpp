@@ -1396,10 +1396,10 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous_cells, view.max_contiguous_cells_idx);
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
     llama_kv_cache_view_cell * c_curr = view.cells;
-    struct llama_kv_cache_view_cell_sequence * cs_curr = view.cells_sequences;
+    llama_seq_id * cs_curr = view.cells_sequences;
 
     for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
         if (i % row_size == 0) {
@@ -1407,7 +1407,7 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
         }
         int seq_count = 0;
         for (int j = 0; j < view.n_max_seq; j++) {
-            if (cs_curr[j].seq_id >= 0) { seq_count++; }
+            if (cs_curr[j] >= 0) { seq_count++; }
         }
         putchar(slot_chars[std::min(sizeof(slot_chars) - 2, size_t(seq_count))]);
     }
@@ -1419,18 +1419,18 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
-        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous_cells, view.max_contiguous_cells_idx);
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
 
     std::unordered_map<llama_seq_id, size_t> seqs;
     llama_kv_cache_view_cell * c_curr = view.cells;
-    struct llama_kv_cache_view_cell_sequence * cs_curr = view.cells_sequences;
+    llama_seq_id * cs_curr = view.cells_sequences;
 
     for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
         for (int j = 0; j < view.n_max_seq; j++) {
-            if (cs_curr[j].seq_id < 0) { continue; }
-            if (seqs.find(cs_curr[j].seq_id) == seqs.end()) {
+            if (cs_curr[j] < 0) { continue; }
+            if (seqs.find(cs_curr[j]) == seqs.end()) {
                 if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
-                seqs[cs_curr[j].seq_id] = seqs.size();
+                seqs[cs_curr[j]] = seqs.size();
             }
         }
         if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
@@ -1449,8 +1449,8 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
             printf("\n%5d: ", i);
         }
         for (int j = 0; j < view.n_max_seq; j++) {
-            if (cs_curr[j].seq_id >= 0) {
-                const auto & it = seqs.find(cs_curr[j].seq_id);
+            if (cs_curr[j] >= 0) {
+                const auto & it = seqs.find(cs_curr[j]);
                 putchar(it != seqs.end() ? int(slot_chars[it->second]) : '+');
             } else {
                 putchar('.');
