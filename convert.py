@@ -229,6 +229,8 @@ class Params:
             n_ctx = config["max_sequence_length"]
         elif "max_position_embeddings" in config:
             n_ctx = config["max_position_embeddings"]
+        elif "model_max_length" in config:
+            n_ctx = config["model_max_length"]
         else:
             raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
