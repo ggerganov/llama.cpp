@@ -436,15 +436,15 @@ endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
 
-	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
+	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)  -I/usr/local/include
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
 	MK_CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
 
 	# Mac provides OpenCL as a framework
 	ifeq ($(UNAME_S),Darwin)
-		MK_LDFLAGS += -lclblast -framework OpenCL
+		MK_LDFLAGS += -lclblast -framework OpenCL  -L/usr/local/lib
 	else
-		MK_LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
+		MK_LDFLAGS += $(shell pkg-config --libs clblast OpenCL)  -L/usr/local/lib
 	endif
 	OBJS    += ggml-opencl.o
 
@@ -627,6 +627,9 @@ beam-search: examples/beam-search/beam-search.cpp build-info.h ggml.o llama.o $(
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 finetune: examples/finetune/finetune.cpp build-info.h ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+finetune-bc: examples/finetune/finetune-bc.cpp build-info.h ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 export-lora: examples/export-lora/export-lora.cpp build-info.h ggml.o llama.o $(COMMON_DEPS) $(OBJS)

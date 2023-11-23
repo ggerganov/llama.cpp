@@ -1,3 +1,10 @@
+# TODO List
+  微调流程已通；
+  选择合适的行业场景；
+  测试微调文本格式与效果；
+  百川模型转换为llama;
+  好的中文llama base model;
+
 # finetune
 
 Basic usage instructions:
@@ -7,18 +14,64 @@ Basic usage instructions:
 wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/shakespeare.txt
 
 # finetune LORA adapter
-./bin/finetune \
-        --model-base open-llama-3b-v2-q8_0.gguf \
-        --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf \
-        --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.gguf \
-        --lora-out lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
-        --train-data "shakespeare.txt" \
-        --save-every 10 \
-        --threads 6 --adam-iter 30 --batch 4 --ctx 64 \
-        --use-checkpointing
+# ./bin/finetune \
+#         --model-base open-llama-3b-v2-q8_0.gguf \
+#         --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf \
+#         --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.gguf \
+#         --lora-out lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.bin \
+#         --train-data "shakespeare.txt" \
+#         --save-every 10 \
+#         --threads 6 --adam-iter 30 --batch 4 --ctx 64 \
+#         --use-checkpointing
 
-# predict
-./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+# # predict
+# ./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+
+# mac os mistral
+data_dir="../models/"  \
+model_dir="../models/ggmls/" \
+model_name="openbuddy-mistral-7b-v13.1-q2_k" \
+dataset=slqm \
+sh examples/finetune/finetune.sh >${model_name}.log
+
+#云电脑   mistral
+data_dir="../"  \
+model_dir="../"  \
+dataset=slqm \
+model_name="openbuddy-mistral-7b-v13.1-q2_k" \
+sh examples/finetune/finetune.sh >${model_name}.log
+
+# mac os llama2
+data_dir="../models/"  \
+model_dir="../models/ggmls/" \
+model_name="chinese-llama-2-7b-16k.Q2_K" \
+dataset=slqm \
+sh examples/finetune/finetune.sh >${model_name}.log
+
+#云电脑   llama2
+data_dir="../"  \
+model_dir="../"  \
+dataset=slqm \
+model_name="chinese-llama-2-7b-16k.Q2_K" \
+sh examples/finetune/finetune.sh >${model_name}.log
+
+
+#云电脑   finetune-bc
+data_dir="../"  \
+model_dir="../"  \
+dataset=slqm \
+model_name="bc2-7b-chat-q2_k" \
+cmd="finetune-bc" \
+sh examples/finetune/finetune.sh >${model_name}.log
+
+
+
+1.微调 CPU核素越多越快 只支持llama架构
+win cmd 输出编码
+    $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+修改Windows10 命令终端cmd的编码为UTF-8
+    chcp 65001
+
 ```
 
 Finetune output files will be saved every N iterations (config with `--save-every N`).
