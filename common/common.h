@@ -224,3 +224,4 @@ void dump_non_result_info_yaml(
 //
 
 void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
+void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 80);
