@@ -1,5 +1,3 @@
-tt:
-	clang++ -std=c++17 ggml.cpp
 
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
@@ -742,3 +740,5 @@ tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp ggml.o llama.o $(
 
 tests/test-c.o: tests/test-c.cpp llama.h
 	$(CXX) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
+tt:
+	clang++ -std=c++17 ggml.cpp

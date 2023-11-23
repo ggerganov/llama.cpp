@@ -108,7 +108,7 @@ int main(int argc, char ** argv) {
     g_params = &params;
 
     //using Td = type_descriptor<gpt_params>;
-    print_fields(g_params);
+    print_fields(params);
 
     //constexpr auto tbl = descriptor::get_attribute<gpt_params>(Td{}); 
     //constexpr auto tbl_name = REFL_MAKE_CONST_STRING(tbl.name);
