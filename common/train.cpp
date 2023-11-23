@@ -32,6 +32,7 @@ struct train_state  * init_train_state() {
     state->opt = new struct ggml_opt_context;
     state->opt->ctx = NULL;
     state->opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    state->opt->params.graph_size = LLAMA_TRAIN_MAX_NODES;
     state->opt->loss_after = 0.0f;
 
     return state;
