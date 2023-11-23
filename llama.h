@@ -361,6 +361,29 @@ extern "C" {
     // KV cache
     //
 
+    struct llama_kv_cache_view_cell {
+        llama_pos pos;
+    };
+
+    struct llama_kv_cache_view_cell_sequence {
+        llama_seq_id seq_id;
+    };
+
+    struct llama_kv_cache_view {
+        int32_t n_cells;
+        int32_t n_max_seq;
+        int32_t token_count;
+        int32_t used_cells;
+        struct llama_kv_cache_view_cell *cells;
+        struct llama_kv_cache_view_cell_sequence * cells_sequences;
+    };
+
+    LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
+
+    LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
+
+    LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
+
     // Returns the number of tokens in the KV cache (slow, use only for debug)
     // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
     LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);

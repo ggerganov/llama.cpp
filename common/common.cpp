@@ -1386,3 +1386,25 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
 }
+
+//
+// KV cache utils
+//
+
+void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
+    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d\n",
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count);
+    llama_kv_cache_view_cell * c_curr = view.cells;
+    struct llama_kv_cache_view_cell_sequence * cs_curr = view.cells_sequences;
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+        if (i % row_size == 0) {
+            printf("\n%5d: ", i);
+        }
+        int seq_count = 0;
+        for (int j = 0; j < view.n_max_seq; j++) {
+            if (cs_curr[j].seq_id >= 0) { seq_count++; }
+        }
+        putchar(int('0' + (std::min(9, seq_count))));
+    }
+    printf("\n=== Done dumping\n");
+}
