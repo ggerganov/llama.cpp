@@ -1,5 +1,5 @@
 // A basic application simulating a server with multiple clients.
-// The clients submite requests to the server and they are processed in parallel.
+// The clients submit requests to the server and they are processed in parallel.
 
 #include "common.h"
 #include "llama.h"
