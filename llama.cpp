@@ -8857,8 +8857,8 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
 
         if (curr_size > 0) {
             if (curr_contig_idx >= 0 && uint32_t(i - curr_contig_idx) > max_contig) {
-                max_contig_idx = i;
                 max_contig = i - curr_contig_idx;
+                max_contig_idx = curr_contig_idx;
             }
             curr_contig_idx = -1;
         } else if (curr_contig_idx < 0) {
