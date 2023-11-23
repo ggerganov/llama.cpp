@@ -122,6 +122,7 @@ struct gpt_params {
     bool numa              = false; // attempt optimizations that help on some NUMA systems
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
+    bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
 
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector

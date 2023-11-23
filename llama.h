@@ -400,13 +400,13 @@ extern "C" {
         llama_seq_id * cells_sequences;
     };
 
-    // Create an empty KV cache view.
+    // Create an empty KV cache view. (use only for debugging purposes)
     LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
 
-    // Free a KV cache view.
+    // Free a KV cache view. (use only for debugging purposes)
     LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
 
-    // Update the KV cache view structure with the current state of the KV cache.
+    // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
     LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
 
     // Returns the number of tokens in the KV cache (slow, use only for debug)

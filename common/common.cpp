@@ -496,6 +496,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.chatml = true;
         } else if (arg == "--infill") {
             params.infill = true;
+        } else if (arg == "-dkvc" || arg == "--dump-kv-cache") {
+            params.dump_kv_cache = true;
         } else if (arg == "--multiline-input") {
             params.multiline_input = true;
         } else if (arg == "--simple-io") {
@@ -836,6 +838,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif // GGML_USE_CUBLAS
 #endif
     printf("  --verbose-prompt      print prompt before generation\n");
+    printf("  -dkvc, --dump-kv-cache\n");
+    printf("                        verbose print of the KV cache\n");
     printf("  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");

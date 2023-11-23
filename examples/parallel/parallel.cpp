@@ -113,6 +113,8 @@ int main(int argc, char ** argv) {
     // insert new requests as soon as the previous one is done
     const bool cont_batching = params.cont_batching;
 
+    const bool dump_kv_cache = params.dump_kv_cache;
+
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("parallel", "log"));
     LOG_TEE("Log start\n");
@@ -203,8 +205,10 @@ int main(int argc, char ** argv) {
     LOG_TEE("Processing requests ...\n\n");
 
     while (true) {
-        llama_kv_cache_view_update(ctx, &kvc_view);
-        dump_kv_cache_view_seqs(kvc_view, 40);
+        if (dump_kv_cache) {
+            llama_kv_cache_view_update(ctx, &kvc_view);
+            dump_kv_cache_view_seqs(kvc_view, 40);
+        }
 
         llama_batch_clear(batch);
 
