@@ -12,7 +12,7 @@ actor LlamaContext {
     private var batch: llama_batch
     private var tokens_list: [llama_token]
     
-    var n_len: Int32 = 32
+    var n_len: Int32 = 512
     var n_cur: Int32 = 0
     var n_decode: Int32 = 0
     
@@ -78,7 +78,7 @@ actor LlamaContext {
         // batch = llama_batch_init(512, 0) // done in init()
         batch.n_tokens = Int32(tokens_list.count)
         
-        for i1 in 0...batch.n_tokens-1 {
+        for i1 in 0..<batch.n_tokens {
             let i = Int(i1)
             batch.token[i] = tokens_list[i]
             batch.pos[i] = i1
@@ -104,7 +104,7 @@ actor LlamaContext {
         var candidates = Array<llama_token_data>()
         candidates.reserveCapacity(Int(n_vocab))
         
-        for token_id in 0...n_vocab {
+        for token_id in 0..<n_vocab {
             candidates.append(llama_token_data(id: token_id, logit: logits![Int(token_id)], p: 0.0))
         }
         candidates.withUnsafeMutableBufferPointer() { buffer in
