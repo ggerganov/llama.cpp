@@ -13,7 +13,7 @@ ARG CUDA_DOCKER_ARCH=all
 # ARG CUDA_DOCKER_ARCH=sm_86
 
 RUN apt-get update && \
-    apt-get install -y build-essential git wget python3 python3-pip
+    apt-get install -y build-essential git wget
 
 WORKDIR /app
 
@@ -37,6 +37,7 @@ ENV MODEL_URL=${MODEL_URL}
 RUN wget $MODEL_URL -O /model.gguf
 
 WORKDIR /install
+RUN apt-get install python3 python3-pip
 RUN pip install --install-option="--prefix=/install" runpod
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
