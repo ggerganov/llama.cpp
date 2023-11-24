@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 96
+Current version: 97
 -Concedo
 -->
 
@@ -1654,18 +1654,9 @@ Current version: 96
 		margin: 8px 0 8px;
 	}
 
-	.cht_inp_hold input {
-
-		border: medium none;
-		color: #bebebe;
-		font-size: 15px;
-		min-height: 36px;
-		/* width: 100%; */
-		outline:none;
-	}
-
-	.cht_inp
+	.cht_inp_bg
 	{
+		display: inline-block;
 		width: calc(100% - 84px);
 		background: #86868638 none repeat scroll 0 0;
 		margin-top: 8px;
@@ -1673,8 +1664,23 @@ Current version: 96
 		border-radius: 16px;
 		padding-left: 10px;
 		padding-right: 10px;
+		padding-top: 7px;
 	}
-	.cht_inp.shorter
+	.cht_inp_bg_inner
+	{
+		width: 100%;
+		resize: none;
+		overflow-y:scroll;
+		overflow-x:hidden;
+		background: #00000000 none repeat scroll 0 0;
+		border: medium none;
+		color: #bebebe;
+		font-size: 15px;
+		/* min-height: 36px; */
+		/* width: 100%; */
+		outline:none;
+	}
+	.cht_inp_bg.shorter
 	{
 		width: calc(100% - 114px);
 	}
@@ -3238,7 +3244,7 @@ Current version: 96
 	var image_db = {}; //stores a dictionary of pending images
 	var completed_imgs_meta = {}; //stores temp info on completed images like alt text
 	//key is ID, body is {done:false,queue:10,result:""}
-	var stablemodels = []; //stored as {name,count}
+	var stablemodels = [{"name": "stable_diffusion","count": 1}]; //stored as {name,count}
 	var custom_kobold_endpoint = ""; //if set, does not use horde. Instead, attempts to use this sync endpoint
 	var custom_oai_endpoint = "";
 	var custom_oai_key = ""; //if set, uses the OpenAI API to generate
@@ -3599,11 +3605,18 @@ Current version: 96
 			.setAttribute("content","width=device-width, initial-scale=1, maximum-scale=1");
 		}
 
-		//fix for copy paste text in firefox
+		//fix for copy paste text in firefox, and also to prevent pasting rich text
 		{
 			document.getElementById("gametext").addEventListener("paste", function(e) {
 				e.preventDefault();
-				var text = (e.originalEvent || e).clipboardData.getData('text/plain');
+
+				let text = e.clipboardData
+				? (e.originalEvent || e).clipboardData.getData('text/plain')
+				: // For IE
+				window.clipboardData
+				? window.clipboardData.getData('Text')
+				: '';
+				text = escapeHtml(text);
 				text = text.replace(/\r?\n/g, '<br>');
 				document.execCommand("insertHTML", false, text);
 			});
@@ -7081,9 +7094,9 @@ Current version: 96
 	{
 		let sdmodelshtml = "";
 		for (var i = 0; i < stablemodels.length; ++i) {
-			sdmodelshtml += "<option value=\"" + stablemodels[i].name + " (" + stablemodels[i].count + ")\">";
+			sdmodelshtml += "<option value=\"" + stablemodels[i].name + "\" "+(stablemodels[i].name==localsettings.generate_images_model?"selected":"")+">" + stablemodels[i].name + " (" + stablemodels[i].count + ")</option>";
 		}
-		document.getElementById("sdmodels").innerHTML = sdmodelshtml;
+		document.getElementById("generate_images_model").innerHTML = sdmodelshtml;
 	}
 
 	function toggle_preset() {
@@ -7118,12 +7131,9 @@ Current version: 96
 				break;
 			}
 		}
-		if (!matched && inputmodel != "*") {
+		if (!matched) {
 			document.getElementById("generate_images_model").value = defaultsettings.generate_images_model;
 		}
-	}
-	function clear_sd_model() {
-		document.getElementById("generate_images_model").value = "";
 	}
 
 	function validate_samplers(savesetting = false) {
@@ -7665,6 +7675,7 @@ Current version: 96
 		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
+		chat_resize_input();
 		image_db = {};
 		completed_imgs_meta = {};
 		localsettings.adventure_is_action = false;
@@ -7851,7 +7862,7 @@ Current version: 96
 		let id_to_cancel = pending_response_id;
 
 		//flush any streaming text first
-		if(is_using_custom_ep() && pending_response_id!="" && synchro_pending_stream!="")
+		if(is_using_custom_ep() && pending_response_id != "" && (synchro_pending_stream != "" || synchro_polled_response != ""))
 		{
 			//apply a short delay of 1s before button reenables
 			allow_reenable_submitbtn_timestamp = performance.now() + 500;
@@ -7859,7 +7870,10 @@ Current version: 96
 				update_submit_button(true);
 			}, 1000);
 
-			synchro_polled_response = synchro_pending_stream;
+			if(synchro_pending_stream!="")
+			{
+				synchro_polled_response = synchro_pending_stream;
+			}
 			poll_in_progress = false;
 			horde_poll_nearly_completed = false;
 			poll_pending_response();
@@ -10219,10 +10233,10 @@ Current version: 96
 			}
 			if (localsettings.opmode == 3 && localsettings.chatopponent != "") {
 				document.getElementById("chat_btnmode_chat").classList.remove("hidden");
-				document.getElementById("cht_inp").classList.add("shorter");
+				document.getElementById("cht_inp_bg").classList.add("shorter");
 			} else {
 				document.getElementById("chat_btnmode_chat").classList.add("hidden");
-				document.getElementById("cht_inp").classList.remove("shorter");
+				document.getElementById("cht_inp_bg").classList.remove("shorter");
 			}
 
 			// Show the 'AI is typing' message if an answer is pending, and prevent the 'send button' from being clicked again.
@@ -10412,12 +10426,21 @@ Current version: 96
 			}
 		}
 	}
+	function chat_resize_input()
+	{
+		//resize chat inp
+		let textarea = document.getElementById("cht_inp");
+		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
+		numberOfLineBreaks = numberOfLineBreaks>4?4:numberOfLineBreaks;
+		textarea.rows = numberOfLineBreaks+1;
+	}
 	function chat_submit_generation()
 	{
 		//easy solution is to just pump the text into the main box and submit it
 		document.getElementById("input_text").value = document.getElementById("cht_inp").value;
 		submit_generation();
 		document.getElementById("cht_inp").value = "";
+		chat_resize_input();
 	}
 	function chat_toggle_actionmenu()
 	{
@@ -11430,15 +11453,16 @@ Current version: 96
 			<div class="cht_inp_hold_outer">
 			  <div class="cht_inp_hold">
 				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
-				<input id="cht_inp" type="text" name="chtchtinp" class="cht_inp" role="presentation" autocomplete="noppynop" spellcheck="true" placeholder="Type a message" value="" oninput="update_submit_button()" onkeypress="return chat_handle_typing(event)"/>
-
+				<div id="cht_inp_bg" class="cht_inp_bg">
+				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="off" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
+				</div>
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>
 				<button type="button" class="chat_msg_cust_btn" id="btn_chat_cust" onclick="chat_toggle_actionmenu()"></button>
 				</div>
 			</div>
 
-			<div class="lastreq" id="lastreq2" style="padding-top: 4px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
+			<div class="lastreq" id="lastreq2" style="padding-top: 2px; color:#999999"><span class="color_gray">Avoid sending privacy sensitive information. <a href="#" onclick="explain_horde()">Click here for more info</a>.</span></div>
 		  </div>
 	</div>
 
@@ -11701,6 +11725,7 @@ Current version: 96
 					<option value="claude-instant-v1">claude-instant-v1</option>
 					<option value="claude-instant-v1-100k">claude-instant-v1-100k</option>
 					<option value="claude-2">claude-2</option>
+					<option value="claude-2.1">claude-2.1</option>
 					<option value="claude-2.0">claude-2.0</option>
 				</select>
 				<input type="checkbox" id="claudeaddversion" onchange="" checked>
@@ -12101,10 +12126,9 @@ Current version: 96
 								<option value="2">Local A1111</option>
 								<option value="3">OpenAI DALL-E</option>
 							</select>
-							<input list="sdmodels" class="form-control mdlpicker hidden" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" placeholder="[Select Model]" value="" onblur="validate_sd_model()" onfocus="clear_sd_model()" title="Select a stable diffusion model to generate images with">
-							<datalist id="sdmodels">
-								<option value="stable_diffusion">
-							</datalist>
+							<select class="form-control" id="generate_images_model" style="font-size: 12px;height:20px;padding:2px;margin:0px 0 0;" onblur="validate_sd_model()" title="Select a stable diffusion model to generate images with">
+							</select>
+
 							<div id="generate_images_local_model_container" class="settinglabel hidden">
 							<select class="form-control" id="generate_images_local_model" style="height:20px;padding:0;margin:0px 0 0; width:calc(100% - 30px)">
 								<option value="">[None]</option>
