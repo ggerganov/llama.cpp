@@ -2217,14 +2217,18 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
 
 static std::string random_string()
 {
-    std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+    static const std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
     std::random_device rd;
     std::mt19937 generator(rd());
 
-    std::shuffle(str.begin(), str.end(), generator);
+    std::string result(32, ' ');
 
-    return str.substr(0, 32); // assumes 32 < number of characters in str
+    for (int i = 0; i < 32; ++i) {
+        result[i] = str[generator() % str.size()];
+    }
+
+    return result;
 }
 
 static std::string gen_chatcmplid()
