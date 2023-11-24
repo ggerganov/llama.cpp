@@ -383,9 +383,9 @@ struct llama_client_slot
     bool stopped_eos = false;
     bool stopped_word = false;
     bool stopped_limit = false;
-    
+
     bool oaicompat = false;
-    std::string oaicompat_model = "";
+    std::string oaicompat_model;
 
     std::string stopping_word;
 
@@ -486,7 +486,7 @@ struct llama_client_slot
         };
     }
 
-    void print_timings() {
+    void print_timings() const {
         LOG_TEE("\n");
         LOG_TEE("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, t_prompt_processing, num_prompt_tokens_processed, t_prompt_processing / num_prompt_tokens_processed, 1e3 / t_prompt_processing * num_prompt_tokens_processed);
@@ -685,7 +685,7 @@ struct llama_server_context
     bool launch_slot_with_data(llama_client_slot* &slot, json data) {
         slot_params default_params;
         llama_sampling_params default_sparams;
-        
+
         if (data.count("__oaicompat") != 0) {
             slot->oaicompat = true;
             slot->oaicompat_model = json_value(data, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
@@ -693,7 +693,7 @@ struct llama_server_context
             slot->oaicompat = false;
             slot->oaicompat_model = "";
         }
-        
+
         slot->params.stream           = json_value(data, "stream",            false);
         slot->params.cache_prompt     = json_value(data, "cache_prompt",      false);
         slot->params.n_predict        = json_value(data, "n_predict",         default_params.n_predict);
@@ -1284,7 +1284,7 @@ struct llama_server_context
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
-        task.data = data;
+        task.data = std::move(data);
         task.infill_mode = infill;
         task.embedding_mode = embedding;
         task.type = COMPLETION_TASK;
@@ -2252,29 +2252,27 @@ json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Map OpenAI parameters to llama.cpp parameters
-    llama_params["prompt"] = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
-    llama_params["temperature"] = json_value(body, "temperature", 0.8);
-    llama_params["top_k"] = json_value(body, "max_tokens", 40);
-    llama_params["top_p"] = json_value(body, "top_p", 0.95);
-    llama_params["n_predict"] = json_value(body, "max_tokens", -1);
-    llama_params["logit_bias"] = json_value(body, "logit_bias",json::object());
+    llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
+    llama_params["temperature"]       = json_value(body, "temperature", 0.8);
+    llama_params["top_k"]             = json_value(body, "top_k", 40);
+    llama_params["top_p"]             = json_value(body, "top_p", 0.95);
+    llama_params["n_predict"]         = json_value(body, "max_tokens", -1);
+    llama_params["logit_bias"]        = json_value(body, "logit_bias",json::object());
     llama_params["frequency_penalty"] = json_value(body, "frequency_penalty", 0.0);
-    llama_params["presence_penalty"] = json_value(body, "presence_penalty", 0.0);
-    llama_params["seed"] = json_value(body, "seed", 0);
-    llama_params["stream"] =json_value(body, "stream", false);
-    llama_params["mirostat"] = json_value(body, "mirostat", false);
-    llama_params["mirostat_tau"] = json_value(body, "mirostat_tau", 0.0);
-    llama_params["mirostat_eta"] = json_value(body, "mirostat_eta", 0.0);
-    llama_params["penalize_nl"] = json_value(body, "penalize_nl", false);
-    llama_params["typical_p"] = json_value(body, "typical_p", 0.0);
-    llama_params["repeat_last_n"] = json_value(body, "repeat_last_n", 0);
-    llama_params["ignore_eos"] = json_value(body, "ignore_eos", false);
-    llama_params["tfs_z"] = json_value(body, "tfs_z", 0.0);
-    
+    llama_params["presence_penalty"]  = json_value(body, "presence_penalty", 0.0);
+    llama_params["seed"]              = json_value(body, "seed", 0);
+    llama_params["stream"]            = json_value(body, "stream", false);
+    llama_params["mirostat"]          = json_value(body, "mirostat", false);
+    llama_params["mirostat_tau"]      = json_value(body, "mirostat_tau", 0.0);
+    llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", 0.0);
+    llama_params["penalize_nl"]       = json_value(body, "penalize_nl", false);
+    llama_params["typical_p"]         = json_value(body, "typical_p", 0.0);
+    llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", 0);
+    llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
+    llama_params["tfs_z"]             = json_value(body, "tfs_z", 0.0);
+
     if (llama_params.count("grammar") != 0) {
-        llama_params["grammar"] = json_value(
-            body, "grammar",
-            json::object());
+        llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
     // Handle 'stop' field
@@ -2287,23 +2285,22 @@ json oaicompat_completion_params_parse(
             body, "stop",
             json::array());
     }
-    
+
     // Ensure there is ChatML-specific end sequence among stop words
     llama_params["stop"].push_back("<|im_end|>");
 
     return llama_params;
 }
 
-static json format_final_response_oaicompat(json request, task_result response,
-                                            bool streaming = false)
+static json format_final_response_oaicompat(const json &request, const task_result &response, bool streaming = false)
 {
     json result = response.result_json;
 
-    bool stopped_word = result.count("stopped_word") != 0;
-    bool stopped_eos = json_value(result, "stopped_eos", false);
+    bool stopped_word        = result.count("stopped_word") != 0;
+    bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
-    int num_prompt_tokens = json_value(result, "tokens_evaluated", 0);
-    std::string content = json_value(result, "content", std::string(""));
+    int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
+    std::string content      = json_value(result, "content", std::string(""));
 
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
@@ -2314,10 +2311,10 @@ static json format_final_response_oaicompat(json request, task_result response,
         streaming ? json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
                                         {"delta", json::object()}}})
-                    : json::array({json{{"finish_reason", finish_reason},
+                  : json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
                                         {"message", json{{"content", content},
-                                                        {"role", "assistant"}}}}});
+                                                         {"role", "assistant"}}}}});
 
     std::time_t t = std::time(0);
 
@@ -2345,7 +2342,7 @@ static json format_final_response_oaicompat(json request, task_result response,
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(task_result response) {
+static std::vector<json> format_partial_response_oaicompat(const task_result &response) {
     json result = response.result_json;
 
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
@@ -2353,15 +2350,14 @@ static std::vector<json> format_partial_response_oaicompat(task_result response)
     }
 
     bool first = json_value(result, "oaicompat_token_ctr", 0) == 0;
-    std::string modelname =
-        json_value(result, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
+    std::string modelname = json_value(result, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
 
-    bool stopped_word = json_value(result, "stopped_word", false);
-    bool stopped_eos = json_value(result, "stopped_eos", false);
-    bool stopped_limit = json_value(result, "stopped_limit", false);
+    bool stopped_word   = json_value(result, "stopped_word", false);
+    bool stopped_eos    = json_value(result, "stopped_eos", false);
+    bool stopped_limit  = json_value(result, "stopped_limit", false);
     std::string content = json_value(result, "content", std::string(""));
 
-    std::string finish_reason = "";
+    std::string finish_reason;
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
     }
@@ -2383,7 +2379,7 @@ static std::vector<json> format_partial_response_oaicompat(task_result response)
                 choices = json::array({json{{"finish_reason", nullptr},
                                             {"index", 0},
                                             {"delta", json{{"role", "assistant"}}}}});
-            } else { 
+            } else {
                 // We have to send this as two updates to conform to openai behavior
                 json initial_ret = json{{"choices", json::array({json{
                                         {"finish_reason", nullptr},
@@ -2400,13 +2396,13 @@ static std::vector<json> format_partial_response_oaicompat(task_result response)
                             {"choices", json::array({json{{"finish_reason", nullptr},
                                                             {"index", 0},
                                                             {"delta", json{
-                                                            {"content", content}}} 
+                                                            {"content", content}}}
                                                             }})},
                             {"created", t},
                             {"id", gen_chatcmplid()},
                             {"model", modelname},
                             {"object", "chat.completion.chunk"}};
-                
+
                 return std::vector<json>({initial_ret, second_ret});
             }
         } else {
@@ -2612,9 +2608,9 @@ int main(int argc, char **argv)
                             task_result result = llama.next_result(task_id);
                             if (!result.error) {
                                 const std::string str =
-                                "data: " +
-                                result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
-                                "\n\n";
+                                    "data: " +
+                                    result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                                    "\n\n";
                                 LOG_VERBOSE("data stream", {
                                     { "to_send", str }
                                 });
@@ -2627,9 +2623,9 @@ int main(int argc, char **argv)
                                 }
                             } else {
                                 const std::string str =
-                                "error: " +
-                                result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
-                                "\n\n";
+                                    "error: " +
+                                    result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                                    "\n\n";
                                 LOG_VERBOSE("data stream", {
                                     { "to_send", str }
                                 });
@@ -2655,13 +2651,13 @@ int main(int argc, char **argv)
             });
 
 
-    svr.Post("/v1/chat/completions", [&llama](const httplib::Request &req,
-                                            httplib::Response &res)
+    // TODO: add mount point without "/v1" prefix -- how?
+    svr.Post("/v1/chat/completions", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = oaicompat_completion_params_parse(json::parse(req.body));
 
                 const int task_id = llama.request_completion(data, false, false);
-                
+
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
@@ -2683,7 +2679,7 @@ int main(int argc, char **argv)
                         task_result llama_result = llama.next_result(task_id);
                         if (!llama_result.error) {
                             std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
-                            
+
                             for (auto it = result_array.begin(); it != result_array.end(); ++it)
                             {
                                 if (!it->empty()) {
@@ -2725,7 +2721,7 @@ int main(int argc, char **argv)
                     res.set_chunked_content_provider("text/event-stream", chunked_content_provider, on_complete);
                 }
             });
-    
+
     svr.Post("/infill", [&llama](const httplib::Request &req, httplib::Response &res)
             {
                 json data = json::parse(req.body);
