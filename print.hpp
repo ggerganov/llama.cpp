@@ -520,39 +520,34 @@ REFL_END
 REFL_TYPE(llama_data_file_context)
   REFL_FIELD(file)
 REFL_END
-  
+
+template <typename T>
+constexpr auto get_value_type_name(const T t) noexcept
+{
+  return t.value_type;
+}
 
 // // A generic function to print out the fields of any object
 template<typename T>
-void print_fields(const T& ) {
-  //return;
-//     // Get the type descriptor of the object
+void print_fields(const T& t) {
+  refl::runtime::debug(std::cout, t);
   constexpr auto type = refl::reflect<T>();
-  
-//     // Print the type name
-//  std::cout << "DEBUG:" << TypeName<T>.fullname_intern() << "\n";
+
+  constexpr auto membertype = refl::member_list<T>();
+
+  constexpr auto members = get_members(type);
   std::cout << "DEBUG Type: " << type.name.c_str() << "\n";
-
-  //  T instance{};
-  //for_each(refl::reflect<T>().members, [&](auto member) {
-
-  //std::cout << "MEMBER:" <<     member.name.str() << "\n";
-      
-  //});
-
-     refl::util::for_each(type.members, [&](auto member) {
-
-       //auto member1 = member(t);
-	 //if(member1){
-	   std::cout  << "Auto:" << member.name <<"\n";
-	   //if(member1){
-	   //print_fields(member1);
-	   //}
-	   //}
-	   //else {
-	   //std::cout  << "NULL:" << member.name <<"\n";
-	   //}
+  std::cout << "DEBUG Type2: " << typeid(membertype).name() << "\n";
+  std::cout << "DEBUG Type3: " << typeid(members).name() << "\n";
+     refl::util::for_each(members, [&](auto member) {
+       //using member_t = decltype(member::value_type);
+       //typename type3 = member::value_type;
+       //typename trait::remove_qualifiers_t<member_t>::value_type>;
+       //constexpr auto type2 = refl::reflect(type3);
+	 //std::cout  << "Auto:" << foo <<"\n";       
+       std::cout  << "Auto:" << member.name <<"\n";
+       //std::cout << "DEBUG Type2: " << typeid(member_t).name() << "\n";
+       //std::cout << "DEBUG Type2: " << type2.name.c_str() << "\n";
      });
      std::cout << "\n";
 }
-
