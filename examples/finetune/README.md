@@ -21,7 +21,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
 ./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
 ```
 
-Finetune output files will be saved every N iterations (config with `--save-every N`).
+**Only llama based models are supported!** The output files will be saved every N iterations (config with `--save-every N`).
 The pattern 'ITERATION' in the output filenames will be replaced with the iteration number and with 'LATEST' for the latest output.
 So in above example after 10 iterations these files will be written:
 - chk-lora-open-llama-3b-v2-q8_0-shakespeare-10.gguf

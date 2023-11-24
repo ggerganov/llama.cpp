@@ -146,6 +146,13 @@ int main(int argc, char ** argv) {
 
         return 0;
     }
+    if (params.chatml) {
+        printf("\n************\n");
+        printf("%s: please use the 'main' tool for chatml mode\n", __func__);
+        printf("************\n\n");
+
+        return 0;
+    }
     if (!params.antiprompt.empty()) {
         printf("\n************\n");
         printf("%s: please use the 'main' tool for antiprompt mode\n", __func__);

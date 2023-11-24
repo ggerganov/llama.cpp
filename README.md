@@ -10,7 +10,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- *No hot topics atm. Open to suggestions about what is hot today*
+- Collecting Apple Silicon performance stats: https://github.com/ggerganov/llama.cpp/discussions/4167
 
 ----
 
@@ -410,19 +410,27 @@ Building the program with BLAS support may lead to some performance improvements
   This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
   You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
-  Windows support is coming soon...
 
   - Using `make`:
     ```bash
     make LLAMA_HIPBLAS=1
     ```
-  - Using `CMake`:
+  - Using `CMake` for Linux:
     ```bash
     mkdir build
     cd build
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
     cmake --build .
     ```
+  - Using `CMake` for Windows:
+    ```bash
+    mkdir build
+    cd build
+    cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+    cmake --build .
+    ```
+    Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
+
 
   The environment variable [`HIP_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/understand/gpu_isolation.html#hip-visible-devices) can be used to specify which GPU(s) will be used.
   If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 or 11.0.0 on RDNA3.
