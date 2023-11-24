@@ -569,12 +569,12 @@ void print_fields(const T& t) {
 
      refl::util::for_each(type.members, [&](auto member) {
 
-	 auto member1 = member(t);
+       //auto member1 = member(t);
 	 //if(member1){
 	   std::cout  << "Auto:" << member.name <<"\n";
 	   //if(member1){
-	   print_fields(member1);
-	     //}
+	   //print_fields(member1);
+	   //}
 	   //}
 	   //else {
 	   //std::cout  << "NULL:" << member.name <<"\n";
