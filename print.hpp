@@ -438,7 +438,7 @@ REFL_FIELD(  logits_all )
 //REFL_FIELD(   work_buffer)
   REFL_FIELD(   buf_compute)
   REFL_FIELD( buf_alloc)
-REFL_FIELD( alloc )
+//REFL_FIELD( alloc ) 
 
 #ifdef GGML_USE_METAL
 REFL_FIELD( ctx_metal )
@@ -552,6 +552,7 @@ struct hidden : refl::attr::usage::field {};
 // // A generic function to print out the fields of any object
 template<typename T>
 void print_fields(const T& t) {
+  //return;
 //     // Get the type descriptor of the object
   constexpr auto type = refl::reflect<T>();
   
@@ -571,7 +572,9 @@ void print_fields(const T& t) {
 	 auto member1 = member(t);
 	 //if(member1){
 	   std::cout  << "Auto:" << member.name <<"\n";
+	   //if(member1){
 	   print_fields(member1);
+	     //}
 	   //}
 	   //else {
 	   //std::cout  << "NULL:" << member.name <<"\n";

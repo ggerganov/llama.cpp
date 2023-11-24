@@ -682,6 +682,9 @@ endif()
 add_library(ggml OBJECT
             ggml.cpp
             ggml.h
+	    print.hpp
+	    ggml-internal.hpp
+	    llama-internal.hpp
             ggml-alloc.cpp
             ggml-alloc.h
             ggml-backend.cpp

@@ -287,7 +287,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
     print_fields(*ctx);
-    print_fields(*ctx_guidance);
     //print_fields(session_tokens);
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
@@ -376,6 +375,10 @@ int main(int argc, char ** argv) {
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
                 LOG_TEE("%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
+	    
+	    print_fields(*ctx_guidance);
+
+
         }
 
         if (params.n_keep > 0) {
