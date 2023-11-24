@@ -618,6 +618,11 @@ struct llama_server_context
 
     std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const
     {
+        // TODO: currently, we tokenize using special tokens by default
+        //       this is not always correct (see https://github.com/ggerganov/llama.cpp/pull/4160#issuecomment-1824826216)
+        //       but it's better compared to completely ignoring ChatML and other chat templates
+        const bool TMP_FORCE_SPECIAL = true;
+
         // If `add_bos` is true, we only add BOS, when json_prompt is a string,
         // or the first element of the json_prompt array is a string.
         std::vector<llama_token> prompt_tokens;
@@ -633,12 +638,12 @@ struct llama_server_context
                     std::vector<llama_token> p;
                     if (first)
                     {
-                        p = ::llama_tokenize(ctx, s, add_bos);
+                        p = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
                         first = false;
                     }
                     else
                     {
-                        p = ::llama_tokenize(ctx, s, false);
+                        p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
                     }
                     prompt_tokens.insert(prompt_tokens.end(), p.begin(), p.end());
                 }
@@ -655,7 +660,7 @@ struct llama_server_context
         else
         {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_bos);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -2235,7 +2240,7 @@ std::string format_chatml(std::vector<json> messages)
 
     for (auto it = messages.begin(); it != messages.end(); ++it) {
         chatml_msgs << "<|im_start|>"
-                    << json_value(*it, "role", std::string("user")) << '\n';
+                    << json_value(*it, "role",    std::string("user")) << '\n';
         chatml_msgs << json_value(*it, "content", std::string(""))
                     << "<|im_end|>\n";
     }
