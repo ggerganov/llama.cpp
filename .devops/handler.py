@@ -1,8 +1,10 @@
+import subprocess
 import runpod
 import os
 import time
 
-sleep_time = int(os.environ.get('SLEEP_TIME', 1))
+llama_cmd = os.environ.get('LLAMA_CMD', "/server --host 0.0.0.0 --threads 8 -ngl 999 -np 8 -cb -m model.gguf -c 16384")
+subprocess.Popen(llama_cmd.split(' '))
 
 ## load your model(s) into vram here
 

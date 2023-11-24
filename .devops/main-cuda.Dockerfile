@@ -27,7 +27,7 @@ ENV LLAMA_CUDA_MMV_Y=2
 ENV LLAMA_CUDA_DMMV_X=64
 ENV LLAMA_CUDA_F16=true
 
-RUN make -j
+RUN make
 
 # Accept the build argument into an environment variable
 ARG MODEL_URL
