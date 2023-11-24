@@ -108,11 +108,8 @@ int main(int argc, char ** argv) {
     g_params = &params;
 
     //using Td = type_descriptor<gpt_params>;
-    print_fields(params);
 
-    //constexpr auto tbl = descriptor::get_attribute<gpt_params>(Td{}); 
-    //constexpr auto tbl_name = REFL_MAKE_CONST_STRING(tbl.name);
-	
+
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
@@ -126,7 +123,8 @@ int main(int argc, char ** argv) {
 
     // TODO: Dump params ?
     //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity));
-
+    print_fields(params);
+    
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
@@ -183,10 +181,6 @@ int main(int argc, char ** argv) {
     llama_context * ctx_guidance = NULL;
     g_model = &model;
     g_ctx = &ctx;
-
-    print_fields(*model);
-    print_fields(*ctx);
-    print_fields(*ctx_guidance);
 	
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
@@ -247,7 +241,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
-
+    print_fields(*model);
 	
     if (params.interactive_first || params.instruct || params.chatml || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
@@ -268,7 +262,7 @@ int main(int argc, char ** argv) {
         embd_inp.push_back(llama_token_bos(model));
         LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
     }
-    //print_fields(embd_inp);
+
     // Tokenize negative prompt
     std::vector<llama_token> guidance_inp;
     int guidance_offset = 0;
@@ -292,7 +286,8 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
         return 1;
     }
-
+    print_fields(*ctx);
+    print_fields(*ctx_guidance);
     //print_fields(session_tokens);
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
@@ -643,7 +638,7 @@ int main(int argc, char ** argv) {
             }
 
             const llama_token id = llama_sampling_sample(ctx_sampling, ctx, ctx_guidance);
-
+	    print_fields(id);
             llama_sampling_accept(ctx_sampling, ctx, id, true);
 
             LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());

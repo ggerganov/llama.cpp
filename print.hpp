@@ -56,9 +56,9 @@ REFL_FIELD(prompt_file )
 REFL_FIELD(path_prompt_cache )
 REFL_FIELD(input_prefix )
 REFL_FIELD(input_suffix )
-REFL_FIELD( antiprompt)
+//REFL_FIELD( antiprompt)
 REFL_FIELD(logdir )
-REFL_FIELD( lora_adapter)
+//REFL_FIELD( lora_adapter)
 REFL_FIELD(lora_base )
 REFL_FIELD( ppl_stride )
 REFL_FIELD( ppl_output_type )
@@ -92,14 +92,22 @@ REFL_FIELD( image)
 
 REFL_END
 
+REFL_TYPE(llama_sampling_params)
+REFL_END
+
+REFL_TYPE(llama_buffer)
+REFL_END
+
+REFL_TYPE(llm_arch)
+REFL_END
 
 REFL_TYPE(llama_sampling_context )
 REFL_FIELD( params)
 REFL_FIELD( mirostat_mu)
 REFL_FIELD( grammar)
 REFL_FIELD( parsed_grammar)
-REFL_FIELD( prev)
-REFL_FIELD( cur)
+//REFL_FIELD( prev) vector of ints
+//REFL_FIELD( cur)
 REFL_END
 
 REFL_TYPE(llama_token_data )
@@ -333,10 +341,10 @@ REFL_END
 //   REFL_END
 
 
-//REFL_TYPE(llama_cparams)
-//  REFL_FIELD(n_ctx)
-//  REFL_FIELD(n_batch)
-//REFL_END
+REFL_TYPE(llama_cparams)
+  REFL_FIELD(n_ctx)
+  REFL_FIELD(n_batch)
+REFL_END
 
 //REFL_TYPE(llama_layer)
 //  REFL_FIELD(attn_norm)
@@ -348,13 +356,19 @@ REFL_END
 //   REFL_FIELD(delta)
 // REFL_END
 
-// REFL_TYPE(llama_kv_cache)
-//   REFL_FIELD(has_shift)
-//   REFL_FIELD(head)
-// REFL_END
+REFL_TYPE(llama_kv_cache)
+   REFL_FIELD(has_shift)
+   REFL_FIELD(head)
+ REFL_END
 
 // REFL_TYPE(llama_vocab)
 // REFL_END
+
+REFL_TYPE(e_model)
+REFL_END
+
+REFL_TYPE(llama_ftype)
+REFL_END
 
 REFL_TYPE(llama_model)
   REFL_FIELD(type)
@@ -375,27 +389,40 @@ REFL_FIELD(   output_norm)
 REFL_FIELD(  output_norm_b)
 REFL_FIELD(  output)
 
-REFL_FIELD(  layers)
+//REFL_FIELD(  layers)
 
 REFL_FIELD(  n_gpu_layers)
 
-REFL_FIELD(  gguf_kv)
+//REFL_FIELD(  gguf_kv) unordered map
   REFL_FIELD( ctx)
   REFL_FIELD( buf)
-  REFL_FIELD( mapping)
-REFL_FIELD( mlock_buf)
-REFL_FIELD( mlock_mmap)
-REFL_FIELD( tensors_by_name)
+//REFL_FIELD( mapping) std::unique_ptr 
+//REFL_FIELD( mlock_buf)
+//REFL_FIELD( mlock_mmap)
+//REFL_FIELD( tensors_by_name)
   REFL_FIELD( t_load_us)
 REFL_FIELD( t_start_us)
 
 REFL_END
 
+
+REFL_TYPE(llama_hparams)
+  REFL_END
+
+//REFL_TYPE(std::vector<int> >)
+//REFL_END
+
+REFL_TYPE(llama_vocab)
+  REFL_END
+  
+  REFL_TYPE(grammar_parser::parse_state)
+  REFL_END
+  
 REFL_TYPE(llama_context)
 REFL_FIELD( cparams)
 //REFL_FIELD(model)
 REFL_FIELD(kv_self)
-REFL_FIELD(rng)
+//REFL_FIELD(rng) random numbers
 REFL_FIELD(has_evaluated_once )
 REFL_FIELD( t_start_us)
 REFL_FIELD( t_load_us)
@@ -405,10 +432,10 @@ REFL_FIELD( t_p_eval_us )
 REFL_FIELD( n_sample )
 REFL_FIELD( n_p_eval )
   REFL_FIELD( n_eval  )
-REFL_FIELD(  logits)
+//REFL_FIELD(  logits)
 REFL_FIELD(  logits_all )
-REFL_FIELD(  embedding)
-REFL_FIELD(   work_buffer)
+//REFL_FIELD(  embedding)
+//REFL_FIELD(   work_buffer)
   REFL_FIELD(   buf_compute)
   REFL_FIELD( buf_alloc)
 REFL_FIELD( alloc )
@@ -524,7 +551,7 @@ struct hidden : refl::attr::usage::field {};
 
 // // A generic function to print out the fields of any object
 template<typename T>
-void print_fields(const T& ) {
+void print_fields(const T& t) {
 //     // Get the type descriptor of the object
   constexpr auto type = refl::reflect<T>();
   
@@ -533,21 +560,22 @@ void print_fields(const T& ) {
   std::cout << "DEBUG Type: " << type.name.c_str() << "\n";
 
   //  T instance{};
-  for_each(refl::reflect<T>().members, [&](auto member) {
+  //for_each(refl::reflect<T>().members, [&](auto member) {
 
-    std::cout << "MEMBER:" <<     member.name.str() << "\n";
+  //std::cout << "MEMBER:" <<     member.name.str() << "\n";
       
-  });
+  //});
 
      refl::util::for_each(type.members, [&](auto member) {
-//         // Check if the member is a field and not hidden
-       //if ((refl::descriptor::is_field(member)) && (!member.has_attribute<hidden>()))) {
-       //if ((refl::descriptor::is_field(member))) {
-//             // Print the member name and value
-	 std::cout
-	   << "Auto:" << member.name << ": " << "\n";
-	 //	 refl::get(member, obj)
-	 //}
+
+	 auto member1 = member(t);
+	 //if(member1){
+	   std::cout  << "Auto:" << member.name <<"\n";
+	   print_fields(member1);
+	   //}
+	   //else {
+	   //std::cout  << "NULL:" << member.name <<"\n";
+	   //}
      });
      std::cout << "\n";
 }
