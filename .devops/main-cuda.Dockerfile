@@ -37,7 +37,7 @@ ENV MODEL_URL=${MODEL_URL}
 RUN wget $MODEL_URL -O /model.gguf
 
 WORKDIR /install
-RUN apt-get install python3 python3-pip
+RUN apt-get install -y python3 python3-pip
 RUN pip install --install-option="--prefix=/install" runpod
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
