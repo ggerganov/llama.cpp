@@ -880,20 +880,21 @@ print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
-model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
+with torch.inference_mode():
+    model_class = Model.from_model_architecture(hparams["architectures"][0])
+    model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
-print("Set model parameters")
-model_instance.set_gguf_parameters()
+    print("Set model parameters")
+    model_instance.set_gguf_parameters()
 
-print("Set model tokenizer")
-model_instance.set_vocab()
+    print("Set model tokenizer")
+    model_instance.set_vocab()
 
-if args.vocab_only:
-    print(f"Exporting model vocab to '{fname_out}'")
-    model_instance.write_vocab()
-else:
-    print(f"Exporting model to '{fname_out}'")
-    model_instance.write()
+    if args.vocab_only:
+        print(f"Exporting model vocab to '{fname_out}'")
+        model_instance.write_vocab()
+    else:
+        print(f"Exporting model to '{fname_out}'")
+        model_instance.write()
 
-print(f"Model successfully exported to '{fname_out}'")
+    print(f"Model successfully exported to '{fname_out}'")
