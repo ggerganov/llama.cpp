@@ -1095,6 +1095,7 @@ struct llama_server_context
         std::lock_guard<std::mutex> lock(mutex_results);
         task_result res;
         res.id = id;
+        res.stop = false;
         res.error = true;
         res.result_json = { { "content", error } };
         queue_results.push_back(res);
@@ -1255,6 +1256,7 @@ struct llama_server_context
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
+        task.target_id = 0;
         task.data = data;
         task.infill_mode = infill;
         task.embedding_mode = embedding;
@@ -2368,6 +2370,17 @@ int main(int argc, char **argv)
                                     break;
                                 }
                             } else {
+                                const std::string str =
+                                "error: " +
+                                result.result_json.dump(-1, ' ', false, json::error_handler_t::replace) +
+                                "\n\n";
+                                LOG_VERBOSE("data stream", {
+                                    { "to_send", str }
+                                });
+                                if (!sink.write(str.c_str(), str.size()))
+                                {
+                                    return false;
+                                }
                                 break;
                             }
                         }

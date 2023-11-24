@@ -827,12 +827,13 @@ class StableLMModel(Model):
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
-        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"]*(hparams["hidden_size"] // hparams["num_attention_heads"])))
+        self.gguf_writer.add_rope_dimension_count(int(hparams["rope_pct"] * (hparams["hidden_size"] // hparams["num_attention_heads"])))
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
 ###### CONVERSION LOGIC ######
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a huggingface model to a GGML compatible file")
@@ -879,20 +880,21 @@ print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
-model_class = Model.from_model_architecture(hparams["architectures"][0])
-model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
+with torch.inference_mode():
+    model_class = Model.from_model_architecture(hparams["architectures"][0])
+    model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
-print("Set model parameters")
-model_instance.set_gguf_parameters()
+    print("Set model parameters")
+    model_instance.set_gguf_parameters()
 
-print("Set model tokenizer")
-model_instance.set_vocab()
+    print("Set model tokenizer")
+    model_instance.set_vocab()
 
-if args.vocab_only:
-    print(f"Exporting model vocab to '{fname_out}'")
-    model_instance.write_vocab()
-else:
-    print(f"Exporting model to '{fname_out}'")
-    model_instance.write()
+    if args.vocab_only:
+        print(f"Exporting model vocab to '{fname_out}'")
+        model_instance.write_vocab()
+    else:
+        print(f"Exporting model to '{fname_out}'")
+        model_instance.write()
 
-print(f"Model successfully exported to '{fname_out}'")
+    print(f"Model successfully exported to '{fname_out}'")
