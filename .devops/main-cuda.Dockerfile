@@ -38,7 +38,7 @@ RUN wget $MODEL_URL -O /model.gguf
 
 WORKDIR /install
 RUN apt-get install -y python3 python3-pip
-RUN pip install --prefix /install runpod
+RUN pip install --prefix /install runpod aiohttp
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
