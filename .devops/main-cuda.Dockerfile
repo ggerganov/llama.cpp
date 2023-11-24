@@ -23,11 +23,11 @@ COPY . .
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable cuBLAS
 ENV LLAMA_CUBLAS=1
-# ENV LLAMA_CUDA_MMV_Y=2
-# ENV LLAMA_CUDA_DMMV_X=64
-# ENV LLAMA_CUDA_F16=true
+ENV LLAMA_CUDA_MMV_Y=2
+ENV LLAMA_CUDA_DMMV_X=64
+ENV LLAMA_CUDA_F16=true
 
-RUN make
+RUN make -j
 
 # Accept the build argument into an environment variable
 ARG MODEL_URL
@@ -36,15 +36,13 @@ ENV MODEL_URL=${MODEL_URL}
 # Use the environment variable to download the model
 RUN wget $MODEL_URL -O /model.gguf
 
-WORKDIR /install
-RUN apt-get install -y python3 python3-pip
-RUN pip install --prefix /install runpod aiohttp
-
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
 RUN apt-get update && \
     apt-get install -y python3 python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install runpod aiohttp
 
 COPY --from=build /app/.devops/handler.py /handler.py
 COPY --from=build /app/server /server
