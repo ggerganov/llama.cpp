@@ -422,8 +422,9 @@ Building the program with BLAS support may lead to some performance improvements
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
     cmake --build .
     ```
-  - Using `CMake` for Windows:
+  - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS):
     ```bash
+    set PATH=%HIP_PATH%\bin;%PATH%
     mkdir build
     cd build
     cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
