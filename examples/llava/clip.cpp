@@ -505,14 +505,15 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             const size_t offset = gguf_get_tensor_offset(ctx, i);
             struct ggml_tensor * cur = ggml_get_tensor(meta, name);
             size_t tensor_size = ggml_nbytes(cur);
-            size_t padded_size = ggml_nbytes_pad(cur);
-            buffer_size += padded_size;
+            buffer_size += tensor_size;
             if (verbosity >= 3) {
-                printf("%s: tensor[%d]: n_dims = %d, name = %s, tensor_size=%zu, padded_size=%zu, offset=%zu\n", __func__, i,
-                       cur->n_dims, cur->name, tensor_size, padded_size, offset);
+                printf("%s: tensor[%d]: n_dims = %d, name = %s, tensor_size=%zu, offset=%zu\n", __func__, i,
+                       cur->n_dims, cur->name, tensor_size, offset);
             }
         }
     }
+
+    buffer_size += n_tensors * 128 /* CLIP PADDING */;
 
     clip_ctx * new_clip = new clip_ctx;
 #ifdef CLIP_USE_CUBLAS
