@@ -2660,6 +2660,26 @@ int main(int argc, char **argv)
             });
 
 
+
+    svr.Get("/v1/models", [&params](const httplib::Request&, httplib::Response& res)
+            {
+                std::time_t t = std::time(0);
+
+                json models = {
+                    {"object", "list"},
+                    {"data", {
+                        {
+                            {"id", params.model_alias},
+                            {"object", "model"},
+                            {"created", t},
+                            {"owned_by", "llamacpp"}
+                        },
+                    }}
+                };
+
+                res.set_content(models.dump(), "application/json");
+            });
+
     // TODO: add mount point without "/v1" prefix -- how?
     svr.Post("/v1/chat/completions", [&llama](const httplib::Request &req, httplib::Response &res)
             {
