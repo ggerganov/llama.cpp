@@ -38,7 +38,8 @@ async def handler(event):
       'prompt': prompt,
     }), headers=headers) as response:
       async for line in response.content:
-        yield line
+        line = line.decode('utf-8').strip()
+        yield line[5:]
 
 runpod.serverless.start({
     "handler": handler,
