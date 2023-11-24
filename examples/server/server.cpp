@@ -2288,9 +2288,7 @@ json oaicompat_completion_params_parse(
     } else if (body["stop"].is_string()) {
         llama_params["stop"] = json::array({body["stop"].get<std::string>()});
     } else {
-        llama_params["stop"] = json_value(
-            body, "stop",
-            json::array());
+        llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
     // Ensure there is ChatML-specific end sequence among stop words
