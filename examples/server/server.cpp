@@ -2678,38 +2678,38 @@ int main(int argc, char **argv)
                 } else {
                     const auto chunked_content_provider = [task_id, &llama](size_t, httplib::DataSink &sink) {
                         while (true) {
-                        task_result llama_result = llama.next_result(task_id);
-                        if (!llama_result.error) {
-                            std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
+                            task_result llama_result = llama.next_result(task_id);
+                            if (!llama_result.error) {
+                                std::vector<json> result_array = format_partial_response_oaicompat( llama_result);
 
-                            for (auto it = result_array.begin(); it != result_array.end(); ++it)
-                            {
-                                if (!it->empty()) {
-                                    const std::string str =
-                                        "data: " +
-                                        it->dump(-1, ' ', false, json::error_handler_t::replace) +
-                                        "\n\n";
-                                    LOG_VERBOSE("data stream", {{"to_send", str}});
-                                    if (!sink.write(str.c_str(), str.size())) {
-                                        return false;
+                                for (auto it = result_array.begin(); it != result_array.end(); ++it)
+                                {
+                                    if (!it->empty()) {
+                                        const std::string str =
+                                            "data: " +
+                                            it->dump(-1, ' ', false, json::error_handler_t::replace) +
+                                            "\n\n";
+                                        LOG_VERBOSE("data stream", {{"to_send", str}});
+                                        if (!sink.write(str.c_str(), str.size())) {
+                                            return false;
+                                        }
                                     }
                                 }
-                            }
-                            if (llama_result.stop) {
+                                if (llama_result.stop) {
+                                    break;
+                                }
+                            } else {
+                                const std::string str =
+                                    "error: " +
+                                    llama_result.result_json.dump(-1, ' ', false,
+                                            json::error_handler_t::replace) +
+                                    "\n\n";
+                                LOG_VERBOSE("data stream", {{"to_send", str}});
+                                if (!sink.write(str.c_str(), str.size())) {
+                                    return false;
+                                }
                                 break;
                             }
-                        } else {
-                            const std::string str =
-                                "error: " +
-                                llama_result.result_json.dump(-1, ' ', false,
-                                                            json::error_handler_t::replace) +
-                                "\n\n";
-                            LOG_VERBOSE("data stream", {{"to_send", str}});
-                            if (!sink.write(str.c_str(), str.size())) {
-                                return false;
-                            }
-                            break;
-                        }
                         }
                         sink.done();
                         return true;
