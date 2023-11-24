@@ -23,11 +23,11 @@ COPY . .
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable cuBLAS
 ENV LLAMA_CUBLAS=1
-ENV LLAMA_CUDA_MMV_Y=2
-ENV LLAMA_CUDA_DMMV_X=64
+# ENV LLAMA_CUDA_MMV_Y=2
+# ENV LLAMA_CUDA_DMMV_X=64
 ENV LLAMA_CUDA_F16=true
 
-RUN make
+RUN make -j
 
 # Accept the build argument into an environment variable
 ARG MODEL_URL
