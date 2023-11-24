@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -8057,7 +8058,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
 #ifndef NDEBUG
-            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = %d, src1->ne[3] = %d - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
+            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = " PRId64 ", src1->ne[3] = " PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
 #endif
             return false;
         }
