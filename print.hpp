@@ -1,7 +1,4 @@
-//template<typename T> void print_fields(const T& obj);
-
 #include <iostream>
-//#include <refl.hpp>
 #include "llama.h"
 #include "ggml-internal.hpp"
 #include "llama-internal.hpp"
@@ -56,9 +53,9 @@ REFL_FIELD(prompt_file )
 REFL_FIELD(path_prompt_cache )
 REFL_FIELD(input_prefix )
 REFL_FIELD(input_suffix )
-//REFL_FIELD( antiprompt)
+REFL_FIELD( antiprompt)
 REFL_FIELD(logdir )
-//REFL_FIELD( lora_adapter)
+REFL_FIELD( lora_adapter)
 REFL_FIELD(lora_base )
 REFL_FIELD( ppl_stride )
 REFL_FIELD( ppl_output_type )
@@ -95,9 +92,6 @@ REFL_END
 REFL_TYPE(llama_sampling_params)
 REFL_END
 
-REFL_TYPE(llama_buffer)
-REFL_END
-
 REFL_TYPE(llm_arch)
 REFL_END
 
@@ -106,8 +100,8 @@ REFL_FIELD( params)
 REFL_FIELD( mirostat_mu)
 REFL_FIELD( grammar)
 REFL_FIELD( parsed_grammar)
-//REFL_FIELD( prev) vector of ints
-//REFL_FIELD( cur)
+REFL_FIELD( prev) 
+REFL_FIELD( cur)
 REFL_END
 
 REFL_TYPE(llama_token_data )
@@ -183,87 +177,82 @@ REFL_TYPE(ggml_context_container)
   REFL_FIELD(context)
 REFL_END
 
-// REFL_TYPE(ggml_numa_node)
-//   REFL_FIELD(cpus)
-//   REFL_FIELD(n_cpus)
-// REFL_END
+ REFL_TYPE(ggml_numa_node)
+   REFL_FIELD(cpus)
+   REFL_FIELD(n_cpus)
+ REFL_END
 
-// REFL_TYPE(ggml_numa_nodes)
-//   REFL_FIELD(nodes)
-//   REFL_FIELD(n_nodes)
-// REFL_END
+ REFL_TYPE(ggml_numa_nodes)
+   REFL_FIELD(nodes)
+   REFL_FIELD(n_nodes)
+ REFL_END
 
-// REFL_TYPE(ggml_state)
-//   REFL_FIELD(contexts)
-//   REFL_FIELD(numa)
-//   REFL_END
+ REFL_TYPE(ggml_state)
+   REFL_FIELD(contexts)
+   REFL_FIELD(numa)
+   REFL_END
 
-// REFL_TYPE(gguf_str)
-//   REFL_FIELD(n)
-//   REFL_FIELD(data)
-// REFL_END
+ REFL_TYPE(gguf_str)
+   REFL_FIELD(n)
+   REFL_FIELD(data)
+ REFL_END
 
-// REFL_TYPE(ggml_map_custom1_op_params)
-//   REFL_FIELD(fun)
-//   REFL_FIELD(n_tasks)
-// REFL_END
+ REFL_TYPE(ggml_map_custom1_op_params)
+   REFL_FIELD(fun)
+   REFL_FIELD(n_tasks)
+ REFL_END
 
-// REFL_TYPE(ggml_map_custom2_op_params)
-//   REFL_FIELD(fun)
-//   REFL_FIELD(n_tasks)
-// REFL_END
-
-// REFL_TYPE(ggml_map_custom3_op_params)
-//   REFL_FIELD(fun)
-//   REFL_FIELD(n_tasks)
-// REFL_END
-
-// REFL_TYPE(hash_map)
-//   REFL_FIELD(set)
-//   REFL_FIELD(vals)
-// REFL_END
-// REFL_TYPE(ggml_compute_state_shared)
-//   REFL_FIELD(cgraph)
-//   REFL_FIELD(cplan)
-// REFL_END
-// REFL_TYPE(ggml_compute_state)
-//   REFL_FIELD(thrd)
-//   REFL_FIELD(ith)
-// REFL_END
-// REFL_TYPE(ggml_lbfgs_iteration_data)
-//   REFL_FIELD(alpha)
-//   REFL_FIELD(ys)
-// REFL_END
-//REFL_TYPE()
-//  REFL_FIELD(type)
-//REFL_END
-// REFL_TYPE(gguf_kv)
-//   REFL_FIELD(key)
-//   REFL_FIELD(type)
-// REFL_END
-
-// REFL_TYPE(gguf_header)
-//   REFL_FIELD(magic)
-//   REFL_FIELD(version)
-// REFL_END
-
-// REFL_TYPE(gguf_tensor_info)
-//   REFL_FIELD(name)
-//   REFL_FIELD(n_dims)
-// REFL_END
-
-REFL_TYPE(gguf_context)
-//  REFL_FIELD(header)
-//  REFL_FIELD(kv)
+REFL_TYPE(ggml_map_custom2_op_params)
+  REFL_FIELD(fun)
+  REFL_FIELD(n_tasks)
 REFL_END
 
-// REFL_TYPE(gguf_buf)
-//   REFL_FIELD(data)
-//   REFL_FIELD(size)
-// REFL_END
+REFL_TYPE(ggml_map_custom3_op_params)
+  REFL_FIELD(fun)
+  REFL_FIELD(n_tasks)
+REFL_END
 
-//REFL_TYPE(llama_token_data)
-//REFL_END
+REFL_TYPE(hash_map)
+  REFL_FIELD(set)
+  REFL_FIELD(vals)
+REFL_END
+REFL_TYPE(ggml_compute_state_shared)
+  REFL_FIELD(cgraph)
+  REFL_FIELD(cplan)
+REFL_END
+REFL_TYPE(ggml_compute_state)
+  REFL_FIELD(thrd)
+  REFL_FIELD(ith)
+REFL_END
+REFL_TYPE(ggml_lbfgs_iteration_data)
+  REFL_FIELD(alpha)
+  REFL_FIELD(ys)
+REFL_END
+
+REFL_TYPE(gguf_kv)
+  REFL_FIELD(key)
+  REFL_FIELD(type)
+REFL_END
+
+REFL_TYPE(gguf_header)
+  REFL_FIELD(magic)
+  REFL_FIELD(version)
+REFL_END
+
+REFL_TYPE(gguf_tensor_info)
+  REFL_FIELD(name)
+  REFL_FIELD(n_dims)
+REFL_END
+
+REFL_TYPE(gguf_context)
+  REFL_FIELD(header)
+  REFL_FIELD(kv)
+REFL_END
+
+REFL_TYPE(gguf_buf)
+  REFL_FIELD(data)
+  REFL_FIELD(size)
+REFL_END
 
 
 REFL_TYPE(llama_model_params)
@@ -290,55 +279,55 @@ REFL_TYPE(llama_beams_state)
   REFL_FIELD(beam_views)
 REFL_END
   
-//REFL_TYPE(ggml_backend)
-//REFL_END
+REFL_TYPE(ggml_backend)
+REFL_END
 
 REFL_TYPE(ggml_backend_buffer)
 REFL_END
 
-//REFL_TYPE(ggml_allocr)
-//REFL_END
+REFL_TYPE(ggml_allocr)
+REFL_END
 
-//REFL_TYPE(ggml_tallocr)
-//REFL_END
+REFL_TYPE(ggml_tallocr)
+REFL_END
 
-//REFL_TYPE(ggml_gallocr)
-//REFL_END
+REFL_TYPE(ggml_gallocr)
+REFL_END
 
 
-//REFL_TYPE(llama_buffer)
-//REFL_FIELD(data)
-//REFL_FIELD(size)
-//REFL_END
+REFL_TYPE(llama_buffer)
+REFL_FIELD(data)
+REFL_FIELD(size)
+REFL_END
   
 
-// REFL_TYPE(llama_file)
-// REFL_FIELD(fp)
-// REFL_FIELD(size)
-// REFL_END
+REFL_TYPE(llama_file)
+REFL_FIELD(fp)
+REFL_FIELD(size)
+REFL_END
   
 
-// REFL_TYPE(llama_mmap)
-// REFL_FIELD(addr)
-// REFL_FIELD(size)
-// REFL_END
+REFL_TYPE(llama_mmap)
+REFL_FIELD(addr)
+REFL_FIELD(size)
+REFL_END
 
 
-// REFL_TYPE(llama_mlock)
-//   REFL_FIELD(addr)
-//   REFL_FIELD(size)
-// REFL_END
+REFL_TYPE(llama_mlock)
+  REFL_FIELD(addr)
+  REFL_FIELD(size)
+REFL_END
 
-//REFL_TYPE(llama_state)
-//  REFL_FIELD(log_callback)
-//  REFL_FIELD(log_callback_user_data)
-//  REFL_END
+REFL_TYPE(llama_state)
+ REFL_FIELD(log_callback)
+ REFL_FIELD(log_callback_user_data)
+ REFL_END
   
 
-// REFL_TYPE(llama_hparams)
-//   REFL_FIELD(vocab_only)
-//   REFL_FIELD(n_vocab)
-//   REFL_END
+REFL_TYPE(llama_hparams)
+  REFL_FIELD(vocab_only)
+  REFL_FIELD(n_vocab)
+  REFL_END
 
 
 REFL_TYPE(llama_cparams)
@@ -346,23 +335,20 @@ REFL_TYPE(llama_cparams)
   REFL_FIELD(n_batch)
 REFL_END
 
-//REFL_TYPE(llama_layer)
-//  REFL_FIELD(attn_norm)
-//  REFL_FIELD(attn_norm_b)
-//REFL_END
+REFL_TYPE(llama_layer)
+ REFL_FIELD(attn_norm)
+ REFL_FIELD(attn_norm_b)
+REFL_END
 
-// REFL_TYPE(llama_kv_cell)
-//   REFL_FIELD(pos)
-//   REFL_FIELD(delta)
-// REFL_END
+REFL_TYPE(llama_kv_cell)
+  REFL_FIELD(pos)
+  REFL_FIELD(delta)
+REFL_END
 
 REFL_TYPE(llama_kv_cache)
    REFL_FIELD(has_shift)
    REFL_FIELD(head)
  REFL_END
-
-// REFL_TYPE(llama_vocab)
-// REFL_END
 
 REFL_TYPE(e_model)
 REFL_END
@@ -389,28 +375,21 @@ REFL_FIELD(   output_norm)
 REFL_FIELD(  output_norm_b)
 REFL_FIELD(  output)
 
-//REFL_FIELD(  layers)
+REFL_FIELD(  layers)
 
 REFL_FIELD(  n_gpu_layers)
 
-//REFL_FIELD(  gguf_kv) unordered map
+  REFL_FIELD(  gguf_kv) //unordered map
   REFL_FIELD( ctx)
   REFL_FIELD( buf)
-//REFL_FIELD( mapping) std::unique_ptr 
-//REFL_FIELD( mlock_buf)
-//REFL_FIELD( mlock_mmap)
-//REFL_FIELD( tensors_by_name)
+ REFL_FIELD( mapping) //std::unique_ptr 
+REFL_FIELD( mlock_buf)
+REFL_FIELD( mlock_mmap)
+REFL_FIELD( tensors_by_name)
   REFL_FIELD( t_load_us)
 REFL_FIELD( t_start_us)
 
 REFL_END
-
-
-REFL_TYPE(llama_hparams)
-  REFL_END
-
-//REFL_TYPE(std::vector<int> >)
-//REFL_END
 
 REFL_TYPE(llama_vocab)
   REFL_END
@@ -422,7 +401,7 @@ REFL_TYPE(llama_context)
 REFL_FIELD( cparams)
 //REFL_FIELD(model)
 REFL_FIELD(kv_self)
-//REFL_FIELD(rng) random numbers
+ REFL_FIELD(rng) //random numbers
 REFL_FIELD(has_evaluated_once )
 REFL_FIELD( t_start_us)
 REFL_FIELD( t_load_us)
@@ -432,13 +411,13 @@ REFL_FIELD( t_p_eval_us )
 REFL_FIELD( n_sample )
 REFL_FIELD( n_p_eval )
   REFL_FIELD( n_eval  )
-//REFL_FIELD(  logits)
+REFL_FIELD(  logits)
 REFL_FIELD(  logits_all )
-//REFL_FIELD(  embedding)
-//REFL_FIELD(   work_buffer)
+REFL_FIELD(  embedding)
+REFL_FIELD(   work_buffer)
   REFL_FIELD(   buf_compute)
   REFL_FIELD( buf_alloc)
-//REFL_FIELD( alloc ) 
+REFL_FIELD( alloc ) 
 
 #ifdef GGML_USE_METAL
 REFL_FIELD( ctx_metal )
@@ -450,108 +429,102 @@ REFL_FIELD( ctx_mpi )
 #endif
 REFL_END
 
-// REFL_TYPE(llama_model_loader)
-//   REFL_FIELD(n_kv)
-//   REFL_FIELD(n_tensors)
-// REFL_END
+REFL_TYPE(llama_model_loader)
+  REFL_FIELD(n_kv)
+  REFL_FIELD(n_tensors)
+REFL_END
 
-// REFL_TYPE(llm_build_context)
-//   REFL_FIELD(model)
-//   REFL_FIELD(hparams)
-// REFL_END
+REFL_TYPE(llm_build_context)
+// REFL_FIELD(model) cannot create pointer to reference member ‘llm_build_context::model’
+//  REFL_FIELD(hparams) cannot create pointer to reference member ‘llm_build_context::hparams’
+REFL_END
 
-// REFL_TYPE(llm_offload_trie)
-// REFL_END
+REFL_TYPE(llm_offload_trie)
+REFL_END
 
-// REFL_TYPE(llm_symbol)
-//   REFL_FIELD(prev)
-// REFL_END
+REFL_TYPE(llm_symbol)
+  REFL_FIELD(prev)
+REFL_END
 
-// REFL_TYPE(llm_bigram_spm)
-// REFL_END
+REFL_TYPE(llm_bigram_spm)
+REFL_END
 
-// REFL_TYPE(llm_tokenizer_spm)
-// REFL_END
+REFL_TYPE(llm_tokenizer_spm)
+REFL_END
 
-// REFL_TYPE(llm_bigram_bpe)
-// REFL_END
+REFL_TYPE(llm_bigram_bpe)
+REFL_END
 
-// REFL_TYPE(llm_tokenizer_bpe)
-// REFL_END
-  
-
-// REFL_TYPE(fragment_buffer_variant)
-// REFL_END
-  
-
-// REFL_TYPE(llama_partial_utf8)
-//   REFL_FIELD(value)
-//   REFL_FIELD(n_remain)
-// REFL_END
-  
-
-REFL_TYPE(llama_grammar)
-//  REFL_FIELD(rules)
-//  REFL_FIELD(stacks)
+REFL_TYPE(llm_tokenizer_bpe)
 REFL_END
   
 
-//REFL_TYPE(llama_grammar_candidate)
-//  REFL_FIELD(index)
-//  REFL_FIELD(code_points)
-//REFL_END
+REFL_TYPE(fragment_buffer_variant)
+REFL_END
   
 
-// REFL_TYPE(llama_beam)
-//   REFL_FIELD(tokens)
-//   REFL_FIELD(p)
-// REFL_END
+REFL_TYPE(llama_partial_utf8)
+  REFL_FIELD(value)
+  REFL_FIELD(n_remain)
+REFL_END
   
 
-// REFL_TYPE(llama_logit_info)
-//   REFL_FIELD(logits)
-//   REFL_FIELD(n_vocab)
-// REFL_END
-
-// REFL_TYPE(llama_beam_search_data)
-//   REFL_FIELD(ctx)
-//   REFL_FIELD(n_beams)
-// REFL_END
-
-
-// REFL_TYPE(quantize_state_internal)
-//   REFL_FIELD(model)
-//   REFL_FIELD(params)
-// REFL_END
-
-// REFL_TYPE(llama_data_context)
-// REFL_END
+REFL_TYPE(llama_grammar)
+ REFL_FIELD(rules)
+ REFL_FIELD(stacks)
+REFL_END
   
-// REFL_TYPE(llama_data_buffer_context)
-//   REFL_FIELD(ptr)
-// REFL_END
 
-// REFL_TYPE(llama_data_file_context)
-//   REFL_FIELD(file)
-// REFL_END
+REFL_TYPE(llama_grammar_candidate)
+ REFL_FIELD(index)
+ REFL_FIELD(code_points)
+REFL_END
   
-// // A simple struct with some fields and a function
-// // A custom attribute to mark some fields as hidden
-struct hidden : refl::attr::usage::field {};
 
-// // Another struct with some fields and a function, using the custom attribute
-// struct Person {
-//     std::string name;
-//     int age;
-//     [[hidden]] std::string password;
-//     void say_hello() const {
-//         std::cout << "Hello, I'm " << name << " and I'm " << age << " years old.\n";
-//     }
-// };
+REFL_TYPE(llama_beam)
+  REFL_FIELD(tokens)
+  REFL_FIELD(p)
+REFL_END
+  
+
+REFL_TYPE(llama_logit_info)
+  REFL_FIELD(logits)
+  REFL_FIELD(n_vocab)
+REFL_END
+
+REFL_TYPE(llama_beam_search_data)
+  REFL_FIELD(ctx)
+  REFL_FIELD(n_beams)
+REFL_END
+
+
+REFL_TYPE(quantize_state_internal)
+//  REFL_FIELD(model)
+  REFL_FIELD(params)
+REFL_FIELD( n_attention_wv )
+REFL_FIELD(    n_feed_forward_w2 )
+  REFL_FIELD(    i_attention_wv    )
+  REFL_FIELD(    i_feed_forward_w2 )
+REFL_FIELD(    n_k_quantized     )
+REFL_FIELD(     n_fallback        )
+
+REFL_END
+
+REFL_TYPE(llama_data_context)
+REFL_END
+  
+REFL_TYPE(llama_data_buffer_context)
+  REFL_FIELD(ptr)
+REFL_END
+
+REFL_TYPE(llama_data_file_context)
+  REFL_FIELD(file)
+REFL_END
+  
 
 // // A generic function to print out the fields of any object
 template<typename T>
-void print_fields(const T& t) {
+void print_fields(const T& ) {
   //return;
 //     // Get the type descriptor of the object
   constexpr auto type = refl::reflect<T>();

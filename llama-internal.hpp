@@ -1,5 +1,5 @@
 #include <set>
-
+#include <queue>
 enum llm_arch {
     LLM_ARCH_LLAMA,
     LLM_ARCH_FALCON,
@@ -90,7 +90,7 @@ enum llama_fver {
 
 struct LLM_KV {
   LLM_KV(llm_arch arch) : arch(arch) {}
-  
+
   llm_arch arch;
 
   std::string operator()(llm_kv kv) const; // moved to llama.cpp file
@@ -196,7 +196,7 @@ struct llama_buffer {
     // useful in cases where CUDA can try to allocate PINNED memory
     bool fallback = false;
 
-  void resize(size_t n) ;	
+  void resize(size_t n) ;
 
 
   ~llama_buffer();
@@ -293,9 +293,9 @@ struct llama_vocab {
 struct llama_mmap {
   void * addr;
   size_t size;
-  
+
   llama_mmap(const llama_mmap &) = delete;
-  
+
   llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false);
   ~llama_mmap();
 
@@ -371,8 +371,8 @@ struct llama_mlock {
 #undef MLOCK_SUGGESTION
   static void raw_unlock(void * addr, size_t size);
 #elif defined(_WIN32)
-  static constexpr bool SUPPORTED = true; 
-  static size_t lock_granularity();	
+  static constexpr bool SUPPORTED = true;
+  static size_t lock_granularity();
   bool raw_lock(void * ptr, size_t len) const ;
   static void raw_unlock(void * ptr, size_t len);
 #else
@@ -515,4 +515,382 @@ struct LLM_TN {
 
   std::string operator()(llm_tensor tensor, const std::string & suffix, int bid) const ;
 
+};
+
+
+struct llama_file {
+    // use FILE * so we don't have to re-open the file to mmap
+    FILE * fp;
+    size_t size;
+
+  llama_file(const char * fname, const char * mode) ;
+  size_t tell() const;
+  void seek(size_t offset, int whence) const;
+  void read_raw(void * ptr, size_t len) const;
+  uint32_t read_u32() const;
+  void write_raw(const void * ptr, size_t len) const ;
+  void write_u32(std::uint32_t val) const;
+  ~llama_file();
+
+};
+
+
+struct llama_state {
+  llama_state();
+    // We save the log callback globally
+    ggml_log_callback log_callback;
+    void * log_callback_user_data = nullptr;
+};
+
+
+
+struct llama_model_loader {
+    int n_kv      = 0;
+    int n_tensors = 0;
+    int n_created = 0;
+
+    int64_t n_elements = 0;
+    size_t  n_bytes    = 0;
+
+    bool use_mmap = false;
+
+    llama_file  file;
+    llama_ftype ftype;
+    llama_fver  fver;
+
+    std::unique_ptr<llama_mmap> mapping;
+
+    struct gguf_context * ctx_gguf = NULL;
+    struct ggml_context * ctx_meta = NULL;
+
+  llama_model_loader(const std::string & fname, bool use_mmap) ;
+
+  ~llama_model_loader();
+
+  std::string get_arch_name() const;
+
+  enum llm_arch get_arch() const ;
+  const char * get_tensor_name(int i) const;
+
+  struct ggml_tensor * get_tensor_meta(int i) const;
+
+  void calc_sizes(size_t & ctx_size_p, size_t & mmapped_size_p) const;
+
+  struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, struct ggml_tensor * meta, ggml_backend_type backend) ;
+
+  struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, ggml_backend_type backend) ;
+
+  void done_getting_tensors() const;
+
+  size_t file_offset(const char * name) const;
+
+
+  void load_data_for(struct ggml_tensor * cur) const ;
+  void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, llama_mlock * lmlock) ;
+};
+
+struct llama_data_context {
+    virtual void write(const void * src, size_t size) = 0;
+    virtual size_t get_size_written() = 0;
+    virtual ~llama_data_context() = default;
+};
+
+struct llama_data_buffer_context : llama_data_context {
+    uint8_t * ptr;
+    size_t size_written = 0;
+  llama_data_buffer_context(uint8_t * p) ;
+  void write(const void * src, size_t size) override ;
+  size_t get_size_written() override ;
+};
+
+struct llama_data_file_context : llama_data_context {
+    llama_file * file;
+    size_t size_written = 0;
+  llama_data_file_context(llama_file * f);
+  size_t get_size_written() override ;
+  void write(const void * src, size_t size);
+};
+
+
+struct llama_beam {
+  std::vector<llama_token> tokens;
+  float p;  // Cumulative beam probability (renormalized relative to all beams)
+  bool eob; // Initialize end-of-beam to false. Callback sets this to true.
+  // Sort beams by probability. In case of ties, prefer beams at eob.
+  bool operator<(const llama_beam & rhs) const ;
+  void shift_tokens(const size_t n) ;
+  llama_beam_view view() const;
+};
+
+// A struct for calculating logit-related info.
+struct llama_logit_info {
+    const float * const logits;
+    const int n_vocab;
+    const float max_l;
+    const float normalizer;
+    struct sum_exp {
+	float max_l;
+	float operator()(float sum, float l) const { return sum + std::exp(l - max_l); }
+    };
+  llama_logit_info(llama_context * ctx);
+  llama_token_data get_token_data(const llama_token token_id) const ;
+  std::vector<llama_token_data> top_k(size_t k) ;
+  float probability_from_logit(float logit) const ;
+};
+
+
+struct llama_beam_search_data {
+  llama_context * ctx;
+  size_t n_beams;
+  int n_past;
+  int n_predict;
+  std::vector<llama_beam> beams;
+  std::vector<llama_beam> next_beams;
+  size_t common_prefix_length;
+  std::vector<llama_beam_view> beam_views;
+  llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict);
+  void collapse_beams(const size_t beam_idx) ;
+  void fill_next_beams_by_top_probabilities(llama_beam & beam) ;
+  size_t find_common_prefix_length() ;
+  llama_beams_state get_beams_state(const bool last_call) ;
+  void loop(const llama_beam_search_callback_fn_t callback, void * const callback_data);
+  static void renormalize_beam_probabilities(std::vector<llama_beam> & beams) ;
+  size_t top_beam_index();
+  void update_beams_from_beam_views();
+};
+
+using llm_build_cb = std::function<void(struct ggml_tensor * cur, const char * name, int nl)>;
+
+enum llm_rope_type {
+    LLM_ROPE,
+    LLM_ROPE_NEOX,
+    LLM_ROPE_GLM,
+};
+
+enum llm_ffn_op_type {
+    LLM_FFN_SILU,
+    LLM_FFN_GELU,
+    LLM_FFN_RELU,
+    LLM_FFN_RELU_SQR,
+};
+
+enum llm_ffn_gate_type {
+    LLM_FFN_SEQ,
+    LLM_FFN_PAR, // ffn_gate is parallel to ffn_up
+};
+
+enum llm_norm_type {
+    LLM_NORM,
+    LLM_NORM_RMS,
+};
+
+struct llm_build_context {
+    const llama_model    & model;
+    const llama_hparams  & hparams;
+    const llama_cparams  & cparams;
+    const llama_batch    & batch;
+    const llama_kv_cache & kv_self;
+
+    const int64_t n_embd;
+    const int64_t n_layer;
+    const int64_t n_ctx;       // user-specified context size (can be different from n_ctx_train)
+    const int64_t n_head;
+    const int64_t n_head_kv;
+    const int64_t n_embd_head;
+    const int64_t n_embd_gqa;
+
+    const float freq_base;
+    const float freq_scale;
+    const float ext_factor;
+    const float attn_factor;
+    const float beta_fast;
+    const float beta_slow;
+    const float norm_eps;
+    const float norm_rms_eps;
+
+    const int32_t n_tokens;
+    const int32_t n_kv;     // size of KV cache to consider (n_kv <= n_ctx)
+    const int32_t kv_head;  // index of where we store new KV data in the cache
+    const int32_t n_orig_ctx;
+
+    const bool do_rope_shift;
+
+    const llm_build_cb & cb;
+
+    llama_buffer & buf_compute;
+
+    struct ggml_context * ctx0 = nullptr;
+
+    // TODO: consider making the entire interface noexcept
+    llm_build_context(
+	llama_context  & lctx,
+    const llama_batch  & batch,
+    const llm_build_cb & cb,
+	bool   worst_case);
+
+  void init() ;
+  void free() ;
+  struct ggml_cgraph * build_llama() ;
+  struct ggml_cgraph * build_baichuan() ;
+  struct ggml_cgraph * build_falcon() ;
+  struct ggml_cgraph * build_starcoder() ;
+  struct ggml_cgraph * build_persimmon() ;
+  struct ggml_cgraph * build_refact() ;
+  struct ggml_cgraph * build_bloom() ;
+  struct ggml_cgraph * build_mpt() ;
+  struct ggml_cgraph * build_stablelm();
+};
+
+
+enum llm_offload_func_e {
+    OFFLOAD_FUNC_NOP,
+    OFFLOAD_FUNC,
+    OFFLOAD_FUNC_KQ,
+    OFFLOAD_FUNC_V,
+    OFFLOAD_FUNC_NR,
+    OFFLOAD_FUNC_EMB,
+    OFFLOAD_FUNC_OUT,
+};
+
+struct llm_offload_trie {
+  struct node {
+    ~node() ;
+    node * children[256] = { nullptr };
+    llm_offload_func_e func = OFFLOAD_FUNC_NOP;
+  };
+  node * root = nullptr;
+  llm_offload_trie();
+  llm_offload_trie(const std::unordered_map<const char *, llm_offload_func_e> & map) ;
+  ~llm_offload_trie();
+  void add(const char * name, llm_offload_func_e func);
+  llm_offload_func_e find(const char * name) const;
+  
+};
+
+struct llm_symbol {
+    using index = int;
+    index prev;
+    index next;
+    const char * text;
+    size_t n;
+};
+
+
+struct llm_bigram_spm {
+    struct comparator {
+      bool operator()(llm_bigram_spm & l, llm_bigram_spm & r);
+    };
+    using queue_storage = std::vector<llm_bigram_spm>;
+    using queue = std::priority_queue<llm_bigram_spm, queue_storage, comparator>;
+    llm_symbol::index left;
+    llm_symbol::index right;
+    float score;
+    size_t size;
+};
+
+struct llm_tokenizer_spm {
+  llm_tokenizer_spm(const llama_vocab & vocab);
+    void tokenize(const std::string & text, std::vector<llama_vocab::id> & output);
+
+
+private:
+  void resegment(llm_symbol & symbol, std::vector<llama_vocab::id> & output) ;
+  void try_add_bigram(int left, int right) ;
+  const llama_vocab & vocab;
+
+  std::vector<llm_symbol> symbols;
+  llm_bigram_spm::queue work_queue;
+
+    std::map<std::string, std::pair<int, int>> rev_merge;
+};
+
+// BPE tokenizer
+// adapted from https://github.com/cmp-nct/ggllm.cpp [MIT License]
+// tried to simplify unicode stuff, so most likely does not work 100% correctly!
+
+// TODO: there are a lot of common parts between spm and bpe tokenizers, should be refactored and reused
+
+struct llm_bigram_bpe {
+    struct comparator {
+      bool operator()(const llm_bigram_bpe & l, const llm_bigram_bpe & r) const ;
+    };
+
+    using queue_storage = std::vector<llm_bigram_bpe>;
+    using queue = std::priority_queue<llm_bigram_bpe, queue_storage, comparator>;
+    llm_symbol::index left;
+    llm_symbol::index right;
+    std::string text;
+    int rank;
+    size_t size;
+};
+
+struct llm_tokenizer_bpe {
+  llm_tokenizer_bpe(const llama_vocab & vocab);
+
+  void tokenize(const std::string & text, std::vector<llama_vocab::id> & output);
+
+private:
+  void add_new_bigram(int left, int right) ;
+
+  std::vector<std::string> bpe_gpt2_preprocess(const std::string & text) ;
+
+  const llama_vocab & vocab;
+
+  std::vector<llm_symbol> symbols;
+  std::vector<llm_symbol> symbols_final;
+
+    llm_bigram_bpe::queue work_queue;
+};
+
+typedef enum FRAGMENT_BUFFER_VARIANT_TYPE{
+    FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN,
+    FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT
+} FRAGMENT_BUFFER_VARIANT_TYPE;
+
+struct fragment_buffer_variant{
+  fragment_buffer_variant(llama_vocab::id _token);
+  fragment_buffer_variant(const std::string & _raw_text, int64_t _offset, int64_t _length);
+  const FRAGMENT_BUFFER_VARIANT_TYPE type;
+  const llama_vocab::id token;
+  const std::string _dummy;
+  const std::string & raw_text;
+  const uint64_t offset;
+  const uint64_t length;
+};
+
+struct llama_partial_utf8 {
+    uint32_t value;    // bit value so far (unshifted)
+    int      n_remain; // num bytes remaining; -1 indicates invalid sequence
+};
+
+struct llama_grammar {
+    const std::vector<std::vector<llama_grammar_element>>   rules;
+    std::vector<std::vector<const llama_grammar_element *>> stacks;
+
+    // buffer for partially generated UTF-8 sequence from accepted tokens
+    llama_partial_utf8                                      partial_utf8;
+};
+
+struct llama_grammar_candidate {
+    size_t               index;
+    const uint32_t     * code_points;
+    llama_partial_utf8   partial_utf8;
+};
+
+struct quantize_state_internal {
+    const llama_model                 & model;
+    const llama_model_quantize_params * params;
+
+    int n_attention_wv    = 0;
+    int n_feed_forward_w2 = 0;
+    int i_attention_wv    = 0;
+    int i_feed_forward_w2 = 0;
+
+    int n_k_quantized     = 0;
+    int n_fallback        = 0;
+
+    quantize_state_internal(const llama_model & model, const llama_model_quantize_params * params)
+        : model(model)
+        , params(params)
+        {}
 };

@@ -114,7 +114,7 @@
         LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
     };
 
-    typedef struct llama_token_data : refl::attr::usage::type{
+    typedef struct llama_token_data {
       llama_token_data( llama_token id, float logit,     float p):
 	id( id),logit(logit),p(p){      }
         llama_token id; // token id
@@ -122,7 +122,7 @@
         float p;        // probability of the token
     } llama_token_data;
 
-    typedef struct llama_token_data_array : refl::attr::usage::type{
+    typedef struct llama_token_data_array {
       llama_token_data_array(llama_token_data * data,
 			     size_t size,
 			     bool sorted):
@@ -146,7 +146,7 @@
     // - seq_id : the sequence to which the respective token belongs
     // - logits : if zero, the logits for the respective token will not be output
     //
-    typedef struct llama_batch : refl::attr::usage::type{
+    typedef struct llama_batch {
 
       llama_batch(int32_t n_tokens,
 		  llama_token  *  token,
@@ -205,7 +205,7 @@
         bool use_mlock;  // force system to keep model in RAM
     };
 
-    struct llama_context_params : refl::attr::usage::type{
+    struct llama_context_params{
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
         uint32_t n_batch;           // prompt processing maximum batch size
@@ -230,7 +230,7 @@
     };
 
     // model quantization parameters
-    typedef struct llama_model_quantize_params : refl::attr::usage::type{
+    typedef struct llama_model_quantize_params {
         int nthread;                 // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         enum llama_ftype ftype;      // quantize to this llama_ftype
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
@@ -268,7 +268,7 @@
         LLAMA_GRETYPE_CHAR_ALT       = 6,
     };
 
-    typedef struct llama_grammar_element : refl::attr::usage::type {
+    typedef struct llama_grammar_element {
       llama_grammar_element(        enum llama_gretype type,
 				    uint32_t           value // Unicode code point or rule ID
 				    ):type(type), value(value){}
@@ -278,7 +278,7 @@
     } llama_grammar_element;
 
     // performance timing information
-    struct llama_timings : refl::attr::usage::type{
+    struct llama_timings {
         double t_start_ms;
         double t_end_ms;
         double t_load_ms;
@@ -755,7 +755,7 @@
     // Beam search
     //
 
-    struct llama_beam_view : refl::attr::usage::type{
+    struct llama_beam_view {
         const llama_token * tokens;
 
         size_t n_tokens;
@@ -767,7 +767,7 @@
     // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
     // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
     // These pointers are valid only during the synchronous callback, so should not be saved.
-    struct llama_beams_state : refl::attr::usage::type{
+    struct llama_beams_state {
         struct llama_beam_view * beam_views;
 
         size_t n_beams;               // Number of elements in beam_views[].
@@ -831,3 +831,5 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 
 
 #endif // LLAMA_H
+
+

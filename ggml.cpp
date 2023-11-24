@@ -1625,33 +1625,12 @@ static void ggml_setup_op_has_task_pass(void) {
 // NUMA support
 //
 
-#define GGML_NUMA_MAX_NODES 8
-#define GGML_NUMA_MAX_CPUS 512
 
-struct ggml_numa_node {
-    uint32_t cpus[GGML_NUMA_MAX_CPUS]; // hardware threads on this node
-    uint32_t n_cpus;
-};
-
-struct ggml_numa_nodes {
-    struct ggml_numa_node nodes[GGML_NUMA_MAX_NODES];
-    uint32_t n_nodes;
-    uint32_t total_cpus; // hardware threads on system
-};
 
 //
 // ggml state
 //
 
-struct ggml_state {
-    struct ggml_context_container contexts[GGML_MAX_CONTEXTS];
-    struct ggml_numa_nodes numa;
-
-  ggml_state():contexts(), numa()
-  {
-    
-  }
-};
 
 // global state
 static struct ggml_state g_state;
@@ -1986,10 +1965,6 @@ static inline int ggml_up(int n, int m) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static  size_t GGUF_TYPE_SIZE[GGUF_TYPE_COUNT]={};
-struct gguf_str {
-    uint64_t n;  // GGUFv2
-    char * data;
-};
 
 static const char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {};
 
@@ -6084,11 +6059,6 @@ struct ggml_tensor * ggml_map_custom3_inplace_f32(
 }
 
 // ggml_map_custom1
-struct ggml_map_custom1_op_params {
-    ggml_custom1_op_t fun;
-    int n_tasks;
-    void * userdata;
-};
 
 static struct ggml_tensor * ggml_map_custom1_impl(
         struct ggml_context          * ctx,
@@ -6141,11 +6111,6 @@ struct ggml_tensor * ggml_map_custom1_inplace(
 
 // ggml_map_custom2
 
-struct ggml_map_custom2_op_params {
-    ggml_custom2_op_t fun;
-    int n_tasks;
-    void * userdata;
-};
 
 static struct ggml_tensor * ggml_map_custom2_impl(
         struct ggml_context          * ctx,
@@ -6202,11 +6167,6 @@ struct ggml_tensor * ggml_map_custom2_inplace(
 
 // ggml_map_custom3
 
-struct ggml_map_custom3_op_params {
-    ggml_custom3_op_t fun;
-    int n_tasks;
-    void * userdata;
-};
 
 static struct ggml_tensor * ggml_map_custom3_impl(
         struct ggml_context          * ctx,
@@ -14475,10 +14435,6 @@ static void ggml_hash_set_free(struct ggml_hash_set hash_set) {
     free(hash_set.keys);
 }
 
-struct hash_map {
-    struct ggml_hash_set set;
-    struct ggml_tensor ** vals;
-};
 
 static struct hash_map * ggml_new_hash_map(size_t size) {
   struct hash_map * result = (hash_map *)malloc(sizeof(struct hash_map));
@@ -15734,7 +15690,7 @@ typedef int ggml_lock_t;
 
 #define GGML_LOCK_INITIALIZER 0
 
-typedef pthread_t ggml_thread_t;
+
 
 #define ggml_thread_create pthread_create
 #define ggml_thread_join   pthread_join
@@ -15824,28 +15780,7 @@ static void set_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(threa
 static void clear_numa_thread_affinity(void) {}
 #endif
 
-struct ggml_compute_state_shared {
-    const struct ggml_cgraph * cgraph;
-    const struct ggml_cplan  * cplan;
 
-    int64_t perf_node_start_cycles;
-    int64_t perf_node_start_time_us;
-
-    const int n_threads;
-
-    // synchronization primitives
-    atomic_int n_active; // num active threads
-    atomic_int node_n;   // active graph node
-
-    bool (*abort_callback)(void * data); // abort ggml_graph_compute when true
-    void * abort_callback_data;
-};
-
-struct ggml_compute_state {
-    ggml_thread_t thrd;
-    int ith;
-    struct ggml_compute_state_shared * shared;
-};
 
 static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st) {
     int64_t cycles_cur  = ggml_perf_cycles()  - st->perf_node_start_cycles;
@@ -17456,12 +17391,6 @@ static enum ggml_opt_result ggml_opt_adam(
 //   https://github.com/chokkan/liblbfgs
 //
 
-struct ggml_lbfgs_iteration_data {
-    float alpha;
-    float ys;
-    float * s;
-    float * y;
-};
 
 static enum ggml_opt_result linesearch_backtracking(
         const struct ggml_opt_params * params,
@@ -18328,71 +18257,6 @@ static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 //};
 static_assert(GGUF_TYPE_COUNT == 13, "GGUF_TYPE_COUNT != 13");
 
-union gguf_value {
-    uint8_t  uint8;
-    int8_t   int8;
-    uint16_t uint16;
-    int16_t  int16;
-    uint32_t uint32;
-    int32_t  int32;
-    float    float32;
-    uint64_t uint64;
-    int64_t  int64;
-    double   float64;
-    bool     bool_;
-
-    struct gguf_str str;
-
-    struct {
-        enum gguf_type type;
-
-        uint64_t n;  // GGUFv2
-        void * data;
-    } arr;
-};
-
-struct gguf_kv {
-    struct gguf_str key;
-
-    enum  gguf_type  type;
-    union gguf_value value;
-};
-
-struct gguf_header {
-    char magic[4];
-    uint32_t version;
-    uint64_t n_tensors; // GGUFv2
-    uint64_t n_kv;      // GGUFv2
-};
-
-struct gguf_tensor_info {
-    struct gguf_str name;
-
-    uint32_t n_dims;
-    uint64_t ne[GGML_MAX_DIMS];
-
-    enum ggml_type type;
-
-    uint64_t offset; // offset from start of `data`, must be a multiple of `ALIGNMENT`
-
-    // for writing API
-    const void * data;
-    size_t size;
-};
-
-struct gguf_context {
-    struct gguf_header header;
-
-    struct gguf_kv          * kv;
-    struct gguf_tensor_info * infos;
-
-    size_t alignment;
-    size_t offset;    // offset of `data` from beginning of file
-    size_t size;      // size of `data` in bytes
-
-    //uint8_t * padding;
-    void * data;
-};
 
 static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {
     const size_t n = fread(dst, 1, size, file);
@@ -19185,11 +19049,6 @@ void gguf_set_tensor_data(struct gguf_context * ctx, const char * name, const vo
 //    fwrite(val, sizeof(char), size, file);
 //}
 
-struct gguf_buf {
-    void * data;
-    size_t size;
-    size_t offset;
-};
 
 static struct gguf_buf gguf_buf_init(size_t size) {
     struct gguf_buf buf = {
