@@ -34,3 +34,7 @@ add_executable(llava-cli llava-cli.cpp)
 install(TARGETS llava-cli RUNTIME)
 target_link_libraries(llava-cli PRIVATE common llama llava ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(llava PRIVATE cxx_std_11)
+
+if(LLAMA_CUBLAS)
+    add_definitions(-DCLIP_USE_CUBLAS)
+endif()
