@@ -51,4 +51,4 @@ COPY --from=build /app/models models
 
 # CMD ["/bin/sh", "-c", "/server --model model.gguf --threads $(nproc) -ngl 99 -np $(nproc) -cb"]
 # CMD ["/server --host 0.0.0.0 --threads 8 -ngl 999 -np 8 -cb -m model.gguf -c 16384"]
-CMD [ "python", "-u", "/handler.py" ]
+CMD [ "python3", "-u", "/handler.py" ]

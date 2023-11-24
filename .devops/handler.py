@@ -26,7 +26,7 @@ async def handler(event):
   print(event)
   prompt = event["input"]["prompt"]
   async with aiohttp.ClientSession() as session:
-    async with session.post(url, data=json.dumps(json_data = {
+    async with session.post(url, data=json.dumps({
       'stream': True,
       'n_predict': 2048,
       'temperature': 0.2,
