@@ -422,7 +422,7 @@ Building the program with BLAS support may lead to some performance improvements
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
     cmake --build .
     ```
-  - Using `CMake` for Windows (using x64 Native Tools command prompt for VS)
+  - Using `CMake` for Windows (using x64 Native Tools command prompt for VS):
     ```bash
     set PATH=%HIP_PATH%\bin;%PATH%
     mkdir build
