@@ -1112,6 +1112,7 @@ struct llama_server_context
         std::lock_guard<std::mutex> lock(mutex_results);
         task_result res;
         res.id = id;
+        res.stop = false;
         res.error = true;
         res.result_json = { { "content", error } };
         queue_results.push_back(res);
@@ -1284,6 +1285,7 @@ struct llama_server_context
         std::lock_guard<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
+        task.target_id = 0;
         task.data = std::move(data);
         task.infill_mode = infill;
         task.embedding_mode = embedding;
