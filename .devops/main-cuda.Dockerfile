@@ -40,7 +40,7 @@ WORKDIR /install
 RUN pip install --install-option="--prefix=/install" runpod
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
-COPY --from=builder /install /usr/local
+COPY --from=build /install /usr/local
 COPY --from=build /app/server /server
 COPY --from=build /model.gguf model.gguf
 COPY --from=build /app/models models
