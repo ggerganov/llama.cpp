@@ -28,38 +28,38 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
 # ./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
 
 # mac os mistral
+dataset=slqm \
 data_dir="../models/"  \
 model_dir="../models/ggmls/" \
 model_name="openbuddy-mistral-7b-v13.1-q2_k" \
-dataset=slqm \
 sh examples/finetune/finetune.sh >${model_name}.log
 
 #云电脑   mistral
+dataset=slqm \
 data_dir="../"  \
 model_dir="../"  \
-dataset=slqm \
 model_name="openbuddy-mistral-7b-v13.1-q2_k" \
 sh examples/finetune/finetune.sh >${model_name}.log
 
 # mac os llama2
+dataset=slqm \
 data_dir="../models/"  \
 model_dir="../models/ggmls/" \
 model_name="chinese-llama-2-7b-16k.Q2_K" \
-dataset=slqm \
 sh examples/finetune/finetune.sh >${model_name}.log
 
 #云电脑   llama2
+dataset="slqm" \
 data_dir="../"  \
 model_dir="../"  \
-dataset=slqm \
 model_name="chinese-llama-2-7b-16k.Q2_K" \
 sh examples/finetune/finetune.sh >${model_name}.log
 
 
 #云电脑   finetune-bc
+dataset="slqm" \
 data_dir="../"  \
 model_dir="../"  \
-dataset=slqm \
 model_name="bc2-7b-chat-q2_k" \
 cmd="finetune-bc" \
 sh examples/finetune/finetune.sh >${model_name}.log

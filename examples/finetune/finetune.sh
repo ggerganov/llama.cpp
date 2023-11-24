@@ -12,22 +12,22 @@ fi
 ./${finetune} \
   --train-data ${data_dir}/${dataset}.txt \
   --model-base ${model_dir}/${model_name}.gguf \
-  --checkpoint-in  ${model_dir}/chk/chk-${model_name}-LATEST.gguf \
-  --checkpoint-out ${model_dir}/chk/chk-${model_name}-ITERATION.gguf \
-  --lora-out ${model_dir}/lora/lora-${model_name}-ITERATION.bin \
+  --checkpoint-in  ${model_dir}/chk/chk-${dataset}-${model_name}-LATEST.gguf \
+  --checkpoint-out ${model_dir}/chk/chk-${dataset}-${model_name}-ITERATION.gguf \
+  --lora-out ${model_dir}/lora/lora-${dataset}-${model_name}-ITERATION.bin \
   --threads 4 --ctx 64 --batch 4  --adam-iter 1 --save-every 5 \
   --lora-r 8  --lora-alpha 16 \
+  --grad-acc 1 \
+  --escape \
+  --epochs 3 \
   --use-checkpointing
 
-#   # --grad-acc 1 \
-#   # --use-flash \
-#   # --escape \
 #   # --seed 1
 
 ./export-lora \
       --model-base ${model_dir}/${model_name}.gguf \
       --model-out ${model_dir}/${dataset}-${model_name}.gguf  \
-      --lora-scaled  ${model_dir}/lora/lora-${model_name}-LATEST.bin 1.0
+      --lora-scaled  ${model_dir}/lora/lora-${dataset}-${model_name}-LATEST.bin 1.0
 
 ./main \
     -m ${model_dir}/${dataset}-${model_name}.gguf \
