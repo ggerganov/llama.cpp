@@ -39,7 +39,7 @@ async def handler(event):
     }), headers=headers) as response:
       async for line in response.content:
         yield line
-    
+
 runpod.serverless.start({
     "handler": handler,
     "return_aggregate_stream": True # Optional, results available via /run
