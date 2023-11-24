@@ -23,9 +23,9 @@ COPY . .
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable cuBLAS
 ENV LLAMA_CUBLAS=1
-ENV LLAMA_CUDA_MMV_Y=2
-ENV LLAMA_CUDA_DMMV_X=64
-ENV LLAMA_CUDA_F16=true
+# ENV LLAMA_CUDA_MMV_Y=2
+# ENV LLAMA_CUDA_DMMV_X=64
+# ENV LLAMA_CUDA_F16=true
 
 RUN make
 
@@ -41,7 +41,7 @@ RUN apt-get install python3 python3-pip
 RUN pip install --install-option="--prefix=/install" runpod
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
-COPY --from=build /install /usr/local
+
 COPY --from=build /app/server /server
 COPY --from=build /model.gguf model.gguf
 COPY --from=build /app/models models
