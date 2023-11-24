@@ -330,7 +330,6 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
         float scale =  1.0f / sqrt((float)d_head);
         ggml_backend_tensor_set(KQ_scale, &scale, 0, ggml_nbytes(KQ_scale));
-        printf("alloc scale\n");
     }
 
     // loop over layers
@@ -424,11 +423,10 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
             int* patches_data = (int*)malloc(ggml_nbytes(patches));
             for (int i = 0; i < num_positions; i++) {
-                patches_data[i] = i+1;
+                patches_data[i] = i + 1;
             }
             ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
             free(patches_data);
-            printf("patches");
         }
 
         embeddings = ggml_get_rows(ctx0, embeddings, patches);
