@@ -43,8 +43,8 @@ RUN pip install --prefix /install runpod aiohttp
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip\
- && rm -rf /var/lib/apt/lists/*```
+    apt-get install -y python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/server /server
 COPY --from=build /model.gguf model.gguf
