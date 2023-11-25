@@ -7106,7 +7106,11 @@ void llama_sample_repetition_penalties(
     }
 }
 
-void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
+void llama_sample_grammar(
+        struct llama_context * ctx,
+        llama_token_data_array * candidates,
+        const struct llama_grammar * grammar,
+        char const * const * pieces) {
     GGML_ASSERT(ctx);
     const int64_t t_start_sample_us = ggml_time_us();
 
@@ -7125,7 +7129,14 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id    = candidates->data[i].id;
-        const std::string piece = llama_token_to_piece(ctx, id);
+        std::string piece;
+
+        if (pieces != nullptr && pieces[id] != nullptr) {
+            piece = std::string(pieces[id]);
+        } else {
+            piece = llama_token_to_piece(ctx, id);
+        }
+
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;

@@ -166,7 +166,7 @@ llama_token llama_sampling_sample(
     }
 
     if (ctx_sampling->grammar != NULL) {
-        llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar);
+        llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar, nullptr);
     }
 
     if (temp < 0.0) {

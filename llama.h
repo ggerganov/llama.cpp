@@ -722,7 +722,9 @@ extern "C" {
     LLAMA_API void llama_sample_grammar(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
-      const struct llama_grammar * grammar);
+      const struct llama_grammar * grammar,
+              char const * const * pieces);
+
 
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
