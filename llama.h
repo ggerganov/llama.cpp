@@ -185,7 +185,7 @@ extern "C" {
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
         float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
-        float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, negative = from model
         float    yarn_attn_factor; // YaRN magnitude scaling factor
         float    yarn_beta_fast;   // YaRN low correction dim
         float    yarn_beta_slow;   // YaRN high correction dim
