@@ -104,8 +104,8 @@ REFL_FIELD( params)
 REFL_FIELD( mirostat_mu)
 REFL_FIELD( grammar)
 REFL_FIELD( parsed_grammar)
-REFL_FIELD( prev) 
-REFL_FIELD( cur)
+//REFL_FIELD( prev)  // TODO fixme has null data 
+//REFL_FIELD( cur)
 REFL_END
 
 REFL_TYPE(llama_token_data )
@@ -415,10 +415,10 @@ REFL_FIELD( t_p_eval_us )
 REFL_FIELD( n_sample )
 REFL_FIELD( n_p_eval )
   REFL_FIELD( n_eval  )
-REFL_FIELD(  logits)
+//REFL_FIELD(  logits) crash
 REFL_FIELD(  logits_all )
 REFL_FIELD(  embedding)
-REFL_FIELD(   work_buffer)
+//REFL_FIELD(   work_buffer)
   REFL_FIELD(   buf_compute)
   REFL_FIELD( buf_alloc)
 REFL_FIELD( alloc ) 
@@ -492,7 +492,7 @@ REFL_END
   
 
 REFL_TYPE(llama_logit_info)
-  REFL_FIELD(logits)
+//  REFL_FIELD(logits)
   REFL_FIELD(n_vocab)
 REFL_END
 
@@ -621,7 +621,9 @@ namespace runtime2
                 }
                 else if constexpr (detail::is_ostream_printable_v<CharT, T>) {
                     // type supports printing natively, just use that
-                    os << value;
+
+		  os << value;
+
                 }
                 else {
                     debug_detailed(os, value, depth);
@@ -640,14 +642,15 @@ namespace runtime2
                     if (!compact) os << '\n';
                     int new_depth = next_depth(depth);
                     indent(os, new_depth);
-
-                    debug_impl(os, *it, new_depth);
-                    if (std::next(it, 1) != end) {
+		    
+		      debug_impl(os, *it, new_depth);
+		      if (std::next(it, 1) != end) {
                         os << ", ";
-                    }
-                    else if (!compact) {
+		      }
+		      else if (!compact) {
                         os << '\n';
-                    }
+		      }
+		    
                 }
 
                 indent(os, depth);
