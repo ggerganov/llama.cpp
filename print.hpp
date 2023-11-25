@@ -1,3 +1,4 @@
+#include <refl-cpp/refl.hpp>
 #include <iostream>
 #include "llama.h"
 #include "ggml-internal.hpp"
@@ -6,6 +7,9 @@
 REFL_TYPE(ggml_init_params )
 REFL_END
 
+// we use the named data type patch
+#define ggml_opt_params_names
+#ifdef ggml_opt_params_names
 REFL_TYPE(ggml_opt_params::ggml_adam)
 REFL_END
 
@@ -15,7 +19,7 @@ REFL_END
 
 REFL_TYPE(ggml_opt_context::ggml_grad )
 REFL_END
-
+#endif
 REFL_TYPE(gpt_params )
 
 REFL_FIELD( seed )
