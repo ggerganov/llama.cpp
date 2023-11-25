@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 class LlamaState: ObservableObject {
     @Published var messageLog = ""
-    
+
     private var llamaContext: LlamaContext?
     private var modelUrl: URL? {
         Bundle.main.url(forResource: "q8_0", withExtension: "gguf", subdirectory: "models")
@@ -17,7 +17,6 @@ class LlamaState: ObservableObject {
         }
     }
 
-    
     private func loadModel() throws {
         messageLog += "Loading model...\n"
         if let modelUrl {
@@ -27,7 +26,7 @@ class LlamaState: ObservableObject {
             messageLog += "Could not locate model\n"
         }
     }
-    
+
     func complete(text: String) async {
         guard let llamaContext else {
             return
@@ -35,7 +34,7 @@ class LlamaState: ObservableObject {
         messageLog += "Attempting to complete text...\n"
         await llamaContext.completion_init(text: text)
         messageLog += "\(text)"
-        
+
         while await llamaContext.n_cur <= llamaContext.n_len {
             let result = await llamaContext.completion_loop()
             messageLog += "\(result)"

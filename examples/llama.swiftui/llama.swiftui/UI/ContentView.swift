@@ -2,15 +2,15 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject var llamaState = LlamaState()
-    
+
     @State private var multiLineText = ""
-    
+
     var body: some View {
         VStack {
             ScrollView(.vertical) {
                 Text(llamaState.messageLog)
             }
-            
+
             TextEditor(text: $multiLineText)
                 .frame(height: 200)
                 .padding()
@@ -27,7 +27,7 @@ struct ContentView: View {
         }
         .padding()
     }
-    
+
     func sendText() {
         Task {
             await llamaState.complete(text: multiLineText)
