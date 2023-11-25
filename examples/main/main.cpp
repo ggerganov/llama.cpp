@@ -31,6 +31,8 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+#include "print.hpp"
+
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
 static gpt_params               * g_params;
@@ -99,6 +101,7 @@ static void sigint_handler(int signo) {
     }
 }
 #endif
+using namespace refl;
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -117,7 +120,8 @@ int main(int argc, char ** argv) {
 
     // TODO: Dump params ?
     //LOG("Params perplexity: %s\n", LOG_TOSTR(params.perplexity));
-
+    print_fields(params);
+    
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
@@ -234,6 +238,8 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd_inp;
 
+    print_fields(*model);
+	
     if (params.interactive_first || params.instruct || params.chatml || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
         if (params.chatml) {
@@ -277,7 +283,8 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: error: prompt is too long (%d tokens, max %d)\n", __func__, (int) embd_inp.size(), n_ctx - 4);
         return 1;
     }
-
+    print_fields(*ctx);
+    //print_fields(session_tokens);
     // debug message about similarity of saved session, if applicable
     size_t n_matching_session_tokens = 0;
     if (!session_tokens.empty()) {
@@ -365,6 +372,10 @@ int main(int argc, char ** argv) {
             for (int i = 0; i < (int) guidance_inp.size(); i++) {
                 LOG_TEE("%6d -> '%s'\n", guidance_inp[i], llama_token_to_piece(ctx, guidance_inp[i]).c_str());
             }
+	    
+	    print_fields(*ctx_guidance);
+
+
         }
 
         if (params.n_keep > 0) {
@@ -473,7 +484,8 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> embd_guidance;
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
-
+    print_fields(*ctx_sampling);
+    
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -508,6 +520,7 @@ int main(int argc, char ** argv) {
                 LOG("context full, swapping: n_past = %d, n_left = %d, n_ctx = %d, n_keep = %d, n_discard = %d\n",
                     n_past, n_left, n_ctx, params.n_keep, n_discard);
 
+		print_fields(*ctx);
                 llama_kv_cache_seq_rm   (ctx, 0, params.n_keep + 1            , params.n_keep + n_discard + 1);
                 llama_kv_cache_seq_shift(ctx, 0, params.n_keep + 1 + n_discard, n_past, -n_discard);
 
@@ -624,7 +637,7 @@ int main(int argc, char ** argv) {
             }
 
             const llama_token id = llama_sampling_sample(ctx_sampling, ctx, ctx_guidance);
-
+	    //print_fields(id);
             llama_sampling_accept(ctx_sampling, ctx, id, true);
 
             LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());

@@ -50,7 +50,9 @@
 #endif
 
 #ifdef __cplusplus
+#ifndef CPP_ONLY
 extern "C" {
+#endif
 #endif
 
     //
@@ -827,7 +829,9 @@ extern "C" {
     LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
 
 #ifdef __cplusplus
+#ifndef CPP_ONLY
 }
+#endif
 #endif
 
 // Internal API to be implemented by llama.cpp and used by tests/benchmarks only
@@ -844,4 +848,8 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 
 #endif // LLAMA_API_INTERNAL
 
+
+
 #endif // LLAMA_H
+
+

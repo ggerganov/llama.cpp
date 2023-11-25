@@ -22,7 +22,7 @@ extern "C" {
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
 #define static_assert(cond, msg) _Static_assert(cond, msg)
 #else
-#define static_assert(cond, msg) struct global_scope_noop_trick
+  //#define static_assert(cond, msg) struct global_scope_noop_trick
 #endif
 #endif
 

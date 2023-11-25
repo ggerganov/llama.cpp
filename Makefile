@@ -116,7 +116,7 @@ endif
 # keep standard at C11 and C++11
 MK_CPPFLAGS = -I. -Icommon
 MK_CFLAGS   = -std=c11   -fPIC
-MK_CXXFLAGS = -std=c++11 -fPIC
+MK_CXXFLAGS = -std=c++20 -fPIC -fpermissive -DCPP_ONLY
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
@@ -502,7 +502,7 @@ ggml-metal.o: ggml-metal.m ggml-metal.h
 endif # LLAMA_METAL
 
 ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
+ggml-mpi.o: ggml-mpi.cpp ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
@@ -537,17 +537,17 @@ $(info )
 # Build library
 #
 
-ggml.o: ggml.c ggml.h ggml-cuda.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
+ggml.o: ggml.cpp ggml.h ggml-cuda.h
+	$(CXX)  $(CXXFLAGS)   -c $< -o $@
 
-ggml-alloc.o: ggml-alloc.c ggml.h ggml-alloc.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
+ggml-alloc.o: ggml-alloc.cpp ggml.h ggml-alloc.h
+	$(CXX)  $(CXXFLAGS)   -c $< -o $@
 
-ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
-	$(CC)  $(CFLAGS)   -c $< -o $@
+ggml-backend.o: ggml-backend.cpp ggml.h ggml-backend.h
+	$(CXX)  $(CXXFLAGS)   -c $< -o $@
 
-ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h
-	$(CC) $(CFLAGS)    -c $< -o $@
+ggml-quants.o: ggml-quants.cpp ggml.h ggml-quants.h
+	$(CXX) $(CXXFLAGS)    -c $< -o $@
 
 OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
 
@@ -734,5 +734,5 @@ tests/test-tokenizer-1-bpe: tests/test-tokenizer-1-bpe.cpp ggml.o llama.o $(COMM
 tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-c.o: tests/test-c.c llama.h
-	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
+tests/test-c.o: tests/test-c.cpp llama.h
+	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@

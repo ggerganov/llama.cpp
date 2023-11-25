@@ -386,7 +386,7 @@ void ggml_gallocr_free(ggml_gallocr_t galloc) {
 
 void ggml_gallocr_set_parse_seq(ggml_gallocr_t galloc, const int * list, int n) {
     free(galloc->parse_seq);
-    galloc->parse_seq = malloc(sizeof(int) * n);
+    galloc->parse_seq = (int*)malloc(sizeof(int) * n);
 
     for (int i = 0; i < n; i++) {
         galloc->parse_seq[i] = list[i];
@@ -646,9 +646,9 @@ size_t ggml_gallocr_alloc_graph(ggml_gallocr_t galloc, ggml_tallocr_t talloc, st
         if (galloc->hash_values != NULL) {
             free(galloc->hash_values);
         }
-        galloc->hash_set.keys = malloc(sizeof(struct ggml_tensor *) * hash_size);
+        galloc->hash_set.keys = (ggml_tensor **)malloc(sizeof(struct ggml_tensor *) * hash_size);
         galloc->hash_set.size = hash_size;
-        galloc->hash_values = malloc(sizeof(struct hash_node) * hash_size);
+        galloc->hash_values = (hash_node*)malloc(sizeof(struct hash_node) * hash_size);
     }
 
     // reset hash table
@@ -674,7 +674,7 @@ void ggml_gallocr_alloc_graph_n(ggml_gallocr_t galloc, struct ggml_cgraph * grap
     // alloc hash_values if needed
     if (galloc->hash_values == NULL || galloc->hash_values_size < hash_size) {
         free(galloc->hash_values);
-        galloc->hash_values      = malloc(sizeof(struct hash_node) * hash_size);
+        galloc->hash_values      = (hash_node*)malloc(sizeof(struct hash_node) * hash_size);
         galloc->hash_values_size = hash_size;
     }
 

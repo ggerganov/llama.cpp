@@ -104,7 +104,7 @@ option(LLAMA_BUILD_SERVER               "llama: build server example"           
 # Compile flags
 #
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
@@ -230,7 +230,12 @@ if (LLAMA_BLAS)
 
         message(STATUS "BLAS found, Includes: ${BLAS_INCLUDE_DIRS}")
         add_compile_options(${BLAS_LINKER_FLAGS})
-        add_compile_definitions(GGML_USE_OPENBLAS)
+
+	# from https://github.com/NVIDIA/cutlass
+	make_directory("${PROJECT_BINARY_DIR}/nvcc_tmp")
+	set(cuda_flags --keep "SHELL:--keep-dir ${PROJECT_BINARY_DIR}/nvcc_tmp" ${cuda_flags})
+
+	#        add_compile_definitions(GGML_USE_OPENBLAS)
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
@@ -312,7 +317,7 @@ if (LLAMA_MPI)
     if (MPI_C_FOUND)
         message(STATUS "MPI found")
         set(GGML_HEADERS_MPI ggml-mpi.h)
-        set(GGML_SOURCES_MPI ggml-mpi.c ggml-mpi.h)
+        set(GGML_SOURCES_MPI ggml-mpi.cpp ggml-mpi.h)
         add_compile_definitions(GGML_USE_MPI)
         add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
         if (NOT MSVC)
@@ -438,6 +443,9 @@ if (NOT cuda_host_flags STREQUAL "")
     set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_host_flags})
 endif()
 
+# 
+set(cuda_flags --verbose -G  ${cuda_flags})
+
 add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
 
 if (WIN32)
@@ -485,8 +493,10 @@ if (NOT MSVC)
             add_link_options(-static-libgcc -static-libstdc++)
         endif()
     endif()
+    add_link_options("-Wl,-Map=${TARGET}.map")
+
     if (LLAMA_GPROF)
-        add_compile_options(-pg)
+      add_compile_options(-pg)
     endif()
 endif()
 
@@ -645,13 +655,16 @@ if (GGML_USE_CPU_HBM)
 endif()
 
 add_library(ggml OBJECT
-            ggml.c
+            ggml.cpp
             ggml.h
-            ggml-alloc.c
+	    print.hpp
+	    ggml-internal.hpp
+	    llama-internal.hpp
+            ggml-alloc.cpp
             ggml-alloc.h
-            ggml-backend.c
+            ggml-backend.cpp
             ggml-backend.h
-            ggml-quants.c
+            ggml-quants.cpp
             ggml-quants.h
             ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
@@ -683,7 +696,7 @@ add_library(llama
             )
 
 target_include_directories(llama PUBLIC .)
-target_compile_features(llama PUBLIC cxx_std_11) # don't bump
+target_compile_features(llama PUBLIC cxx_std_20) # don't bump
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}

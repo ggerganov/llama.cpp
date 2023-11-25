@@ -20,7 +20,7 @@ ggml_backend_buffer_t ggml_backend_buffer_init(
         struct ggml_backend_buffer_i           iface,
                ggml_backend_buffer_context_t   context,
                size_t                          size) {
-    ggml_backend_buffer_t buffer = malloc(sizeof(struct ggml_backend_buffer));
+  ggml_backend_buffer_t buffer = (ggml_backend_buffer*)malloc(sizeof(struct ggml_backend_buffer));
 
     GGML_ASSERT(iface.get_base != NULL);
 
@@ -195,9 +195,9 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
     // TODO: allow backends to support copy to/from same backend
 
     if (ggml_get_backend(dst)->iface.cpy_tensor_from != NULL) {
-        ggml_get_backend(dst)->iface.cpy_tensor_from(ggml_get_backend(dst)->context, src, dst);
+      ggml_get_backend(dst)->iface.cpy_tensor_from((ggml_backend_t)ggml_get_backend(dst)->context, src, dst);
     } else if (ggml_get_backend(src)->iface.cpy_tensor_to != NULL) {
-        ggml_get_backend(src)->iface.cpy_tensor_to(ggml_get_backend(src)->context, src, dst);
+      ggml_get_backend(src)->iface.cpy_tensor_to((ggml_backend_t)ggml_get_backend(src)->context, src, dst);
     } else {
         // shouldn't be hit when copying from/to CPU
         #ifndef NDEBUG
@@ -316,13 +316,13 @@ struct ggml_backend_plan_cpu {
 static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
-    struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
+    struct ggml_backend_plan_cpu * cpu_plan = (ggml_backend_plan_cpu*)malloc(sizeof(struct ggml_backend_plan_cpu));
 
     cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
     cpu_plan->cgraph = *cgraph;
 
     if (cpu_plan->cplan.work_size > 0) {
-        cpu_plan->cplan.work_data = malloc(cpu_plan->cplan.work_size);
+      cpu_plan->cplan.work_data = (uint8_t*)malloc(cpu_plan->cplan.work_size);
     }
 
     return cpu_plan;
@@ -356,7 +356,7 @@ static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_c
         cpu_ctx->work_size = cplan.work_size;
     }
 
-    cplan.work_data = cpu_ctx->work_data;
+    cplan.work_data = (uint8_t*)cpu_ctx->work_data;
 
     ggml_graph_compute(cgraph, &cplan);
 }
@@ -385,13 +385,13 @@ static struct ggml_backend_i cpu_backend_i = {
 };
 
 ggml_backend_t ggml_backend_cpu_init(void) {
-    struct ggml_backend_cpu_context * ctx = malloc(sizeof(struct ggml_backend_cpu_context));
+  struct ggml_backend_cpu_context * ctx = (ggml_backend_cpu_context*)malloc(sizeof(struct ggml_backend_cpu_context));
 
     ctx->n_threads = GGML_DEFAULT_N_THREADS;
     ctx->work_data = NULL;
     ctx->work_size = 0;
 
-    ggml_backend_t cpu_backend = malloc(sizeof(struct ggml_backend));
+    ggml_backend_t cpu_backend = (ggml_backend_t)malloc(sizeof(struct ggml_backend));
 
     *cpu_backend = (struct ggml_backend) {
         /* .interface = */ cpu_backend_i,
@@ -869,7 +869,7 @@ static void sched_reset(ggml_backend_sched_t sched) {
 ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_backends) {
     GGML_ASSERT(n_backends <= GGML_MAX_BACKENDS);
 
-    struct ggml_backend_sched * sched = malloc(sizeof(struct ggml_backend_sched));
+    struct ggml_backend_sched * sched = (ggml_backend_sched*)malloc(sizeof(struct ggml_backend_sched));
     memset(sched, 0, sizeof(struct ggml_backend_sched));
 
     fprintf(stderr, "ggml_backend_sched size: %lu KB\n", sizeof(struct ggml_backend_sched)/1024);
@@ -907,9 +907,9 @@ void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgr
     // initialize hash tables
     size_t hash_size = measure_graph->visited_hash_table.size + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS;
     sched->hash_set.size = hash_size;
-    sched->hash_set.keys = malloc(sizeof(sched->hash_set.keys[0]) * hash_size);
-    sched->node_talloc   = malloc(sizeof(sched->node_talloc[0])   * hash_size);
-    sched->node_copies   = malloc(sizeof(sched->node_copies[0])   * hash_size);
+    sched->hash_set.keys = (ggml_tensor**)malloc(sizeof(sched->hash_set.keys[0]) * hash_size);
+    sched->node_talloc   = (ggml_tallocr**)malloc(sizeof(sched->node_talloc[0])   * hash_size);
+    sched->node_copies   = (ggml_tensor *(*)[4])malloc(sizeof(sched->node_copies[0])   * hash_size);
 
     sched_split_graph(sched, measure_graph);
     sched_alloc_splits(sched);

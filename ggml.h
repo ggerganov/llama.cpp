@@ -285,7 +285,9 @@
     GGML_UNUSED(prefix##3);
 
 #ifdef  __cplusplus
+#ifndef CPP_ONLY
 extern "C" {
+#endif
 #endif
 
 #if defined(__ARM_NEON) && defined(__CUDACC__)
@@ -1859,7 +1861,7 @@ extern "C" {
         int n_gradient_accumulation;
 
         // ADAM parameters
-        struct {
+        struct ggml_adam{
             int n_iter;
 
             float sched; // schedule multiplier (fixed, decay or warmup)
@@ -1875,7 +1877,7 @@ extern "C" {
         } adam;
 
         // LBFGS parameters
-        struct {
+        struct ggml_lbfgs{
             int m; // number of corrections to approximate the inv. Hessian
             int n_iter;
             int max_linesearch;
@@ -1902,7 +1904,7 @@ extern "C" {
         float loss_before;
         float loss_after;
 
-        struct {
+        struct ggml_grad{
             struct ggml_tensor * g;  // current gradient
             struct ggml_tensor * m;  // first moment
             struct ggml_tensor * v;  // second moment
@@ -1912,7 +1914,7 @@ extern "C" {
             int n_no_improvement;
         } adam;
 
-        struct {
+        struct ggml_params{
             struct ggml_tensor * x;    // current parameters
             struct ggml_tensor * xp;   // previous parameters
             struct ggml_tensor * g;    // current gradient
@@ -2134,15 +2136,15 @@ extern "C" {
 
 #ifdef  __cplusplus
 // restrict not standard in C++
-#define GGML_RESTRICT
+#define GGML_RESTRICT 
 #else
-#define GGML_RESTRICT restrict
+#define GGML_RESTRICT __restrict__
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
     typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
 
-    typedef struct {
+    typedef struct ggml_something{
         const char      * type_name;
         int               blck_size;
         size_t            type_size;
@@ -2157,5 +2159,7 @@ extern "C" {
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
+#ifndef CPP_ONLY
 }
+#endif
 #endif
