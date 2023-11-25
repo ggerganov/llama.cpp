@@ -6425,8 +6425,8 @@ static std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
     static const int      lookup[] = { 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 3, 4 };
     const char          * pos      = src;
     std::vector<uint32_t> code_points;
-    // common english strings have the same number of codepoints and bytes.
-    code_points.reserve(n_src);
+    // common english strings have the same number of codepoints and bytes. `+ 1` for the terminating 0.
+    code_points.reserve(n_src + 1);
     uint32_t              value    = partial_start.value;
     int                   n_remain = partial_start.n_remain;
 
