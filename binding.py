@@ -14,8 +14,9 @@ llvmLibPath = "/usr/lib/llvm-15/lib/"
 cxxClientRoot = "/home/mdupont/experiments/llama.cpp/"
 
 fileList = [
-    "ggml.cpp",
-    "llama.cpp"
+#    "ggml.cpp",
+#    "llama.cpp",
+    "examples/server/server.cpp",
 ]
 
 typeList = [
@@ -224,10 +225,11 @@ UNNAMED_STRUCT_DELIM = '::(unnamed struct'
 
 def traverse(node, namespace, main_file):
     # only scan the elements of the file we parsed
-    #print("FILE", node.location.file )
+
 
     if node.kind == clang.cindex.CursorKind.STRUCT_DECL or node.kind == clang.cindex.CursorKind.CLASS_DECL:
         fullStructName = "::".join([*namespace, node.displayname])
+        print("#FILE", node.location.file )
         print("REFL_TYPE(" + fullStructName + ")")
 
         structFields = []
@@ -247,14 +249,15 @@ def traverse(node, namespace, main_file):
                         "type": struct_type,
                     })
             # replica read changes introduced duplicate get requests
-            if any(map(lambda op: op['name'] == fullStructName, opTypes)):
-                return
+            #if any(map(lambda op: op['name'] == fullStructName, opTypes)):
+            #    return
 
-            opTypes.append({
-                "name": fullStructName,
-                "fields": structFields,
-            })
+            #opTypes.append({
+            #    "name": fullStructName,
+            #    "fields": structFields,
+            #})
         print("REFL_END")
+
         
     if node.kind == clang.cindex.CursorKind.TYPE_ALIAS_DECL:
         fullStructName = "::".join([*namespace, node.displayname])
