@@ -9,12 +9,12 @@ models are available.
 After API is confirmed, more models will be supported / uploaded.
 
 ## Usage
-Build with cmake or run `make llava` to build it.
+Build with cmake or run `make llava-cli` to build it.
 
-After building, run: `./llava` to see the usage. For example:
+After building, run: `./llava-cli` to see the usage. For example:
 
 ```sh
-./llava -m llava-v1.5-7b/ggml-model-q5_k.gguf --mmproj llava-v1.5-7b/mmproj-model-f16.gguf --image path/to/an/image.jpg
+./llava-cli -m llava-v1.5-7b/ggml-model-q5_k.gguf --mmproj llava-v1.5-7b/mmproj-model-f16.gguf --image path/to/an/image.jpg
 ```
 
 **note**: A lower temperature like 0.1 is recommended for better quality. add `--temp 0.1` to the command to do so.
@@ -51,7 +51,6 @@ Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` director
 
 ## TODO
 
-- [ ] Support server mode.
 - [ ] Support non-CPU backend for the image encoding part.
 - [ ] Support different sampling methods.
 - [ ] Support more model variants.

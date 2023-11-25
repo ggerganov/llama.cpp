@@ -1,5 +1,4 @@
 #include "common.h"
-#include "build-info.h"
 #include "llama.h"
 
 #include <algorithm>
@@ -13,6 +12,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
@@ -91,6 +91,19 @@ void process_escapes(std::string& input) {
                 case '\'': input[output_idx++] = '\''; break;
                 case '\"': input[output_idx++] = '\"'; break;
                 case '\\': input[output_idx++] = '\\'; break;
+                case 'x':
+                    // Handle \x12, etc
+                    if (input_idx + 2 < input_len) {
+                        const char x[3] = { input[input_idx + 1], input[input_idx + 2], 0 };
+                        char *err_p = nullptr;
+                        const long val = std::strtol(x, &err_p, 16);
+                        if (err_p == x + 2) {
+                            input_idx += 2;
+                            input[output_idx++] = char(val);
+                            break;
+                        }
+                    }
+                    // fall through
                 default:   input[output_idx++] = '\\';
                            input[output_idx++] = input[input_idx]; break;
             }
@@ -103,9 +116,24 @@ void process_escapes(std::string& input) {
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
+    bool result = true;
+    try {
+        if (!gpt_params_parse_ex(argc, argv, params)) {
+            gpt_print_usage(argc, argv, gpt_params());
+            exit(0);
+        }
+    }
+    catch (const std::invalid_argument & ex) {
+        fprintf(stderr, "%s\n", ex.what());
+        gpt_print_usage(argc, argv, gpt_params());
+        exit(1);
+    }
+    return result;
+}
+
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
-    gpt_params default_params;
     const std::string arg_prefix = "--";
     llama_sampling_params & sparams = params.sparams;
 
@@ -204,12 +232,52 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.rope_freq_scale = std::stof(argv[i]);
+        } else if (arg == "--rope-scaling") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string value(argv[i]);
+            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_NONE; }
+            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_LINEAR; }
+            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_YARN; }
+            else { invalid_param = true; break; }
         } else if (arg == "--rope-scale") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rope_freq_scale = 1.0f/std::stof(argv[i]);
+        } else if (arg == "--yarn-orig-ctx") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_orig_ctx = std::stoi(argv[i]);
+        } else if (arg == "--yarn-ext-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_ext_factor = std::stof(argv[i]);
+        } else if (arg == "--yarn-attn-factor") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_attn_factor = std::stof(argv[i]);
+        } else if (arg == "--yarn-beta-fast") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_beta_fast = std::stof(argv[i]);
+        } else if (arg == "--yarn-beta-slow") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.yarn_beta_slow = std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
         } else if (arg == "--top-p") {
@@ -218,6 +286,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             sparams.top_p = std::stof(argv[i]);
+        } else if (arg == "--min-p") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.min_p = std::stof(argv[i]);
         } else if (arg == "--temp") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -343,6 +417,18 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.n_sequences = std::stoi(argv[i]);
+        } else if (arg == "--p-accept" || arg == "-pa") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.p_accept = std::stof(argv[i]);
+        } else if (arg == "--p-split" || arg == "-ps") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.p_split = std::stof(argv[i]);
         } else if (arg == "-m" || arg == "--model") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -406,8 +492,12 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
             params.interactive_first = true;
         } else if (arg == "-ins" || arg == "--instruct") {
             params.instruct = true;
+        } else if (arg == "-cml" || arg == "--chatml") {
+            params.chatml = true;
         } else if (arg == "--infill") {
             params.infill = true;
+        } else if (arg == "-dkvc" || arg == "--dump-kv-cache") {
+            params.dump_kv_cache = true;
         } else if (arg == "--multiline-input") {
             params.multiline_input = true;
         } else if (arg == "--simple-io") {
@@ -548,11 +638,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 break;
             }
         } else if (arg == "-h" || arg == "--help") {
-            gpt_print_usage(argc, argv, default_params);
-#ifndef LOG_DISABLE_LOGS
-            log_print_usage();
-#endif // LOG_DISABLE_LOGS
-            exit(0);
+            return false;
+
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
         } else if (arg == "--in-prefix-bos") {
@@ -611,22 +698,17 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
         } else {
-            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            gpt_print_usage(argc, argv, default_params);
-            exit(1);
+            throw std::invalid_argument("error: unknown argument: " + arg);
         }
     }
     if (invalid_param) {
-        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
+        throw std::invalid_argument("error: invalid parameter for argument: " + arg);
     }
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
              params.instruct)) {
-        fprintf(stderr, "error: --prompt-cache-all not supported in interactive mode yet\n");
-        gpt_print_usage(argc, argv, default_params);
-        exit(1);
+
+        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
     }
 
     if (params.escape) {
@@ -645,6 +727,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
+    printf("\n");
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
     printf("options:\n");
@@ -652,6 +735,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
+    printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
     printf("  -r PROMPT, --reverse-prompt PROMPT\n");
     printf("                        halt generation at PROMPT, return control in interactive mode\n");
@@ -679,6 +763,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", sparams.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)sparams.top_p);
+    printf("  --min-p N             min-p sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.min_p);
     printf("  --tfs N               tail free sampling, parameter z (default: %.1f, 1.0 = disabled)\n", (double)sparams.tfs_z);
     printf("  --typical N           locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)\n", (double)sparams.typical_p);
     printf("  --repeat-last-n N     last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)\n", sparams.penalty_last_n);
@@ -701,9 +786,16 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --cfg-negative-prompt-file FNAME\n");
     printf("                        negative prompt file to use for guidance. (default: empty)\n");
     printf("  --cfg-scale N         strength of guidance (default: %f, 1.0 = disable)\n", sparams.cfg_scale);
-    printf("  --rope-scale N        RoPE context linear scaling factor, inverse of --rope-freq-scale\n");
+    printf("  --rope-scaling {none,linear,yarn}\n");
+    printf("                        RoPE frequency scaling method, defaults to linear unless specified by the model\n");
+    printf("  --rope-scale N        RoPE context scaling factor, expands context by a factor of N\n");
     printf("  --rope-freq-base N    RoPE base frequency, used by NTK-aware scaling (default: loaded from model)\n");
-    printf("  --rope-freq-scale N   RoPE frequency linear scaling factor (default: loaded from model)\n");
+    printf("  --rope-freq-scale N   RoPE frequency scaling factor, expands context by a factor of 1/N\n");
+    printf("  --yarn-orig-ctx N     YaRN: original context size of model (default: 0 = model training context size)\n");
+    printf("  --yarn-ext-factor N   YaRN: extrapolation mix factor (default: 1.0, 0.0 = full interpolation)\n");
+    printf("  --yarn-attn-factor N  YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
+    printf("  --yarn-beta-slow N    YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
+    printf("  --yarn-beta-fast N    YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
     printf("  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     printf("  --no-penalize-nl      do not penalize newline token\n");
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
@@ -717,6 +809,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --chunks N            max number of chunks to process (default: %d, -1 = all)\n", params.n_chunks);
     printf("  -np N, --parallel N   number of parallel sequences to decode (default: %d)\n", params.n_parallel);
     printf("  -ns N, --sequences N  number of sequences to decode (default: %d)\n", params.n_sequences);
+    printf("  -pa N, --p-accept N   speculative decoding accept probability (default: %.1f)\n", (double)params.p_accept);
+    printf("  -ps N, --p-split N    speculative decoding split probability (default: %.1f)\n", (double)params.p_split);
     printf("  -cb, --cont-batching  enable continuous batching (a.k.a dynamic batching) (default: disabled)\n");
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA. see examples/llava/README.md\n");
     printf("  --image IMAGE_FILE    path to an image file. use with multimodal models\n");
@@ -744,6 +838,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif // GGML_USE_CUBLAS
 #endif
     printf("  --verbose-prompt      print prompt before generation\n");
+    printf("  -dkvc, --dump-kv-cache\n");
+    printf("                        verbose print of the KV cache\n");
     printf("  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
@@ -755,6 +851,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
     printf("\n");
+#ifndef LOG_DISABLE_LOGS
+    log_print_usage();
+#endif // LOG_DISABLE_LOGS
 }
 
 std::string get_system_info(const gpt_params & params) {
@@ -808,17 +907,23 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params) {
     auto cparams = llama_context_default_params();
 
-    cparams.n_ctx           = params.n_ctx;
-    cparams.n_batch         = params.n_batch;
-    cparams.n_threads       = params.n_threads;
-    cparams.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-    cparams.mul_mat_q       = params.mul_mat_q;
-    cparams.seed            = params.seed;
-    cparams.f16_kv          = params.memory_f16;
-    cparams.logits_all      = params.logits_all;
-    cparams.embedding       = params.embedding;
-    cparams.rope_freq_base  = params.rope_freq_base;
-    cparams.rope_freq_scale = params.rope_freq_scale;
+    cparams.n_ctx             = params.n_ctx;
+    cparams.n_batch           = params.n_batch;
+    cparams.n_threads         = params.n_threads;
+    cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    cparams.mul_mat_q         = params.mul_mat_q;
+    cparams.seed              = params.seed;
+    cparams.f16_kv            = params.memory_f16;
+    cparams.logits_all        = params.logits_all;
+    cparams.embedding         = params.embedding;
+    cparams.rope_scaling_type = params.rope_scaling_type;
+    cparams.rope_freq_base    = params.rope_freq_base;
+    cparams.rope_freq_scale   = params.rope_freq_scale;
+    cparams.yarn_ext_factor   = params.yarn_ext_factor;
+    cparams.yarn_attn_factor  = params.yarn_attn_factor;
+    cparams.yarn_beta_fast    = params.yarn_beta_fast;
+    cparams.yarn_beta_slow    = params.yarn_beta_slow;
+    cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
 
     return cparams;
 }
@@ -834,7 +939,7 @@ void llama_batch_add(
     const std::vector<llama_seq_id> & seq_ids,
                                bool   logits) {
     batch.token   [batch.n_tokens] = id;
-    batch.pos     [batch.n_tokens] = pos,
+    batch.pos     [batch.n_tokens] = pos;
     batch.n_seq_id[batch.n_tokens] = seq_ids.size();
     for (size_t i = 0; i < seq_ids.size(); ++i) {
         batch.seq_id[batch.n_tokens][i] = seq_ids[i];
@@ -975,6 +1080,12 @@ std::string llama_detokenize_bpe(llama_context * ctx, const std::vector<llama_to
     return result;
 }
 
+bool llama_should_add_bos_token(const llama_model * model) {
+    const int add_bos = llama_add_bos_token(model);
+
+    return add_bos != -1 ? bool(add_bos) : (llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
+}
+
 //
 // YAML utils
 //
@@ -1091,6 +1202,7 @@ void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const cha
     if (!data_str.empty() && (std::isspace(data_str[0]) || std::isspace(data_str.back()))) {
         data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
         data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
+        data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");
         data_str = "\"" + data_str + "\"";
         fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
         return;
@@ -1128,8 +1240,8 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
     const llama_sampling_params & sparams = params.sparams;
 
-    fprintf(stream, "build_commit: %s\n", BUILD_COMMIT);
-    fprintf(stream, "build_number: %d\n", BUILD_NUMBER);
+    fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
+    fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
     fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
     fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
     fprintf(stream, "cpu_has_avx2: %s\n",        ggml_cpu_has_avx2()        ? "true" : "false");
@@ -1275,6 +1387,81 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "threads: %d # default: %d\n", params.n_threads, std::thread::hardware_concurrency());
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
+    fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
+}
+
+//
+// KV cache utils
+//
+
+void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
+    static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
+
+    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
+
+    llama_kv_cache_view_cell * c_curr = view.cells;
+    llama_seq_id * cs_curr = view.cells_sequences;
+
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+        if (i % row_size == 0) {
+            printf("\n%5d: ", i);
+        }
+        int seq_count = 0;
+        for (int j = 0; j < view.n_max_seq; j++) {
+            if (cs_curr[j] >= 0) { seq_count++; }
+        }
+        putchar(slot_chars[std::min(sizeof(slot_chars) - 2, size_t(seq_count))]);
+    }
+
+    printf("\n=== Done dumping\n");
+}
+
+void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
+    static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+    printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
+        view.n_cells, view.n_max_seq, view.used_cells, view.token_count, view.max_contiguous, view.max_contiguous_idx);
+
+    std::unordered_map<llama_seq_id, size_t> seqs;
+    llama_kv_cache_view_cell * c_curr = view.cells;
+    llama_seq_id * cs_curr = view.cells_sequences;
+
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+        for (int j = 0; j < view.n_max_seq; j++) {
+            if (cs_curr[j] < 0) { continue; }
+            if (seqs.find(cs_curr[j]) == seqs.end()) {
+                if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
+                seqs[cs_curr[j]] = seqs.size();
+            }
+        }
+        if (seqs.size() + 1 >= sizeof(slot_chars)) { break; }
+    }
+
+    printf("=== Sequence legend: ");
+    for (const auto & it : seqs) {
+        printf("%zu=%d, ", it.second, it.first);
+    }
+    printf("'+'=other sequence ids");
+
+    c_curr = view.cells;
+    cs_curr = view.cells_sequences;
+    for (int i = 0; i < view.n_cells; i++, c_curr++, cs_curr += view.n_max_seq) {
+        if (i % row_size == 0) {
+            printf("\n%5d: ", i);
+        }
+        for (int j = 0; j < view.n_max_seq; j++) {
+            if (cs_curr[j] >= 0) {
+                const auto & it = seqs.find(cs_curr[j]);
+                putchar(it != seqs.end() ? int(slot_chars[it->second]) : '+');
+            } else {
+                putchar('.');
+            }
+        }
+        putchar(' ');
+    }
+
+    printf("\n=== Done dumping\n");
 }

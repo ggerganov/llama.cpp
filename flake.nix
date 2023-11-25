@@ -11,8 +11,7 @@
         meta.mainProgram = "llama";
         inherit (pkgs.stdenv) isAarch32 isAarch64 isDarwin;
         buildInputs = with pkgs; [ openmpi ];
-        osSpecific = with pkgs; buildInputs ++
-        (
+        osSpecific = with pkgs; buildInputs ++ (
           if isAarch64 && isDarwin then
             with pkgs.darwin.apple_sdk_11_0.frameworks; [
               Accelerate
@@ -96,12 +95,15 @@
         };
         packages.rocm = pkgs.stdenv.mkDerivation {
           inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs; buildInputs ++ [ hip hipblas rocblas ];
+          buildInputs = with pkgs.rocmPackages; buildInputs ++ [ clr hipblas rocblas ];
           cmakeFlags = cmakeFlags ++ [
             "-DLLAMA_HIPBLAS=1"
             "-DCMAKE_C_COMPILER=hipcc"
             "-DCMAKE_CXX_COMPILER=hipcc"
-            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            # Build all targets supported by rocBLAS. When updating search for TARGET_LIST_ROCM
+            # in github.com/ROCmSoftwarePlatform/rocBLAS/blob/develop/CMakeLists.txt
+            # and select the line that matches the current nixpkgs version of rocBLAS.
+            "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
           ];
         };
         apps.llama-server = {
