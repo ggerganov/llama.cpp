@@ -285,7 +285,9 @@
     GGML_UNUSED(prefix##3);
 
 #ifdef  __cplusplus
+#ifndef CPP_ONLY
 extern "C" {
+#endif
 #endif
 
 #if defined(__ARM_NEON) && defined(__CUDACC__)
@@ -2134,9 +2136,9 @@ extern "C" {
 
 #ifdef  __cplusplus
 // restrict not standard in C++
-#define GGML_RESTRICT
+#define GGML_RESTRICT 
 #else
-#define GGML_RESTRICT restrict
+#define GGML_RESTRICT __restrict__
 #endif
     typedef void (*ggml_to_float_t)  (const void  * GGML_RESTRICT x, float * GGML_RESTRICT y, int k);
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
@@ -2157,5 +2159,7 @@ extern "C" {
     GGML_API ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type);
 
 #ifdef  __cplusplus
+#ifndef CPP_ONLY
 }
+#endif
 #endif
