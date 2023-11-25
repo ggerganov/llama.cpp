@@ -1129,6 +1129,7 @@ struct llama_server_context
             {
                 send_partial_response(slot, result);
             }
+	    print_fields(slot);
         }
 
         if (slot.multibyte_pending > 0 && !slot.has_next_token)
