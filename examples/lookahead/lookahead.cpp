@@ -129,7 +129,9 @@ int main(int argc, char ** argv) {
         for (int i = 0; i < W; i++) {
             // initialize randomly from the prompt tokens
             tokens_j[j][i] = all[1 + rand() % (all.size() - 1)];
-            //tokens_j[j][i] = 100 + i;
+
+            // initialize with a sequence of increasing numbers
+            tokens_j[j][i] = 100 + i;
         }
     }
 
@@ -327,14 +329,16 @@ int main(int argc, char ** argv) {
                 } else {
                     for (int i = 0; i < W; i++) {
                         // random init
-                        tokens_j[N - 2][i] = all[1 + rand() % (all.size() - 1)];
-                        //tokens_j[N - 2][i] = tokens_j[0][i];
+                        //tokens_j[N - 2][i] = all[1 + rand() % (all.size() - 1)];
+
+                        // init from the previous level
+                        tokens_j[N - 2][i] = tokens_j[0][i];
                     }
                 }
             }
 
             // update observed ngrams
-            {
+            if (v == 0) {
                 // the first token of the n-gram is determined by the index in the container so it is not stored
                 std::vector<llama_token> ngram(N - 1);
 
