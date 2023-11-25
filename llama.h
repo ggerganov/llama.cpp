@@ -719,6 +719,7 @@ extern "C" {
             "use llama_sample_temp instead");
 
     /// @details Apply constraints from grammar
+    /// @param pieces an array of all null terminated strings obtained from calling llama_token_to_piece for the whole grammar. Can be nullptr in which case they will be computed.
     LLAMA_API void llama_sample_grammar(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
