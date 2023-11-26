@@ -21,19 +21,28 @@ REFL_END
 REFL_TYPE(ggml_opt_context::ggml_grad )
 REFL_END
 #endif
+
+REFL_TYPE(ggml_task_type )
+REFL_END
+REFL_TYPE(ggml_type )
+REFL_END
+REFL_TYPE(ggml_backend_type )
+REFL_END
+//REFL_TYPE(long int * )
+//REFL_END
 REFL_TYPE(gpt_params )
 
-REFL_FIELD( seed )
-REFL_FIELD( n_threads)
-REFL_FIELD( n_threads_batch)
-REFL_FIELD( n_predict )
-REFL_FIELD( n_ctx )
-REFL_FIELD( n_batch)
-REFL_FIELD( n_keep )
-REFL_FIELD( n_draft)
-REFL_FIELD( n_chunks )
-REFL_FIELD( n_parallel)
-REFL_FIELD( n_sequences)
+//REFL_FIELD( seed )
+//REFL_FIELD( n_threads)
+//REFL_FIELD( n_threads_batch)
+//REFL_FIELD( n_predict )
+//REFL_FIELD( n_ctx )
+//REFL_FIELD( n_batch)
+//REFL_FIELD( n_keep )
+//REFL_FIELD( n_draft)
+//REFL_FIELD( n_chunks )
+//REFL_FIELD( n_parallel)
+//REFL_FIELD( n_sequences)
 REFL_FIELD( p_accept  )
 REFL_FIELD( p_split )
 REFL_FIELD( n_gpu_layers)
@@ -586,6 +595,7 @@ REFL_END
 template <typename T>
 constexpr auto get_value_type_name(const T t) noexcept
 {
+
   return t.value_type;
 }
 
@@ -635,7 +645,7 @@ namespace runtime2
                 using type_descriptor = type_descriptor<T>;
                 bool compact = depth == -1;
                 // print type with members enclosed in braces
-                os << type_descriptor::name << " { ";
+                os << "Type2:" <<type_descriptor::name << " { ";
                 if (!compact) os << '\n';
 
                 constexpr auto readable_members = filter(type_descriptor::members, [](auto member) { return is_readable(member); });
@@ -643,7 +653,11 @@ namespace runtime2
                     int new_depth = next_depth(depth);
 
                     indent(os, new_depth);
-                    os << get_display_name(member) << " = ";
+                    os << get_display_name(member) << "/";
+		    //using typename member_descriptor_base<T, 0>::member;
+		    //static_assert(trait::is_field_v<member>);
+
+		    //os << get_value_type_name(member) << " = ";
 
                     if constexpr (util::contains_instance<attr::debug>(member.attributes)) {
                         // use the debug attribute to print
@@ -679,6 +693,9 @@ namespace runtime2
                 }
                 else if constexpr (detail::is_ostream_printable_v<CharT, T>) {
                     // type supports printing natively, just use that
+		  //constexpr auto vtype = refl::reflect<T>();
+		  using type_descriptor = refl::descriptor::type_descriptor<T>;
+		  os << "Type:" << type_descriptor::name << ":";
 
 		  os << value;
 
@@ -719,26 +736,34 @@ namespace runtime2
             void debug_impl(std::basic_ostream<CharT>& os, const T& value, [[maybe_unused]] int depth)
             {
                 using no_pointer_t = std::remove_pointer_t<T>;
+                using type_descriptor = type_descriptor<T>;
 
                 if constexpr (std::is_same_v<bool, T>) {
-                    os << (value ? "true" : "false");
+		  
+		  os << "BOOL"<< (value ? "true" : "false");
                 }
                 else if constexpr (std::is_pointer_v<T> && !std::is_void_v<no_pointer_t> && trait::is_reflectable_v<no_pointer_t>) {
                     if (value == nullptr) {
-                        os << "nullptr";
+		      os << "POINTER:"<< "nullptr";
                     }
                     else {
+		      os << "Type0:" <<type_descriptor::name << "=";
                         os << '&';
                         debug_impl(os, *value, -1);
                     }
                 }
                 else if constexpr (trait::is_reflectable_v<T>) {
+		  os << "Type2:" <<type_descriptor::name << "=";
                     debug_reflectable(os, value, depth);
                 }
                 else if constexpr (detail::is_ostream_printable_v<CharT, T>) {
+		  //os << "Type3:" <<type_descriptor::name << "=";
+		  os << "TypeSimple:" << typeid(T).name() << "//";
                     os << value;
                 }
                 else if constexpr (trait::is_container_v<T>) {
+		  //os << "Type4:" <<type_descriptor::name << "=";
+		  os << "TypeContainer:" << typeid(T).name() << "//";
                     debug_container(os, value, depth);
                 }
                 else {
@@ -799,7 +824,7 @@ namespace runtime2
 template<typename T>
 void print_fields(const T& t) {
   runtime2::debug(std::cout, t);
-  constexpr auto type = refl::reflect<T>();
+  //constexpr auto type = refl::reflect<T>();
 
   // constexpr auto membertype = refl::member_list<T>();
 
