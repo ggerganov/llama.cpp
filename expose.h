@@ -76,6 +76,7 @@ struct generation_inputs
     const bool stream_sse;
     const char * grammar;
     const bool grammar_retain_state;
+    const bool quiet = false;
 };
 struct generation_outputs
 {

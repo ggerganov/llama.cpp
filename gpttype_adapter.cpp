@@ -1442,6 +1442,8 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     params.n_threads_batch = n_blasthreads;
     bool stream_sse = inputs.stream_sse;
 
+    bool allow_regular_prints = (debugmode!=-1 && !inputs.quiet) || debugmode >= 1;
+
     generation_finished = false; // Set current generation status
     generated_tokens.clear(); // New Generation, new tokens
 
@@ -1695,7 +1697,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         printf("\nBanned a total of %zu tokens.\n",banned_token_ids.size());
     }
 
-    if(debugmode!=-1)
+    if(allow_regular_prints)
     {
         printf("\n");
     }
@@ -1716,7 +1718,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         // predict
         unsigned int embdsize = embd.size();
         //print progress
-        if (!startedsampling && debugmode!=-1)
+        if (!startedsampling && allow_regular_prints)
         {
             printf("\rProcessing Prompt%s (%d / %zu tokens)", (blasmode ? " [BLAS]" : ""), input_consumed, embd_inp.size());
         }
@@ -1835,7 +1837,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 params.n_threads = original_threads;
                 time1 = timer_check();
                 timer_start();
-                if(debugmode!=-1)
+                if(allow_regular_prints)
                 {
                     printf("\n");
                 }
@@ -1910,7 +1912,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 concat_output_mtx.unlock();
             }
 
-            if (startedsampling && debugmode!=-1)
+            if (startedsampling && allow_regular_prints)
             {
                 printf("\rGenerating (%d / %d tokens)", (params.n_predict - remaining_tokens), params.n_predict);
             }
@@ -1935,7 +1937,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             if(inputs.unban_tokens_rt && id==eosID)
             {
                 stopper_unused_tokens = remaining_tokens;
-                if(debugmode!=-1)
+                if(allow_regular_prints)
                 {
                     printf("\n(EOS token triggered!)");
                 }
@@ -1949,7 +1951,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
                 {
                     stopper_unused_tokens = remaining_tokens;
                     remaining_tokens = 0;
-                    if(debugmode!=-1)
+                    if(allow_regular_prints)
                     {
                         auto match_clean = matched;
                         replace_all(match_clean, "\n", "\\n");
