@@ -2,7 +2,7 @@
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf llama-bench libllava.a llava-cli baby-llama beam-search  \
-	speculative infill tokenize benchmark-matmult parallel finetune export-lora tests/test-c.o
+	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
@@ -655,6 +655,9 @@ speculative: examples/speculative/speculative.cpp ggml.o llama.o $(COMMON_DEPS) 
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 parallel: examples/parallel/parallel.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+lookahead: examples/lookahead/lookahead.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 ifdef LLAMA_METAL
