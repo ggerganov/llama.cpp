@@ -679,7 +679,7 @@ namespace runtime2
 
                 if (compact) os << ' ';
                 indent(os, depth);
-                os << '}';
+                os << "}\n";
             }
 
             template <typename CharT, typename T>

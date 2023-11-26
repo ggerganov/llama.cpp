@@ -2,6 +2,7 @@
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
 #include "ggml-impl.h"
+
 #include "ggml-quants.h"
 
 
@@ -2947,7 +2948,9 @@ float ggml_get_f32_1d(const struct ggml_tensor * tensor, int i) {
             }
         default:
             {
-                GGML_ASSERT(false);
+	      //return ((float *)(tensor->data))[i];
+	      return 0;
+	      //GGML_ASSERT(false);
             }
     }
 
@@ -9414,6 +9417,44 @@ static bool ggml_compute_forward_mul_mat_use_blas(
 }
 #endif
 
+void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor);
+void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor) {
+  const int64_t ne = ggml_nelements(tensor) ;
+  float fmin=0;
+  float ffirst=0;
+  float fmax=0;
+  float fsum=0;
+
+  for (int64_t j = 0; j < ne; ++j) {
+    float f = ggml_get_f32_1d(tensor, j);
+    if (j ==0) {
+      ffirst = f;
+      fmin = f;
+      fmax = f;
+    }
+    fsum += f;
+    if (f < fmin){
+      fmin = f;
+    }
+    if (f >fmax){
+      fmax = f;
+    }    
+  }
+
+  auto type_name = ggml_type_name(tensor->type);
+// color_name
+  fprintf(stderr, "JSON: { \"name1\" :\"%s\", \"cnt\":\"%ld\", \"first\":\"%f\",\"max\":\"%f\",\"min\":\"%f\",\"sum\":\"%f\", \"name\":\"%s\", \"type\":\"%s\"}\n",
+	  name,
+	  ne,
+	  ffirst,
+	  fmax,
+	  fmin,
+	  fsum,
+	  tensor->name,
+	  std::string(type_name).c_str()
+	  );
+}
+
 static void ggml_compute_forward_mul_mat(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
@@ -9423,6 +9464,9 @@ static void ggml_compute_forward_mul_mat(
   print_fields(*src0);
   print_fields(*src1);
   print_fields(*dst);
+  ggml_tensor_checksum("src0",src0);
+  ggml_tensor_checksum("src1",src1);
+  ggml_tensor_checksum("dst_pre",dst);
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -9466,7 +9510,10 @@ static void ggml_compute_forward_mul_mat(
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
+
+
 	print_fields(*dst);
+	ggml_tensor_checksum("after1",dst);
         return;
     }
 #endif
@@ -9475,6 +9522,7 @@ static void ggml_compute_forward_mul_mat(
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
 	  print_fields(*dst);
+	  ggml_tensor_checksum("after_accel",dst);
             return;
         }
 
@@ -9522,6 +9570,7 @@ static void ggml_compute_forward_mul_mat(
 
         //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
 	print_fields(*dst);
+	ggml_tensor_checksum("after_blas",dst);
         return;
     }
 #endif
@@ -9541,11 +9590,13 @@ static void ggml_compute_forward_mul_mat(
             }
         }
 	print_fields(*dst);
+	ggml_tensor_checksum("after3",dst);
         return;
     }
 
     if (params->type == GGML_TASK_FINALIZE) {
       print_fields(*dst);
+      ggml_tensor_checksum("after_final",dst);
         return;
     }
 
@@ -9633,6 +9684,7 @@ static void ggml_compute_forward_mul_mat(
         }
     }
     print_fields(*dst);
+    ggml_tensor_checksum("last",dst);
 }
 
 // ggml_compute_forward_out_prod
@@ -13741,6 +13793,8 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     if (tensor->op == GGML_OP_NONE) {
         return;
     }
+    print_fields(*params);
+    print_fields(*tensor);
 
 #ifdef GGML_USE_CUBLAS
     bool skip_cpu = ggml_cuda_compute_forward(params, tensor);
