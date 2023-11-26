@@ -1,5 +1,5 @@
 // A basic application simulating a server with multiple clients.
-// The clients submite requests to the server and they are processed in parallel.
+// The clients submit requests to the server and they are processed in parallel.
 
 #include "common.h"
 #include "llama.h"
@@ -113,6 +113,8 @@ int main(int argc, char ** argv) {
     // insert new requests as soon as the previous one is done
     const bool cont_batching = params.cont_batching;
 
+    const bool dump_kv_cache = params.dump_kv_cache;
+
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("parallel", "log"));
     LOG_TEE("Log start\n");
@@ -172,6 +174,8 @@ int main(int argc, char ** argv) {
     int32_t n_total_gen    = 0;
     int32_t n_cache_miss   = 0;
 
+    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, n_clients);
+
     const auto t_main_start = ggml_time_us();
 
     LOG_TEE("%s: Simulating parallel requests from clients:\n", __func__);
@@ -201,6 +205,11 @@ int main(int argc, char ** argv) {
     LOG_TEE("Processing requests ...\n\n");
 
     while (true) {
+        if (dump_kv_cache) {
+            llama_kv_cache_view_update(ctx, &kvc_view);
+            dump_kv_cache_view_seqs(kvc_view, 40);
+        }
+
         llama_batch_clear(batch);
 
         // decode any currently ongoing sequences
