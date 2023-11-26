@@ -30,7 +30,8 @@
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
-
+#include "ggml-internal.hpp"
+#include "llama-internal.hpp"
 #include "print.hpp"
 
 static llama_context           ** g_ctx;

@@ -14,9 +14,9 @@ llvmLibPath = "/usr/lib/llvm-15/lib/"
 cxxClientRoot = "/home/mdupont/experiments/llama.cpp/"
 
 fileList = [
-#    "ggml.cpp",
+    "ggml.cpp",
 #    "llama.cpp",
-    "examples/server/server.cpp",
+#    "examples/server/server.cpp",
 ]
 
 typeList = [

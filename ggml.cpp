@@ -4,6 +4,7 @@
 #include "ggml-impl.h"
 #include "ggml-quants.h"
 
+
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
@@ -45,6 +46,12 @@ static  char * GGUF_TYPE_NAME[GGUF_TYPE_COUNT] = {};
 void type_traits_init();
 void GGUF_TYPE_SIZE_init();
 void GGUF_TYPE_NAME_init();
+
+#include "llama.h"
+struct ggml_allocr;
+//#include "ggml-internal.hpp"
+#include "llama-internal.hpp"
+#include "print.hpp"
 
 #if defined(_WIN32)
 
@@ -9412,7 +9419,10 @@ static void ggml_compute_forward_mul_mat(
         const struct ggml_tensor * src0,
         const struct ggml_tensor * src1,
               struct ggml_tensor * dst) {
-
+  print_fields(*params);
+  print_fields(*src0);
+  print_fields(*src1);
+  print_fields(*dst);
     int64_t t0 = ggml_perf_time_us();
     UNUSED(t0);
 
@@ -9456,6 +9466,7 @@ static void ggml_compute_forward_mul_mat(
         if (params->ith == 0 && params->type == GGML_TASK_COMPUTE) {
             ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
         }
+	print_fields(*dst);
         return;
     }
 #endif
@@ -9463,10 +9474,12 @@ static void ggml_compute_forward_mul_mat(
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
     if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
         if (params->ith != 0) {
+	  print_fields(*dst);
             return;
         }
 
         if (params->type == GGML_TASK_INIT) {
+	  
             return;
         }
 
@@ -9508,7 +9521,7 @@ static void ggml_compute_forward_mul_mat(
         }
 
         //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
-
+	print_fields(*dst);
         return;
     }
 #endif
@@ -9527,11 +9540,12 @@ static void ggml_compute_forward_mul_mat(
                 }
             }
         }
-
+	print_fields(*dst);
         return;
     }
 
     if (params->type == GGML_TASK_FINALIZE) {
+      print_fields(*dst);
         return;
     }
 
@@ -9565,6 +9579,7 @@ static void ggml_compute_forward_mul_mat(
     // threads with no work simply yield (not sure if it helps)
     if (ir010 >= ir011 || ir110 >= ir111) {
         sched_yield();
+	
         return;
     }
 
@@ -9617,6 +9632,7 @@ static void ggml_compute_forward_mul_mat(
             }
         }
     }
+    print_fields(*dst);
 }
 
 // ggml_compute_forward_out_prod

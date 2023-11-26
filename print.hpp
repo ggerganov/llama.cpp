@@ -1,8 +1,9 @@
 #include <refl-cpp/refl.hpp>
 #include <iostream>
 #include "llama.h"
-#include "ggml-internal.hpp"
-#include "llama-internal.hpp"
+#include "common/common.h"
+//#include "ggml-internal.hpp"
+//#include "llama-internal.hpp"
 
 REFL_TYPE(ggml_init_params )
 REFL_END
@@ -96,9 +97,10 @@ REFL_END
 REFL_TYPE(llama_sampling_params)
 REFL_END
 
+#ifdef llm_arch
 REFL_TYPE(llm_arch)
 REFL_END
-
+#endif
 REFL_TYPE(llama_sampling_context )
 REFL_FIELD( params)
 REFL_FIELD( mirostat_mu)
@@ -125,10 +127,34 @@ REFL_END
 
 REFL_TYPE(ggml_tensor)
   REFL_FIELD(type)
+  REFL_FIELD(type)
+  REFL_FIELD(backend)
+  REFL_FIELD(buffer)
+  REFL_FIELD(n_dims)
+  REFL_FIELD(ne)
+  REFL_FIELD(nb)
+  REFL_FIELD(op)
+  REFL_FIELD(op_params)
+  REFL_FIELD(is_param)
+  REFL_FIELD(grad)
+  REFL_FIELD(src)
+  REFL_FIELD(perf_runs)
+  REFL_FIELD(perf_cycles)
+  REFL_FIELD(perf_time_us)
+  REFL_FIELD(view_src)
+  REFL_FIELD(view_offs)
+  REFL_FIELD(data)
+  REFL_FIELD(name)
+  REFL_FIELD(extra)
+  REFL_FIELD(padding)
 REFL_END
 
 REFL_TYPE(ggml_cplan)
   REFL_FIELD(work_size)
+  REFL_FIELD(work_data)
+  REFL_FIELD(n_threads)
+  REFL_FIELD(abort_callback)
+  REFL_FIELD(abort_callback_data)
 REFL_END
 
 REFL_TYPE(ggml_hash_set)
@@ -137,14 +163,32 @@ REFL_END
 
 REFL_TYPE(ggml_cgraph)
   REFL_FIELD(size)
+  REFL_FIELD(n_nodes)
+  REFL_FIELD(n_leafs)
+  REFL_FIELD(nodes)
+  REFL_FIELD(grads)
+  REFL_FIELD(leafs)
+  REFL_FIELD(visited_hash_table)
+  REFL_FIELD(order)
+  REFL_FIELD(perf_runs)
+  REFL_FIELD(perf_cycles)
+  REFL_FIELD(perf_time_us)
 REFL_END
 
 REFL_TYPE(ggml_scratch)
   REFL_FIELD(offs)
+  REFL_FIELD(size)
+  REFL_FIELD(data)
+
 REFL_END
 
 REFL_TYPE(ggml_compute_params)
   REFL_FIELD(type)
+  REFL_FIELD(ith)
+  REFL_FIELD(nth)
+  REFL_FIELD(wsize)
+  REFL_FIELD(wdata)
+
 REFL_END
 
 REFL_TYPE(ggml_opt_params)
@@ -162,6 +206,7 @@ REFL_TYPE(ggml_something)
   REFL_FIELD(type_name)
 REFL_END
 
+#ifdef ggml_context
 REFL_TYPE(ggml_context)
   REFL_FIELD(mem_size)
 REFL_FIELD(mem_buffer)
@@ -173,14 +218,17 @@ REFL_FIELD(    objects_begin)
 REFL_FIELD(    objects_end)
 REFL_FIELD(    scratch)
 REFL_FIELD(    scratch_save)
-
 REFL_END
+#endif
 
+#ifdef ggml_context_container
 REFL_TYPE(ggml_context_container)
   REFL_FIELD(used)
   REFL_FIELD(context)
 REFL_END
+#endif
 
+#ifdef ggml_numa_node
  REFL_TYPE(ggml_numa_node)
    REFL_FIELD(cpus)
    REFL_FIELD(n_cpus)
@@ -220,6 +268,7 @@ REFL_TYPE(hash_map)
   REFL_FIELD(set)
   REFL_FIELD(vals)
 REFL_END
+
 REFL_TYPE(ggml_compute_state_shared)
   REFL_FIELD(cgraph)
   REFL_FIELD(cplan)
@@ -232,11 +281,14 @@ REFL_TYPE(ggml_lbfgs_iteration_data)
   REFL_FIELD(alpha)
   REFL_FIELD(ys)
 REFL_END
+#endif
 
+#ifdef gguf_kv
 REFL_TYPE(gguf_kv)
   REFL_FIELD(key)
   REFL_FIELD(type)
 REFL_END
+
 
 REFL_TYPE(gguf_header)
   REFL_FIELD(magic)
@@ -257,7 +309,7 @@ REFL_TYPE(gguf_buf)
   REFL_FIELD(data)
   REFL_FIELD(size)
 REFL_END
-
+#endif
 
 REFL_TYPE(llama_model_params)
   REFL_FIELD(n_gpu_layers)
@@ -265,6 +317,7 @@ REFL_END
 REFL_TYPE(llama_context_params)
   REFL_FIELD(seed)
 REFL_END
+
 REFL_TYPE(llama_model_quantize_params)
   REFL_FIELD(nthread)
 REFL_END
@@ -282,13 +335,16 @@ REFL_END
 REFL_TYPE(llama_beams_state)
   REFL_FIELD(beam_views)
 REFL_END
-  
+
+#ifdef ggml_backend
 REFL_TYPE(ggml_backend)
 REFL_END
+#endif
 
 REFL_TYPE(ggml_backend_buffer)
 REFL_END
 
+#ifdef ggml_allocr
 REFL_TYPE(ggml_allocr)
 REFL_END
 
@@ -298,13 +354,14 @@ REFL_END
 REFL_TYPE(ggml_gallocr)
 REFL_END
 
+#endif
 
+#ifdef llama_buffer
 REFL_TYPE(llama_buffer)
 REFL_FIELD(data)
 REFL_FIELD(size)
 REFL_END
   
-
 REFL_TYPE(llama_file)
 REFL_FIELD(fp)
 REFL_FIELD(size)
@@ -353,91 +410,92 @@ REFL_TYPE(llama_kv_cache)
    REFL_FIELD(has_shift)
    REFL_FIELD(head)
  REFL_END
+#endif
 
+#ifdef e_model
 REFL_TYPE(e_model)
 REFL_END
+#endif
 
 REFL_TYPE(llama_ftype)
 REFL_END
 
+//#ifdef llama_model
 REFL_TYPE(llama_model)
-  REFL_FIELD(type)
-  REFL_FIELD(arch)
+REFL_FIELD(type)
+REFL_FIELD(arch)
 REFL_FIELD(ftype )
-
-REFL_FIELD(  name )
-
-  REFL_FIELD(   hparams )
-REFL_FIELD(    vocab)
-
-REFL_FIELD(   tok_embd)
-REFL_FIELD(   pos_embd)
-REFL_FIELD(   tok_norm)
-REFL_FIELD(   tok_norm_b)
-
-REFL_FIELD(   output_norm)
-REFL_FIELD(  output_norm_b)
-REFL_FIELD(  output)
-
-REFL_FIELD(  layers)
-
-REFL_FIELD(  n_gpu_layers)
-
-  REFL_FIELD(  gguf_kv) //unordered map
-  REFL_FIELD( ctx)
-  REFL_FIELD( buf)
- REFL_FIELD( mapping) //std::unique_ptr 
-REFL_FIELD( mlock_buf)
-REFL_FIELD( mlock_mmap)
-REFL_FIELD( tensors_by_name)
-  REFL_FIELD( t_load_us)
-REFL_FIELD( t_start_us)
-
+REFL_FIELD(name )
+REFL_FIELD(hparams )
+REFL_FIELD(vocab)
+REFL_FIELD(tok_embd)
+REFL_FIELD(pos_embd)
+REFL_FIELD(tok_norm)
+REFL_FIELD(tok_norm_b)
+REFL_FIELD(output_norm)
+REFL_FIELD(output_norm_b)
+REFL_FIELD(output)
+REFL_FIELD(layers)
+REFL_FIELD(n_gpu_layers)
+REFL_FIELD(gguf_kv) //unordered map
+REFL_FIELD(ctx)
+REFL_FIELD(buf)
+REFL_FIELD(mapping) //std::unique_ptr 
+REFL_FIELD(mlock_buf)
+REFL_FIELD(mlock_mmap)
+REFL_FIELD(tensors_by_name)
+REFL_FIELD(t_load_us)
+REFL_FIELD(t_start_us)
 REFL_END
+//#endif
 
+#ifdef llama_vocab
 REFL_TYPE(llama_vocab)
   REFL_END
-  
-  REFL_TYPE(grammar_parser::parse_state)
-  REFL_END
-  
+#endif
+
+REFL_TYPE(grammar_parser::parse_state)
+REFL_END
+
+//#ifdef llama_context
 REFL_TYPE(llama_context)
 REFL_FIELD( cparams)
 //REFL_FIELD(model)
 REFL_FIELD(kv_self)
- REFL_FIELD(rng) //random numbers
+REFL_FIELD(rng) //random numbers
 REFL_FIELD(has_evaluated_once )
 REFL_FIELD( t_start_us)
 REFL_FIELD( t_load_us)
-  REFL_FIELD( t_sample_us )
+REFL_FIELD( t_sample_us )
 REFL_FIELD( t_p_eval_us )
-  REFL_FIELD( t_eval_us)
+REFL_FIELD( t_eval_us)
 REFL_FIELD( n_sample )
 REFL_FIELD( n_p_eval )
-  REFL_FIELD( n_eval  )
+REFL_FIELD( n_eval  )
 //REFL_FIELD(  logits) crash
 REFL_FIELD(  logits_all )
 REFL_FIELD(  embedding)
 //REFL_FIELD(   work_buffer)
-  REFL_FIELD(   buf_compute)
-  REFL_FIELD( buf_alloc)
+REFL_FIELD(   buf_compute)
+REFL_FIELD( buf_alloc)
 REFL_FIELD( alloc ) 
-
 #ifdef GGML_USE_METAL
 REFL_FIELD( ctx_metal )
 #endif
-
 #ifdef GGML_USE_MPI
 REFL_FIELD( ctx_mpi )
-
 #endif
 REFL_END
+//#endif
 
+#ifdef llama_model_loader
 REFL_TYPE(llama_model_loader)
   REFL_FIELD(n_kv)
   REFL_FIELD(n_tensors)
 REFL_END
+#endif
 
+#ifdef llm_build_context
 REFL_TYPE(llm_build_context)
 // REFL_FIELD(model) cannot create pointer to reference member ‘llm_build_context::model’
 //  REFL_FIELD(hparams) cannot create pointer to reference member ‘llm_build_context::hparams’
@@ -511,7 +569,6 @@ REFL_FIELD(    n_feed_forward_w2 )
   REFL_FIELD(    i_feed_forward_w2 )
 REFL_FIELD(    n_k_quantized     )
 REFL_FIELD(     n_fallback        )
-
 REFL_END
 
 REFL_TYPE(llama_data_context)
@@ -524,6 +581,7 @@ REFL_END
 REFL_TYPE(llama_data_file_context)
   REFL_FIELD(file)
 REFL_END
+#endif
 
 template <typename T>
 constexpr auto get_value_type_name(const T t) noexcept

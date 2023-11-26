@@ -1,5 +1,10 @@
 #include <set>
 #include <queue>
+#include <map>
+#include <random>
+#include <functional>
+#include <unordered_map>
+#include <memory>
 enum llm_arch {
     LLM_ARCH_LLAMA,
     LLM_ARCH_FALCON,
@@ -451,6 +456,7 @@ struct llama_model {
     }
 };
 
+struct ggml_allocr;
 struct llama_context {
     llama_context(const llama_model & model) : model(model), t_start_us(model.t_start_us), t_load_us(model.t_load_us) {}
   ~llama_context();

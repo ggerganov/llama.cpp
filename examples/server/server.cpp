@@ -24,6 +24,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include "llama-internal.hpp"
 #include "print.hpp"
 
 #ifndef SERVER_VERBOSE
