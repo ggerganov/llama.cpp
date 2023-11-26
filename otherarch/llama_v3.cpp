@@ -12,6 +12,7 @@
 #include "llama_v3.h"
 
 #include "ggml.h"
+#include "otherarch.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #endif
@@ -88,7 +89,6 @@ enum e_model3 {
 
 static const size_t kB3 = 1024;
 static const size_t MB3 = 1024*1024;
-static const size_t GGML_MAX_NODES = 8192;
 
 // computed for n_ctx == 2048
 // TODO: dynamically determine these sizes

@@ -471,7 +471,7 @@ bool gpt_neox_eval(
 
 
     struct ggml_context * ctx0 = ggml_init(params);
-    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+    struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, GGML_MAX_NODES, false);
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, embd_inp.data(), N*ggml_element_size(embd));

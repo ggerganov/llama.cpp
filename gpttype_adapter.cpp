@@ -941,19 +941,20 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
             llamamodel->hparams.rope_freq_scale_train!=1.0f ||
             llamamodel->hparams.rope_scaling_type_train==2)
             {
-                // float ropemultiplier = 1.0f;
-                // if(llamamodel->hparams.rope_scaling_type_train!=2 &&
-                // llamamodel->hparams.n_ctx_train > 2048 && clamped_max_context_length > llamamodel->hparams.n_ctx_train)
-                // {
-                //     ropemultiplier = (float)llamamodel->hparams.n_ctx_train / (float)clamped_max_context_length;
-                //     llama_ctx_params.rope_freq_base = rope_freq_base = llamamodel->hparams.rope_freq_base_train;
-                //     llama_ctx_params.rope_freq_scale = rope_freq_scale = ropemultiplier * llamamodel->hparams.rope_freq_scale_train;
-                //     printf("Automatic RoPE Scaling: Using (scale:%.3f, base:%.1f).\n", rope_freq_scale, rope_freq_base);
-                // }
-                // else
-                // {
+                float ropemultiplier = 1.0f;
+                if(llamamodel->hparams.rope_scaling_type_train!=2 &&
+                llamamodel->hparams.n_ctx_train > 2048 && clamped_max_context_length > llamamodel->hparams.n_ctx_train &&
+                llamamodel->hparams.rope_freq_scale_train==1.0f)
+                {
+                    ropemultiplier = (float)llamamodel->hparams.n_ctx_train / (float)clamped_max_context_length;
+                    llama_ctx_params.rope_freq_base = rope_freq_base = llamamodel->hparams.rope_freq_base_train;
+                    llama_ctx_params.rope_freq_scale = rope_freq_scale = ropemultiplier * llamamodel->hparams.rope_freq_scale_train;
+                    printf("Automatic RoPE Scaling: Using (scale:%.3f, base:%.1f).\n", rope_freq_scale, rope_freq_base);
+                }
+                else
+                {
                     printf("Automatic RoPE Scaling: Using model internal value.\n");
-                //}
+                }
             }
             else
             {

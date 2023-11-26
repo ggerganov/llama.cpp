@@ -459,3 +459,4 @@ struct mpt_model {
 };
 
 const float default_norm_eps = 1e-5f;
+const size_t GGML_MAX_NODES = 8192;

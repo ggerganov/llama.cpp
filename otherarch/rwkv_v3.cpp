@@ -1520,7 +1520,7 @@ struct rwkv_context * rwkv_new_context_impl(std::shared_ptr<struct rwkv_instance
     serial_graph.ctx = graph_future_ctx;
     RWKV_ASSERT_NULL_MSG(RWKV_ERROR_CTX | RWKV_ERROR_ALLOC, serial_graph.ctx.ctx, "Failed to allocate serial graph context");
     serial_graph.tokens = ggml_new_i32(serial_graph.ctx.ctx, 0);
-    serial_graph.cgraph = ggml_new_graph(serial_graph.ctx.ctx);
+    serial_graph.cgraph = ggml_new_graph_custom(serial_graph.ctx.ctx, GGML_MAX_NODES, false);
     RWKV_ASSERT_NULL_MSG(RWKV_ERROR_ALLOC, serial_graph.cgraph, "Failed to allocate serial graph");
 
     RWKV_ASSERT_NULL(RWKV_ERROR_GRAPH, rwkv_build_serial_graph(
@@ -1698,7 +1698,7 @@ bool rwkv_eval_sequence(struct rwkv_context * ctx, const int n_threads, const ui
         sequence_graph.ctx = graph_future_ctx;
         RWKV_ASSERT_FALSE_MSG(RWKV_ERROR_CTX | RWKV_ERROR_ALLOC, sequence_graph.ctx.ctx, "Failed to allocate sequence graph context");
         sequence_graph.tokens = ggml_new_tensor_1d(sequence_graph.ctx.ctx, GGML_TYPE_I32, sequence_len);
-        sequence_graph.cgraph = ggml_new_graph(sequence_graph.ctx.ctx);
+        sequence_graph.cgraph = ggml_new_graph_custom(sequence_graph.ctx.ctx, GGML_MAX_NODES, false);
         RWKV_ASSERT_FALSE_MSG(RWKV_ERROR_ALLOC, sequence_graph.cgraph, "Failed to allocate sequence graph");
 
         RWKV_ASSERT_FALSE(RWKV_ERROR_GRAPH, rwkv_build_sequence_graph(
