@@ -311,7 +311,7 @@ int main(int argc, char ** argv) {
             ++n_predict;
             ++n_past;
 
-            if (n_predict > params.n_predict || has_eos) {
+            if ((params.n_predict >= 0 && n_predict > params.n_predict) || has_eos) {
                 break;
             }
 
@@ -433,7 +433,7 @@ int main(int argc, char ** argv) {
             }
         }
 
-        if (n_predict > params.n_predict || has_eos) {
+        if ((params.n_predict >= 0 && n_predict > params.n_predict) || has_eos) {
             break;
         }
 
