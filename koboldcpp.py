@@ -427,7 +427,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     async def generate_text(self, genparams, api_format, stream_flag):
         global friendlymodelname
-        is_quiet = genparams.get('quiet', False)
+        is_quiet = args.remotetunnel
         def run_blocking(): #api format 1=basic,2=kai,3=oai,4=oai-chat
             if api_format==1:
                 genparams["prompt"] = genparams.get('text', "")
@@ -813,7 +813,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     utfprint("Body Err: " + str(body))
                     return self.send_response(503)
 
-                is_quiet = genparams.get('quiet', False)
+                is_quiet = args.remotetunnel
                 if (args.debugmode != -1 and not is_quiet) or args.debugmode >= 1:
                     utfprint("\nInput: " + json.dumps(genparams))
 
