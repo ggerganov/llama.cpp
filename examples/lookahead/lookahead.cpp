@@ -135,10 +135,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    std::vector<llama_seq_id> seq_id_look(W + 1);
-    for (int i = 0; i < W + 1; i++) {
-        seq_id_look[i] = i;
-    }
+    std::vector<llama_seq_id> seq_id_look;
 
     std::vector<llama_seq_id> seq_id_all(W + G + 1);
     for (int i = 0; i < W + G + 1; i++) {
@@ -210,6 +207,11 @@ int main(int argc, char ** argv) {
 
             // fill the remaining W - 1 tokens for the first level
             for (int i = 1; i < W; i++) {
+                seq_id_look.resize(W - i);
+                for (int j = 0; j < W - i; j++) {
+                    seq_id_look[j] = i + j + 1;
+                }
+
                 llama_batch_add(batch, tokens_j[0][i], n_past + i, seq_id_look, false);
             }
 
