@@ -427,10 +427,10 @@ mulmat_split_k_reduce_src = """#version 450
 
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
-layout (binding = 0) buffer A {float data[];};
+layout (binding = 0) readonly buffer A {float data_a[];};
+layout (binding = 1) writeonly buffer D {float data_d[];};
 
-layout (push_constant) uniform parameter
-{
+layout (push_constant) uniform parameter {
     int M;
     int N;
     int k_num;
@@ -449,10 +449,10 @@ void main() {
     float result = 0.0f;
 
     for (int i = 0; i < p.k_num; i++) {
-        result += data[i * p.M * p.N + idx];
+        result += data_a[i * p.M * p.N + idx];
     }
 
-    data[idx] = result;
+    data_d[idx] = result;
 }
 """
 
@@ -1315,6 +1315,14 @@ generic_head = """
 #version 450
 
 #extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint KX;
+    uint KY;
+    float param1;
+    float param2;
+} p;
 """
 
 # MUL F32
@@ -1324,15 +1332,8 @@ layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
 
-layout (push_constant) uniform parameter
-{
-    int KX;
-    int KY;
-    float param;
-} p;
-
 void main() {
-    const int idx = int(gl_GlobalInvocationID.x);
+    const uint idx = gl_GlobalInvocationID.x;
 
     if (idx >= p.KX) {
         return;
@@ -1350,15 +1351,8 @@ layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
 
-layout (push_constant) uniform parameter
-{
-    int KX;
-    int KY;
-    float param;
-} p;
-
 void main() {
-    const int idx = int(gl_GlobalInvocationID.x);
+    const uint idx = gl_GlobalInvocationID.x;
 
     if (idx >= p.KX) {
         return;
@@ -1374,21 +1368,86 @@ scale_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) i
 layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
 
-layout (push_constant) uniform parameter
-{
-    int KX;
-    int KY;
-    float param;
-} p;
-
 void main() {
-    const int idx = int(gl_GlobalInvocationID.x);
+    const uint idx = gl_GlobalInvocationID.x;
 
     if (idx >= p.KX) {
         return;
     }
 
-    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(p.param));
+    data_d[idx] = D_TYPE(FLOAT_TYPE(data_a[idx]) * FLOAT_TYPE(p.param1));
+}
+"""
+
+# SQR
+sqr_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+void main() {
+    const uint idx = gl_GlobalInvocationID.x;
+
+    if (idx >= p.KX) {
+        return;
+    }
+
+    const FLOAT_TYPE val = FLOAT_TYPE(data_a[idx]);
+    data_d[idx] = D_TYPE(val * val);
+}
+"""
+
+# CLAMP
+clamp_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+void main() {
+    const uint idx = gl_GlobalInvocationID.x;
+
+    if (idx >= p.KX) {
+        return;
+    }
+
+    const FLOAT_TYPE val = FLOAT_TYPE(data_a[idx]);
+    data_d[idx] = D_TYPE(val < p.param1 ? p.param1 : (val > p.param2 ? p.param2 : val));
+}
+"""
+
+# CPY
+cpy_head = """#version 450
+
+#extension GL_EXT_shader_16bit_storage : require
+
+layout (push_constant) uniform parameter
+{
+    uint ne;
+    uint ne00; uint ne01; uint nb00; uint nb01; uint nb02;
+    uint ne10; uint ne11; uint nb10; uint nb11; uint nb12;
+} p;
+"""
+cpy_body = """layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+void main() {
+    if (gl_GlobalInvocationID.x >= p.ne) {
+        return;
+    }
+
+    const uint i02 = gl_GlobalInvocationID.x / (p.ne00*p.ne01);
+    const uint i01 = (gl_GlobalInvocationID.x - i02*p.ne01*p.ne00) / p.ne00;
+    const uint i00 = gl_GlobalInvocationID.x - i02*p.ne01*p.ne00 - i01*p.ne00;
+    const uint a_idx = i00*p.nb00 + i01*p.nb01 + i02*p.nb02;
+
+    const uint i12 = gl_GlobalInvocationID.x / (p.ne10*p.ne11);
+    const uint i11 = (gl_GlobalInvocationID.x - i12*p.ne11*p.ne10) / p.ne10;
+    const uint i10 = gl_GlobalInvocationID.x - i12*p.ne11*p.ne10 - i11*p.ne10;
+    const uint d_idx = i10*p.nb10 + i11*p.nb11 + i12*p.nb12;
+
+    data_d[d_idx] = D_TYPE(data_a[a_idx]);
 }
 """
 
@@ -1403,36 +1462,73 @@ layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer Y {int data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int N;
-    float param;
-} p;
-
 void main() {
-    const int col = int(gl_GlobalInvocationID.x) * 2;
-    const int row = int(gl_GlobalInvocationID.y);
+    const uint col = int(gl_GlobalInvocationID.x) * 2;
+    const uint row = int(gl_GlobalInvocationID.y);
 
-    if (col >= p.N) {
+    if (col >= p.KY) {
         return;
     }
 
-    const int r = data_b[row];
+    const uint r = uint(data_b[row]);
 
-    // copy data_a[r*p.N + col] to dst[row*p.M + col]
-    const int xi = r*p.N + col;
-    const int di = row*p.N + col;
+    // copy data_a[r*p.KY + col] to dst[row*p.KX + col]
+    const uint xi = r*p.KY + col;
+    const uint di = row*p.KY + col;
 
-    const int ib = xi/QUANT_K; // block index
-    const int iqs = (xi%QUANT_K)/QUANT_R; // quant index
-    const int iybs = di - di%QUANT_K; // y block start index
-    const int y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
+    const uint ib = xi/QUANT_K; // block index
+    const uint iqs = (xi%QUANT_K)/QUANT_R; // quant index
+    const uint iybs = di - di%QUANT_K; // y block start index
+    const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
     DEQUANT_FUNC
 
     dst[iybs + iqs + 0]        = D_TYPE(v.x);
     dst[iybs + iqs + y_offset] = D_TYPE(v.y);
+}
+"""
+
+norm_body = """
+#extension GL_EXT_control_flow_attributes : enable
+#define BLOCK_SIZE 512
+
+layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+shared vec2 sum[BLOCK_SIZE];
+
+void main() {
+    const uint row = uint(gl_WorkGroupID.x);
+    const uint tid = uint(gl_LocalInvocationID.x);
+
+    const float eps = 1e-5f;
+
+    sum[tid] = vec2(0.0f, 0.0f);
+
+    [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
+        const float xi = float(data_a[row*p.KX + col]);
+        sum[tid].x += xi;
+        sum[tid].y += xi * xi;
+    }
+
+    // sum up partial sums and write back result
+    barrier();
+    [[unroll]] for (int s = BLOCK_SIZE / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sum[tid] += sum[tid + s];
+        }
+        barrier();
+    }
+
+    const float mean = sum[0].x / p.KX;
+    const float var = sum[0].y / p.KX - mean * mean;
+    const float inv_std = inversesqrt(var + 1e-5f);
+
+    for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
+        data_d[row*p.KX + col] = D_TYPE((float(data_a[row*p.KX + col]) - mean) * inv_std);
+    }
 }
 """
 
@@ -1445,13 +1541,6 @@ layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
 layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
 
-layout (push_constant) uniform parameter
-{
-    int M;
-    int N;
-    float param;
-} p;
-
 shared FLOAT_TYPE sum[BLOCK_SIZE];
 
 void main() {
@@ -1460,8 +1549,8 @@ void main() {
 
     sum[tid] = FLOAT_TYPE(0.0f); // partial sum for thread in warp
 
-    [[unroll]] for (uint col = tid; col < p.M; col += BLOCK_SIZE) {
-        const FLOAT_TYPE xi = FLOAT_TYPE(data_a[row*p.M + col]);
+    [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
+        const FLOAT_TYPE xi = FLOAT_TYPE(data_a[row*p.KX + col]);
         sum[tid] += xi * xi;
     }
 
@@ -1474,11 +1563,11 @@ void main() {
         barrier();
     }
 
-    const FLOAT_TYPE mean = sum[0] / FLOAT_TYPE(p.M);
-    const FLOAT_TYPE scale = inversesqrt(mean + FLOAT_TYPE(p.param));
+    const FLOAT_TYPE mean = sum[0] / FLOAT_TYPE(p.KX);
+    const FLOAT_TYPE scale = inversesqrt(mean + FLOAT_TYPE(p.param1));
 
-    for (uint col = tid; col < p.M; col += BLOCK_SIZE) {
-        data_d[row*p.M + col] = D_TYPE(scale * FLOAT_TYPE(data_a[row*p.M + col]));
+    for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
+        data_d[row*p.KX + col] = D_TYPE(scale * FLOAT_TYPE(data_a[row*p.KX + col]));
     }
 }
 """
@@ -1676,18 +1765,6 @@ async def main():
             tasks.append(string_to_spv(f"get_rows_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
             tasks.append(string_to_spv(f"get_rows_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float"}, fp16))
 
-        # add
-        stream.clear()
-        stream.extend((generic_head, shader_float_type, add_body))
-        tasks.append(string_to_spv("add_f32", "".join(stream), {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-        tasks.append(string_to_spv("add_f16_f32_f16", "".join(stream), {"A_TYPE": "float16_t", "B_TYPE": "float", "D_TYPE": "float16_t"}, fp16))
-
-        # Static shaders
-        tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}, fp16))
-        tasks.append(string_to_spv("mul_f32", f"{generic_head}\n{shader_float_type}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, fp16))
-
-        tasks.append(string_to_spv("scale_f32", f"{generic_head}\n{shader_float_type}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float"}, fp16))
-
     # Shaders where precision is needed, so no fp16 version
 
     # mul mat vec
@@ -1723,8 +1800,23 @@ async def main():
         tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float16_t", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
         tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}, fp16))
 
-    # RMS Norm
+    # Norms
+    tasks.append(string_to_spv("norm_f32", f"{generic_head}\n{shader_f32}\n{norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
     tasks.append(string_to_spv("rms_norm_f32", f"{generic_head}\n{shader_f32}\n{rms_norm_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
+
+    tasks.append(string_to_spv("cpy_f32_f32", f"{cpy_head}\n{shader_f32}\n{cpy_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
+    tasks.append(string_to_spv("cpy_f32_f16", f"{cpy_head}\n{shader_f32}\n{cpy_body}", {"A_TYPE": "float", "D_TYPE": "float16_t"}, True))
+
+    tasks.append(string_to_spv("add_f32", f"{generic_head}\n{shader_f32}\n{add_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, True))
+
+    tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}, True))
+    tasks.append(string_to_spv("mul_f32", f"{generic_head}\n{shader_f32}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, True))
+
+    tasks.append(string_to_spv("scale_f32", f"{generic_head}\n{shader_f32}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
+
+    tasks.append(string_to_spv("sqr_f32", f"{generic_head}\n{shader_f32}\n{sqr_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
+
+    tasks.append(string_to_spv("clamp_f32", f"{generic_head}\n{shader_f32}\n{clamp_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
 
     await asyncio.gather(*tasks)
 
