@@ -1433,7 +1433,8 @@ void ggml_metal_graph_compute(
                             const int n_past     = ((int32_t *) dst->op_params)[0];
                             const int n_dims     = ((int32_t *) dst->op_params)[1];
                             const int mode       = ((int32_t *) dst->op_params)[2];
-                            const int n_orig_ctx = ((int32_t *) dst->op_params)[3];
+                            // skip 3, n_ctx, used in GLM RoPE, unimplemented in metal
+                            const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
 
                             float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
                             memcpy(&freq_base,   (int32_t *) dst->op_params +  5, sizeof(float));

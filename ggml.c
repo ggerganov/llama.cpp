@@ -15689,13 +15689,14 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             {
                 n_tasks = 1;
             } break;
-        case GGML_OP_COUNT:
-            {
-                GGML_ASSERT(false);
-            } break;
         default:
             {
-                printf("%s: op %s not implemented\n", __func__, ggml_op_name(node->op));
+                fprintf(stderr, "%s: op not implemented: ", __func__);
+                if (node->op < GGML_OP_COUNT) {
+                    fprintf(stderr, "%s\n", ggml_op_name(node->op));
+                } else {
+                    fprintf(stderr, "%d\n", node->op);
+                }
                 GGML_ASSERT(false);
             } break;
     }
