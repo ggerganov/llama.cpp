@@ -524,7 +524,7 @@ struct llama_server_context
     bool all_slots_are_idle = false;
     bool add_bos_token      = true;
 
-    std::atomic<int32_t> id_gen;
+    int32_t id_gen;
     int32_t n_ctx;  // total context for all clients / slots
 
     // system prompt
@@ -542,7 +542,7 @@ struct llama_server_context
     std::vector<task_server> queue_tasks;
     std::vector<task_result> queue_results;
     std::vector<task_multi>  queue_multitasks;
-    std::mutex mutex_tasks;
+    std::mutex mutex_tasks; // also guards id_gen
     std::mutex mutex_results;
     std::mutex mutex_multitasks;
 
@@ -1333,6 +1333,7 @@ struct llama_server_context
 
     int request_completion(json data, bool infill, bool embedding, int multitask_id)
     {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
         task.target_id = 0;
@@ -1345,12 +1346,12 @@ struct llama_server_context
         // when a completion task's prompt array is not a singleton, we split it into multiple requests
         if (task.data.at("prompt").size() > 1)
         {
+            lock.unlock(); // entering new func scope
             auto id = split_multiprompt_task(task);
             return id;
         }
 
         // otherwise, it's a single-prompt task, we actually queue it
-        std::lock_guard<std::mutex> lock(mutex_tasks);
         queue_tasks.push_back(task);
         return task.id;
     }
