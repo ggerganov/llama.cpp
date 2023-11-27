@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import math
 import struct
 import sys
 from enum import IntEnum
@@ -12,33 +11,15 @@ import numpy as np
 
 import os
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
+    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-# Note: Does not support GGML_QKK_64
-QK_K = 256
-# Items here are (block size, type size)
-GGML_QUANT_SIZES = {
-    gguf.GGMLQuantizationType.F32  : (1, 4),
-    gguf.GGMLQuantizationType.F16  : (1, 2),
-    gguf.GGMLQuantizationType.Q4_0 : (32, 2 + 16),
-    gguf.GGMLQuantizationType.Q4_1 : (32, 2 + 2 + 16),
-    gguf.GGMLQuantizationType.Q5_0 : (32, 2 + 4 + 16),
-    gguf.GGMLQuantizationType.Q5_1 : (32, 2 + 2 + 4 + 16),
-    gguf.GGMLQuantizationType.Q8_0 : (32, 2 + 32),
-    gguf.GGMLQuantizationType.Q8_1 : (32, 4 + 4 + 32),
-    gguf.GGMLQuantizationType.Q2_K : (256, 2 + 2 + QK_K // 16 + QK_K // 4),
-    gguf.GGMLQuantizationType.Q3_K : (256, 2 + QK_K // 4 + QK_K // 8 + 12),
-    gguf.GGMLQuantizationType.Q4_K : (256, 2 + 2 + QK_K // 2 + 12),
-    gguf.GGMLQuantizationType.Q5_K : (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
-    gguf.GGMLQuantizationType.Q6_K : (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    gguf.GGMLQuantizationType.Q8_K : (256, 4 + QK_K + QK_K // 8),
-}
 
 class GGMLFormat(IntEnum):
     GGML = 0
     GGMF = 1
     GGJT = 2
+
 
 class GGMLFType(IntEnum):
     ALL_F32              = 0
@@ -58,6 +39,7 @@ class GGMLFType(IntEnum):
     MOSTLY_Q5_K_S        = 16
     MOSTLY_Q5_K_M        = 17
     MOSTLY_Q6_K          = 18
+
 
 class Hyperparameters:
     def __init__(self):
@@ -90,6 +72,7 @@ class Hyperparameters:
     def __str__(self):
         return f'<Hyperparameters: n_vocab={self.n_vocab}, n_embd={self.n_embd}, n_mult={self.n_mult}, n_head={self.n_head}, n_layer={self.n_layer}, n_rot={self.n_rot}, n_ff={self.n_ff}, ftype={self.ftype.name}>'
 
+
 class Vocab:
     def __init__(self, load_scores = True):
         self.items = []
@@ -111,6 +94,7 @@ class Vocab:
             self.items.append((item_text, item_score))
         return offset - orig_offset
 
+
 class Tensor:
     def __init__(self, use_padding = True):
         self.name = None
@@ -125,7 +109,7 @@ class Tensor:
         (n_dims, name_len, dtype) = struct.unpack('<3I', data[offset:offset + 12])
         assert n_dims >= 0 and n_dims <= 4, f'Invalid tensor dimensions {n_dims}'
         assert name_len < 4096, 'Absurd tensor name length'
-        quant = GGML_QUANT_SIZES.get(dtype)
+        quant = gguf.GGML_QUANT_SIZES.get(dtype)
         assert quant is not None, 'Unknown tensor type'
         (blksize, tysize) = quant
         offset += 12
@@ -143,6 +127,7 @@ class Tensor:
         offset += n_bytes
         # print(n_dims, name_len, dtype, self.dims, self.name, pad)
         return offset - orig_offset
+
 
 class GGMLModel:
     def __init__(self):
@@ -180,8 +165,8 @@ class GGMLModel:
             if ftype not in (GGMLFType.ALL_F32, GGMLFType.MOSTLY_F16):
                 err = 'Quantizations changed in GGJTv2. Can only convert unquantized GGML files older than GGJTv2.'
         elif (self.file_format == GGMLFormat.GGJT and self.format_version == 2):
-            if ftype in ( GGMLFType.MOSTLY_Q4_0, GGMLFType.MOSTLY_Q4_1,
-                          GGMLFType.MOSTLY_Q4_1_SOME_F16, GGMLFType.MOSTLY_Q8_0):
+            if ftype in (GGMLFType.MOSTLY_Q4_0, GGMLFType.MOSTLY_Q4_1,
+                         GGMLFType.MOSTLY_Q4_1_SOME_F16, GGMLFType.MOSTLY_Q8_0):
                 err = 'Q4 and Q8 quantizations changed in GGJTv3.'
         if len(err) > 0:
             raise ValueError(f'{err} Sorry, your {self.file_format.name}v{self.format_version} file of type {ftype.name} is not eligible for conversion.')
@@ -207,6 +192,7 @@ class GGMLModel:
         self.tensor_map = tensor_map
         hp.set_n_ff(self)
         return offset
+
 
 class GGMLToGGUF:
     def __init__(self, ggml_model, data, cfg, params_override = None, vocab_override = None, special_vocab = None):
@@ -238,7 +224,7 @@ class GGMLToGGUF:
         gguf_writer = gguf.GGUFWriter(
             self.cfg.output,
             gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA],
-            use_temp_file = False )
+            use_temp_file = False)
         self.add_params(gguf_writer)
         self.add_vocab(gguf_writer)
         if self.special_vocab is not None:
@@ -362,7 +348,8 @@ class GGMLToGGUF:
                 mapped_name,
                 data[tensor.start_offset:tensor.start_offset + tensor.len_bytes],
                 raw_shape = tempdims,
-                raw_dtype = tensor.dtype )
+                raw_dtype = tensor.dtype)
+
 
 def handle_metadata(cfg, hp):
     import convert
@@ -386,37 +373,39 @@ def handle_metadata(cfg, hp):
         raise ValueError('Unable to load metadata')
     vocab = convert.load_vocab(
         cfg.vocab_dir if cfg.vocab_dir is not None else cfg.model_metadata_dir,
-        cfg.vocabtype )
+        cfg.vocabtype)
     # FIXME: Respect cfg.vocab_dir?
     svocab = gguf.SpecialVocab(cfg.model_metadata_dir,
-        load_merges = cfg.vocabtype == 'bpe',
-        n_vocab = vocab.vocab_size)
+                               load_merges = cfg.vocabtype == 'bpe',
+                               n_vocab = vocab.vocab_size)
     convert.check_vocab_size(params, vocab)
     return (params, vocab, svocab)
+
 
 def handle_args():
     parser = argparse.ArgumentParser(description = 'Convert GGML models to GGUF')
     parser.add_argument('--input', '-i', type = Path, required = True,
-        help = 'Input GGMLv3 filename')
+                        help = 'Input GGMLv3 filename')
     parser.add_argument('--output', '-o', type = Path, required = True,
-        help ='Output GGUF filename')
+                        help ='Output GGUF filename')
     parser.add_argument('--name',
-        help = 'Set model name')
+                        help = 'Set model name')
     parser.add_argument('--desc',
-        help = 'Set model description')
+                        help = 'Set model description')
     parser.add_argument('--gqa', type = int, default = 1,
-        help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
+                        help = 'grouped-query attention factor (use 8 for LLaMA2 70B)')
     parser.add_argument('--eps', default = '5.0e-06',
-        help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
+                        help = 'RMS norm eps: Use 1e-6 for LLaMA1 and OpenLLaMA, use 1e-5 for LLaMA2')
     parser.add_argument('--context-length', '-c', type=int, default = 2048,
-        help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
+                        help = 'Default max context length: LLaMA1 is typically 2048, LLaMA2 is typically 4096')
     parser.add_argument('--model-metadata-dir', '-m', type = Path,
-        help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
+                        help ='Load HuggingFace/.pth vocab and metadata from the specified directory')
     parser.add_argument("--vocab-dir", type=Path,
-        help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
+                        help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
     parser.add_argument("--vocabtype", choices=["spm", "bpe"], default="spm",
-        help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)")
+                        help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm)")
     return parser.parse_args()
+
 
 def main():
     cfg = handle_args()
@@ -427,7 +416,7 @@ def main():
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLModel()
     print('* Scanning GGML input file')
-    offset = model.load(data, 0)
+    offset = model.load(data, 0)  # noqa
     print(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
@@ -442,12 +431,15 @@ def main():
         print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
         if model.file_format == GGMLFormat.GGML:
             print('! This is a very old GGML file that does not contain vocab scores. Strongly recommend using model metadata!')
-    converter = GGMLToGGUF(model, data, cfg,
+    converter = GGMLToGGUF(
+        model, data, cfg,
         params_override = params_override,
         vocab_override = vocab_override,
-        special_vocab = special_vocab )
+        special_vocab = special_vocab
+    )
     converter.save()
     print(f'* Successful completion. Output saved to: {cfg.output}')
+
 
 if __name__ == '__main__':
     main()
