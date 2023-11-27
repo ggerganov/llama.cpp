@@ -1,6 +1,6 @@
    [Desktop Entry]
-   Name=llama.cpp Server
-   Exec=sh-server-dialog.sh
-   Icon=./media/llama-server-icon.png
-   Terminal=false
+   Name="llama.cpp Server"
+   Exec=./sh-server-dialog.sh
+   Icon=./icon.png
+   Terminal=true
    Type=Application
