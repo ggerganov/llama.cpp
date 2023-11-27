@@ -16,6 +16,42 @@ advanced_options=""
 
 
 
+# Function to install Dialog
+install_dialog() {
+    echo "Try to install Dialog with $1..."
+    if ! $1 install dialog; then
+        echo "Error: Dialog could not be installed."
+        exit 1
+    fi
+    echo "Dialog was successfully installed."
+}
+
+# Check whether Dialog is already installed
+if ! command -v dialog &> /dev/null; then
+    # Dialog is not installed, try to find the package manager
+    PACKAGE_MANAGERS=(brew apt apt-get yum pacman)
+    for manager in "${PACKAGE_MANAGERS[@]}"; do
+        if command -v $manager &> /dev/null; then
+            # Package manager found, ask the user for permission
+            read -p "Dialog is not installed. Would you like to install Dialog with $manager? (y/N) " response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                # User has agreed, install Dialog
+                install_dialog $manager
+                break
+            else
+                echo "Installation canceled."
+                exit 1
+            fi
+        fi
+    done
+    if ! command -v dialog &> /dev/null; then
+        echo "No supported package manager found or Dialog could not be installed. Please install Dialog manually."
+        exit 1
+    fi
+fi
+
+
+
 model_selection() {
     # User selects a file or folder
   exec 3>&1
