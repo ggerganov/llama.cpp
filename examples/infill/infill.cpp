@@ -2,7 +2,6 @@
 
 #include "console.h"
 #include "llama.h"
-#include "build-info.h"
 #include "grammar-parser.h"
 
 #include <cassert>
@@ -147,6 +146,13 @@ int main(int argc, char ** argv) {
 
         return 0;
     }
+    if (params.chatml) {
+        printf("\n************\n");
+        printf("%s: please use the 'main' tool for chatml mode\n", __func__);
+        printf("************\n\n");
+
+        return 0;
+    }
     if (!params.antiprompt.empty()) {
         printf("\n************\n");
         printf("%s: please use the 'main' tool for antiprompt mode\n", __func__);
@@ -184,8 +190,8 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
-    LOG_TEE("%s: build = %d (%s)\n", __func__, BUILD_NUMBER, BUILD_COMMIT);
-    LOG_TEE("%s: built with %s for %s\n", __func__, BUILD_COMPILER, BUILD_TARGET);
+    LOG_TEE("%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
+    LOG_TEE("%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
@@ -231,7 +237,7 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
         LOG_TEE("%s\n", get_system_info(params).c_str());
     }
-    const bool add_bos = llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM;
+    const bool add_bos = llama_should_add_bos_token(model);
     LOG("add_bos: %d\n", add_bos);
 
     bool suff_rm_leading_spc = params.escape;

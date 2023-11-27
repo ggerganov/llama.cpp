@@ -106,6 +106,14 @@ extern "C" {
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
+    enum llama_rope_scaling_type {
+        LLAMA_ROPE_SCALING_UNSPECIFIED = -1,
+        LLAMA_ROPE_SCALING_NONE        = 0,
+        LLAMA_ROPE_SCALING_LINEAR      = 1,
+        LLAMA_ROPE_SCALING_YARN        = 2,
+        LLAMA_ROPE_SCALING_MAX_VALUE   = LLAMA_ROPE_SCALING_YARN,
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -167,15 +175,21 @@ extern "C" {
     };
 
     struct llama_context_params {
-        uint32_t seed;            // RNG seed, -1 for random
-        uint32_t n_ctx;           // text context, 0 = from model
-        uint32_t n_batch;         // prompt processing maximum batch size
-        uint32_t n_threads;       // number of threads to use for generation
-        uint32_t n_threads_batch; // number of threads to use for batch processing
+        uint32_t seed;              // RNG seed, -1 for random
+        uint32_t n_ctx;             // text context, 0 = from model
+        uint32_t n_batch;           // prompt processing maximum batch size
+        uint32_t n_threads;         // number of threads to use for generation
+        uint32_t n_threads_batch;   // number of threads to use for batch processing
+        int8_t   rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
-        float rope_freq_base;  // RoPE base frequency, 0 = from model
-        float rope_freq_scale; // RoPE frequency scaling factor, 0 = from model
+        float    rope_freq_base;   // RoPE base frequency, 0 = from model
+        float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, negative = from model
+        float    yarn_attn_factor; // YaRN magnitude scaling factor
+        float    yarn_beta_fast;   // YaRN low correction dim
+        float    yarn_beta_slow;   // YaRN high correction dim
+        uint32_t yarn_orig_ctx;    // YaRN original context size
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
@@ -191,6 +205,7 @@ extern "C" {
         bool allow_requantize;       // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor; // quantize output.weight
         bool only_copy;              // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool pure;                   // disable k-quant mixtures and quantize all tensors to the same type
     } llama_model_quantize_params;
 
     // grammar types
@@ -286,6 +301,23 @@ extern "C" {
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
 
+    // Functions to access the model's GGUF metadata scalar values
+    // - The functions return the length of the string on success, or -1 on failure
+    // - The output string is always null-terminated and cleared on failure
+    // - GGUF array values are not supported by these functions
+
+    // Get metadata value as a string by key name
+    LLAMA_API int llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
+
+    // Get the number of metadata key/value pairs
+    LLAMA_API int llama_model_meta_count(const struct llama_model * model);
+
+    // Get metadata key name by index
+    LLAMA_API int llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+
+    // Get metadata value as a string by index
+    LLAMA_API int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size);
+
     // Get a string describing the model type
     LLAMA_API int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size);
 
@@ -329,21 +361,69 @@ extern "C" {
     // KV cache
     //
 
-    // Returns the number of tokens in the KV cache
-    LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
-            "avoid using this, it will be removed in the future, instead - count the tokens in user code");
+    // Information associated with an individual cell in the KV cache view.
+    struct llama_kv_cache_view_cell {
+        // The position for this cell. Takes KV cache shifts into account.
+        // May be negative if the cell is not populated.
+        llama_pos pos;
+    };
 
-    // Remove all tokens data of cells in [c0, c1)
-    // c0 < 0 : [0,  c1]
-    // c1 < 0 : [c0, inf)
-    LLAMA_API void llama_kv_cache_tokens_rm(
-            struct llama_context * ctx,
-                         int32_t   c0,
-                         int32_t   c1);
+    // An updateable view of the KV cache.
+    struct llama_kv_cache_view {
+        // Number of KV cache cells. This will be the same as the context size.
+        int32_t n_cells;
+
+        // Maximum number of sequences that can exist in a cell. It's not an error
+        // if there are more sequences in a cell than this value, however they will
+        // not be visible in the view cells_sequences.
+        int32_t n_max_seq;
+
+        // Number of tokens in the cache. For example, if there are two populated
+        // cells, the first with 1 sequence id in it and the second with 2 sequence
+        // ids then you'll have 3 tokens.
+        int32_t token_count;
+
+        // Number of populated cache cells.
+        int32_t used_cells;
+
+        // Maximum contiguous empty slots in the cache.
+        int32_t max_contiguous;
+
+        // Index to the start of the max_contiguous slot range. Can be negative
+        // when cache is full.
+        int32_t max_contiguous_idx;
+
+        // Information for an individual cell.
+        struct llama_kv_cache_view_cell * cells;
+
+        // The sequences for each cell. There will be n_max_seq items per cell.
+        llama_seq_id * cells_sequences;
+    };
+
+    // Create an empty KV cache view. (use only for debugging purposes)
+    LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
+
+    // Free a KV cache view. (use only for debugging purposes)
+    LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
+
+    // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
+    LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
+
+    // Returns the number of tokens in the KV cache (slow, use only for debug)
+    // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
+
+    // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
+    LLAMA_API int llama_get_kv_cache_used_cells(const struct llama_context * ctx);
+
+    // Clear the KV cache
+    LLAMA_API void llama_kv_cache_clear(
+            struct llama_context * ctx);
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // p0 < 0 : [0,  p1]
-    // p1 < 0 : [p0, inf)
+    // seq_id < 0 : match any sequence
+    // p0 < 0     : [0,  p1]
+    // p1 < 0     : [p0, inf)
     LLAMA_API void llama_kv_cache_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
@@ -505,6 +585,12 @@ extern "C" {
     LLAMA_API llama_token llama_token_eos(const struct llama_model * model); // end-of-sentence
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
 
+    // Returns -1 if unknown, 1 for true or 0 for false.
+    LLAMA_API int         llama_add_bos_token(const struct llama_model * model);
+
+    // Returns -1 if unknown, 1 for true or 0 for false.
+    LLAMA_API int         llama_add_eos_token(const struct llama_model * model);
+
     // codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
     LLAMA_API llama_token llama_token_middle(const struct llama_model * model); // Beginning of infill middle
@@ -600,6 +686,13 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
+    /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
+    LLAMA_API void llama_sample_min_p(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+                           float   p,
+                          size_t   min_keep);
+
     /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API void llama_sample_tail_free(
             struct llama_context * ctx,
@@ -658,6 +751,7 @@ extern "C" {
                            float * mu);
 
     /// @details Selects the token with the highest probability.
+    ///          Does not compute the token probabilities. Use llama_sample_softmax() instead.
     LLAMA_API llama_token llama_sample_token_greedy(
             struct llama_context * ctx,
           llama_token_data_array * candidates);

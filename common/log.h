@@ -97,38 +97,56 @@
     #define LOG_TEE_TARGET stderr
 #endif
 
-// NOTE: currently disabled as it produces too many log files
+// Utility for synchronizing log configuration state
+//  since std::optional was introduced only in c++17
+enum LogTriState
+{
+    LogTriStateSame,
+    LogTriStateFalse,
+    LogTriStateTrue
+};
+
 // Utility to obtain "pid" like unique process id and use it when creating log files.
-//inline std::string log_get_pid()
-//{
-//    static std::string pid;
-//    if (pid.empty())
-//    {
-//        // std::this_thread::get_id() is the most portable way of obtaining a "process id"
-//        //  it's not the same as "pid" but is unique enough to solve multiple instances
-//        //  trying to write to the same log.
-//        std::stringstream ss;
-//        ss << std::this_thread::get_id();
-//        pid = ss.str();
-//    }
-//
-//    return pid;
-//}
+inline std::string log_get_pid()
+{
+   static std::string pid;
+   if (pid.empty())
+   {
+       // std::this_thread::get_id() is the most portable way of obtaining a "process id"
+       //  it's not the same as "pid" but is unique enough to solve multiple instances
+       //  trying to write to the same log.
+       std::stringstream ss;
+       ss << std::this_thread::get_id();
+       pid = ss.str();
+   }
+
+   return pid;
+}
 
 // Utility function for generating log file names with unique id based on thread id.
 //  invocation with log_filename_generator( "llama", "log" ) creates a string "llama.<number>.log"
 //  where the number is a runtime id of the current thread.
 
-#define log_filename_generator(log_file_basename, log_file_extension) log_filename_generator_impl(log_file_basename, log_file_extension)
+#define log_filename_generator(log_file_basename, log_file_extension) log_filename_generator_impl(LogTriStateSame, log_file_basename, log_file_extension)
 
 // INTERNAL, DO NOT USE
-inline std::string log_filename_generator_impl(const std::string & log_file_basename, const std::string & log_file_extension)
+inline std::string log_filename_generator_impl(LogTriState multilog, const std::string & log_file_basename, const std::string & log_file_extension)
 {
+    static bool _multilog = false;
+
+    if (multilog != LogTriStateSame)
+    {
+        _multilog = multilog == LogTriStateTrue;
+    }
+
     std::stringstream buf;
 
     buf << log_file_basename;
-    //buf << ".";
-    //buf << log_get_pid();
+    if (_multilog)
+    {
+        buf << ".";
+        buf << log_get_pid();
+    }
     buf << ".";
     buf << log_file_extension;
 
@@ -212,15 +230,6 @@ inline std::string log_filename_generator_impl(const std::string & log_file_base
     #define LOG_TEE_FLF_FMT "%s"
     #define LOG_TEE_FLF_VAL ,""
 #endif
-
-// Utility for synchronizing log configuration state
-//  since std::optional was introduced only in c++17
-enum LogTriState
-{
-    LogTriStateSame,
-    LogTriStateFalse,
-    LogTriStateTrue
-};
 
 // INTERNAL, DO NOT USE
 //  USE LOG() INSTEAD
@@ -315,16 +324,23 @@ enum LogTriState
 #endif
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
+inline FILE *log_handler1_impl(bool change = false, LogTriState append = LogTriStateSame, LogTriState disable = LogTriStateSame, const std::string & filename = LOG_DEFAULT_FILE_NAME, FILE *target = nullptr)
 {
-    static bool _initialized{false};
-    static bool _disabled{(filename.empty() && target == nullptr)};
+    static bool _initialized = false;
+    static bool _append = false;
+    static bool _disabled = filename.empty() && target == nullptr;
     static std::string log_current_filename{filename};
     static FILE *log_current_target{target};
     static FILE *logfile = nullptr;
 
     if (change)
     {
+        if (append != LogTriStateSame)
+        {
+            _append = append == LogTriStateTrue;
+            return logfile;
+        }
+
         if (disable == LogTriStateTrue)
         {
             // Disable primary target
@@ -377,7 +393,7 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
             }
         }
 
-        logfile = fopen(filename.c_str(), "w");
+        logfile = fopen(filename.c_str(), _append ? "a" : "w");
     }
 
     if (!logfile)
@@ -398,9 +414,9 @@ inline FILE *log_handler1_impl(bool change = false, LogTriState disable = LogTri
 }
 
 // INTERNAL, DO NOT USE
-inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTriStateSame, FILE *target = nullptr, const std::string & filename = LOG_DEFAULT_FILE_NAME)
+inline FILE *log_handler2_impl(bool change = false, LogTriState append = LogTriStateSame, LogTriState disable = LogTriStateSame, FILE *target = nullptr, const std::string & filename = LOG_DEFAULT_FILE_NAME)
 {
-    return log_handler1_impl(change, disable, filename, target);
+    return log_handler1_impl(change, append, disable, filename, target);
 }
 
 // Disables logs entirely at runtime.
@@ -411,7 +427,7 @@ inline FILE *log_handler2_impl(bool change = false, LogTriState disable = LogTri
 // INTERNAL, DO NOT USE
 inline FILE *log_disable_impl()
 {
-    return log_handler1_impl(true, LogTriStateTrue);
+    return log_handler1_impl(true, LogTriStateSame, LogTriStateTrue);
 }
 
 // Enables logs at runtime.
@@ -420,18 +436,30 @@ inline FILE *log_disable_impl()
 // INTERNAL, DO NOT USE
 inline FILE *log_enable_impl()
 {
-    return log_handler1_impl(true, LogTriStateFalse);
+    return log_handler1_impl(true, LogTriStateSame, LogTriStateFalse);
 }
 
 // Sets target fir logs, either by a file name or FILE* pointer (stdout, stderr, or any valid FILE*)
 #define log_set_target(target) log_set_target_impl(target)
 
 // INTERNAL, DO NOT USE
-inline FILE *log_set_target_impl(const std::string & filename) { return log_handler1_impl(true, LogTriStateSame, filename); }
-inline FILE *log_set_target_impl(FILE *target) { return log_handler2_impl(true, LogTriStateSame, target); }
+inline FILE *log_set_target_impl(const std::string & filename) { return log_handler1_impl(true, LogTriStateSame, LogTriStateSame, filename); }
+inline FILE *log_set_target_impl(FILE *target) { return log_handler2_impl(true, LogTriStateSame, LogTriStateSame, target); }
 
 // INTERNAL, DO NOT USE
 inline FILE *log_handler() { return log_handler1_impl(); }
+
+// Enable or disable creating separate log files for each run.
+//  can ONLY be invoked BEFORE first log use.
+#define log_multilog(enable) log_filename_generator_impl((enable) ? LogTriStateTrue : LogTriStateFalse, "", "")
+// Enable or disable append mode for log file.
+//  can ONLY be invoked BEFORE first log use.
+#define log_append(enable) log_append_impl(enable)
+// INTERNAL, DO NOT USE
+inline FILE *log_append_impl(bool enable)
+{
+    return log_handler1_impl(true, enable ? LogTriStateTrue : LogTriStateFalse, LogTriStateSame);
+}
 
 inline void log_test()
 {
@@ -494,6 +522,18 @@ inline bool log_param_single_parse(const std::string & param)
         return true;
     }
 
+    if (param == "--log-new")
+    {
+        log_multilog(true);
+        return true;
+    }
+
+    if (param == "--log-append")
+    {
+        log_append(true);
+        return true;
+    }
+
     return false;
 }
 
@@ -523,7 +563,9 @@ inline void log_print_usage()
     printf("  --log-disable         Disable trace logs\n");
     printf("  --log-enable          Enable trace logs\n");
     printf("  --log-file            Specify a log filename (without extension)\n");
-    printf("                        Log file will be tagged with unique ID and written as \"<name>.<ID>.log\"\n"); /*  */
+    printf("  --log-new             Create a separate new log file on start. "
+                                   "Each log file will have unique name: \"<name>.<ID>.log\"\n");
+    printf("  --log-append          Don't truncate the old log file.\n");
 }
 
 #define log_dump_cmdline(argc, argv) log_dump_cmdline_impl(argc, argv)

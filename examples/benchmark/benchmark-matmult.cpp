@@ -1,4 +1,3 @@
-#include "build-info.h"
 #include "common.h"
 #include "ggml.h"
 
@@ -172,7 +171,8 @@ int main(int argc, char ** argv)  {
     struct ggml_tensor * m11xm2 = ggml_mul_mat(ctx, m11, m2);
 
     // printf("Creating compute graph\n");
-    struct ggml_cgraph gf = ggml_build_forward(m11xm2);
+    struct ggml_cgraph * gf = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf, m11xm2);
 
     printf("n_threads=%i\n", benchmark_params.n_threads);
 
@@ -181,9 +181,9 @@ int main(int argc, char ** argv)  {
 
     std::vector<uint8_t> work_buffer;
 
-    ggml_graph_compute_helper(work_buffer, &gf, benchmark_params.n_threads);
+    ggml_graph_compute_helper(work_buffer, gf, benchmark_params.n_threads);
 
-    TENSOR_DUMP(gf.nodes[0]);
+    TENSOR_DUMP(gf->nodes[0]);
 
     printf("\n------ Test 2 - Matrix Mult via %s code\n", ggml_type_name(qtype));
 
@@ -201,7 +201,8 @@ int main(int argc, char ** argv)  {
     struct ggml_tensor * q31 = ggml_mul_mat(ctx, q11, m2);
 
     // printf("Creating compute graph\n");
-    struct ggml_cgraph gf31 = ggml_build_forward(q31);
+    struct ggml_cgraph * gf31 = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf31, q31);
 
     // Set up a second graph computation to make sure we override the CPU cache lines
     // printf("Creating new tensor q12 & Running quantize\n");
@@ -212,7 +213,8 @@ int main(int argc, char ** argv)  {
     struct ggml_tensor * q32 = ggml_mul_mat(ctx, q12, m2);
 
     //printf("Creating compute graph\n");
-    struct ggml_cgraph gf32 = ggml_build_forward(q32);
+    struct ggml_cgraph * gf32 = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf32, q32);
     printf("n_threads=%i\n", benchmark_params.n_threads);
 
     const int dimx = sizex;
@@ -224,7 +226,7 @@ int main(int argc, char ** argv)  {
 
 
     // Let's use the F32 result from above as a reference for the quantized multiplication
-    float sum_of_F32_reference = tensor_sum_elements(gf.nodes[0]);
+    float sum_of_F32_reference = tensor_sum_elements(gf->nodes[0]);
 
     printf("Iteration;NThreads; SizeX; SizeY; SizeZ; Required_FLOPS; Elapsed_u_Seconds; gigaFLOPS\n");
     printf("=====================================================================================\n");
@@ -234,7 +236,7 @@ int main(int argc, char ** argv)  {
 
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
-        ggml_graph_compute_helper(work_buffer, &gf31, benchmark_params.n_threads);
+        ggml_graph_compute_helper(work_buffer, gf31, benchmark_params.n_threads);
 
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
@@ -252,7 +254,7 @@ int main(int argc, char ** argv)  {
 
         // Check that the matrix multiplication result is in the right ballpark
         // We cannot use the exact value from the F32 multiplication because the quantizuation will be slightly different
-        float sum_of_Q4_result = tensor_sum_elements(gf31.nodes[0]);
+        float sum_of_Q4_result = tensor_sum_elements(gf31->nodes[0]);
         float delta = std::abs(sum_of_Q4_result - sum_of_F32_reference);
         float allowed_delta = (sum_of_F32_reference) / 1000 / 1000; //  Let's accept an epsilon of 10^-6
 
@@ -267,7 +269,7 @@ int main(int argc, char ** argv)  {
         }
 
         // Running a different graph computation to make sure we override the CPU cache lines
-        ggml_graph_compute_helper(work_buffer, &gf32, benchmark_params.n_threads);
+        ggml_graph_compute_helper(work_buffer, gf32, benchmark_params.n_threads);
     }
     printf("\n");
     printf("Average%78.2f\n",gflops_sum/((double)benchmark_params.n_iterations));
