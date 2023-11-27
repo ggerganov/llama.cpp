@@ -162,6 +162,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 - [withcatai/catai](https://github.com/withcatai/catai)
+- [semperai/amica](https://github.com/semperai/amica)
 
 ---
 
