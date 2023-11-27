@@ -37,6 +37,7 @@
       repeat_penalty: 1.18, // 1.0 = disabled
       top_k: 1, // <= 0 to use vocab size
       top_p: 0.5, // 1.0 = disabled
+      min_p: 0.05, // 0 = disabled
       tfs_z: 1.0, // 1.0 = disabled
       typical_p: 1.0, // 1.0 = disabled
       presence_penalty: 0.0, // 0.0 = disabled
@@ -775,6 +776,7 @@ async function updateSystemLanguage(event) {
             ${FloatField({ label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
             ${IntField({ label: "Top-K", max: 100, min: -1, step: 1, name: "top_k", value: params.value.top_k })}
             ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
           </fieldset>
 
           <details>
