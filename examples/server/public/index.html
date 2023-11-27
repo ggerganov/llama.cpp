@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
   <link rel="stylesheet" href="style.css">
-  
+
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
@@ -354,7 +354,7 @@
         </div>
 
           <div class="right">
-      	    <button class="button-back" onclick=${reset}>Back</button>
+            <button class="button-back" onclick=${reset}>Back</button>
             <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button type="submit" disabled=${generating.value}>Submit</button>
@@ -372,7 +372,7 @@
         <div>
           <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
           <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-	  <button onclick=${reset}>Back</button>
+    <button onclick=${reset}>Back</button>
         </div>`;
     }
 
@@ -532,7 +532,7 @@ async function updateSystemLanguage(event) {
 //     console.error('Fehler beim Laden der UI-Texte:', error);
 //   }
 // }
-//    
+//
 ///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
 //
 ///////////////////////////////////////////////////////////////////////////
@@ -746,7 +746,7 @@ async function updateSystemLanguage(event) {
           <details>
             <summary><span class="summary-title" id="id_grammar-title" id_grammar-title>Grammar</span></summary>
             ${GrammarControl()}
-	        </details>
+          </details>
         </fieldset>
         `
       );
@@ -768,7 +768,7 @@ async function updateSystemLanguage(event) {
                 </label>
             <${UserTemplateResetButton}/>
           </fieldset>
-          
+
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">

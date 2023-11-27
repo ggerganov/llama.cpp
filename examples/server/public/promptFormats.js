@@ -1,5 +1,5 @@
 // extended list
-export const promptFormats = {  
+export const promptFormats = {
 "airoborosl2": {
   template: "{{prompt}} {{history}} {{char}}",
   historyTemplate: "{{name}}: {{message}}",
