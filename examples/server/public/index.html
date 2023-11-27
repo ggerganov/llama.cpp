@@ -230,8 +230,7 @@
           currentMessages.push(data);
           slot_id = data.slot_id;
           if (selected_image && !data.multimodal) {
-            alert("Der Server wurde nicht für multimodal zusammengestellt oder der Modellprojektor kann nicht geladen werden.");
-            return;
+            alert("The server was not compiled for multimodal or the model projector can't be loaded.");            return;
           }
           transcriptUpdate([...history, [char, currentMessages]])
         }
@@ -517,19 +516,19 @@ async function updateSystemLanguage(event) {
 }
 //
 // async function updateTexts(systemPrompts) {
-//   // Aktualisiere die Texte, die aus den Sprachdateien kommen
+//   // Update the texts that come from the language files
 //   document.querySelector('#someElement').textContent = systemPrompts.default.systemPrompt;
-//   // Lade die JSON-Datei für die UI-Elemente
+//   // Load the JSON file for the UI elements
 //   const uiLanguageFile = `./${language}_texts.json`;
 //   try {
 //     const response = await fetch(uiLanguageFile);
 //     const uiTexts = await response.json();
-//     // Aktualisiere die UI-Elemente
+//     // Update the UI elements
 //     // document.querySelector('label[for="user"]').textContent = uiTexts.USER_NAME;
 //     document.getElementById('label-user').textContent = uiTexts.USER_NAME;
-//     // Weitere Elemente aktualisieren
+//     // Update further elements
 //   } catch (error) {
-//     console.error('Fehler beim Laden der UI-Texte:', error);
+//     console.error('Error when loading the UI texts:', error);
 //   }
 // }
 //
@@ -564,7 +563,7 @@ async function updateSystemLanguage(event) {
             grammar: converter.formatGrammar(),
           }
         } catch (e) {
-          alert(`Konvertierung fehlgeschlagen: ${e.message}`)
+          alert(`Conversion failed: ${e.message}`)
         }
       }
 
@@ -888,7 +887,7 @@ async function updateSystemLanguage(event) {
       }
       return html`
         <span>
-          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms pro Token, ${llamaStats.value.predicted_per_second.toFixed(2)} Token pro Sekunde
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
