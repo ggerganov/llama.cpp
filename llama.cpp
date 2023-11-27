@@ -5433,7 +5433,7 @@ static int llama_decode_internal(
 
     GGML_ASSERT(n_tokens <= n_batch);
 
-    int n_threads = n_tokens < 32 ? cparams.n_threads : cparams.n_threads_batch;
+    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
     GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
 
     const int64_t t_start_us = ggml_time_us();
