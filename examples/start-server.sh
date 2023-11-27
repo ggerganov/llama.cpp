@@ -64,6 +64,54 @@ model_path=${model_files[$((model_choice-1))]}
 
 
 
+multimodal_model_selection() {
+    # User selects a file or folder
+  exec 3>&1
+  mmproj_path=$(dialog --backtitle "Multimodal Model" \
+                      --title "Select Model File or Folder" \
+                      --fselect "$HOME/" 14 60 \
+                      2>&1 1>&3)
+  exit_status=$?
+  exec 3>&-
+
+  # Check whether user has selected 'Cancel'
+  if [ $exit_status = 1 ]; then
+    return
+  fi
+
+  # If a folder has been selected, search for *.bin files
+  if [ -d "$mmproj_path" ]; then
+    multi_modal_files=($(find "$mmproj_path" -name "*.bin" 2>/dev/null))
+  elif [ -f "$mmproj_path" ]; then
+    multi_modal_files=("$mmproj_path")
+  else
+    dialog --backtitle "Multimodal Model" \
+           --title "Invalid Selection" \
+           --msgbox "The selected path is not valid." 7 50
+    return
+  fi
+
+# Selection menu for models found
+exec 3>&1
+multi_modal_choice=$(dialog --backtitle "Multimodal Model" \
+                      --title "Select a Model File" \
+                      --menu "Choose one of the found models:" 15 60 4 \
+                      $(for i in "${!multi_modal_files[@]}"; do echo "$((i+1))" "$(basename "${multi_modal_files[$i]}")"; done) \
+                      2>&1 1>&3)
+exit_status=$?
+exec 3>&-
+
+# Check whether user has selected 'Cancel'
+if [ $exit_status = 1 ]; then
+  return
+fi
+
+# Set path to the selected model
+mmproj_path=${multi_modal_files[$((multi_modal_choice-1))]}
+}
+
+
+
 options() {
   # Show form for entering the options
   exec 3>&1
