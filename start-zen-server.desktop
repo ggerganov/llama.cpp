@@ -1,0 +1,6 @@
+   [Desktop Entry]
+   Name=llama.cpp Server
+   Exec=sh-server-zenity.sh
+   Icon=./media/llama-server-icon.png
+   Terminal=false
+   Type=Application
