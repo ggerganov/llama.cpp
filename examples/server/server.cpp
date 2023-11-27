@@ -1290,14 +1290,10 @@ struct llama_server_context
             res.result_json["model"] = slot.oaicompat_model;
         }
 
-        // if this task has a multitask associated with it, then we update the multitask
+        // parent multitask, if any, needs to be updated
         if (slot.multitask_id != -1)
         {
             update_multi_task(slot.multitask_id, slot.task_id, res);
-        }
-        else // otherwise update the results queue
-        {
-            
         }
 
         queue_results.push_back(res);
@@ -1349,7 +1345,7 @@ struct llama_server_context
         // when a completion task's prompt array is not a singleton, we split it into multiple requests
         if (task.data.at("prompt").size() > 1)
         {
-            auto id = split_multiprompt_task_into_subtasks(task);
+            auto id = request_multiprompt_task(task);
             return id;
         }
 
@@ -1473,21 +1469,23 @@ struct llama_server_context
         queue_tasks.push_back(task);
     }
 
-    int split_multiprompt_task_into_subtasks(task_server& task)
+    int split_multiprompt_task(task_server& multiprompt_task)
     {
-        auto prompt_count = task.data.at("prompt").size();
+        auto prompt_count = multiprompt_task.data.at("prompt").size();
         assert(prompt_count > 1);
 
         int multitask_id = id_gen++;
         std::vector<int> subtask_ids(prompt_count);
         for (int i = 0; i < prompt_count; i++)
         {
-            json subtask_data = task.data;
+            json subtask_data = multiprompt_task.data;
             subtask_data["prompt"] = subtask_data["prompt"][i];
 
-            subtask_ids[i] = request_completion(subtask_data, task.infill_mode, task.embedding_mode, multitask_id);
+            // subtasks inherit everything else (infill mode, embedding mode, etc.)
+            subtask_ids[i] = request_completion(subtask_data, multiprompt_task.infill_mode, multiprompt_task.embedding_mode, multitask_id);
         }
 
+        // queue up the multitask so we can track its subtask progression
         add_multi_task(multitask_id, subtask_ids);
         return multitask_id;
     }
