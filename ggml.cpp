@@ -9490,16 +9490,9 @@ void find_n_most_common_values(const char * pname, const ggml_tensor* tensor, in
     size_t j = 0;
     while (it != values.end() ) {
         const int count = it->second;
-	//n_most_common[j++] =
 	j++;
 	if (count >1) {
-	  
-	  std::cout << "weight:"
-		    << pname << "\t"
-		    << tensor->name << "\t"
-		    << std::fixed << (int) j  << "\t"
-		    << std::fixed << it->first << "\t"
-		    << std::fixed << (int)count << "\n";
+	  printf("JSON: { \"name\": \"%s\", \"name2\": \"%s\", \"weight\" : \"%f\", \"pos\" : \"%d\", \"count\" : \"%d\"} \n", pname, tensor->name, it->first , j, count);
 	}
         it++;
     }
