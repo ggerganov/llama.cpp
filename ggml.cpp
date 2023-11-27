@@ -9417,13 +9417,85 @@ static bool ggml_compute_forward_mul_mat_use_blas(
 }
 #endif
 
+#include <iostream>
+#include <algorithm>
+#include <unordered_map> // hash table
+#include <numeric>       // for copying and iterating over arrays
+
 void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor);
+void ggml_tensor_hash(const char * name,const struct ggml_tensor * tensor, int decimalPlace);
+#include "ggml-backend-impl.h"
+// helper function to convert the tensor buffer to a float array
+float* ggml_tensor_to_float(const ggml_tensor& tensor, size_t* out_size) {
+  //if (tensor->type != GGML_TYPE_FLOAT) {
+  //throw std::runtime_error("Only support for floating-point tensors");
+  //}
+    const size_t num_elements = tensor->n_dims > 0 ? std::accumulate(tensor->nb, tensor->nb + tensor->n_dims, 1) : 0;
+    float* buffer = new float[num_elements];
+    if (out_size) {
+        *out_size = num_elements;
+    }
+    memcpy(buffer, ggml_get_data_f32(tensor), ggml_nbytes(tensor));
+    //memcpy(vec, ggml_get_data_f32(embeddings), ggml_nbytes(embeddings));
+    return buffer;
+}
+
+// function to create a hash table of the N most common values of a given tensor
+std::vector<double> find_n_most_common_values(const ggml_tensor& tensor, int decimal_place, size_t top_n) {
+    float* buffer = ggml_tensor_to_float(tensor, nullptr);
+    auto values = std::unordered_map<double, int>(); // hash table to store the count of each value
+
+    if (decimal_place <= 0 || top_n <= 0) {
+        throw std::runtime_error("Invalid parameters: decimal_place and top_n must be positive integers");
+    }
+
+    // find N most common values by counting the frequency of each value with truncated decimal places
+    for (size_t i = 0; i < buffer->size(); ++i) {
+        const double value = std::pow(10, static_cast<double>(decimal_place));
+        buffer[i] *= value; // multiply by value to truncate decimal places
+        int count = values.find(buffer[i])->second + 1;
+        if (count > top_n) {
+            continue;
+        }
+        if (decimal_place <= 0 || count >= top_n) {
+            break;
+        }
+    }
+
+    // sort the values in descending order of frequency
+    auto it = values.begin();
+    std::vector<double> n_most_common(top_n);
+    size_t j = 0;
+    while (it != values.end() && j < top_n) {
+        const int count = it->second;
+        if (count <= top_n - j) {
+            break;
+        }
+        n_most_common[j++] = it->first;
+        it++;
+    }
+
+    delete[] buffer;
+    return n_most_common;
+}
+
+
 void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor) {
   const int64_t ne = ggml_nelements(tensor) ;
   float fmin=0;
   float ffirst=0;
   float fmax=0;
   float fsum=0;
+
+  const int top_n=10;
+  const int decimal_place = 5;
+  
+  auto n_most_common_values = find_n_most_common_values(tensor, decimal_place, top_n);
+  std::cout << "N most common values with decimal places " << decimal_place << ": ";
+  for (const auto& value : n_most_common_values) {
+    std::cout << value << " ";
+  }
+  std::cout << std::endl;
 
   for (int64_t j = 0; j < ne; ++j) {
     float f = ggml_get_f32_1d(tensor, j);
@@ -9442,13 +9514,14 @@ void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor) {
   }
 
   auto type_name = ggml_type_name(tensor->type);
-// color_name
-  fprintf(stderr, "JSON: { \"name1\" :\"%s\", \"cnt\":\"%ld\", \"first\":\"%f\",\"max\":\"%f\",\"min\":\"%f\",\"sum\":\"%f\", \"name\":\"%s\", \"type\":\"%s\"}\n",
+  float fmean = fsum / ne;
+  fprintf(stderr, "JSON: {\"name1\":\"%s\",\"cnt\":\"%ld\",\"first\":\"%f\",\"max\":\"%f\",\"min\":\"%f\",\"mean\":\"%f\",\"sum\":\"%f\",\"name\":\"%s\",\"type\":\"%s\"}\n",
 	  name,
 	  ne,
 	  ffirst,
 	  fmax,
 	  fmin,
+	  fmean,
 	  fsum,
 	  tensor->name,
 	  std::string(type_name).c_str()
