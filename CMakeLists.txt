@@ -53,7 +53,7 @@ option(LLAMA_ALL_WARNINGS_3RD_PARTY     "llama: enable all compiler warnings in 
 option(LLAMA_GPROF                      "llama: enable gprof"                                   OFF)
 
 # build
-option(LLAMA_FATAL_WARNINGS              "llama: enable -Werror flag"                           OFF)
+option(LLAMA_FATAL_WARNINGS             "llama: enable -Werror flag"                            OFF)
 
 # sanitizers
 option(LLAMA_SANITIZE_THREAD            "llama: enable thread sanitizer"                        OFF)
