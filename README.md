@@ -6,6 +6,25 @@
 
 ---
 
+- UI with CSS to make it look nicer and tidier overall.
+- CSS outsourced as a separate file
+- Added a dropdown menu with prompt style templates
+- Added a dropdown menu with system prompts
+- Prompt Styles and System Prompts are separate files, so editing is very easy.
+- Created a script that uses "dialog" to compose the command for the server.
+- Script offers the possibility to save and load configs
+
+
+
+In planning or already started:
+
+- WIP Multilingual: You will be able to select the language from a dropdown menu. So far language files only for English and German. (concerns UI elements and system prompts).
+- Dark Mode
+- Templates for the values of the UI options (samplers etc.), e.g. deterministic template, creative template, balanced template etc...
+
+
+---
+
 
 ![Server UI-2](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppCamall-ui02.jpeg?raw=true)
 
