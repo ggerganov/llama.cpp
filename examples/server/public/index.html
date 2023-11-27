@@ -1,201 +1,12 @@
+<!-- <!DOCTYPE html> -->
 <html>
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
-
-  <style>
-    body {
-      font-family: system-ui;
-      font-size: 90%;
-    }
-
-    #container {
-      margin: 0em auto;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      height: 100%;
-    }
-
-    main {
-      margin: 3px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 1em;
-
-      flex-grow: 1;
-      overflow-y: auto;
-
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      padding: 0.5em;
-    }
-
-    body {
-      max-width: 600px;
-      min-width: 300px;
-      line-height: 1.2;
-      margin: 0 auto;
-      padding: 0 0.5em;
-    }
-
-    p {
-      overflow-wrap: break-word;
-      word-wrap: break-word;
-      hyphens: auto;
-      margin-top: 0.5em;
-      margin-bottom: 0.5em;
-    }
-
-    #write form {
-      margin: 1em 0 0 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5em;
-      align-items: stretch;
-    }
-
-    .right {
-      display: flex;
-      flex-direction: row;
-      gap: 0.5em;
-      justify-content: flex-end;
-    }
-
-    fieldset {
-      border: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    fieldset.two {
-      display: grid;
-      grid-template: "a a";
-      gap: 1em;
-    }
-
-    fieldset.three {
-      display: grid;
-      grid-template: "a a a";
-      gap: 1em;
-    }
-
-    details {
-      border: 1px solid #aaa;
-      border-radius: 4px;
-      padding: 0.5em 0.5em 0;
-      margin-top: 0.5em;
-    }
-
-    summary {
-      font-weight: bold;
-      margin: -0.5em -0.5em 0;
-      padding: 0.5em;
-      cursor: pointer;
-    }
-
-    details[open] {
-      padding: 0.5em;
-    }
-
-    .prob-set {
-      padding: 0.3em;
-      border-bottom: 1px solid #ccc;
-    }
-
-    .popover-content {
-      position: absolute;
-      background-color: white;
-      padding: 0.2em;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
-
-    textarea {
-      padding: 5px;
-      flex-grow: 1;
-      width: 100%;
-    }
-
-    pre code {
-      display: block;
-      background-color: #222;
-      color: #ddd;
-    }
-
-    code {
-      font-family: monospace;
-      padding: 0.1em 0.3em;
-      border-radius: 3px;
-    }
-
-    fieldset label {
-      margin: 0.5em 0;
-      display: block;
-    }
-
-    fieldset label.slim {
-      margin: 0 0.5em;
-      display: inline;
-    }
-
-    header,
-    footer {
-      text-align: center;
-    }
-
-    footer {
-      font-size: 80%;
-      color: #888;
-    }
-
-    .mode-chat textarea[name=prompt] {
-      height: 4.5em;
-    }
-
-    .mode-completion textarea[name=prompt] {
-      height: 10em;
-    }
-
-    [contenteditable] {
-      display: inline-block;
-      white-space: pre-wrap;
-      outline: 0px solid transparent;
-    }
-
-    @keyframes loading-bg-wipe {
-      0% {
-        background-position: 0%;
-      }
-
-      100% {
-        background-position: 100%;
-      }
-    }
-
-    .loading {
-      --loading-color-1: #eeeeee00;
-      --loading-color-2: #eeeeeeff;
-      background-size: 50% 100%;
-      background-image: linear-gradient(90deg, var(--loading-color-1), var(--loading-color-2), var(--loading-color-1));
-      animation: loading-bg-wipe 2s linear infinite;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .loading {
-        --loading-color-1: #22222200;
-        --loading-color-2: #222222ff;
-      }
-
-      .popover-content {
-        background-color: black;
-      }
-    }
-  </style>
-
+  <link rel="stylesheet" href="style.css">
+  
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
@@ -203,42 +14,43 @@
 
     import { llama } from '/completion.js';
     import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    import { promptFormats } from './promptFormats.js';
+    import { systemPrompts } from './EN_systemPrompts.js'; // multilingual is wip
     let selected_image = false;
     var slot_id = -1;
 
     const session = signal({
-      prompt: "This is a conversation between User and Llama, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
+      prompt: "This is a conversation between a user and a friendly chatbot. The chatbot is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
       template: "{{prompt}}\n\n{{history}}\n{{char}}:",
       historyTemplate: "{{name}}: {{message}}",
       transcript: [],
       type: "chat",  // "chat" | "completion"
-      char: "Llama",
+      char: "Assistant",
       user: "User",
       image_selected: ''
     })
 
     const params = signal({
-      n_predict: 400,
+      n_predict: 358,
       temperature: 0.7,
       repeat_last_n: 256, // 0 = disable penalty, -1 = context size
       repeat_penalty: 1.18, // 1.0 = disabled
-      top_k: 40, // <= 0 to use vocab size
+      top_k: 1, // <= 0 to use vocab size
       top_p: 0.5, // 1.0 = disabled
-      min_p: 0.05, // 0 = disabled
       tfs_z: 1.0, // 1.0 = disabled
       typical_p: 1.0, // 1.0 = disabled
       presence_penalty: 0.0, // 0.0 = disabled
       frequency_penalty: 0.0, // 0.0 = disabled
       mirostat: 0, // 0/1/2
       mirostat_tau: 5, // target entropy
-      mirostat_eta: 0.1, // learning rate
+      mirostat_eta: 0.96, // learning rate
       grammar: '',
       n_probs: 0, // no completion_probabilities,
       image_data: [],
       cache_prompt: true
     })
 
-    /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
+    /* START: Support for storing prompt templates and parameters in browser's LocalStorage */
 
     const local_storage_storageKey = "llamacpp_server_local_storage";
 
@@ -369,7 +181,7 @@
     console.log('Checking for autosaved last used template')
     userTemplateLoadAndApplyAutosaved()
 
-    /* END: Support for storing prompt templates and parameters in browsers LocalStorage */
+    /* END: Support for storing prompt templates and parameters in browser's LocalStorage */
 
     const llamaStats = signal(null)
     const controller = signal(null)
@@ -405,7 +217,6 @@
       controller.value = new AbortController();
       for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
         const data = chunk.data;
-
         if (data.stop) {
           while (
             currentMessages.length > 0 &&
@@ -419,17 +230,15 @@
           currentMessages.push(data);
           slot_id = data.slot_id;
           if (selected_image && !data.multimodal) {
-            alert("The server was not compiled for multimodal or the model projector can't be loaded.");
+            alert("Der Server wurde nicht für multimodal zusammengestellt oder der Modellprojektor kann nicht geladen werden.");
             return;
           }
           transcriptUpdate([...history, [char, currentMessages]])
         }
-
         if (data.timings) {
           llamaStats.value = data.timings;
         }
       }
-
       controller.value = null;
     }
 
@@ -467,23 +276,18 @@
       }, "{{char}}");
     }
 
-    const runCompletion = () => {
+    const runCompletion = async () => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      runLlama(prompt, {
+      await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
-      }, "").finally(() => {
-        session.value.prompt = session.value.transcript.map(([_, data]) =>
-          Array.isArray(data) ? data.map(msg => msg.content).join('') : data
-        ).join('');
-        session.value.transcript = [];
-      })
+      }, "");
     }
 
     const stop = (e) => {
@@ -536,23 +340,24 @@
       }
 
       return html`
-        <form onsubmit=${submit}>
-          <div>
-            <textarea
-               className=${generating.value ? "loading" : null}
-               oninput=${(e) => message.value = e.target.value}
-               onkeypress=${enterSubmits}
-               placeholder="Say something..."
-               rows=2
-               type="text"
-               value="${message}"
-            />
-          </div>
+      <form onsubmit=${submit}>
+        <div class="chat-input-container">
+          <textarea
+            id="chat-input" placeholder="Say Something ..."
+            class="${generating.value ? 'loading' : null}"
+            oninput=${(e) => message.value = e.target.value}
+            onkeypress=${enterSubmits}
+            rows="2"
+            type="text"
+            value="${message}"
+          ></textarea>
+        </div>
+
           <div class="right">
-            <button type="submit" disabled=${generating.value}>Send</button>
+      	    <button class="button-back" onclick=${reset}>Back</button>
             <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-            <button onclick=${reset}>Reset</button>
+            <button type="submit" disabled=${generating.value}>Submit</button>
           </div>
         </form>
       `
@@ -567,7 +372,7 @@
         <div>
           <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
           <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-          <button onclick=${reset}>Reset</button>
+	  <button onclick=${reset}>Back</button>
         </div>`;
     }
 
@@ -583,7 +388,6 @@
         }
       }, [messages])
 
-      const isCompletionMode = session.value.type === 'completion'
       const chatLine = ([user, data], index) => {
         let message
         const isArrayMessage = Array.isArray(data)
@@ -593,34 +397,152 @@
           const text = isArrayMessage ?
             data.map(msg => msg.content).join('').replace(/^\s+/, '') :
             data;
-          message = isCompletionMode ?
-            text :
-            html`<${Markdownish} text=${template(text)} />`
+          message = html`<${Markdownish} text=${template(text)} />`
         }
         if (user) {
           return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
         } else {
-          return isCompletionMode ?
-            html`<span key=${index}>${message}</span>` :
-            html`<p key=${index}>${message}</p>`
+          return html`<p key=${index}>${message}</p>`
         }
       };
 
-      const handleCompletionEdit = (e) => {
-        session.value.prompt = e.target.innerText;
-        session.value.transcript = [];
-      }
-
       return html`
-        <div id="chat" ref=${container} key=${messages.length}>
+        <section id="chat" ref=${container}>
           <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
-            ${messages.flatMap(chatLine)}
-          </span>
-        </div>`;
+          ${messages.flatMap(chatLine)}
+        </section>`;
     };
 
-    const ConfigForm = (props) => {
+    const handleToggleChange = (e) => {
+      const isChecked = e.target.checked;
+      session.value = { ...session.value, type: isChecked ? 'completion' : 'chat' };
+      // may require further actions to update the user interface
+      // for example, calling a function that re-renders the form or updates the state
+      // that controls the display of the form. Currently after reset chat toggle does not return
+    }
+
+function updatePromptFormat(e) {
+  const promptFormat = e.target.value;
+  if (promptFormats.hasOwnProperty(promptFormat)) {
+    session.value = {
+      ...session.value,
+      ...promptFormats[promptFormat]
+    };
+  } else {
+    // llama.cpp's default setting
+    session.value = {
+      ...session.value,
+      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
+      historyTemplate: "{{name}}: {{message}}",
+      char: "Assistant",
+      user: "User"
+    };
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////
+//
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+//
+function updateSystemPrompt(e) {
+  const SystemPrompt = e.target.value;
+  if (systemPrompts.hasOwnProperty(SystemPrompt)) {
+    session.value = {
+      ...session.value,
+      prompt: systemPrompts[SystemPrompt].systemPrompt
+    };
+  }
+}
+//
+document.addEventListener('DOMContentLoaded', (event) => {
+  // Add event listener for the language selection dropdown
+  document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
+});
+//
+async function updateSystemLanguage(event) {
+  const language = event.target.value;
+  const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
+  const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
+//
+  try {
+    // System prompts
+    const promptsModule = await import(`./${languageFile}`);
+    const systemPrompts = promptsModule.systemPrompts;
+    // Update the system prompt
+    document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
+    // The UI texts
+    const response = await fetch(uiLanguageFile);
+    const uiTexts = await response.json();
+    // Update the label
+    document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
+    document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
+    document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
+    document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
+    document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
+    document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
+    document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
+    document.getElementById('id_reset').textContent = uiTexts.RESET;
+    document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
+    document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
+    document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
+    document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
+    document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
+    document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
+    document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
+    document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
+    document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
+    document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
+    document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
+    document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
+    document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
+    document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
+    document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
+    document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
+    document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
+    document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
+    document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
+    document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
+    document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
+    document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
+    document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
+    document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
+    document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
+    document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
+    document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
+    document.getElementById('id_and').textContent = uiTexts.AND;
+  } catch (error) {
+    console.error('Error loading the language files:', error);
+  }
+}
+//
+// async function updateTexts(systemPrompts) {
+//   // Aktualisiere die Texte, die aus den Sprachdateien kommen
+//   document.querySelector('#someElement').textContent = systemPrompts.default.systemPrompt;
+//   // Lade die JSON-Datei für die UI-Elemente
+//   const uiLanguageFile = `./${language}_texts.json`;
+//   try {
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Aktualisiere die UI-Elemente
+//     // document.querySelector('label[for="user"]').textContent = uiTexts.USER_NAME;
+//     document.getElementById('label-user').textContent = uiTexts.USER_NAME;
+//     // Weitere Elemente aktualisieren
+//   } catch (error) {
+//     console.error('Fehler beim Laden der UI-Texte:', error);
+//   }
+// }
+//    
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+///////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+      const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
@@ -642,7 +564,7 @@
             grammar: converter.formatGrammar(),
           }
         } catch (e) {
-          alert(`Convert failed: ${e.message}`)
+          alert(`Konvertierung fehlgeschlagen: ${e.message}`)
         }
       }
 
@@ -656,11 +578,11 @@
         `
       };
 
-      const IntField = ({ label, max, min, name, value }) => {
+      const IntField = ({ label, max, min, step, name, value }) => {
         return html`
           <div>
             <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+              <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
             <span>${value}</span>
           </div>
         `
@@ -674,12 +596,14 @@
       const UserTemplateResetButton = () => {
         if (selectedUserTemplate.value.name == 'default') {
           return html`
-            <button disabled>Using default template</button>
+          <button class="reset-button" id="id_reset" onclick="${userTemplateReset}">Reset</button>
           `
         }
 
         return html`
-          <button onclick=${userTemplateReset}>Reset all to default</button>
+          <div class="button-container">
+            <button class="reset-button" title="Caution: This resets the entire form." onclick="${userTemplateReset}">Reset</button>
+          </div>
         `
       };
 
@@ -691,54 +615,139 @@
       const GrammarControl = () => (
         html`
           <div>
-            <label for="template">Grammar</label>
-            <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
-            <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-            <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
+            <label for="template"></label>
+            <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            <div class="json-schema-controls">
+            <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+            <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON-Scheme</button>
           </div>
-          `
+          </div>
+        `
       );
 
       const PromptControlFieldSet = () => (
         html`
-        <fieldset>
-          <div>
-            <label htmlFor="prompt">Prompt</label>
-            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
-          </div>
-        </fieldset>
+          <fieldset>
+            <div class="input-container">
+              <label for="prompt" class="input-label">System</label>
+              <textarea
+                id="prompt"
+                class="persistent-input"
+                name="prompt"
+                value="${session.value.prompt}"
+                oninput=${updateSession}
+              ></textarea>
+            </div>
+          </fieldset>
         `
       );
 
       const ChatConfigForm = () => (
         html`
-          ${PromptControlFieldSet()}
-
-          <fieldset class="two">
+          <fieldset class="dropdowns">
             <div>
-              <label for="user">User name</label>
+              <select id="promptFormat" name="promptFormat" onchange=${updatePromptFormat}>
+                  <option value="default">Prompt Style</option>
+                  <option value=""></option>
+                <optgroup label="Common Prompt-Styles">
+                  <option value="alpaca">Alpaca</option>
+                  <option value="chatml">ChatML</option>
+                  <option value="llama2">Llama 2</option>
+                  <option value="vicuna">Vicuna</option>
+                  <option value=""></option>
+                </optgroup>
+                <optgroup label="More Prompt-Styles">
+                  <option value="airoboros180">Airoboros L2</option>
+                  <option value="codeCherryPop">Code Cherry Pop</option>
+                  <option value="deepseekCoder">Deepseek Coder</option>
+                  <option value="dolphinMistral">Dolphin Mistral</option>
+                  <option value="evolvedSeeker">evolvedSeeker 1.3B</option>
+                  <option value="goliath120b">Goliath 120B</option>
+                  <option value="jordan">Jordan</option>
+                  <option value="leoHessianai">Leo Hessianai</option>
+                  <option value="leoMistral">Leo Mistral</option>
+                  <option value="marx">Marx</option>
+                  <option value="med42">Med42</option>
+                  <option value="metaMath">MetaMath</option>
+                  <option value="mistralInstruct">Mistral Instruct</option>
+                  <option value="mistralOpenOrca">Mistral 7B OpenOrca</option>
+                  <option value="mythomax">MythoMax</option>
+                  <option value="neuralchat">Neural Chat</option>
+                  <option value="nousCapybara">Nous Capybara</option>
+                  <option value="nousHermes">Nous Hermes</option>
+                  <option value="openhermes2Mistral">OpenHermes 2.5-Mistral</option>
+                  <option value="orcamini">Orca Mini v3</option>
+                  <option value="sauerkrautLM">SauerkrautLM</option>
+                  <option value="samantha">Samantha</option>
+                  <option value="samanthaMistral">Samantha Mistral</option>
+                  <option value="scarlett">Scarlett</option>
+                  <option value="sydney">Sydney</option>
+                  <option value="synthia">Synthia</option>
+                  <option value="tess">Tess</option>
+                  <option value="yi34b">Yi-34B</option>
+                  <option value="zephyr">Zephyr</option>
+                  <option value=""></option>
+                </optgroup>
+              </select>
+              <select id="SystemPrompt" name="SystemPrompt" onchange=${updateSystemPrompt}>
+                <option value="default">System Prompt</option>
+                <option value="empty">None</option>
+                <option value="airoboros">Airoboros</option>
+                <option value="alpaca">Alpaca</option>
+                <option value="deepseekcoder">Deepseek Coder</option>
+                <option value="jordan">Jordan</option>
+                <option value="leomistral">Leo Mistral</option>
+                <option value="med42">Med42</option>
+                <option value="mistralopenorca">Mistral OpenOrca</option>
+                <option value="migeltot">Migel's Tree of Thought</option>
+                <option value="orcamini">Orca Mini</option>
+                <option value="samantha">Samantha</option>
+                <option value="sauerkraut">Sauerkraut</option>
+                <option value="scarlett">Scarlett</option>
+                <option value="synthia">Synthia</option>
+              </select>
+              <!--<select id="systemLanguage" name="systemLanguage">-->
+                <!--<option value="default">English</option>-->
+                  <!--<option value="DE">German</option>-->
+                  <!--<option value="placeholderLanguage">Placeholder</option>-->
+                  <!--</select>-->
+            </div>
+          </fieldset>
+          ${PromptControlFieldSet()}
+          <fieldset class="names">
+            <div>
+              <label for="user" id="id_user-name">User Name</label>
               <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
             </div>
-
             <div>
-              <label for="bot">Bot name</label>
+              <label for="bot" id="id_bot-name">AI Name</label>
               <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
           </fieldset>
-
           <fieldset>
-            <div>
-              <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
+            <details>
+              <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
+                <div class="two-columns">
+                  <div>
+                    <div class="input-container">
+                    <label for="template" class="input-label-sec" id_prompt-template>Prompt Template</label>
+                    <textarea id="template" class="persistent-input-sec" name="template" value="${session.value.template}" rows=6 oninput=${updateSession}/>
+                  </div>
+                </div>
+              <div>
+                <div class="input-container">
+                  <label for="template" class="input-label-sec" id="id_history-template">Chat History</label>
+                  <textarea id="template" class="persistent-input-sec" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+                </div>
+              </div>
             </div>
-
-            <div>
-              <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
-            </div>
+          </details>
+          <details>
+            <summary><span class="summary-title" id="id_grammar-title" id_grammar-title>Grammar</span></summary>
             ${GrammarControl()}
-          </fieldset>
-      `
+	        </details>
+        </fieldset>
+        `
       );
 
       const CompletionConfigForm = () => (
@@ -751,49 +760,52 @@
       return html`
         <form>
           <fieldset class="two">
+              <input type="checkbox" id="toggle" class="toggleCheckbox" onchange=${handleToggleChange} />
+                <label for="toggle" class="toggleContainer">
+                  <div id="id_toggle-label-chat">Chat</div>
+                  <div id="id_toggle-label-complete">Complete</div>
+                </label>
             <${UserTemplateResetButton}/>
-            <div>
-              <label class="slim"><input type="radio" name="type" value="chat" checked=${session.value.type === "chat"} oninput=${updateSession} /> Chat</label>
-              <label class="slim"><input type="radio" name="type" value="completion" checked=${session.value.type === "completion"} oninput=${updateSession} /> Completion</label>
-            </div>
           </fieldset>
-
+          
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">
-            ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
+            ${IntField({ label: "Prediction", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
             ${FloatField({ label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
-            ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
-            ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
-            ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
-            ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
-            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
+            ${IntField({ label: "Top-K", max: 100, min: -1, step: 1, name: "top_k", value: params.value.top_k })}
+            ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
           </fieldset>
+
           <details>
-            <summary>More options</summary>
+            <summary><span class="summary-title">Further Options</span></summary>
             <fieldset class="two">
+              ${FloatField({ label: "Top-P", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+              ${IntField({ label: "Penalize Last N", max: 2048, min: 0, step: 16, name: "repeat_last_n", value: params.value.repeat_last_n })}
               ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
-              ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
-              ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
-              ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
+              ${FloatField({ label: "Presence Penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
+              ${FloatField({ label: "Typical-P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+              ${FloatField({ label: "Frequency Penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
             </fieldset>
-            <hr />
+
+            <hr style="height: 1px; background-color: #ececf1; border: none;" />
+
             <fieldset class="three">
               <div>
-                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> no Mirostat</label>
+                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> Mirostat off</label>
                 <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
                 <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
               </div>
-              ${FloatField({ label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
-              ${FloatField({ label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
-            </fieldset>
-            <fieldset>
-              ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
+              ${FloatField({ label: "Entropy tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
+              ${FloatField({ label: "Learning-rate eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
+
+              ${IntField({ label: "Show Probabilities", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
             </fieldset>
           </details>
         </form>
       `
     }
+
 
     const probColor = (p) => {
       const r = Math.floor(192 * (1 - p));
@@ -875,7 +887,7 @@
       }
       return html`
         <span>
-          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms pro Token, ${llamaStats.value.predicted_per_second.toFixed(2)} Token pro Sekunde
         </span>
       `
     }
@@ -996,7 +1008,7 @@
       return html`
         <div class="mode-${session.value.type}">
           <header>
-            <h1>llama.cpp</h1>
+            <h2>llama.cpp</h2>
           </header>
 
           <main id="content">
@@ -1009,7 +1021,7 @@
 
           <footer>
             <p><${ModelGenerationInfo} /></p>
-            <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
+            <p>Powered By <a href="https://github.com/ggerganov/llama.cpp#readme" target="_blank">llama.cpp</a> and <a href="https://ggml.ai/" target="_blank">ggml.ai</a></p>
           </footer>
         </div>
       `;
@@ -1020,6 +1032,7 @@
 </head>
 
 <body>
+
   <div id="container">
     <input type="file" id="fileInput" accept="image/*" style="display: none;">
   </div>
@@ -1027,4 +1040,3 @@
 </body>
 
 </html>
-
