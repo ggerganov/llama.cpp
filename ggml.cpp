@@ -9426,23 +9426,37 @@ void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor);
 void ggml_tensor_hash(const char * name,const struct ggml_tensor * tensor, int decimalPlace);
 #include "ggml-backend-impl.h"
 // helper function to convert the tensor buffer to a float array
-float* ggml_tensor_to_float(const ggml_tensor& tensor, size_t* out_size) {
+float* ggml_tensor_to_float(const ggml_tensor* tensor) {
   //if (tensor->type != GGML_TYPE_FLOAT) {
   //throw std::runtime_error("Only support for floating-point tensors");
   //}
-    const size_t num_elements = tensor->n_dims > 0 ? std::accumulate(tensor->nb, tensor->nb + tensor->n_dims, 1) : 0;
-    float* buffer = new float[num_elements];
-    if (out_size) {
-        *out_size = num_elements;
-    }
-    memcpy(buffer, ggml_get_data_f32(tensor), ggml_nbytes(tensor));
+  //if (out_size) {
+  //    *out_size = num_elements;
+  // }
+
+    if(tensor->type == GGML_TYPE_F32)
+      {
+	const size_t num_elements = tensor->n_dims > 0 ? std::accumulate(tensor->nb, tensor->nb + tensor->n_dims, 1) : 0;
+	float* buffer = new float[num_elements];
+
+	memcpy(buffer, ggml_get_data_f32(tensor), ggml_nbytes(tensor));
+	return buffer;
+      }
+    else
+      {
+	const size_t num_elements = ggml_nbytes(tensor)/sizeof(float);
+	float* buffer = new float[num_elements];
+
+	memcpy(buffer, (float*)ggml_get_data(tensor), ggml_nbytes(tensor));
+	return buffer;
+      }
     //memcpy(vec, ggml_get_data_f32(embeddings), ggml_nbytes(embeddings));
-    return buffer;
+
 }
 
 // function to create a hash table of the N most common values of a given tensor
-std::vector<double> find_n_most_common_values(const ggml_tensor& tensor, int decimal_place, size_t top_n) {
-    float* buffer = ggml_tensor_to_float(tensor, nullptr);
+std::vector<double> find_n_most_common_values(const ggml_tensor* tensor, int decimal_place, size_t top_n) {
+    float* buffer = ggml_tensor_to_float(tensor);
     auto values = std::unordered_map<double, int>(); // hash table to store the count of each value
 
     if (decimal_place <= 0 || top_n <= 0) {
@@ -9450,16 +9464,19 @@ std::vector<double> find_n_most_common_values(const ggml_tensor& tensor, int dec
     }
 
     // find N most common values by counting the frequency of each value with truncated decimal places
-    for (size_t i = 0; i < buffer->size(); ++i) {
+    auto size = ggml_nbytes(tensor)/sizeof(float);
+    for (size_t i = 0; i < size; ++i) {
         const double value = std::pow(10, static_cast<double>(decimal_place));
         buffer[i] *= value; // multiply by value to truncate decimal places
-        int count = values.find(buffer[i])->second + 1;
-        if (count > top_n) {
+	if (values.find(buffer[i]) != values.end()){
+	  int count = values.find(buffer[i])->second + 1;
+	  if (count > top_n) {
             continue;
-        }
-        if (decimal_place <= 0 || count >= top_n) {
+	  }
+	  if (decimal_place <= 0 || count >= top_n) {
             break;
-        }
+	  }
+	}
     }
 
     // sort the values in descending order of frequency
