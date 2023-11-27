@@ -1345,7 +1345,7 @@ struct llama_server_context
         // when a completion task's prompt array is not a singleton, we split it into multiple requests
         if (task.data.at("prompt").size() > 1)
         {
-            auto id = request_multiprompt_task(task);
+            auto id = split_multiprompt_task(task);
             return id;
         }
 
