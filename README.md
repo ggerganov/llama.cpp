@@ -4,8 +4,7 @@
 
 I will maintain it and keep it up-to-date with the origin repo, so almost everything here will be like a mirror, except the server ui (which is in `./examples/server/public`)
 
-![Server UI-1](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppCamall-ui01.jpeg?raw=true)
-
+![Server UI-1](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppcamall-ui-min_p.jpeg?raw=true)
 ---
 
 - UI with CSS to make it look nicer and tidier overall.
