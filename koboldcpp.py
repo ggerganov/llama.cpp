@@ -682,9 +682,13 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path=="/api":
             content_type = 'text/html'
             if self.embedded_kcpp_docs is None:
-                response_body = (f"KoboldCpp partial API reference can be found at the wiki: https://github.com/LostRuins/koboldcpp/wiki").encode()
+                response_body = (f"KoboldCpp API is running!\n\nAPI usage reference can be found at the wiki: https://github.com/LostRuins/koboldcpp/wiki").encode()
             else:
                 response_body = self.embedded_kcpp_docs
+
+        elif self.path=="/v1":
+            content_type = 'text/html'
+            response_body = (f"KoboldCpp OpenAI compatible endpoint is running!\n\nFor usage reference, see https://platform.openai.com/docs/api-reference").encode()
 
         elif self.path=="/api/extra/preloadstory":
             if preloaded_story is None:
@@ -2160,7 +2164,8 @@ def main(launch_args,start_server=True):
 
     if args.port_param!=defaultport:
         args.port = args.port_param
-    print(f"Starting Kobold HTTP Server on port {args.port}")
+    print(f"Starting Kobold HTTP Server on port {args.port} at http://localhost:{args.port}/api")
+    print(f"Starting OpenAI Compatible Endpoint on port {args.port} at http://localhost:{args.port}/v1")
     epurl = ""
     if args.host=="":
         epurl = f"http://localhost:{args.port}"
