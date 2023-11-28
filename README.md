@@ -1,6 +1,52 @@
+
+
+# This fork is ONLY a modified server UI.
+
+I will maintain it and keep it up-to-date with the origin repo, so almost everything here will be like a mirror, except the server ui (which is in `./examples/server/public`)
+
+![Server UI-1](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppcamall-ui-min_p.jpeg?raw=true)
+---
+
+- UI with CSS to make it look nicer and tidier overall.
+- CSS outsourced as a separate file
+- Added a dropdown menu with prompt style templates
+- Added a dropdown menu with system prompts
+- Prompt Styles and System Prompts are separate files, so editing is very easy.
+- Created a script that uses "dialog" to compose the command for the server.
+- Script offers the possibility to save and load configs
+
+
+
+In planning or already started:
+
+- WIP Multilingual: You will be able to select the language from a dropdown menu. So far language files only for English and German. (concerns UI elements and system prompts).
+- Dark Mode
+- Templates for the values of the UI options (samplers etc.), e.g. deterministic template, creative template, balanced template etc...
+
+
+---
+
+
+![Server UI-2](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppCamall-ui02.jpeg?raw=true)
+
+
+---
+
+
+![Server TUI-1](https://github.com/mounta11n/plusplus-caMalL/blob/master/media/ppCamall-tui01.jpeg?raw=true)
+
+
+---
+
+
 # llama.cpp
 
+
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
+
+
+
+
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
@@ -116,6 +162,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 - [withcatai/catai](https://github.com/withcatai/catai)
+- [semperai/amica](https://github.com/semperai/amica)
 
 ---
 
