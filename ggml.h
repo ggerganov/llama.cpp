@@ -244,11 +244,10 @@
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \
-            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
-            fflush(stderr); \
             fflush(stdout); \
+            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
             ggml_print_backtrace(); \
-            exit(1); \
+            abort(); \
         } \
     } while (0)
 
