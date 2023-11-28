@@ -12,12 +12,6 @@ export const promptFormats = {
   char: "Response",
   user: "Instruction"
 },
-"bakllava": {
-  template: "{{history}}{{char}}:",
-  historyTemplate: "{{name}}: {{message}}\n",
-  char: "ASSISTANT",
-  user: "USER"
-},
 "chatml": {
   template: "<|im_start|>system\n{{prompt}}<|im_end|>\n{{history}}\n<|im_start|>{{char}}",
   historyTemplate: "<|im_start|>{{user}}\n{{message}}<|im_end|>",
@@ -60,18 +54,6 @@ export const promptFormats = {
   char: "ASSISTANT",
   user: "USER"
 },
-"llama2": {
-  template: "<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\n{{history}} [/INST] {{char}} </s><s>[INST] ",
-  historyTemplate: "{{name}}: {{message}} [/INST]",
-  char: "llama",
-  user: "user"
-},
-"llava": {
-  template: "{{history}}{{char}}:",
-  historyTemplate: "{{name}}: {{message}}\n",
-  char: "ASSISTANT",
-  user: "USER"
-},
 "leoHessianai": {
   template: "<|im_start|>system\n{{prompt}}<|im_end|>\n{{history}}\n<|im_start|>{{char}}",
   historyTemplate: "<|im_start|>{{user}}\n{{message}}<|im_end|>",
@@ -83,6 +65,12 @@ export const promptFormats = {
   historyTemplate: "{{name}}: {{message}}",
   char: "ASSISTANT",
   user: "USER"
+},
+"llama2": {
+  template: "<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\n{{history}} [/INST] {{char}} </s><s>[INST] ",
+  historyTemplate: "{{name}}: {{message}} [/INST]",
+  char: "llama",
+  user: "user"
 },
 "marx": {
   template: "{{history}}\n{{char}}:",
@@ -138,6 +126,12 @@ export const promptFormats = {
   char: "Response",
   user: "Input"
 },
+"openChat": {
+  template: "{{history}}{{char}}",
+  historyTemplate: "GPT4 {{user}}: {{message}}<|end_of_turn|>",
+  char: "Assistant",
+  user: "User"
+},
 "openhermes2Mistral": {
   template: "<|im_start|>system\n{{prompt}}<|im_end|>\n{{history}}\n<|im_start|>{{char}}",
   historyTemplate: "<|im_start|>{{user}}\n{{message}}<|im_end|>",
@@ -173,6 +167,12 @@ export const promptFormats = {
   historyTemplate: "{{name}}: {{message}}",
   char: "ASSISTANT",
   user: "USER"
+},
+"starlingLM": {
+  template: "{{history}}{{char}}",
+  historyTemplate: "GPT4 {{user}}: {{message}}<|end_of_turn|>",
+  char: "Assistant",
+  user: "User"
 },
 "sydney": {
   template: "{{prompt}}\n\n{{history}}\n{{char}}",
