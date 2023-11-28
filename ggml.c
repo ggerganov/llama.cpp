@@ -9373,7 +9373,7 @@ static bool ggml_compute_forward_mul_mat_use_blas(
     // TODO: find the optimal values for these
     if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) &&
-        src0->type == GGML_TYPE_F32 &&
+      //src0->type == GGML_TYPE_F32 &&
         src1->type == GGML_TYPE_F32 &&
         (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
 
@@ -15689,13 +15689,14 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
             {
                 n_tasks = 1;
             } break;
-        case GGML_OP_COUNT:
-            {
-                GGML_ASSERT(false);
-            } break;
         default:
             {
-                printf("%s: op %s not implemented\n", __func__, ggml_op_name(node->op));
+                fprintf(stderr, "%s: op not implemented: ", __func__);
+                if (node->op < GGML_OP_COUNT) {
+                    fprintf(stderr, "%s\n", ggml_op_name(node->op));
+                } else {
+                    fprintf(stderr, "%d\n", node->op);
+                }
                 GGML_ASSERT(false);
             } break;
     }
