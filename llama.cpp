@@ -2385,14 +2385,19 @@ static void llm_load_vocab(
             vocab.special_unk_id = 0;
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
-        } else if (tokenizer_name == "gpt2" || tokenizer_name == "deepseek_coder") {
-            if(tokenizer_name == "gpt2") {
+        } else {
+            if (tokenizer_name == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
-            }
-            else if (tokenizer_name == "deepseek_coder") {
+            } else if (tokenizer_name == "deepseek_coder") {
                 vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKCODER;
+            } else if (tokenizer_name == "deepseek_llm") {
+                vocab.type = LLAMA_VOCAB_TYPE_DEEPSEEKLLM;
+            } else {
+                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
+                LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
+                vocab.type = LLAMA_VOCAB_TYPE_SPM;
+                return;
             }
-
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
             if (merges_keyidx == -1) {
@@ -2424,11 +2429,6 @@ static void llm_load_vocab(
             vocab.special_unk_id = -1;
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
-        } else {
-            LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_name.c_str());
-            LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
-
-            vocab.type = LLAMA_VOCAB_TYPE_SPM;
         }
     }
 
@@ -2605,7 +2605,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     // hparams
     LLAMA_LOG_INFO("%s: format           = %s\n",     __func__, llama_file_version_name(ml.fver));
     LLAMA_LOG_INFO("%s: arch             = %s\n",     __func__, LLM_ARCH_NAMES.at(model.arch).c_str());
-    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : (vocab.type == LLAMA_VOCAB_TYPE_BPE ? "BPE" : "DEEPSEEKCODER")); // TODO: fix
+    LLAMA_LOG_INFO("%s: vocab type       = %s\n",     __func__, vocab.type == LLAMA_VOCAB_TYPE_SPM ? "SPM" : "BPE"); // TODO: fix
     LLAMA_LOG_INFO("%s: n_vocab          = %u\n",     __func__, hparams.n_vocab);
     LLAMA_LOG_INFO("%s: n_merges         = %u\n",     __func__, (int) vocab.bpe_ranks.size());
     LLAMA_LOG_INFO("%s: n_ctx_train      = %u\n",     __func__, hparams.n_ctx_train);
@@ -5956,10 +5956,20 @@ struct llm_tokenizer_bpe {
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
         std::vector<std::string> word_collection;
-        if(vocab.type == LLAMA_VOCAB_TYPE_BPE)
+        switch (vocab.type)
+        {
+        case LLAMA_VOCAB_TYPE_BPE:
             word_collection = bpe_gpt2_preprocess(text);
-        else if(vocab.type==LLAMA_VOCAB_TYPE_DEEPSEEKCODER)
+            break;
+        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
             word_collection = bpe_deepseek_coder_preprocess(text);
+            break;
+        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
+            word_collection = bpe_deepseek_llm_preprocess(text);
+            break;
+        default:
+            break;
+        }
 
         symbols_final.clear();
 
@@ -6159,6 +6169,10 @@ private:
         return regex_bpe_preprocess(text, deepseek_coder_regex);
     }
 
+    std::vector<std::string> bpe_deepseek_llm_preprocess(const std::string & text) {
+        return regex_bpe_preprocess(text, deepseek_llm_regex);
+    }
+
     const llama_vocab & vocab;
 
     std::vector<llm_symbol> symbols;
@@ -6350,6 +6364,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
             } break;
         case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE:
             {
                 for (const auto & fragment: fragment_buffer)
@@ -9467,6 +9482,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             break;
         }
         case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
         case LLAMA_VOCAB_TYPE_BPE: {
             if (llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
