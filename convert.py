@@ -18,6 +18,7 @@ import sys
 import time
 import zipfile
 from abc import ABCMeta, abstractmethod
+from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -313,30 +314,25 @@ class VocabLoader:
         except:
             self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer), use_fast=False, trust_remote_code=True)
             vocab_set = {encoded_tok for encoded_tok, id in self.tokenizer.get_vocab().items()}
-        
-        self.added_tokens_list = []
-        self.added_tokens_dict = dict()
-        self.added_tokens_ids = set()
-        
+
+        self.added_tokens_dict: OrderedDict[str, int] = OrderedDict()
+
         for tok, tokidx in sorted(self.tokenizer.get_added_vocab().items(), key=lambda x: x[1]):
             if tokidx >= params.n_vocab or tokidx < self.tokenizer.vocab_size:
                 continue
-                
-            self.added_tokens_list.append(tok)
+
             self.added_tokens_dict[tok] = tokidx
-            self.added_tokens_ids.add(tokidx)
-        
-        self.unk_token_id = self.tokenizer.unk_token_id
-        self.specials = {
+
+        self.unk_token_id: int = self.tokenizer.unk_token_id
+        self.specials: dict[str, int] = {
             tok: self.tokenizer.get_vocab()[tok]
             for tok in self.tokenizer.all_special_tokens
         }
-        print(self.specials)
-        self.special_ids = set(self.tokenizer.all_special_ids)
+        self.special_ids: set[int] = set(self.tokenizer.all_special_ids)
         self.vocab_size_base: int = self.tokenizer.vocab_size
-        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_list)
-        self.fname_tokenizer = fname_tokenizer
-        
+        self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_dict)
+        self.fname_tokenizer: str = fname_tokenizer
+
         vocab_file = "tokenizer.model"
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
@@ -348,18 +344,18 @@ class VocabLoader:
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.tokenizer
         reverse_vocab = {id: encoded_tok for encoded_tok, id in tokenizer.get_vocab().items()}
-        special_ids = set(tokenizer.all_special_ids)
-        
+        added_tokens_ids = set(self.added_tokens_dict.values())
+
         for i in range(self.vocab_size_base):
-            if i in self.added_tokens_ids:
+            if i in added_tokens_ids:
                 continue
-                
+
             text = reverse_vocab[i].encode("utf-8")
             yield text, self.get_token_score(i), self.get_token_type(i)
 
-    def get_token_type(self, token_id):
+    def get_token_type(self, token_id: int) -> gguf.TokenType:
         toktype = gguf.TokenType.NORMAL
-        
+
         if self.spm is not None and token_id < self.spm.vocab_size():
             if self.spm.is_unknown(token_id):
                 toktype = gguf.TokenType.UNKNOWN
@@ -377,27 +373,27 @@ class VocabLoader:
 
         return toktype
 
-    def get_token_score(self, token_id):
+    def get_token_score(self, token_id: int) -> float:
         if self.spm is not None and token_id < self.spm.vocab_size():
             return self.spm.get_score(token_id)
         else:
             return 0.0
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
-        
-        for text in self.added_tokens_list:
+
+        for text in self.added_tokens_dict:
             if text in self.specials:
-                
+
                 toktype = self.get_token_type(self.specials[text])
                 score = self.get_token_score(self.specials[text])
-                
+
             else:
                 toktype = gguf.TokenType.USER_DEFINED
                 score = -1000.0
 
             yield text.encode("utf-8"), score, toktype
 
-    def has_newline_token(self):
+    def has_newline_token(self) -> bool:
         return '<0x0A>' in self.tokenizer.vocab or '\n' in self.tokenizer.vocab
 
     def all_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
@@ -421,7 +417,7 @@ class VocabLoader:
         vocab_file = "tokenizer.json"
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate:
-            if not self.has_newline_token(): 
+            if not self.has_newline_token():
                 return "gpt2"
             else:
                 return "llama"
@@ -432,7 +428,7 @@ class VocabLoader:
                     "if it's in another directory, pass the directory as --vocab-dir")
 
     def __repr__(self) -> str:
-        return f"<VocabLoader with {self.vocab_size_base} base tokens and {len(self.added_tokens_list)} added tokens>"
+        return f"<VocabLoader with {self.vocab_size_base} base tokens and {len(self.added_tokens_dict)} added tokens>"
 
 Vocab: TypeAlias = 'VocabLoader'
 
@@ -814,15 +810,15 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
     if params.n_vocab != vocab.vocab_size:
         if params.n_vocab == vocab.vocab_size:
             print("Ignoring added_tokens.json since model matches vocab size without it.")
-            vocab.added_tokens_list = []
+            vocab.added_tokens_dict = OrderedDict()
             vocab.vocab_size = vocab.vocab_size
             return
-            
+
         if pad_vocab and params.n_vocab > vocab.vocab_size:
             pad_count = params.n_vocab - vocab.vocab_size
             print(f'Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>')
             for i in range(1, (params.n_vocab - vocab.vocab_size) + 1):
-                vocab.added_tokens_list.append(f'<dummy{i:05}>')
+                vocab.added_tokens_dict[f'<dummy{i:05}>'] = -1
             vocab.vocab_size = params.n_vocab
             return
         msg = f"Vocab size mismatch (model has {params.n_vocab}, but {vocab.fname_tokenizer}"
@@ -1112,25 +1108,15 @@ def find_vocab_file_path(path: Path, vocab_file: str) -> Optional[Path]:
     path2 = path / vocab_file
     # Use `.parent` instead of /.. to handle the symlink case better.
     path3 = path.parent / vocab_file
-    
+
     if path2.exists():
         path = path2
     elif path3.exists():
         path = path3
     else:
         path = None
-        
+
     return path
-
-
-def load_vocab(params: Params, path: Path) -> Vocab:
-    # Be extra-friendly and accept either a file or a directory.  Also, if it's
-    # a directory, it might be the model directory, and tokenizer.model might
-    # be in the parent of that.
-            
-    print(f"Loading vocab file '{path}'")
-
-    return VocabLoader(params, path)
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
@@ -1215,7 +1201,7 @@ def main(args_in: list[str] | None = None) -> None:
         if not args.outfile:
             raise ValueError("need --outfile if using --vocab-only")
         # FIXME: Try to respect vocab_dir somehow?
-        vocab = load_vocab(params, args.vocab_dir or args.model)
+        vocab = VocabLoader(params, args.vocab_dir or args.model)
         special_vocab = gguf.SpecialVocab(model_plus.paths[0].parent,
                                           load_merges = True,
                                           n_vocab = vocab.vocab_size)
@@ -1229,7 +1215,7 @@ def main(args_in: list[str] | None = None) -> None:
         vocab = model_plus.vocab
     else:
         vocab_dir = args.vocab_dir if args.vocab_dir else model_plus.paths[0].parent
-        vocab = load_vocab(params, vocab_dir)
+        vocab = VocabLoader(params, vocab_dir)
 
     # FIXME: Try to respect vocab_dir somehow?
     print(f"Vocab info: {vocab}")
