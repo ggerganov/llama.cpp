@@ -1,8 +1,10 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
 # Set default values
-model_path="../models/"
-mmproj_path=""
+model_path="$SCRIPT_DIR/../models/"
+mmproj_path="$SCRIPT_DIR/../models/"
 threads=4
 ctx_size=512
 batch_size=512
@@ -16,7 +18,23 @@ advanced_options=""
 
 
 
-# Function to install Dialog
+# Get absolute path of a file or directory
+get_absolute_path() {
+  local target_file=$1
+
+  if command -v readlink &>/dev/null; then
+    echo "$(readlink -f "$target_file")"
+  elif command -v greadlink &>/dev/null; then
+    echo "$(greadlink -f "$target_file")"
+  else
+    echo "Error: Neither readlink nor greadlink is available."
+    exit 1
+  fi
+}
+
+
+
+# Install Dialog if missing
 install_dialog() {
     echo "Try to install Dialog with $1..."
     if ! $1 install dialog; then
@@ -28,14 +46,14 @@ install_dialog() {
 
 # Check whether Dialog is already installed
 if ! command -v dialog &> /dev/null; then
-    # Dialog is not installed, try to find the package manager
+    # Dialog is not installed, try to find the package manager. I start with brew since this is the only cross-platform pkg-manager.
     PACKAGE_MANAGERS=(brew apt apt-get yum pacman)
     for manager in "${PACKAGE_MANAGERS[@]}"; do
         if command -v $manager &> /dev/null; then
-            # Package manager found, ask the user for permission
+            # If package manager found, ask user for permission
             read -p "Dialog is not installed. Would you like to install Dialog with $manager? (y/N) " response
             if [[ "$response" =~ ^[Yy]$ ]]; then
-                # User has agreed, install Dialog
+                # If user has agreed, install Dialog
                 install_dialog $manager
                 break
             else
@@ -52,12 +70,22 @@ fi
 
 
 
+model_selection_warning() {
+  dialog --title "Hinweis" --msgbox "\n\n\nPlease note: To navigate to a folder, please press the space bar twice. To return to a higher-level folder, press the Backspace key.\n\n\nAlternatively, you can also enter the desired path manually in the lower address field. \n\n\nOnly confirm your selection with the Enter key once you have selected the file – or the desired folder to be searched." 23 65
+}
+
+
+
 model_selection() {
-    # User selects a file or folder
+  # User selects a file or folder
   exec 3>&1
+
+  # Set initial directory for the file selection dialog
+  INITIAL_DIR="$SCRIPT_DIR/../models/"
+
   model_path=$(dialog --backtitle "Model Selection" \
                       --title "Select Model File or Folder" \
-                      --fselect "$HOME/" 14 60 \
+                      --fselect "$INITIAL_DIR" 23 65 \
                       2>&1 1>&3)
   exit_status=$?
   exec 3>&-
@@ -75,7 +103,7 @@ model_selection() {
   else
     dialog --backtitle "Model Selection" \
            --title "Invalid Selection" \
-           --msgbox "The selected path is not valid." 7 50
+           --msgbox "The selected path is not valid." 23 65
     return
   fi
 
@@ -83,7 +111,7 @@ model_selection() {
 exec 3>&1
 model_choice=$(dialog --backtitle "Model Selection" \
                       --title "Select a Model File" \
-                      --menu "Choose one of the found models:" 15 60 4 \
+                      --menu "Choose one of the found models:" 23 65 4 \
                       $(for i in "${!model_files[@]}"; do echo "$((i+1))" "$(basename "${model_files[$i]}")"; done) \
                       2>&1 1>&3)
 exit_status=$?
@@ -103,10 +131,12 @@ model_path=${model_files[$((model_choice-1))]}
 multimodal_model_selection() {
     # User selects a file or folder
   exec 3>&1
-  mmproj_path=$(dialog --backtitle "Multimodal Model" \
-                      --title "Select Model File or Folder" \
-                      --fselect "$HOME/" 14 60 \
-                      2>&1 1>&3)
+  INITIAL_DIR="$SCRIPT_DIR/../models/"
+
+  mmproj_path=$(dialog --backtitle "Multimodal Model Selection" \
+                       --title "Select Multimodal Model File or Folder" \
+                       --fselect "$INITIAL_DIR"  23 65 \
+                       2>&1 1>&3)
   exit_status=$?
   exec 3>&-
 
@@ -130,10 +160,10 @@ multimodal_model_selection() {
 # Selection menu for models found
 exec 3>&1
 multi_modal_choice=$(dialog --backtitle "Multimodal Model" \
-                      --title "Select a Model File" \
-                      --menu "Choose one of the found models:" 15 60 4 \
-                      $(for i in "${!multi_modal_files[@]}"; do echo "$((i+1))" "$(basename "${multi_modal_files[$i]}")"; done) \
-                      2>&1 1>&3)
+                            --title "Select a Model File" \
+                            --menu "Choose one of the found models:" 23 65 4 \
+                            $(for i in "${!multi_modal_files[@]}"; do echo "$((i+1))" "$(basename "${multi_modal_files[$i]}")"; done) \
+                            2>&1 1>&3)
 exit_status=$?
 exec 3>&-
 
@@ -154,7 +184,7 @@ options() {
   form_values=$(dialog --backtitle "Options Configuration" \
                        --title "Set Options" \
                        --form "Enter the values for the following options:" \
-                       15 50 0 \
+                       23 65 0 \
                        "Number of Threads (-t):" 1 1 "$threads" 1 25 25 5 \
                        "Context Size (-c):" 2 1 "$ctx_size" 2 25 25 5 \
                        "Batch Size (-b):" 3 1 "$batch_size" 3 25 25 5 \
@@ -184,7 +214,7 @@ further_options() {
   exec 3>&1
   choices=$(dialog --backtitle "Further Options" \
                    --title "Boolean Options" \
-                   --checklist "Select options:" 15 60 3 \
+                   --checklist "Select options:"  23 65 3 \
                    "1" "Continuous Batching (-cb)" $cb_value \
                    "2" "Memory Lock (--mlock)" $mlock_value \
                    "3" "No Memory Map (--no-mmap)" $no_mmap_value \
@@ -218,7 +248,7 @@ advanced_options() {
   advanced_values=$(dialog --backtitle "Advanced Options" \
                            --title "Advanced Server Configuration" \
                            --form "Enter the advanced configuration options:" \
-                           15 60 0 \
+                            23 65 0 \
                            "Host IP:" 1 1 "$host" 1 15 15 0 \
                            "Port:" 2 1 "$port" 2 15 5 0 \
                            "Additional Options:" 3 1 "$advanced_options" 3 15 30 0 \
@@ -237,34 +267,12 @@ advanced_options() {
 
 
 
-start_server() {
-  # Compiling the command with the selected options
-  cmd="../server"
-  [ -n "$model_path" ] && cmd+=" -m $model_path"
-  [ -n "$mmproj_path" ] && cmd+=" --mmproj $mmproj_path"
-  [ "$threads" -ne 4 ] && cmd+=" -t $threads"
-  [ "$ctx_size" -ne 512 ] && cmd+=" -c $ctx_size"
-  [ "$batch_size" -ne 512 ] && cmd+=" -b $batch_size"
-  [ "$n_gpu_layers" -ne 0 ] && cmd+=" -ngl $n_gpu_layers"
-  [ "$cont_batching" = "on" ] && cmd+=" -cb"
-  [ "$mlock" = "on" ] && cmd+=" --mlock"
-  [ "$no_mmap" = "off" ] && cmd+=" --no-mmap"
-  [ -n "$host" ] && cmd+=" --host $host"
-  [ -n "$port" ] && cmd+=" --port $port"
-  [ -n "$advanced_options" ] && cmd+=" $advanced_options"
-
-    eval "$cmd"
-  read -p 'Do not forget to quit the server later with Ctrl+C as soon as you are finished. Press Enter to continue...'
-}
-
-
-
 # Function to save the current configuration
 save_config() {
   exec 3>&1
   config_file=$(dialog --backtitle "Save Configuration" \
                        --title "Save Configuration File" \
-                       --fselect "$HOME/" 14 60 \
+                       --fselect "$SCRIPT_DIR/" 23 65 \
                        2>&1 1>&3)
   exit_status=$?
   exec 3>&-
@@ -274,10 +282,10 @@ save_config() {
     return
   fi
 
-  # Saving the configuration to the file
-  cat > "$config_file" << EOF
-model_path=$model_path
-mmproj_path=$mmproj_path
+# Saving the configuration to the file with absolute paths using custom function
+cat > "$config_file" << EOF
+model_path=$(get_absolute_path "$model_path")
+mmproj_path=$(get_absolute_path "$mmproj_path")
 threads=$threads
 ctx_size=$ctx_size
 batch_size=$batch_size
@@ -297,12 +305,12 @@ EOF
 
 
 
-# Function for loading the configuration from a file
+# loading the configuration from a file
 load_config() {
   exec 3>&1
   config_file=$(dialog --backtitle "Load Configuration" \
                        --title "Load Configuration File" \
-                       --fselect "$HOME/" 14 60 \
+                       --fselect "$SCRIPT_DIR/" 23 65 \
                        2>&1 1>&3)
   exit_status=$?
   exec 3>&-
@@ -330,6 +338,45 @@ load_config() {
 
 
 
+confirm_and_start_server() {
+  # Show the compiled command in a dialog box
+  dialog --title "Server Start Confirmation" --yesno "The server will be started with the following command:\n\n$cmd\n\nDo not forget to close the server with Ctrl+C as soon as you are finished.\n\nWould you like to continue?" 23 65
+
+  # Check exit status of dialog
+  response=$?
+  case $response in
+    0) eval "$cmd" ;;  # User has selected 'Yes', execute the server command
+    1) return 1 ;;     # User has selected 'No', return to main menu
+    255) echo "[ESC] key pressed.";;  # The user has pressed ESC
+  esac
+}
+
+
+
+start_server() {
+  # Absolute path to the server executable
+  SERVER_CMD="$SCRIPT_DIR/../server"
+
+  # Compiling the command with the selected options
+  cmd="$SERVER_CMD"
+  [ -n "$model_path" ] && cmd+=" -m $model_path"
+  [ -n "$mmproj_path" ] && cmd+=" --mmproj $mmproj_path"
+  [ "$threads" -ne 4 ] && cmd+=" -t $threads"
+  [ "$ctx_size" -ne 512 ] && cmd+=" -c $ctx_size"
+  [ "$batch_size" -ne 512 ] && cmd+=" -b $batch_size"
+  [ "$n_gpu_layers" -ne 0 ] && cmd+=" -ngl $n_gpu_layers"
+  [ "$cont_batching" = "on" ] && cmd+=" -cb"
+  [ "$mlock" = "on" ] && cmd+=" --mlock"
+  [ "$no_mmap" = "on" ] && cmd+=" --no-mmap"
+  [ -n "$host" ] && cmd+=" --host $host"
+  [ -n "$port" ] && cmd+=" --port $port"
+  [ -n "$advanced_options" ] && cmd+=" $advanced_options"
+
+  confirm_and_start_server || return
+  }
+
+
+
 # Function to show the main menu
 show_main_menu() {
   while true; do
@@ -339,7 +386,7 @@ show_main_menu() {
       --title "Main Menu" \
       --clear \
       --cancel-label "Exit" \
-      --menu "Please select:" 15 50 6 \
+      --menu "Welcome to llama.cpp Dialog" 23 65 6 \
       "1" "Model Selection" \
       "2" "Multimodal Model Selection" \
       "3" "Options" \
@@ -360,8 +407,8 @@ show_main_menu() {
 
     # Call up the corresponding function based on the selection
     case $selection in
-      1) model_selection ;;
-      2) multimodal_model_selection ;;
+      1) model_selection_warning; model_selection ;;
+      2) model_selection_warning; multimodal_model_selection ;;
       3) options ;;
       4) further_options ;;
       5) advanced_options ;;
