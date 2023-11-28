@@ -79,7 +79,7 @@ fi
 
 
 model_selection_warning() {
-  dialog --title "Hinweis" --msgbox "\n\n\nPlease note!\n\nTo navigate to a folder, please press the space bar twice. To return to a higher-level folder, press the Backspace key.\n\n\nAlternatively, you can also enter the desired path manually in the lower path field. \n\n\nOnly confirm your selection with the Enter key once you have selected the file – or the desired folder to be searched recursively." $DIALOG_HEIGHT $DIALOG_WIDTH
+  dialog --title "Note" --msgbox "\n\n\nPlease note!\n\nTo navigate to a folder, please press the space bar twice. To return to a higher-level folder, press the Backspace key.\n\n\nAlternatively, you can also enter the desired path manually in the lower path field. \n\n\nOnly confirm your selection with the Enter key once you have selected the file – or the desired folder to be searched recursively." $DIALOG_HEIGHT $DIALOG_WIDTH
 }
 
 
