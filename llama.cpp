@@ -5550,18 +5550,8 @@ static int llama_decode_internal(
         n_threads = std::min(4, n_threads);
     }
 
-    // If all tensors can be run on the GPU then using more than 1 thread is detrimental.
-    const bool full_offload_supported =
-        model.arch == LLM_ARCH_LLAMA      ||
-        model.arch == LLM_ARCH_BAICHUAN   ||
-        model.arch == LLM_ARCH_FALCON     ||
-        model.arch == LLM_ARCH_REFACT     ||
-        model.arch == LLM_ARCH_MPT        ||
-        model.arch == LLM_ARCH_STARCODER  ||
-        model.arch == LLM_ARCH_STABLELM;
-
     const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 3;
-    if (ggml_cpu_has_cublas() && full_offload_supported && fully_offloaded) {
+    if (ggml_cpu_has_cublas() && fully_offloaded) {
         n_threads = 1;
     }
 
