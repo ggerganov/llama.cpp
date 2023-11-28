@@ -883,7 +883,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     {
         llama_model_params model_params = llama_model_default_params();
         llama_context_params llama_ctx_params = llama_context_default_params();
-        llama_ctx_params.n_ctx = clamped_max_context_length;
+        llama_ctx_params.n_ctx = clamped_max_context_length + 64; //add some extra context to deal with KV fragmentation
         //llama_ctx_paran_parts = -1;
         llama_ctx_params.seed = -1;
         llama_ctx_params.f16_kv = inputs.f16_kv;
@@ -1808,7 +1808,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             if (!evalres)
             {
-                fprintf(stderr, "\nFailed to predict! Check your context buffer sizes!\n");
+                fprintf(stderr, "\nFailed to predict at %d! Check your context buffer sizes!\n",n_past);
                 snprintf(output.text, sizeof(output.text), "%s", "");
                 output.status = 0;
                 generation_finished = true;

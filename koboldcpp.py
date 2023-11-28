@@ -2164,13 +2164,14 @@ def main(launch_args,start_server=True):
 
     if args.port_param!=defaultport:
         args.port = args.port_param
-    print(f"Starting Kobold HTTP Server on port {args.port} at http://localhost:{args.port}/api")
-    print(f"Starting OpenAI Compatible Endpoint on port {args.port} at http://localhost:{args.port}/v1")
+
     epurl = ""
     if args.host=="":
         epurl = f"http://localhost:{args.port}"
     else:
         epurl = f"http://{args.host}:{args.port}"
+    print(f"Starting Kobold HTTP Server on port {args.port} at {epurl}/api/")
+    print(f"Starting OpenAI Compatible Endpoint on port {args.port} at {epurl}/v1/")
 
     if args.launch:
         try:
