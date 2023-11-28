@@ -429,7 +429,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     async def generate_text(self, genparams, api_format, stream_flag):
         global friendlymodelname
-        is_quiet = args.remotetunnel
+        is_quiet = args.quiet
         def run_blocking(): #api format 1=basic,2=kai,3=oai,4=oai-chat
             if api_format==1:
                 genparams["prompt"] = genparams.get('text', "")
@@ -819,7 +819,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                     utfprint("Body Err: " + str(body))
                     return self.send_response(503)
 
-                is_quiet = args.remotetunnel
+                is_quiet = args.quiet
                 if (args.debugmode != -1 and not is_quiet) or args.debugmode >= 1:
                     utfprint("\nInput: " + json.dumps(genparams))
 
@@ -1009,6 +1009,7 @@ def show_new_gui():
     usemlock = ctk.IntVar()
     debugmode = ctk.IntVar()
     keepforeground = ctk.IntVar()
+    quietmode = ctk.IntVar(value=0)
 
     lowvram_var = ctk.IntVar()
     mmq_var = ctk.IntVar(value=1)
@@ -1441,6 +1442,7 @@ def show_new_gui():
 
     makecheckbox(network_tab, "Multiuser Mode", multiuser_var, 3)
     makecheckbox(network_tab, "Remote Tunnel", remotetunnel, 3, 1)
+    makecheckbox(network_tab, "Quiet Mode", quietmode, 4)
 
     # horde
     makelabel(network_tab, "Horde:", 5).grid(pady=10)
@@ -1488,6 +1490,7 @@ def show_new_gui():
         args.noshift = contextshift.get()==0
         args.remotetunnel = remotetunnel.get()==1
         args.foreground = keepforeground.get()==1
+        args.quiet = quietmode.get()==1
 
         gpuchoiceidx = 0
         if gpu_choice_var.get()!="All":
@@ -1556,6 +1559,7 @@ def show_new_gui():
         contextshift.set(0 if "noshift" in dict and dict["noshift"] else 1)
         remotetunnel.set(1 if "remotetunnel" in dict and dict["remotetunnel"] else 0)
         keepforeground.set(1 if "foreground" in dict and dict["foreground"] else 0)
+        quietmode.set(1 if "quiet" in dict and dict["quiet"] else 0)
         if "useclblast" in dict and dict["useclblast"]:
             if "noavx2" in dict and dict["noavx2"]:
                 if clblast_noavx2_option is not None:
@@ -2247,6 +2251,7 @@ if __name__ == '__main__':
     parser.add_argument("--remotetunnel", help="Uses Cloudflare to create a remote tunnel, allowing you to access koboldcpp remotely over the internet even behind a firewall.", action='store_true')
     parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
     parser.add_argument("--preloadstory", help="Configures a prepared story json save file to be hosted on the server, which frontends (such as Kobold Lite) can access over the API.", default="")
+    parser.add_argument("--quiet", help="Enable quiet mode, which hides generation inputs and outputs in the terminal. Quiet mode is automatically enabled when running --hordeconfig.", action='store_true')
 
     # #deprecated hidden args. they do nothing. do not use
     # parser.add_argument("--psutil_set_threads", action='store_true', help=argparse.SUPPRESS)
