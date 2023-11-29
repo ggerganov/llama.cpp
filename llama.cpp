@@ -5048,6 +5048,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "kq_scaled_alibi",            OFFLOAD_FUNC_KQ  },
     { "kq_masked",                  OFFLOAD_FUNC_KQ  },
     { "kq_soft_max",                OFFLOAD_FUNC_V   },
+    { "kq_soft_max_ext",            OFFLOAD_FUNC_V   },
     { "v",                          OFFLOAD_FUNC_V   },
     { "kqv",                        OFFLOAD_FUNC_V   },
     { "kqv_merged",                 OFFLOAD_FUNC_V   },

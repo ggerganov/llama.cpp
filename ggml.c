@@ -4829,6 +4829,12 @@ static struct ggml_tensor * ggml_soft_max_impl(
         struct ggml_tensor  * mask,
         float                 scale,
         bool                  inplace) {
+    if (mask) {
+        GGML_ASSERT(mask->ne[2] == 1);
+        GGML_ASSERT(mask->ne[3] == 1);
+        GGML_ASSERT(ggml_can_repeat_rows(mask, a));
+    }
+
     bool is_node = false;
 
     if (a->grad) {
