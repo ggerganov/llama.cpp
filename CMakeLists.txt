@@ -164,7 +164,7 @@ if (LLAMA_METAL)
     configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
-        ${FOUNDATION_LIBRARY}
+        ${FOUNDATION_LIBRARY} 
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
         )
@@ -700,6 +700,7 @@ target_compile_features(llama PUBLIC cxx_std_20) # don't bump
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}
+    -ldynet
     )
 
 if (BUILD_SHARED_LIBS)

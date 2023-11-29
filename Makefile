@@ -541,6 +541,8 @@ $(info )
 
 ggml.o: ggml.cpp ggml.h ggml-cuda.h
 	$(CXX)  $(CXXFLAGS)   -c $< -o $@
+libdynet.o: libdynet.cpp ggml.h ggml-cuda.h
+	$(CXX)  $(CXXFLAGS)   -c $< -o $@
 
 ggml-alloc.o: ggml-alloc.cpp ggml.h ggml-alloc.h
 	$(CXX)  $(CXXFLAGS)   -c $< -o $@
@@ -551,7 +553,7 @@ ggml-backend.o: ggml-backend.cpp ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.cpp ggml.h ggml-quants.h
 	$(CXX) $(CXXFLAGS)    -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o libdynet.o
 
 llama.o: llama.cpp ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -584,8 +586,8 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS) 
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) -ldynet
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
