@@ -3705,22 +3705,28 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
     cb(kq, "kq", il);
 
-    kq = ggml_scale(ctx, kq, kq_scale);
-    cb(kq, "kq_scaled", il);
-
+    // TODO: !!!!!!!!!
     if (max_alibi_bias > 0.0f) {
-        // TODO: n_head or n_head_kv
-        // TODO: K-shift is likely not working
-        // TODO: change to ggml_add
-        kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
-        cb(kq, "kq_scaled_alibi", il);
+        kq = ggml_scale(ctx, kq, kq_scale);
+        cb(kq, "kq_scaled", il);
+
+        if (max_alibi_bias > 0.0f) {
+            // TODO: n_head or n_head_kv
+            // TODO: K-shift is likely not working
+            // TODO: change to ggml_add
+            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, max_alibi_bias);
+            cb(kq, "kq_scaled_alibi", il);
+        }
+
+        kq = ggml_add(ctx, kq, kq_mask);
+        cb(kq, "kq_masked", il);
+
+        kq = ggml_soft_max(ctx, kq);
+        cb(kq, "kq_soft_max", il);
+    } else {
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, 1.0f/sqrtf(float(n_embd_head)));
+        cb(kq, "kq_soft_max_ext", il);
     }
-
-    kq = ggml_add(ctx, kq, kq_mask);
-    cb(kq, "kq_masked", il);
-
-    kq = ggml_soft_max(ctx, kq);
-    cb(kq, "kq_soft_max", il);
 
     // split cached v into n_head heads
     struct ggml_tensor * v =

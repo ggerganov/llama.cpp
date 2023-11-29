@@ -1036,11 +1036,21 @@ void ggml_metal_graph_compute(
                                 nth /= 2;
                                 [encoder setComputePipelineState:ctx->pipeline_soft_max];
                             }
-                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                            [encoder setBytes:&ne00 length:sizeof(ne00) atIndex:2];
-                            [encoder setBytes:&ne01 length:sizeof(ne01) atIndex:3];
-                            [encoder setBytes:&ne02 length:sizeof(ne02) atIndex:4];
+
+                            const float scale = ((float *) dst->op_params)[0];
+
+                            [encoder setBuffer:id_src0 offset:offs_src0   atIndex:0];
+                            if (id_src1) {
+                                [encoder setBuffer:id_src1 offset:offs_src1   atIndex:1];
+                            } else {
+                                [encoder setBuffer:nil     offset:0           atIndex:1];
+                            }
+
+                            [encoder setBuffer:id_dst  offset:offs_dst    atIndex:2];
+                            [encoder setBytes:&ne00  length:sizeof(ne00)  atIndex:3];
+                            [encoder setBytes:&ne01  length:sizeof(ne01)  atIndex:4];
+                            [encoder setBytes:&ne02  length:sizeof(ne02)  atIndex:5];
+                            [encoder setBytes:&scale length:sizeof(scale) atIndex:6];
                             [encoder setThreadgroupMemoryLength:GGML_PAD(nth/32*sizeof(float), 16) atIndex:0];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne01*ne02*ne03, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
