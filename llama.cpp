@@ -765,8 +765,10 @@ struct llama_buffer {
     ~llama_buffer() {
         if (data) {
 #ifdef GGML_USE_KOMPUTE
-            if (ggml_vk_has_device()) {
-                ggml_vk_free_memory(memory);
+            if (memory.data) {
+                if (ggml_vk_has_device()) {
+                    ggml_vk_free_memory(memory);
+                }
                 data = NULL;
                 return;
             }
