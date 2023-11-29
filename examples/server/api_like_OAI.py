@@ -32,6 +32,15 @@ def is_present(json, key):
         return False
     return True
 
+
+def extract_content_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return ''.join(extract_content_text(item) for item in content)
+    else:
+        return content['text']
+
 #convert chat to prompt
 def convert_chat(messages):
     prompt = "" + args.chat_prompt.replace("\\n", "\n")
@@ -44,11 +53,11 @@ def convert_chat(messages):
 
     for line in messages:
         if (line["role"] == "system"):
-            prompt += f"{system_n}{line['content']}"
+            prompt += f"{system_n}{extract_content_text(line['content'])}"
         if (line["role"] == "user"):
-            prompt += f"{user_n}{line['content']}"
+            prompt += f"{user_n}{extract_content_text(line['content'])}"
         if (line["role"] == "assistant"):
-            prompt += f"{ai_n}{line['content']}{stop}"
+            prompt += f"{ai_n}{extract_content_text(line['content'])}{stop}"
     prompt += ai_n.rstrip()
 
     return prompt
@@ -130,7 +139,8 @@ def make_resData_stream(data, chat=False, time_now = 0, start=False):
             }
         ]
     }
-    slot_id = data["slot_id"]
+    if "slot_id" in data:
+        slot_id = data["slot_id"]
     if (chat):
         if (start):
             resData["choices"][0]["delta"] =  {
