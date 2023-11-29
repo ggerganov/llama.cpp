@@ -9440,8 +9440,8 @@ float* ggml_tensor_to_float(const ggml_tensor* tensor) {
 
 // function to create a hash table of the N most common values of a given tensor
 void find_n_most_common_values(const char * pname, const ggml_tensor* tensor, int decimal_place, size_t top_n) {
-  //float* buffer = ggml_tensor_to_float(tensor);
-  float* buffer = 0;
+  
+  //float* buffer = 0;
 
   //if(tensor->type == GGML_TYPE_F32)
   //  {
@@ -9451,10 +9451,11 @@ void find_n_most_common_values(const char * pname, const ggml_tensor* tensor, in
   //	memcpy(buffer, ggml_get_data_f32(tensor), ggml_nbytes(tensor));
 	//return buffer;
 
-    const size_t num_elements = ggml_nbytes(tensor)/sizeof(float);
-    //buffer = new float[num_elements];
-
-    buffer=(float*)ggml_get_data(tensor);
+    const size_t num_elements = ggml_nelements(tensor);
+    if (tensor->type != GGML_TYPE_F32) {
+      return;
+    }
+    float* buffer = ggml_get_data_f32(tensor);
 
     auto values = std::unordered_map<double, int>(); // hash table to store the count of each value
 
