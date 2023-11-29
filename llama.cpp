@@ -6108,11 +6108,11 @@ private:
         std::vector<size_t> bpe_words; // stroe the offset of each word
         bpe_words.reserve(offsets.size()); // Reserve memory for the approximate size
         size_t start = 0;
-        for ( auto & offset : offsets) {
+        for (auto offset : offsets) {
             std::wcregex_iterator it(text.data() + start, text.data() + start + offset, expr);
             std::wcregex_iterator end;
 
-            size_t start_idx = 0;
+            int64_t start_idx = 0;
             while (it != end) {
                 std::wcmatch match = *it;
                 if (match.position() > start_idx) {
@@ -6122,7 +6122,7 @@ private:
                 start_idx = match.position() + match.length();
                 ++it;
             }
-            if (start_idx < offset) {
+            if (start_idx < (int64_t) offset) {
                 bpe_words.emplace_back(offset - start_idx);
             }
             start += offset;
