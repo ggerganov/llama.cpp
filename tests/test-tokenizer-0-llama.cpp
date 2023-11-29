@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "common.h"
+#include "console.h"
 
 #include <cstdio>
 #include <string>
@@ -35,6 +36,7 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "   Hello"              , {    1678,  15043, }, },
         { "    Hello"             , {     268,  15043, }, },
         { "    Hello\n    Hello"  , {     268,  15043,     13,   1678,  15043, }, },
+        { " ("                    , {   29871,  313, }, },
     };
 
     return _k_tests;
@@ -62,18 +64,20 @@ int main(int argc, char **argv) {
 
     // load the vocab
     {
-        auto lparams = llama_context_default_params();
+        auto mparams = llama_model_default_params();
 
-        lparams.vocab_only = true;
+        mparams.vocab_only = true;
 
-        model = llama_load_model_from_file(fname.c_str(), lparams);
+        model = llama_load_model_from_file(fname.c_str(), mparams);
 
         if (model == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
             return 1;
         }
 
-        ctx = llama_new_context_with_model(model, lparams);
+        auto cparams = llama_context_default_params();
+
+        ctx = llama_new_context_with_model(model, cparams);
 
         if (ctx == NULL) {
             fprintf(stderr, "%s: error: failed to load vocab '%s'\n", __func__, fname.c_str());
@@ -82,12 +86,18 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (llama_vocab_type(ctx) != LLAMA_VOCAB_TYPE_SPM) {
+    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_SPM) {
         fprintf(stderr, "%s : error: vocab type is not SPM\n", __func__);
         llama_free_model(model);
         llama_free(ctx);
         return 2;
     }
+
+#ifdef _WIN32
+    // We need this for unicode console support
+    console::init(false, false);
+    atexit([]() { console::cleanup(); });
+#endif
 
     bool success = true;
 
@@ -164,10 +174,8 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                ofs << tok << " ";
+                ofs << tok << " '" << llama_detokenize_spm(ctx, std::vector<int>{tok}) << "'" << std::endl;
             }
-
-            ofs << "\n";
         }
 
         fprintf(stderr, "%s : tokens written to '%s'\n", __func__, (fname_text + ".tokcpp").c_str());

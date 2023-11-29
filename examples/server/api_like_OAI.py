@@ -8,6 +8,7 @@ import json
 
 
 app = Flask(__name__)
+slot_id = -1
 
 parser = argparse.ArgumentParser(description="An example of using server.cpp with a similar API to OAI. It must be used together with server.cpp.")
 parser.add_argument("--chat-prompt", type=str, help="the top prompt in chat completions(default: 'A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')", default='A chat between a curious user and an artificial intelligence assistant. The assistant follows the given rules no matter what.\\n')
@@ -27,9 +28,9 @@ def is_present(json, key):
         buf = json[key]
     except KeyError:
         return False
+    if json[key] == None:
+        return False
     return True
-
-
 
 #convert chat to prompt
 def convert_chat(messages):
@@ -77,7 +78,8 @@ def make_postData(body, chat=False, stream=False):
     if(is_present(body, "stop")): postData["stop"] += body["stop"]
     postData["n_keep"] = -1
     postData["stream"] = stream
-
+    postData["cache_prompt"] = True
+    postData["slot_id"] = slot_id
     return postData
 
 def make_resData(data, chat=False, promptToken=[]):
@@ -128,6 +130,7 @@ def make_resData_stream(data, chat=False, time_now = 0, start=False):
             }
         ]
     }
+    slot_id = data["slot_id"]
     if (chat):
         if (start):
             resData["choices"][0]["delta"] =  {

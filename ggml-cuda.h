@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-backend.h"
 
 #ifdef GGML_USE_HIPBLAS
 #define GGML_CUDA_NAME "ROCm"
@@ -16,7 +17,12 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
+// Always success. To check if CUDA is actually loaded, use `ggml_cublas_loaded`.
 GGML_API void   ggml_init_cublas(void);
+
+// Returns `true` if there are available CUDA devices and cublas loads successfully; otherwise, it returns `false`.
+GGML_API bool   ggml_cublas_loaded(void);
+
 GGML_API void * ggml_cuda_host_malloc(size_t size);
 GGML_API void   ggml_cuda_host_free(void * ptr);
 
@@ -31,6 +37,7 @@ GGML_API void   ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tens
 
 GGML_API void   ggml_cuda_assign_buffers_no_alloc(struct ggml_tensor * tensor);
 GGML_API void   ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset);
+GGML_API void   ggml_cuda_copy_to_device(struct ggml_tensor * tensor);
 
 GGML_API void   ggml_cuda_set_main_device(int main_device);
 GGML_API void   ggml_cuda_set_mul_mat_q(bool mul_mat_q);
@@ -40,6 +47,9 @@ GGML_API bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, s
 
 GGML_API int    ggml_cuda_get_device_count(void);
 GGML_API void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
+
+// backend API
+GGML_API ggml_backend_t ggml_backend_cuda_init(void); // TODO: take a list of devices to use
 
 #ifdef  __cplusplus
 }

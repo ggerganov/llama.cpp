@@ -10,10 +10,10 @@ on:
   push:
     branches:
       - master
-    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+    paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu']
+    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -27,7 +27,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -38,13 +38,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          CC=gcc-8 make
+          CC=gcc-8 make -j $(nproc)
 
       - name: Test
         id: make_test
         run: |
-          CC=gcc-8 make tests
-          make test
+          CC=gcc-8 make tests -j $(nproc)
+          make test -j $(nproc)
 
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -66,7 +66,7 @@ jobs:
           mkdir build
           cd build
           cmake ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -101,7 +101,7 @@ jobs:
           mkdir build
           cd build
           cmake .. -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --build . --config ${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -121,7 +121,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -135,7 +135,7 @@ jobs:
           mkdir build
           cd build
           cmake -DLLAMA_MPI=ON ..
-          cmake --build . --config Release
+          cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
@@ -149,7 +149,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
 
       - name: Dependencies
         id: depends
@@ -160,15 +160,44 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make
+          make -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: make_test
         run: |
-          make tests
-          make test
+          make tests -j $(sysctl -n hw.logicalcpu)
+          make test -j $(sysctl -n hw.logicalcpu)
 
   macOS-latest-cmake:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest --verbose --timeout 900
+
+  macOS-latest-cmake-ios:
     runs-on: macos-latest
 
     steps:
@@ -188,14 +217,69 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF ..
-          cmake --build . --config Release
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
-      - name: Test
-        id: cmake_test
+  macOS-latest-cmake-tvos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
         run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
           cd build
-          ctest --verbose --timeout 900
+          cmake -G Xcode .. \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DCMAKE_SYSTEM_NAME=tvOS \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+  macOS-latest-swift:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        destination: ['generic/platform=macOS', 'generic/platform=iOS', 'generic/platform=tvOS']
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v1
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: xcodebuild for swift package
+        id: xcodebuild
+        run: |
+          xcodebuild -scheme llama -destination "${{ matrix.destination }}"
+
+      - name: Build Swift Example
+        id: make_build_swift_example
+        run: |
+            make swift
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -204,27 +288,30 @@ jobs:
       OPENBLAS_VERSION: 0.3.23
       OPENCL_VERSION: 2023.04.17
       CLBLAST_VERSION: 1.6.0
+      SDE_VERSION: 9.21.1-2023-04-24
 
     strategy:
       matrix:
         include:
           - build: 'noavx'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx2'
-            defines: '-DLLAMA_BUILD_SERVER=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'avx'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
           - build: 'avx512'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
           - build: 'clblast'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
           - build: 'openblas'
-            defines: '-DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Download OpenCL SDK
         id: get_opencl
@@ -266,7 +353,7 @@ jobs:
           mkdir build
           cd build
           cmake .. ${{ matrix.defines }}
-          cmake --build . --config Release
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Add clblast.dll
         id: add_clblast_dll
@@ -297,10 +384,22 @@ jobs:
 
       - name: Test
         id: cmake_test
-        if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # Test AVX-512 only when possible
+        if: ${{ matrix.build != 'clblast' && (matrix.build != 'avx512' || env.HAS_AVX512F == '1') }} # not all machines have native AVX-512
         run: |
           cd build
           ctest -C Release --verbose --timeout 900
+
+      - name: Test (Intel SDE)
+        id: cmake_test_sde
+        if: ${{ matrix.build == 'avx512' && env.HAS_AVX512F == '0' }} # use Intel SDE for AVX-512 emulation
+        run: |
+          curl.exe -o $env:RUNNER_TEMP/sde.tar.xz -L "https://downloadmirror.intel.com/777395/sde-external-${env:SDE_VERSION}-win.tar.xz"
+          # for some weird reason windows tar doesn't like sde tar.xz
+          7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/sde.tar.xz
+          7z x "-o${env:RUNNER_TEMP}" $env:RUNNER_TEMP/sde.tar
+          $sde = $(join-path $env:RUNNER_TEMP sde-external-${env:SDE_VERSION}-win/sde.exe)
+          cd build
+          & $sde -future -- ctest -C Release --verbose --timeout 900
 
       - name: Determine tag name
         id: tag
@@ -334,28 +433,30 @@ jobs:
 
     strategy:
       matrix:
-        cuda: ['12.1.0', '11.7.1']
+        cuda: ['12.2.0', '11.7.1']
         build: ['cublas']
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - uses: Jimver/cuda-toolkit@v0.2.10
+      - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
         with:
           cuda: ${{ matrix.cuda }}
-          # TODO(green-sky): _dev seems to fail, and non dev are not enought
-          #sub-packages: '["nvcc", "cudart", "cublas", "cudart_dev", "cublas_dev"]'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON
-          cmake --build . --config Release
+          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
         id: tag
@@ -384,27 +485,11 @@ jobs:
             llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '12.1.0' }}
-        # TODO(green-sky): paths are cuda 12 specific
         run: |
           echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_12.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_12.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
-
-      - name: Copy and pack Cuda runtime
-        if: ${{ matrix.cuda == '11.7.1' }}
-        # TODO(green-sky): paths are cuda 11 specific
-        run: |
-          echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
-          mkdir '.\build\bin\cudart\'
-          ls "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin"
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_110.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublas64_11.dll" '.\build\bin\cudart\'
-          cp "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cublasLt64_11.dll" '.\build\bin\cudart\'
-          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip .\build\bin\cudart\*
+          $dst='.\build\bin\cudart\'
+          robocopy "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -412,6 +497,34 @@ jobs:
         with:
           path: |
             cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+
+  ios-xcode-build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build Xcode project
+        run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
+
+
+#  freeBSD-latest:
+#    runs-on: macos-12
+#    steps:
+#    - name: Clone
+#      uses: actions/checkout@v3
+#
+#    - name: Build
+#      uses: cross-platform-actions/action@v0.19.0
+#      with:
+#        operating_system: freebsd
+#        version: '13.2'
+#        hypervisor: 'qemu'
+#        run: |
+#            sudo pkg update
+#            sudo pkg install -y gmake automake autoconf pkgconf llvm15 clinfo clover opencl clblast openblas
+#            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
     if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
@@ -429,7 +542,9 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Determine tag name
         id: tag
@@ -487,7 +602,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -511,7 +626,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -535,7 +650,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
@@ -565,7 +680,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -604,7 +719,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -650,7 +765,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v1
+#        uses: actions/checkout@v3
 #
 #      - name: Dependencies
 #        run: |
