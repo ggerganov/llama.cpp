@@ -3705,8 +3705,8 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
     cb(kq, "kq", il);
 
-    // TODO: !!!!!!!!!
     if (max_alibi_bias > 0.0f) {
+        // temporary branch until we figure out how to handle ggml_alibi through ggml_add
         kq = ggml_scale(ctx, kq, kq_scale);
         cb(kq, "kq_scaled", il);
 
