@@ -717,3 +717,5 @@ tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp build-info.h ggml
 
 tests/test-c.o: tests/test-c.c llama.h
 	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
+
+include Makefile-finetune.mak

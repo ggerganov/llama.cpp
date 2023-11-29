@@ -64,6 +64,26 @@ model_name="bc2-7b-chat-q2_k" \
 cmd="finetune-bc" \
 sh examples/finetune/finetune.sh >${model_name}.log
 
+dataset="slqm" \
+data_dir="../"  \
+model_dir="../"  \
+model_name="bc2-13b-chat-q2_k" \
+adamiter=90 \
+cmd="finetune-bc" \
+inter=true \
+sh examples/finetune/finetune.sh >bc2-13b-chat-q2_k.log
+
+# macos
+dataset="slqm" \
+data_dir="../models/"  \
+model_dir="../models/ggmls/"  \
+model_name="bc2-13b-chat-q2_k" \
+cmd="finetune-bc" \
+inter=1 \
+sh examples/finetune/finetune.sh >bc2-13b-chat-q2_k.log
+
+
+# ./main -m ../models/ggmls/openbuddy-llama2-70b-v10.1-bf16-q3_k_s.gguf -n 128     -p '"人间清暑殿，天上广寒宫。"的下一句'
 
 
 1.微调 CPU核素越多越快 只支持llama架构
