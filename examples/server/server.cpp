@@ -542,9 +542,8 @@ struct llama_server_context
     std::vector<task_server> queue_tasks;
     std::vector<task_result> queue_results;
     std::vector<task_multi>  queue_multitasks;
-    std::mutex mutex_tasks; // also guards id_gen
+    std::mutex mutex_tasks; // also guards id_gen, and queue_multitasks
     std::mutex mutex_results;
-    std::mutex mutex_multitasks;
 
     ~llama_server_context()
     {
@@ -1140,7 +1139,7 @@ struct llama_server_context
 
     void add_multi_task(int id, std::vector<int>& sub_ids)
     {
-        std::lock_guard<std::mutex> lock(mutex_multitasks);
+        std::lock_guard<std::mutex> lock(mutex_tasks);
         task_multi multi;
         multi.id = id;
         std::copy(sub_ids.begin(), sub_ids.end(), std::inserter(multi.subtasks_remaining, multi.subtasks_remaining.end()));
@@ -1149,7 +1148,7 @@ struct llama_server_context
 
     void update_multi_task(int multitask_id, int subtask_id, task_result& result)
     {
-        std::lock_guard<std::mutex> lock(mutex_multitasks);
+        std::lock_guard<std::mutex> lock(mutex_tasks);
         for (auto& multitask : queue_multitasks)
         {
             if (multitask.id == multitask_id)
@@ -1543,7 +1542,6 @@ struct llama_server_context
         }
 
         // remove finished multitasks from the queue of multitasks, and add the corresponding result to the result queue
-        std::lock_guard<std::mutex> lock_multitasks(mutex_multitasks);
         auto queue_iterator = queue_multitasks.begin();
         while (queue_iterator != queue_multitasks.end())
         {
