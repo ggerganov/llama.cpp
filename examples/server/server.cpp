@@ -1844,6 +1844,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("    -spf FNAME, --system-prompt-file FNAME\n");
     printf("                        Set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA.\n");
+    printf("  --log-disable         disables logging to afile.\n");
     printf("\n");
 }
 
@@ -2197,6 +2198,11 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             params.mmproj = argv[i];
+        }
+        else if (arg == "--log-disable")
+        {
+            log_set_target(stdout);
+            LOG_INFO("logging to file is disabled.", {});
         }
         else
         {
