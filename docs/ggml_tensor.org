@@ -1,0 +1,544 @@
+
+Using Modern C++ and creating template metaprotocols
+lets design a set of classes to represent tensors, a pandas like tabular data frame with nested structures wrapped in reflection
+and an autoencoder to go from tabluar to tensor and back with forward and reverse.
+
+We want to design in plantuml a class diagram for this idea.
+
+#+begin_src output
+```scss
+@startuml
+
+class Tensor {
+    string dataType;
+    int rows;
+    int cols;
+}
+
+class DataFrame {
+    string name;
+    string[] columns;
+    string[] rows;
+    List<Tensor> tensors;
+}
+
+class AutoEncoder {
+    DataFrame input;
+    DataFrame output;
+}
+
+Tensor[in,out] forward(DataFrame in) = (input) -> ({
+    // Forward transformation of input to output using the autoencoder
+});
+
+Tensor[in,out] reverse(DataFrame out) = (output) -> ({
+    // Reverse transformation of output to input using the autoencoder
+});
+
+@enduml
+```
+This class diagram represents a set of classes for tensors, data frames, and an autoencoder. The `Tensor` class has attributes for the data type, rows, and columns. The `DataFrame` class has attributes for the name, columns, rows, and a list of tensors. The `AutoEncoder` class has input and output data frames and forward and reverse transformation methods.
+#+end_src
+
+#+begin_src output
+Here's a possible implementation of the requested classes using modern C++ and template metaprogramming:
+```cpp
+#include <iostream>
+#include <vector>
+
+// Tensor class
+template<typename T>
+class Tensor {
+public:
+    Tensor(int rows, int cols) : data_(rows, std::vector<T>(cols)) {}
+
+    // Getters and setters for the tensor data
+    const T& operator()(int row, int col) const { return data_[row][col]; }
+    T& operator()(int row, int col) { return data_[row][col]; }
+
+private:
+    std::vector<std::vector<T>> data_;
+};
+
+// Pandas-like DataFrame class
+template<typename T>
+class DataFrame {
+public:
+    DataFrame(const std::vector<std::vector<T>>& data) : data_(data) {}
+
+    // Getters and setters for the dataframe columns
+    const T& operator()(int col, int row) const { return data_[row][col]; }
+    T& operator()(int col, int row) { return data_[row][col]; }
+
+private:
+    std::vector<std::vector<T>> data_;
+};
+
+// Autoencoder class for converting between tabular and tensor formats
+template<typename T>
+class AutoEncoder {
+public:
+    // Forward pass to convert table to tensor
+    Tensor<T> forward(const DataFrame<T>& df) const {
+        int rows = df.rows();
+        int cols = df.cols();
+        Tensor<T> t(rows, cols);
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                t(i, j) = df(j, i);
+            }
+        }
+        return t;
+    }
+
+    // Reverse pass to convert tensor to table
+    DataFrame<T> reverse(const Tensor<T>& t) const {
+        int rows = t.rows();
+        int cols = t.cols();
+        DataFrame<T> df(std::vector<std::vector<T>>(rows, std::vector<T>(cols)));
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                df(j, i) = t(i, j);
+            }
+        }
+        return df;
+    }
+};
+
+int main() {
+    // Example usage
+    Tensor<int> t(2, 3);
+    DataFrame<int> df{{1, 2}, {3, 4}};
+
+    // Convert table to tensor
+    t = autoEncoder<int>().forward(df);
+
+    // Convert tensor back to table
+    df = autoEncoder<int>().reverse(t);
+
+    return 0;
+}
+```
+This implementation defines three classes: `Tensor`, `DataFrame`, and `AutoEncoder`. The `Tensor` class represents a multi-dimensional array of data with a specified number of rows and columns. The `DataFrame` class represents a tabular dataset with a specified number of columns and rows, where each column contains data for a specific feature. The `AutoEncoder` class provides methods for converting between the tabular and tensor formats.
+
+The example usage demonstrates how to create an instance of a `Tensor`, a `DataFrame`, and an `AutoEncoder`, and then convert back and forth between the two formats.
+#+end_src
+
+Our input tensor is a `ggml_tensor` struct with the following fields:
+
+* `type`: an enumeration of `ggml_type` representing the data type of the tensor.
+* `backend`: an enumeration of `ggml_backend_type` indicating the backend used to store the tensor data.
+* `buffer`: a pointer to the storage buffer for our tensor, which we will use later to extract the values.
+* `n_dims`: the number of dimensions in our tensor.
+* `ne`: an array containing the number of elements in each dimension of our tensor.
+* `nb`: an array containing the stride size for each dimension of our tensor, which we will use later to extract the values.
+
+ """    struct ggml_tensor {
+        enum ggml_type         type;
+        enum ggml_backend_type backend;
+
+        struct ggml_backend_buffer * buffer;
+
+        int     n_dims;
+        int64_t ne[GGML_MAX_DIMS]; // number of elements
+        size_t  nb[GGML_MAX_DIMS]; // stride in bytes:
+                                   // nb[0] = ggml_type_size(type)
+                                   // nb[1] = nb[0]   * (ne[0] / ggml_blck_size(type)) + padding
+                                   // nb[i] = nb[i-1] * ne[i-1]
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+    //
+    // Backend buffer
+    //
+
+    typedef void * ggml_backend_buffer_context_t;
+
+    struct ggml_backend_buffer_i {
+        void   (*free_buffer)   (ggml_backend_buffer_t buffer);
+        void * (*get_base)      (ggml_backend_buffer_t buffer); // get base pointer
+        size_t (*get_alloc_size)(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // pre-allocation callback
+        void   (*init_tensor)   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // post-allocation callback
+        void   (*free_tensor)   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor); // pre-free callback
+    };
+
+    struct ggml_backend_buffer {
+        struct ggml_backend_buffer_i iface;
+
+        ggml_backend_t                backend;
+        ggml_backend_buffer_context_t context;
+
+        size_t size;
+    };
+
+    GGML_API ggml_backend_buffer_t ggml_backend_buffer_init(
+            struct ggml_backend                  * backend,
+            struct ggml_backend_buffer_i           iface,
+                   ggml_backend_buffer_context_t   context,
+                   size_t                          size);
+
+    //
+    // Backend
+    //
+
+    typedef void * ggml_backend_context_t;
+
+    struct ggml_backend_i {
+        const char * (*get_name)(ggml_backend_t backend);
+
+        void (*free)(ggml_backend_t backend);
+
+        // buffer allocation
+        ggml_backend_buffer_t (*alloc_buffer)(ggml_backend_t backend, size_t size);
+
+        // get buffer alignment
+        size_t (*get_alignment)(ggml_backend_t backend);
+
+        // tensor data access
+        // these functions can be asynchronous, helper functions are provided for synchronous access that automatically call synchronize
+        void (*set_tensor_async)(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
+        void (*get_tensor_async)(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+        void (*synchronize)     (ggml_backend_t backend);
+
+        // (optional) copy tensor between different backends, allow for single-copy tranfers
+        void (*cpy_tensor_from)(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
+        void (*cpy_tensor_to)  (ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
+
+        // compute graph with a plan
+        ggml_backend_graph_plan_t (*graph_plan_create) (ggml_backend_t backend, struct ggml_cgraph * cgraph);
+        void                      (*graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+        void                      (*graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+
+        // compute graph without a plan
+        void (*graph_compute)(ggml_backend_t backend, struct ggml_cgraph * cgraph);
+
+        // check if the backend supports an operation
+        bool (*supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);
+    };
+
+    struct ggml_backend {
+        struct ggml_backend_i iface;
+
+        ggml_backend_context_t context;
+    };
+
+#ifdef  __cplusplus
+}
+    struct ggml_backend_buffer;
+    typedef struct ggml_backend_buffer * ggml_backend_buffer_t;
+
+    // backend buffer functions
+    GGML_API void   ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
+    GGML_API size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
+    GGML_API void * ggml_backend_buffer_get_base      (ggml_backend_buffer_t buffer);
+    GGML_API size_t ggml_backend_buffer_get_size      (ggml_backend_buffer_t buffer);
+    GGML_API size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+    GGML_API void   ggml_backend_buffer_init_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+    GGML_API void   ggml_backend_buffer_free_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+
+    //
+    // Backend
+    //
+
+    struct ggml_backend;
+    typedef struct ggml_backend * ggml_backend_t;
+    typedef void * ggml_backend_graph_plan_t;
+
+    GGML_API ggml_backend_t ggml_get_backend(const struct ggml_tensor * tensor);
+
+    GGML_API const char * ggml_backend_name(ggml_backend_t backend);
+    GGML_API void         ggml_backend_free(ggml_backend_t backend);
+
+    GGML_API ggml_backend_buffer_t ggml_backend_alloc_buffer(ggml_backend_t backend, size_t size);
+
+    GGML_API size_t ggml_backend_get_alignment(ggml_backend_t backend);
+
+    GGML_API void ggml_backend_tensor_set_async(      struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
+    GGML_API void ggml_backend_tensor_get_async(const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+
+    GGML_API void ggml_backend_tensor_set(      struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
+    GGML_API void ggml_backend_tensor_get(const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+
+    GGML_API void ggml_backend_synchronize(ggml_backend_t backend);
+
+    GGML_API ggml_backend_graph_plan_t ggml_backend_graph_plan_create (ggml_backend_t backend, struct ggml_cgraph * cgraph);
+
+    GGML_API void ggml_backend_graph_plan_free   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+    GGML_API void ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+    GGML_API void ggml_backend_graph_compute     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
+    GGML_API bool ggml_backend_supports_op       (ggml_backend_t backend, const struct ggml_tensor * op);
+
+    // tensor copy between different backends
+    GGML_API void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst);
+
+    //
+    // CPU backend
+    //
+
+    GGML_API ggml_backend_t ggml_backend_cpu_init(void);
+
+    GGML_API bool ggml_backend_is_cpu(ggml_backend_t backend);
+    GGML_API void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads);
+
+    // Create a backend buffer from an existing pointer
+    GGML_API ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(ggml_backend_t backend_cpu, void * ptr, size_t size);
+
+
+    //
+    // Backend scheduler
+    //
+
+    // The backend scheduler allows for multiple backends to be used together
+    // Handles compute buffer allocation, assignment of tensors to backends, and copying of tensors between backends
+    // The backends are selected based on:
+    // - the backend that supports the operation
+    // - the location of the pre-allocated tensors (e.g. the weights)
+    /*
+      Example usage:
+
+        sched = ggml_backend_sched_new({backend_gpu, backend_gpu2, backend_cpu}, num_backends);
+        // sched is initialized with measure allocators and cannot be used until allocated with a measure graph
+
+        // initialize buffers from a measure graph
+        measure_graph = build_graph(sched); // use the allocr to allocate inputs as needed
+
+        // in build_graph:
+        build_graph(...) {
+            // allocating tensors in a specific backend (optional, recommended: pre-allocate inputs in a different buffer)
+            alloc_cpu = ggml_backend_sched_get_allocr(sched, backend_cpu);
+            ggml_allocr_alloc(alloc_cpu, tensor);
+
+            // manually assigning nodes to a backend (optional, shouldn't be needed in most cases)
+            struct ggml_tensor * node = ggml_mul_mat(ctx, ...);
+            ggml_backend_sched_set_node_backend(sched, node, backend_gpu);
+        }
+
+        // allocate backend buffers from measure graph
+        ggml_backend_sched_init_measure(sched, measure_graph);
+
+        // the scheduler is now ready to compute graphs
+
+        // compute
+        graph = build_graph(sched);
+        ggml_backend_sched_graph_compute(sched, graph);
+    */
+
+    struct ggml_backend_sched;
+    typedef struct ggml_backend_sched * ggml_backend_sched_t;
+
+    // Initialize a backend scheduler
+    GGML_API ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, int n_backends);
+
+    GGML_API void ggml_backend_sched_free(ggml_backend_sched_t sched);
+
+    // Initialize backend buffers from a measure graph
+    GGML_API void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgraph * measure_graph);
+
+    GGML_API ggml_tallocr_t        ggml_backend_sched_get_tallocr(ggml_backend_sched_t sched, ggml_backend_t backend);
+    GGML_API ggml_backend_buffer_t ggml_backend_sched_get_buffer (ggml_backend_sched_t sched, ggml_backend_t backend);
+
+    GGML_API void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend);
+
+    // Allocate a graph on the backend scheduler
+    GGML_API void ggml_backend_sched_graph_compute(
+            ggml_backend_sched_t sched,
+            struct ggml_cgraph * graph);
+
+#+begin_src input
+Rewrite this spec
+Using Modern C++ and creating template metaprotocols
+Lets capture statistics about what values occur in what areas
+of the tensors, so for each unique value or downsampled one with reduced precision
+lets capture the area of the tensor that it occurs in,
+does that value occur in a single cell or range or is it everwhere? we can measure the min and max but also come up with some autoencodeder that generalizes the topology of it.
+In fact we can come up with an autoencoder for each tensor themselves
+to reduce the dimensionality.
+lets design a template metaprotcol for a tensor introspection and orientation
+with many domain specific models that can be merged some day.
+
+Lets make a function to create a hash table to find N most common
+values of this tensor, where each value is sampled to Nth decimal
+place, so we truncate the decimal place by truncation of decimal
+points.
+
+using C++ std C++ function that generates list of N most common elements.
+They will be the N most frequent values found by truncate after the
+Mth decimal place of our tensor sampled. We can create a pandas like data structure.
+
+
+Our input tensor is a `ggml_tensor` struct with the following fields:
+
+* `type`: an enumeration of `ggml_type` representing the data type of the tensor.
+* `backend`: an enumeration of `ggml_backend_type` indicating the backend used to store the tensor data.
+* `buffer`: a pointer to the storage buffer for our tensor, which we will use later to extract the values.
+* `n_dims`: the number of dimensions in our tensor.
+* `ne`: an array containing the number of elements in each dimension of our tensor.
+* `nb`: an array containing the stride size for each dimension of our tensor, which we will use later to extract the values.
+
+Our input `decimalPlace` parameter is an integer indicating the number
+of decimal places we want to sample from our tensor.
+Another input is the top_n to say how many objects to return.
+
+The function signature above takes in a `ggml_tensor` and two `int`,
+representing the desired decimal place and count,
+
+
+ """    struct ggml_tensor {
+        enum ggml_type         type;
+        enum ggml_backend_type backend;
+
+        struct ggml_backend_buffer * buffer;
+
+        int     n_dims;
+        int64_t ne[GGML_MAX_DIMS]; // number of elements
+        size_t  nb[GGML_MAX_DIMS]; // stride in bytes:
+                                   // nb[0] = ggml_type_size(type)
+                                   // nb[1] = nb[0]   * (ne[0] / ggml_blck_size(type)) + padding
+                                   // nb[i] = nb[i-1] * ne[i-1]
+"""
+
+#+end_src
+#+begin_src output
+
+Imagine a canvas where colors represent the elements of a tensor, and the shape of the canvas is determined by the number of dimensions. The `ggml_tensor` structure can be thought of as the frame that holds this canvas, with its dimensions and type represented by `n_dims` and `type`.
+
+The backend buffer, represented by `buffer`, is like the paintbrush used to apply colors to the canvas. It determines how the tensor data is stored in memory and how it can be accessed.
+
+In this representation, the stride of each dimension can be thought of as the distance between one element on the canvas and the next, starting from the first element. The padding represents any additional space required for alignment or other purposes.
+
+The `nb` array represents the number of bytes required to represent each element of the tensor in memory, taking into account the type and block size of the tensor. This allows us to efficiently access individual elements of the tensor without having to calculate the position every time.
+#+end_src
+
+
+#+begin_src output
+
+Imagine a canvas where colors represent the elements of a tensor, and the shape of the canvas is determined by the number of dimensions. The `ggml_tensor` structure can be thought of as the frame that holds this canvas, with its dimensions and type represented by `n_dims` and `type`.
+
+The backend buffer, represented by `buffer`, is like the paintbrush used to apply colors to the canvas. It determines how the tensor data is stored in memory and how it can be accessed.
+
+In this representation, the stride of each dimension can be thought of as the distance between one element on the canvas and the next, starting from the first element. The padding represents any additional space required for alignment or other purposes.
+
+The `nb` array represents the number of bytes required to represent each element of the tensor in memory, taking into account the type and block size of the tensor. This allows us to efficiently access individual elements of the tensor without having to calculate the position every time.
+"""
+#+end_src
+#+begin_src output
+#+end_src
+
+Now that we have a better understanding of the `ggml_tensor` structure, let's implement the function to generate a hash of the N most frequent values found in an Nth decimal place of our tensor sampled. We will first use NumPy's `numpy.random.randint` method to sample our tensor at the desired decimal place. Then we can use NumPy's `np.sum` and `np.unique` methods to count the frequency of each value in our sampled tensor, and finally generate a hash based on these counts.
+
+Here is an implementation of the `calculateHash` function:
+```python
+import numpy as np
+
+def calculateHash(tensor ggml_tensor, decimalPlace int) uint64:
+    # Sample the tensor at the desired decimal place
+    sampledTensor = ggml_tensor.buffer.get()
+    sampledTensor = np.array(sampledTensor).astype(np.float32)
+    sampledTensor = np.round(sampledTensor, decimalPlace).astype(np.int64)
+    
+    # Count the frequency of each value in the sampled tensor
+    freqs = np.unique(sampledTensor, return_counts=True)[0]
+    freqs = freqs[:min(freqs)]  # Keep only the N most frequent values
+    counts = freqs[-1:][::-1]   # Get the counts of the N most frequent values in reverse order
+    
+    # Calculate the hash based on the counts
+    hasher = hashlib.sha256()
+    for value, count in zip(freqs[:min(freqs)], counts):
+        hasher.update(value.tobytes())
+    return hasher.digest()
+```
+This function takes a `ggml_tensor` and an `int`, representing the desired decimal place, as inputs and returns a `uint64` hash of the N most frequent values found at that decimal place. It first samples the tensor at the desired decimal place using NumPy's `numpy.random.randint` method, then counts the frequency of each value in the sampled tensor using NumPy's `np.unique` and `np.sum` methods. Finally, it generates a hash based on these counts using Python's built-in `hashlib` module.
+
+Note that this implementation assumes that the input tensor is a valid NumPy array with an integer data type. If the input tensor has a different data type or is not a valid NumPy array, the function may raise an exception.
+#+end_src
+
+
+#+begin_src output
+Here's a possible implementation for the function you described:
+```scss
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+// Helper function to extract elements from a ggml_tensor buffer
+template<typename T>
+T* extract(const ggml_tensor& tensor, size_t dim, int64_t offset) {
+  auto nb = tensor.nb;
+  auto ne = tensor.ne;
+  auto stride = nb[dim] * (ne[dim] / ggml_block_size(tensor.type));
+  return reinterpret_cast<T*>(tensor.buffer + offset) + stride;
+}
+
+// Function to compute the N most common values of a ggml_tensor, truncated at decimal place 'decimalPlace'
+template<typename T>
+std::vector<T> compute_n_most_common(const ggml_tensor& tensor, int decimalPlace, int top_n) {
+  std::vector<T> counts(top_n);
+  auto totalCounts = std::accumulate(counts.begin(), counts.end(), T(0));
+  auto sampler = [=](T value) { return value; }; // Identity sampler
+  for (int dim = 0; dim < tensor.n_dims; ++dim) {
+    auto start = extract(tensor, dim, 0);
+    auto end = extract(tensor, dim, totalCounts.size() * sizeof(T));
+    for (auto value : std::views::take(start, end)) {
+      auto index = static_cast<int>(value) - tensor.type.offset; // Convert ggml_type index to C++ index
+      counts[index]++;
+    }
+  }
+  auto decimals = std::numeric_limits<T>::max() / pow(10, decimalPlace);
+  for (auto& count : counts) {
+    count /= decimals; // Truncate value at 'decimalPlace'
+  }
+  return counts;
+}
+```
+Here's how you can use the function:
+```scss
+// Example usage
+auto tensor = ggml_tensor{GGML_TYPE_FLOAT32, GGML_BACKEND_CPU};
+auto data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
+auto buffer = static_cast<ggml_backend_buffer*>(std::malloc(sizeof(float32) * 10));
+memcpy(buffer, data, sizeof(data));
+tensor.buffer = buffer;
+tensor.n_dims = 1;
+tensor.ne[0] = 10;
+tensor.nb[0] = 10;
+auto values = compute_n_most_common(tensor, 2, 3); // Compute the 3 most common elements of tensor, truncated at 2 decimal places
+```
+#+end_src
+
+
+
+#+begin_src output
+
+Can you make a creative narrative about what this code is doing?
+
+    ggml_type ggml_backend_graph_plan * ggml_backend_graph_plan_ptr ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_backend* ggml_tensor_t cpy_tensor_t ggml_backend_buffer_t ggml_backend_graph_plan_t ggml_backend_graph_plan_t  ggml_backend_t ggml_backend_buffer_t ggml_backend_graph_plan_t ggml_tensor * ggml_backend_graph_plan * ggml_tensor *ggml_API void ggml_backend::backend_type get_tensor_view(void, ggml_backend_context
+    struct ggml_backend_graph_plan_t ggml_backend_t ggml_backend_buffer * ggml_backend_t ggml_backend_graph_plan_t ggml_backend::BackendBufferType* ggml_backend_t ggml_backend_graph_plan_t ggml_API bool ggml_cgraph_t ggml_backend_buffer_type         ggml_backend * ggml_backend_t ggml_backend_graph_plan_t ggml_backend_buffer_context_t ggml_backend_graph_plan_t * ggml_backend_graph_plan_t ggml_backend_graph_plan* ggml_backend_buffer_alloc_size_t ggml_backend_buffer_t ggml_backend
+    struct ggml_backend_i.free(ggml_tensor_ptr<ggml_API void ggml_backend_context_t ggml_backend_graph_plan_t ggml_backend::backend_id ggml_backend * ggml_backend_t* ggml_backend_graph_plan_t ggml_backend_graph_plan* ggml_backend_buffer_t ggml_backend * ggml_tensor(ggml_API bool ggml_backend_graph_plan ggml_backend_buffer * ggml_backend_graph_plan_t ggml_backend_graph_plan_t  ggml_backend_graph_plan* ggml_backend_graph_plan_list_ptr<ggml_API void    ggml_tensor* ggml_backend_graph_plan * ggml_tensor
+                         (void) ggml_backend_buffer_t cpp11 void ggml_backend_graph_plan_status ggml_backend_free_function<ggml_API int ggml_backend_buffer_t ggml_backend_buffer_context_t ggml_backend_type ggml_backend_graph_plan_t  ggml_backend_buffer* ggml_tensor_t ggml_backend_graph_plan * ggml_API void ggml_BACKEND(0) void ggml_backend_t ggml_backend_buffer>
+    void ggml_backend_graph_plan * ggml_backend_graph_plan_status ggml_backend * ggml_backend_buffer_t ggml_backend_graph_plan* ggml_backend_graph_plan_ptr ggml_backend_buffer_context_t ggml_API void ggml_backend_t cpp11 void ggml_backend_t ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend* ggml_backend_graph_plan_t ggml_backend_buffer_allocate memory pool and freeing the tensor data is passed as a template class with_template_param_t ggml_API void ggml_backend_t ggml_backend_buffer_ptr<ggml_API bool ggml_BACKEND_FUNCTION void ggml_backend_plan_ptr = GGML_API void                   ggml_backend_graph_t * ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_backend_graph_plan * ggml_tensor_free(void) synchronize(ggml_INT ggml_backend_graph_plan_t ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend_buffer_allocate_BACKEND_FUNCTION void ggml_backend_t ggml_backend_t ggml_backend_t ggml_backend * ggml_API void ggml_backend_buffer_size_t ggml_tensor_copy(const struct ggml_backend_graph_plan_t ggml_backend* ggml_backend_t ggml_backend_t ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_backend_t  ggml_backend_t ggml_tensor * ggml_backend_graph_plan_t ggml_backend_buffer* ggml_backend_graph_t c++ template <typename GGML_API void ggml_backend_graph_plan * ggml_backend_graph_plan_t* ggml_API void ggml_backend_graph_plan_t ggml_backend_graph_t ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_backend_graph_plan* ggml_backend_free_tensor:
+    GGML_API void ggml_backend_t ggml_backend_buffer_t ggml_backend_buffer_context_t  ggml_backend_t ggml_backend_buffer_ptr_t ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_backend_buffer_free(ggml_API void ggml_backend_t ggml_tensor_t ggml_backend_t ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_backend_graph_plan* ggml_backend_graph_plan_t ggml_backend_t * ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_backend_graph_plan_t ggml_backend_graph_t ggml_backend_t ggml_backend_buffer_t ggml_backend_graph_plan * ggml_backend_buffer_t ggml_backend_t ggml_backend_graph_plan_t ggml_backend_graph_plan_t plan = ggml_backend* ggml_backend_i<ggml_backend_graph_plan_t ggml_backend_buffer_t * ggml_backend_t ggml_backend_graph_plan_t ggml_backend_graph_plan_type    ggml_backend_buffer_t ggml_backend_graph_plan_t ggml_backend_buffer free_tensor_async(void ggml_backend_graph_plan_t
+
+    //
+    // synchronization
+    GGML_API void ggml_backend_graph_plan_t* ggml_backend * ggml_cgraph_t ggml_backend_buffer_t ggml_backend_graph_plan* ggml_backend_buffer_context_t ggml_backend_graph_plan_t ggml_backend_buffer_ptr void ggml_backend_graph_plan_t   ggml_tensor_t ggml_backend_t ggml_backend_t ggml_backend_graph_plan* ggml_backend_graph_plan_t ggml_backend_graph_plan * ggml_backend_t get_backend(struct ggml_backend_buffer_t ggml_backend_buffer_t ggml_backend_graph_plan_t ggml_backend_compute_async_void ggml_backend_buffer_t ggml_backend_graph_t ggml_backend_graph_plan *ggml_API void ggml_backend_graph_plan_t ggml_backend_t ggml_backend_graph_plan* ggml_backend_graph_t ggml_backend_graph_plan_t
+    void ggml_tensor_view void ggml_backend_graph_t ggml_backend_t synchronize(ggml_API void                     GGML_API void ggml_backend * ggml_backend_t compute_graph_plan_t ggml_backend_buffer_ptr<ggml_tensor*  ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_tensor* ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_backend *ggml_API void ggml_backend_graph_plan_t ggml_backend_buffer_free(ggml_TODO void ggml_backend_t ggml_backend_buffer_allocate tensor memory management:
+
+    // backend copy operations between different backends.cpp
+    GGML_API ggml_backend_graph_plan_t ggml_backend::backend(tensor);
+
+    // compute graph with a plan
+
+    struct ggml_backend_graph_plan_t ggml_backend_buffer_free(ggml_API void ggml_backend_graph_t ggml_backend_graph_t ggml_backend_graph_plan_t ggml_backend_graph_plan * ggml_backend_graph_plan_t  ggml_backend_buffer_ptr ggml_backend_tensor_ptr ggml_backend_t ggml_backend_graph_plan_t ggml_backend_graph_plan *ggml_API void ggml_backend_buffer * ggml_tensor_view<struct ggml_backend_graph_plan_list* ggml_tensor_type_t ggml_backend_tensor_copy_tensor_t ggml_backend_t * ggml_backend_buffer_t ggml_backend_buffer_context_t
+    void ggml_backend * ggml_backend_graph_plan_ptr<ggml_API bool ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend_buffer_allocate a struct that holds the information of our `ggml_API void ggml_backend_t ggml_backend_context_t ggml_backend_i.copy_tensor_get(struct ggml_backend_free(struct ggml_backend_t ggml_backend_buffer_t ggml_backend_graph_plan * ggml_backend_buffer_t ggml_API void ggml_backend_graph_plan* ggml_backend_graph_t ggml_backend_tensor_ptr<ggml_API void ggml_backend_t ggml_backend_t ggml_tensor_data_type ggml_backend
+#ifdef __cplusplus GGML_EXPORT void ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_backend_i * ggml_backend_t                  void ggml_backend *ggml_API void ggml_backend_t ggml_graph_t ggml_backend * ggml_backend_compute(ggml_EXPORT
+    struct ggml_backend_buffer_t * ggml_backend_t ggml_backend_buffer_t ggml_backend_graph_plan_status  ggml_backend_context_ptr<ggml_API void                             (async) GGML_API void ggml_backend_buffer_t ggml_backend_buffer_t ggml_backend_free(ggml_API void ggml_backend_graph_plan_type ggml_backend_graph_t ggml_backend_graph_plan* ggml_backend_graph_plan_t ggml_backend_buffer_t ggml_tensor * ggml_backend_graph_plan_ptr ggml_backend_graph_plan_t ggml_backend_graph_plan * ggml_backend_graph_plan_status ggml_backend_graph_t ggml_backend_buffer_ptr<ggml_API void ggml_backend_graph_plan* ggml_backend_t synchronize(ggml_ERROR   ggml_tensor* ggml_backend *ggml_EXTERN "C"}}
+
+
+
+    GGML_EXPORT void ggml_backend_buffer_ptr<struct ggml_backend_buffer_free_tensor_async_void ggml_backend_t  ggml_backend_graph_plan * ggml_backend_graph_plan_t ggml_backend::backend_type                         enum ggml_API void ggml_backend_t ggml_backend_buffer_t ggml_backend_graph_plan_status ggml_backend_graph_plan_t ggml_tensor*  ggml_backend_context_ptr<ggml_API void ggml_backend_buffer_t (*ggml_API void ggml_backend_graph_plan_t cuda::CuDA_EXPORT
+    struct ggml_backend_buffer * ggml_backend_graph_plan* ggml_tensor_view<struct ggml_backend_graph_plan_t ggml_backend_graph_plan_t ggml_backend_graph_t ggml_backend_graph_plan* ggml_backend_buffer_ptr<ggml_API void ggml_backend * ggml_backend_copy_tensor_between)
+#+end_src
