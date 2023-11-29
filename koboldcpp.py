@@ -776,7 +776,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         reqblocking = False
-        if args.multiuser and requestsinqueue < 4: #up to 5 concurrent requests
+        muint = int(args.multiuser)
+        multiuserlimit = ((muint-1) if muint > 1 else 4)
+        #backwards compatibility for up to 5 concurrent requests, use default limit of 5 if multiuser set to 1
+        if muint > 0 and requestsinqueue < multiuserlimit:
             reqblocking = True
             requestsinqueue += 1
         if not modelbusy.acquire(blocking=reqblocking):
@@ -1539,7 +1542,7 @@ def show_new_gui():
 
         args.port_param = defaultport if port_var.get()=="" else int(port_var.get())
         args.host = host_var.get()
-        args.multiuser = multiuser_var.get() == 1
+        args.multiuser = multiuser_var.get()
 
         if horde_apikey_var.get()=="" or horde_workername_var.get()=="":
             args.hordeconfig = None if usehorde_var.get() == 0 else [horde_name_var.get(), horde_gen_var.get(), horde_context_var.get()]
@@ -1636,7 +1639,8 @@ def show_new_gui():
         if "host" in dict and dict["host"]:
             host_var.set(dict["host"])
 
-        multiuser_var.set(1 if "multiuser" in dict and dict["multiuser"] else 0)
+        if "multiuser" in dict:
+            multiuser_var.set(dict["multiuser"])
 
         if "hordeconfig" in dict and dict["hordeconfig"] and len(dict["hordeconfig"]) > 1:
             horde_name_var.set(dict["hordeconfig"][0])
@@ -2174,8 +2178,8 @@ def main(launch_args,start_server=True):
         epurl = f"http://localhost:{args.port}"
     else:
         epurl = f"http://{args.host}:{args.port}"
-    print(f"Starting Kobold HTTP Server on port {args.port} at {epurl}/api/")
-    print(f"Starting OpenAI Compatible Endpoint on port {args.port} at {epurl}/v1/")
+    print(f"Starting Kobold API on port {args.port} at {epurl}/api/")
+    print(f"Starting OpenAI Compatible API on port {args.port} at {epurl}/v1/")
 
     if args.launch:
         try:
@@ -2201,7 +2205,7 @@ def main(launch_args,start_server=True):
     if start_server:
         if args.remotetunnel:
             setuptunnel()
-        print(f"Please connect to custom endpoint at {epurl}")
+        print(f"======\nPlease connect to custom endpoint at {epurl}")
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite, embedded_kcpp_docs))
     else:
         print(f"Server was not started, main function complete. Idling.")
@@ -2246,8 +2250,8 @@ if __name__ == '__main__':
     compatgroup.add_argument("--usecublas", help="Use CuBLAS for GPU Acceleration. Requires CUDA. Select lowvram to not allocate VRAM scratch buffer. Enter a number afterwards to select and use 1 GPU. Leaving no number will use all GPUs. For hipBLAS binaries, please check YellowRoseCx rocm fork.", nargs='*',metavar=('[lowvram|normal] [main GPU ID] [mmq]'), choices=['normal', 'lowvram', '0', '1', '2', '3', 'mmq'])
     parser.add_argument("--gpulayers", help="Set number of layers to offload to GPU when using GPU. Requires GPU.",metavar=('[GPU layers]'), type=int, default=0)
     parser.add_argument("--tensor_split", help="For CUDA with ALL GPU set only, ratio to split tensors across multiple GPUs, space-separated list of proportions, e.g. 7 3", metavar=('[Ratios]'), type=float, nargs='+')
-    parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", type=str, default="",nargs=1)
-    parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them.", action='store_true')
+    parser.add_argument("--onready", help="An optional shell command to execute after the model has been loaded.", metavar=('[shell command]'), type=str, default="",nargs=1)
+    parser.add_argument("--multiuser", help="Runs in multiuser mode, which queues incoming requests instead of blocking them.", metavar=('limit'), nargs='?', const=1, type=int, default=0)
     parser.add_argument("--remotetunnel", help="Uses Cloudflare to create a remote tunnel, allowing you to access koboldcpp remotely over the internet even behind a firewall.", action='store_true')
     parser.add_argument("--foreground", help="Windows only. Sends the terminal to the foreground every time a new prompt is generated. This helps avoid some idle slowdown issues.", action='store_true')
     parser.add_argument("--preloadstory", help="Configures a prepared story json save file to be hosted on the server, which frontends (such as Kobold Lite) can access over the API.", default="")
