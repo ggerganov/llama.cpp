@@ -3,18 +3,19 @@
 #pragma once
 
 #include "llama.h"
+
 #include "sampling.h"
 
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
 #include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <random>
 #include <string>
-#include <tuple>
 #include <vector>
+#include <random>
+#include <thread>
+#include <unordered_map>
+#include <tuple>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -67,7 +68,7 @@ struct gpt_params {
     int32_t yarn_orig_ctx                   = 0;    // YaRN original context length
     int8_t  rope_scaling_type               = LLAMA_ROPE_SCALING_UNSPECIFIED;
 
-    // sampling parameters
+    // // sampling parameters
     struct llama_sampling_params sparams;
 
     std::string model             = "models/7B/ggml-model-f16.gguf"; // model path

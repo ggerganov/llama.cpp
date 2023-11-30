@@ -2,20 +2,13 @@
 // The clients submite requests to the server and they are processed in parallel.
 
 #include "common.h"
-#include "ggml.h"
 #include "llama.h"
-#include "sampling.h"
 
-#include <algorithm>
-#include <cctype>
-#include <cstdint>
+#include <cmath>
 #include <cstdio>
-#include <cstdlib>
-#include <ctime>
-#include <istream>
 #include <string>
-#include <tuple>
 #include <vector>
+#include <ctime>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {

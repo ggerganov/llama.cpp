@@ -1,11 +1,9 @@
 #include "common.h"
 #include "llama.h"
 
-#include <cstdint>
-#include <cstdio>
-#include <string>
-#include <tuple>
 #include <vector>
+#include <cstdio>
+#include <chrono>
 
 int main(int argc, char ** argv) {
     gpt_params params;

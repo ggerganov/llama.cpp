@@ -1,11 +1,11 @@
 #pragma once
 
+#include "ggml-impl.h"
+
 // GGML internal header
 
-#include "ggml.h"
-
-#include <assert.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #define QK4_0 32
 typedef struct {

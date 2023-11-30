@@ -2,16 +2,10 @@
 #undef NDEBUG
 #endif
 
-#include "grammar-parser.h"
 #include "llama.h"
+#include "grammar-parser.h"
 
 #include <cassert>
-#include <cstdint>
-#include <cstdio>
-#include <map>
-#include <string>
-#include <utility>
-#include <vector>
 
 int main()
 {

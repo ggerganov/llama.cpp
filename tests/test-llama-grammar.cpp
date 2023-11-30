@@ -6,12 +6,6 @@
 #include "grammar-parser.h"
 
 #include <cassert>
-#include <cstdint>
-#include <cstdio>
-#include <map>
-#include <string>
-#include <utility>
-#include <vector>
 
 int main()
 {

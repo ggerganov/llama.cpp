@@ -2,12 +2,14 @@
 
 #include "ggml.h"
 
+#undef NDEBUG
 #include <algorithm>
-#include <cinttypes>
-#include <cmath>
-#include <cstdio>
+#include <assert.h>
 #include <functional>
+#include <inttypes.h>
+#include <math.h>
 #include <memory>
+#include <stdio.h>
 #include <string>
 #include <vector>
 

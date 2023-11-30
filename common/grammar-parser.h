@@ -10,14 +10,11 @@
 // space ::= [ \t\n]*
 
 #pragma once
-
 #include "llama.h"
-
-#include <cstdint>
-#include <cstdio>
-#include <map>
-#include <string>
 #include <vector>
+#include <map>
+#include <cstdint>
+#include <string>
 
 namespace grammar_parser {
     struct parse_state {

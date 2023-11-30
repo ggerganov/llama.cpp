@@ -1,10 +1,9 @@
 #include "ggml.h"
 
-#include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cassert>
 #include <vector>
 
 #if defined(_MSC_VER)

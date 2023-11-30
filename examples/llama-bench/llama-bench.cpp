@@ -1,29 +1,25 @@
-#include "ggml.h"
-#include "llama.h"
-#include "common.h"
-#include "ggml-cuda.h"
-
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cctype>
 #include <chrono>
 #include <cinttypes>
 #include <clocale>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <iterator>
 #include <map>
-#include <memory>
 #include <numeric>
 #include <regex>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
+
+#include "ggml.h"
+#include "llama.h"
+#include "common.h"
+#include "ggml-cuda.h"
 
 // utils
 static uint64_t get_time_ns() {

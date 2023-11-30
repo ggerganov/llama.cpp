@@ -1,20 +1,13 @@
 #include "common.h"
 #include "llama.h"
 
-#include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <iterator>
-#include <mutex>
-#include <random>
 #include <sstream>
-#include <string>
 #include <thread>
-#include <tuple>
-#include <utility>
+#include <mutex>
 #include <vector>
 
 #if defined(_MSC_VER)

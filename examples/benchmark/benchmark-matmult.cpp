@@ -1,11 +1,20 @@
 #include "common.h"
 #include "ggml.h"
 
-#include <cinttypes>
+#include <locale.h>
+#include <assert.h>
+#include <math.h>
+#include <cstring>
 #include <cstdio>
-#include <cstdlib>
+#include <cinttypes>
+#include <unordered_map>
+#include <queue>
+#include <string.h>
+#include <cassert>
+#include <fstream>
 #include <string>
-#include <vector>
+#include <iterator>
+#include <algorithm>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

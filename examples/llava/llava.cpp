@@ -1,14 +1,11 @@
 #include "clip.h"
-#include "common.h"
-#include "ggml.h"
-#include "llama.h"
 #include "llava-utils.h"
+#include "common.h"
+#include "llama.h"
 
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <string>
+#include <vector>
 
 static void show_additional_info(int /*argc*/, char ** argv) {
     printf("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);

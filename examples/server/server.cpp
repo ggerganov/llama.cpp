@@ -1,7 +1,6 @@
 #include "common.h"
-#include "ggml.h"
 #include "llama.h"
-#include "sampling.h"
+#include "grammar-parser.h"
 
 #include "../llava/clip.h"
 
@@ -21,28 +20,10 @@
 #include "completion.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <ctime>
-#include <exception>
-#include <functional>
-#include <istream>
-#include <iterator>
-#include <mutex>
-#include <numeric>
-#include <stdexcept>
-#include <string>
+#include <cstddef>
 #include <thread>
-#include <tuple>
-#include <unordered_map>
-#include <utility>
-#include <vector>
+#include <mutex>
+#include <chrono>
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1

@@ -1,19 +1,9 @@
-#include "common.h"
-#include "ggml.h"
-#include "llama.h"
 #include "train.h"
+#include "common.h"
 
-#include <algorithm>
-#include <cerrno>
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <functional>
-#include <locale>
 #include <random>
 #include <sstream>
+#include <functional>
 
 struct random_normal_distribution {
     std::mt19937 gen;

@@ -1,13 +1,9 @@
 #include "common.h"
-#include "ggml.h"
 #include "llama.h"
-#include "sampling.h"
 
-#include <algorithm>
+#include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  100

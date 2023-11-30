@@ -14,13 +14,14 @@
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
 #endif
 #else
-#include <clocale>
-#include <cstdio>
-#include <cwchar>
-
+#include <climits>
 #include <sys/ioctl.h>
-#include <termios.h>
 #include <unistd.h>
+#include <wchar.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <termios.h>
 #endif
 
 #define ANSI_COLOR_RED     "\x1b[31m"

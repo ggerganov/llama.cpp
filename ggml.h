@@ -300,6 +300,7 @@ extern "C" {
     GGML_API void ggml_fp16_to_fp32_row(const ggml_fp16_t * x, float * y, int n);
     GGML_API void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int n);
 
+    struct ggml_object;
     struct ggml_context;
 
     enum ggml_type {

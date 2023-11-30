@@ -1,10 +1,4 @@
-#include "common.h"
 #include "sampling.h"
-
-#include <algorithm>
-#include <cstdio>
-#include <map>
-#include <utility>
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();

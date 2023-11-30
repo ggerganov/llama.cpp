@@ -1,9 +1,15 @@
 #include "ggml.h"
 #include "llama.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <cmath>
-#include <cstdio>
+#include <numeric>
+#include <cassert>
 #include <vector>
+#include <algorithm>
 
 static void dump(const llama_token_data_array * candidates) {
     for (size_t i = 0; i < candidates->size; i++) {

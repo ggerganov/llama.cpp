@@ -1,11 +1,10 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
+#include <math.h>
+#include <string.h>
 #include <assert.h>
 #include <float.h>
-#include <math.h>
-#include <stdbool.h>
-#include <string.h>
 
 #ifdef __ARM_NEON
 

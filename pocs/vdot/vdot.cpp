@@ -1,15 +1,14 @@
-#include "ggml.h"
-
-#include <algorithm>
-#include <cassert>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <random>
-#include <utility>
 #include <vector>
+#include <random>
+#include <chrono>
+#include <cstdlib>
+#include <cmath>
+#include <cassert>
+#include <cstring>
+#include <array>
+
+#include <ggml.h>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

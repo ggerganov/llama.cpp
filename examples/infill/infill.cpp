@@ -1,17 +1,19 @@
 #include "common.h"
+
 #include "console.h"
 #include "llama.h"
-#include "sampling.h"
+#include "grammar-parser.h"
 
-#include <algorithm>
+#include <cassert>
+#include <cinttypes>
+#include <cmath>
 #include <cstdio>
-#include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
-#include <random>
+#include <iostream>
 #include <sstream>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))

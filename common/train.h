@@ -2,13 +2,12 @@
 
 #pragma once
 
-#include "llama.h"
-
-#include <cstddef>
-#include <cstdint>
-#include <random>
 #include <string>
+#include <random>
 #include <vector>
+
+#include "ggml.h"
+#include "llama.h"
 
 typedef std::string mt19937_state;
 

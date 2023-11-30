@@ -1,14 +1,12 @@
+#include "llama.h"
 #include "common.h"
 #include "console.h"
-#include "llama.h"
 
 #include <cstdio>
-#include <fstream>
-#include <iterator>
-#include <map>
 #include <string>
-#include <utility>
+#include <map>
 #include <vector>
+#include <fstream>
 
 // generate using test-tokenizer-0-llama.py
 static const std::map<std::string, std::vector<llama_token>> & k_tests() {

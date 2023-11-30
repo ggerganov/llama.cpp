@@ -1,13 +1,28 @@
 #include "common.h"
 #include "llama.h"
 
-#include <algorithm>
 #include <cassert>
+#include <cinttypes>
+#include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <fstream>
 #include <iostream>
 #include <string>
-#include <tuple>
 #include <vector>
+
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#include <signal.h>
+#include <unistd.h>
+#elif defined (_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#   define NOMINMAX
+#endif
+#include <windows.h>
+#include <signal.h>
+#endif
 
 // Used for debugging to print out beam tokens.
 struct ostream_beam_view {

@@ -1,11 +1,10 @@
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 #include "ggml.h"
 
-#include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cassert>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

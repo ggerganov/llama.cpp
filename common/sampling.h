@@ -1,12 +1,12 @@
 #pragma once
 
-#include "grammar-parser.h"
 #include "llama.h"
 
-#include <cstdint>
+#include "grammar-parser.h"
+
 #include <string>
-#include <unordered_map>
 #include <vector>
+#include <unordered_map>
 
 // sampling parameters
 typedef struct llama_sampling_params {
@@ -55,6 +55,8 @@ struct llama_sampling_context {
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
 };
+
+#include "common.h"
 
 // Create a new sampling context instance.
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params);

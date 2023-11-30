@@ -1,7 +1,6 @@
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
-#include "ggml.h"
 #include "ggml-impl.h"
 #include "ggml-quants.h"
 
@@ -21,7 +20,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <float.h>
+#include <limits.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #ifdef GGML_USE_METAL
 #include <unistd.h>
@@ -84,13 +85,14 @@ static int sched_yield (void) {
     return 0;
 }
 #else
-
 #include <pthread.h>
-#include <sched.h>
 #include <stdatomic.h>
-#include <sys/stat.h>
 
 typedef void * thread_ret_t;
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #endif
 

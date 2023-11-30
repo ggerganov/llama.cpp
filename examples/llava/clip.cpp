@@ -2,22 +2,20 @@
 // so there might be still unnecessary artifacts hanging around
 // I'll gradually clean and extend it
 
-#include "clip.h"
-#include "ggml-alloc.h"
-#include "ggml.h"
-
-#include <algorithm>
-#include <climits>
+#include <cassert>
 #include <cmath>
-#include <cstdarg>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iostream>
+#include <map>
 #include <regex>
 #include <stdexcept>
-#include <string>
 #include <vector>
+
+#include "clip.h"
+#include "ggml.h"
+#include "ggml-alloc.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

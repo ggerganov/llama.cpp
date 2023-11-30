@@ -1,11 +1,9 @@
 #include "common.h"
-#include "ggml.h"
 #include "llama.h"
 
 #include <algorithm>
-#include <cstdint>
+#include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <string>
 #include <vector>
 

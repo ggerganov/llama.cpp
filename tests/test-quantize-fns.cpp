@@ -2,9 +2,10 @@
 
 #include "ggml.h"
 
-#include <cmath>
-#include <cstdint>
-#include <cstdio>
+#undef NDEBUG
+#include <assert.h>
+#include <math.h>
+#include <stdio.h>
 #include <string>
 #include <vector>
 
