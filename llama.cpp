@@ -5616,7 +5616,7 @@ static int llama_decode_internal(
 #ifndef NDEBUG
         auto & logits_valid = lctx.logits_valid;
         logits_valid.clear();
-        logits_valid.resize(n_vocab);
+        logits_valid.resize(n_tokens);
 #endif
 
         if (batch.logits) {
