@@ -8,7 +8,7 @@ BUILD_TARGETS = \
 TEST_TARGETS = \
 	tests/test-llama-grammar tests/test-grammar-parser tests/test-double-float tests/test-grad0 tests/test-opt \
 	tests/test-quantize-fns tests/test-quantize-perf tests/test-sampling tests/test-tokenizer-0-llama          \
-	tests/test-tokenizer-0-falcon tests/test-tokenizer-0-deepseek_coder tests/test-tokenizer-0-deepseek_llm \
+	tests/test-tokenizer-0-falcon tests/test-tokenizer-0-deepseek-coder tests/test-tokenizer-0-deepseek-llm \
 	tests/test-tokenizer-1-llama tests/test-tokenizer-1-bpe
 
 # Code coverage output files
@@ -72,8 +72,8 @@ test: $(TEST_TARGETS)
 			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-0-deepseek-coder" ]; then \
 			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-coder.gguf; \
-		elif [ "$$test_target" = "tests/test-tokenizer-0-deepseek_llm" ]; then \
-			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-llm.gguf $(CURDIR)/README.md; \
+		elif [ "$$test_target" = "tests/test-tokenizer-0-deepseek-llm" ]; then \
+			./$$test_target $(CURDIR)/models/ggml-vocab-deepseek-llm.gguf; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-llama" ]; then \
 			continue; \
 		elif [ "$$test_target" = "tests/test-tokenizer-1-bpe" ]; then \
@@ -736,7 +736,7 @@ tests/test-tokenizer-0-llama: tests/test-tokenizer-0-llama.cpp ggml.o llama.o $(
 tests/test-tokenizer-0-deepseek-coder: tests/test-tokenizer-0-deepseek-coder.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
-tests/test-tokenizer-0-deepseek_llm: tests/test-tokenizer-0-deepseek_llm.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+tests/test-tokenizer-0-deepseek-llm: tests/test-tokenizer-0-deepseek-llm.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 tests/test-tokenizer-1-bpe: tests/test-tokenizer-1-bpe.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
