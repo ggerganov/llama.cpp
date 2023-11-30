@@ -24,7 +24,6 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
-#include <unordered_set>
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -169,7 +168,7 @@ struct task_result {
 
 struct task_multi {
     int id;
-    std::unordered_set<int> subtasks_remaining{};
+    std::set<int> subtasks_remaining{};
     std::vector<task_result> results{};
 };
 
