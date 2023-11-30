@@ -169,8 +169,8 @@ struct task_result {
 
 struct task_multi {
     int id;
-    std::unordered_set<int> subtasks_remaining{};
-    std::vector<task_result> results{};
+    std::unordered_set<int> subtasks_remaining;
+    std::vector<task_result> results;
 };
 
 // TODO: can become bool if we can't find use of more states
