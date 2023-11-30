@@ -340,8 +340,9 @@ ggml_vk_device ggml_vk_current_device() {
     if (!komputeManager()->hasDevice())
         return ggml_vk_device();
 
-    auto devices = ggml_vk_available_devices_internal(0);
-    ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName);
+    auto devices = ggml_vk_available_devices(0);
+    ggml_vk_filterByName(devices, komputeManager()->physicalDevice()->getProperties().deviceName.data());
+    GGML_ASSERT(!devices.empty());
     return devices.front();
 }
 
