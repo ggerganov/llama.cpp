@@ -70,6 +70,7 @@ extern "C" {
         LLAMA_VOCAB_TYPE_SPM = 0, // SentencePiece
         LLAMA_VOCAB_TYPE_BPE = 1, // Byte Pair Encoding
         LLAMA_VOCAB_TYPE_DEEPSEEKCODER = 2, // deepseek coder
+        LLAMA_VOCAB_TYPE_DEEPSEEKLLM = 3, // deepseek coder
     };
 
     enum llama_token_type {

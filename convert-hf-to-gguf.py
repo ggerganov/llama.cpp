@@ -195,6 +195,8 @@ class Model:
             return PersimmonModel
         if model_name_lower == "deepseekcoder":
             return DeepseekCoderModel
+        if model_name_lower == "deepseekllm":
+            return DeepseekLLMModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -865,6 +867,9 @@ class DeepseekCoderModel(Model):
     def set_vocab(self):
         self._set_vocab_gpt2("deepseek_coder")
 
+class DeepseekLLMModel(DeepseekCoderModel):
+    def set_vocab(self):
+        self._set_vocab_gpt2("deepseek_llm")
 
 class StableLMModel(Model):
     def set_gguf_parameters(self):
