@@ -98,6 +98,8 @@ static std::mutex concat_output_mtx;
 static std::string concat_output = "";
 static std::string concat_output_reader_copy = "";
 
+const size_t extra_context_handle_fragmentation = 80;
+
 inline bool IsNanCheck(float f)
 {
     const unsigned int u = *(unsigned int*)&f;
@@ -883,7 +885,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     {
         llama_model_params model_params = llama_model_default_params();
         llama_context_params llama_ctx_params = llama_context_default_params();
-        llama_ctx_params.n_ctx = clamped_max_context_length + 64; //add some extra context to deal with KV fragmentation
+        llama_ctx_params.n_ctx = clamped_max_context_length;
         //llama_ctx_paran_parts = -1;
         llama_ctx_params.seed = -1;
         llama_ctx_params.f16_kv = inputs.f16_kv;
@@ -1421,6 +1423,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             stop_sequence.push_back(stopper);
         }
     }
+
     std::string addedmemory = inputs.memory;
     params.prompt = inputs.prompt;
     params.seed = inputs.seed;
@@ -1441,6 +1444,15 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     params.n_threads = n_threads;
     params.n_threads_batch = n_blasthreads;
     bool stream_sse = inputs.stream_sse;
+
+    if(params.n_ctx >= 256 && useContextShift && (file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON))
+    {
+        params.n_ctx -= extra_context_handle_fragmentation; //add some additional buffer to handle KV fragmentation
+        if(debugmode==1)
+        {
+            printf("\nTrue max context permitted: %d\n",params.n_ctx);
+        }
+    }
 
     bool allow_regular_prints = (debugmode!=-1 && !inputs.quiet) || debugmode >= 1;
 
