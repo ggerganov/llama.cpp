@@ -174,6 +174,10 @@ ifdef LLAMA_DEBUG
 	MK_CFLAGS   += -O0 -g
 	MK_CXXFLAGS += -O0 -g
 	MK_LDFLAGS  += -g
+
+	ifeq ($(UNAME_S),Linux)
+		MK_CXXFLAGS += -Wp,-D_GLIBCXX_ASSERTIONS
+	endif
 else
 	MK_CPPFLAGS += -DNDEBUG
 endif
