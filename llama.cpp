@@ -7027,6 +7027,7 @@ void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * c
     // Replace the data in candidates with the new_candidates data
     std::copy(new_candidates.begin(), new_candidates.end(), candidates->data);
     candidates->size = new_candidates.size();
+    candidates->sorted = false;
 
     if (ctx) {
         ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
