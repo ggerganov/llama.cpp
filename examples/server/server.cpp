@@ -1548,7 +1548,7 @@ struct llama_server_context
             if (queue_iterator->subtasks_remaining.empty())
             {
                 // all subtasks done == multitask is done
-                task_result aggregate_result{};
+                task_result aggregate_result;
                 aggregate_result.id = queue_iterator->id;
                 aggregate_result.stop = true;
                 aggregate_result.error = false;
