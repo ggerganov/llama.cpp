@@ -30,7 +30,7 @@ ifeq '' '$(findstring clang,$(shell $(CC) --version))'
 	CC_VER := $(shell $(CC) -dumpfullversion -dumpversion | awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
 else
 	CC_IS_CLANG=1
-	ifeq '' '$(findstring Apple LLVM,$(shell $(CC) --version))'
+	ifeq '' '$(findstring Apple,$(shell $(CC) --version))'
 		CC_IS_LLVM_CLANG=1
 	else
 		CC_IS_APPLE_CLANG=1
