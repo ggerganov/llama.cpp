@@ -9422,6 +9422,7 @@ static bool ggml_compute_forward_mul_mat_use_blas(
 #include <unordered_map> // hash table
 #include <numeric>       // for copying and iterating over arrays
 
+void ggml_tensor_add(const char * name,const struct ggml_tensor * tensor);
 void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor);
 void ggml_tensor_hash(const char * name,const struct ggml_tensor * tensor, int decimalPlace);
 #include "ggml-backend-impl.h"
@@ -9511,6 +9512,7 @@ void find_n_most_common_values(const char * pname, const ggml_tensor* tensor, in
 
 
 void ggml_tensor_checksum(const char * name,const struct ggml_tensor * tensor) {
+  ggml_tensor_add(name,tensor);
   const int64_t ne = ggml_nelements(tensor) ;
   float fmin=0;
   float ffirst=0;
