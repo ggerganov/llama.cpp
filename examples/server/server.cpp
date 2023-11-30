@@ -1346,8 +1346,7 @@ struct llama_server_context
         if (task.data.at("prompt").size() > 1)
         {
             lock.unlock(); // entering new func scope
-            auto id = split_multiprompt_task(task);
-            return id;
+            return split_multiprompt_task(task);
         }
 
         // otherwise, it's a single-prompt task, we actually queue it
