@@ -1345,8 +1345,7 @@ struct llama_server_context
         if (task.data.at("prompt").size() > 1)
         {
             lock.unlock(); // entering new func scope
-            auto id = split_multiprompt_task(task);
-            return id;
+            return split_multiprompt_task(task);
         }
 
         // otherwise, it's a single-prompt task, we actually queue it
@@ -1547,13 +1546,13 @@ struct llama_server_context
             if (queue_iterator->subtasks_remaining.empty())
             {
                 // all subtasks done == multitask is done
-                task_result aggregate_result{};
+                task_result aggregate_result;
                 aggregate_result.id = queue_iterator->id;
                 aggregate_result.stop = true;
                 aggregate_result.error = false;
 
                 // collect json results into one json result
-                std::vector<json> result_jsons{};
+                std::vector<json> result_jsons;
                 for (auto& subres : queue_iterator->results)
                 {
                     result_jsons.push_back(subres.result_json);
