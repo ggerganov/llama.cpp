@@ -1553,7 +1553,7 @@ struct llama_server_context
                 aggregate_result.error = false;
 
                 // collect json results into one json result
-                std::vector<json> result_jsons{};
+                std::vector<json> result_jsons;
                 for (auto& subres : queue_iterator->results)
                 {
                     result_jsons.push_back(subres.result_json);
