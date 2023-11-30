@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 98
+Current version: 99
 -Concedo
 -->
 
@@ -2521,6 +2521,26 @@ Current version: 98
 		} else {
 			return replaceAll(localsettings.instruct_endtag, "\\n", "\n");
 		}
+	}
+
+	function readTavernPngFromBlob(blob, onDone)
+	{
+		var fileReader = new FileReader();
+		fileReader.onload = function(event) {
+			var data = event.target.result;
+			var arr = new Uint8Array(data);
+			var result = convertTavernPng(arr);
+			if(!result)
+			{
+				//attempt to read as WEBP
+				result = getTavernExifJSON(arr);
+			}
+			if(onDone)
+			{
+				onDone(result);
+			}
+		};
+		fileReader.readAsArrayBuffer(blob);
 	}
 
 	//import tavern png data. adapted from png-chunks-extract under MIT license
@@ -5052,6 +5072,7 @@ Current version: 98
 							"authorsnote": "",
 							"worldinfo": [],
 						};
+						let card_is_defective = (data.name==""&&previewtxt==""&&greeting==""&&cdesc==""&&cdef=="");
 
 						//try to obtain the full portrait image
 						fetch("https://api.chub.ai/api/characters/download", {
@@ -5076,6 +5097,50 @@ Current version: 98
 						})
 						.then(blob => {
 							preview_temp_scenario();
+
+							if(card_is_defective)
+							{
+								readTavernPngFromBlob(blob,(obj)=>{
+									if(obj!=null)
+									{
+										//a lightweight tavern card loader, not fully compliant
+										if(obj.spec=="chara_card_v2" && obj.data!=null)
+										{
+											obj = obj.data;
+										}
+										let chatopponent = obj.name?obj.name:"Bot";
+										let memory = obj.description?("Persona: "+obj.description):"";
+										memory += obj.personality?("\nPersonality: "+obj.personality):"";
+										let scenario = obj.scenario?obj.scenario:"";
+										let examplemsg = obj.mes_example?obj.mes_example:"";
+										let greeting = obj.first_mes?obj.first_mes:"";
+										let sysprompt = obj.system_prompt?obj.system_prompt:"";
+
+										if(scenario!="")
+										{
+											scenario = "\n[Scenario: "+scenario+"]";
+										}
+										if(examplemsg!="")
+										{
+											examplemsg = "\n"+examplemsg;
+										}
+										if(sysprompt!="")
+										{
+											sysprompt = sysprompt+"\n";
+										}
+										let combinedmem = sysprompt + memory + scenario + examplemsg;
+										temp_scenario.title = chatopponent;
+										let prev2 = replaceAll(obj.description,"{{char}}",chatopponent,true);
+										prev2 = replaceAll(prev2,"{{user}}","You",true);
+										temp_scenario.desc = prev2;
+										temp_scenario.chatopponent = chatopponent;
+										temp_scenario.prompt = ("\n{{char}}: "+ greeting);
+										temp_scenario.memory = combinedmem;
+										preview_temp_scenario();
+									}
+
+								});
+							}
 							const objectURL = URL.createObjectURL(blob);
 							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
 								temp_scenario.image = compressedImageURI;
