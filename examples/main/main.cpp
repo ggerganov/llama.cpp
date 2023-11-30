@@ -1,7 +1,8 @@
+#include "llama.h"
 #include "common.h"
 
 #include "console.h"
-#include "llama.h"
+
 
 #include <cassert>
 #include <cinttypes>

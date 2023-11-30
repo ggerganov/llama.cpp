@@ -1,7 +1,8 @@
 #define LLAMA_API_INTERNAL
+#include "llama.h"
 #include "common.h"
 #include "ggml.h"
-#include "llama.h"
+
 
 #include <algorithm>
 #include <cassert>

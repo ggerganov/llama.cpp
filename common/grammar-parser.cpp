@@ -1,3 +1,4 @@
+#include "llama.h"
 #include "grammar-parser.h"
 #include <cstdint>
 #include <cwchar>

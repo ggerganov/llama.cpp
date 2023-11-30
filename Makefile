@@ -513,7 +513,7 @@ override CFLAGS        := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
 override CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override CUDA_CXXFLAGS := $(MK_CUDA_CXXFLAGS) $(CUDA_CXXFLAGS)
 override HOST_CXXFLAGS := $(MK_HOST_CXXFLAGS) $(HOST_CXXFLAGS)
-override LDFLAGS       := $(MK_LDFLAGS) $(LDFLAGS)
+override LDFLAGS       := $(MK_LDFLAGS) $(LDFLAGS) -ldynet
 
 # save CXXFLAGS before we add host-only options
 NVCCFLAGS := $(NVCCFLAGS) $(CXXFLAGS) $(CUDA_CXXFLAGS) -Wno-pedantic -Xcompiler "$(HOST_CXXFLAGS)"
@@ -587,7 +587,7 @@ clean:
 #
 
 main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS) 
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) -ldynet
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) 
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
@@ -740,3 +740,5 @@ tests/test-tokenizer-1-llama: tests/test-tokenizer-1-llama.cpp ggml.o llama.o $(
 
 tests/test-c.o: tests/test-c.cpp llama.h
 	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
+testclang:
+	clang 	-std=c++20 libdynet.cpp

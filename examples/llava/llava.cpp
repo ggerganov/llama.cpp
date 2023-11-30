@@ -1,6 +1,7 @@
 #include "clip.h"
-#include "common.h"
 #include "llama.h"
+#include "common.h"
+
 #include "llava.h"
 
 #include <cstdio>

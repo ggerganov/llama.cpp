@@ -14,7 +14,8 @@ llvmLibPath = "/usr/lib/llvm-15/lib/"
 cxxClientRoot = "/home/mdupont/experiments/llama.cpp/"
 
 fileList = [
-    "ggml.cpp",
+    "libdynet.cpp",
+#    "ggml.cpp",
 #    "llama.cpp",
 #    "examples/server/server.cpp",
 ]
@@ -34,7 +35,9 @@ def list_headers_in_dir(path):
     # list all the files in the folder
     files = os.listdir(path)
     # only include .hxx files
-    files = list(filter(lambda x: x.endswith('.hxx'), files))
+    files = list(filter(lambda x:
+                        x.endswith('.hpp') or x.endswith('.h')
+                        , files))
     # add the folder path back on
     files = list(map(lambda x: path + x, files))
     return files

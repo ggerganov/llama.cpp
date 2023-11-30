@@ -1,3 +1,4 @@
+#include "llama.h"
 #include "common.h"
 #include "ggml.h"
 

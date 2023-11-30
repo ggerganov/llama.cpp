@@ -1,5 +1,6 @@
-#include "common.h"
 #include "llama.h"
+#include "common.h"
+
 #include "grammar-parser.h"
 
 #include "../llava/clip.h"

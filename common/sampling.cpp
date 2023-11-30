@@ -1,3 +1,4 @@
+#include "llama.h"
 #include "sampling.h"
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
