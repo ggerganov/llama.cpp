@@ -164,24 +164,21 @@ actor LlamaContext {
     private func token_to_piece(token: llama_token) -> String {
         let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
         result.initialize(repeating: Int8(0), count: 8)
-
+        defer {
+            result.deallocate()
+        }
         let nTokens = llama_token_to_piece(model, token, result, 8)
 
-        if nTokens > 8 {
-            result.removeAll()
-            result = [CChar](repeating: 0, count: nTokens)
-            _ = llama_token_to_piece(
-                model,
-                token,
-                &result,
-                Int32(result.count)
-            )
+        if nTokens < 0 {
+            let newResult = UnsafeMutablePointer<Int8>.allocate(capacity: Int(-nTokens))
+            newResult.initialize(repeating: Int8(0), count: Int(-nTokens))
+            defer {
+                newResult.deallocate()
+            }
+            _ = llama_token_to_piece(model, token, newResult, -nTokens)
+            return String(cString: newResult)
+        } else {
+            return String(cString: result)
         }
-
-        let resultStr = String(cString: result)
-
-        result.deallocate()
-
-        return resultStr
     }
 }
