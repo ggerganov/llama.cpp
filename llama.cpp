@@ -5617,6 +5617,8 @@ static int llama_decode_internal(
         auto & logits_valid = lctx.logits_valid;
         logits_valid.clear();
         logits_valid.resize(n_tokens);
+
+        logits_out.clear();
 #endif
 
         if (batch.logits) {
