@@ -60,13 +60,7 @@ chat_completion() {
             printf "%s" "${CONTENT}"
             ANSWER+="${CONTENT}"
         fi
-    done < <(curl \
-        --silent \
-        --no-buffer \
-        --request POST \
-        --url "${API_URL}/completion" \
-        --header "Content-Type: application/json" \
-        --data-raw "${DATA}")
+    done << (curl  --silent   --no-buffer  --request POST   --url "${API_URL}/completion"    --header "Content-Type: application/json"  --data-raw "${DATA}")
 
     printf "\n"
 

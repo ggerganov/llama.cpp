@@ -77,6 +77,7 @@ print("gguf: loading model "+dir_model.name)
 with open(dir_model / "config.json", "r", encoding="utf-8") as f:
     hparams = json.load(f)
 
+
 if hparams["architectures"][0] != "GPTNeoXForCausalLM":
     print("Model architecture not supported: " + hparams["architectures"][0])
 

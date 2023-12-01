@@ -153,3 +153,33 @@ client-test:
 		--url http://localhost:8080/completion \
 		--header "Content-Type: application/json" \
 		--data "${CURL_DATA}"
+
+
+bench13b:
+	./main -m ../models/ggmls/openbuddy-llama2-13b-v11.1.ggmlv3.Q3_K_S.gguf 	-n 256 -p '${PROMPT}' -t 2 -ngl 10
+	sleep 50
+	./main -m ../models/ggmls/chinese-llama-2-13b-16k.Q3_K_S.gguf				-n 256 -p '${PROMPT}' -t 2 -ngl 10
+	sleep 50
+	./main -m ../models/ggmls/bc2-13b-chat-q2_k.gguf 							-n 256 -p '${PROMPT}' -t 2 -ngl 10
+	sleep 50
+	./main -m ../models/ggmls/openbuddy-mistral-7b-v13.1-q4_0.gguf 				-n 256 -p '${PROMPT}' -t 2 -ngl 10
+	sleep 50
+	./main -m ../models/ggmls/openbuddy-zephyr-7b-v14.1-q5_k_s.gguf 			-n 256 -p '${PROMPT}' -t 2 -ngl 10
+	sleep 50
+
+bench-lj:
+	make bench13b PROMPT="小丽有3个兄弟, 他们各有2个姐妹, 问小丽有几个姐妹"
+
+bench-sql:
+	make bench13b PROMPT="展示上个季度所有销售额超过 10000 美元的订单,写出SQL"
+
+bench-gpt:
+	make bench13b PROMPT='写一首藏头诗五言绝句，每句诗的开头字母分别是"莫""勇"二字：'
+
+bench-all: bench-lj bench-sql bench-gpt
+
+	./main -m ../models/ggmls/openbuddy-mistral-7b-v13.1-q4_0.gguf 	-n 256  -r "User:" -f prompts/test.txt -t 2 -ngl 10
+
+
+
+

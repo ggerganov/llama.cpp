@@ -12,5 +12,6 @@ response = model(messages)
 print(response)
 
 #python convert.py /root/.cache/modelscope/hub/baichuan-inc/Baichuan2-13B-Chat-4bits/
-# ./main -m ggml-model-q4_0.gguf -n 128 -p "莫勇开头写一首藏头诗"
+# ./main -m ../models/ggmls/bc2-13b-chat-q2_k.gguf -n 128 -p "莫勇开头写一首藏头诗"
 
+# ./main -m ../models/ggmls/bc2-13b-chat-q2_k.gguf -n 256 -p "小丽有3个兄弟, 他们各有2个姐妹, 问小丽有几个姐妹" -t 2 -ngl 10
