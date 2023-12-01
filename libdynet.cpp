@@ -368,14 +368,21 @@ REFL_END
 //  REFL_FIELD(dataname)
 //REFL_END
 
+  
+
 void trainmain();
 
 static ParameterCollection  model;
 size_t BATCH_SIZE=500;
 static  ComputationGraph cg;
-static vector<Expression> batch(BATCH_SIZE);
+static vector<Tensor> batch(BATCH_SIZE);
 static int next_id = 0;
 void ggml_tensor_add(const char * name,const struct ggml_tensor * tensor);
+
+#include <eigen3/Eigen/Core>
+//Eigen/Core
+using namespace Eigen;
+
 void ggml_tensor_add(const char * name,const struct ggml_tensor * tensor){
   //model.add(tensor)
   //runtime2::debug(std::cout,e);
@@ -386,63 +393,68 @@ void ggml_tensor_add(const char * name,const struct ggml_tensor * tensor){
       return;
     }
   float* buffer = ggml_get_data_f32(tensor);
-  Expression x = input(cg,  buffer);
+  //Expression x = input(cg,  buffer);
+  //  runtime2::debug(std::cout,x);
+  Tensor eigen_tensor(Dim({num_elements},1),buffer, nullptr,DeviceMempool::NONE);
+  // Create a copy of the eigen tensor
+  //  Tensor<float, 1> eigen_tensor_copy = eigen_tensor;
+  batch[(next_id++) % BATCH_SIZE] = eigen_tensor;
 
-  runtime2::debug(std::cout,x);
-  batch[(next_id++) % BATCH_SIZE] = x;
-
+  trainmain();
   //runtime2::debug(std::cout,batch);
 }
 
+void init_dynet() {
+
+}
+
+class DynetWrapper{
+
+  void init(){
+
+  }
+};
+ 
+
+//ComputationGraph cg2;
+
+
+const unsigned HIDDEN_SIZE = 8;
+
+int ITERATIONS = 5;
+
 void trainmain() {
 
-  int argc=0;
-  char** argv;
-  dynet::initialize(argc, argv);
-  const unsigned ITERATIONS = 30;
-  //ParameterCollection m;
-  SimpleSGDTrainer trainer(model);
+  char**  argv = 0;
+  //= {""};
+  int argc = 0;
+  dynet::initialize(argc,argv);
+    static SimpleSGDTrainer trainer(model);
+Parameter p_W = model.add_parameters({HIDDEN_SIZE, 2});
+Parameter p_b = model.add_parameters({HIDDEN_SIZE});
+Parameter p_V = model.add_parameters({1, HIDDEN_SIZE});
+Parameter p_a = model.add_parameters({1});
 
-  const unsigned HIDDEN_SIZE = 8;
-  Parameter p_W = model.add_parameters({HIDDEN_SIZE, 2});
-  Parameter p_b = model.add_parameters({HIDDEN_SIZE});
-  Parameter p_V = model.add_parameters({1, HIDDEN_SIZE});
-  Parameter p_a = model.add_parameters({1});
-  //if (argc == 2) {
-    // Load the model and parameters from file if given.
-    //TextFileLoader loader(argv[1]);
-  //loader.populate(m);
-    //}
-
-  // Static declaration of the computation graph.
-  ComputationGraph cg;
-  Expression W = parameter(cg, p_W);
-  Expression b = parameter(cg, p_b);
-  Expression V = parameter(cg, p_V);
-  Expression a = parameter(cg, p_a);
-
-  // Set x_values to change the inputs to the network.
-  vector<dynet::real> x_values(2);
-  Expression x = input(cg, {2}, &x_values);
-  dynet::real y_value;  // Set y_value to change the target output.
-  Expression y = input(cg, &y_value);
-
-  Expression h = tanh(W*x + b);
-  Expression y_pred = V*h + a;
-  Expression loss_expr = squared_distance(y_pred, y);
-
-  // Show the computation graph, just for fun.
-  cg.print_graphviz();
+Expression W = parameter(cg, p_W);
+Expression b = parameter(cg, p_b);
+Expression V = parameter(cg, p_V);
+Expression a = parameter(cg, p_a);
 
   // Train the parameters.
   for (unsigned iter = 0; iter < ITERATIONS; ++iter) {
     double loss = 0;
-    for (unsigned mi = 0; mi < 4; ++mi) {
-      bool x1 = mi % 2;
-      bool x2 = (mi / 2) % 2;
-      x_values[0] = x1 ? 1 : -1;
-      x_values[1] = x2 ? 1 : -1;
-      y_value = (x1 != x2) ? 1 : -1;
+    for (unsigned mi = 0; mi < BATCH_SIZE; ++mi) {
+      
+      auto x_values = batch[mi];
+      auto y_value = x_values.batch_ptr(0);
+
+      Expression y = input(cg, y_value);
+
+      Expression x = input(cg, x_values.batch_ptr(0));
+      Expression h = tanh(W*x + b);
+      Expression y_pred = V*h + a;
+      Expression loss_expr = squared_distance(y_pred, y);
+
       loss += as_scalar(cg.forward(loss_expr));
       cg.backward(loss_expr);
       trainer.update();
@@ -451,27 +463,5 @@ void trainmain() {
     cerr << "E = " << loss << endl;
   }
 
-  // Check whether our ComputationGraph learns correctly or not.
-  x_values[0] = -1;	// Set input value
-  x_values[1] = -1; // Set input value
-  cg.forward(y_pred); // Calculate until y_pred node
-  std::cout << "[-1,-1] -1 : " << as_scalar(y_pred.value()) << std::endl;
-  x_values[0] = -1;
-  x_values[1] =  1;
-  cg.forward(y_pred);
-  std::cout << "[-1, 1]  1 : " << as_scalar(y_pred.value()) << std::endl;
-  x_values[0] =  1;
-  x_values[1] = -1;
-  cg.forward(y_pred);
-  std::cout << "[ 1,-1]  1 : " << as_scalar(y_pred.value()) << std::endl;
-  x_values[0] =  1;
-  x_values[1] =  1;
-  cg.forward(y_pred);
-  std::cout << "[ 1, 1] -1 : " << as_scalar(y_pred.value()) << std::endl;
-
-  // Output the model and parameter objects to a file.
-  // TextFileSaver saver("test.model");
-  //  saver.save(model);
-  runtime2::debug(std::cout,model);
 }
 

@@ -105,7 +105,10 @@ static void sigint_handler(int signo) {
 #endif
 using namespace refl;
 
+
+#include "dynet/init.h"
 int main(int argc, char ** argv) {
+
     gpt_params params;
     g_params = &params;
 
