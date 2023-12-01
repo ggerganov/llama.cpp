@@ -1469,7 +1469,7 @@ struct llama_server_context
 
     int split_multiprompt_task(task_server& multiprompt_task)
     {
-        auto prompt_count = multiprompt_task.data.at("prompt").size();
+        int prompt_count = multiprompt_task.data.at("prompt").size();
         assert(prompt_count > 1);
 
         int multitask_id = id_gen++;
