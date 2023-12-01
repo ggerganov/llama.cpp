@@ -31,10 +31,10 @@
     })
 
     const params = signal({
-      n_predict: 358,
+      n_predict: -1, //358,
       temperature: 1.0, // adapt to optimized min-p requierements
-      repeat_last_n: 256, // 0 = disable penalty, -1 = context size
-      repeat_penalty: 1.18, // 1.0 = disabled
+      repeat_last_n: 0, // 0 = disable penalty, -1 = context size
+      repeat_penalty: 1.0, // 1.0 = disabled
       top_k: 0, // <= 0 to use vocab size
       top_p: 1.0, // 1.0 = disabled
       min_p: 0.05, // 0 = disabled
@@ -50,6 +50,8 @@
       image_data: [],
       cache_prompt: true
     })
+
+
 
     /* START: Support for storing prompt templates and parameters in browser's LocalStorage */
 
@@ -455,66 +457,69 @@ function updateSystemPrompt(e) {
   }
 }
 //
-document.addEventListener('DOMContentLoaded', (event) => {
-  // Add event listener for the language selection dropdown
-  document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
-});
+///////////////////////////////////////////////////////////////////////////
 //
-async function updateSystemLanguage(event) {
-  const language = event.target.value;
-  const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
-  const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
-//
-  try {
-    // System prompts
-    const promptsModule = await import(`./${languageFile}`);
-    const systemPrompts = promptsModule.systemPrompts;
-    // Update the system prompt
-    document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
-    // The UI texts
-    const response = await fetch(uiLanguageFile);
-    const uiTexts = await response.json();
-    // Update the label
-    document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
-    document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
-    document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
-    document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
-    document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
-    document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
-    document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
-    document.getElementById('id_reset').textContent = uiTexts.RESET;
-    document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
-    document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
-    document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
-    document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
-    document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
-    document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
-    document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
-    document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
-    document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
-    document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
-    document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
-    document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
-    document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
-    document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
-    document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
-    document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
-    document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
-    document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
-    document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
-    document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
-    document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
-    document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
-    document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
-    document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
-    document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
-    document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
-    document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
-    document.getElementById('id_and').textContent = uiTexts.AND;
-  } catch (error) {
-    console.error('Error loading the language files:', error);
-  }
-}
+// document.addEventListener('DOMContentLoaded', (event) => {
+//   // Add event listener for the language selection dropdown
+//   document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
+// });
+// //
+// async function updateSystemLanguage(event) {
+//   const language = event.target.value;
+//   const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
+//   const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
+// //
+//   try {
+//     // System prompts
+//     const promptsModule = await import(`./${languageFile}`);
+//     const systemPrompts = promptsModule.systemPrompts;
+//     // Update the system prompt
+//     document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
+//     // The UI texts
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Update the label
+//     document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
+//     document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
+//     document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
+//     document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
+//     document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
+//     document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
+//     document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
+//     document.getElementById('id_reset').textContent = uiTexts.RESET;
+//     document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
+//     document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
+//     document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
+//     document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
+//     document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
+//     document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
+//     document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
+//     document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
+//     document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
+//     document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
+//     document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
+//     document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
+//     document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
+//     document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
+//     document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
+//     document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
+//     document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
+//     document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
+//     document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
+//     document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
+//     document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
+//     document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
+//     document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
+//     document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
+//     document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
+//     document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
+//     document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
+//     document.getElementById('id_and').textContent = uiTexts.AND;
+//   } catch (error) {
+//     console.error('Error loading the language files:', error);
+//   }
+// }
+///////////////////////////////////////////////////////////////////////////
 //
 // async function updateTexts(systemPrompts) {
 //   // Update the texts that come from the language files
@@ -568,12 +573,14 @@ async function updateSystemLanguage(event) {
         }
       }
 
+
+
       const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
           <div>
             <label for="${name}">${label}</label>
             <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
-            <span>${value}</span>
+            <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -583,7 +590,7 @@ async function updateSystemLanguage(event) {
           <div>
             <label for="${name}">${label}</label>
               <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-            <span>${value}</span>
+              <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -603,6 +610,7 @@ async function updateSystemLanguage(event) {
         return html`
           <div class="button-container">
             <button class="reset-button" title="Caution: This resets the entire form." onclick="${userTemplateReset}">Reset</button>
+
           </div>
         `
       };
@@ -644,6 +652,8 @@ async function updateSystemLanguage(event) {
 
       const ChatConfigForm = () => (
         html`
+
+          <!-- <button id="theme-toggle">Dark/Light</button> -->
           <fieldset class="dropdowns">
             <div>
               <select id="promptFormat" name="promptFormat" onchange=${updatePromptFormat}>
@@ -677,12 +687,15 @@ async function updateSystemLanguage(event) {
                   <option value="neuralchat">Neural Chat</option>
                   <option value="nousCapybara">Nous Capybara</option>
                   <option value="nousHermes">Nous Hermes</option>
+                  <option value="openChat">OpenChat</option>
                   <option value="openhermes2Mistral">OpenHermes 2.5-Mistral</option>
                   <option value="orcamini">Orca Mini v3</option>
                   <option value="sauerkrautLM">SauerkrautLM</option>
                   <option value="samantha">Samantha</option>
                   <option value="samanthaMistral">Samantha Mistral</option>
                   <option value="scarlett">Scarlett</option>
+                  <option value="starlingLM">Starling-7B</option>
+                  <option value="starlingLM">Starling-7B Coding</option>
                   <option value="sydney">Sydney</option>
                   <option value="synthia">Synthia</option>
                   <option value="tess">Tess</option>
@@ -697,12 +710,14 @@ async function updateSystemLanguage(event) {
                 <option value="airoboros">Airoboros</option>
                 <option value="alpaca">Alpaca</option>
                 <option value="atlas">Atlas</option>
+                <option value="cot">Chain of Tought</option>
+                <option value="deduce">Critical Thinking</option>
                 <option value="deepseekcoder">Deepseek Coder</option>
                 <option value="jordan">Jordan</option>
                 <option value="leomistral">Leo Mistral</option>
                 <option value="med42">Med42</option>
-                <option value="mistralopenorca">Mistral OpenOrca</option>
                 <option value="migeltot">Migel's Tree of Thought</option>
+                <option value="mistralopenorca">Mistral OpenOrca</option>
                 <option value="orcamini">Orca Mini</option>
                 <option value="samantha">Samantha</option>
                 <option value="sauerkraut">Sauerkraut</option>
@@ -711,9 +726,18 @@ async function updateSystemLanguage(event) {
               </select>
               <!--<select id="systemLanguage" name="systemLanguage">-->
                 <!--<option value="default">English</option>-->
-                  <!--<option value="DE">German</option>-->
-                  <!--<option value="placeholderLanguage">Placeholder</option>-->
-                  <!--</select>-->
+                <!--<option value="DE">German</option>-->
+                <!--<option value="placeholderLanguage">Placeholder</option>-->
+              <!--</select>-->
+              <select id="theme-selector">
+                <option value="default">Default</option>
+                <option value="mangotango">Mango Tango</option>
+                <option value="playground">Playground</option>
+                <option value="polarnight">Polar Night</option>
+                <option value="snowstorm">Snow Storm</option>
+                <option value="been_in_order">Been In Order</option>
+                <!-- ... more themes ... -->
+              </select>
             </div>
           </fieldset>
           ${PromptControlFieldSet()}
@@ -728,7 +752,7 @@ async function updateSystemLanguage(event) {
             </div>
           </fieldset>
           <fieldset>
-            <details>
+            <details open>
               <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
                 <div class="two-columns">
                   <div>
@@ -777,7 +801,7 @@ async function updateSystemLanguage(event) {
             ${IntField({ label: "Prediction", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
             ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
             ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
-            ${FloatField({ label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
           </fieldset>
 
           <details>
@@ -1031,7 +1055,69 @@ async function updateSystemLanguage(event) {
       `;
     }
 
+
+document.addEventListener('DOMContentLoaded', function() {
+  var themeSelector = document.getElementById('theme-selector');
+
+  themeSelector.addEventListener('change', function(event) {
+    // remove all existing/defined theme classes
+    document.body.classList.remove('theme-default', 'theme-mangotango', 'theme-playground', 'theme-polarnight', 'theme-snowstorm', 'theme-been_in_order');
+    // add the selected theme class
+    var selectedTheme = event.target.value;
+    if (selectedTheme !== 'default') {
+      document.body.classList.add('theme-' + selectedTheme);
+    }
+    // save selection in local storage
+    localStorage.setItem('selected-theme', selectedTheme);
+  });
+
+  // set the selected theme when loading the page
+  var savedTheme = localStorage.getItem('selected-theme');
+  if (savedTheme && savedTheme !== 'default') {
+    document.body.classList.add('theme-' + savedTheme);
+    themeSelector.value = savedTheme;
+  }
+});
+
+
+// snapping of the slider to indicate 'disabled'
+document.addEventListener('DOMContentLoaded', (event) => {
+  // define an object that contains snap values and ranges for each slider
+  const snapSettings = {
+    temperature: { snapValue: 1.0, snapRangeMultiplier: 6 },
+    min_p: { snapValue: 0.05, snapRangeMultiplier: 2 },
+    top_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    tfs_z: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    typical_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    repeat_penalty: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    presence_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+    frequency_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+  };
+  // add an event listener for each slider
+  Object.keys(snapSettings).forEach(sliderName => {
+    const slider = document.querySelector(`input[name="${sliderName}"]`);
+    const settings = snapSettings[sliderName];
+
+    slider.addEventListener('input', (e) => {
+      let value = parseFloat(e.target.value);
+      const step = parseFloat(e.target.step);
+      const snapRange = step * settings.snapRangeMultiplier;
+      const valueDisplay = document.getElementById(`${e.target.name}-value`);
+
+      if (value >= settings.snapValue - snapRange && value <= settings.snapValue + snapRange) {
+        value = settings.snapValue; // set value to the snap value
+        e.target.value = value; // update the slider value
+      }
+      // update the displayed value
+      if (valueDisplay) {
+        valueDisplay.textContent = value.toFixed(2); // display value with two decimal places
+      }
+    });
+  });
+});
+
     render(h(App), document.querySelector('#container'));
+
   </script>
 </head>
 
