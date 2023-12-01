@@ -280,6 +280,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.yarn_beta_slow = std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
+        } else if (arg == "--sampling-seq") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.samplers_sequence = argv[i];
         } else if (arg == "--top-p") {
             if (++i >= argc) {
                 invalid_param = true;
