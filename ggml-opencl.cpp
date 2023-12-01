@@ -1,20 +1,18 @@
+#include "ggml.h"
 #include "ggml-opencl.h"
 
 #include <array>
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <sstream>
 #include <vector>
-#include <limits>
 
 #define CL_TARGET_OPENCL_VERSION 110
 #include <clblast.h>
 #include <clblast_c.h>
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "ggml.h"
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
