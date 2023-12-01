@@ -2785,10 +2785,29 @@ static void llm_load_tensors(
                         layer.wv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
                         layer.wo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
                         
-                        layer.bq = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q,   "bias", i), {n_embd},     backend);
-                        layer.bk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K,   "bias", i), {n_embd_gqa}, backend);
-                        layer.bv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V,   "bias", i), {n_embd_gqa}, backend);
-                        layer.bo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd},     backend);
+                        try { 
+                            layer.bq = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q, "bias", i), {n_embd}, backend); 
+                        } catch (const std::runtime_error& e) { 
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bq = NULL; else throw; 
+                        }
+
+                        try { 
+                            layer.bk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K, "bias", i), {n_embd_gqa}, backend); 
+                        } catch (const std::runtime_error& e) { 
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bk = NULL; else throw; 
+                        }
+
+                        try { 
+                            layer.bv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V, "bias", i), {n_embd_gqa}, backend); 
+                        } catch (const std::runtime_error& e) { 
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bv = NULL; else throw; 
+                        }
+
+                        try { 
+                            layer.bo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd}, backend); 
+                        } catch (const std::runtime_error& e) { 
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bo = NULL; else throw; 
+                        }
 
                         layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
@@ -2798,10 +2817,14 @@ static void llm_load_tensors(
 
                         if (backend == GGML_BACKEND_GPU) {
                             vram_weights +=
-                                ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.wq)       + ggml_nbytes(layer.wk)       +
-                                ggml_nbytes(layer.wv)        + ggml_nbytes(layer.wo)       + ggml_nbytes(layer.bq)       +
-                                ggml_nbytes(layer.bk)        + ggml_nbytes(layer.bv)       + ggml_nbytes(layer.bo) +
-                                ggml_nbytes(layer.ffn_norm) + ggml_nbytes(layer.ffn_gate)  + ggml_nbytes(layer.ffn_down) + ggml_nbytes(layer.ffn_up);
+                                ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.wq) + ggml_nbytes(layer.wk) +
+                                ggml_nbytes(layer.wv) + ggml_nbytes(layer.wo) +
+                                (layer.bq ? ggml_nbytes(layer.bq) : 0) +
+                                (layer.bk ? ggml_nbytes(layer.bk) : 0) +
+                                (layer.bv ? ggml_nbytes(layer.bv) : 0) +
+                                (layer.bo ? ggml_nbytes(layer.bo) : 0) +
+                                ggml_nbytes(layer.ffn_norm) + ggml_nbytes(layer.ffn_gate) +
+                                ggml_nbytes(layer.ffn_down) + ggml_nbytes(layer.ffn_up);
                         }
                     }
                 } break;
