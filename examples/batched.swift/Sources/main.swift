@@ -242,6 +242,16 @@ private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String
             Int32(result.count)
         )
         assert(check == nTokens)
+    } else if nTokens > 8 {
+        result.removeAll()
+        result = [CChar](repeating: 0, count: nTokens)
+        let check = llama_token_to_piece(
+            model,
+            token,
+            &result,
+            Int32(result.count)
+        )
+        assert(check == nTokens)
     } else {
         result.removeLast(result.count - Int(nTokens))
     }

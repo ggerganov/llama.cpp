@@ -165,7 +165,18 @@ actor LlamaContext {
         let result = UnsafeMutablePointer<Int8>.allocate(capacity: 8)
         result.initialize(repeating: Int8(0), count: 8)
 
-        let _ = llama_token_to_piece(model, token, result, 8)
+        let nTokens = llama_token_to_piece(model, token, result, 8)
+
+        if nTokens > 8 {
+            result.removeAll()
+            result = [CChar](repeating: 0, count: nTokens)
+            _ = llama_token_to_piece(
+                model,
+                token,
+                &result,
+                Int32(result.count)
+            )
+        }
 
         let resultStr = String(cString: result)
 
