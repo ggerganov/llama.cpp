@@ -2784,29 +2784,29 @@ static void llm_load_tensors(
                         layer.wk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
                         layer.wv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa}, backend_split);
                         layer.wo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd},     backend_split);
-                        
-                        try { 
-                            layer.bq = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q, "bias", i), {n_embd}, backend); 
-                        } catch (const std::runtime_error& e) { 
-                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bq = NULL; else throw; 
+
+                        try {
+                            layer.bq = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_Q, "bias", i), {n_embd}, backend);
+                        } catch (const std::runtime_error& e) {
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bq = NULL; else throw;
                         }
 
-                        try { 
-                            layer.bk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K, "bias", i), {n_embd_gqa}, backend); 
-                        } catch (const std::runtime_error& e) { 
-                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bk = NULL; else throw; 
+                        try {
+                            layer.bk = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_K, "bias", i), {n_embd_gqa}, backend);
+                        } catch (const std::runtime_error& e) {
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bk = NULL; else throw;
                         }
 
-                        try { 
-                            layer.bv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V, "bias", i), {n_embd_gqa}, backend); 
-                        } catch (const std::runtime_error& e) { 
-                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bv = NULL; else throw; 
+                        try {
+                            layer.bv = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_V, "bias", i), {n_embd_gqa}, backend);
+                        } catch (const std::runtime_error& e) {
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bv = NULL; else throw;
                         }
 
-                        try { 
-                            layer.bo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd}, backend); 
-                        } catch (const std::runtime_error& e) { 
-                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bo = NULL; else throw; 
+                        try {
+                            layer.bo = ml.create_tensor(ctx, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd}, backend);
+                        } catch (const std::runtime_error& e) {
+                            if (std::string(e.what()).find("not found") != std::string::npos) layer.bo = NULL; else throw;
                         }
 
                         layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
@@ -3941,7 +3941,7 @@ struct llm_build_context {
                     Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
                     cb(Vcur, "Vcur", il);
                 }
-                
+
                 Qcur = ggml_rope_custom(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos,
                     n_embd_head, 0, 0, n_orig_ctx, freq_base, freq_scale,
@@ -3959,7 +3959,7 @@ struct llm_build_context {
                 llm_build_kv_store(ctx0, hparams, kv_self, gf, Kcur, Vcur, n_ctx, n_tokens, kv_head, cb, il);
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
-                        model.layers[il].wo, model.layers[il].bo,   
+                        model.layers[il].wo, model.layers[il].bo,
                         Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
                 cb(cur, "kqv_out", il);
             }
