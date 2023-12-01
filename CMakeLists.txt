@@ -116,6 +116,11 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include(CheckCXXCompilerFlag)
 
+# enable libstdc++ assertions for debug builds
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    add_compile_definitions($<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>)
+endif()
+
 if (NOT MSVC)
     if (LLAMA_SANITIZE_THREAD)
         add_compile_options(-fsanitize=thread)
@@ -165,7 +170,7 @@ if (LLAMA_METAL)
     #add_compile_definitions(GGML_METAL_DIR_KERNELS="${CMAKE_CURRENT_SOURCE_DIR}/")
 
     # copy ggml-metal.metal to bin directory
-    configure_file(ggml-metal.metal bin/ggml-metal.metal COPYONLY)
+    configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
 
     set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}
         ${FOUNDATION_LIBRARY}
