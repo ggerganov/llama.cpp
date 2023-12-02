@@ -540,7 +540,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
     async def send_oai_sse_event(self, data):
-        self.wfile.write(f'data: {data}\r\n\r\n'.encode())
+        if data=="[DONE]":
+            self.wfile.write(f'data: {data}'.encode())
+        else:
+            self.wfile.write(f'data: {data}\r\n\r\n'.encode())
         self.wfile.flush()
 
     async def send_kai_sse_event(self, data):
@@ -1918,8 +1921,8 @@ def setuptunnel():
                     for x in found:
                         tunneloutput = x
 
-                        print(f"Your remote Kobold API can be found at {tunneloutput}/api/")
-                        print(f"Your remote OpenAI Compatible API can be found at {tunneloutput}/v1/")
+                        print(f"Your remote Kobold API can be found at {tunneloutput}/api")
+                        print(f"Your remote OpenAI Compatible API can be found at {tunneloutput}/v1")
                         print("======\n")
                         print(f"Your remote tunnel is ready, please connect to {tunneloutput}")
                         return
