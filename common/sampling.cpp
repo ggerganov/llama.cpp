@@ -104,31 +104,13 @@ std::string llama_sampling_order_print(const llama_sampling_params & params) {
     if (params.mirostat == 0){
         for (auto s : params.samplers_sequence){
             switch (s){
-                case 'k':{
-                    result += "-> top_k ";
-                    break;
-                }
-                case 'f':{
-                    result += "-> tfs_z ";
-                    break;
-                }
-                case 'y':{
-                    result += "-> typical_p ";
-                    break;
-                }
-                case 'p':{
-                    result += "-> top_p ";
-                    break;
-                }
-                case 'm':{
-                    result += "-> min_p ";
-                    break;
-                }
-                case 't':{
-                    result += "-> temp ";
-                    break;
-                }
-                default: break;
+                case 'k': result += "-> top_k "; break;
+                case 'f': result += "-> tfs_z "; break;
+                case 'y': result += "-> typical_p "; break;
+                case 'p': result += "-> top_p "; break;
+                case 'm': result += "-> min_p "; break;
+                case 't': result += "-> temp "; break;
+                default : break;
             }
         }
     } else result += "-> mirostat ";
@@ -154,34 +136,15 @@ void sampler_queue(
                       
     for (auto s : samplers_sequence){
         switch (s){
-            case 'k':{
-                llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep);
-                break;
-            }
-            case 'f':{
-                llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep);
-                break;
-            }
-            case 'y':{
-                llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep);
-                break;
-            }
-            case 'p':{
-                llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep);
-                break;
-            }
-            case 'm':{
-                llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep);
-                break;
-            }
-            case 't':{
-                llama_sample_temp     (ctx_main, &cur_p, temp);
-                break;
-            }
-            default: break;
+            case 'k': llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
+            case 'f': llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
+            case 'y': llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
+            case 'p': llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
+            case 'm': llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
+            case 't': llama_sample_temp     (ctx_main, &cur_p, temp); break;
+            default : break;
         }
     }
-    
 }
 
 llama_token llama_sampling_sample(
