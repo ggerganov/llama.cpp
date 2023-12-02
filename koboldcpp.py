@@ -1917,6 +1917,10 @@ def setuptunnel():
                     found = re.findall(pattern, line)
                     for x in found:
                         tunneloutput = x
+
+                        print(f"Your remote Kobold API can be found at {tunneloutput}/api/")
+                        print(f"Your remote OpenAI Compatible API can be found at {tunneloutput}/v1/")
+                        print("======\n")
                         print(f"Your remote tunnel is ready, please connect to {tunneloutput}")
                         return
 
@@ -2178,8 +2182,9 @@ def main(launch_args,start_server=True):
         epurl = f"http://localhost:{args.port}"
     else:
         epurl = f"http://{args.host}:{args.port}"
-    print(f"Starting Kobold API on port {args.port} at {epurl}/api/")
-    print(f"Starting OpenAI Compatible API on port {args.port} at {epurl}/v1/")
+    if not args.remotetunnel:
+        print(f"Starting Kobold API on port {args.port} at {epurl}/api/")
+        print(f"Starting OpenAI Compatible API on port {args.port} at {epurl}/v1/")
 
     if args.launch:
         try:
