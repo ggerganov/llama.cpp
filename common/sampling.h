@@ -84,6 +84,42 @@ std::string llama_sampling_print(const llama_sampling_params & params);
 // Print sampling order into a string
 std::string llama_sampling_order_print(const llama_sampling_params & params);
 
+void sample_top_k(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
+void sample_top_p(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
+void sample_tfs_z(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
+void sample_typical_p(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
+void sample_min_p(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
+void sample_temp(
+    const llama_sampling_params & params, 
+           struct llama_context * ctx_main, 
+         llama_token_data_array & cur_p, 
+                         size_t & min_keep);
+
 // this is a common sampling function used across the examples for convenience
 // it can serve as a starting point for implementing your own sampling function
 // Note: When using multiple sequences, it is the caller's responsibility to call
