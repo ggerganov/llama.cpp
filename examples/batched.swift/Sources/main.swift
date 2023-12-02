@@ -230,18 +230,15 @@ private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String
     var result = [CChar](repeating: 0, count: 8)
     let nTokens = llama_token_to_piece(model, token, &result, Int32(result.count))
     if nTokens < 0 {
-        if result.count >= -Int(nTokens) {
-            result.removeLast(-Int(nTokens))
-        } else {
-            result.removeAll()
-        }
+        let actualTokensCount = -Int(nTokens)
+        result = .init(repeating: 0, count: actualTokensCount)
         let check = llama_token_to_piece(
             model,
             token,
             &result,
             Int32(result.count)
         )
-        assert(check == nTokens)
+        assert(check == actualTokensCount)
     } else {
         result.removeLast(result.count - Int(nTokens))
     }
@@ -259,5 +256,4 @@ private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String
         buffer = []
         return bufferString
     }
-    return nil
 }
