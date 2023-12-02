@@ -74,6 +74,7 @@ static llama_v3_context * llama_ctx_v3;
 static llama_context * llama_ctx_v4;
 
 static gpt_params params;
+static int max_context_limit_at_load = 0;
 static int n_past = 0;
 static int n_threads = 4;
 static int n_blasthreads = 4;
@@ -690,6 +691,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     }
 
     params.n_ctx = clamped_max_context_length;
+    max_context_limit_at_load = clamped_max_context_length;
 
     neox_ctx_v2.hparams.n_ctx  = neox_ctx_v3.hparams.n_ctx
     = gptj_ctx_v1.hparams.n_ctx = gptj_ctx_v2.hparams.n_ctx = gptj_ctx_v3.hparams.n_ctx
@@ -1447,10 +1449,13 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
     if(params.n_ctx >= 256 && useContextShift && (file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON))
     {
-        params.n_ctx -= extra_context_handle_fragmentation; //add some additional buffer to handle KV fragmentation
-        if(debugmode==1)
+        if(params.n_ctx + extra_context_handle_fragmentation >= max_context_limit_at_load)
         {
-            printf("\nTrue max context permitted: %d\n",params.n_ctx);
+            params.n_ctx -= extra_context_handle_fragmentation; //add some additional buffer to handle KV fragmentation
+            if(debugmode==1)
+            {
+                printf("\nTrue max context permitted: %d\n",params.n_ctx);
+            }
         }
     }
 
