@@ -156,15 +156,15 @@ llama_token llama_sampling_sample(
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
 
-    const float   temp                  = params.temp;
-    const int32_t penalty_last_n        = params.penalty_last_n < 0 ? params.n_prev : params.penalty_last_n;
-    const float   penalty_repeat        = params.penalty_repeat;
-    const float   penalty_freq          = params.penalty_freq;
-    const float   penalty_present       = params.penalty_present;
-    const int     mirostat              = params.mirostat;
-    const float   mirostat_tau          = params.mirostat_tau;
-    const float   mirostat_eta          = params.mirostat_eta;
-    const bool    penalize_nl           = params.penalize_nl;
+    const float   temp            = params.temp;
+    const int32_t penalty_last_n  = params.penalty_last_n < 0 ? params.n_prev : params.penalty_last_n;
+    const float   penalty_repeat  = params.penalty_repeat;
+    const float   penalty_freq    = params.penalty_freq;
+    const float   penalty_present = params.penalty_present;
+    const int     mirostat        = params.mirostat;
+    const float   mirostat_tau    = params.mirostat_tau;
+    const float   mirostat_eta    = params.mirostat_eta;
+    const bool    penalize_nl     = params.penalize_nl;
 
     auto & prev = ctx_sampling->prev;
     auto & cur  = ctx_sampling->cur;
