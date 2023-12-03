@@ -1,0 +1,117 @@
+root ::= [ \t\n]* exp
+
+ws ::= [ \t\n]+
+w ::= [ \t]*
+
+comment ::= "#" [^#]* "#" [ \t]+ [\n]? [ \t]*
+
+### Expressions
+
+exp ::= comment* sequence-exp
+
+sequence-exp ::= tuple-exp (w ";" ws tuple-exp)*
+
+tuple-exp ::= cons-exp (w "," ws cons-exp)*
+
+cons-exp ::= binary-exp (w "::" w binary-exp)*
+
+binary-exp ::= unary-exp (ws binary-op ws unary-exp)*
+
+unary-exp ::= unary-op* function-app-exp
+
+function-app-exp ::= primary-exp (w "(" w exp w ")" w)*
+
+primary-exp ::= bool |
+    integer |
+    float |
+    string |
+    variable |
+    "()" |
+    "[]" |
+    constructor |
+    constructor-app |
+    parenthesized-exp |
+    list-exp |
+    let-exp |
+    if-exp |
+    case-exp |
+    test-exp |
+    type-alias |
+    fun
+
+constructor-app ::= constructor "(" w exp w ")"
+parenthesized-exp ::= "(" w exp w ")"
+list-exp ::= "[" exp ("," ws exp)* "]"
+let-exp ::= "let" ws pat ws "=" ws exp ws "in" ws exp
+if-exp ::= "if" ws exp ws "then" ws exp ws "else" ws exp
+case-exp ::= "case" ws exp (ws "|" ws pat ws "=>" ws exp)+ ws "end"
+test-exp ::= "test" ws exp ws "end"
+type-alias ::= "type" ws constructor ws "=" ws typ ws "in" ws exp
+fun ::= "fun" ws pat ws "->" ws exp
+
+type-variable ::= [a-z][A-Za-z0-9_]*
+constructor ::= [A-Z][A-Za-z0-9_]*
+variable ::= ([_a-bdg-hj-kn-qu-z][A-Za-z0-9_.]*)|(("s" ([.0-9A-Z_a-su-z][A-Za-z0-9_.]*)?)|("st" ([.0-9A-Z_a-qs-z][A-Za-z0-9_.]*)?)|("str" ([.0-9A-Z_a-tv-z][A-Za-z0-9_.]*)?)|("stru" ([.0-9A-Z_a-bd-z][A-Za-z0-9_.]*)?)|("struc" ([.0-9A-Z_a-su-z][A-Za-z0-9_.]*)?)|("struct" [A-Za-z0-9_.]+)|("c" ([.0-9A-Z_b-z][A-Za-z0-9_.]*)?)|("ca" ([.0-9A-Z_a-rt-z][A-Za-z0-9_.]*)?)|("cas" ([.0-9A-Z_a-df-z][A-Za-z0-9_.]*)?)|("case" [A-Za-z0-9_.]+)|("i" ([.0-9A-Z_a-mo-z][A-Za-z0-9_.]*)?)|("in" [A-Za-z0-9_.]+)|("r" ([.0-9A-Z_a-df-z][A-Za-z0-9_.]*)?)|("re" ([.0-9A-Z_a-bd-z][A-Za-z0-9_.]*)?)|("rec" [A-Za-z0-9_.]+)|("t" ([.0-9A-Z_a-df-z][A-Za-z0-9_.]*)?)|("te" ([.0-9A-Z_a-rt-z][A-Za-z0-9_.]*)?)|("tes" ([.0-9A-Z_a-su-z][A-Za-z0-9_.]*)?)|("test" [A-Za-z0-9_.]+)|("l" ([.0-9A-Z_a-df-z][A-Za-z0-9_.]*)?)|("le" ([.0-9A-Z_a-su-z][A-Za-z0-9_.]*)?)|("let" [A-Za-z0-9_.]+)|("m" ([.0-9A-Z_b-z][A-Za-z0-9_.]*)?)|("ma" ([.0-9A-Z_a-su-z][A-Za-z0-9_.]*)?)|("mat" ([.0-9A-Z_a-bd-z][A-Za-z0-9_.]*)?)|("matc" ([.0-9A-Z_a-gi-z][A-Za-z0-9_.]*)?)|("match" [A-Za-z0-9_.]+)|("f" ([.0-9A-Z_a-tv-z][A-Za-z0-9_.]*)?)|("fu" ([.0-9A-Z_a-mo-z][A-Za-z0-9_.]*)?)|("fun" [A-Za-z0-9_.]+)|("e" ([.0-9A-Z_a-mo-z][A-Za-z0-9_.]*)?)|("en" ([.0-9A-Z_a-ce-z][A-Za-z0-9_.]*)?)|("end" [A-Za-z0-9_.]+))
+bool ::= "true" | "false"
+integer ::= [0-9]+
+float ::= [0-9]* "." [0-9]+
+string ::= "\"" [^"]* "\""
+
+unary-op ::= "-" | "!"
+binary-op-int ::= "+" | "-" | "*" | "/" | "<" | ">" | "<=" | ">=" | "==" | "!="
+binary-op-float ::= "+." | "-." | "*." | "/." | "<." | ">." | "<=." | ">=." | "==." | "!=."
+binary-op-string ::= "$==" | "@"
+binary-op-logic ::= "&&"
+binary-op ::= binary-op-int | binary-op-float | binary-op-string | binary-op-logic
+
+### Patterns
+
+pat ::= type-ascription-pat
+
+type-ascription-pat ::= tuple-pat (w ":" ws typ)*
+
+tuple-pat ::= cons-pat (w "," ws cons-pat)*
+
+cons-pat ::= primary-pat (w "::" w primary-pat)*
+
+primary-pat ::=
+    bool |
+    integer |
+    float |
+    string |
+    variable |
+    "()" |
+    "[]" |
+    "_" |
+    constructor |
+    constructor-app-pat |
+    parenthesized-pat |
+    list-pat
+
+constructor-app-pat ::= constructor "(" w pat w ")"
+parenthesized-pat ::= "(" w pat w ")"
+list-pat ::= "[" pat (w "," ws pat)* "]"
+
+### Types
+
+typ ::= arrow-typ
+
+arrow-typ ::= tuple-typ (ws "->" ws tuple-typ)*
+
+tuple-typ ::= primary-typ (w "," ws primary-typ)*
+
+primary-typ ::=
+    "Unit" |
+    "Int" |
+    "Float" |
+    "Bool" |
+    "String" |
+    type-variable |
+    constructor |
+    constructor-def (ws "+" ws constructor-def)+ |
+    parenthesized-typ |
+    list-typ
+
+parenthesized-typ ::= "(" w typ w ")"
+list-typ ::= "[" w typ w "]"
+constructor-def ::= constructor | constructor "(" w typ w ")"
