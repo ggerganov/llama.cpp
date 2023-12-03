@@ -98,10 +98,11 @@ std::string llama_sampling_print(const llama_sampling_params & params);
 //  - candidates: vector of candidate tokens
 //
 llama_token llama_sampling_sample(
-        struct llama_sampling_context * ctx_sampling,
-        struct llama_context * ctx_main,
-        struct llama_context * ctx_cfg,
-        int idx = 0);
+    struct llama_sampling_context * ctx_sampling,
+    struct llama_context * ctx_main,
+    struct llama_context * ctx_cfg,
+    const int idx,
+    bool is_resampling = false); // Add the new parameter with default value
 
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
