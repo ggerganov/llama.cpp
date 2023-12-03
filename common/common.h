@@ -142,6 +142,12 @@ std::string gpt_random_prompt(std::mt19937 & rng);
 void process_escapes(std::string& input);
 
 //
+// String parsing
+//
+
+std::string parse_samplers_input(std::string input);
+
+//
 // Model utils
 //
 
