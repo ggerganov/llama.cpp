@@ -25,7 +25,7 @@ request_oai(){
         "messages": [
             {
                 "role": "system",
-                "content": "You are an AI assistant. Your top priority is to fulfill the requests of the by helping them with their needs."
+                "content": "You are an AI assistant. Your top priority is to fulfill the requests of the user by helping them with their needs."
             },
             {
                 "role": "user",
