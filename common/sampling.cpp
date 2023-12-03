@@ -100,11 +100,11 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 }
 
 llama_token llama_sampling_sample(
-        struct llama_sampling_context * ctx_sampling,
-        struct llama_context * ctx_main,
-        struct llama_context * ctx_cfg,
-        const int idx,
-        bool is_resampling) {  // Add a parameter to indicate if we are resampling
+                  struct llama_sampling_context * ctx_sampling,
+                  struct llama_context * ctx_main,
+                  struct llama_context * ctx_cfg,
+                  const int idx,
+                  bool is_resampling) {  // Add a parameter to indicate if we are resampling
     const llama_sampling_params & params = ctx_sampling->params;
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
@@ -134,7 +134,7 @@ llama_token llama_sampling_sample(
 
     // Declare original_logits at the beginning of the function scope
     std::vector<float> original_logits;
-    
+
     if (!is_resampling) {
         // Only make a copy of the original logits if we are not in the resampling phase, not sure if I actually have to do this.
         original_logits = std::vector<float>(logits, logits + llama_n_vocab(llama_get_model(ctx_main)));
