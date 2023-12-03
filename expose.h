@@ -83,6 +83,11 @@ struct generation_outputs
     int status = -1;
     char text[32768]; //32kb should be enough for any response
 };
+struct token_count_outputs
+{
+    int count = 0;
+    int * ids; //we'll just use shared memory for this one, bit of a hack
+};
 
 extern std::string executable_path;
 extern std::string lora_filename;

@@ -1390,7 +1390,7 @@ bool gpttype_generate_abort()
     return true;
 }
 
-int gpttype_token_count(const std::string & input)
+std::vector<int> gpttype_get_token_arr(const std::string & input)
 {
     if(debugmode==1)
     {
@@ -1403,7 +1403,7 @@ int gpttype_token_count(const std::string & input)
     {
         printf("\nTokens Counted: %d\n",tokcount);
     }
-    return tokcount;
+    return toks;
 }
 
 const std::string & gpttype_get_pending_output()

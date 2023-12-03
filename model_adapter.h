@@ -68,7 +68,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output);
 bool gpttype_generate_abort();
 const std::string & gpttype_get_pending_output();
-int gpttype_token_count(const std::string & input);
+std::vector<int> gpttype_get_token_arr(const std::string & input);
 
 void timer_start();
 double timer_check();

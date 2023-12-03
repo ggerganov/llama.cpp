@@ -194,7 +194,7 @@ extern "C"
         return gpttype_generate(inputs, output);
     }
 
-    const char* new_token(int idx) {
+    const char * new_token(int idx) {
         if (generated_tokens.size() <= idx || idx < 0) return nullptr;
 
         return generated_tokens[idx].c_str();
@@ -232,9 +232,14 @@ extern "C"
         return gpttype_generate_abort();
     }
 
-    int token_count(const char * input)
+    static std::vector<int> toks; //just share a static object for token counting
+    token_count_outputs token_count(const char * input)
     {
         std::string inputstr = input;
-        return gpttype_token_count(inputstr);
+        token_count_outputs output;
+        toks = gpttype_get_token_arr(inputstr);
+        output.count = toks.size();
+        output.ids = toks.data(); //this may be slightly unsafe
+        return output;
     }
 }
