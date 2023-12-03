@@ -5508,7 +5508,7 @@ static struct ggml_cgraph * llama_build_graph(
         //
         // TODO: will be removed with backend v2
 
-//#define LLAMA_OFFLOAD_DEBUG
+#define LLAMA_OFFLOAD_DEBUG
 
         if (!do_offload) {
             return;
