@@ -3029,13 +3029,6 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-#ifdef GGML_USE_CUBLAS
-                            if (n_gpu_layers > int(n_layer + 1)) {
-                                LLAMA_LOG_ERROR("%s: CUDA backend missing Persimmon CUDA ops, can offload at most %ld layers. See: https://github.com/ggerganov/llama.cpp/issues/4038\n",
-                                    __func__, n_layer + 1);
-                                throw std::runtime_error("Persimmon CUDA offload failed");
-                            }
-#endif
                             // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
                             // on Windows however this is detrimental unless everything is on the GPU
 #ifndef _WIN32
@@ -4377,32 +4370,17 @@ struct llm_build_context {
                         LLM_NORM, cb, il);
                 cb(Kcur, "Kcur", il);
 
-                // RoPE the first n_rot of q/k, pass the other half, and concat.
-                struct ggml_tensor * qrot = ggml_view_3d(
-                        ctx0, Qcur, n_embd_head, n_head, n_tokens,
-                        ggml_element_size(Qcur) * n_embd_head,
-                        ggml_element_size(Qcur) * n_embd_head * n_head,
-                        0
-                        );
-                cb(qrot, "qrot", il);
-
-                struct ggml_tensor * krot = ggml_view_3d(
-                        ctx0, Kcur, n_embd_head, n_head, n_tokens,
-                        ggml_element_size(Kcur) * n_embd_head,
-                        ggml_element_size(Kcur) * n_embd_head * n_head,
-                        0
-                        );
-                cb(krot, "krot", il);
-
                 Qcur = ggml_rope_custom(
-                    ctx0, qrot, inp_pos, n_rot, 2, 0, n_orig_ctx,
-                    freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos,
+                    n_rot, 2, 0, n_orig_ctx, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_custom(
-                    ctx0, krot, inp_pos, n_rot, 2, 0, n_orig_ctx,
-                    freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
+                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head, n_tokens), inp_pos,
+                    n_rot, 2, 0, n_orig_ctx, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
 
