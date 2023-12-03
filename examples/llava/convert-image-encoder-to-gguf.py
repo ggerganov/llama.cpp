@@ -80,6 +80,8 @@ ap.add_argument("--vision-only", action="store_true", required=False,
                 help="Save a vision-only model. It can't be used to encode texts")
 ap.add_argument("--clip_model_is_vision", action="store_true", required=False,
                 help="The clip model is a pure vision model (ShareGPT4V vision extract for example)")
+ap.add_argument("--clip_model_is_openclip", action="store_true", required=False,
+                help="The clip model is from openclip (for ViT-SO400M type))")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--image-mean", nargs=3, type=float, required=False, help="Override image mean values")
 ap.add_argument("--image-std", nargs=3, type=float, required=False, help="Override image std values")
@@ -90,7 +92,7 @@ default_image_std = [0.26862954, 0.26130258, 0.27577711]
 ap.add_argument('--image_mean', type=float, nargs='+', help='Mean of the images for normalization (overrides processor) ', default=None)
 ap.add_argument('--image_std', type=float, nargs='+', help='Standard deviation of the images for normalization (overrides processor)', default=None)
 
-# with proper
+# with proper 
 args = ap.parse_args()
 
 
@@ -104,7 +106,7 @@ if args.use_f32:
 # output in the same directory as the model if output_dir is None
 dir_model = args.model_dir
 
-if args.clip_model_is_vision:
+if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or clip_model_is_openclip:
     vocab = None
     tokens = None
 else:
@@ -132,7 +134,7 @@ ftype = 1
 if args.use_f32:
     ftype = 0
 
-if args.clip_model_is_vision:
+if args.clip_model_is_vision or args.clip_model_is_openclip:
     model = CLIPVisionModel.from_pretrained(dir_model)
     processor = None
 else:
