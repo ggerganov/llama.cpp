@@ -2410,9 +2410,7 @@ json oaicompat_completion_params_parse(
     }
 
     // Handle 'stop' field
-    if (body["stop"].is_null()) {
-        llama_params["stop"] = json::array({});
-    } else if (body["stop"].is_string()) {
+    if (body.contains("stop") && body["stop"].is_string()) {
         llama_params["stop"] = json::array({body["stop"].get<std::string>()});
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
