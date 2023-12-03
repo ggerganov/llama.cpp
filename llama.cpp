@@ -1,7 +1,3 @@
-// TODO: move to context params
-bool offload_k = true;
-bool offload_v = true;
-
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
@@ -1249,6 +1245,9 @@ struct llama_cparams {
     float yarn_beta_slow;
 
     bool mul_mat_q;
+    bool offload_k;
+    bool offload_v;
+
 };
 
 struct llama_layer {
@@ -1331,8 +1330,10 @@ struct llama_kv_cache {
 
 #ifdef GGML_USE_CUBLAS
         if (ggml_cublas_loaded()) {
-            ggml_cuda_free_data(k);
-            ggml_cuda_free_data(v);
+            for (size_t i = 0; i < k_l.size(); ++i) {
+                ggml_cuda_free_data(k_l[i]);
+                ggml_cuda_free_data(v_l[i]);
+            }
         }
 #endif
     }
@@ -1524,7 +1525,9 @@ static bool llama_kv_cache_init(
              struct llama_kv_cache & cache,
                          ggml_type   wtype,
                           uint32_t   n_ctx,
-                               int   n_gpu_layers) {
+                               int   n_gpu_layers,
+                              bool   offload_k,
+                              bool   offload_v) {
     const uint32_t n_embd  = hparams.n_embd_gqa();
     const uint32_t n_layer = hparams.n_layer;
 
@@ -2782,14 +2785,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -2859,14 +2855,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -2929,14 +2918,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3006,14 +2988,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3083,21 +3058,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-#ifdef GGML_USE_CUBLAS
-                            if (n_gpu_layers > int(n_layer + 1)) {
-                                LLAMA_LOG_ERROR("%s: CUDA backend missing Persimmon CUDA ops, can offload at most %ld layers. See: https://github.com/ggerganov/llama.cpp/issues/4038\n",
-                                    __func__, n_layer + 1);
-                                throw std::runtime_error("Persimmon CUDA offload failed");
-                            }
-#endif
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3156,14 +3117,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3234,14 +3188,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3301,14 +3248,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3373,14 +3313,7 @@ static void llm_load_tensors(
                         ggml_backend_type backend_output;
 
                         if (n_gpu_layers > int(n_layer)) {
-                            // norm is not performance relevant on its own but keeping it in VRAM reduces data copying
-                            // on Windows however this is detrimental unless everything is on the GPU
-#ifndef _WIN32
-                            backend_norm = llama_backend_offload;
-#else
-                            backend_norm = n_gpu_layers <= (int) n_layer + 2 ? GGML_BACKEND_CPU : llama_backend_offload;
-#endif // _WIN32
-
+                            backend_norm   = llama_backend_offload;
                             backend_output = llama_backend_offload_split;
                         } else {
                             backend_norm   = GGML_BACKEND_CPU;
@@ -3456,8 +3389,8 @@ static void llm_load_tensors(
         }
 
 #ifdef GGML_USE_CUBLAS
-        const int max_backend_supported_layers = hparams.n_layer + 3;
-        const int max_offloadable_layers       = hparams.n_layer + 3;
+        const int max_backend_supported_layers = hparams.n_layer + 1;
+        const int max_offloadable_layers       = hparams.n_layer + 1;
 #elif GGML_USE_CLBLAST
         const int max_backend_supported_layers = hparams.n_layer + 1;
         const int max_offloadable_layers       = hparams.n_layer + 1;
@@ -3981,16 +3914,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos, "inp_pos", -1);
+        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_host, "inp_pos_host", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale, "KQ_scale", -1);
+        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_host, "KQ_scale_host", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask, "KQ_mask", -1);
+        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_host, "KQ_mask_host", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -3998,6 +3931,16 @@ struct llm_build_context {
         }
 
         for (int il = 0; il < n_layer; ++il) {
+            // offloaded mirrors
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            cb(inp_pos, "inp_pos", il);
+
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            cb(KQ_scale, "KQ_scale", il);
+
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            cb(KQ_mask, "KQ_mask", il);
+
             struct ggml_tensor * inpSA = inpL;
 
             // norm
@@ -5165,8 +5108,6 @@ struct llm_build_context {
 enum llm_offload_func_e {
     OFFLOAD_FUNC_NOP,
     OFFLOAD_FUNC,
-    OFFLOAD_FUNC_KQ,
-    OFFLOAD_FUNC_V,
     OFFLOAD_FUNC_NR,
     OFFLOAD_FUNC_EMB,
     OFFLOAD_FUNC_OUT,
@@ -5252,11 +5193,15 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
   //{ "inp_embd",                   OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
     { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
-    { "inp_pos",                    OFFLOAD_FUNC_KQ  }, // this is often used for KQ ops (e.g. rope)
-    { "KQ_scale",                   OFFLOAD_FUNC_KQ  },
-    { "KQ_mask",                    OFFLOAD_FUNC_KQ  },
-    { "K_shift",                    OFFLOAD_FUNC_KQ  },
-    { "K_shifted",                  OFFLOAD_FUNC_KQ  },
+    { "inp_pos_host",               OFFLOAD_FUNC_NOP }, // this is often used for KQ ops (e.g. rope)
+    { "KQ_scale_host",              OFFLOAD_FUNC_NOP },
+    { "KQ_mask_host",               OFFLOAD_FUNC_NOP },
+    { "inp_pos",                    OFFLOAD_FUNC     }, // these are offloaded versions of the tensors
+    { "KQ_scale",                   OFFLOAD_FUNC     },
+    { "KQ_mask",                    OFFLOAD_FUNC     },
+
+    { "K_shift",                    OFFLOAD_FUNC     },
+    { "K_shifted",                  OFFLOAD_FUNC     },
 
     { "inp_norm",                   OFFLOAD_FUNC_NR  },
     { "inp_norm_w",                 OFFLOAD_FUNC_NR  },
@@ -5269,38 +5214,38 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "attn_norm",                  OFFLOAD_FUNC     },
     { "attn_norm_2",                OFFLOAD_FUNC     },
 
-    { "wqkv",                       OFFLOAD_FUNC_KQ  },
-    { "bqkv",                       OFFLOAD_FUNC_KQ  },
-    { "wqkv_clamped",               OFFLOAD_FUNC_KQ  },
+    { "wqkv",                       OFFLOAD_FUNC     },
+    { "bqkv",                       OFFLOAD_FUNC     },
+    { "wqkv_clamped",               OFFLOAD_FUNC     },
 
-    { "tmpk",                       OFFLOAD_FUNC_KQ  },
-    { "tmpq",                       OFFLOAD_FUNC_KQ  },
-    { "tmpv",                       OFFLOAD_FUNC_V   },
-    { "Kcur",                       OFFLOAD_FUNC_KQ  },
-    { "Qcur",                       OFFLOAD_FUNC_KQ  },
-    { "Vcur",                       OFFLOAD_FUNC_V   },
+    { "tmpk",                       OFFLOAD_FUNC     },
+    { "tmpq",                       OFFLOAD_FUNC     },
+    { "tmpv",                       OFFLOAD_FUNC     },
+    { "Kcur",                       OFFLOAD_FUNC     },
+    { "Qcur",                       OFFLOAD_FUNC     },
+    { "Vcur",                       OFFLOAD_FUNC     },
 
-    { "krot",                       OFFLOAD_FUNC_KQ  },
-    { "qrot",                       OFFLOAD_FUNC_KQ  },
-    { "kpass",                      OFFLOAD_FUNC_KQ  },
-    { "qpass",                      OFFLOAD_FUNC_KQ  },
-    { "krotated",                   OFFLOAD_FUNC_KQ  },
-    { "qrotated",                   OFFLOAD_FUNC_KQ  },
+    { "krot",                       OFFLOAD_FUNC     },
+    { "qrot",                       OFFLOAD_FUNC     },
+    { "kpass",                      OFFLOAD_FUNC     },
+    { "qpass",                      OFFLOAD_FUNC     },
+    { "krotated",                   OFFLOAD_FUNC     },
+    { "qrotated",                   OFFLOAD_FUNC     },
 
-    { "q",                          OFFLOAD_FUNC_KQ  },
-    { "k",                          OFFLOAD_FUNC_KQ  },
-    { "kq",                         OFFLOAD_FUNC_KQ  },
-    { "kq_scaled",                  OFFLOAD_FUNC_KQ  },
-    { "kq_scaled_alibi",            OFFLOAD_FUNC_KQ  },
-    { "kq_masked",                  OFFLOAD_FUNC_KQ  },
-    { "kq_soft_max",                OFFLOAD_FUNC_V   },
-    { "kq_soft_max_ext",            OFFLOAD_FUNC_V   },
-    { "v",                          OFFLOAD_FUNC_V   },
-    { "kqv",                        OFFLOAD_FUNC_V   },
-    { "kqv_merged",                 OFFLOAD_FUNC_V   },
-    { "kqv_merged_cont",            OFFLOAD_FUNC_V   },
-    { "kqv_wo",                     OFFLOAD_FUNC_V   },
-    { "kqv_out",                    OFFLOAD_FUNC_V   },
+    { "q",                          OFFLOAD_FUNC     },
+    { "k",                          OFFLOAD_FUNC     },
+    { "kq",                         OFFLOAD_FUNC     },
+    { "kq_scaled",                  OFFLOAD_FUNC     },
+    { "kq_scaled_alibi",            OFFLOAD_FUNC     },
+    { "kq_masked",                  OFFLOAD_FUNC     },
+    { "kq_soft_max",                OFFLOAD_FUNC     },
+    { "kq_soft_max_ext",            OFFLOAD_FUNC     },
+    { "v",                          OFFLOAD_FUNC     },
+    { "kqv",                        OFFLOAD_FUNC     },
+    { "kqv_merged",                 OFFLOAD_FUNC     },
+    { "kqv_merged_cont",            OFFLOAD_FUNC     },
+    { "kqv_wo",                     OFFLOAD_FUNC     },
+    { "kqv_out",                    OFFLOAD_FUNC     },
 
     { "ffn_inp",                    OFFLOAD_FUNC     },
     { "ffn_norm",                   OFFLOAD_FUNC     },
@@ -5390,7 +5335,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_embd = true;
         }
 
-        if (!alloc_inp_pos && strcmp(name, "inp_pos") == 0) {
+        if (!alloc_inp_pos && strcmp(name, "inp_pos_host") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc) && batch.pos) {
@@ -5406,7 +5351,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_pos = true;
         }
 
-        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale") == 0) {
+        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale_host") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
@@ -5417,7 +5362,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_KQ_scale = true;
         }
 
-        if (!alloc_inp_KQ_mask && strcmp(name, "KQ_mask") == 0) {
+        if (!alloc_inp_KQ_mask && strcmp(name, "KQ_mask_host") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
@@ -5493,14 +5438,10 @@ static struct ggml_cgraph * llama_build_graph(
             { OFFLOAD_FUNC_OUT, "CPU" },
 #ifdef GGML_USE_CUBLAS
             { OFFLOAD_FUNC,     "GPU (CUDA)" },
-            { OFFLOAD_FUNC_KQ,  "GPU (CUDA) KQ" },
-            { OFFLOAD_FUNC_V,   "GPU (CUDA) V" },
             { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR" },
             { OFFLOAD_FUNC_EMB, "GPU (CUDA) EMB" },
 #else
             { OFFLOAD_FUNC,     "CPU" },
-            { OFFLOAD_FUNC_KQ,  "CPU" },
-            { OFFLOAD_FUNC_V,   "CPU" },
             { OFFLOAD_FUNC_NR,  "CPU" },
             { OFFLOAD_FUNC_EMB, "CPU" },
 #endif // GGML_USE_CUBLAS
@@ -5538,16 +5479,6 @@ static struct ggml_cgraph * llama_build_graph(
                     func_e = OFFLOAD_FUNC_NOP;
                 }
                 break;
-            case OFFLOAD_FUNC_V:
-                if (n_gpu_layers <= n_layer + 1) {
-                    func_e = OFFLOAD_FUNC_NOP;
-                }
-                break;
-            case OFFLOAD_FUNC_KQ:
-                if (n_gpu_layers <= n_layer + 2) {
-                    func_e = OFFLOAD_FUNC_NOP;
-                }
-                break;
             case OFFLOAD_FUNC_EMB:
                 if (!offload_emb || n_gpu_layers < n_layer) {
                     func_e = OFFLOAD_FUNC_NOP;
@@ -5569,8 +5500,6 @@ static struct ggml_cgraph * llama_build_graph(
             case OFFLOAD_FUNC_NOP:
             case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
             case OFFLOAD_FUNC:
-            case OFFLOAD_FUNC_KQ:
-            case OFFLOAD_FUNC_V:
             case OFFLOAD_FUNC_NR:
             case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
             default: GGML_ASSERT(false);
@@ -5806,7 +5735,7 @@ static int llama_decode_internal(
         n_threads = std::min(4, n_threads);
     }
 
-    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 3;
+    const bool fully_offloaded = model.n_gpu_layers >= (int) hparams.n_layer + 1;
     if (ggml_cpu_has_cublas() && fully_offloaded) {
         n_threads = 1;
     }
@@ -8644,6 +8573,8 @@ struct llama_context_params llama_context_default_params() {
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
+        /*.offload_k                   =*/ true,
+        /*.offload_q                   =*/ true,
     };
 
     return result;
@@ -8760,6 +8691,8 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_fast   = params.yarn_beta_fast;
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.mul_mat_q        = params.mul_mat_q;
+    cparams.offload_k        = params.offload_k;
+    cparams.offload_v        = params.offload_v;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
@@ -8797,7 +8730,7 @@ struct llama_context * llama_new_context_with_model(
 
     // reserve memory for context buffers
     if (!hparams.vocab_only) {
-        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, memory_type, cparams.n_ctx, model->n_gpu_layers)) {
+        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, memory_type, cparams.n_ctx, model->n_gpu_layers, cparams.offload_k, cparams.offload_v)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
