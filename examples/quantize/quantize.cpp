@@ -1,4 +1,3 @@
-#include "build-info.h"
 #include "common.h"
 #include "llama.h"
 
@@ -18,7 +17,6 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1,   " 3.90G, +0.1585 ppl @ LLaMA-v1-7B", },
     { "Q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0,   " 4.33G, +0.0683 ppl @ LLaMA-v1-7B", },
     { "Q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1,   " 4.70G, +0.0349 ppl @ LLaMA-v1-7B", },
-#ifdef GGML_USE_K_QUANTS
     { "Q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K,   " 2.63G, +0.6717 ppl @ LLaMA-v1-7B", },
     { "Q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M, "alias for Q3_K_M" },
     { "Q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S, " 2.75G, +0.5551 ppl @ LLaMA-v1-7B", },
@@ -31,7 +29,6 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S, " 4.33G, +0.0400 ppl @ LLaMA-v1-7B", },
     { "Q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M, " 4.45G, +0.0122 ppl @ LLaMA-v1-7B", },
     { "Q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K,   " 5.15G, -0.0008 ppl @ LLaMA-v1-7B", },
-#endif
     { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 6.70G, +0.0004 ppl @ LLaMA-v1-7B", },
     { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B", },
     { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B", },
@@ -70,13 +67,14 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 }
 
 // usage:
-//  ./quantize [--allow-requantize] [--leave-output-tensor] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
+//  ./quantize [--allow-requantize] [--leave-output-tensor] [--pure] models/llama/ggml-model.gguf [models/llama/ggml-model-quant.gguf] type [nthreads]
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
+    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
+    printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
         if (it.name != "COPY") {
@@ -103,6 +101,8 @@ int main(int argc, char ** argv) {
             params.quantize_output_tensor = false;
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
             params.allow_requantize = true;
+        } else if (strcmp(argv[arg_idx], "--pure") == 0) {
+            params.pure = true;
         } else {
             usage(argv[0]);
         }

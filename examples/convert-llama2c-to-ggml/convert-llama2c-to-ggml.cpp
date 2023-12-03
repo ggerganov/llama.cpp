@@ -536,7 +536,7 @@ static bool is_ggml_file(const char * filename) {
     if (file.size < 4) {
         return false;
     }
-    uint32_t magic = file.read_u32();
+    std::string magic = file.read_string(4);
     return magic == GGUF_MAGIC;
 }
 

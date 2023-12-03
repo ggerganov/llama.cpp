@@ -2,7 +2,7 @@
 
 This is pretty much just a straight port of aigoopy/llm-jeopardy/ with an added graph viewer.
 
-The jeopardy test can be used to compare the fact knowledge of different models and compare them to eachother. This is in contrast to some other tests, which test logical deduction, creativity, writing skills, etc.
+The jeopardy test can be used to compare the fact knowledge of different models and compare them to each other. This is in contrast to some other tests, which test logical deduction, creativity, writing skills, etc.
 
 
 Step 1: Open jeopardy.sh and modify the following:

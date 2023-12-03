@@ -1,5 +1,3 @@
-set(TEMPLATE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.h.in")
-set(HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/build-info.h")
 set(BUILD_NUMBER 0)
 set(BUILD_COMMIT "unknown")
 set(BUILD_COMPILER "unknown")
@@ -24,15 +22,21 @@ if(Git_FOUND)
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE HEAD
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE RES
     )
+    if (RES EQUAL 0)
+        set(BUILD_COMMIT ${HEAD})
+    endif()
     execute_process(
         COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE COUNT
         OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE RES
     )
-    set(BUILD_COMMIT ${HEAD})
-    set(BUILD_NUMBER ${COUNT})
+    if (RES EQUAL 0)
+        set(BUILD_NUMBER ${COUNT})
+    endif()
 endif()
 
 if(MSVC)
@@ -51,24 +55,4 @@ else()
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     set(BUILD_TARGET ${OUT})
-endif()
-
-# Only write the header if it's changed to prevent unnecessary recompilation
-if(EXISTS ${HEADER_FILE})
-    file(READ ${HEADER_FILE} CONTENTS)
-    string(REGEX MATCH "BUILD_COMMIT \"([^\"]*)\"" _ ${CONTENTS})
-    set(OLD_COMMIT ${CMAKE_MATCH_1})
-    string(REGEX MATCH "BUILD_COMPILER \"([^\"]*)\"" _ ${CONTENTS})
-    set(OLD_COMPILER ${CMAKE_MATCH_1})
-    string(REGEX MATCH "BUILD_TARGET \"([^\"]*)\"" _ ${CONTENTS})
-    set(OLD_TARGET ${CMAKE_MATCH_1})
-    if (
-        NOT OLD_COMMIT   STREQUAL BUILD_COMMIT   OR
-        NOT OLD_COMPILER STREQUAL BUILD_COMPILER OR
-        NOT OLD_TARGET   STREQUAL BUILD_TARGET
-    )
-        configure_file(${TEMPLATE_FILE} ${HEADER_FILE})
-    endif()
-else()
-    configure_file(${TEMPLATE_FILE} ${HEADER_FILE})
 endif()
