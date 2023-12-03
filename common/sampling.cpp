@@ -126,12 +126,12 @@ void sampler_queue(
                                  size_t & min_keep) {
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
 
-    const float   temp                  = params.temp;
-    const int32_t top_k                 = params.top_k <= 0 ? n_vocab : params.top_k;
-    const float   top_p                 = params.top_p;
-    const float   min_p                 = params.min_p;
-    const float   tfs_z                 = params.tfs_z;
-    const float   typical_p             = params.typical_p;
+    const float       temp              = params.temp;
+    const int32_t     top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
+    const float       top_p             = params.top_p;
+    const float       min_p             = params.min_p;
+    const float       tfs_z             = params.tfs_z;
+    const float       typical_p         = params.typical_p;
     const std::string samplers_sequence = params.samplers_sequence;
                       
     for (auto s : samplers_sequence){
