@@ -123,6 +123,7 @@ struct gpt_params {
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
+    bool no_kv_offload     = false; // disable KV offloading
 
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector

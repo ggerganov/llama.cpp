@@ -498,6 +498,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.infill = true;
         } else if (arg == "-dkvc" || arg == "--dump-kv-cache") {
             params.dump_kv_cache = true;
+        } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
+            params.no_kv_offload = true;
         } else if (arg == "--multiline-input") {
             params.multiline_input = true;
         } else if (arg == "--simple-io") {
@@ -840,6 +842,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --verbose-prompt      print prompt before generation\n");
     printf("  -dkvc, --dump-kv-cache\n");
     printf("                        verbose print of the KV cache\n");
+    printf("  -nkvo, --no-kv-offload\n");
+    printf("                        disable KV offload\n");
     printf("  --simple-io           use basic IO for better compatibility in subprocesses and limited consoles\n");
     printf("  --lora FNAME          apply LoRA adapter (implies --no-mmap)\n");
     printf("  --lora-scaled FNAME S apply LoRA adapter with user defined scaling S (implies --no-mmap)\n");
@@ -924,6 +928,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_beta_fast    = params.yarn_beta_fast;
     cparams.yarn_beta_slow    = params.yarn_beta_slow;
     cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
+    cparams.offload_kqv       = !params.no_kv_offload;
 
     return cparams;
 }

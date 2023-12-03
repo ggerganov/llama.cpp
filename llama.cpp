@@ -1245,8 +1245,7 @@ struct llama_cparams {
     float yarn_beta_slow;
 
     bool mul_mat_q;
-    bool offload_k;
-    bool offload_v;
+    bool offload_kqv;
 
 };
 
@@ -1526,8 +1525,7 @@ static bool llama_kv_cache_init(
                          ggml_type   wtype,
                           uint32_t   n_ctx,
                                int   n_gpu_layers,
-                              bool   offload_k,
-                              bool   offload_v) {
+                              bool   offload) {
     const uint32_t n_embd  = hparams.n_embd_gqa();
     const uint32_t n_layer = hparams.n_layer;
 
@@ -1574,11 +1572,9 @@ static bool llama_kv_cache_init(
         cache.v_l.push_back(v);
 #ifdef GGML_USE_CUBLAS
         if (i >= i_gpu_start) {
-            if (offload_k) {
+            if (offload) {
                 ggml_cuda_assign_buffers_no_scratch(k);
                 vram_kv_cache += ggml_nbytes(k);
-            }
-            if (offload_v) {
                 ggml_cuda_assign_buffers_no_scratch(v);
                 vram_kv_cache += ggml_nbytes(v);
             }
@@ -5101,6 +5097,7 @@ enum llm_offload_func_e {
     OFFLOAD_FUNC_NOP,
     OFFLOAD_FUNC,
     OFFLOAD_FUNC_FRC, // force offload
+    OFFLOAD_FUNC_KQV,
     OFFLOAD_FUNC_NR,
     OFFLOAD_FUNC_EMB,
     OFFLOAD_FUNC_OUT,
@@ -5204,38 +5201,38 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "attn_norm",                  OFFLOAD_FUNC     },
     { "attn_norm_2",                OFFLOAD_FUNC     },
 
-    { "wqkv",                       OFFLOAD_FUNC     },
-    { "bqkv",                       OFFLOAD_FUNC     },
-    { "wqkv_clamped",               OFFLOAD_FUNC     },
+    { "wqkv",                       OFFLOAD_FUNC_KQV },
+    { "bqkv",                       OFFLOAD_FUNC_KQV },
+    { "wqkv_clamped",               OFFLOAD_FUNC_KQV },
 
-    { "tmpk",                       OFFLOAD_FUNC     },
-    { "tmpq",                       OFFLOAD_FUNC     },
-    { "tmpv",                       OFFLOAD_FUNC     },
-    { "Kcur",                       OFFLOAD_FUNC     },
-    { "Qcur",                       OFFLOAD_FUNC     },
-    { "Vcur",                       OFFLOAD_FUNC     },
+    { "tmpk",                       OFFLOAD_FUNC_KQV },
+    { "tmpq",                       OFFLOAD_FUNC_KQV },
+    { "tmpv",                       OFFLOAD_FUNC_KQV },
+    { "Kcur",                       OFFLOAD_FUNC_KQV },
+    { "Qcur",                       OFFLOAD_FUNC_KQV },
+    { "Vcur",                       OFFLOAD_FUNC_KQV },
 
-    { "krot",                       OFFLOAD_FUNC     },
-    { "qrot",                       OFFLOAD_FUNC     },
-    { "kpass",                      OFFLOAD_FUNC     },
-    { "qpass",                      OFFLOAD_FUNC     },
-    { "krotated",                   OFFLOAD_FUNC     },
-    { "qrotated",                   OFFLOAD_FUNC     },
+    { "krot",                       OFFLOAD_FUNC_KQV },
+    { "qrot",                       OFFLOAD_FUNC_KQV },
+    { "kpass",                      OFFLOAD_FUNC_KQV },
+    { "qpass",                      OFFLOAD_FUNC_KQV },
+    { "krotated",                   OFFLOAD_FUNC_KQV },
+    { "qrotated",                   OFFLOAD_FUNC_KQV },
 
-    { "q",                          OFFLOAD_FUNC     },
-    { "k",                          OFFLOAD_FUNC     },
-    { "kq",                         OFFLOAD_FUNC     },
-    { "kq_scaled",                  OFFLOAD_FUNC     },
-    { "kq_scaled_alibi",            OFFLOAD_FUNC     },
-    { "kq_masked",                  OFFLOAD_FUNC     },
-    { "kq_soft_max",                OFFLOAD_FUNC     },
-    { "kq_soft_max_ext",            OFFLOAD_FUNC     },
-    { "v",                          OFFLOAD_FUNC     },
-    { "kqv",                        OFFLOAD_FUNC     },
-    { "kqv_merged",                 OFFLOAD_FUNC     },
-    { "kqv_merged_cont",            OFFLOAD_FUNC     },
-    { "kqv_wo",                     OFFLOAD_FUNC     },
-    { "kqv_out",                    OFFLOAD_FUNC     },
+    { "q",                          OFFLOAD_FUNC_KQV },
+    { "k",                          OFFLOAD_FUNC_KQV },
+    { "kq",                         OFFLOAD_FUNC_KQV },
+    { "kq_scaled",                  OFFLOAD_FUNC_KQV },
+    { "kq_scaled_alibi",            OFFLOAD_FUNC_KQV },
+    { "kq_masked",                  OFFLOAD_FUNC_KQV },
+    { "kq_soft_max",                OFFLOAD_FUNC_KQV },
+    { "kq_soft_max_ext",            OFFLOAD_FUNC_KQV },
+    { "v",                          OFFLOAD_FUNC_KQV },
+    { "kqv",                        OFFLOAD_FUNC_KQV },
+    { "kqv_merged",                 OFFLOAD_FUNC_KQV },
+    { "kqv_merged_cont",            OFFLOAD_FUNC_KQV },
+    { "kqv_wo",                     OFFLOAD_FUNC_KQV },
+    { "kqv_out",                    OFFLOAD_FUNC_KQV },
 
     { "ffn_inp",                    OFFLOAD_FUNC     },
     { "ffn_norm",                   OFFLOAD_FUNC     },
@@ -5429,11 +5426,13 @@ static struct ggml_cgraph * llama_build_graph(
 #ifdef GGML_USE_CUBLAS
             { OFFLOAD_FUNC,     "GPU (CUDA)"     },
             { OFFLOAD_FUNC_FRC, "GPU (CUDA) FRC" },
+            { OFFLOAD_FUNC_KQV, "GPU (CUDA) KQV" },
             { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR"  },
             { OFFLOAD_FUNC_EMB, "GPU (CUDA) EMB" },
 #else
             { OFFLOAD_FUNC,     "CPU" },
             { OFFLOAD_FUNC_FRC, "CPU" },
+            { OFFLOAD_FUNC_KQV, "CPU" },
             { OFFLOAD_FUNC_NR,  "CPU" },
             { OFFLOAD_FUNC_EMB, "CPU" },
 #endif // GGML_USE_CUBLAS
@@ -5458,12 +5457,26 @@ static struct ggml_cgraph * llama_build_graph(
         switch (func_e) {
             case OFFLOAD_FUNC_NOP:
             case OFFLOAD_FUNC_OUT:
-            case OFFLOAD_FUNC_FRC:
                 break;
             case OFFLOAD_FUNC:
                 if (n_gpu_layers < n_layer) {
                     if (il < i_gpu_start) {
                         func_e = OFFLOAD_FUNC_NOP;
+                    }
+                }
+                break;
+            case OFFLOAD_FUNC_FRC:
+                if (!lctx.cparams.offload_kqv) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                } break;
+            case OFFLOAD_FUNC_KQV:
+                if (!lctx.cparams.offload_kqv) {
+                    func_e = OFFLOAD_FUNC_NOP;
+                } else {
+                    if (n_gpu_layers < n_layer) {
+                        if (il < i_gpu_start) {
+                            func_e = OFFLOAD_FUNC_NOP;
+                        }
                     }
                 }
                 break;
@@ -5493,6 +5506,7 @@ static struct ggml_cgraph * llama_build_graph(
             case OFFLOAD_FUNC_NOP:
             case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
             case OFFLOAD_FUNC:
+            case OFFLOAD_FUNC_KQV:
             case OFFLOAD_FUNC_FRC:
             case OFFLOAD_FUNC_NR:
             case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
@@ -8567,8 +8581,7 @@ struct llama_context_params llama_context_default_params() {
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
-        /*.offload_k                   =*/ true,
-        /*.offload_q                   =*/ true,
+        /*.offload_kqv                 =*/ true,
     };
 
     return result;
@@ -8685,8 +8698,7 @@ struct llama_context * llama_new_context_with_model(
     cparams.yarn_beta_fast   = params.yarn_beta_fast;
     cparams.yarn_beta_slow   = params.yarn_beta_slow;
     cparams.mul_mat_q        = params.mul_mat_q;
-    cparams.offload_k        = params.offload_k;
-    cparams.offload_v        = params.offload_v;
+    cparams.offload_kqv      = params.offload_kqv;
 
     cparams.n_ctx            = params.n_ctx           == 0    ? hparams.n_ctx_train           : params.n_ctx;
     cparams.rope_freq_base   = params.rope_freq_base  == 0.0f ? hparams.rope_freq_base_train  : params.rope_freq_base;
@@ -8724,7 +8736,7 @@ struct llama_context * llama_new_context_with_model(
 
     // reserve memory for context buffers
     if (!hparams.vocab_only) {
-        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, memory_type, cparams.n_ctx, model->n_gpu_layers, cparams.offload_k, cparams.offload_v)) {
+        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, memory_type, cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
