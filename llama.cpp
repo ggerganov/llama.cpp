@@ -3543,8 +3543,8 @@ static void llm_build_k_shift(
 
     GGML_ASSERT(n_embd_head % n_rot == 0);
 
-    struct ggml_tensor * K_shift_host = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n_ctx);
-    cb(K_shift_host, "K_shift_host", -1);
+    struct ggml_tensor * K_shift_ref = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n_ctx);
+    cb(K_shift_ref, "K_shift_ref", -1);
 
     int rope_type = 0;
 
@@ -3555,8 +3555,7 @@ static void llm_build_k_shift(
     }
 
     for (int il = 0; il < n_layer; ++il) {
-        // offloaded mirrors
-        struct ggml_tensor * K_shift = ggml_view_tensor(ctx, K_shift_host);
+        struct ggml_tensor * K_shift = ggml_view_tensor(ctx, K_shift_ref);
         cb(K_shift, "K_shift", il);
 
         struct ggml_tensor * tmp =
@@ -3918,16 +3917,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -3936,13 +3935,15 @@ struct llm_build_context {
 
         for (int il = 0; il < n_layer; ++il) {
             // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            // TODO: this is not ideal because when we do partial offloading, we will do Device->Host copies
+            //       for all non-offloaded layers
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * inpSA = inpL;
@@ -4050,16 +4051,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -4068,13 +4069,13 @@ struct llm_build_context {
 
         for (int il = 0; il < n_layer; ++il) {
             // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * inpSA = inpL;
@@ -4180,16 +4181,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -4197,14 +4198,13 @@ struct llm_build_context {
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * attn_norm;
@@ -4313,32 +4313,31 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
-        pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos_host);
+        pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos_ref);
         cb(pos, "pos_embd", -1);
 
         inpL = ggml_add(ctx0, inpL, pos);
         cb(inpL, "inpL", -1);
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             cur = llm_build_norm(ctx0, inpL, hparams,
@@ -4423,30 +4422,29 @@ struct llm_build_context {
         cb(inpL, "imp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         if (do_rope_shift) {
             llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE_NEOX, n_ctx, n_embd_head, freq_base, freq_scale, cb);
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * residual = inpL;
@@ -4643,19 +4641,18 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * inpSA = inpL;
@@ -4741,12 +4738,12 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         inpL = llm_build_norm(ctx0, inpL, hparams,
                 model.tok_norm,
@@ -4755,11 +4752,10 @@ struct llm_build_context {
         cb(inpL, "inp_norm", -1);
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             cur = llm_build_norm(ctx0, inpL, hparams,
@@ -4842,19 +4838,18 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * attn_norm;
@@ -4948,16 +4943,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -4965,14 +4960,13 @@ struct llm_build_context {
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * inpSA = inpL;
@@ -5071,16 +5065,16 @@ struct llm_build_context {
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos_host, "inp_pos_host", -1);
+        struct ggml_tensor * inp_pos_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos_ref, "inp_pos_ref", -1);
 
         // KQ_scale
-        struct ggml_tensor * KQ_scale_host = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-        cb(KQ_scale_host, "KQ_scale_host", -1);
+        struct ggml_tensor * KQ_scale_ref = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(KQ_scale_ref, "KQ_scale_ref", -1);
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask_host = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
-        cb(KQ_mask_host, "KQ_mask_host", -1);
+        struct ggml_tensor * KQ_mask_ref = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
+        cb(KQ_mask_ref, "KQ_mask_ref", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -5088,14 +5082,13 @@ struct llm_build_context {
         }
 
         for (int il = 0; il < n_layer; ++il) {
-            // offloaded mirrors
-            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_host);
+            struct ggml_tensor * inp_pos = ggml_view_tensor(ctx0, inp_pos_ref);
             cb(inp_pos, "inp_pos", il);
 
-            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_host);
+            struct ggml_tensor * KQ_scale = ggml_view_tensor(ctx0, KQ_scale_ref);
             cb(KQ_scale, "KQ_scale", il);
 
-            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_host);
+            struct ggml_tensor * KQ_mask = ggml_view_tensor(ctx0, KQ_mask_ref);
             cb(KQ_mask, "KQ_mask", il);
 
             struct ggml_tensor * inpSA = inpL;
@@ -5195,6 +5188,7 @@ struct llm_build_context {
 enum llm_offload_func_e {
     OFFLOAD_FUNC_NOP,
     OFFLOAD_FUNC,
+    OFFLOAD_FUNC_FRC, // force offload
     OFFLOAD_FUNC_NR,
     OFFLOAD_FUNC_EMB,
     OFFLOAD_FUNC_OUT,
@@ -5280,16 +5274,16 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
   //{ "inp_embd",                   OFFLOAD_FUNC_NR  }, // TODO: missing K-quants get_rows kernel
     { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
-    { "inp_pos_host",               OFFLOAD_FUNC_NOP }, // this is often used for KQ ops (e.g. rope)
-    { "KQ_scale_host",              OFFLOAD_FUNC_NOP },
-    { "KQ_mask_host",               OFFLOAD_FUNC_NOP },
-    { "K_shift_host",               OFFLOAD_FUNC_NOP },
+    { "inp_pos_ref",                OFFLOAD_FUNC_FRC }, // this is often used for KQ ops (e.g. rope)
+    { "KQ_scale_ref",               OFFLOAD_FUNC_FRC },
+    { "KQ_mask_ref",                OFFLOAD_FUNC_FRC },
+    { "K_shift_ref",                OFFLOAD_FUNC_FRC },
 
-    { "inp_pos",                    OFFLOAD_FUNC     }, // these are offloaded versions of the tensors
+    { "inp_pos",                    OFFLOAD_FUNC     },
     { "KQ_scale",                   OFFLOAD_FUNC     },
     { "KQ_mask",                    OFFLOAD_FUNC     },
-
     { "K_shift",                    OFFLOAD_FUNC     },
+
     { "K_shifted",                  OFFLOAD_FUNC     },
 
     { "inp_norm",                   OFFLOAD_FUNC_NR  },
@@ -5424,7 +5418,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_embd = true;
         }
 
-        if (!alloc_inp_pos && strcmp(name, "inp_pos_host") == 0) {
+        if (!alloc_inp_pos && strcmp(name, "inp_pos_ref") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc) && batch.pos) {
@@ -5440,7 +5434,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_pos = true;
         }
 
-        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale_host") == 0) {
+        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale_ref") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
@@ -5451,7 +5445,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_KQ_scale = true;
         }
 
-        if (!alloc_inp_KQ_mask && strcmp(name, "KQ_mask_host") == 0) {
+        if (!alloc_inp_KQ_mask && strcmp(name, "KQ_mask_ref") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
@@ -5478,7 +5472,7 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_KQ_mask = true;
         }
 
-        if (!alloc_inp_K_shift && strcmp(name, "K_shift_host") == 0) {
+        if (!alloc_inp_K_shift && strcmp(name, "K_shift_ref") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
@@ -5526,11 +5520,13 @@ static struct ggml_cgraph * llama_build_graph(
             { OFFLOAD_FUNC_NOP, "CPU" },
             { OFFLOAD_FUNC_OUT, "CPU" },
 #ifdef GGML_USE_CUBLAS
-            { OFFLOAD_FUNC,     "GPU (CUDA)" },
-            { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR" },
+            { OFFLOAD_FUNC,     "GPU (CUDA)"     },
+            { OFFLOAD_FUNC_FRC, "GPU (CUDA) FRC" },
+            { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR"  },
             { OFFLOAD_FUNC_EMB, "GPU (CUDA) EMB" },
 #else
             { OFFLOAD_FUNC,     "CPU" },
+            { OFFLOAD_FUNC_FRC, "CPU" },
             { OFFLOAD_FUNC_NR,  "CPU" },
             { OFFLOAD_FUNC_EMB, "CPU" },
 #endif // GGML_USE_CUBLAS
@@ -5555,6 +5551,7 @@ static struct ggml_cgraph * llama_build_graph(
         switch (func_e) {
             case OFFLOAD_FUNC_NOP:
             case OFFLOAD_FUNC_OUT:
+            case OFFLOAD_FUNC_FRC:
                 break;
             case OFFLOAD_FUNC:
                 if (n_gpu_layers < n_layer) {
@@ -5589,6 +5586,7 @@ static struct ggml_cgraph * llama_build_graph(
             case OFFLOAD_FUNC_NOP:
             case OFFLOAD_FUNC_OUT: func = ggml_offload_nop; break;
             case OFFLOAD_FUNC:
+            case OFFLOAD_FUNC_FRC:
             case OFFLOAD_FUNC_NR:
             case OFFLOAD_FUNC_EMB: func = ggml_offload_gpu; break;
             default: GGML_ASSERT(false);
