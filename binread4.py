@@ -30,11 +30,12 @@ def main(mode):
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if mode == 'fit':
-        model.fit(x_train, y_train, batch_size=batch_size, epochs=1, validation_data=(x_test, y_test))
+        model.fit(x_train, y_train, batch_size=batch_size, epochs=4, validation_data=(x_test, y_test))
     else:
         train_steps, train_batches = batch_iter(x_train, y_train, batch_size)
         valid_steps, valid_batches = batch_iter(x_test, y_test, batch_size)
         model.fit_generator(train_batches, train_steps, epochs=1, validation_data=valid_batches, validation_steps=valid_steps)
+    model.save("v1.kersas")
 
 
 if __name__ == '__main__':
