@@ -7361,7 +7361,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id    = candidates->data[i].id;
-        const std::string piece = llama_token_to_piece(ctx, id);
+        const std::string piece = ctx->model.vocab.id_to_token[id].text;
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
