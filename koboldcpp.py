@@ -1196,6 +1196,15 @@ def show_new_gui():
         changed_gpu_choice_var()
         return
 
+    def on_picked_model_file(filepath):
+        if filepath.lower().endswith('.kcpps'):
+            #load it as a config file instead
+            with open(filepath, 'r') as f:
+                dict = json.load(f)
+                import_vars(dict)
+        else:
+            autoset_gpu_layers(filepath)
+
     def autoset_gpu_layers(filepath): #shitty algo to determine how many layers to use
         try:
             global gui_layers_untouched
@@ -1370,7 +1379,7 @@ def show_new_gui():
     makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=3)
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170, onchoosefile=autoset_gpu_layers)
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170, onchoosefile=on_picked_model_file)
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
@@ -1441,7 +1450,7 @@ def show_new_gui():
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, onchoosefile=autoset_gpu_layers)
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, onchoosefile=on_picked_model_file)
     makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
     makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
     makefileentry(model_tab, "Preloaded Story:", "Select Preloaded Story File", preloadstory_var, 7)
