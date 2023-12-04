@@ -7357,6 +7357,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
     const llama_token eos = llama_token_eos(&ctx->model);
 
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+    candidates_decoded.reserve(candidates->size);
     std::vector<llama_grammar_candidate>                              candidates_grammar;
 
     for (size_t i = 0; i < candidates->size; ++i) {
