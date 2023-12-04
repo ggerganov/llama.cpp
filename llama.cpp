@@ -8738,7 +8738,7 @@ struct llama_context * llama_new_context_with_model(
     //const ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     // TODO: move as params
-    const ggml_type k_type = GGML_TYPE_Q4_0;
+    const ggml_type k_type = GGML_TYPE_Q8_0;
     const ggml_type v_type = GGML_TYPE_F16;
 
     GGML_ASSERT(hparams.n_embd_head() % ggml_blck_size(k_type) == 0);
