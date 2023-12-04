@@ -7356,6 +7356,8 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     const llama_token eos = llama_token_eos(&ctx->model);
 
+    std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
+    candidates_decoded.reserve(candidates->size);
     std::vector<llama_grammar_candidate>                              candidates_grammar;
     candidates_grammar.reserve(candidates->size);
 
@@ -7369,8 +7371,8 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
         } else if (piece.empty() || piece[0] == 0) {
             candidates->data[i].logit = -INFINITY;
         } else {
-            std::pair<std::vector<uint32_t>, llama_partial_utf8> decoded = decode_utf8(piece, grammar->partial_utf8);
-            candidates_grammar.push_back({ i, decoded.first.data(), decoded.second });
+            candidates_decoded.push_back(decode_utf8(piece, grammar->partial_utf8));
+            candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
         }
     }
 
