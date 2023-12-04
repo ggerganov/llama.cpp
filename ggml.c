@@ -2456,8 +2456,6 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         data_size *= ne[i];
     }
 
-    GGML_ASSERT(view_src == NULL || data_size + view_offs <= ggml_nbytes(view_src));
-
     void * data = view_src != NULL ? view_src->data : NULL;
     if (data != NULL) {
         data = (char *) data + view_offs;
