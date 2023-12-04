@@ -1246,7 +1246,6 @@ struct llama_cparams {
 
     bool mul_mat_q;
     bool offload_kqv;
-
 };
 
 struct llama_layer {
@@ -1562,7 +1561,7 @@ static bool llama_kv_cache_init(
     cache.k_l.reserve(n_layer);
     cache.v_l.reserve(n_layer);
 
-    const int i_gpu_start = n_layer - n_gpu_layers; GGML_UNUSED(i_gpu_start);
+    const int i_gpu_start = (int) n_layer - n_gpu_layers; GGML_UNUSED(i_gpu_start);
 
     GGML_UNUSED(offload);
 
@@ -5696,6 +5695,7 @@ static int llama_decode_internal(
     // after enough generations, the benefit from this heuristic disappears
     // if we start defragmenting the cache, the benefit from this will be more important
     kv_self.n = std::min((int32_t) cparams.n_ctx, std::max(32, GGML_PAD(llama_kv_cache_cell_max(kv_self), 32)));
+    //kv_self.n = llama_kv_cache_cell_max(kv_self);
 
     //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
