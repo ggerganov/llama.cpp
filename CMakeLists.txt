@@ -399,13 +399,17 @@ endif()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
+        # warning_flags is common to C and C++ but not CUDA
         set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
         set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration)
-        set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
-        set(host_cxx_flags "")
+        # host_cxx_flags gets passed to nvcc after '-Xcompiler', i.e., it then gets sent to gcc (which is the default
+        # preprocessor for nvcc, even when clang would be used .c/.cpp files)
+        set(host_cxx_flags -Wmissing-declarations -Wmissing-noreturn)
 
         if (CMAKE_C_COMPILER_ID MATCHES "Clang")
-            set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
+            set(c_flags ${c_flags} -Wunreachable-code-break -Wunreachable-code-return)
+            # cxx_flags are used for C++ files but not for CUDA
+            set(cxx_flags -Wunreachable-code-break -Wunreachable-code-return)
             set(host_cxx_flags ${host_cxx_flags} -Wmissing-prototypes -Wextra-semi)
 
             if (
@@ -440,7 +444,7 @@ endif()
 if (NOT MSVC)
     set(cuda_flags -Wno-pedantic)
 endif()
-set(cuda_flags ${cxx_flags} -use_fast_math ${cuda_flags})
+set(cuda_flags -use_fast_math ${cuda_flags})
 
 list(JOIN host_cxx_flags " " cuda_host_flags)  # pass host compiler flags as a single argument
 if (NOT cuda_host_flags STREQUAL "")
