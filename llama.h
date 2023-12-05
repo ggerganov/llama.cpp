@@ -181,14 +181,17 @@ extern "C" {
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
+
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        // override key-value pairs of the model meta data
+        const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
-        const struct llama_model_kv_override * kv_overrides;
     };
 
     struct llama_context_params {
