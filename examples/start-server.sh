@@ -84,17 +84,100 @@ model_selection_warning() {
 
 
 
+# model_selection() {
+#   # User selects a file or folder
+#   exec 3>&1
+
+#   # Set initial directory for the file selection dialog
+#   INITIAL_DIR="$SCRIPT_DIR/../models/"
+
+#   model_path=$(dialog --backtitle "Model Selection" \
+#                       --title "Select Model File or Folder" \
+#                       --fselect "$INITIAL_DIR" $DIALOG_HEIGHT $DIALOG_WIDTH \
+#                       2>&1 1>&3)
+#   exit_status=$?
+#   exec 3>&-
+
+#   # Check whether user has selected 'Cancel'
+#   if [ $exit_status = 1 ]; then
+#     return
+#   fi
+
+#   # If a folder has been selected, search for *.gguf files
+#   if [ -d "$model_path" ]; then
+#     model_files=($(find "$model_path" -name "*.gguf" 2>/dev/null))
+#     # Check whether files have been found
+#     if [ ${#model_files[@]} -eq 0 ]; then
+#       dialog --backtitle "Model Selection" \
+#              --title "No Models Found" \
+#              --msgbox "\n\n\nNo model files (*.gguf) were found in the selected directory." $DIALOG_HEIGHT $DIALOG_WIDTH
+#       return
+#     fi
+#   elif [ -f "$model_path" ]; then
+#     model_files=("$model_path")
+#   else
+#     dialog --backtitle "Model Selection" \
+#            --title "Invalid Selection" \
+#            --msgbox "\n\n\nThe selected path is not valid." $DIALOG_HEIGHT $DIALOG_WIDTH
+#     return
+#   fi
+
+# # Selection menu for models found
+# exec 3>&1
+# model_choice=$(dialog --backtitle "Model Selection" \
+#                       --title "Select a Model File" \
+#                       --menu "Choose one of the found models:" $DIALOG_HEIGHT $DIALOG_WIDTH \
+#                       $(for i in "${!model_files[@]}"; do echo "$((i+1))" "$(basename "${model_files[$i]}")"; done) \
+#                       2>&1 1>&3)
+# exit_status=$?
+# exec 3>&-
+
+# # Check whether user has selected 'Cancel'
+# if [ $exit_status = 1 ]; then
+#   return
+# fi
+
+# # Set path to the selected model
+# model_path=${model_files[$((model_choice-1))]}
+# }
 model_selection() {
-  # User selects a file or folder
+    # User selects a file or folder
+    exec 3>&1
+
+    # Set initial directory for the file selection dialog
+    INITIAL_DIR="$SCRIPT_DIR/../models/"
+
+    model_path=$(dialog --backtitle "Model Selection" \
+                        --title "Select Model File or Folder" \
+                        --fselect "$INITIAL_DIR" 23 65 \
+                        2>&1 1>&3)
+    exit_status=$?
+    exec 3>&-
+
+    # Check whether user has selected 'Cancel'
+    if [ $exit_status = 1 ]; then
+      return
+    fi
+
+    # If a folder has been selected, search for *.gguf files
+    if [ -d "$model_path" ]; then
+      model_files=($(find "$model_path" -name "*.gguf" 2>/dev/null))
+    elif [ -f "$model_path" ]; then
+      model_files=("$model_path")
+    else
+      dialog --backtitle "Model Selection" \
+             --title "Invalid Selection" \
+             --msgbox "The selected path is not valid." 23 65
+      return
+    fi
+
+  # Selection menu for models found
   exec 3>&1
-
-  # Set initial directory for the file selection dialog
-  INITIAL_DIR="$SCRIPT_DIR/../models/"
-
-  model_path=$(dialog --backtitle "Model Selection" \
-                      --title "Select Model File or Folder" \
-                      --fselect "$INITIAL_DIR" $DIALOG_HEIGHT $DIALOG_WIDTH \
-                      2>&1 1>&3)
+  model_choice=$(dialog --backtitle "Model Selection" \
+                        --title "Select a Model File" \
+                        --menu "Choose one of the found models:" 23 65 4 \
+                        $(for i in "${!model_files[@]}"; do echo "$((i+1))" "$(basename "${model_files[$i]}")"; done) \
+                        2>&1 1>&3)
   exit_status=$?
   exec 3>&-
 
@@ -103,44 +186,9 @@ model_selection() {
     return
   fi
 
-  # If a folder has been selected, search for *.gguf files
-  if [ -d "$model_path" ]; then
-    model_files=($(find "$model_path" -name "*.gguf" 2>/dev/null))
-    # Check whether files have been found
-    if [ ${#model_files[@]} -eq 0 ]; then
-      dialog --backtitle "Model Selection" \
-             --title "No Models Found" \
-             --msgbox "\n\n\nNo model files (*.gguf) were found in the selected directory." $DIALOG_HEIGHT $DIALOG_WIDTH
-      return
-    fi
-  elif [ -f "$model_path" ]; then
-    model_files=("$model_path")
-  else
-    dialog --backtitle "Model Selection" \
-           --title "Invalid Selection" \
-           --msgbox "\n\n\nThe selected path is not valid." $DIALOG_HEIGHT $DIALOG_WIDTH
-    return
-  fi
-
-# Selection menu for models found
-exec 3>&1
-model_choice=$(dialog --backtitle "Model Selection" \
-                      --title "Select a Model File" \
-                      --menu "Choose one of the found models:" $DIALOG_HEIGHT $DIALOG_WIDTH \
-                      $(for i in "${!model_files[@]}"; do echo "$((i+1))" "$(basename "${model_files[$i]}")"; done) \
-                      2>&1 1>&3)
-exit_status=$?
-exec 3>&-
-
-# Check whether user has selected 'Cancel'
-if [ $exit_status = 1 ]; then
-  return
-fi
-
-# Set path to the selected model
-model_path=${model_files[$((model_choice-1))]}
-}
-
+  # Set path to the selected model
+  model_path=${model_files[$((model_choice-1))]}
+  }
 
 
 multimodal_model_selection() {
