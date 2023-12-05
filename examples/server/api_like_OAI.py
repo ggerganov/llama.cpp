@@ -70,6 +70,7 @@ def make_postData(body, chat=False, stream=False):
     if(is_present(body, "mirostat_tau")): postData["mirostat_tau"] = body["mirostat_tau"]
     if(is_present(body, "mirostat_eta")): postData["mirostat_eta"] = body["mirostat_eta"]
     if(is_present(body, "seed")): postData["seed"] = body["seed"]
+    if(is_present(body, "grammar")): postData["grammar"] = body["grammar"]
     if(is_present(body, "logit_bias")): postData["logit_bias"] = [[int(token), body["logit_bias"][token]] for token in body["logit_bias"].keys()]
     if (args.stop != ""):
         postData["stop"] = [args.stop]
