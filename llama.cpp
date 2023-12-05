@@ -8580,6 +8580,8 @@ struct llama_context_params llama_context_default_params() {
         /*.yarn_beta_fast              =*/ 32.0f,
         /*.yarn_beta_slow              =*/ 1.0f,
         /*.yarn_orig_ctx               =*/ 0,
+        /*.type_k                      =*/ GGML_TYPE_F16,
+        /*.type_v                      =*/ GGML_TYPE_F16,
         /*.mul_mat_q                   =*/ true,
         /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
@@ -8737,31 +8739,36 @@ struct llama_context * llama_new_context_with_model(
 
     //const ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
-    // TODO: move as params
-    const ggml_type k_type = GGML_TYPE_Q8_0;
-    const ggml_type v_type = GGML_TYPE_F16;
+    const ggml_type type_k = params.type_k;
+    const ggml_type type_v = params.type_v;
 
-    GGML_ASSERT(hparams.n_embd_head() % ggml_blck_size(k_type) == 0);
-    GGML_ASSERT(hparams.n_embd_head() % ggml_blck_size(v_type) == 0);
+    GGML_ASSERT(hparams.n_embd_head() % ggml_blck_size(type_k) == 0);
+    GGML_ASSERT(hparams.n_embd_head() % ggml_blck_size(type_v) == 0);
 
     // reserve memory for context buffers
     if (!hparams.vocab_only) {
-        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, k_type, v_type, cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv)) {
+        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, type_k, type_v, cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
         }
 
         {
-            // const size_t memory_size = ggml_nbytes(ctx->kv_self.k) + ggml_nbytes(ctx->kv_self.v);
-            size_t memory_size = 0;
+            size_t memory_size_k = 0;
+            size_t memory_size_v = 0;
+
             for (auto & k : ctx->kv_self.k_l) {
-                memory_size += ggml_nbytes(k);
+                memory_size_k += ggml_nbytes(k);
             }
+
             for (auto & v : ctx->kv_self.v_l) {
-                memory_size += ggml_nbytes(v);
+                memory_size_v += ggml_nbytes(v);
             }
-            LLAMA_LOG_INFO("%s: kv self size  = %7.2f MiB\n", __func__, memory_size / 1024.0 / 1024.0);
+
+            LLAMA_LOG_INFO("%s: KV self size  = %7.2f MiB, K (%s): %7.2f MiB, V (%s): %7.2f MiB\n", __func__,
+                (float)(memory_size_k + memory_size_v) / (1024.0f * 1024.0f),
+                ggml_type_name(type_k), (float)memory_size_k / (1024.0f * 1024.0f),
+                ggml_type_name(type_v), (float)memory_size_v / (1024.0f * 1024.0f));
         }
 
         // resized during inference

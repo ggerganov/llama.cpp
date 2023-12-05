@@ -125,9 +125,12 @@ struct gpt_params {
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
     bool no_kv_offload     = false; // disable KV offloading
 
+    std::string cache_type_k = "f16"; // KV cache data type for the K
+    std::string cache_type_v = "f16"; // KV cache data type for the V
+
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector
-    std::string image = ""; // path to an image file
+    std::string image  = ""; // path to an image file
 };
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);

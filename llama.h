@@ -191,6 +191,9 @@ extern "C" {
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
 
+        ggml_type type_k; // data type for K cache
+        ggml_type type_v; // data type for V cache
+
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
         bool f16_kv;      // use fp16 for KV cache, fp32 otherwise
