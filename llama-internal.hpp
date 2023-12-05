@@ -13,8 +13,10 @@ enum llm_arch {
     LLM_ARCH_REFACT,
     LLM_ARCH_BLOOM,
     LLM_ARCH_STABLELM,
+    LLM_ARCH_QWEN,
     LLM_ARCH_UNKNOWN,
 };
+
 
 enum llm_kv {
     LLM_KV_GENERAL_ARCHITECTURE,
@@ -141,41 +143,7 @@ struct llama_cparams {
     bool mul_mat_q;
 };
 
-struct llama_layer {
-    // normalization
-    struct ggml_tensor * attn_norm;
-    struct ggml_tensor * attn_norm_b;
-    struct ggml_tensor * attn_norm_2;
-    struct ggml_tensor * attn_norm_2_b;
-    struct ggml_tensor * attn_q_norm;
-    struct ggml_tensor * attn_q_norm_b;
-    struct ggml_tensor * attn_k_norm;
-    struct ggml_tensor * attn_k_norm_b;
-
-    // attention
-    struct ggml_tensor * wq;
-    struct ggml_tensor * wk;
-    struct ggml_tensor * wv;
-    struct ggml_tensor * wo;
-    struct ggml_tensor * wqkv;
-
-    // attention bias
-    struct ggml_tensor * bo;
-    struct ggml_tensor * bqkv;
-
-    // normalization
-    struct ggml_tensor * ffn_norm;
-    struct ggml_tensor * ffn_norm_b;
-
-    // ff
-    struct ggml_tensor * ffn_gate; // w1
-    struct ggml_tensor * ffn_down; // w2
-    struct ggml_tensor * ffn_up;   // w3
-
-    // ff bias
-    struct ggml_tensor * ffn_down_b; // b2
-    struct ggml_tensor * ffn_up_b;   // b3
-};
+#include "llama-layer.hpp"
 
 struct llama_kv_cell {
     llama_pos pos   = -1;
@@ -211,7 +179,8 @@ struct llama_kv_cache {
     // for a free KV slot. llama_decode_internal also uses it, so it
     // cannot be freely changed after a slot has been allocated.
     uint32_t head = 0;
-    uint32_t size = 0;
+  uint32_t size = 0;
+  uint32_t used = 0; // used cells (i.e. at least one seq_id);
 
     // computed before each graph build
     uint32_t n = 0;
@@ -225,18 +194,7 @@ struct llama_kv_cache {
 
     llama_buffer buf;
 
-    ~llama_kv_cache() {
-	if (ctx) {
-	    ggml_free(ctx);
-	}
-
-#ifdef GGML_USE_CUBLAS
-	if (ggml_cublas_loaded()) {
-	    ggml_cuda_free_data(k);
-	    ggml_cuda_free_data(v);
-	}
-#endif
-    }
+  ~llama_kv_cache();
 };
 
 struct llama_vocab {
@@ -275,19 +233,7 @@ struct llama_vocab {
     id special_suffix_id = 32008;
     id special_eot_id    = 32010;
 
-    int find_bpe_rank(std::string token_left, std::string token_right) const {
-	GGML_ASSERT(token_left.find(" ") == std::string::npos);
-	GGML_ASSERT(token_left.find("\n") == std::string::npos);
-	GGML_ASSERT(token_right.find(" ") == std::string::npos);
-	GGML_ASSERT(token_right.find("\n") == std::string::npos);
-
-	auto it = bpe_ranks.find(std::make_pair(token_left, token_right));
-	if (it == bpe_ranks.end()) {
-	    return -1;
-	}
-
-	return it->second;
-    }
+  int find_bpe_rank(std::string token_left, std::string token_right) const;
 };
 
 struct llama_mmap {
@@ -429,30 +375,12 @@ struct llama_model {
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
 
-    ~llama_model() {
-	if (ctx) {
-	    ggml_free(ctx);
-	}
+  ~llama_model() ;
 
-#ifdef GGML_USE_CUBLAS
-	if (ggml_cublas_loaded()) {
-	    for (size_t i = 0; i < tensors_by_name.size(); ++i) {
-		ggml_cuda_free_data(tensors_by_name[i].second);
-	    }
-	    ggml_cuda_free_scratch();
-	}
-#endif
-
-#if defined(GGML_USE_CLBLAST)
-	for (size_t i = 0; i < tensors_by_name.size(); ++i) {
-	    ggml_cl_free_data(tensors_by_name[i].second);
-	}
-#endif
-    }
 };
 
 struct llama_context {
-    llama_context(const llama_model & model) : model(model), t_start_us(model.t_start_us), t_load_us(model.t_load_us) {}
+  llama_context(const llama_model & model);
   ~llama_context();
 
     llama_cparams cparams;
@@ -540,6 +468,8 @@ struct llama_state {
     // We save the log callback globally
     ggml_log_callback log_callback;
     void * log_callback_user_data = nullptr;
+  bool operator!=(const llama_hparams & other) const;
+  static llama_state g_state;
 };
 
 
@@ -578,7 +508,7 @@ struct llama_model_loader {
 
   struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, struct ggml_tensor * meta, ggml_backend_type backend) ;
 
-  struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, ggml_backend_type backend) ;
+  struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, ggml_backend_type backend, bool required = true) ;
 
   void done_getting_tensors() const;
 
@@ -739,6 +669,7 @@ struct llm_build_context {
   struct ggml_cgraph * build_bloom() ;
   struct ggml_cgraph * build_mpt() ;
   struct ggml_cgraph * build_stablelm();
+  struct ggml_cgraph * build_qwen();
 };
 
 

@@ -49,6 +49,11 @@
 #define LLAMA_SUPPORTS_GPU_OFFLOAD
 #endif
 
+static const size_t kiB = 1024;
+static const size_t MiB = 1024*kiB;
+static const size_t GiB = 1024*MiB;
+
+
 #ifdef __cplusplus
 //extern "C" {
 #endif
