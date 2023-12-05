@@ -1760,7 +1760,6 @@ def run_horde_worker(args, api_key, worker_name):
         global exitcounter, punishcounter, session_kudos_earned, session_jobs, rewardcounter
         reply = make_url_request(url, submit_dict)
         if not reply:
-            exitcounter += 1
             punishcounter += 1
             print_with_time(f"Error, Job submit failed.")
         else:
@@ -1778,7 +1777,7 @@ def run_horde_worker(args, api_key, worker_name):
             rewardcounter += 1
             if rewardcounter > 50:
                 rewardcounter = 0
-                if exitcounter > 5:
+                if exitcounter >= 1:
                     exitcounter -= 1
 
     def make_url_request(url, data, method='POST'):
@@ -1815,23 +1814,27 @@ def run_horde_worker(args, api_key, worker_name):
     print(f"===\nEmbedded Horde Worker '{worker_name}' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:2:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
-    while exitcounter < 35:
+    while exitcounter < 10:
         time.sleep(3)
         readygo = make_url_request(f'{epurl}/api/v1/info/version', None,'GET')
         if readygo:
             print_with_time(f"Embedded Horde Worker '{worker_name}' is started.")
             break
 
-    while exitcounter < 40:
+    while exitcounter < 10:
         currentjob_attempts = 0
         current_generation = None
 
-        if punishcounter >= 8:
+        if punishcounter >= 5:
             punishcounter = 0
-            penaltymult = (1 + (exitcounter//10))
-            print_with_time(f"Horde Worker Paused for {penaltymult*10} min - Too many errors. It will resume automatically, but you should restart it.")
-            print_with_time(f"Caution: Too many failed jobs may lead to entering maintenance mode.")
-            time.sleep(600 * penaltymult)
+            exitcounter += 1
+            if exitcounter < 10:
+                penaltytime = (2 ** exitcounter)
+                print_with_time(f"Horde Worker Paused for {penaltytime} min - Too many errors. It will resume automatically, but you should restart it.")
+                print_with_time(f"Caution: Too many failed jobs may lead to entering maintenance mode.")
+                time.sleep(60 * penaltytime)
+            else:
+                 print_with_time(f"Exit limit reached, too many errors.")
 
         #first, make sure we are not generating
         if modelbusy.locked():
@@ -1850,7 +1853,6 @@ def run_horde_worker(args, api_key, worker_name):
         }
         pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
         if not pop:
-            exitcounter += 1
             punishcounter += 1
             print_with_time(f"Failed to fetch job from {cluster}. Waiting 10 seconds...")
             time.sleep(10)
@@ -1870,7 +1872,7 @@ def run_horde_worker(args, api_key, worker_name):
         print_with_time(f"Job received from {cluster} for {current_payload.get('max_length',80)} tokens and {current_payload.get('max_context_length',1024)} max context. Starting generation...")
 
         #do gen
-        while exitcounter < 35:
+        while exitcounter < 10:
             if not modelbusy.locked():
                 current_generation = make_url_request(f'{epurl}/api/v1/generate', current_payload)
                 if current_generation:
