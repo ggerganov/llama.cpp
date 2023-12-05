@@ -100,6 +100,12 @@ static void sigint_handler(int signo) {
 }
 #endif
 
+static void llama_log_callback_logTee(ggml_log_level level, const char * text, void * user_data) {
+    (void) level;
+    (void) user_data;
+    LOG_TEE("%s", text);
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
@@ -113,6 +119,7 @@ int main(int argc, char ** argv) {
     log_set_target(log_filename_generator("main", "log"));
     LOG_TEE("Log start\n");
     log_dump_cmdline(argc, argv);
+    llama_log_set(llama_log_callback_logTee, nullptr);
 #endif // LOG_DISABLE_LOGS
 
     // TODO: Dump params ?
@@ -430,6 +437,7 @@ int main(int argc, char ** argv) {
         }
     }
     LOG_TEE("sampling: \n%s\n", llama_sampling_print(sparams).c_str());
+    LOG_TEE("sampling order: \n%s\n", llama_sampling_order_print(sparams).c_str());
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
