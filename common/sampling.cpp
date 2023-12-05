@@ -101,9 +101,9 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 
 std::string llama_sampling_order_print(const llama_sampling_params & params) {
     std::string result = "CFG -> Penalties ";
-    if (params.mirostat == 0){
-        for (auto s : params.samplers_sequence){
-            switch (s){
+    if (params.mirostat == 0) {
+        for (auto s : params.samplers_sequence) {
+            switch (s) {
                 case 'k': result += "-> top_k "; break;
                 case 'f': result += "-> tfs_z "; break;
                 case 'y': result += "-> typical_p "; break;
@@ -126,15 +126,15 @@ void sampler_queue(
                                  size_t & min_keep) {
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
 
-    const float       temp              = params.temp;
-    const int32_t     top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
-    const float       top_p             = params.top_p;
-    const float       min_p             = params.min_p;
-    const float       tfs_z             = params.tfs_z;
-    const float       typical_p         = params.typical_p;
-    const std::string samplers_sequence = params.samplers_sequence;
+    const float         temp              = params.temp;
+    const int32_t       top_k             = params.top_k <= 0 ? n_vocab : params.top_k;
+    const float         top_p             = params.top_p;
+    const float         min_p             = params.min_p;
+    const float         tfs_z             = params.tfs_z;
+    const float         typical_p         = params.typical_p;
+    const std::string & samplers_sequence = params.samplers_sequence;
                       
-    for (auto s : samplers_sequence){
+    for (auto s : samplers_sequence) {
         switch (s){
             case 'k': llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
             case 'f': llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;

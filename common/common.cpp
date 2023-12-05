@@ -904,11 +904,11 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 // String parsing
 //
 
-std::string parse_samplers_input(std::string input){
+std::string parse_samplers_input(std::string input) {
     std::string output = "";
     // since samplers names are written multiple ways
     // make it ready for both system names and input names
-    std::unordered_map<std::string, char> samplers_symbols{
+    std::unordered_map<std::string, char> samplers_symbols {
         {"top_k",      'k'},
         {"top-k",      'k'},
         {"top_p",      'p'},
@@ -927,16 +927,16 @@ std::string parse_samplers_input(std::string input){
     };
     // expected format example: "temp;top_k;tfs_z;typical_p;top_p;min_p"
     size_t separator = input.find(';');
-    while (separator != input.npos){
+    while (separator != input.npos) {
         std::string name = input.substr(0,separator);
         input = input.substr(separator+1);
         separator = input.find(';');
         
-        if (samplers_symbols.find(name) != samplers_symbols.end()){
+        if (samplers_symbols.find(name) != samplers_symbols.end()) {
             output += samplers_symbols[name];
         }
     }
-    if (samplers_symbols.find(input) != samplers_symbols.end()){
+    if (samplers_symbols.find(input) != samplers_symbols.end()) {
         output += samplers_symbols[input];
     }
     return output;
