@@ -931,7 +931,7 @@ std::string parse_samplers_input(std::string input) {
         std::string name = input.substr(0,separator);
         input = input.substr(separator+1);
         separator = input.find(';');
-        
+
         if (samplers_symbols.find(name) != samplers_symbols.end()) {
             output += samplers_symbols[name];
         }
