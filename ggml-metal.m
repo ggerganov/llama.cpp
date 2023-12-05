@@ -120,7 +120,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(cpy_f32_f32);
     GGML_METAL_DECL_KERNEL(cpy_f32_q8_0);
     GGML_METAL_DECL_KERNEL(cpy_f32_q4_0);
-    //GGML_METAL_DECL_KERNEL(cpy_f32_q4_1);
+    GGML_METAL_DECL_KERNEL(cpy_f32_q4_1);
     //GGML_METAL_DECL_KERNEL(cpy_f32_q5_0);
     //GGML_METAL_DECL_KERNEL(cpy_f32_q5_1);
     GGML_METAL_DECL_KERNEL(cpy_f16_f16);
@@ -331,7 +331,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(cpy_f32_f32);
         GGML_METAL_ADD_KERNEL(cpy_f32_q8_0);
         GGML_METAL_ADD_KERNEL(cpy_f32_q4_0);
-        //GGML_METAL_ADD_KERNEL(cpy_f32_q4_1);
+        GGML_METAL_ADD_KERNEL(cpy_f32_q4_1);
         //GGML_METAL_ADD_KERNEL(cpy_f32_q5_0);
         //GGML_METAL_ADD_KERNEL(cpy_f32_q5_1);
         GGML_METAL_ADD_KERNEL(cpy_f16_f16);
@@ -437,7 +437,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(cpy_f32_f32);
     GGML_METAL_DEL_KERNEL(cpy_f32_q8_0);
     GGML_METAL_DEL_KERNEL(cpy_f32_q4_0);
-    //GGML_METAL_DEL_KERNEL(cpy_f32_q4_1);
+    GGML_METAL_DEL_KERNEL(cpy_f32_q4_1);
     //GGML_METAL_DEL_KERNEL(cpy_f32_q5_0);
     //GGML_METAL_DEL_KERNEL(cpy_f32_q5_1);
     GGML_METAL_DEL_KERNEL(cpy_f16_f16);
@@ -1578,7 +1578,7 @@ void ggml_metal_graph_compute(
                                             case GGML_TYPE_F32:  [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f32];  break;
                                             case GGML_TYPE_Q8_0: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q8_0]; break;
                                             case GGML_TYPE_Q4_0: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q4_0]; break;
-                                            //case GGML_TYPE_Q4_1: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q4_1]; break;
+                                            case GGML_TYPE_Q4_1: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q4_1]; break;
                                             //case GGML_TYPE_Q5_0: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q5_0]; break;
                                             //case GGML_TYPE_Q5_1: [encoder setComputePipelineState:ctx->pipeline_cpy_f32_q5_1]; break;
                                             default: GGML_ASSERT(false && "not implemented");
