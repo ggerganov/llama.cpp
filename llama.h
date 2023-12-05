@@ -196,7 +196,6 @@ extern "C" {
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        bool f16_kv;      // use fp16 for KV cache, fp32 otherwise
         bool logits_all;  // the llama_eval() call computes all logits, not just the last one
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU

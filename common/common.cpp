@@ -278,8 +278,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.yarn_beta_slow = std::stof(argv[i]);
-        } else if (arg == "--memory-f32") {
-            params.memory_f16 = false;
         } else if (arg == "--top-p") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -804,8 +802,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --yarn-beta-fast N    YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
     printf("  --ignore-eos          ignore end of stream token and continue generating (implies --logit-bias 2-inf)\n");
     printf("  --no-penalize-nl      do not penalize newline token\n");
-    printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
     printf("  --temp N              temperature (default: %.1f)\n", (double)sparams.temp);
     printf("  --logits-all          return logits for all tokens in the batch (default: disabled)\n");
     printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
@@ -948,7 +944,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
     cparams.mul_mat_q         = params.mul_mat_q;
     cparams.seed              = params.seed;
-    cparams.f16_kv            = params.memory_f16;
     cparams.logits_all        = params.logits_all;
     cparams.embedding         = params.embedding;
     cparams.rope_scaling_type = params.rope_scaling_type;
@@ -1375,7 +1370,6 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     }
     fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
-    fprintf(stream, "memory_f32: %s # default: false\n", !params.memory_f16 ? "true" : "false");
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);
     fprintf(stream, "mirostat_ent: %f # default: 5.0\n", sparams.mirostat_tau);
     fprintf(stream, "mirostat_lr: %f # default: 0.1\n", sparams.mirostat_eta);

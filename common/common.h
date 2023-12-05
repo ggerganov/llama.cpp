@@ -98,7 +98,6 @@ struct gpt_params {
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
-    bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode

@@ -8583,7 +8583,6 @@ struct llama_context_params llama_context_default_params() {
         /*.type_k                      =*/ GGML_TYPE_F16,
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.mul_mat_q                   =*/ true,
-        /*.f16_kv                      =*/ true,
         /*.logits_all                  =*/ false,
         /*.embedding                   =*/ false,
         /*.offload_kqv                 =*/ true,
@@ -8736,8 +8735,6 @@ struct llama_context * llama_new_context_with_model(
 
     ctx->rng = std::mt19937(params.seed);
     ctx->logits_all = params.logits_all;
-
-    //const ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     const ggml_type type_k = params.type_k;
     const ggml_type type_v = params.type_v;
