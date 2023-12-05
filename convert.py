@@ -267,7 +267,7 @@ class Params:
             n_ctx = 2048
 
         return Params(
-            n_vocab          = config.get("vocab_size", model["tok_embeddings.weight"].shape[0]),
+            n_vocab          = model["tok_embeddings.weight"].shape[0],
             n_embd           = config["dim"],
             n_layer          = config["n_layers"],
             n_ctx            = n_ctx,
