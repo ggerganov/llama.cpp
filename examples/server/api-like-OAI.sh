@@ -47,6 +47,6 @@ while true; do
     echo -e "\033[1;94mUser\033[0m"
     read -r USER_INPUT
     echo
-    echo -e "\033[1mAssistent\033[0m"
+    echo -e "\033[1mAssistant\033[0m"
     request_oai
 done
