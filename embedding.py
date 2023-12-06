@@ -1,2 +1,6 @@
-print("hello llama.cpp" + llm_input)
-llm_output = "Is it because of your mother that " + llm_input + "?";
+print("hello llama.cpp, got input:\n" + llm_input  + "\n")
+
+if len(llm_input) > 20:
+    llm_output = "Reinterpret with emojis " + llm_input + "?\nSTOP";
+else:
+    llm_output =  llm_input

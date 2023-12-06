@@ -497,7 +497,7 @@ int main(int argc, char ** argv) {
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
     //print_fields(*ctx_sampling);
-    
+    std::string last_output; // the output from python at any time    
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -706,7 +706,7 @@ int main(int argc, char ** argv) {
 	// just print the whole thing       	
 	const std::string last_output1 = output_ss.str();
 	printf("%s",last_output1.c_str());
-	const std::string last_output = process_output_plugin(last_output1);
+	last_output = process_output_plugin(last_output1);
 	printf("%s",last_output.c_str());
 		    
         // if not currently processing queued inputs;
@@ -716,7 +716,7 @@ int main(int argc, char ** argv) {
                 const int n_prev = 32;
                 const std::string last_output1 = llama_sampling_prev_str(ctx_sampling, ctx, n_prev);
 		// now plugin the python :
-		const std::string last_output = process_output_plugin(last_output1);
+		const std::string partial_output = process_output_plugin(last_output1);
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
@@ -783,11 +783,11 @@ int main(int argc, char ** argv) {
                 console::set_display(console::user_input);
 
                 std::string line;
-                bool another_line = true;
-                do {
-                    another_line = console::readline(line, params.multiline_input);
-                    buffer += line;
-                } while (another_line);
+                //bool another_line = true;
+                //do {
+		//  another_line = console::readline(line, params.multiline_input);
+		buffer += last_output;
+		//} while (another_line);
 
                 // done taking input, reset color
                 console::set_display(console::reset);
