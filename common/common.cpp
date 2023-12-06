@@ -146,9 +146,9 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                     char* key = new char[p.key().length() + 1];
                     strcpy(key, p.key().c_str());
                     arguments_w_json.push_back(key);
-                    std::string param_value;
 
                     if (!p.value().is_boolean()) {
+                        std::string param_value;
                         if (p.value().is_string()) {
                             param_value = p.value().get<std::string>();
                         } else if (p.value().is_number()) {
@@ -181,6 +181,10 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         fprintf(stderr, "%s\n", ex.what());
         gpt_print_usage(argc_json, argv_json, gpt_params());
         exit(1);
+    }
+    // clearing pointers
+    for (auto c : arguments_w_json) {
+        delete [] c;
     }
 
     return result;
