@@ -105,7 +105,7 @@ if args.use_f32:
 # output in the same directory as the model if output_dir is None
 dir_model = args.model_dir
 
-if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or clip_model_is_openclip:
+if args.clip_model_is_vision or not os.path.exists(dir_model + "/vocab.json") or args.clip_model_is_openclip:
     vocab = None
     tokens = None
 else:
