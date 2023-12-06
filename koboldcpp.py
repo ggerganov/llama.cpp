@@ -630,6 +630,52 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(e)
 
+    def noscript_webui(self, path):
+        global modelbusy
+        import urllib.parse as urlparse
+        parsed_url = urlparse.urlparse(path)
+        parsed_dict = urlparse.parse_qs(parsed_url.query)
+        status = "Error"
+        reply = ""
+        prompt = parsed_dict['prompt'][0] if 'prompt' in parsed_dict else ""
+        max_length = parsed_dict['max_length'][0] if 'max_length' in parsed_dict else 100
+        temperature = parsed_dict['temperature'][0] if 'temperature' in parsed_dict else 0.7
+        top_k = parsed_dict['top_k'][0] if 'top_k' in parsed_dict else 100
+        top_p = parsed_dict['top_p'][0] if 'top_p' in parsed_dict else 0.9
+        rep_pen = parsed_dict['rep_pen'][0] if 'rep_pen' in parsed_dict else 1.1
+        gencommand = (parsed_dict['generate'][0] if 'generate' in parsed_dict else "")=="Generate"
+
+        if prompt=="" or not gencommand or max_length<=0:
+            status = "Ready To Generate"
+        elif modelbusy.locked():
+            status = "Model is busy, try again later."
+        else:
+            epurl = f"http://localhost:{args.port}"
+            if args.host!="":
+                epurl = f"http://{args.host}:{args.port}"
+            gen_payload = {"prompt": prompt,"max_length": max_length,"temperature": temperature,"prompt": prompt,"top_k": top_k,"top_p": top_p,"rep_pen": rep_pen}
+            respjson = make_url_request(f'{epurl}/api/v1/generate', gen_payload)
+            reply = respjson["results"][0]["text"]
+            status = "Generation Completed"
+
+        finalhtml = f'''
+        <!DOCTYPE html>
+        <html><head><title>KoboldCpp NoScript Mode</title></head><body>
+        <h2>KoboldCpp NoScript Mode</h2>
+        <p>KoboldCpp can be used without Javascript enabled, however this is not recommended.
+        <br>If you have Javascript, please use <a href="/">Kobold Lite WebUI</a> instead.</p><hr/>
+        <form action="/noscript">
+        Enter Prompt:<br>
+        <textarea name="prompt" cols="60" rows="7" placeholder="Enter Prompt Here">{prompt + reply}</textarea>
+        <hr/>
+        {status}<br>
+        <hr/>
+        <input type="submit" name="generate" value="Generate">
+        </form>
+        </body>
+        </html>
+        '''
+        return finalhtml
 
     def do_GET(self):
         global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story
@@ -643,6 +689,10 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 response_body = (f"Embedded Kobold Lite is not found.<br>You will have to connect via the main KoboldAI client, or <a href='https://lite.koboldai.net?local=1&port={self.port}'>use this URL</a> to connect.").encode()
             else:
                 response_body = self.embedded_kailite
+
+        elif self.path in ["/noscript", "/noscript?"] or self.path.startswith(('/noscript?','noscript?')): #it's possible for the root url to have ?params without /
+            content_type = 'text/html'
+            response_body = (self.noscript_webui(self.path)).encode('utf-8')
 
         elif self.path.endswith(('/api/v1/model', '/api/latest/model')):
             response_body = (json.dumps({'result': friendlymodelname }).encode())
@@ -1744,21 +1794,47 @@ def show_gui_msgbox(title,message):
     except Exception as ex2:
         pass
 
+def print_with_time(txt):
+    from datetime import datetime
+    print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
+
+def make_url_request(url, data, method='POST', headers={}):
+    import urllib.request
+    try:
+        request = None
+        if method=='POST':
+            json_payload = json.dumps(data).encode('utf-8')
+            request = urllib.request.Request(url, data=json_payload, headers=headers, method=method)
+            request.add_header('content-type', 'application/json')
+        else:
+            request = urllib.request.Request(url, headers=headers, method=method)
+        response_data = ""
+        with urllib.request.urlopen(request) as response:
+            response_data = response.read().decode('utf-8')
+            json_response = json.loads(response_data)
+            return json_response
+    except urllib.error.HTTPError as e:
+        try:
+            errmsg = e.read().decode('utf-8')
+            print_with_time(f"Error: {e} - {errmsg}")
+        except Exception as e:
+            print_with_time(f"Error: {e}")
+        return None
+    except Exception as e:
+        print_with_time(f"Error: {e} - {response_data}")
+        return None
+
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
-    import urllib.request
     from datetime import datetime
     global friendlymodelname, maxhordectx, maxhordelen, exitcounter, punishcounter, modelbusy, session_starttime
     epurl = f"http://localhost:{args.port}"
     if args.host!="":
         epurl = f"http://{args.host}:{args.port}"
 
-    def print_with_time(txt):
-        print(f"{datetime.now().strftime('[%H:%M:%S]')} " + txt)
-
     def submit_completed_generation(url, jobid, sessionstart, submit_dict):
         global exitcounter, punishcounter, session_kudos_earned, session_jobs, rewardcounter
-        reply = make_url_request(url, submit_dict)
+        reply = make_url_request_horde(url, submit_dict)
         if not reply:
             punishcounter += 1
             print_with_time(f"Error, Job submit failed.")
@@ -1780,31 +1856,12 @@ def run_horde_worker(args, api_key, worker_name):
                 if exitcounter >= 1:
                     exitcounter -= 1
 
-    def make_url_request(url, data, method='POST'):
-        try:
-            request = None
-            headers = {"apikey": api_key,'User-Agent':'KoboldCppEmbeddedWorkerV2','Client-Agent':'KoboldCppEmbedWorker:2'}
-            if method=='POST':
-                json_payload = json.dumps(data).encode('utf-8')
-                request = urllib.request.Request(url, data=json_payload, headers=headers, method=method)
-                request.add_header('content-type', 'application/json')
-            else:
-                request = urllib.request.Request(url, headers=headers, method=method)
-            response_data = ""
-            with urllib.request.urlopen(request) as response:
-                response_data = response.read().decode('utf-8')
-                json_response = json.loads(response_data)
-                return json_response
-        except urllib.error.HTTPError as e:
-            try:
-                errmsg = e.read().decode('utf-8')
-                print_with_time(f"Error: {e} - {errmsg}, Make sure your Horde API key and worker name is valid.")
-            except Exception as e:
-                print_with_time(f"Error: {e}, Make sure your Horde API key and worker name is valid.")
-            return None
-        except Exception as e:
-            print_with_time(f"Error: {e} - {response_data}, Make sure your Horde API key and worker name is valid.")
-            return None
+    def make_url_request_horde(url, data, method='POST'):
+        headers = headers = {"apikey": api_key,'User-Agent':'KoboldCppEmbeddedWorkerV2','Client-Agent':'KoboldCppEmbedWorker:2'}
+        ret = make_url_request(url, data, method, headers)
+        if not ret:
+            print("Make sure your Horde API key and worker name is valid!")
+        return ret
 
     current_id = None
     current_payload = None
@@ -1816,7 +1873,7 @@ def run_horde_worker(args, api_key, worker_name):
     cluster = "https://horde.koboldai.net"
     while exitcounter < 10:
         time.sleep(3)
-        readygo = make_url_request(f'{epurl}/api/v1/info/version', None,'GET')
+        readygo = make_url_request_horde(f'{epurl}/api/v1/info/version', None,'GET')
         if readygo:
             print_with_time(f"Embedded Horde Worker '{worker_name}' is started.")
             break
@@ -1851,7 +1908,7 @@ def run_horde_worker(args, api_key, worker_name):
             "softprompts": [],
             "bridge_agent": BRIDGE_AGENT,
         }
-        pop = make_url_request(f'{cluster}/api/v2/generate/text/pop',gen_dict)
+        pop = make_url_request_horde(f'{cluster}/api/v2/generate/text/pop',gen_dict)
         if not pop:
             punishcounter += 1
             print_with_time(f"Failed to fetch job from {cluster}. Waiting 10 seconds...")
@@ -1874,7 +1931,7 @@ def run_horde_worker(args, api_key, worker_name):
         #do gen
         while exitcounter < 10:
             if not modelbusy.locked():
-                current_generation = make_url_request(f'{epurl}/api/v1/generate', current_payload)
+                current_generation = make_url_request_horde(f'{epurl}/api/v1/generate', current_payload)
                 if current_generation:
                     break
                 else:
