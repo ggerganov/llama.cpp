@@ -113,13 +113,15 @@ std::string llama_sampling_order_print(const llama_sampling_params & params) {
                 default : break;
             }
         }
-    } else result += "-> mirostat ";
+    } else {
+        result += "-> mirostat ";
+    }
 
     return result;
 }
 
 // no reasons to expose this function in header
-void sampler_queue(
+static void sampler_queue(
                    struct llama_context * ctx_main,
             const llama_sampling_params & params,
                  llama_token_data_array & cur_p,
