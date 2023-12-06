@@ -1,5 +1,45 @@
 cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
+find_package (Python3 COMPONENTS Interpreter Development)
+
+
+if (Python3_Interpreter_FOUND)
+  if (UNIX AND NOT APPLE)
+    if (PYTHON_VERSION_MAJOR EQUAL 3)
+        FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_SUFFIX})
+#        FIND_PACKAGE(PythonInterp 3)
+#        FIND_PACKAGE(PythonLibs 3 REQUIRED)
+    else()
+        FIND_PACKAGE(Boost COMPONENTS python)
+ #       FIND_PACKAGE(PythonInterp)
+ #       FIND_PACKAGE(PythonLibs REQUIRED)
+    endif()
+  else()	
+    if (PYTHON_VERSION_MAJOR EQUAL 3)
+        FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+        FIND_PACKAGE(PythonInterp 3)
+        FIND_PACKAGE(PythonLibs 3 REQUIRED)
+    else()
+        FIND_PACKAGE(Boost COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR})
+        FIND_PACKAGE(PythonInterp)
+        FIND_PACKAGE(PythonLibs REQUIRED)
+    endif()
+  endif()
+else()
+    message("Python not found")
+endif()
+
+message(STATUS "PYTHON_LIBRARIES = ${Python3_LIBRARIES}")
+message(STATUS "PYTHON_EXECUTABLE = ${PYTHON_EXECUTABLE}")
+message(STATUS "PYTHON_INCLUDE_DIRS = ${Python3_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
+
+ENABLE_TESTING()
+INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${Python3_INCLUDE_DIRS})
+LINK_LIBRARIES(${Boost_LIBRARIES} ${Python3_LIBRARIES}) # Deprecated but so convenient!
+
+#PYTHON_ADD_MODULE(plugin_python plugin_python.cpp)
+Python3_add_library(plugin_python MODULE plugin_python.cpp)
 
 if (NOT MSVC)
     set(cuda_flags -Wno-pedantic)
@@ -692,6 +732,7 @@ add_library(ggml OBJECT
             ggml.cpp
             ggml.h
 	    print.hpp
+	    plugin_python.cpp
 	    ggml-internal.hpp
 	    llama-internal.hpp
             ggml-alloc.cpp

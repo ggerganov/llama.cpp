@@ -527,27 +527,30 @@ constexpr auto get_value_type_name(const T t) noexcept
   return t.value_type;
 }
 
+int call_python();
+
 // // A generic function to print out the fields of any object
 template<typename T>
 void print_fields(const T& t) {
-  refl::runtime::debug(std::cout, t);
-  constexpr auto type = refl::reflect<T>();
+  //refl::runtime::debug(std::cout, t);
+  //constexpr auto type = refl::reflect<T>();
 
-  constexpr auto membertype = refl::member_list<T>();
+  //constexpr auto membertype = refl::member_list<T>();
 
-  constexpr auto members = get_members(type);
-  std::cout << "DEBUG Type: " << type.name.c_str() << "\n";
-  std::cout << "DEBUG Type2: " << typeid(membertype).name() << "\n";
-  std::cout << "DEBUG Type3: " << typeid(members).name() << "\n";
-     refl::util::for_each(members, [&](auto member) {
+  call_python();
+  //constexpr auto members = get_members(type);
+  //std::cout << "DEBUG Type: " << type.name.c_str() << "\n";
+  //  std::cout << "DEBUG Type2: " << typeid(membertype).name() << "\n";
+  //  std::cout << "DEBUG Type3: " << typeid(members).name() << "\n";
+  //  refl::util::for_each(members, [&](auto member) {
        //using member_t = decltype(member::value_type);
        //typename type3 = member::value_type;
        //typename trait::remove_qualifiers_t<member_t>::value_type>;
        //constexpr auto type2 = refl::reflect(type3);
 	 //std::cout  << "Auto:" << foo <<"\n";       
-       std::cout  << "Auto:" << member.name <<"\n";
+  //   std::cout  << "Auto:" << member.name <<"\n";
        //std::cout << "DEBUG Type2: " << typeid(member_t).name() << "\n";
        //std::cout << "DEBUG Type2: " << type2.name.c_str() << "\n";
-     });
-     std::cout << "\n";
+  // });
+  //    std::cout << "\n";
 }
