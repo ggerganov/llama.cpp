@@ -115,9 +115,9 @@ void process_escapes(std::string& input) {
     input.resize(output_idx);
 }
 
-nlohmann::json get_json(std::string& file_name) noexcept {
+nlohmann::json get_json(const char* file_name) noexcept {
     try {
-        printf("Opening a json file %s\n", file_name.c_str());
+        printf("Opening a json file %s\n", file_name);
         std::ifstream jstream(file_name);
         return nlohmann::json::parse(jstream);
     }
@@ -136,8 +136,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     // only the second argument to reduce reading attempts (plus drag'n'drop)
     if (argc > 1) {
         // console arguments should override json values, so json processing goes first
-        std::string json_name = argv[1];
-        nlohmann::json file_config = get_json(json_name);
+        nlohmann::json file_config = get_json(argv[1]);
         pos = 2; // avoid putting file name into arguments
         if (!file_config.empty()) {
 
