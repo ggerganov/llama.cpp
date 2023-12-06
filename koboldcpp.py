@@ -630,52 +630,85 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(e)
 
-    def noscript_webui(self, path):
+    def noscript_webui(self):
         global modelbusy
+        import html
         import urllib.parse as urlparse
-        parsed_url = urlparse.urlparse(path)
+        parsed_url = urlparse.urlparse(self.path)
         parsed_dict = urlparse.parse_qs(parsed_url.query)
-        status = "Error"
         reply = ""
+        status = parsed_dict['status'][0] if 'status' in parsed_dict else "Ready To Generate"
         prompt = parsed_dict['prompt'][0] if 'prompt' in parsed_dict else ""
-        max_length = parsed_dict['max_length'][0] if 'max_length' in parsed_dict else 100
-        temperature = parsed_dict['temperature'][0] if 'temperature' in parsed_dict else 0.7
-        top_k = parsed_dict['top_k'][0] if 'top_k' in parsed_dict else 100
-        top_p = parsed_dict['top_p'][0] if 'top_p' in parsed_dict else 0.9
-        rep_pen = parsed_dict['rep_pen'][0] if 'rep_pen' in parsed_dict else 1.1
+        max_length = int(parsed_dict['max_length'][0]) if 'max_length' in parsed_dict else 100
+        temperature = float(parsed_dict['temperature'][0]) if 'temperature' in parsed_dict else 0.7
+        top_k = int(parsed_dict['top_k'][0]) if 'top_k' in parsed_dict else 100
+        top_p = float(parsed_dict['top_p'][0]) if 'top_p' in parsed_dict else 0.9
+        rep_pen = float(parsed_dict['rep_pen'][0]) if 'rep_pen' in parsed_dict else 1.1
+        use_default_badwordsids = int(parsed_dict['use_default_badwordsids'][0]) if 'use_default_badwordsids' in parsed_dict else 0
         gencommand = (parsed_dict['generate'][0] if 'generate' in parsed_dict else "")=="Generate"
 
-        if prompt=="" or not gencommand or max_length<=0:
-            status = "Ready To Generate"
-        elif modelbusy.locked():
-            status = "Model is busy, try again later."
-        else:
-            epurl = f"http://localhost:{args.port}"
-            if args.host!="":
-                epurl = f"http://{args.host}:{args.port}"
-            gen_payload = {"prompt": prompt,"max_length": max_length,"temperature": temperature,"prompt": prompt,"top_k": top_k,"top_p": top_p,"rep_pen": rep_pen}
-            respjson = make_url_request(f'{epurl}/api/v1/generate', gen_payload)
-            reply = respjson["results"][0]["text"]
-            status = "Generation Completed"
+        if gencommand:
+            if prompt=="" or max_length<=0:
+                status = "Need a valid prompt and length to generate."
+            if modelbusy.locked():
+                status = "Model is currently busy, try again later."
+            else:
+                epurl = f"http://localhost:{args.port}"
+                if args.host!="":
+                    epurl = f"http://{args.host}:{args.port}"
+                gen_payload = {"prompt": prompt,"max_length": max_length,"temperature": temperature,"prompt": prompt,"top_k": top_k,"top_p": top_p,"rep_pen": rep_pen,"use_default_badwordsids":use_default_badwordsids}
+                respjson = make_url_request(f'{epurl}/api/v1/generate', gen_payload)
+                reply = html.escape(respjson["results"][0]["text"])
+                status = "Generation Completed"
 
-        finalhtml = f'''
-        <!DOCTYPE html>
-        <html><head><title>KoboldCpp NoScript Mode</title></head><body>
-        <h2>KoboldCpp NoScript Mode</h2>
-        <p>KoboldCpp can be used without Javascript enabled, however this is not recommended.
-        <br>If you have Javascript, please use <a href="/">Kobold Lite WebUI</a> instead.</p><hr/>
-        <form action="/noscript">
-        Enter Prompt:<br>
-        <textarea name="prompt" cols="60" rows="7" placeholder="Enter Prompt Here">{prompt + reply}</textarea>
-        <hr/>
-        {status}<br>
-        <hr/>
-        <input type="submit" name="generate" value="Generate">
-        </form>
-        </body>
-        </html>
-        '''
-        return finalhtml
+            if "generate" in parsed_dict:
+                del parsed_dict["generate"]
+            parsed_dict["prompt"] = prompt + reply
+            parsed_dict["status"] = status
+            updated_query_string = urlparse.urlencode(parsed_dict, doseq=True)
+            updated_path = parsed_url._replace(query=updated_query_string).geturl()
+            self.path = updated_path
+            self.send_response(302)
+            self.send_header("location", self.path)
+            self.end_headers(content_type='text/html')
+            return
+        else:
+            if modelbusy.locked():
+                status = "Model is currently busy."
+
+        finalhtml = f'''<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KoboldCpp NoScript Mode</title></head><body>
+<h2>KoboldCpp NoScript Mode</h2>
+<div>
+<p>KoboldCpp can be used without Javascript enabled, however this is not recommended.
+<br>If you have Javascript, please use <a href="/">Kobold Lite WebUI</a> instead.</p><hr>
+<form action="/noscript">
+Enter Prompt:<br>
+<textarea name="prompt" cols="60" rows="8" wrap="soft" placeholder="Enter Prompt Here">{prompt}</textarea>
+<hr>
+{status}<br>
+<hr>
+<label>Gen. Amount</label> <input type="text" size="4" value="{max_length}" name="max_length"><br>
+<label>Temperature</label> <input type="text" size="4" value="{temperature}" name="temperature"><br>
+<label>Top-K</label> <input type="text" size="4" value="{top_k}" name="top_k"><br>
+<label>Top-P</label> <input type="text" size="4" value="{top_p}" name="top_p"><br>
+<label>Rep. Pen</label> <input type="text" size="4" value="{rep_pen}" name="rep_pen"><br>
+<label>Ignore EOS</label> <input type="checkbox" name="use_default_badwordsids" value="1" {"checked" if use_default_badwordsids else ""}><br>
+<input type="submit" name="generate" value="Generate"> (Please be patient)
+</form>
+<form action="/noscript">
+<input type="submit" value="Reset">
+</form>
+</div>
+</body></html>'''
+        finalhtml = finalhtml.encode('utf-8')
+        self.send_response(200)
+        self.send_header('content-length', str(len(finalhtml)))
+        self.end_headers(content_type='text/html')
+        self.wfile.write(finalhtml)
 
     def do_GET(self):
         global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story
@@ -691,8 +724,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 response_body = self.embedded_kailite
 
         elif self.path in ["/noscript", "/noscript?"] or self.path.startswith(('/noscript?','noscript?')): #it's possible for the root url to have ?params without /
-            content_type = 'text/html'
-            response_body = (self.noscript_webui(self.path)).encode('utf-8')
+            self.noscript_webui()
+            return
 
         elif self.path.endswith(('/api/v1/model', '/api/latest/model')):
             response_body = (json.dumps({'result': friendlymodelname }).encode())
