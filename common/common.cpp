@@ -116,8 +116,6 @@ void process_escapes(std::string& input) {
 }
 
 nlohmann::json get_json(std::string file_name) {
-    // safeguard since we expose this fucntion in header
-    if (file_name.find(".json") == file_name.npos) file_name += ".json";
     nlohmann::json config;
     std::fstream   jstream(file_name);
     if (jstream.is_open()) {
@@ -143,15 +141,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     std::vector<char*> arguments_w_json;
     arguments_w_json.push_back(argv[0]);
     int pos = 1;
-
+    // only the second argument to reduce reading attempts (plus drag'n'drop)
     if (argc > 1) {
-        std::string json_name = argv[1];
         // console arguments should override json values, so json processing goes first
-        // to avoid exta work, let's expect at least an extention
-        if (json_name.rfind(".json") != json_name.npos) {
-            nlohmann::json file_config = get_json(argv[1]);
-            // avoid putting file name in arguments
-            pos = 2;
+        std::string json_name = argv[1];
+        nlohmann::json file_config = get_json(argv[1]);
+        pos = 2; // avoid putting file name into arguments
+        if (!file_config.empty()) {
+
             for (auto& p : file_config.items()) {
                 // only use strings, numbers and booleans for switches
                 if (p.value().is_string() || p.value().is_number() || p.value().is_boolean()) {
@@ -159,10 +156,14 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                     strcpy(key, p.key().c_str());
                     arguments_w_json.push_back(key);
                     std::string param_value;
-                    if (!p.value().is_boolean()){
-                        if (p.value().is_string()) param_value = p.value().get<std::string>();
-                        else if (p.value().is_number()) param_value = std::to_string(p.value().get<float>());
-                        
+
+                    if (!p.value().is_boolean()) {
+                        if (p.value().is_string()) {
+                            param_value = p.value().get<std::string>();
+                        } else if (p.value().is_number()) {
+                            param_value = std::to_string(p.value().get<float>()); // nlohmann::json can't just get numbers as strings, float works fine for int values
+                        }
+
                         char* val = new char[param_value.length() + 1];
                         strcpy(val, param_value.c_str());
                         arguments_w_json.push_back(val);
@@ -170,12 +171,13 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
                 }
             }
         }
+
         for (int i = pos; i < argc; i++) {
             arguments_w_json.push_back(argv[i]);
         }
     }
 
-    int argc_json = arguments_w_json.size();
+    int argc_json    = arguments_w_json.size();
     char** argv_json = &arguments_w_json[0];
 
     try {
