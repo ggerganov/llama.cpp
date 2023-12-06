@@ -244,11 +244,10 @@
 #define GGML_ASSERT(x) \
     do { \
         if (!(x)) { \
-            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
-            fflush(stderr); \
             fflush(stdout); \
+            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
             ggml_print_backtrace(); \
-            exit(1); \
+            abort(); \
         } \
     } while (0)
 
@@ -1282,6 +1281,14 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_soft_max_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
+
+    // fused soft_max(a*scale + mask)
+    // mask is optional
+    GGML_API struct ggml_tensor * ggml_soft_max_ext(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * mask,
+            float                 scale);
 
     GGML_API struct ggml_tensor * ggml_soft_max_back(
             struct ggml_context * ctx,
