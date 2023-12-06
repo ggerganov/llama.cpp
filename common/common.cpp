@@ -115,25 +115,17 @@ void process_escapes(std::string& input) {
     input.resize(output_idx);
 }
 
-nlohmann::json get_json(std::string file_name) {
-    nlohmann::json config;
-    std::fstream   jstream(file_name);
-    if (jstream.is_open()) {
-        try {
-            config = nlohmann::json::parse(jstream);
-            jstream.close();
-            printf("Opened a json file %s\n", file_name.c_str());
-        }
-        catch (nlohmann::json::parse_error& ex) {
-            jstream.close();
-            fprintf(stderr, "%s\n", ex.what());
-            return config;
-        }
-    } else {
-        printf("%s not found!\n", file_name.c_str());
+nlohmann::json get_json(std::string& file_name) noexcept {
+    try {
+        printf("Opening a json file %s\n", file_name.c_str());
+        std::ifstream jstream(file_name);
+        return nlohmann::json::parse(jstream);
+    }
+    catch (const std::exception& ex) {
+        fprintf(stderr, "%s\n", ex.what());
     }
 
-    return config;
+    return {};
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -145,7 +137,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     if (argc > 1) {
         // console arguments should override json values, so json processing goes first
         std::string json_name = argv[1];
-        nlohmann::json file_config = get_json(argv[1]);
+        nlohmann::json file_config = get_json(json_name);
         pos = 2; // avoid putting file name into arguments
         if (!file_config.empty()) {
 

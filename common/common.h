@@ -133,7 +133,7 @@ struct gpt_params {
     std::string image = ""; // path to an image file
 };
 
-nlohmann::json get_json(std::string file_name);
+nlohmann::json get_json(std::string& file_name) noexcept;
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
