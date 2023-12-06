@@ -115,19 +115,81 @@ void process_escapes(std::string& input) {
     input.resize(output_idx);
 }
 
+nlohmann::json get_json(std::string file_name) {
+    // safeguard since we expose this fucntion in header
+    if (file_name.find(".json") == file_name.npos) file_name += ".json";
+    nlohmann::json config;
+    std::fstream   jstream(file_name);
+    if (jstream.is_open()) {
+        try {
+            config = nlohmann::json::parse(jstream);
+            jstream.close();
+            printf("Opened a json file %s\n", file_name.c_str());
+        }
+        catch (nlohmann::json::parse_error& ex) {
+            jstream.close();
+            fprintf(stderr, "%s\n", ex.what());
+            return config;
+        }
+    } else {
+        printf("%s not found!\n", file_name.c_str());
+    }
+
+    return config;
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool result = true;
+    std::vector<char*> arguments_w_json;
+    arguments_w_json.push_back(argv[0]);
+    int pos = 1;
+
+    if (argc > 1) {
+        std::string json_name = argv[1];
+        // console arguments should override json values, so json processing goes first
+        // to avoid exta work, let's expect at least an extention
+        if (json_name.rfind(".json") != json_name.npos) {
+            nlohmann::json file_config = get_json(argv[1]);
+            // avoid putting file name in arguments
+            pos = 2;
+            for (auto& p : file_config.items()) {
+                // only use strings, numbers and booleans for switches
+                if (p.value().is_string() || p.value().is_number() || p.value().is_boolean()) {
+                    char* key = new char[p.key().length() + 1];
+                    strcpy(key, p.key().c_str());
+                    arguments_w_json.push_back(key);
+                    std::string param_value;
+                    if (!p.value().is_boolean()){
+                        if (p.value().is_string()) param_value = p.value().get<std::string>();
+                        else if (p.value().is_number()) param_value = std::to_string(p.value().get<float>());
+                        
+                        char* val = new char[param_value.length() + 1];
+                        strcpy(val, param_value.c_str());
+                        arguments_w_json.push_back(val);
+                    }
+                }
+            }
+        }
+        for (int i = pos; i < argc; i++) {
+            arguments_w_json.push_back(argv[i]);
+        }
+    }
+
+    int argc_json = arguments_w_json.size();
+    char** argv_json = &arguments_w_json[0];
+
     try {
-        if (!gpt_params_parse_ex(argc, argv, params)) {
-            gpt_print_usage(argc, argv, gpt_params());
+        if (!gpt_params_parse_ex(argc_json, argv_json, params)) {
+            gpt_print_usage(argc_json, argv_json, gpt_params());
             exit(0);
         }
     }
     catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
-        gpt_print_usage(argc, argv, gpt_params());
+        gpt_print_usage(argc_json, argv_json, gpt_params());
         exit(1);
     }
+
     return result;
 }
 
