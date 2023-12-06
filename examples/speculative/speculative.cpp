@@ -203,8 +203,9 @@ int main(int argc, char ** argv) {
 
             const std::string token_str = llama_token_to_piece(ctx_tgt, id);
 
-            if (!params.use_color)
+            if (!params.use_color) {
                 printf("%s", token_str.c_str());
+            }
 
             if (id == llama_token_eos(model_tgt)) {
                 has_eos = true;
@@ -244,8 +245,9 @@ int main(int argc, char ** argv) {
                     continue;
                 }
             }
-            if (params.use_color)
+            if (params.use_color) {
                 printf("%s", token_str.c_str());
+            }
             fflush(stdout);
 
             LOG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
