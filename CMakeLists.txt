@@ -279,10 +279,6 @@ if (LLAMA_CUBLAS)
         if (LLAMA_CUDA_FORCE_MMQ)
             add_compile_definitions(GGML_CUDA_FORCE_MMQ)
         endif()
-
-        # required for dynamic parallelism
-        set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
         if (DEFINED LLAMA_CUDA_DMMV_Y)
