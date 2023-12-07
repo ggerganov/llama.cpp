@@ -114,7 +114,7 @@ export async function* llama(prompt, params = {}, config = {}) {
   return content;
 }
 
-// Call llama, return an event target that you can subcribe to
+// Call llama, return an event target that you can subscribe to
 //
 // Example:
 //

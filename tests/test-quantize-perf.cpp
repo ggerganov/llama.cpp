@@ -117,7 +117,7 @@ static void usage(char * argv[]) {
     printf("  --size SIZE           set test size, divisible by 32 (L1_SIZE:%d)\n", L1_SIZE);
     printf("  -3                    use size as L1, L2, L3 sizes (L1:%d L2:%d L3:%d)\n", L1_SIZE, L2_SIZE, L3_SIZE);
     printf("  -4                    use size as L1, L2, L3, MEM sizes (L1:%d L2:%d L3:%d MEM:%d)\n", L1_SIZE, L2_SIZE, L3_SIZE, MEM_SIZE);
-    printf("  --op OP               set test opration as quantize_row_q_reference, quantize_row_q, dequantize_row_q,\n");
+    printf("  --op OP               set test operation as quantize_row_q_reference, quantize_row_q, dequantize_row_q,\n");
     printf("                        quantize_row_q_dot, vec_dot_q (all)\n");
     printf("  --type TYPE           set test type as");
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
@@ -202,7 +202,7 @@ int main(int argc, char * argv[]) {
             }
             int alignment = std::stoi(argv[i]);
             if (alignment < 0 || alignment > MAX_ALIGNMENT) {
-            fprintf(stderr, "error: aligment-offset must be less than %d\n", MAX_ALIGNMENT);
+            fprintf(stderr, "error: alignment-offset must be less than %d\n", MAX_ALIGNMENT);
                 invalid_param = true;
                 break;
             }

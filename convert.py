@@ -585,7 +585,7 @@ def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
 
     if any("model.embed_tokens.weight" in mp.model for mp in models_plus):
         # Transformers models put different tensors in different files, but
-        # don't split indivdual tensors between files.
+        # don't split individual tensors between files.
         model: LazyModel = {}
         for mp in models_plus:
             model.update(mp.model)
@@ -678,7 +678,7 @@ class LazyUnpickler(pickle.Unpickler):
         return func(*args)
 
     CLASSES: dict[tuple[str, str], Any] = {
-        # getattr used here as a workaround for mypy not being smart enough to detrmine
+        # getattr used here as a workaround for mypy not being smart enough to determine
         # the staticmethods have a __func__ attribute.
         ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
         ('torch._utils', '_rebuild_tensor_v2'): getattr(lazy_rebuild_tensor_v2, '__func__'),

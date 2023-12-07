@@ -61,13 +61,13 @@
 //  #define LOG_TARGET stderr
 //  #include "log.h"
 //
-//  The log target can also be redirected to a diffrent function
+//  The log target can also be redirected to a different function
 //  like so:
 //
-//  #define LOG_TARGET log_handler_diffrent()
+//  #define LOG_TARGET log_handler_different()
 //  #include "log.h"
 //
-//  FILE* log_handler_diffrent()
+//  FILE* log_handler_different()
 //  {
 //      return stderr;
 //  }
@@ -421,7 +421,7 @@ inline FILE *log_handler2_impl(bool change = false, LogTriState append = LogTriS
 
 // Disables logs entirely at runtime.
 //  Makes LOG() and LOG_TEE() produce no output,
-//  untill enabled back.
+//  until enabled back.
 #define log_disable() log_disable_impl()
 
 // INTERNAL, DO NOT USE

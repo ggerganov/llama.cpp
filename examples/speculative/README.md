@@ -1,6 +1,6 @@
 # llama.cpp/examples/speculative
 
-Demonstartion of speculative decoding and tree-based speculative decoding techniques
+Demonstration of speculative decoding and tree-based speculative decoding techniques
 
 More info:
 
