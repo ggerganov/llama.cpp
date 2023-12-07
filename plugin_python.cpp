@@ -26,7 +26,9 @@ using namespace boost::python;
 #endif
 
 
-std::string process_output_plugin(const std::string input)
+std::string process_output_plugin(const std::string start,
+				  const std::string state,
+				  const std::string input)
 {
     try {
         PyImport_AppendInittab((char*)"mymodule", INIT_MODULE);
@@ -36,7 +38,9 @@ std::string process_output_plugin(const std::string input)
         object mymodule = import("mymodule");
 
         main_namespace["precreated_object"] = Base("created on C++ side");
-	main_namespace["llm_input"] = input;       
+	main_namespace["llm_input"] = input;
+	main_namespace["llm_state"] = state;
+	main_namespace["llm_start"] = start;       
         exec_file("embedding.py", main_namespace, main_namespace);
 
 	boost::python::object llm_output = main_namespace["llm_output"];

@@ -178,8 +178,10 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
+      params.prompt = gpt_random_prompt(rng);
     }
+
+    auto start_prompt = process_output_plugin(params.prompt,"params",params.prompt);
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init(params.numa);
@@ -606,7 +608,7 @@ int main(int argc, char ** argv) {
                     int n_eval = std::min(input_size - i, params.n_batch);
                     if (llama_decode(ctx_guidance, llama_batch_get_one(input_buf + i, n_eval, n_past_guidance, 0))) {
                         LOG_TEE("%s : failed to eval\n", __func__);
-                        return 1;
+                        //return 1;
                     }
 
                     n_past_guidance += n_eval;
@@ -685,7 +687,7 @@ int main(int argc, char ** argv) {
         if (input_echo) {
             for (auto id : embd) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
-                printf("TOKEN:%s\n", token_str.c_str());
+                printf("\nTOKEN:%s\n", token_str.c_str());
 
 		//print_fields(id);
 		
@@ -706,8 +708,8 @@ int main(int argc, char ** argv) {
 	// just print the whole thing       	
 	const std::string last_output1 = output_ss.str();
 	printf("%s",last_output1.c_str());
-	last_output = process_output_plugin(last_output1);
-	printf("%s",last_output.c_str());
+	last_output = process_output_plugin(start_prompt,"statement",last_output1);
+	printf("\nLASTOUTPUT: '%s'\n",last_output.c_str());
 		    
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
@@ -716,7 +718,7 @@ int main(int argc, char ** argv) {
                 const int n_prev = 32;
                 const std::string last_output1 = llama_sampling_prev_str(ctx_sampling, ctx, n_prev);
 		// now plugin the python :
-		const std::string partial_output = process_output_plugin(last_output1);
+		const std::string partial_output = process_output_plugin(start_prompt,"antiprompt",last_output1);
 
                 is_antiprompt = false;
                 // Check if each of the reverse prompts appears at the end of the output.
@@ -786,6 +788,12 @@ int main(int argc, char ** argv) {
                 //bool another_line = true;
                 //do {
 		//  another_line = console::readline(line, params.multiline_input);
+
+		for (const auto & antiprompt : params.antiprompt) {
+		  size_t found_pos = last_output.find(antiprompt);
+		  if (found_pos != string::npos) {
+		  last_output.erase(found_pos,found_pos+ antiprompt.length());		  }
+		}
 		buffer += last_output;
 		//} while (another_line);
 

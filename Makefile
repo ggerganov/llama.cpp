@@ -750,3 +750,7 @@ tests/test-rope: tests/test-rope.cpp ggml.o $(OBJS)
 
 tests/test-c.o: tests/test-c.cpp llama.h
 	$(CC) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
+
+
+test123:
+	./build2/bin/main -m ~/.ollama/models/mistral --interactive -r STOP -p 'write simple python expression to be evaluated ending WITH TOKEN <GO>' -n -1
