@@ -143,6 +143,9 @@ jobs:
           cd build
           ctest --verbose
 
+  # TODO: build with LLAMA_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
+  #       how to debug it.
+  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7131777249/job/19420981052#step:5:1124
   macOS-latest-make:
     runs-on: macos-latest
 
@@ -160,13 +163,13 @@ jobs:
       - name: Build
         id: make_build
         run: |
-          make -j $(sysctl -n hw.logicalcpu)
+          LLAMA_NO_METAL=1 make -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: make_test
         run: |
-          make tests -j $(sysctl -n hw.logicalcpu)
-          make test -j $(sysctl -n hw.logicalcpu)
+          LLAMA_NO_METAL=1 make tests -j $(sysctl -n hw.logicalcpu)
+          LLAMA_NO_METAL=1 make test  -j $(sysctl -n hw.logicalcpu)
 
   macOS-latest-cmake:
     runs-on: macos-latest
