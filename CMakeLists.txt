@@ -97,9 +97,9 @@ option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"   
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
-option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
+option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -662,11 +662,11 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
-            ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_CUDA}   ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
-            ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
