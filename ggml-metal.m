@@ -797,7 +797,6 @@ static bool ggml_metal_supports_op(const struct ggml_tensor * op) {
                 default:
                     return false;
             }
-            break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -827,7 +826,7 @@ static bool ggml_metal_supports_op(const struct ggml_tensor * op) {
         case GGML_OP_GET_ROWS:
             {
                 return op->ne[0] % 4 == 0;
-            } break;
+            }
         default:
             return false;
     }

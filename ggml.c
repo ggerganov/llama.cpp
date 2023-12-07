@@ -14100,7 +14100,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_SOFT_MAX:
             {
-                ggml_compute_forward_soft_max(params, tensor->src[0], tensor);
+                ggml_compute_forward_soft_max(params, tensor->src[0], tensor->src[1], tensor);
             } break;
         case GGML_OP_SOFT_MAX_BACK:
             {
