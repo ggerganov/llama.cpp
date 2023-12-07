@@ -171,6 +171,10 @@ jobs:
           LLAMA_NO_METAL=1 make tests -j $(sysctl -n hw.logicalcpu)
           LLAMA_NO_METAL=1 make test  -j $(sysctl -n hw.logicalcpu)
 
+  # TODO: build with LLAMA_METAL=OFF because test-backend-ops fail on "Apple Paravirtual device" and I don't know
+  #       how to debug it.
+  #       ref: https://github.com/ggerganov/llama.cpp/actions/runs/7132125951/job/19422043567?pr=4359#step:5:6584
+  #       would be great if we fix these
   macOS-latest-cmake:
     runs-on: macos-latest
 
@@ -191,7 +195,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake ..
+          cmake -DLLAMA_METAL=OFF ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
