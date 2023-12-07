@@ -158,6 +158,22 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
+    enum llama_model_kv_override_type {
+        LLAMA_KV_OVERRIDE_INT,
+        LLAMA_KV_OVERRIDE_FLOAT,
+        LLAMA_KV_OVERRIDE_BOOL,
+    };
+
+    struct llama_model_kv_override {
+        char key[128];
+        enum llama_model_kv_override_type tag;
+        union {
+            int64_t int_value;
+            double float_value;
+            bool bool_value;
+        };
+    };
+
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
@@ -165,8 +181,12 @@ extern "C" {
 
         // called with a progress value between 0 and 1, pass NULL to disable
         llama_progress_callback progress_callback;
+
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        // override key-value pairs of the model meta data
+        const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only; // only load the vocabulary, no weights

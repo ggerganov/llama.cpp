@@ -215,9 +215,10 @@ print("decoded \(n_decode) tokens in \(String(format: "%.2f", Double(t_main_end 
 llama_print_timings(context)
 
 private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
-    let n_tokens = text.count + (add_bos ? 1 : 0)
+    let utf8Count = text.utf8.count
+    let n_tokens = utf8Count + (add_bos ? 1 : 0)
     let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-    let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
+    let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
     var swiftTokens: [llama_token] = []
     for i in 0 ..< tokenCount {
         swiftTokens.append(tokens[Int(i)])
