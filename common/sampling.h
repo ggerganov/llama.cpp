@@ -92,18 +92,16 @@ std::string llama_sampling_print(const llama_sampling_params & params);
 // optional:
 //  - ctx_cfg:      context to use for classifier-free guidance
 //  - idx:          sample from llama_get_logits_ith(ctx, idx)
-//  - is_resampling: determines whether or not this is a repeated sampling operation due to the ID not matching the grammar
 //
 // returns:
 //  - token:      sampled token
 //  - candidates: vector of candidate tokens
 //
 llama_token llama_sampling_sample(
-    struct llama_sampling_context * ctx_sampling,
-    struct llama_context * ctx_main,
-    struct llama_context * ctx_cfg,
-    const int idx,
-    bool is_resampling = false);
+        struct llama_sampling_context * ctx_sampling,
+        struct llama_context * ctx_main,
+        struct llama_context * ctx_cfg,
+        int idx = 0);
 
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,

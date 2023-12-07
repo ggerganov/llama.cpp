@@ -99,7 +99,7 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
     return std::string(result);
 }
 
-llama_token llama_sampling_sample(
+static llama_token llama_sampling_sample_impl(
                   struct llama_sampling_context * ctx_sampling,
                   struct llama_context * ctx_main,
                   struct llama_context * ctx_cfg,
@@ -241,12 +241,20 @@ llama_token llama_sampling_sample(
             // Restore logits from the copy
             std::copy(original_logits.begin(), original_logits.end(), logits);
 
-            // Recursively call llama_sampling_sample to resample with the grammar checks applied first
-            return llama_sampling_sample(ctx_sampling, ctx_main, ctx_cfg, idx, true);  // Pass true for is_resampling
+            return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, true);  // Pass true for is_resampling
         }
     }
 
     return id;
+}
+
+llama_token llama_sampling_sample(
+                  struct llama_sampling_context * ctx_sampling,
+                  struct llama_context * ctx_main,
+                  struct llama_context * ctx_cfg,
+                  const int idx) {
+    // Call the implementation function with is_resampling set to false by default
+    return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, false);
 }
 
 void llama_sampling_accept(
