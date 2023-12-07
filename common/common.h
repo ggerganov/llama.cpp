@@ -138,13 +138,9 @@ struct gpt_params {
 
 nlohmann::json get_json(const char* file_name) noexcept;
 
-std::vector<char*> args_parse_json_only(char* file_name);
-
 std::vector<std::string> args_parse_json_only_string(char* file_name);
 
 bool gpt_params_parse_json(char* file_name, gpt_params & params);
-
-bool gpt_params_parse_json0(char* file_name, gpt_params & params);
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 

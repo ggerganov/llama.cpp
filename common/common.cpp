@@ -128,37 +128,7 @@ nlohmann::json get_json(const char* file_name) noexcept {
     return {};
 }
 
-std::vector<char*> args_parse_json_only(char* file_name) {
-    std::vector<char*> arguments_w_json;
-    nlohmann::json file_config = get_json(file_name);
-    if (!file_config.empty()) { // ensures no unnecessary work
-        arguments_w_json.push_back(file_name);
-
-        for (auto& p : file_config.items()) {
-            // only use strings, numbers and booleans for switches
-            if (p.value().is_string() || p.value().is_number() || p.value().is_boolean()) {
-                char* key = new char[p.key().length() + 1];
-                strcpy(key, p.key().c_str());
-                arguments_w_json.push_back(key);
-
-                if (!p.value().is_boolean()) {
-                    std::string param_value;
-                    if (p.value().is_string()) {
-                        param_value = p.value().get<std::string>();
-                    } else if (p.value().is_number()) {
-                        param_value = std::to_string(p.value().get<float>()); // nlohmann::json can't just get numbers as strings, float works fine for int values
-                    }
-                    char* val = new char[param_value.length() + 1];
-                    strcpy(val, param_value.c_str());
-                    arguments_w_json.push_back(val);
-                }
-            }
-        }
-    }
-    
-    return arguments_w_json;
-}
-
+// standalone parsing attempt
 std::vector<std::string> args_parse_json_only_string(char* file_name) {
     std::vector<std::string> arguments_w_json;
     nlohmann::json file_config = get_json(file_name);
@@ -175,32 +145,30 @@ std::vector<std::string> args_parse_json_only_string(char* file_name) {
                     if (p.value().is_string()) {
                         param_value = p.value().get<std::string>();
                     } else if (p.value().is_number()) {
-                        param_value = std::to_string(p.value().get<float>()); // nlohmann::json can't just get numbers as strings, float works fine for int values
+                        param_value = std::to_string(p.value().get<float>()); // works for int values too
                     }
                     arguments_w_json.push_back(param_value);
                 }
             }
         }
     }
-    
+
     return arguments_w_json;
 }
 
-// standalone parsing attempt
+// this variant seems safer, we can clear args after processing
 bool gpt_params_parse_json(char* file_name, gpt_params & params) {
     bool result = true;
-    //std::vector<const char*> arguments = args_parse_json_only(file_name);
     std::vector<std::string> arguments = args_parse_json_only_string(file_name);
 
     if (!arguments.empty()) { // ensures no unnecessary work
         int    argc_json = arguments.size();
-        //char** args_json = const_cast<char **>(&arguments[0]);
         char** args_json = new char*[arguments.size()];
         for(size_t i = 0; i < arguments.size(); i++) {
             args_json[i] = new char[arguments[i].size() + 1];
             strcpy(args_json[i], arguments[i].c_str());
         }
-        
+
         try {
             if (!gpt_params_parse_ex(argc_json, args_json, params)) {
                 gpt_print_usage(argc_json, args_json, gpt_params());
@@ -210,36 +178,6 @@ bool gpt_params_parse_json(char* file_name, gpt_params & params) {
                 delete [] args_json[i];
             }
             delete [] args_json;
-        }
-        catch (const std::invalid_argument & ex) {
-            fprintf(stderr, "%s\n", ex.what());
-            gpt_print_usage(argc_json, args_json, gpt_params());
-            exit(1);
-        }
-    } else {
-        // let's also print help, pointing at a faulty file name/parameter
-        char** args = new char* {file_name};
-        gpt_print_usage(1, args, gpt_params());
-        exit(1);
-    }
-
-    return result;
-}
-
-// still deciding which one is worse, both leak
-bool gpt_params_parse_json0(char* file_name, gpt_params & params) {
-    bool result = true;
-    std::vector<char*> arguments = args_parse_json_only(file_name);
-
-    if (!arguments.empty()) { // ensures no unnecessary work
-        int    argc_json = arguments.size();
-        char** args_json = &arguments[0];
-        
-        try {
-            if (!gpt_params_parse_ex(argc_json, args_json, params)) {
-                gpt_print_usage(argc_json, args_json, gpt_params());
-                exit(0);
-            }
         }
         catch (const std::invalid_argument & ex) {
             fprintf(stderr, "%s\n", ex.what());
@@ -898,7 +836,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         // End of Parse args for logging parameters
 #endif // LOG_DISABLE_LOGS
         } else {
-            if (!gpt_params_parse_json0(argv[i], params)) { // attempt to read as a file
+            if (!gpt_params_parse_json(argv[i], params)) { // attempt to read as a file
                 invalid_param = true;
                 throw std::invalid_argument("error: unknown argument: " + arg);
             }
