@@ -409,7 +409,7 @@ struct llama_client_slot
     size_t sent_token_probs_index = 0;
 
     int64_t t_start_process_prompt;
-    int64_t t_start_genereration;
+    int64_t t_start_generation;
 
     double t_prompt_processing; // ms
     double t_token_generation; // ms
@@ -477,12 +477,12 @@ struct llama_client_slot
     void release() {
         if (state == IDLE || state == PROCESSING)
         {
-            t_token_generation = (ggml_time_us() - t_start_genereration) / 1e3;
+            t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             command = RELEASE;
         }
     }
 
-    json get_formated_timings() {
+    json get_formatted_timings() {
         return json
         {
             {"prompt_n",               num_prompt_tokens_processed},
@@ -1160,10 +1160,10 @@ struct llama_server_context
 
     json get_model_props()
     {
-        return get_formated_generation(slots[0]);
+        return get_formatted_generation(slots[0]);
     }
 
-    json get_formated_generation(llama_client_slot &slot)
+    json get_formatted_generation(llama_client_slot &slot)
     {
         const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() &&
@@ -1254,7 +1254,7 @@ struct llama_server_context
             {"model",               params.model_alias},
             {"tokens_predicted",    slot.n_decoded},
             {"tokens_evaluated",    slot.num_prompt_tokens},
-            {"generation_settings", get_formated_generation(slot)},
+            {"generation_settings", get_formatted_generation(slot)},
             {"prompt",              slot.prompt},
             {"truncated",           slot.truncated},
             {"stopped_eos",         slot.stopped_eos},
@@ -1262,7 +1262,7 @@ struct llama_server_context
             {"stopped_limit",       slot.stopped_limit},
             {"stopping_word",       slot.stopping_word},
             {"tokens_cached",       slot.n_past},
-            {"timings",             slot.get_formated_timings()}
+            {"timings",             slot.get_formatted_timings()}
         };
 
         if (slot.sparams.n_probs > 0)
@@ -1681,7 +1681,7 @@ struct llama_server_context
                     slot.command = NONE;
                     std::vector<llama_token> prompt_tokens;
                     slot.t_start_process_prompt = ggml_time_us();
-                    slot.t_start_genereration = 0;
+                    slot.t_start_generation = 0;
 
                     if (slot.infill)
                     {
@@ -1871,8 +1871,8 @@ struct llama_server_context
 
                 if (slot.n_decoded == 1)
                 {
-                    slot.t_start_genereration = ggml_time_us();
-                    slot.t_prompt_processing = (slot.t_start_genereration - slot.t_start_process_prompt) / 1e3;
+                    slot.t_start_generation = ggml_time_us();
+                    slot.t_prompt_processing = (slot.t_start_generation - slot.t_start_process_prompt) / 1e3;
                 }
 
                 llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
@@ -2299,13 +2299,13 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 invalid_param = true;
                 break;
             }
-            std::string systm_content;
+            std::string system_content;
             std::copy(
                 std::istreambuf_iterator<char>(file),
                 std::istreambuf_iterator<char>(),
-                std::back_inserter(systm_content)
+                std::back_inserter(system_content)
             );
-            llama.process_system_prompt_data(json::parse(systm_content));
+            llama.process_system_prompt_data(json::parse(system_content));
         }
         else if(arg == "--mmproj")
         {

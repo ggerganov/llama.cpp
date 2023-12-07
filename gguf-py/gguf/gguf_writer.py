@@ -50,11 +50,11 @@ class GGUFWriter:
 
     def __init__(
         self, path: os.PathLike[str] | str, arch: str, use_temp_file: bool = True,
-        endianess: GGUFEndian = GGUFEndian.LITTLE,
+        endianness: GGUFEndian = GGUFEndian.LITTLE,
     ):
         self.fout = open(path, "wb")
         self.arch = arch
-        self.endianess = endianess
+        self.endianness = endianness
         self.offset_tensor = 0
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
         self.kv_data = bytearray()
@@ -65,7 +65,7 @@ class GGUFWriter:
         self.temp_file = None
         self.tensors = []
         print("gguf: This GGUF file is for {0} Endian only".format(
-            "Big" if self.endianess == GGUFEndian.BIG else "Little",
+            "Big" if self.endianness == GGUFEndian.BIG else "Little",
         ))
         self.state = WriterState.EMPTY
 
@@ -218,7 +218,7 @@ class GGUFWriter:
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
         raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
-        if self.endianess == GGUFEndian.BIG:
+        if self.endianness == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
         if self.use_temp_file and self.temp_file is None:
             fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256 * 1024 * 1024)
@@ -244,7 +244,7 @@ class GGUFWriter:
         if self.state is not WriterState.TI_DATA:
             raise ValueError(f'Expected output file to contain tensor info, got {self.state}')
 
-        if self.endianess == GGUFEndian.BIG:
+        if self.endianness == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
         self.write_padding(self.fout, self.fout.tell())
         tensor.tofile(self.fout)
@@ -405,7 +405,7 @@ class GGUFWriter:
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
         if not skip_pack_prefix:
-            pack_prefix = '<' if self.endianess == GGUFEndian.LITTLE else '>'
+            pack_prefix = '<' if self.endianness == GGUFEndian.LITTLE else '>'
         return struct.pack(f'{pack_prefix}{fmt}', value)
 
     def _write_packed(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
