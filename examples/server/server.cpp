@@ -2108,10 +2108,6 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             }
             params.yarn_beta_slow = std::stof(argv[i]);
         }
-        else if (arg == "--memory-f32" || arg == "--memory_f32")
-        {
-            params.memory_f16 = false;
-        }
         else if (arg == "--threads" || arg == "-t")
         {
             if (++i >= argc)
