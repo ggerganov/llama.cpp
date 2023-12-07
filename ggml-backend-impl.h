@@ -105,36 +105,7 @@ extern "C" {
 
     typedef ggml_backend_t (*ggml_backend_init_fn)(const char * params, void * user_data);
 
-    size_t ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data);
-
-
-    // Register a int function to be called at program startup
-    #if defined(__GNUC__) || defined(__clang__)
-        #define GGML_CONSTRUCTOR(init_fn) \
-            static void __attribute__((constructor)) init_fn ## _ggml_constructor(void) { \
-                init_fn(); \
-            }
-    #elif defined(_MSC_VER)
-        #ifdef __cplusplus
-            #define GGML_CONSTRUCTOR(init_fn) \
-                static int init_fn ## _ggml_constructor_dummy = init_fn();
-        #else
-            #define GGML_CONSTRUCTOR(init_fn) \
-                __pragma(section(".CRT$XCV", read)) \
-                __declspec(allocate(".CRT$XCV")) int (*init_fn ## _ggml_constructor)(void) = init_fn; \
-                __pragma(comment(linker, "/include:" #init_fn "_ggml_constructor"))
-        #endif
-    #else
-        #error "GGML_CONSTRUCTOR not implemented for this compiler"
-    #endif
-
-
-    // Register a backend
-    #define GGML_BACKEND_REGISTER(name, init_fn, buft, user_data) \
-        static void init_fn ## _backend_register(void) { \
-            ggml_backend_register(name, init_fn, buft, user_data); \
-        } \
-        GGML_CONSTRUCTOR(init_fn ## _backend_register)
+    void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data);
 
 #ifdef  __cplusplus
 }

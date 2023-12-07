@@ -9264,7 +9264,7 @@ static ggml_backend_t ggml_backend_reg_cuda_init(const char * params, void * use
     UNUSED(params);
 }
 
-static int ggml_backend_cuda_reg_devices() {
+extern "C" int ggml_backend_cuda_reg_devices() {
     int device_count = ggml_cuda_get_device_count();
     //int device_count = 1; // DEBUG: some tools require delaying CUDA initialization
     for (int i = 0; i < device_count; i++) {
@@ -9274,5 +9274,3 @@ static int ggml_backend_cuda_reg_devices() {
     }
     return device_count;
 }
-
-GGML_CONSTRUCTOR(ggml_backend_cuda_reg_devices)

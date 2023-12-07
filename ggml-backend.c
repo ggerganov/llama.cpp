@@ -241,6 +241,8 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
 
 // backend registry
 
+#define GGML_MAX_BACKENDS_REG 16
+
 struct ggml_backend_reg {
     char name[128];
     ggml_backend_init_fn init_fn;
@@ -248,11 +250,36 @@ struct ggml_backend_reg {
     void * user_data;
 };
 
-#define GGML_MAX_BACKENDS_REG 16
 static struct ggml_backend_reg ggml_backend_registry[GGML_MAX_BACKENDS_REG];
 static size_t ggml_backend_registry_count = 0;
 
-size_t ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
+static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, void * user_data);
+
+static void ggml_backend_registry_init(void) {
+    static bool initialized = false;
+
+    if (initialized) {
+        return;
+    }
+
+    initialized = true;
+
+    ggml_backend_register("CPU", ggml_backend_reg_cpu_init, ggml_backend_cpu_buffer_type(), NULL);
+
+    // add forward decls here to avoid including the backend headers
+#ifdef GGML_USE_CUBLAS
+    extern void ggml_backend_cuda_reg_devices(void);
+    ggml_backend_cuda_reg_devices();
+#endif
+
+#ifdef GGML_USE_METAL
+    extern ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data);
+    extern ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void);
+    ggml_backend_register("Metal", ggml_backend_reg_metal_init, ggml_backend_metal_buffer_type(), NULL);
+#endif
+}
+
+void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
     GGML_ASSERT(ggml_backend_registry_count < GGML_MAX_BACKENDS_REG);
 
     int id = ggml_backend_registry_count;
@@ -271,15 +298,17 @@ size_t ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, gg
 #endif
 
     ggml_backend_registry_count++;
-    return ggml_backend_registry_count - 1;
 }
 
-
 size_t ggml_backend_reg_get_count(void) {
+    ggml_backend_registry_init();
+
     return ggml_backend_registry_count;
 }
 
 size_t ggml_backend_reg_find_by_name(const char * name) {
+    ggml_backend_registry_init();
+
     for (size_t i = 0; i < ggml_backend_registry_count; i++) {
         // TODO: case insensitive in a portable way
         if (strcmp(ggml_backend_registry[i].name, name) == 0) {
@@ -291,6 +320,8 @@ size_t ggml_backend_reg_find_by_name(const char * name) {
 
 // init from backend:params string
 ggml_backend_t ggml_backend_reg_init_backend_from_str(const char * backend_str) {
+    ggml_backend_registry_init();
+
     const char * params = strchr(backend_str, ':');
     char backend_name[128];
     if (params == NULL) {
@@ -312,21 +343,29 @@ ggml_backend_t ggml_backend_reg_init_backend_from_str(const char * backend_str) 
 }
 
 const char * ggml_backend_reg_get_name(size_t i) {
+    ggml_backend_registry_init();
+
     GGML_ASSERT(i < ggml_backend_registry_count);
     return ggml_backend_registry[i].name;
 }
 
 ggml_backend_t ggml_backend_reg_init_backend(size_t i, const char * params) {
+    ggml_backend_registry_init();
+
     GGML_ASSERT(i < ggml_backend_registry_count);
     return ggml_backend_registry[i].init_fn(params, ggml_backend_registry[i].user_data);
 }
 
 ggml_backend_buffer_type_t ggml_backend_reg_get_default_buffer_type(size_t i) {
+    ggml_backend_registry_init();
+
     GGML_ASSERT(i < ggml_backend_registry_count);
     return ggml_backend_registry[i].default_buffer_type;
 }
 
 ggml_backend_buffer_t ggml_backend_reg_alloc_buffer(size_t i, size_t size) {
+    ggml_backend_registry_init();
+
     GGML_ASSERT(i < ggml_backend_registry_count);
     return ggml_backend_buft_alloc_buffer(ggml_backend_registry[i].default_buffer_type, size);
 }
@@ -569,7 +608,6 @@ static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, void * user
     GGML_UNUSED(user_data);
 }
 
-GGML_BACKEND_REGISTER("CPU", ggml_backend_reg_cpu_init, ggml_backend_cpu_buffer_type(), NULL)
 
 // scheduler
 
