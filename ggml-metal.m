@@ -2092,6 +2092,14 @@ void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
     ggml_metal_set_n_cb(ctx, n_cb);
 }
 
+bool ggml_backend_metal_supports_family(ggml_backend_t backend, int family) {
+    GGML_UNUSED(ggml_backend_is_metal(backend));
+
+    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+
+    return [ctx->device supportsFamily:(MTLGPUFamilyApple1 + family - 1)];
+}
+
 ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data); // silence warning
 
 ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data) {
