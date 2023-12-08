@@ -635,8 +635,8 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         parsed_url = urlparse.urlparse(self.path)
         parsed_dict = urlparse.parse_qs(parsed_url.query)
         reply = ""
-        status = parsed_dict['status'][0] if 'status' in parsed_dict else "Ready To Generate"
-        prompt = parsed_dict['prompt'][0] if 'prompt' in parsed_dict else ""
+        status = str(parsed_dict['status'][0]) if 'status' in parsed_dict else "Ready To Generate"
+        prompt = str(parsed_dict['prompt'][0]) if 'prompt' in parsed_dict else ""
         max_length = int(parsed_dict['max_length'][0]) if 'max_length' in parsed_dict else 100
         temperature = float(parsed_dict['temperature'][0]) if 'temperature' in parsed_dict else 0.7
         top_k = int(parsed_dict['top_k'][0]) if 'top_k' in parsed_dict else 100
@@ -645,12 +645,14 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         use_default_badwordsids = int(parsed_dict['use_default_badwordsids'][0]) if 'use_default_badwordsids' in parsed_dict else 0
         gencommand = (parsed_dict['generate'][0] if 'generate' in parsed_dict else "")=="Generate"
 
-        if gencommand:
+        if modelbusy.locked():
+            status = "Model is currently busy, try again later."
+        elif gencommand:
             if prompt=="" or max_length<=0:
                 status = "Need a valid prompt and length to generate."
-            if modelbusy.locked():
-                status = "Model is currently busy, try again later."
             else:
+                if max_length>512:
+                    max_length = 512
                 epurl = f"http://localhost:{args.port}"
                 if args.host!="":
                     epurl = f"http://{args.host}:{args.port}"
@@ -670,9 +672,6 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("location", self.path)
             self.end_headers(content_type='text/html')
             return
-        else:
-            if modelbusy.locked():
-                status = "Model is currently busy."
 
         finalhtml = f'''<!doctype html>
 <html lang="en"><head>
