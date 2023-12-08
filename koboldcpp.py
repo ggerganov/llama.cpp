@@ -24,7 +24,6 @@ class load_model_inputs(ctypes.Structure):
                 ("blasthreads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
                 ("batch_size", ctypes.c_int),
-                ("f16_kv", ctypes.c_bool),
                 ("low_vram", ctypes.c_bool),
                 ("use_mmq", ctypes.c_bool),
                 ("executable_path", ctypes.c_char_p),
@@ -235,7 +234,6 @@ def load_model(model_filename):
     inputs.low_vram = (True if (args.usecublas and "lowvram" in args.usecublas) else False)
     inputs.use_mmq = (True if (args.usecublas and "mmq" in args.usecublas) else False)
     inputs.blasthreads = args.blasthreads
-    inputs.f16_kv = True
     inputs.use_mmap = (not args.nommap)
     inputs.use_mlock = args.usemlock
     inputs.lora_filename = "".encode("UTF-8")

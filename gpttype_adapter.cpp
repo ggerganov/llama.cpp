@@ -679,7 +679,6 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     {
         blasbatchsize = 8;
     }
-    params.memory_f16 = inputs.f16_kv;
 
     auto clamped_max_context_length = inputs.max_context_length;
 
@@ -768,7 +767,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params_v2.n_ctx = clamped_max_context_length;
         //llama_ctx_params.n_parts = -1;
         llama_ctx_params_v2.seed = -1;
-        llama_ctx_params_v2.f16_kv = inputs.f16_kv;
+        llama_ctx_params_v2.f16_kv = true;
         llama_ctx_params_v2.logits_all = false;
         llama_ctx_params_v2.use_mmap = inputs.use_mmap;
         llama_ctx_params_v2.use_mlock = inputs.use_mlock;
@@ -818,7 +817,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         llama_ctx_params.n_ctx = clamped_max_context_length;
         //llama_ctx_paran_parts = -1;
         llama_ctx_params.seed = -1;
-        llama_ctx_params.f16_kv = inputs.f16_kv;
+        llama_ctx_params.f16_kv = true;
         llama_ctx_params.low_vram = inputs.low_vram;
         llama_ctx_params.mul_mat_q = inputs.use_mmq;
         llama_ctx_params.logits_all = false;
@@ -895,7 +894,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
         //llama_ctx_paran_parts = -1;
         llama_ctx_params.seed = -1;
-        llama_ctx_params.f16_kv = inputs.f16_kv;
+        //llama_ctx_params.f16_kv = true;
         //llama_ctx_params.low_vram = inputs.low_vram;
         llama_ctx_params.mul_mat_q = inputs.use_mmq;
         llama_ctx_params.logits_all = false;
