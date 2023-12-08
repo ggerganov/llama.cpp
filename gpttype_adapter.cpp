@@ -895,7 +895,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
         //llama_ctx_paran_parts = -1;
         llama_ctx_params.seed = -1;
         //llama_ctx_params.f16_kv = true;
-        //llama_ctx_params.low_vram = inputs.low_vram;
+        llama_ctx_params.offload_kqv = !inputs.low_vram;
         llama_ctx_params.mul_mat_q = inputs.use_mmq;
         llama_ctx_params.logits_all = false;
         model_params.use_mmap = inputs.use_mmap;
