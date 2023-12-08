@@ -138,6 +138,7 @@ int main(int argc, char ** argv) {
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
+    process_output_plugin_node_init();
     atexit([]() { console::cleanup(); });
 
     if (params.logits_all) {
@@ -910,5 +911,6 @@ int main(int argc, char ** argv) {
     LOG_TEE("Log end\n");
 #endif // LOG_DISABLE_LOGS
 
+    process_output_plugin_node_destroy();
     return 0;
 }
