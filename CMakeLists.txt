@@ -36,7 +36,7 @@ message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
 
 ENABLE_TESTING()
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS} ${Python3_INCLUDE_DIRS})
-LINK_LIBRARIES(${Boost_LIBRARIES} ${Python3_LIBRARIES}) # Deprecated but so convenient!
+LINK_LIBRARIES(${Boost_LIBRARIES} ${Python3_LIBRARIES} ) # Deprecated but so convenient!
 
 #PYTHON_ADD_MODULE(plugin_python plugin_python.cpp)
 Python3_add_library(plugin_python MODULE plugin_python.cpp)
@@ -749,8 +749,8 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
-target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES} "/usr/local/include/node/")
-target_compile_features(ggml PUBLIC c_std_11) # don't bump
+target_include_directories(ggml PUBLIC "/usr/include/node/" . ${LLAMA_EXTRA_INCLUDES}  )
+target_compile_features(ggml PUBLIC c_std_23) # always bump
 target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
@@ -772,10 +772,15 @@ add_library(llama
             )
 
 target_include_directories(llama PUBLIC .)
-target_compile_features(llama PUBLIC cxx_std_20) # don't bump
+target_compile_features(llama PUBLIC cxx_std_20) # always bump
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}
+    libnode.so
+#        libv8.so
+#	libv8_libbase.so
+#	libv8_libplatform.so
+#	libv8_libsampler.so
     )
 
 if (BUILD_SHARED_LIBS)

@@ -587,8 +587,8 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp   ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+main: examples/main/main.cpp  plugin_nodejs.o  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) /usr/lib/libnode.so
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo

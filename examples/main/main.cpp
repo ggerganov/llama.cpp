@@ -32,7 +32,9 @@
 #endif
 
 #include "print.hpp"
-#include "plugin_python.hpp"
+//#include "plugin_python.hpp"
+#include "plugin_nodejs.hpp"
+#define process_output_plugin process_output_plugin_node
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
