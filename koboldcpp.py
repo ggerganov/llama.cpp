@@ -1104,7 +1104,7 @@ def show_new_gui():
     keepforeground = ctk.IntVar()
     quietmode = ctk.IntVar(value=0)
 
-    lowvram_var = ctk.IntVar()
+    lowvram_var = ctk.IntVar(value=1)
     mmq_var = ctk.IntVar(value=1)
     blas_threads_var = ctk.StringVar()
     blas_size_var = ctk.IntVar()
@@ -1304,6 +1304,12 @@ def show_new_gui():
                     layerlimit = int(min(200,mem/sizeperlayer))
                 else:
                     layerlimit = 200 #assume full offload
+
+                if layerlimit>=200:
+                    lowvram_var.set(0)
+                else:
+                    lowvram_var.set(1)
+
                 old_gui_layers_untouched = gui_layers_untouched
                 gui_layers_zeroed = gpulayers_var.get()=="" or gpulayers_var.get()=="0"
                 if (gui_layers_untouched or gui_layers_zeroed) and layerlimit>0:
