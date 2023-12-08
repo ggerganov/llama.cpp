@@ -2319,9 +2319,11 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else
         {
-            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            server_print_usage(argv[0], default_params, default_sparams);
-            exit(1);
+            if (!gpt_params_parse_json(argv[i], params)) { // attempt to read as a file
+                fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
+                server_print_usage(argv[0], default_params, default_sparams);
+                exit(1);
+            }
         }
     }
 
