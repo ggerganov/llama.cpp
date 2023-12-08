@@ -3532,6 +3532,7 @@ Current version: 99
 		}
 
 		console.log("Init started");
+		let loadok = false;
 		try {
 			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
 			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
@@ -3558,12 +3559,41 @@ Current version: 99
 					//toggle persistence off to prevent it from turning on again
 					localsettings.persist_session = false;
 				}
+				loadok = true;
 			} else {
 				console.log("Skipped missing local save");
+				loadok = false;
 			}
 
 		} catch (e) {
 			console.log("Discarded invalid local save: " + e);
+			loadok = false;
+		}
+
+
+		if(!loadok && !localflag && selected_models.length==0 && !is_using_custom_ep()) //nothing was loaded. this is a brand new state, in web lite
+		{
+			console.log("Autopick some good default models...");
+			//attempt to autopick some good default models
+			fetch_models((mdls) => {
+			//can we find the model that's used? if yes load it, otherwise load the first one
+				if (mdls.length > 0)
+				{
+					for (var i = 0; i < mdls.length; ++i) {
+						for (var j = 0; j < defaultmodels.length; ++j) {
+							if (mdls[i].name.trim().toLowerCase().includes(defaultmodels[j].trim().toLowerCase()) ||
+								defaultmodels[j].trim().toLowerCase().includes(mdls[i].name.trim().toLowerCase())) {
+								selected_models.push(mdls[i]);
+							}
+						}
+					}
+					if (selected_models.length == 0) //no matching models, just assign one
+					{
+						selected_models.push(mdls[0]);
+					}
+					render_gametext();
+				}
+			});
 		}
 
 		const tokenstreaming = urlParams.get('streaming');
@@ -3636,6 +3666,17 @@ Current version: 99
 				window.clipboardData
 				? window.clipboardData.getData('Text')
 				: '';
+
+				let elem = document.getElementById("gametext")
+				let selection = window.getSelection();
+				let fullySelected = (elem.innerText!="" && selection.toString() === elem.innerText);
+				if(fullySelected || elem.innerText.trim()=="")
+				{
+					document.execCommand('selectAll', false, null);
+  					document.execCommand('insertText', false, "");
+					elem.innerHTML = "";
+				}
+
 				text = escapeHtml(text);
 				text = text.replace(/\r?\n/g, '<br>');
 				document.execCommand("insertHTML", false, text);
@@ -4816,7 +4857,7 @@ Current version: 99
 	function load_agnai_wi(obj,chatopponent,myname)
 	{
 		console.log("Append Agnai WI");
-		current_wi = [];
+		let loadedwi = [];
 		for (let key in obj.entries) {
 			var itm = obj.entries[key];
 			var karr = itm.keywords;
@@ -4829,13 +4870,14 @@ Current version: 99
 				"selective": false,
 				"constant": false
 			};
-			current_wi.push(nwi);
+			loadedwi.push(nwi);
 		}
+		return loadedwi;
 	}
 	function load_tavern_wi(obj,chatopponent,myname)
 	{
 		console.log("Append Tavern WI");
-		current_wi = [];
+		let loadedwi = [];
 		for (let key in obj.entries) {
 			var itm = obj.entries[key];
 			var karr = itm.key;
@@ -4857,8 +4899,9 @@ Current version: 99
 				"selective": itm.selective,
 				"constant": itm.constant
 			};
-			current_wi.push(nwi);
+			loadedwi.push(nwi);
 		}
+		return loadedwi;
 	}
 	function load_tavern_obj(obj)
 	{
@@ -4894,11 +4937,11 @@ Current version: 99
 		//check if it's a world info only card, if so, do not restart game
 		if(combinedmem.trim()=="" && greeting=="" && obj.entries)
 		{
-			load_tavern_wi(obj,chatopponent,myname);
+			current_wi = load_tavern_wi(obj,chatopponent,myname);
 		}
 		else if(agnaidatafieldsempty.trim()=="" && obj.entries && obj.kind=="memory")
 		{
-			load_agnai_wi(obj,chatopponent,myname);
+			current_wi = load_agnai_wi(obj,chatopponent,myname);
 		}
 		else
 		{
@@ -4913,11 +4956,11 @@ Current version: 99
 			//handle character book
 			if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
 			{
-				load_tavern_wi(obj.character_book,chatopponent,myname);
+				current_wi = load_tavern_wi(obj.character_book,chatopponent,myname);
 			}
 			else if(obj.entries && obj.entries.length>0)
 			{
-				load_agnai_wi(obj,chatopponent,myname);
+				current_wi = load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
 		render_gametext();
@@ -4993,7 +5036,16 @@ Current version: 99
 								let keys = data.worldInfos[w].keys;
 								let entry = data.worldInfos[w].entry;
 
-								temp_scenario.worldinfo.push({"key":(keys?keys:""),"content":(entry?entry:"")})
+								let nwi = {
+									"key": (keys ? keys : ""),
+									"keysecondary": "",
+									"content": (entry ? entry : ""),
+									"comment": "",
+									"folder": null,
+									"selective": false,
+									"constant": false
+								};
+								temp_scenario.worldinfo.push(nwi);
 							}
 						}
 						preview_temp_scenario();
@@ -5098,16 +5150,17 @@ Current version: 99
 						.then(blob => {
 							preview_temp_scenario();
 
-							if(card_is_defective)
-							{
-								readTavernPngFromBlob(blob,(obj)=>{
-									if(obj!=null)
+							readTavernPngFromBlob(blob,(obj)=>{
+								if(obj!=null)
+								{
+									//a lightweight tavern card loader, not fully compliant
+									if(obj.spec=="chara_card_v2" && obj.data!=null)
 									{
-										//a lightweight tavern card loader, not fully compliant
-										if(obj.spec=="chara_card_v2" && obj.data!=null)
-										{
-											obj = obj.data;
-										}
+										obj = obj.data;
+									}
+
+									if(card_is_defective)
+									{
 										let chatopponent = obj.name?obj.name:"Bot";
 										let memory = obj.description?("Persona: "+obj.description):"";
 										memory += obj.personality?("\nPersonality: "+obj.personality):"";
@@ -5136,11 +5189,19 @@ Current version: 99
 										temp_scenario.chatopponent = chatopponent;
 										temp_scenario.prompt = ("\n{{char}}: "+ greeting);
 										temp_scenario.memory = combinedmem;
-										preview_temp_scenario();
 									}
 
-								});
-							}
+									//since cai format has no wi, try to grab it from tavern format
+									if(obj.character_book && obj.character_book.entries && obj.character_book.entries.length>0)
+									{
+										let myname = ((localsettings.chatname && localsettings.chatname!="")?localsettings.chatname:"You");
+										temp_scenario.worldinfo = load_tavern_wi(obj.character_book,chatopponent,myname);
+									}
+									preview_temp_scenario();
+								}
+
+							});
+
 							const objectURL = URL.createObjectURL(blob);
 							const compressedImg = compressImage(objectURL, (compressedImageURI, aspectratio)=>{
 								temp_scenario.image = compressedImageURI;
@@ -5233,21 +5294,7 @@ Current version: 99
 			refreshPreview(true);
 		}
 		if (temp_scenario.worldinfo && temp_scenario.worldinfo.length > 0) {
-			current_wi = [];
-			for (let x = 0; x < temp_scenario.worldinfo.length; ++x) {
-				let key = temp_scenario.worldinfo[x].key;
-				let content = temp_scenario.worldinfo[x].content;
-				let nwi = {
-					"key": (key ? key : ""),
-					"keysecondary": "",
-					"content": (content ? content : ""),
-					"comment": "",
-					"folder": null,
-					"selective": false,
-					"constant": false
-				};
-				current_wi.push(nwi);
-			}
+			current_wi = temp_scenario.worldinfo;
 		}
 
 		localsettings.opmode = temp_scenario.opmode;
@@ -8925,6 +8972,9 @@ Current version: 99
 
 				//horde now supports stopping sequences
 				submit_payload.params.stop_sequence = get_stop_sequences();
+
+				//horde should support min_p in future too
+				submit_payload.params.min_p = localsettings.min_p;
 			}
 
 			last_request_str = JSON.stringify(submit_payload);
@@ -10220,7 +10270,7 @@ Current version: 99
 			document.getElementById("topbtn_ai").classList.add("hidden");
 			document.getElementById("topbtn_newgame").classList.remove("hidden");
 			document.getElementById("topbtn_save_load").classList.remove("hidden");
-			document.getElementById("topbtn_settings").classList.add("hidden");
+			document.getElementById("topbtn_settings").classList.remove("hidden");
 			document.getElementById("topbtn_scenarios").classList.add("hidden");
 			document.getElementById("topbtn_quickplay").classList.add("hidden");
 		} else {
@@ -10500,9 +10550,24 @@ Current version: 99
 	{
 		//resize chat inp
 		let textarea = document.getElementById("cht_inp");
-		let numberOfLineBreaks = (textarea.value.match(/\n/g) || []).length;
-		numberOfLineBreaks = numberOfLineBreaks>4?4:numberOfLineBreaks;
-		textarea.rows = numberOfLineBreaks+1;
+
+		let textlines = textarea.value.split("\n");
+		let numberOfLineBreaks = textlines.length;
+		let lengthtester = document.getElementById("cht_inp_lengthtester");
+		for(let l=0;l<textlines.length;++l)
+		{
+			lengthtester.innerText = textlines[l];
+			if(textarea.offsetWidth>0)
+			{
+				numberOfLineBreaks += Math.floor(lengthtester.offsetWidth / textarea.offsetWidth );
+			}
+		}
+		lengthtester.innerText = "";
+		numberOfLineBreaks = numberOfLineBreaks>5?5:numberOfLineBreaks;
+		textarea.rows = numberOfLineBreaks;
+
+		// textarea.style.height = "auto";
+		// textarea.style.height = textarea.scrollHeight + 3 + "px";
 	}
 	function chat_submit_generation()
 	{
@@ -11524,7 +11589,8 @@ Current version: 99
 			  <div class="cht_inp_hold">
 				<button onclick="show_groupchat_select()" id="chat_btnmode_chat" class="chat_btnmode_chat hidden" type="button"></button>
 				<div id="cht_inp_bg" class="cht_inp_bg">
-				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="off" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
+				<div class="cht_inp_bg_inner" id="cht_inp_lengthtester" style="white-space: nowrap; visibility: hidden; height: 0px; position:absolute; width: auto;"></div>
+				<textarea class="cht_inp_bg_inner" id="cht_inp" type="text" name="chtchtinp"  role="presentation" autocomplete="noppynop" spellcheck="true" rows="1" wrap="on" placeholder="Type a message" value="" oninput="update_submit_button();chat_resize_input();" onkeypress="return chat_handle_typing(event)"/></textarea>
 				</div>
 				<button onclick="chat_submit_generation()" id="chat_msg_send_btn" class="chat_msg_send_btn" type="button"></button>
 				<button onclick="abort_generation()" id="chat_msg_send_btn_abort" class="hidden chat_msg_send_btn_abort" type="button"></button>

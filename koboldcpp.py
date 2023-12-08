@@ -2274,15 +2274,21 @@ def main(launch_args,start_server=True):
         basepath = os.path.abspath(os.path.dirname(__file__))
         with open(os.path.join(basepath, "klite.embd"), mode='rb') as f:
             embedded_kailite = f.read()
+            # patch it with extra stuff
+            origStr = "Sorry, Kobold Lite requires Javascript to function."
+            patchedStr = "Sorry, Kobold Lite requires Javascript to function.<br>You can use <a class=\"color_blueurl\" href=\"/noscript\">KoboldCpp NoScript mode</a> instead."
+            embedded_kailite = embedded_kailite.decode("UTF-8","ignore")
+            embedded_kailite = embedded_kailite.replace(origStr, patchedStr)
+            embedded_kailite = embedded_kailite.encode()
             print("Embedded Kobold Lite loaded.")
-    except:
+    except Exception as e:
         print("Could not find Kobold Lite. Embedded Kobold Lite will not be available.")
 
     try:
         basepath = os.path.abspath(os.path.dirname(__file__))
         with open(os.path.join(basepath, "kcpp_docs.embd"), mode='rb') as f:
             embedded_kcpp_docs = f.read()
-    except:
+    except Exception as e:
         print("Could not find Embedded KoboldCpp API docs.")
 
     if args.port_param!=defaultport:
