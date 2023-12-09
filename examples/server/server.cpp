@@ -1,6 +1,7 @@
 #include "common.h"
 #include "llama.h"
 #include "grammar-parser.h"
+#include "json-util.hpp"
 
 #include "../llava/clip.h"
 
@@ -2319,7 +2320,14 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
         }
         else
         {
-            if (!gpt_params_parse_json(argv[i], params)) { // attempt to read as a file
+            args_struct args_obj(argv[i]);
+
+            if (args_obj.argc > 0) {
+                int    argc_json = args_obj.argc;
+                char** args_json = args_obj.argv;
+
+                return server_params_parse(argc_json, args_json, sparams, params, llama);
+            } else {
                 fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
                 server_print_usage(argv[0], default_params, default_sparams);
                 exit(1);

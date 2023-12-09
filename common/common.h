@@ -6,8 +6,6 @@
 
 #include "sampling.h"
 
-#include "examples/server/json.hpp"
-
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
 
@@ -135,12 +133,6 @@ struct gpt_params {
     std::string mmproj = ""; // path to multimodal projector
     std::string image  = ""; // path to an image file
 };
-
-nlohmann::json get_json(const char* file_name) noexcept;
-
-std::vector<std::string> args_parse_json_only_string(char* file_name);
-
-bool gpt_params_parse_json(char* file_name, gpt_params & params);
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
 
