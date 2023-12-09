@@ -266,12 +266,23 @@ class Params:
             # LLaMA v1
             n_ctx = 2048
 
+        # print model keys
+        for k in model.keys():
+            print(k)
+
+        # check if MoE
+        if "layers.0.feed_forward.experts.0.w1.weight" in model:
+            n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
+            n_ctx = 32768
+        else:
+            n_ff = model["layers.0.feed_forward.w1.weight"].shape[0],
+
         return Params(
             n_vocab          = model["tok_embeddings.weight"].shape[0],
             n_embd           = config["dim"],
             n_layer          = config["n_layers"],
             n_ctx            = n_ctx,
-            n_ff             = model["layers.0.feed_forward.w1.weight"].shape[0],
+            n_ff             = n_ff,
             n_head           = (n_head := config["n_heads"]),
             n_head_kv        = config.get("n_kv_heads", n_head),
             f_norm_eps       = config["norm_eps"],
