@@ -5570,6 +5570,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_moe_weighted",           OFFLOAD_FUNC     },
     { "ffn_moe_up",                 OFFLOAD_FUNC     },
     { "ffn_moe_gate",               OFFLOAD_FUNC     },
+    { "ffn_moe_silu",               OFFLOAD_FUNC     },
     { "ffn_moe_gate_par",           OFFLOAD_FUNC     },
     { "ffn_moe_down",               OFFLOAD_FUNC     },
     { "ffn_moe_out",                OFFLOAD_FUNC     },
