@@ -343,6 +343,8 @@ struct test_case {
                 ud->ok = false;
             }
             return true;
+
+            GGML_UNUSED(index);
         };
 
         ggml_backend_compare_graph_backend(backend1, backend2, gf, callback, &ud);
@@ -803,7 +805,7 @@ struct test_mul_mat_id : public test_case {
         }
         ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
         ggml_tensor * b = ggml_new_tensor_2d(ctx, type_b, k, n);
-        ggml_tensor * out = ggml_mul_mat_id(ctx, mats.data(), ids, id, b);
+        ggml_tensor * out = ggml_mul_mat_id(ctx, mats.data(), n_mats, ids, id, b);
         return out;
     }
 

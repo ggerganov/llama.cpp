@@ -1460,7 +1460,7 @@ void ggml_metal_graph_compute(
 
                             GGML_ASSERT(src0t == GGML_TYPE_I32);
 
-                            const int n_as = ne00;
+                            const int n_as = ((int32_t *) dst->op_params)[1];
 
                             // TODO: make this more general
                             GGML_ASSERT(n_as <= 8);

@@ -4270,11 +4270,11 @@ struct llm_build_context {
                     ggml_tensor ** ffn_down_exp = (ggml_tensor **) model.layers[il].ffn_down_exp;
 
                     cur_expert = ggml_mul(ctx0,
-                            ggml_mul_mat_id(ctx0, ffn_up_exp, selected_experts, i, cur),
+                            ggml_mul_mat_id(ctx0, ffn_up_exp, n_experts, selected_experts, i, cur),
                             ggml_silu(ctx0,
-                                ggml_mul_mat_id(ctx0, ffn_gate_exp, selected_experts, i, cur))); // [n_tokens, n_embd]
+                                ggml_mul_mat_id(ctx0, ffn_gate_exp, n_experts, selected_experts, i, cur))); // [n_tokens, n_embd]
 
-                    cur_expert = ggml_mul_mat_id(ctx0, ffn_down_exp, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+                    cur_expert = ggml_mul_mat_id(ctx0, ffn_down_exp, n_experts, selected_experts, i, cur_expert); // [n_tokens, n_embd]
                     cur_expert = ggml_mul(ctx0, cur_expert,
                             ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
 

@@ -1052,6 +1052,7 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_mul_mat_id(
             struct ggml_context * ctx,
             struct ggml_tensor  * as[],
+            int                   n_as,
             struct ggml_tensor  * ids,
             int                   id,
             struct ggml_tensor  * b);
