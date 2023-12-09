@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
 find_package (Python3 COMPONENTS Interpreter Development)
-
+execute_process(COMMAND "ocamlopt" "-where" OUTPUT_VARIABLE OCAMLC_WHERE ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(OCAML_RUNTIMELIBRARY "${OCAMLC_WHERE}/libasmrun_pic.a")
 
 if (Python3_Interpreter_FOUND)
   if (UNIX AND NOT APPLE)
@@ -315,6 +316,7 @@ if (LLAMA_BLAS)
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ${BLAS_LIBRARIES})
+
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
 
     else()
@@ -728,6 +730,10 @@ if (GGML_USE_CPU_HBM)
     find_library(memkind memkind REQUIRED)
 endif()
 
+#/usr/local/lib/ocaml/
+set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}   /usr/lib/ocaml)
+
+
 add_library(libmetacalld SHARED IMPORTED)
 add_dependencies(libmetacalld metacall)
 set_property(
@@ -742,6 +748,7 @@ add_library(ggml OBJECT
 	    plugin_python.cpp
 	    plugin_nodejs.cpp
 	    plugin_nodejs_metacall.cpp
+	    plugin_ocaml.cpp	
 	    ggml-internal.hpp
 	    llama-internal.hpp
             ggml-alloc.cpp
@@ -757,9 +764,11 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
+set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} "/usr/lib/ocaml/")
 target_include_directories(ggml PUBLIC "/usr/include/node/" . ${LLAMA_EXTRA_INCLUDES}  )
+
 target_compile_features(ggml PUBLIC c_std_23) # always bump
-target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS} libmetacalld)
+target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS}  libmetacalld  "/usr/lib/ocaml/libasmrund.a")
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
@@ -893,3 +902,36 @@ if (LLAMA_BUILD_EXAMPLES)
     add_subdirectory(examples)
     add_subdirectory(pocs)
 endif()
+
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+
+	
+find_package(OCaml REQUIRED)
+include(UseOCaml)
+find_ocaml_package(extlib)
+
+# add_ocaml_library(common
+#   SOURCES message_node file_node files io
+#   PACKAGES unix str extlib
+#   )
+
+# add_ocaml_executable(loc
+#   SOURCES file_statistics loc
+#   LIBRARIES common
+#   )
+
+# add_ocaml_executable(messages
+#   SOURCES observables_graph message_graph messages
+#   LIBRARIES common
+#   )
+# install_ocaml_targets(common loc messages loc2 messages2 DESTINATION lib/ocaml/site-lib/code-analysis)
+
+# install_ocaml_interfaces(loc2 message_node file_node DESTINATION lib/ocaml/site-lib/code-analysis)
+
+# install_ocaml_exports(common loc messages loc2 messages2 DESTINATION lib/ocaml/site-lib/code-analysis FILE code-analysis.cmake)
+
+
+set(CMAKE_C_FLAGS                  "${CMAKE_C_FLAGS}                  -Wall -Wextra -fno-strict-aliasing -fPIC")
+
+#target_link_libraries(${LIBRARY_NAME} ${SDL2_LIBRARIES} ${SDL2IMAGE_LIBRARIES} ${SDL2GFX_LIBRARIES} ${SDL2MIXER_LIBRARIES} ${SDL2TTF_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} dl m )

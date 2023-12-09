@@ -34,11 +34,11 @@
 #include "print.hpp"
 //#include "plugin_python.hpp"
 //#include "plugin_nodejs.hpp"
-#include "plugin_nodejs_metacall.hpp"
-#define process_output_plugin process_output_plugin_metacall
-#define process_output_plugin_destroy process_output_plugin_metacall_destroy
-#define process_output_plugin_init process_output_plugin_metacall_init
-
+//#include "plugin_nodejs_metacall.hpp"
+#include "plugin_ocaml.hpp"
+#define process_output_plugin process_output_plugin_ocaml
+#define process_output_plugin_destroy process_output_plugin_ocaml_destroy
+#define process_output_plugin_init process_output_plugin_ocaml_init
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
