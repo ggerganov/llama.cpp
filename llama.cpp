@@ -4269,7 +4269,7 @@ struct llm_build_context {
                                 ggml_mul_mat_id(ctx0, ffn_gate_exp, selected_experts, i, cur))); // [n_tokens, n_embd]
 
                     cur_expert = ggml_mul_mat_id(ctx0, ffn_down_exp, selected_experts, i, cur_expert); // [n_tokens, n_embd]
-                    cur_expert = ggml_mul(ctx0, cur,
+                    cur_expert = ggml_mul(ctx0, cur_expert,
                             ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
 
                     if (i == 0) {
