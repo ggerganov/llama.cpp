@@ -4735,7 +4735,8 @@ struct ggml_tensor * ggml_get_rows(
         struct ggml_context * ctx,
         struct ggml_tensor  * a,
         struct ggml_tensor  * b) {
-    GGML_ASSERT(ggml_is_matrix(a) && ggml_is_vector(b) && b->type == GGML_TYPE_I32);
+    GGML_ASSERT(a->ne[2] == b->ne[1]);
+    GGML_ASSERT(ggml_is_matrix(b) && b->type == GGML_TYPE_I32);
 
     bool is_node = false;
 
@@ -4745,7 +4746,7 @@ struct ggml_tensor * ggml_get_rows(
 
     // TODO: implement non F32 return
     //struct ggml_tensor * result = ggml_new_tensor_2d(ctx, a->type, a->ne[0], b->ne[0]);
-    struct ggml_tensor * result = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, a->ne[0], b->ne[0]);
+    struct ggml_tensor * result = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, a->ne[0], b->ne[0], b->ne[1]);
 
     result->op   = GGML_OP_GET_ROWS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -10348,8 +10349,8 @@ static void ggml_compute_forward_get_rows_q(
     const enum ggml_type type = src0->type;
     ggml_to_float_t const dequantize_row_q = type_traits[type].to_float;
 
-    assert( dst->ne[0] == nc);
-    assert( dst->ne[1] == nr);
+    assert(     dst->ne[0] == nc);
+    assert(ggml_nrows(dst) == nr);
     assert(src0->nb[0] == ggml_type_size(type));
 
     for (int i = 0; i < nr; ++i) {
@@ -10375,8 +10376,8 @@ static void ggml_compute_forward_get_rows_f16(
     const int nc = src0->ne[0];
     const int nr = ggml_nelements(src1);
 
-    assert( dst->ne[0] == nc);
-    assert( dst->ne[1] == nr);
+    assert(     dst->ne[0] == nc);
+    assert(ggml_nrows(dst) == nr);
     assert(src0->nb[0] == sizeof(ggml_fp16_t));
 
     for (int i = 0; i < nr; ++i) {
@@ -10403,8 +10404,8 @@ static void ggml_compute_forward_get_rows_f32(
     const int nc = src0->ne[0];
     const int nr = ggml_nelements(src1);
 
-    assert( dst->ne[0] == nc);
-    assert( dst->ne[1] == nr);
+    assert(     dst->ne[0] == nc);
+    assert(ggml_nrows(dst) == nr);
     assert(src0->nb[0] == sizeof(float));
 
     for (int i = 0; i < nr; ++i) {
