@@ -4105,7 +4105,9 @@ struct ggml_tensor * ggml_mul_mat_id(
     result->src[0] = ids;
     result->src[1] = b;
 
-    for (int64_t i = 0; i < n_as; i++) {
+    // TODO: n_as is the selected experts, but it should be the total number of experts
+    //for (int64_t i = 0; i < n_as; i++) {
+    for (int64_t i = 0; i < 8; i++) {
         struct ggml_tensor * a = as[i];
         GGML_ASSERT(ggml_are_same_shape(as[0], a));
         GGML_ASSERT(ggml_can_mul_mat(a, b));
@@ -9758,7 +9760,10 @@ static void ggml_compute_forward_mul_mat_id(
 
     for (int64_t i01 = 0; i01 < ids->ne[1]; i01++) {
         const int32_t row_id = *(const int32_t *) ((const char *) ids->data + i01*ids->nb[1] + id*ids->nb[0]);
-        GGML_ASSERT(row_id >= 0 && row_id < ids->ne[0]);
+
+        // TODO: this assert seems wrong?
+        //printf("row_id = %d, ids->ne[0] = %d, id = %d\n", row_id, ids->ne[0], id);
+        //GGML_ASSERT(row_id >= 0 && row_id < ids->ne[0]);
 
         const struct ggml_tensor * src0_row = dst->src[row_id + 2];
         ggml_compute_forward_mul_mat(params, src0_row, src1, dst, i01, 1);

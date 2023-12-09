@@ -4242,14 +4242,18 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                const int n_experts_per_tok = 2; // TODO: param
+                // TODO: param
+                const int n_experts = 8;
+                const int n_experts_per_tok = 2;
 
                 ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
                 ggml_tensor * probs = ggml_soft_max(ctx0, logits);                             // [n_tokens, num_experts]
 
                 // select experts
                 ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_experts_per_tok); // [n_tokens, num_experts_per_tok]
-                ggml_tensor * weights = ggml_get_rows(ctx0, probs, selected_experts);        // [n_tokens, num_experts_per_tok, 1]
+                //ggml_tensor * weights = ggml_get_rows(ctx0, probs, selected_experts);        // [n_tokens, num_experts_per_tok, 1]
+                ggml_tensor * weights = ggml_get_rows(ctx0,
+                        ggml_reshape_3d(ctx0, probs, 1, n_experts, n_tokens), selected_experts);
                 weights = ggml_div(ctx0, weights, ggml_sum_rows(ctx0, weights));             // [n_tokens, num_experts_per_tok, 1]
 
                 // compute expert outputs
