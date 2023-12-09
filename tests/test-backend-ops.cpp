@@ -770,11 +770,9 @@ struct test_mul_mat_id : public test_case {
     const int64_t m;
     const int64_t n;
     const int64_t k;
-    const std::array<int64_t, 2> bs; // dims 3 and 4
-    const std::array<int64_t, 2> nr; // repeat in dims 3 and 4
 
     std::string vars() override {
-        return VARS_TO_STR9(type_a, type_b, n_mats, id, m, n, k, bs, nr);
+        return VARS_TO_STR7(type_a, type_b, n_mats, id, m, n, k);
     }
 
     double max_nmse_err() override {
@@ -782,7 +780,7 @@ struct test_mul_mat_id : public test_case {
     }
 
     size_t op_size(ggml_tensor * t) override {
-        size_t a = ggml_nbytes(t->src[2]) * n * nr[0] * nr[1];
+        size_t a = ggml_nbytes(t->src[2]) * n;
         size_t b = ggml_nbytes(t->src[1]) * m;
         size_t c  = ggml_nbytes(t);
         return a + b + c;
@@ -792,35 +790,37 @@ struct test_mul_mat_id : public test_case {
 
     test_mul_mat_id(ggml_type type_a = GGML_TYPE_F32, ggml_type type_b = GGML_TYPE_F32,
             int n_mats = 2, int id = 0,
-            int64_t m = 32, int64_t n = 32, int64_t k = 32,
-            std::array<int64_t, 2> bs = {10, 10},
-            std::array<int64_t, 2> nr = {2, 2})
+            int64_t m = 32, int64_t n = 32, int64_t k = 32)
         : type_a(type_a), type_b(type_b), n_mats(n_mats), id(id),
-            m(m), n(n), k(k), bs(bs), nr(nr) {}
+            m(m), n(n), k(k) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
         std::vector<ggml_tensor *> mats;
         for (int i = 0; i < n_mats; i++) {
-            ggml_tensor * a = ggml_new_tensor_4d(ctx, type_a, k, m, bs[0], bs[1]);
+            ggml_tensor * a = ggml_new_tensor_2d(ctx, type_a, k, m);
             mats.push_back(a);
         }
-        ggml_tensor * ids = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, n_mats);
-        ggml_tensor * b = ggml_new_tensor_4d(ctx, type_b, k, n, bs[0]*nr[0], bs[1]*nr[1]);
+        ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
+        ggml_tensor * b = ggml_new_tensor_2d(ctx, type_b, k, n);
         ggml_tensor * out = ggml_mul_mat_id(ctx, mats.data(), ids, id, b);
         return out;
     }
 
     void initialize_tensors(ggml_context * ctx) override {
+        std::random_device rd;
+        std::default_random_engine rng(rd());
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (t->type == GGML_TYPE_I32) {
                 // ids
-                std::vector<int> data(n_mats);
-                for (int i = 0; i < n_mats; i++) {
-                    data[i] = i;
+                for (int64_t r = 0; r < ggml_nrows(t); r++) {
+                    std::vector<int32_t> data(t->ne[0]);
+                    for (int i = 0; i < t->ne[0]; i++) {
+                        data[i] = i;
+                    }
+                    std::shuffle(data.begin(), data.end(), rng);
+                    ggml_backend_tensor_set(t, data.data(), r * t->nb[1], t->ne[0] * sizeof(int32_t));
                 }
-                std::shuffle(data.begin(), data.end(), std::default_random_engine(std::random_device()()));
-                ggml_backend_tensor_set(t, data.data(), 0, n_mats * sizeof(int));
             } else {
                 init_tensor_uniform(t);
             }
@@ -1215,7 +1215,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             for (int n_mats : {1, 2, 4}) {
                 for (int id = 0; id < n_mats; id++) {
-                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, id, 16, 16, 256, {1, 1}, {1, 1}));
+                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, id, 16, 16, 256));
                 }
             }
         }
