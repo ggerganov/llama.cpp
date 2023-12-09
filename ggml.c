@@ -4105,7 +4105,6 @@ struct ggml_tensor * ggml_mul_mat_id(
     result->src[0] = ids;
     result->src[1] = b;
 
-    // TODO: n_as is the selected experts, but it should be the total number of experts
     for (int i = 0; i < n_as; i++) {
         struct ggml_tensor * a = as[i];
         GGML_ASSERT(ggml_are_same_shape(as[0], a));
