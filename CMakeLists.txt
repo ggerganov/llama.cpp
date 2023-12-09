@@ -728,6 +728,13 @@ if (GGML_USE_CPU_HBM)
     find_library(memkind memkind REQUIRED)
 endif()
 
+add_library(libmetacall SHARED IMPORTED)
+add_dependencies(libmetacall metacall)
+set_property(
+	TARGET libmetacall
+	PROPERTY IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}metacall${CMAKE_SHARED_LIBRARY_SUFFIX}
+)
+
 add_library(ggml OBJECT
             ggml.cpp
             ggml.h
@@ -751,7 +758,7 @@ add_library(ggml OBJECT
 
 target_include_directories(ggml PUBLIC "/usr/include/node/" . ${LLAMA_EXTRA_INCLUDES}  )
 target_compile_features(ggml PUBLIC c_std_23) # always bump
-target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS} libmetacall)
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
