@@ -41,7 +41,7 @@ class Context {
 public:
   
   struct metacall_log_stdio_type log_stdio = { stdout };
-  void* handle = NULL; // function pointer
+  //void* handle = NULL; // function pointer
 };
 
 static Context context;
@@ -77,7 +77,10 @@ void process_output_plugin_metacall_init()
   // Load scripts
   if (metacall_load_from_file("node",
 			      js_scripts,
-			      sizeof(js_scripts) / sizeof(js_scripts[0]), &context.handle) != 0)
+			      sizeof(js_scripts) / sizeof(js_scripts[0]),
+			      //&context.handle
+			      NULL
+			      ) != 0)
     {
       printf("error loading scripts!");
       //return cleanup(3);
@@ -110,7 +113,7 @@ std::string process_output_plugin_metacall(const std::string start,
 void process_output_plugin_metacall_destroy()
 {
 
-  metacall_clear(context.handle);
+  //metacall_clear(context.handle);
   //if (
   metacall_destroy();
 	//!= 0)
