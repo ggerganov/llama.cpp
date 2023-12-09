@@ -33,8 +33,12 @@
 
 #include "print.hpp"
 //#include "plugin_python.hpp"
-#include "plugin_nodejs.hpp"
-#define process_output_plugin process_output_plugin_node
+//#include "plugin_nodejs.hpp"
+#include "plugin_nodejs_metacall.hpp"
+#define process_output_plugin process_output_plugin_metacall
+#define process_output_plugin_destroy process_output_plugin_metacall_destroy
+#define process_output_plugin_init process_output_plugin_metacall_init
+
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
@@ -138,7 +142,7 @@ int main(int argc, char ** argv) {
     // save choice to use color for later
     // (note for later: this is a slightly awkward choice)
     console::init(params.simple_io, params.use_color);
-    process_output_plugin_node_init();
+    process_output_plugin_init();
     atexit([]() { console::cleanup(); });
 
     if (params.logits_all) {
@@ -911,6 +915,6 @@ int main(int argc, char ** argv) {
     LOG_TEE("Log end\n");
 #endif // LOG_DISABLE_LOGS
 
-    process_output_plugin_node_destroy();
+    process_output_plugin_destroy();
     return 0;
 }

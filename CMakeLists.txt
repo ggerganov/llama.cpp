@@ -741,6 +741,7 @@ add_library(ggml OBJECT
 	    print.hpp
 	    plugin_python.cpp
 	    plugin_nodejs.cpp
+	    plugin_nodejs_metacall.cpp
 	    ggml-internal.hpp
 	    llama-internal.hpp
             ggml-alloc.cpp
