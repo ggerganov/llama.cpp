@@ -55,12 +55,14 @@ void process_output_plugin_metacall_init()
   // Define log stream
   if (metacall_log(METACALL_LOG_STDIO, (void *)&context.log_stdio) != 0)
     {
+      printf("error setting log");
       //return cleanup(1);
     }
 
   // Initialize MetaCall
   if (metacall_initialize() != 0)
     {
+      printf("error init");
       //return cleanup(2);
     }
 
@@ -77,6 +79,7 @@ void process_output_plugin_metacall_init()
 			      js_scripts,
 			      sizeof(js_scripts) / sizeof(js_scripts[0]), &context.handle) != 0)
     {
+      printf("error loading scripts!");
       //return cleanup(3);
       //return "error loading";
     }
