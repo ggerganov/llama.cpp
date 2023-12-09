@@ -1686,31 +1686,39 @@ static __global__ void quantize_q8_1(const float * __restrict__ x, void * __rest
 }
 
 template<int qk, int qr, dequantize_kernel_t dequantize_kernel, typename dst_t>
-static __global__ void k_get_rows(const void * x, const int32_t * y, dst_t * dst, const int ncols) {
-    const int col = (blockIdx.x*blockDim.x + threadIdx.x)*2;
-    const int row = blockDim.y*blockIdx.y + threadIdx.y;
+static __global__ void k_get_rows(
+            const void * src0, const int32_t * src1, dst_t * dst,
+            int64_t ne00, /*int64_t ne01, int64_t ne02, int64_t ne03,*/
+            /*int64_t ne10, int64_t ne11,*/ int64_t ne12, /*int64_t ne13,*/
+            /*size_t s0,*/ size_t s1, size_t s2, size_t s3,
+            /*size_t nb00,*/ size_t nb01, size_t nb02, size_t nb03,
+            size_t s10, size_t s11, size_t s12/*, size_t s13*/) {
 
-    if (col >= ncols) {
+    const int i00 = (blockIdx.x*blockDim.x + threadIdx.x)*2;
+    const int i10 = blockDim.y*blockIdx.y + threadIdx.y;
+    const int i11 = (blockIdx.z*blockDim.z + threadIdx.z)/ne12;
+    const int i12 = (blockIdx.z*blockDim.z + threadIdx.z)%ne12;
+
+    if (i00 >= ne00) {
         return;
     }
 
-    const int r = y[row];
+    const int i01 = src1[i10*s10 + i11*s11 + i12*s12];
 
-    // copy x[r*ncols + col] to dst[row*ncols + col]
-    const int xi = r*ncols + col;
-    const int di = row*ncols + col;
+    dst_t * dst_row = dst + i10*s1 + i11*s2 + i12*s3;
+    const void * src0_row = (const char *)src0 + i01*nb01 + i11*nb02 + i12*nb03;
 
-    const int ib = xi/qk; // block index
-    const int iqs = (xi%qk)/qr; // quant index
-    const int iybs = di - di%qk; // y block start index
+    const int ib = i00/qk; // block index
+    const int iqs = (i00%qk)/qr; // quant index
+    const int iybs = i00 - i00%qk; // dst block start index
     const int y_offset = qr == 1 ? 1 : qk/2;
 
     // dequantize
     dfloat2 v;
-    dequantize_kernel(x, ib, iqs, v);
+    dequantize_kernel(src0_row, ib, iqs, v);
 
-    dst[iybs + iqs + 0]        = v.x;
-    dst[iybs + iqs + y_offset] = v.y;
+    dst_row[iybs + iqs + 0]        = v.x;
+    dst_row[iybs + iqs + y_offset] = v.y;
 }
 
 template <int qk, int qr, dequantize_kernel_t dequantize_kernel, typename dst_t>
@@ -5055,11 +5063,35 @@ static  __global__ void im2col_f32_f16(
 }
 
 template<int qk, int qr, dequantize_kernel_t dq>
-static void get_rows_cuda(const void * x, const int32_t * y, float * dst, const int nrows, const int ncols, cudaStream_t stream) {
+static void get_rows_cuda(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
+                            const void * src0_dd, const int32_t * src1_dd, float * dst_dd, cudaStream_t stream) {
+
+    GGML_TENSOR_BINARY_OP_LOCALS
+
     const dim3 block_dims(CUDA_GET_ROWS_BLOCK_SIZE, 1, 1);
-    const int block_num_x = (ncols + 2*CUDA_GET_ROWS_BLOCK_SIZE - 1) / (2*CUDA_GET_ROWS_BLOCK_SIZE);
-    const dim3 block_nums(block_num_x, nrows, 1);
-    k_get_rows<qk, qr, dq><<<block_nums, block_dims, 0, stream>>>(x, y, dst, ncols);
+    const int block_num_x = (ne00 + 2*CUDA_GET_ROWS_BLOCK_SIZE - 1) / (2*CUDA_GET_ROWS_BLOCK_SIZE);
+    const dim3 block_nums(block_num_x, ne10, ne11*ne12);
+
+    // strides in elements
+    //const size_t s0 = nb0 / ggml_element_size(dst);
+    const size_t s1 = nb1 / ggml_element_size(dst);
+    const size_t s2 = nb2 / ggml_element_size(dst);
+    const size_t s3 = nb3 / ggml_element_size(dst);
+
+    const size_t s10 = nb10 / ggml_element_size(src1);
+    const size_t s11 = nb11 / ggml_element_size(src1);
+    const size_t s12 = nb12 / ggml_element_size(src1);
+    //const size_t s13 = nb13 / ggml_element_size(src1);
+
+    k_get_rows<qk, qr, dq><<<block_nums, block_dims, 0, stream>>>(
+            src0_dd, src1_dd, dst_dd,
+            ne00, /*ne01, ne02, ne03,*/
+            /*ne10, ne11,*/ ne12, /*ne13,*/
+            /* s0,*/ s1, s2, s3,
+            /* nb00,*/ nb01, nb02, nb03,
+            s10, s11, s12/*, s13*/);
+
+    (void) dst;
 }
 
 template<float (*bin_op)(const float, const float)>
@@ -5070,7 +5102,6 @@ struct bin_bcast_cuda {
             cudaStream_t stream) {
 
         GGML_TENSOR_BINARY_OP_LOCALS
-
 
         int nr0 = ne10/ne0;
         int nr1 = ne11/ne1;
@@ -5119,26 +5150,28 @@ struct bin_bcast_cuda {
             int64_t ne12 = cne1[2];
             int64_t ne13 = cne1[3];
 
-            //size_t nb0 = cnb0[0];
+            size_t nb0 = cnb0[0];
             size_t nb1 = cnb0[1];
             size_t nb2 = cnb0[2];
             size_t nb3 = cnb0[3];
 
-            //size_t nb10 = cnb1[0];
+            size_t nb10 = cnb1[0];
             size_t nb11 = cnb1[1];
             size_t nb12 = cnb1[2];
             size_t nb13 = cnb1[3];
 
-            //size_t s0 = nb0 / sizeof(src1_t);
+            size_t s0 = nb0 / sizeof(src1_t);
             size_t s1 = nb1 / sizeof(src1_t);
             size_t s2 = nb2 / sizeof(src1_t);
             size_t s3 = nb3 / sizeof(src1_t);
 
-            //size_t s10 = nb10 / sizeof(src1_t);
+            size_t s10 = nb10 / sizeof(src1_t);
             size_t s11 = nb11 / sizeof(src1_t);
             size_t s12 = nb12 / sizeof(src1_t);
             size_t s13 = nb13 / sizeof(src1_t);
 
+            GGML_ASSERT(s0 == 1);
+            GGML_ASSERT(s10 == 1);
 
             const int block_size = 128;
 
@@ -6449,36 +6482,34 @@ static void ggml_cuda_op_get_rows(
 
     GGML_ASSERT(src1->type == GGML_TYPE_I32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
-    GGML_ASSERT(ggml_is_contiguous(src0));
-    GGML_ASSERT(ggml_is_contiguous(src1));
-    GGML_ASSERT(ggml_is_contiguous(dst));
 
-    const int ncols = src0->ne[0];
-    const int nrows = ggml_nelements(src1);
+    GGML_ASSERT(src0->nb[0] == ggml_type_size(src0->type));
+    GGML_ASSERT(src1->nb[0] == ggml_type_size(src1->type));
+    GGML_ASSERT(dst->nb[0] == ggml_type_size(dst->type));
 
     const int32_t * src1_i32 = (const int32_t *) src1_d;
 
     switch (src0->type) {
         case GGML_TYPE_F16:
-            get_rows_cuda<1, 1, convert_f16>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<1, 1, convert_f16>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_F32:
-            get_rows_cuda<1, 1, convert_f32>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<1, 1, convert_f32>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_Q4_0:
-            get_rows_cuda<QK4_0, QR4_0, dequantize_q4_0>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<QK4_0, QR4_0, dequantize_q4_0>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_Q4_1:
-            get_rows_cuda<QK4_1, QR4_1, dequantize_q4_1>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<QK4_1, QR4_1, dequantize_q4_1>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_Q5_0:
-            get_rows_cuda<QK5_0, QR5_0, dequantize_q5_0>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<QK5_0, QR5_0, dequantize_q5_0>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_Q5_1:
-            get_rows_cuda<QK5_1, QR5_1, dequantize_q5_1>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<QK5_1, QR5_1, dequantize_q5_1>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         case GGML_TYPE_Q8_0:
-            get_rows_cuda<QK8_0, QR8_0, dequantize_q8_0>(src0_d, src1_i32, dst_d, nrows, ncols, stream);
+            get_rows_cuda<QK8_0, QR8_0, dequantize_q8_0>(src0, src1, dst, src0_d, src1_i32, dst_d, stream);
             break;
         default:
             // TODO: k-quants
@@ -8286,11 +8317,8 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
 
         const struct ggml_tensor * src0_row = dst->src[row_id + 2];
 
-        if (src1->backend == GGML_BACKEND_GPU) {
-            src1_row_extra.data_device[g_main_device] = (char *) src1_extra->data_device[g_main_device] + i01*src1->nb[1];
-        } else {
-            src1_row.data = (char *) src1->data + i01*src1->nb[1];
-        }
+        src1_row_extra.data_device[g_main_device] = (char *) src1_extra->data_device[g_main_device] + i01*src1->nb[1];
+        src1_row.data = (char *) src1->data + i01*src1->nb[1];
 
         dst_row_extra.data_device[g_main_device] = (char *) dst_extra->data_device[g_main_device] + i01*dst->nb[1];
 
@@ -8707,9 +8735,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             func = ggml_cuda_repeat;
             break;
         case GGML_OP_GET_ROWS:
-            if (ggml_is_contiguous(tensor->src[1])) {
-                func = ggml_cuda_get_rows;
-            }
+            func = ggml_cuda_get_rows;
             break;
         case GGML_OP_DUP:
             func = ggml_cuda_dup;
@@ -9215,6 +9241,21 @@ static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_ten
                 }
                 return true;
             } break;
+        case GGML_OP_GET_ROWS:
+            {
+                switch (op->src[0]->type) {
+                    case GGML_TYPE_F16:
+                    case GGML_TYPE_F32:
+                    case GGML_TYPE_Q4_0:
+                    case GGML_TYPE_Q4_1:
+                    case GGML_TYPE_Q5_0:
+                    case GGML_TYPE_Q5_1:
+                    case GGML_TYPE_Q8_0:
+                        return true;
+                    default:
+                        return false;
+                }
+            } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -9222,7 +9263,6 @@ static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_ten
         case GGML_OP_TRANSPOSE:
         case GGML_OP_NORM:
         case GGML_OP_REPEAT:
-        case GGML_OP_GET_ROWS:
         case GGML_OP_DUP:
         case GGML_OP_ADD:
         case GGML_OP_MUL:
@@ -9298,7 +9338,9 @@ static ggml_backend_t ggml_backend_reg_cuda_init(const char * params, void * use
     UNUSED(params);
 }
 
-extern "C" int ggml_backend_cuda_reg_devices() {
+extern "C" int ggml_backend_cuda_reg_devices();
+
+int ggml_backend_cuda_reg_devices() {
     int device_count = ggml_cuda_get_device_count();
     //int device_count = 1; // DEBUG: some tools require delaying CUDA initialization
     for (int i = 0; i < device_count; i++) {

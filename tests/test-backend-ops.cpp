@@ -489,17 +489,21 @@ struct test_get_rows : public test_case {
     const int m; // rows
     const int r; // rows to get
     const int b; // batch size
+    const bool v; // view (non-contiguous src1)
 
     std::string vars() override {
-        return VARS_TO_STR4(type, n, m, r);
+        return VARS_TO_STR6(type, n, m, r, b, v);
     }
 
-    test_get_rows(ggml_type type = GGML_TYPE_F32, int n = 10, int m = 5, int r = 3, int b = 1)
-        : type(type), n(n), m(m), r(r), b(b) {}
+    test_get_rows(ggml_type type = GGML_TYPE_F32, int n = 10, int m = 5, int r = 3, int b = 1, bool v = false)
+        : type(type), n(n), m(m), r(r), b(b), v(v) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * in = ggml_new_tensor_3d(ctx, type, n, m, b);
         ggml_tensor * rows = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, r, b);
+        if (v) {
+            rows = ggml_view_2d(ctx, rows, r/2, b, rows->nb[1], 0);
+        }
         ggml_tensor * out = ggml_get_rows(ctx, in, rows);
         return out;
     }
@@ -507,6 +511,7 @@ struct test_get_rows : public test_case {
     void initialize_tensors(ggml_context * ctx) override {
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (t->type == GGML_TYPE_I32) {
+                if (ggml_is_view_op(t->op)) { continue; }
                 // rows
                 std::vector<int> data(r*b);
                 for (int i = 0; i < r*b; i++) {
@@ -773,9 +778,10 @@ struct test_mul_mat_id : public test_case {
     const int64_t m;
     const int64_t n;
     const int64_t k;
+    const bool v; // view (non-contiguous ids)
 
     std::string vars() override {
-        return VARS_TO_STR7(type_a, type_b, n_mats, id, m, n, k);
+        return VARS_TO_STR8(type_a, type_b, n_mats, id, m, n, k, v);
     }
 
     double max_nmse_err() override {
@@ -793,9 +799,9 @@ struct test_mul_mat_id : public test_case {
 
     test_mul_mat_id(ggml_type type_a = GGML_TYPE_F32, ggml_type type_b = GGML_TYPE_F32,
             int n_mats = 2, int id = 0,
-            int64_t m = 32, int64_t n = 32, int64_t k = 32)
+            int64_t m = 32, int64_t n = 32, int64_t k = 32, bool v = false)
         : type_a(type_a), type_b(type_b), n_mats(n_mats), id(id),
-            m(m), n(n), k(k) {}
+            m(m), n(n), k(k), v(v) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         // C^T = A * B^T: (k, m) * (k, n) => (m, n)
@@ -805,8 +811,11 @@ struct test_mul_mat_id : public test_case {
             mats.push_back(a);
         }
         ggml_tensor * ids = ggml_new_tensor_2d(ctx, GGML_TYPE_I32, n_mats, n);
+        if (v) {
+            ids = ggml_view_2d(ctx, ids, n_mats/2, ids->ne[1], ids->nb[1], 0);
+        }
         ggml_tensor * b = ggml_new_tensor_2d(ctx, type_b, k, n);
-        ggml_tensor * out = ggml_mul_mat_id(ctx, mats.data(), n_mats, ids, id, b);
+        ggml_tensor * out = ggml_mul_mat_id(ctx, mats.data(), n_mats, ids, v ? id/2 : id, b);
         return out;
     }
 
@@ -815,11 +824,12 @@ struct test_mul_mat_id : public test_case {
         std::default_random_engine rng(rd());
         for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
             if (t->type == GGML_TYPE_I32) {
+                if (ggml_is_view_op(t->op)) { continue; }
                 // ids
                 for (int64_t r = 0; r < ggml_nrows(t); r++) {
                     std::vector<int32_t> data(t->ne[0]);
                     for (int i = 0; i < t->ne[0]; i++) {
-                        data[i] = i;
+                        data[i] = i % n_mats;
                     }
                     std::shuffle(data.begin(), data.end(), rng);
                     ggml_backend_tensor_set(t, data.data(), r * t->nb[1], t->ne[0] * sizeof(int32_t));
@@ -1120,14 +1130,27 @@ enum test_mode {
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
     std::vector<std::unique_ptr<test_case>> test_cases;
 
+    const ggml_type all_types[] = {
+        GGML_TYPE_F32, GGML_TYPE_F16,
+        GGML_TYPE_Q4_0, GGML_TYPE_Q4_1,
+        GGML_TYPE_Q5_0, GGML_TYPE_Q5_1,
+        GGML_TYPE_Q8_0,
+        GGML_TYPE_Q2_K, GGML_TYPE_Q3_K,
+        GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
+        GGML_TYPE_Q6_K
+    };
+
     // unary ops
     for (int op = 0; op < GGML_UNARY_OP_COUNT; op++) {
         test_cases.emplace_back(new test_unary((ggml_unary_op) op));
     }
 
-    for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
-        test_cases.emplace_back(new test_get_rows(type, 10, 5, 3, 7));
-        test_cases.emplace_back(new test_get_rows(type, 16, 5, 3, 7));
+    for (ggml_type type : all_types) {
+        for (int b : {1, 7}) {
+            for (bool v : {false, true}) {
+                test_cases.emplace_back(new test_get_rows(type, 256, 5, 4, b, v));
+            }
+        }
     }
 
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 1, 1}));
@@ -1183,16 +1206,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_rms_norm(GGML_TYPE_F32, {64, 10, 10, 10}, eps));
     }
 
-    const ggml_type all_types[] = {
-        GGML_TYPE_F32, GGML_TYPE_F16,
-        GGML_TYPE_Q4_0, GGML_TYPE_Q4_1,
-        GGML_TYPE_Q5_0, GGML_TYPE_Q5_1,
-        GGML_TYPE_Q8_0,
-        GGML_TYPE_Q2_K, GGML_TYPE_Q3_K,
-        GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
-        GGML_TYPE_Q6_K
-    };
-
     for (ggml_type type_a : all_types) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
             // FIXME: CPU crashes on f16xf16
@@ -1216,9 +1229,11 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     for (ggml_type type_a : all_types) {
         for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
-            for (int n_mats : {1, 2, 4}) {
+            for (int n_mats : {2, 4, 8}) {
                 for (int id = 0; id < n_mats; id++) {
-                    test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, id, 16, 16, 256));
+                    for (bool v : {false, true}) {
+                        test_cases.emplace_back(new test_mul_mat_id(type_a, type_b, n_mats, id, 16, 16, 256, v));
+                    }
                 }
             }
         }

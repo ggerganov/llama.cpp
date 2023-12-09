@@ -4254,12 +4254,13 @@ struct llm_build_context {
 
                 // select experts
                 ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_experts_per_tok);   // [n_tokens, num_experts_per_tok]
+                cb(selected_experts->src[0], "ffn_moe_argsort", il);
+
                 ggml_tensor * weights = ggml_get_rows(ctx0,
-                                ggml_reshape_3d(ctx0, probs, 1, n_experts, n_tokens), selected_experts);
+                        ggml_reshape_3d(ctx0, probs, 1, n_experts, n_tokens), selected_experts);
                 cb(weights, "ffn_moe_weights", il);
 
-                weights = ggml_reshape_2d(ctx0, weights,
-                            n_experts_per_tok, n_tokens);                                     // [n_tokens, num_experts_per_tok]
+                weights = ggml_reshape_2d(ctx0, weights, n_experts_per_tok, n_tokens);          // [n_tokens, num_experts_per_tok]
 
                 ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
                 cb(weights_sum, "ffn_moe_weights_sum", il);
@@ -4268,7 +4269,7 @@ struct llm_build_context {
                 cb(weights, "ffn_moe_weights_norm", il);
 
                 // compute expert outputs
-                ggml_tensor * moe_out;
+                ggml_tensor * moe_out = nullptr;
 
                 for (int i = 0; i < n_experts_per_tok; ++i) {
                     ggml_tensor * cur_expert;
@@ -4279,19 +4280,19 @@ struct llm_build_context {
                     ggml_tensor ** ffn_down_exp = (ggml_tensor **) model.layers[il].ffn_down_exp;
 
                     ggml_tensor * cur_up = ggml_mul_mat_id(ctx0, ffn_up_exp, n_experts, selected_experts, i, cur);
-                    cb(cur_up, "ffn_up", il);
+                    cb(cur_up, "ffn_moe_up", il);
 
                     ggml_tensor * cur_gate = ggml_mul_mat_id(ctx0, ffn_gate_exp, n_experts, selected_experts, i, cur);
-                    cb(cur_gate, "ffn_gate", il);
+                    cb(cur_gate, "ffn_moe_gate", il);
 
                     cur_gate = ggml_silu(ctx0, cur_gate);
-                    cb(cur_gate, "ffn_silu", il);
+                    cb(cur_gate, "ffn_moe_silu", il);
 
                     cur_expert = ggml_mul(ctx0, cur_up, cur_gate); // [n_tokens, n_embd]
-                    cb(cur_expert, "ffn_gate_par", il);
+                    cb(cur_expert, "ffn_moe_gate_par", il);
 
                     cur_expert = ggml_mul_mat_id(ctx0, ffn_down_exp, n_experts, selected_experts, i, cur_expert); // [n_tokens, n_embd]
-                    cb(cur_expert, "ffn_down", il);
+                    cb(cur_expert, "ffn_moe_down", il);
 
                     cur_expert = ggml_mul(ctx0, cur_expert,
                             ggml_view_2d(ctx0, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
@@ -5562,10 +5563,15 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
 
     { "ffn_moe_logits",             OFFLOAD_FUNC     },
     { "ffn_moe_probs",              OFFLOAD_FUNC     },
-    { "ffn_moe_weights",            OFFLOAD_FUNC_NOP },
+    { "ffn_moe_argsort",            OFFLOAD_FUNC     },
+    { "ffn_moe_weights",            OFFLOAD_FUNC     },
     { "ffn_moe_weights_sum",        OFFLOAD_FUNC     },
     { "ffn_moe_weights_norm",       OFFLOAD_FUNC     },
     { "ffn_moe_weighted",           OFFLOAD_FUNC     },
+    { "ffn_moe_up",                 OFFLOAD_FUNC     },
+    { "ffn_moe_gate",               OFFLOAD_FUNC     },
+    { "ffn_moe_gate_par",           OFFLOAD_FUNC     },
+    { "ffn_moe_down",               OFFLOAD_FUNC     },
     { "ffn_moe_out",                OFFLOAD_FUNC     },
 
     { "l_out",                      OFFLOAD_FUNC     },
