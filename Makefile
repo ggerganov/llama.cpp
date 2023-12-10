@@ -592,7 +592,8 @@ main: examples/main/main.cpp  ocaml-example-script.o plugin_nodejs.o  plugin_oca
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
-ocaml-example-script.o:
+#nasty hack
+ocaml-example-script.o: caml_src/step.ml
 	ocamlopt -g -fPIC -linkall -output-obj caml_src/step.ml -o ocaml-example-script.o
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)

@@ -8,9 +8,13 @@ let shutdown () =
     Printf.printf "Shutting down Game module...\n";
     flush stdout;;
 
-let step () =
-    (* Printf.printf "bla\n"; *)
-    flush stdout;;
+let step (s:string) : string =
+    Printf.printf "Hello Ocaml from LLama\n";
+    flush stdout;
+    s ^ "Hello Ocaml\n";;
+
+
+
 
 (* main/init *)
 let () =
