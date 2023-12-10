@@ -92,7 +92,8 @@ std::string process_output_plugin_ocaml(const std::string start,
 void process_output_plugin_ocaml_init()
 {
     printf( "Linked against OCaml version %s\n", OCAML_VERSION_STRING );
-    caml_startup( NULL );
+    const char *argv[] = {"llamacpp", NULL };
+    caml_startup( argv );
 }
 
 void process_output_plugin_ocaml_destroy()
