@@ -945,23 +945,12 @@ find_ocaml_package(extlib)
 #   LIBRARIES common
 #   )
 
-# add_ocaml_executable(messages
-#   SOURCES observables_graph message_graph messages
-#   LIBRARIES common
-#   )
-# install_ocaml_targets(common loc messages loc2 messages2 DESTINATION lib/ocaml/site-lib/code-analysis)
-
-# install_ocaml_interfaces(loc2 message_node file_node DESTINATION lib/ocaml/site-lib/code-analysis)
-
-# install_ocaml_exports(common loc messages loc2 messages2 DESTINATION lib/ocaml/site-lib/code-analysis FILE code-analysis.cmake)
 
 
 set(CMAKE_C_FLAGS                  "${CMAKE_C_FLAGS}                  -Wall -Wextra -fno-strict-aliasing -fPIC")
 
 #target_link_libraries(${LIBRARY_NAME} ${SDL2_LIBRARIES} ${SDL2IMAGE_LIBRARIES} ${SDL2GFX_LIBRARIES} ${SDL2MIXER_LIBRARIES} ${SDL2TTF_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} dl m )
 
-
-##ocaml
 file(GLOB OCAML_SCRIPT_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/caml_src/*.ml"
 )
