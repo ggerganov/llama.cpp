@@ -115,7 +115,7 @@ endif
 #
 
 # keep standard at C11 and C++11
-MK_CPPFLAGS = -I. -Icommon
+MK_CPPFLAGS = -I. -Icommon -I/usr/local/lib/ocaml/
 MK_CFLAGS   = -std=c11   -fPIC
 MK_CXXFLAGS = -std=c++17 -fPIC -fpermissive
 
@@ -587,11 +587,13 @@ clean:
 # Examples
 #
 
-main: examples/main/main.cpp  plugin_nodejs.o  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) /usr/lib/libnode.so
+main: examples/main/main.cpp  ocaml-example-script.o plugin_nodejs.o  plugin_ocaml.o  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS) /usr/lib/libnode.so /usr/local/lib/ocaml/libasmrun_pic.a -lzstd
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+ocaml-example-script.o:
+	ocamlopt -g -fPIC -linkall -output-obj caml_src/step.ml -o ocaml-example-script.o
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)  # for add_link_options
 project("llama.cpp" C CXX)
 find_package (Python3 COMPONENTS Interpreter Development)
 execute_process(COMMAND "ocamlopt" "-where" OUTPUT_VARIABLE OCAMLC_WHERE ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(OCAML_RUNTIMELIBRARY "${OCAMLC_WHERE}/libasmrun_pic.a")
+#set(OCAML_RUNTIMELIBRARY "${OCAMLC_WHERE}/libasmrun_pic.a")
 
 if (Python3_Interpreter_FOUND)
   if (UNIX AND NOT APPLE)
@@ -504,8 +504,8 @@ if (LLAMA_ALL_WARNINGS)
         # todo : msvc
     endif()
 
-    set(c_flags   ${c_flags}  -save-temps --verbose  ${warning_flags})
-    set(cxx_flags ${cxx_flags} -fpermissive  -save-temps --verbose ${warning_flags})
+    set(c_flags   ${c_flags}  -save-temps  -fPIC  --verbose  ${warning_flags})
+    set(cxx_flags ${cxx_flags} -fpermissive -fPIC  -save-temps --verbose ${warning_flags})
     add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
                         "$<$<COMPILE_LANGUAGE:CXX>:${host_cxx_flags}>")
@@ -731,7 +731,7 @@ if (GGML_USE_CPU_HBM)
 endif()
 
 #/usr/local/lib/ocaml/
-set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}   /usr/lib/ocaml)
+set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH}   /usr/local/lib/ocaml)
 
 
 add_library(libmetacalld SHARED IMPORTED)
@@ -748,7 +748,7 @@ add_library(ggml OBJECT
 	    plugin_python.cpp
 	    plugin_nodejs.cpp
 	    plugin_nodejs_metacall.cpp
-	    plugin_ocaml.cpp	
+	    plugin_ocaml.cpp
 	    ggml-internal.hpp
 	    llama-internal.hpp
             ggml-alloc.cpp
@@ -764,11 +764,35 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
             )
 
-set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} "/usr/lib/ocaml/")
+set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} "/usr/local/lib/ocaml/")
 target_include_directories(ggml PUBLIC "/usr/include/node/" . ${LLAMA_EXTRA_INCLUDES}  )
 
+# 
+#   "/usr/local/lib/ocaml/libasmrun.a"
+#	  "/usr/local/lib/ocaml/libcamlrun.a"
 target_compile_features(ggml PUBLIC c_std_23) # always bump
-target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS}  libmetacalld  "/usr/lib/ocaml/libasmrund.a")
+			   # /usr/local/lib/ocaml/libcamlrun_pic.a
+			   # /usr/local/lib/ocaml/libasmrund.a
+			   # /usr/local/lib/ocaml/libasmrun.a
+			   # /usr/local/lib/ocaml/libasmrund.a
+			   # /usr/local/lib/ocaml/libasmruni.a
+			   #			   #/usr/local/lib/ocaml/libcamlrund.a
+
+#/usr/bin/c++                 -Wall -Wextra -fno-strict-aliasing -fno-rtti -fno-exceptions -D GLIBCXX_FORCE_NEW -fPIC -g          -O0 -g3 -pg -rdynamic CMakeFiles/Cppcamlexample.dir/app/MainLoop.cpp.o CMakeFiles/Cppcamlexample.dir/app/main.cpp.o -o Cppcamlexample  -Wl,-rpath,/home/mdupont/2023/12/09/Cppcamlexample/build -ldl -lm /usr/local/lib/ocaml/libasmrun_pic.a -Wl,-Bstatic  -Wl,-Bdynamic libCppcamlexampleEngine.so game.o -ldl -lm 
+
+
+target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS}  libmetacalld
+			   
+			   /usr/local/lib/libzstd.a 
+			   "${CMAKE_CURRENT_SOURCE_DIR}/build2/ocaml-example-script.o"
+			   /usr/local/lib/ocaml/libasmrun_pic.a
+			   
+			   #/usr/local/lib/ocaml/libcamlrun.a )
+			   #/usr/local/lib/ocaml/libasmrun_pic.a
+					  #
+			   #/usr/local/lib/ocaml/libcamlrun_pic.a
+			   )
+# /usr/local/lib/ocaml/libcamlrun.a
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
@@ -935,3 +959,19 @@ find_ocaml_package(extlib)
 set(CMAKE_C_FLAGS                  "${CMAKE_C_FLAGS}                  -Wall -Wextra -fno-strict-aliasing -fPIC")
 
 #target_link_libraries(${LIBRARY_NAME} ${SDL2_LIBRARIES} ${SDL2IMAGE_LIBRARIES} ${SDL2GFX_LIBRARIES} ${SDL2MIXER_LIBRARIES} ${SDL2TTF_LIBRARIES} ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES} dl m )
+
+
+##ocaml
+file(GLOB OCAML_SCRIPT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/caml_src/*.ml"
+)
+
+#WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
+add_custom_target("ocaml_script" "ocamlopt" "-g" "-fPIC" "-linkall" "-output-obj" "${OCAML_SCRIPT_SOURCES}" "-o" "${CMAKE_CURRENT_SOURCE_DIR}/build2/ocaml-example-script.o"  VERBATIM SOURCES ${OCAML_SCRIPT_SOURCES})
+
+#nm /usr/local/lib/ocaml/libcamlrun_pic.a |grep unbox
+#ocamlc -output-obj -o embed_out.c
+#/usr/local/bin/ocamlc ../caml_src/step.ml   -output-obj -o embed_out.c
+
+
+#/usr/local/bin/ocamlc caml_src/step.ml   -output-obj -o embed_out.c
