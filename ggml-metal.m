@@ -1612,7 +1612,6 @@ void ggml_metal_graph_compute(
                                         {
                                             GGML_ASSERT(src1t == GGML_TYPE_F32);
                                             [encoder setComputePipelineState:ctx->pipeline_mul_mv_id_f32_f32];
-                                            nrows = 4;
                                         } break;
                                     case GGML_TYPE_F16:
                                         {
