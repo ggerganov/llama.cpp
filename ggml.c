@@ -15574,6 +15574,11 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                     n_tasks = 1; // TODO: this actually is doing nothing
                                  //       the threads are still spinning
                 }
+#elif defined(GGML_USE_VULKAN)
+                if (ggml_vk_can_mul_mat(node->src[0], node->src[1], node)) {
+                    n_tasks = 1; // TODO: this actually is doing nothing
+                                 //       the threads are still spinning
+                }
 #elif defined(GGML_USE_CLBLAST)
                 if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
                     n_tasks = 1; // TODO: this actually is doing nothing
@@ -19139,7 +19144,7 @@ int ggml_cpu_has_wasm_simd(void) {
 }
 
 int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) || defined(GGML_USE_CUBLAS) || defined(GGML_USE_VULKAN) || defined(GGML_USE_CLBLAST)
     return 1;
 #else
     return 0;

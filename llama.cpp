@@ -1,6 +1,8 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
+#include <iostream>
+
 #include "unicode.h"
 
 #include "ggml.h"
@@ -672,22 +674,7 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
         plan.work_data = buf.data();
     }
 
-#ifdef GGML_USE_VULKAN
-    for (int i = 0; i < graph->n_nodes; i++) {
-        ggml_vk_preallocate_buffers_graph(graph->nodes[i], graph);
-    }
-    ggml_vk_preallocate_buffers();
-
-    for (int i = 0; i < graph->n_nodes; i++) {
-        ggml_vk_build_graph(graph->nodes[i]);
-    }
-#endif
-
     ggml_graph_compute(graph, &plan);
-
-#ifdef GGML_USE_VULKAN
-    ggml_vk_graph_cleanup();
-#endif
 }
 
 //
@@ -1324,6 +1311,9 @@ struct llama_kv_cache {
             ggml_cuda_free_data(k);
             ggml_cuda_free_data(v);
         }
+#elif GGML_USE_VULKAN
+        ggml_vk_free_data(k);
+        ggml_vk_free_data(v);
 #endif
     }
 };
@@ -1443,9 +1433,7 @@ struct llama_model {
             ggml_cl_free_data(tensors_by_name[i].second);
         }
 #elif defined(GGML_USE_VULKAN)
-        for (size_t i = 0; i < tensors_by_name.size(); ++i) {
-            ggml_vk_free_data(tensors_by_name[i].second);
-        }
+        ggml_vk_cleanup();
 #endif
     }
 };
@@ -1573,8 +1561,23 @@ static bool llama_kv_cache_init(
             LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MiB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
         }
     }
-#endif
+#elif defined(GGML_USE_VULKAN)
+    size_t vram_kv_cache = 0;
 
+    if (n_gpu_layers > (int)n_layer + 1) {
+        ggml_vk_assign_buffer(cache.v);
+        LLAMA_LOG_INFO("%s: offloading v cache to GPU\n", __func__);
+        vram_kv_cache += ggml_nbytes(cache.v);
+    }
+    if (n_gpu_layers > (int)n_layer + 2) {
+        ggml_vk_assign_buffer(cache.k);
+        LLAMA_LOG_INFO("%s: offloading k cache to GPU\n", __func__);
+        vram_kv_cache += ggml_nbytes(cache.k);
+    }
+    if (vram_kv_cache > 0) {
+        LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MiB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
+    }
+#endif
     return true;
 }
 
@@ -2108,7 +2111,7 @@ struct llama_model_loader {
                     break;
 #elif defined(GGML_USE_VULKAN)
                 case GGML_BACKEND_GPU:
-                    ggml_vk_transform_tensor(cur->data, cur);
+                    ggml_vk_transform_tensor_static(cur->data, cur);
                     if (!use_mmap) {
                         free(cur->data);
                     }
@@ -3355,10 +3358,10 @@ static void llm_load_tensors(
             LLAMA_LOG_INFO("%s: offloading non-repeating layers to GPU\n", __func__);
         }
 
-#ifdef GGML_USE_CUBLAS
+#if GGML_USE_CUBLAS || GGML_USE_VULKAN
         const int max_backend_supported_layers = hparams.n_layer + 3;
         const int max_offloadable_layers       = hparams.n_layer + 3;
-#elif GGML_USE_CLBLAST || GGML_USE_VULKAN
+#elif GGML_USE_CLBLAST
         const int max_backend_supported_layers = hparams.n_layer + 1;
         const int max_offloadable_layers       = hparams.n_layer + 1;
 #endif // GGML_USE_CUBLAS
@@ -5321,6 +5324,12 @@ static struct ggml_cgraph * llama_build_graph(
             { OFFLOAD_FUNC_V,   "GPU (CUDA) V" },
             { OFFLOAD_FUNC_NR,  "GPU (CUDA) NR" },
             { OFFLOAD_FUNC_EMB, "GPU (CUDA) EMB" },
+#elif GGML_USE_VULKAN
+            { OFFLOAD_FUNC,     "GPU (Vulkan)" },
+            { OFFLOAD_FUNC_KQ,  "GPU (Vulkan) KQ" },
+            { OFFLOAD_FUNC_V,   "GPU (Vulkan) V" },
+            { OFFLOAD_FUNC_NR,  "GPU (Vulkan) NR" },
+            { OFFLOAD_FUNC_EMB, "GPU (Vulkan) EMB" },
 #else
             { OFFLOAD_FUNC,     "CPU" },
             { OFFLOAD_FUNC_KQ,  "CPU" },
@@ -5385,6 +5394,8 @@ static struct ggml_cgraph * llama_build_graph(
         // this is needed for compatibility with Metal for example
 #ifdef GGML_USE_CUBLAS
         static offload_func_t ggml_offload_gpu = ggml_cuda_assign_buffers_no_alloc;
+#elif GGML_USE_VULKAN
+        static offload_func_t ggml_offload_gpu = ggml_vk_prepare_tensor;
 #else
         static offload_func_t ggml_offload_gpu = ggml_offload_nop;
 #endif
@@ -5608,6 +5619,28 @@ static int llama_decode_internal(
         embeddings->backend = GGML_BACKEND_CPU;
     }
     res->backend = GGML_BACKEND_CPU;
+#elif GGML_USE_VULKAN
+    for (int i = 0; i < gf->n_leafs; i++) {
+        ggml_tensor * node = gf->leafs[i];
+        if (node->backend == GGML_BACKEND_GPU && node->extra == nullptr) {
+            ggml_vk_transform_tensor_temporary(node->data, node);
+        }
+    }
+
+    for (int i = 0; i < gf->n_nodes; i++) {
+        ggml_vk_preallocate_buffers_graph(gf->nodes[i], gf);
+    }
+    ggml_vk_preallocate_buffers();
+
+    for (int i = 0; i < gf->n_nodes; i++) {
+        ggml_vk_build_graph(gf->nodes[i], gf);
+    }
+
+    // HACK: ggml-alloc may change the tensor backend when reusing a parent, so force output to be on the CPU here if needed
+    if (!lctx.embedding.empty()) {
+        embeddings->backend = GGML_BACKEND_CPU;
+    }
+    res->backend = GGML_BACKEND_CPU;
 #endif
 
     // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
@@ -5654,6 +5687,8 @@ static int llama_decode_internal(
 
 #if GGML_USE_MPI
     ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
+#elif GGML_USE_VULKAN
+    ggml_vk_graph_cleanup();
 #endif
 
     // update the kv ring buffer
