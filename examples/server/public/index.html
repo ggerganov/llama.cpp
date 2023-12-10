@@ -639,13 +639,13 @@
         <form onsubmit=${submit}>
           <div>
             <textarea
-              className=${generating.value ? "loading" : null}
-              oninput=${(e) => message.value = e.target.value}
-              onkeypress=${enterSubmits}
-              placeholder="Say something..."
-              rows=2
-              type="text"
-              value="${message}"
+               className=${generating.value ? "loading" : null}
+               oninput=${(e) => message.value = e.target.value}
+               onkeypress=${enterSubmits}
+               placeholder="Say something..."
+               rows=2
+               type="text"
+               value="${message}"
             />
           </div>
           <div class="right">
@@ -655,7 +655,7 @@
             <button onclick=${reset}>Reset</button>
           </div>
         </form>
-    `
+      `
     }
 
     function CompletionControls() {
@@ -752,7 +752,7 @@
             <label for="${name}">${label} <span>${value}</span></label>
             <input  type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
           </div>
-          `
+        `
       };
 
       const IntField = ({ label, max, min, name, value }) => {
@@ -772,13 +772,13 @@
       const UserTemplateResetButton = () => {
         if (selectedUserTemplate.value.name == 'default') {
           return html`
-          <button disabled>Using default template</button>
-        `
+            <button disabled>Using default template</button>
+          `
         }
 
         return html`
-        <button onclick=${userTemplateReset}>Reset all to default</button>
-      `
+          <button onclick=${userTemplateReset}>Reset all to default</button>
+        `
       };
 
       useEffect(() => {
@@ -992,10 +992,10 @@
         return html`<span/>`
       }
       return html`
-      <span>
-        ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second | 
-      </span>
-    `
+        <span>
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second | 
+        </span>
+      `
     }
 
     // simple popover impl
