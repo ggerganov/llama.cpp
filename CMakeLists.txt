@@ -593,6 +593,11 @@ else()
     message(STATUS "Unknown architecture")
 endif()
 
+if (MINGW)
+    # Target Windows 8 for PrefetchVirtualMemory
+    add_compile_definitions(_WIN32_WINNT=0x602)
+endif()
+
 #
 # POSIX conformance
 #

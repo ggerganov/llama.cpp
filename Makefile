@@ -306,12 +306,15 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	#MK_CXXFLAGS += -mssse3
 endif
 
-# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
-# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
-# https://github.com/ggerganov/llama.cpp/issues/2922
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
+	# The stack is only 16-byte aligned on Windows, so don't let gcc emit aligned moves.
+	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
+	# https://github.com/ggerganov/llama.cpp/issues/2922
 	MK_CFLAGS   += -Xassembler -muse-unaligned-vector-move
 	MK_CXXFLAGS += -Xassembler -muse-unaligned-vector-move
+
+	# Target Windows 8 for PrefetchVirtualMemory
+	MK_CPPFLAGS += -D_WIN32_WINNT=0x602
 endif
 
 ifneq ($(filter aarch64%,$(UNAME_M)),)
