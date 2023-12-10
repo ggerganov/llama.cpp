@@ -20,8 +20,6 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
 
-    std::random_device rd;
-
 #if 0
     std::default_random_engine generator(rd());
     std::uniform_real_distribution<float> distribution(min, max);
@@ -31,6 +29,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     }
 #endif
     auto init_thread = [&](size_t start, size_t end) {
+        std::random_device rd;
         std::default_random_engine generator(rd());
         std::uniform_real_distribution<float> distribution(min, max);
 
@@ -341,13 +340,6 @@ struct test_case {
                 }
             }
 
-            //if (t1->op == GGML_OP_SOFT_MAX) {
-            //    printf("[%s] ", ggml_op_desc(t1));
-            //    for (int i = 0; i < f1.size(); i++) {
-            //        printf("(%x, %x) ", *(uint32_t*)&f1[i], *(uint32_t*)&f2[i]);
-            //    }
-            //    printf("\n");
-            //}
             double err = nmse(f1.data(), f2.data(), f1.size());
             if (err > ud->max_err) {
                 printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
@@ -447,8 +439,9 @@ struct test_case {
             return size;
         };
         for (int i = 0; i < gf->n_nodes; i++) {
-            if (ggml_is_view_op(gf->nodes[i]->op) || gf->nodes[i] == out)
+            if (ggml_is_view_op(gf->nodes[i]->op) || gf->nodes[i] == out) {
                 continue;
+            }
             mem += tensor_op_size(gf->nodes[i]);
         }
 
@@ -1137,15 +1130,17 @@ struct test_sum_rows : public test_case {
     }
 };
 
+// Mixtral MOE
 struct test_moe : public test_case {
-    const int n_experts = 8;
-    const int n_experts_per_tok = 2;
-    const int n_tokens = 1;
-    const int n_embd = 4096;
-    const int n_ff = 14336;
+    const int n_experts;
+    const int n_experts_per_tok;
+    const int n_tokens;
+    const int n_embd;
+    const int n_ff;
 
     std::string op_desc(ggml_tensor * t) override {
         return "MOE";
+
         GGML_UNUSED(t);
     }
 
@@ -1153,7 +1148,8 @@ struct test_moe : public test_case {
         return VARS_TO_STR5(n_experts, n_experts_per_tok, n_tokens, n_embd, n_ff);
     }
 
-    test_moe() {
+    test_moe(int n_experts = 8, int n_experts_per_tok = 2, int n_tokens = 1, int n_embd = 4096, int n_ff = 14336)
+        : n_experts(n_experts), n_experts_per_tok(n_experts_per_tok), n_tokens(n_tokens), n_embd(n_embd), n_ff(n_ff) {
     }
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
@@ -1171,24 +1167,20 @@ struct test_moe : public test_case {
 
         ggml_tensor * cur = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_tokens);
 
-        ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur); // [n_tokens, num_experts]
-        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(n_embd)); // [n_tokens, num_experts]
+        ggml_tensor * logits = ggml_mul_mat(ctx, ffn_gate_inp, cur);
+        ggml_tensor * probs = ggml_soft_max_ext(ctx, logits, nullptr, 1.0f/sqrtf(n_embd));
 
         // select experts
-        ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_experts_per_tok);   // [n_tokens, num_experts_per_tok]
+        ggml_tensor * selected_experts = ggml_top_k(ctx, probs, n_experts_per_tok);
 
         ggml_tensor * weights = ggml_get_rows(ctx,
                 ggml_reshape_3d(ctx, probs, 1, n_experts, n_tokens), selected_experts);
-        printf("get rows args %ld %ld %ld %ld, %ld %ld %ld %ld\n",
-                weights->src[0]->ne[0], weights->src[0]->ne[1], weights->src[0]->ne[2], weights->src[0]->ne[3],
-                weights->src[1]->ne[0], weights->src[1]->ne[1], weights->src[1]->ne[2], weights->src[1]->ne[3]);
 
-
-        weights = ggml_reshape_2d(ctx, weights, n_experts_per_tok, n_tokens);          // [n_tokens, num_experts_per_tok]
+        weights = ggml_reshape_2d(ctx, weights, n_experts_per_tok, n_tokens);
 
         ggml_tensor * weights_sum = ggml_sum_rows(ctx, weights);
 
-        weights = ggml_div(ctx, weights, weights_sum);              // [n_tokens, num_experts_per_tok]
+        weights = ggml_div(ctx, weights, weights_sum);
 
         // compute expert outputs
         ggml_tensor * moe_out = nullptr;
@@ -1202,9 +1194,9 @@ struct test_moe : public test_case {
 
             cur_gate = ggml_silu(ctx, cur_gate);
 
-            cur_expert = ggml_mul(ctx, cur_up, cur_gate); // [n_tokens, n_embd]
+            cur_expert = ggml_mul(ctx, cur_up, cur_gate);
 
-            cur_expert = ggml_mul_mat_id(ctx, ffn_down_exp.data(), n_experts, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+            cur_expert = ggml_mul_mat_id(ctx, ffn_down_exp.data(), n_experts, selected_experts, i, cur_expert);
 
             cur_expert = ggml_mul(ctx, cur_expert,
                     ggml_view_2d(ctx, weights, 1, n_tokens, weights->nb[1], i*weights->nb[0]));
@@ -1239,8 +1231,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_Q4_K, GGML_TYPE_Q5_K,
         GGML_TYPE_Q6_K
     };
-
-    test_cases.emplace_back(new test_moe());
 
     // unary ops
     for (int op = 0; op < GGML_UNARY_OP_COUNT; op++) {
@@ -1374,6 +1364,9 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     test_cases.emplace_back(new test_sum_rows());
 
+    test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 14336));
+    test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
+
     // run tests
     if (mode == MODE_TEST) {
         ggml_backend_t backend_cpu = ggml_backend_cpu_init();
@@ -1389,14 +1382,17 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         ggml_backend_free(backend_cpu);
 
         return n_ok == test_cases.size();
-    } else if (mode == MODE_PERF) {
+    }
+
+    if (mode == MODE_PERF) {
         for (auto & test : test_cases) {
             test->eval_perf(backend, op_name);
         }
         return true;
-    } else {
-        GGML_ASSERT(false);
     }
+
+    GGML_ASSERT(false);
+    return false;
 }
 
 static void usage(char ** argv) {
@@ -1469,11 +1465,12 @@ int main(int argc, char ** argv) {
     }
 
     printf("%zu/%zu backends passed\n", n_ok, ggml_backend_reg_get_count());
+
     if (n_ok != ggml_backend_reg_get_count()) {
         printf("\033[1;31mFAIL\033[0m\n");
         return 1;
-    } else {
-        printf("\033[1;32mOK\033[0m\n");
-        return 0;
     }
+
+    printf("\033[1;32mOK\033[0m\n");
+    return 0;
 }
