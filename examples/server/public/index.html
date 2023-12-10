@@ -20,15 +20,17 @@
       justify-content: space-between;
       height: 100%;
       width: 100%;
+      max-width: 900px;
     }
 
     main {
-      margin: 3px;
+      margin: 3px auto;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       gap: 1em;
-
+      width: 100%;
+      align-items: center;
       flex-grow: 1;
       overflow-y: auto;
       padding: 0.5em;
@@ -144,7 +146,11 @@
     header {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
+      align-items: center;
+      background: #1c2020;
+      color: #f2f2f2;
+      padding: 0.25em 0.5em;
+      border-bottom: 2px solid color(srgb 0.9999 0.5095 0.2057);
     }
 
     .header_controls {
@@ -157,6 +163,7 @@
       max-height: 100%;
       height: 100%;
       flex-wrap: wrap;
+      width: 100%;
     }
 
     .column {
@@ -175,6 +182,14 @@
       .aside {
         max-width: 100%;
       }
+    }
+
+    #chat {
+      width: 100%;
+    }
+
+    button{
+      padding: 0.5em;
     }
 
     .range_field {
@@ -930,20 +945,20 @@
         const popoverChildren = html`
           <div class="prob-set">
             ${probs.map((p, index) => {
-            return html`
+          return html`
                 <div
                   key=${index}
                   title=${`prob: ${p.prob}`}
                   style=${{
-                padding: '0.3em',
-                backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
-              }}
+              padding: '0.3em',
+              backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+            }}
                 >
                   <span>${p.tok_str}: </span>
                   <span>${Math.floor(p.prob * 100)}%</span>
                 </div>
               `
-          })}
+        })}
           </div>
         `
 
@@ -1022,9 +1037,9 @@
               ref=${popoverRef}
               class="popover-content"
               style=${{
-              top: position.value.top,
-              left: position.value.left,
-            }}
+            top: position.value.top,
+            left: position.value.left,
+          }}
             >
               ${props.popoverChildren}
             </div>
@@ -1099,7 +1114,7 @@
       return html`
       <div class="basecontainer mode-${session.value.type}">
         <header>
-          <h1>llama.cpp</h1>
+          <img src="/llama1-logo.png" alt="llama.cpp" height="40px" width="auto" />
           <${ConfigForm} header/>
         </header>
 
