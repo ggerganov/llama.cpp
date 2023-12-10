@@ -621,25 +621,25 @@
       }
 
       return html`
-      <form onsubmit=${submit}>
-        <div>
-          <textarea
-             className=${generating.value ? "loading" : null}
-             oninput=${(e) => message.value = e.target.value}
-             onkeypress=${enterSubmits}
-             placeholder="Say something..."
-             rows=2
-             type="text"
-             value="${message}"
-          />
-        </div>
-        <div class="right">
-          <button type="submit" disabled=${generating.value}>Send</button>
-          <button onclick=${uploadImage}>Upload Image</button>
-          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-          <button onclick=${reset}>Reset</button>
-        </div>
-      </form>
+        <form onsubmit=${submit}>
+          <div>
+            <textarea
+              className=${generating.value ? "loading" : null}
+              oninput=${(e) => message.value = e.target.value}
+              onkeypress=${enterSubmits}
+              placeholder="Say something..."
+              rows=2
+              type="text"
+              value="${message}"
+            />
+          </div>
+          <div class="right">
+            <button type="submit" disabled=${generating.value}>Send</button>
+            <button onclick=${uploadImage}>Upload Image</button>
+            <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+            <button onclick=${reset}>Reset</button>
+          </div>
+        </form>
     `
     }
 
@@ -649,11 +649,11 @@
         runCompletion();
       }
       return html`
-      <div>
-        <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
-        <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-        <button onclick=${reset}>Reset</button>
-      </div>`;
+        <div>
+          <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
+          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+          <button onclick=${reset}>Reset</button>
+        </div>`;
     }
 
     const ChatLog = (props) => {
@@ -697,12 +697,12 @@
       }
 
       return html`
-      <div id="chat" ref=${container} key=${messages.length}>
-        <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-        <span class="response" contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
-          ${messages.flatMap(chatLine)}
-        </span>
-      </div>`;
+        <div id="chat" ref=${container} key=${messages.length}>
+          <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
+          <span class="response" contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
+            ${messages.flatMap(chatLine)}
+          </span>
+        </div>`;
     };
 
     const ConfigForm = (props) => {
@@ -733,20 +733,20 @@
 
       const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
-        <div class="range_field">
-          <label for="${name}">${label} <span>${value}</span></label>
-          <input  type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
-        </div>
-      `
+          <div class="range_field">
+            <label for="${name}">${label} <span>${value}</span></label>
+            <input  type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
+          </div>
+          `
       };
 
       const IntField = ({ label, max, min, name, value }) => {
         return html`
-        <div class="range_field">
-          <label for="${name}">${label} <span>${value}</span></label>
-          <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-        </div>
-      `
+          <div class="range_field">
+            <label for="${name}">${label} <span>${value}</span></label>
+            <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+          </div>
+          `
       };
 
       const userTemplateReset = (e) => {
@@ -769,12 +769,12 @@
       useEffect(() => {
         // autosave template on every change
         userTemplateAutosave()
-      }, [session.value])// removed params.value as it would re render the page.
+      }, [session.value])
 
       const GrammarControl = () => (
         html`
         <details>
-        <summary>Grammer Configuration</summary>
+        <summary>Grammar Configuration</summary>
           <label for="template">Grammar</label>
           <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
           <input  type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
@@ -785,49 +785,49 @@
 
       const PromptControlFieldSet = () => (
         html`
-      <fieldset>
-        <div>
-          <label htmlFor="prompt">Prompt</label>
-          <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
-        </div>
-      </fieldset>
-      `
+        <fieldset>
+          <div>
+            <label htmlFor="prompt">Prompt</label>
+            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
+          </div>
+        </fieldset>
+        `
       );
 
       const ChatConfigForm = () => (
         html`
-        ${PromptControlFieldSet()}
+          ${PromptControlFieldSet()}
 
-        <fieldset class="two">
-          <div>
-            <label for="user">User name</label>
-            <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
-          </div>
+          <fieldset class="two">
+            <div>
+              <label for="user">User name</label>
+              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+            </div>
 
-          <div>
-            <label for="bot">Bot name</label>
-            <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
-          </div>
-        </fieldset>
+            <div>
+              <label for="bot">Bot name</label>
+              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
+            </div>
+          </fieldset>
 
-        <fieldset>
-          <div>
-            <label for="template">Prompt template</label>
-            <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
-          </div>
+          <fieldset>
+            <div>
+              <label for="template">Prompt template</label>
+              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
+            </div>
 
-          <div>
-            <label for="template">Chat history template</label>
-            <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
-          </div>
-        </fieldset>
-    `
+            <div>
+              <label for="template">Chat history template</label>
+              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+            </div>
+          </fieldset>
+          `
       );
 
       const CompletionConfigForm = () => (
         html`
-        ${PromptControlFieldSet()}
-      `
+          ${PromptControlFieldSet()}
+        `
       );
 
 
@@ -884,7 +884,7 @@
       )
 
       if (props?.header)
-        return html`<${ModeSelector} />`
+        return ModeSelector()
 
       return html`
       <form class="flexform">
@@ -928,30 +928,30 @@
         const pColor = found ? probColor(found.prob) : 'transparent'
 
         const popoverChildren = html`
-        <div class="prob-set">
-          ${probs.map((p, index) => {
-          return html`
-              <div
-                key=${index}
-                title=${`prob: ${p.prob}`}
-                style=${{
-              padding: '0.3em',
-              backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
-            }}
-              >
-                <span>${p.tok_str}: </span>
-                <span>${Math.floor(p.prob * 100)}%</span>
-              </div>
-            `
-        })}
-        </div>
-      `
+          <div class="prob-set">
+            ${probs.map((p, index) => {
+            return html`
+                <div
+                  key=${index}
+                  title=${`prob: ${p.prob}`}
+                  style=${{
+                padding: '0.3em',
+                backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+              }}
+                >
+                  <span>${p.tok_str}: </span>
+                  <span>${Math.floor(p.prob * 100)}%</span>
+                </div>
+              `
+          })}
+          </div>
+        `
 
         return html`
-        <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
-          ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
-        </>
-      `
+          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
+            ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
+          </>
+        `
       });
     }
 
@@ -1015,22 +1015,22 @@
       }, []);
 
       return html`
-      <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
-      ${isOpen.value && html`
-        <${Portal} into="#portal">
-          <div
-            ref=${popoverRef}
-            class="popover-content"
-            style=${{
-            top: position.value.top,
-            left: position.value.left,
-          }}
-          >
-            ${props.popoverChildren}
-          </div>
-        </${Portal}>
-      `}
-    `;
+        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
+        ${isOpen.value && html`
+          <${Portal} into="#portal">
+            <div
+              ref=${popoverRef}
+              class="popover-content"
+              style=${{
+              top: position.value.top,
+              left: position.value.left,
+            }}
+            >
+              ${props.popoverChildren}
+            </div>
+          </${Portal}>
+        `}
+      `;
     };
 
     // Source: preact-portal (https://github.com/developit/preact-portal/blob/master/src/preact-portal.js)
@@ -1073,10 +1073,10 @@
         }
 
         this.remote = render(html`
-        <${PortalProxy} context=${this.context}>
-          ${show && this.props.children || null}
-        </${PortalProxy}>
-      `, this.into, this.remote);
+          <${PortalProxy} context=${this.context}>
+            ${show && this.props.children || null}
+          </${PortalProxy}>
+        `, this.into, this.remote);
       }
 
       render() {
