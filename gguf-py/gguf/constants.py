@@ -56,20 +56,21 @@ class Keys:
         SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
 
     class Tokenizer:
-        MODEL      = "tokenizer.ggml.model"
-        LIST       = "tokenizer.ggml.tokens"
-        TOKEN_TYPE = "tokenizer.ggml.token_type"
-        SCORES     = "tokenizer.ggml.scores"
-        MERGES     = "tokenizer.ggml.merges"
-        BOS_ID     = "tokenizer.ggml.bos_token_id"
-        EOS_ID     = "tokenizer.ggml.eos_token_id"
-        UNK_ID     = "tokenizer.ggml.unknown_token_id"
-        SEP_ID     = "tokenizer.ggml.seperator_token_id"
-        PAD_ID     = "tokenizer.ggml.padding_token_id"
-        ADD_BOS    = "tokenizer.ggml.add_bos_token"
-        ADD_EOS    = "tokenizer.ggml.add_eos_token"
-        HF_JSON    = "tokenizer.huggingface.json"
-        RWKV       = "tokenizer.rwkv.world"
+        MODEL         = "tokenizer.ggml.model"
+        LIST          = "tokenizer.ggml.tokens"
+        TOKEN_TYPE    = "tokenizer.ggml.token_type"
+        SCORES        = "tokenizer.ggml.scores"
+        MERGES        = "tokenizer.ggml.merges"
+        BOS_ID        = "tokenizer.ggml.bos_token_id"
+        EOS_ID        = "tokenizer.ggml.eos_token_id"
+        UNK_ID        = "tokenizer.ggml.unknown_token_id"
+        SEP_ID        = "tokenizer.ggml.seperator_token_id"
+        PAD_ID        = "tokenizer.ggml.padding_token_id"
+        ADD_BOS       = "tokenizer.ggml.add_bos_token"
+        ADD_EOS       = "tokenizer.ggml.add_eos_token"
+        HF_JSON       = "tokenizer.huggingface.json"
+        RWKV          = "tokenizer.rwkv.world"
+        CHAT_TEMPLATE = "tokenizer.chat_template"
 
 
 #
@@ -91,6 +92,7 @@ class MODEL_ARCH(IntEnum):
     BERT      = auto()
     BLOOM     = auto()
     STABLELM  = auto()
+    QWEN      = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -131,6 +133,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
+    MODEL_ARCH.QWEN:           "qwen",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -316,6 +319,20 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.QWEN: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.GPT2: [
         # TODO
     ],
@@ -334,6 +351,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
     MODEL_ARCH.PERSIMMON: [
         MODEL_TENSOR.ROPE_FREQS,
+    ],
+    MODEL_ARCH.QWEN: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
 }
 

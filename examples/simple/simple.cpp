@@ -75,7 +75,7 @@ int main(int argc, char ** argv) {
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
         LOG_TEE("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
-        LOG_TEE("%s:        either reduce n_parallel or increase n_ctx\n", __func__);
+        LOG_TEE("%s:        either reduce n_len or increase n_ctx\n", __func__);
         return 1;
     }
 
