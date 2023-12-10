@@ -261,15 +261,15 @@ class Params:
         n_experts_used = None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
-        if config.get("rope_theta") == 1000000:
+        if config.get("moe"):
+            # Mixtral
+            n_ctx = 32768
+        elif config.get("rope_theta") == 1000000:
             # CodeLlama
             n_ctx = 16384
         elif config["norm_eps"] == 1e-05:
             # LLaMA v2
             n_ctx = 4096
-        elif config["moe"]:
-            # Mixtral
-            n_ctx = 32768
         else:
             # LLaMA v1
             n_ctx = 2048
