@@ -1,0 +1,24 @@
+name: koboldcpp
+channels:
+  - nvidia/label/cuda-11.5.0
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - cuda-nvcc=11.5
+  - cuda-libraries-dev=11.5
+  - cxx-compiler
+  - gxx=10
+  - pip
+  - git=2.35.1
+  - libopenblas
+  - openblas
+  - clblast
+  - ninja
+  - make
+  - packaging
+  - pyinstaller
+  - libcblas
+  - ocl-icd-system
+  - pip:
+    - customtkinter

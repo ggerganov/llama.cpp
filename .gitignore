@@ -118,5 +118,8 @@ hipblas.dll
 koboldcpp_hipblas.so
 koboldcpp_hipblas.dll
 
+bin/
+conda/
+
 # Jetbrains idea folder
 .idea/
