@@ -70,23 +70,27 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
     std::vector<uint8_t> buf(ggml_nbytes(t));
     ggml_backend_tensor_get(t, buf.data(), 0, ggml_nbytes(t));
 
+    ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
+
     // access elements by index to avoid gaps in views
     for (int64_t i3 = 0; i3 < t->ne[3]; i3++) {
         for (int64_t i2 = 0; i2 < t->ne[2]; i2++) {
             for (int64_t i1 = 0; i1 < t->ne[1]; i1++) {
-                for (int64_t i0 = 0; i0 < t->ne[0]; i0++) {
+                for (int64_t i0 = 0; i0 < t->ne[0]; i0 += ggml_blck_size(t->type)) {
                     size_t i = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
-                    float v;
                     if (t->type == GGML_TYPE_F16) {
-                        v = (float) ggml_fp16_to_fp32(*(ggml_fp16_t*)&buf[i]);
+                        tv.push_back(ggml_fp16_to_fp32(*(ggml_fp16_t*)&buf[i]));
                     } else if (t->type == GGML_TYPE_F32) {
-                        v = *(float *) &buf[i];
+                        tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
-                        v = *(int32_t *) &buf[i];
+                        tv.push_back((float)*(int32_t *) &buf[i]);
+                    } else if (ggml_is_quantized(t->type)) {
+                        std::vector<float> vq(ggml_blck_size(t->type));
+                        tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
+                        tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
                         GGML_ASSERT(false);
                     }
-                    tv.push_back(v);
                 }
             }
         }
@@ -320,7 +324,7 @@ struct test_case {
             for (size_t i = 0; i < f1.size(); i++) {
                 // check for nans
                 if (std::isnan(f1[i]) || std::isnan(f2[i])) {
-                    printf("[%s] NaN at index %zu ", ggml_op_desc(t1), i);
+                    printf("[%s] NaN at index %zu (%f %f) ", ggml_op_desc(t1), i, f1[i], f2[i]);
                     ud->ok = false;
                     return true;
                 }
@@ -1253,7 +1257,11 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_repeat(GGML_TYPE_F32, {10, 10, 10, 10}, {1, 1, 1, 2}));
 
     test_cases.emplace_back(new test_dup());
-    test_cases.emplace_back(new test_cpy());
+
+    for (ggml_type type : all_types) {
+       test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 100, 100, 1}));
+    }
+
     test_cases.emplace_back(new test_cont());
 
     auto add_test_bin_bcast = [&](ggml_type type, std::array<int64_t, 4> ne, std::array<int, 4> nr) {
