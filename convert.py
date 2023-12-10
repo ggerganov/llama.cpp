@@ -151,14 +151,16 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 
 @dataclass
 class Params:
-    n_vocab:    int
-    n_embd:     int
-    n_layer:    int
-    n_ctx:      int
-    n_ff:       int
-    n_head:     int
-    n_head_kv:  int
-    f_norm_eps: float
+    n_vocab:        int
+    n_embd:         int
+    n_layer:        int
+    n_ctx:          int
+    n_ff:           int
+    n_head:         int
+    n_head_kv:      int
+    n_experts:      int | None = None
+    n_experts_used: int | None = None
+    f_norm_eps:     float | None = None
 
     rope_scaling_type: gguf.RopeScalingType | None = None
     f_rope_freq_base: float | None = None
@@ -255,6 +257,9 @@ class Params:
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
+        n_experts = None
+        n_experts_used = None
+
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
         if config.get("rope_theta") == 1000000:
             # CodeLlama
@@ -262,20 +267,20 @@ class Params:
         elif config["norm_eps"] == 1e-05:
             # LLaMA v2
             n_ctx = 4096
+        elif config["moe"]:
+            # Mixtral
+            n_ctx = 32768
         else:
             # LLaMA v1
             n_ctx = 2048
 
-        # print model keys
-        for k in model.keys():
-            print(k)
-
-        # check if MoE
-        if "layers.0.feed_forward.experts.0.w1.weight" in model:
-            n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
-            n_ctx = 32768
-        else:
+        if "layers.0.feed_forward.w1.weight" in model:
             n_ff = model["layers.0.feed_forward.w1.weight"].shape[0]
+
+        if config.get("moe"):
+            n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
+            n_experts = config["moe"]["num_experts"]
+            n_experts_used = config["moe"]["num_experts_per_tok"]
 
         return Params(
             n_vocab          = model["tok_embeddings.weight"].shape[0],
@@ -285,6 +290,8 @@ class Params:
             n_ff             = n_ff,
             n_head           = (n_head := config["n_heads"]),
             n_head_kv        = config.get("n_kv_heads", n_head),
+            n_experts        = n_experts,
+            n_experts_used   = n_experts_used,
             f_norm_eps       = config["norm_eps"],
             f_rope_freq_base = config.get("rope_theta"),
         )
@@ -843,7 +850,17 @@ class OutputFile:
         self.gguf.add_rope_dimension_count(params.n_embd // params.n_head)
         self.gguf.add_head_count          (params.n_head)
         self.gguf.add_head_count_kv       (params.n_head_kv)
-        self.gguf.add_layer_norm_rms_eps  (params.f_norm_eps)
+
+        if params.n_experts:
+            self.gguf.add_expert_count(params.n_experts)
+
+        if params.n_experts_used:
+            self.gguf.add_expert_used_count(params.n_experts_used)
+
+        if params.f_norm_eps:
+            self.gguf.add_layer_norm_rms_eps(params.f_norm_eps)
+        else:
+            raise ValueError('f_norm_eps is None')
 
         if params.f_rope_freq_base is not None:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)

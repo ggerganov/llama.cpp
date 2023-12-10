@@ -38,6 +38,8 @@ class Keys:
         FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
         USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
         TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
+        EXPERT_COUNT          = "{arch}.expert_count"
+        EXPERT_USED_COUNT     = "{arch}.expert_used_count"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"

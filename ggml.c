@@ -4075,7 +4075,7 @@ struct ggml_tensor * ggml_mul_mat(
 
 struct ggml_tensor * ggml_mul_mat_id(
         struct ggml_context * ctx,
-        struct ggml_tensor  * as[],
+        struct ggml_tensor  * const as[],
         int                   n_as,
         struct ggml_tensor  * ids,
         int                   id,
