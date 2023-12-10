@@ -84,7 +84,8 @@ std::string process_output_plugin_ocaml(const std::string start,
   //
     
     value result= caml_callback( *step_fn, ocamlString );
-    std::string resultString = String_val(result);
+    std::string resultString = "todo";
+    //String_val(result);
     return resultString;
     
 }
