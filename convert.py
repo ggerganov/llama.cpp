@@ -259,6 +259,7 @@ class Params:
 
         n_experts = None
         n_experts_used = None
+        f_rope_freq_base = None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
         if config.get("moe"):
@@ -281,6 +282,8 @@ class Params:
             n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
             n_experts = config["moe"]["num_experts"]
             n_experts_used = config["moe"]["num_experts_per_tok"]
+            f_rope_freq_base = 1e6
+
 
         return Params(
             n_vocab          = model["tok_embeddings.weight"].shape[0],
@@ -293,7 +296,7 @@ class Params:
             n_experts        = n_experts,
             n_experts_used   = n_experts_used,
             f_norm_eps       = config["norm_eps"],
-            f_rope_freq_base = config.get("rope_theta"),
+            f_rope_freq_base = config.get("rope_theta", f_rope_freq_base),
         )
 
     @staticmethod
