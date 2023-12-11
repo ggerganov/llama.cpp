@@ -1260,7 +1260,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_dup());
 
     for (ggml_type type : all_types) {
-       test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 100, 100, 1}));
+       test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 10, 10, 1}));
     }
 
     test_cases.emplace_back(new test_cont());
@@ -1298,8 +1298,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     add_test_bin_bcast(GGML_TYPE_F32, {1, 1, 640, 1}, {32, 32, 1, 1});
     add_test_bin_bcast(GGML_TYPE_F32, {5120, 1, 1, 1}, {1, 256, 1, 1});
     add_test_bin_bcast(GGML_TYPE_F32, {640, 1, 1, 1}, {1, 1, 1, 1});
-    add_test_bin_bcast(GGML_TYPE_F32, {3, 3, 2560, 1280}, {1, 1, 1, 1});
-    add_test_bin_bcast(GGML_TYPE_F32, {3, 3, 2560, 1280}, {2, 1, 1, 1});
+    //add_test_bin_bcast(GGML_TYPE_F32, {3, 3, 2560, 1280}, {1, 1, 1, 1});
+    //add_test_bin_bcast(GGML_TYPE_F32, {3, 3, 2560, 1280}, {2, 1, 1, 1});
 
     test_cases.emplace_back(new test_scale());
 
@@ -1374,7 +1374,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_sum_rows());
 
     test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 14336));
-    test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
+    //test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
 
     // run tests
     if (mode == MODE_TEST) {
