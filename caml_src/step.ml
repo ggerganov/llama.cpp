@@ -1,4 +1,8 @@
-(* Copyright (C) 2017 Sio Kreuzer. All Rights Reserved. *)
+(* Copyright (C) 2017 Sio Kreuzer. All Rights Reserved.
+   Copyright (C) 2023 James DuPont. All Rights Reserved.
+   *)
+
+open Sertop.Sertop_init
 
 let init () =
     Printf.printf "Initializing Game module...\n";
@@ -7,6 +11,7 @@ let init () =
 let shutdown () =
     Printf.printf "Shutting down Game module...\n";
     flush stdout;;
+
 
 let step (s:string) : string =
     Printf.printf "Hello Ocaml from LLama\n";
