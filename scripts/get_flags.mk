@@ -8,8 +8,9 @@ else
 	else
 		GF_CC_IS_APPLE_CLANG = 1
 	endif
-	GF_CC_VER := $(shell $(GF_CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
-				   | awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
+	GF_CC_VER := \
+		$(shell $(GF_CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
+		| awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
 endif
 
 ifeq ($(GF_CC_IS_CLANG), 1)
