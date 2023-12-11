@@ -1077,6 +1077,10 @@ def show_new_gui():
     contextsize_text = ["256", "512", "1024", "2048", "3072", "4096", "6144", "8192", "12288", "16384", "24576", "32768", "65536"]
     runopts = [opt for lib, opt in lib_option_pairs if file_exists(lib)]
     antirunopts = [opt.replace("Use ", "") for lib, opt in lib_option_pairs if not (opt in runopts)]
+    if "Use CuBLAS" in runopts:
+        antirunopts.remove("hipBLAS (ROCm)")
+    if "Use hipBLAS (ROCm)" in runopts:
+        antirunopts.remove("CuBLAS")
     if os.name != 'nt':
         if "NoAVX2 Mode (Old CPU)" in antirunopts:
             antirunopts.remove("NoAVX2 Mode (Old CPU)")
