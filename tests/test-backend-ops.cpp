@@ -71,13 +71,14 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
     ggml_backend_tensor_get(t, buf.data(), 0, ggml_nbytes(t));
 
     ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
+    size_t bs = ggml_blck_size(t->type);
 
     // access elements by index to avoid gaps in views
     for (int64_t i3 = 0; i3 < t->ne[3]; i3++) {
         for (int64_t i2 = 0; i2 < t->ne[2]; i2++) {
             for (int64_t i1 = 0; i1 < t->ne[1]; i1++) {
-                for (int64_t i0 = 0; i0 < t->ne[0]; i0 += ggml_blck_size(t->type)) {
-                    size_t i = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0*t->nb[0];
+                for (int64_t i0 = 0; i0 < t->ne[0]; i0 += bs) {
+                    size_t i = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0/bs*t->nb[0];
                     if (t->type == GGML_TYPE_F16) {
                         tv.push_back(ggml_fp16_to_fp32(*(ggml_fp16_t*)&buf[i]));
                     } else if (t->type == GGML_TYPE_F32) {
