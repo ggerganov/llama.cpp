@@ -401,7 +401,7 @@ showmaxctxwarning = True
 session_kudos_earned = 0
 session_jobs = 0
 session_starttime = None
-exitcounter = 0
+exitcounter = -1
 punishcounter = 0 #causes a timeout if too many errors
 rewardcounter = 0 #reduces error counts for successful jobs
 totalgens = 0
@@ -708,7 +708,7 @@ Enter Prompt:<br>
         self.wfile.write(finalhtml)
 
     def do_GET(self):
-        global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story
+        global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story, exitcounter
         self.path = self.path.rstrip('/')
         response_body = None
         content_type = 'application/json'
@@ -754,7 +754,7 @@ Enter Prompt:<br>
             lastc = handle.get_last_token_count()
             totalgens = handle.get_total_gens()
             stopreason = handle.get_last_stop_reason()
-            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "total_gens":totalgens, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1)}).encode())
+            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "total_gens":totalgens, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1), "hordeexitcounter":exitcounter}).encode())
 
         elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
@@ -1893,7 +1893,7 @@ def run_horde_worker(args, api_key, worker_name):
             rewardcounter += 1
             if rewardcounter > 50:
                 rewardcounter = 0
-                if exitcounter >= 1:
+                if exitcounter > 1:
                     exitcounter -= 1
 
     def make_url_request_horde(url, data, method='POST'):
@@ -1908,6 +1908,7 @@ def run_horde_worker(args, api_key, worker_name):
     current_generation = None
     session_starttime = datetime.now()
     sleepy_counter = 0 #if this exceeds a value, worker becomes sleepy (slower)
+    exitcounter = 0
     print(f"===\nEmbedded Horde Worker '{worker_name}' Starting...\n(To use your own KAI Bridge/Scribe worker instead, don't set your API key)")
     BRIDGE_AGENT = f"KoboldCppEmbedWorker:2:https://github.com/LostRuins/koboldcpp"
     cluster = "https://horde.koboldai.net"
@@ -1931,7 +1932,7 @@ def run_horde_worker(args, api_key, worker_name):
                 print_with_time(f"Caution: Too many failed jobs may lead to entering maintenance mode.")
                 time.sleep(60 * penaltytime)
             else:
-                 print_with_time(f"Exit limit reached, too many errors.")
+                 print_with_time(f"Horde Worker Exit limit reached, too many errors.")
 
         #first, make sure we are not generating
         if modelbusy.locked():
