@@ -471,6 +471,7 @@ endif()
 execute_process(
     COMMAND ${CMAKE_C_COMPILER} ${CMAKE_EXE_LINKER_FLAGS} -Wl,-v
     ERROR_VARIABLE output
+    OUTPUT_QUIET
 )
 if (output MATCHES "dyld-1015\.7")
     add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
