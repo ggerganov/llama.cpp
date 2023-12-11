@@ -26,20 +26,6 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-ifeq '' '$(findstring clang,$(shell $(CC) --version))'
-	CC_IS_GCC=1
-	CC_VER := $(shell $(CC) -dumpfullversion -dumpversion | awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
-else
-	CC_IS_CLANG=1
-	ifeq '' '$(findstring Apple,$(shell $(CC) --version))'
-		CC_IS_LLVM_CLANG=1
-	else
-		CC_IS_APPLE_CLANG=1
-	endif
-	CC_VER := $(shell $(CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
-				| awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
-endif
-
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -220,30 +206,6 @@ MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmis
 				-Werror=implicit-function-declaration
 MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 
-ifeq ($(CC_IS_CLANG), 1)
-	# clang options
-	MK_CFLAGS     += -Wunreachable-code-break -Wunreachable-code-return
-	HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
-
-	ifneq '' '$(and $(CC_IS_LLVM_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 030800)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-	ifneq '' '$(and $(CC_IS_APPLE_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 070300)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-else
-	# gcc options
-	MK_CFLAGS     += -Wdouble-promotion
-	HOST_CXXFLAGS += -Wno-array-bounds
-
-	ifeq ($(shell expr $(CC_VER) \>= 070100), 1)
-		HOST_CXXFLAGS += -Wno-format-truncation
-	endif
-	ifeq ($(shell expr $(CC_VER) \>= 080100), 1)
-		HOST_CXXFLAGS += -Wextra-semi
-	endif
-endif
-
 # this version of Apple ld64 is buggy
 ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
 	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
@@ -392,6 +354,10 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
+	GF_CC := nvcc 2>/dev/null .c -Xcompiler
+	include scripts/get_flags.mk
+	CUDA_CXXFLAGS := $(GF_CXXFLAGS)
+
 	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS         += ggml-cuda.o
@@ -447,7 +413,7 @@ ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(HOST_CXXFLAGS)" -c $< -o $@
+	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -509,10 +475,13 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
+GF_CC := $(CC)
+include scripts/get_flags.mk
+
 # combine build flags with cmdline overrides
-override CFLAGS    := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
+override CFLAGS    := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(GF_CFLAGS) $(CFLAGS)
 BASE_CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
-override CXXFLAGS  := $(BASE_CXXFLAGS) $(HOST_CXXFLAGS)
+override CXXFLAGS  := $(BASE_CXXFLAGS) $(HOST_CXXFLAGS) $(GF_CXXFLAGS)
 override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
 override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 
