@@ -474,8 +474,13 @@ endif
 ifdef CLBLAST_BUILD
 koboldcpp_clblast: ggml_clblast.o ggml_v2_clblast.o ggml_v1.o expose.o common.o gpttype_adapter_clblast.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o ggml-quants.o ggml-alloc.o ggml-backend.o grammar-parser.o $(OBJS)
 	$(CLBLAST_BUILD)
+ifdef NOAVX2_BUILD
 koboldcpp_clblast_noavx2: ggml_clblast_noavx2.o ggml_v2_clblast_noavx2.o ggml_v1_failsafe.o expose.o common.o gpttype_adapter_clblast_noavx2.o ggml-opencl.o ggml_v2-opencl.o ggml_v2-opencl-legacy.o ggml-quants_noavx2.o ggml-alloc.o ggml-backend.o grammar-parser.o $(OBJS)
 	$(CLBLAST_BUILD)
+else
+koboldcpp_clblast_noavx2:
+	$(DONOTHING)
+endif
 else
 koboldcpp_clblast:
 	$(DONOTHING)
