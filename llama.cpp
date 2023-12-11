@@ -3079,7 +3079,7 @@ static void llm_load_tensors(
                             GGML_ASSERT(hparams.n_expert_used > 0);
 
                             // MoE branch
-                            for (int x = 0; x < 8; ++x) {
+                            for (uint32_t x = 0; x < hparams.n_expert; ++x) {
                                 layer.ffn_gate_exp[x] = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_GATE_EXP, "weight", i, x), {n_embd,   n_ff}, backend_split);
                                 layer.ffn_down_exp[x] = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN_EXP, "weight", i, x), {  n_ff, n_embd}, backend_split);
                                 layer.ffn_up_exp[x]   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP_EXP,   "weight", i, x), {n_embd,   n_ff}, backend_split);
