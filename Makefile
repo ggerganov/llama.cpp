@@ -354,10 +354,6 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	GF_CC := nvcc 2>/dev/null .c -Xcompiler
-	include scripts/get_flags.mk
-	CUDA_CXXFLAGS := $(GF_CXXFLAGS)
-
 	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS         += ggml-cuda.o
@@ -484,6 +480,13 @@ BASE_CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
 override CXXFLAGS  := $(BASE_CXXFLAGS) $(HOST_CXXFLAGS) $(GF_CXXFLAGS)
 override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
 override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
+
+# identify CUDA host compiler
+ifdef LLAMA_CUBLAS
+GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
+include scripts/get_flags.mk
+CUDA_CXXFLAGS := $(GF_CXXFLAGS)
+endif
 
 #
 # Print build information
