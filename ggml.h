@@ -215,7 +215,7 @@
 #define GGML_QNT_VERSION_FACTOR 1000 // do not change this
 
 #define GGML_MAX_DIMS           4
-#define GGML_MAX_PARAMS         1024
+#define GGML_MAX_PARAMS         2048
 #define GGML_MAX_CONTEXTS       64
 #define GGML_MAX_SRC            6
 #define GGML_MAX_NAME           64
