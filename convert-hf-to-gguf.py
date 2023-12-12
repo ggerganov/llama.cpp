@@ -180,6 +180,8 @@ class Model:
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
+        if model_architecture == "MixtralForCausalLM":
+            return MixtralModel
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -847,6 +849,11 @@ class StableLMModel(Model):
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(1e-5)
+
+class MixtralModel(Model):
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
 
 
 class QwenModel(Model):
