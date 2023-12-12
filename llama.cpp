@@ -2754,8 +2754,11 @@ struct llama_augmentation_model_loader {
         // 1. gpu_idx;
         // 2. gpu_bucket;
         // 3. transformed ffn_down;
-        const int64_t ggml_aux_tensor_size = 4 * (100 * 100 + 5120*40*4 * ggml_tensor_overhead() + (int64_t)13824*5120*40*4);
-        printf("%ld\n", ggml_aux_tensor_size);
+        // const int64_t ggml_aux_tensor_size = 4 * (100 * 100 + 5120*40*4 * ggml_tensor_overhead() + (int64_t)13824*5120*40*4);
+        int model_layer = model->layers.size();
+        int ffn_dim = model->layers[0].ffn_up->ne[1];
+        const int64_t ggml_aux_tensor_size = 4 * (100 * 100 + model_layer*ffn_dim*sizeof(float) * ggml_tensor_overhead() );
+        printf("augmentation buffer: %ld\n", ggml_aux_tensor_size);
         struct ggml_init_params params = {
             /*.mem_size   =*/ ggml_aux_tensor_size,
             /*.mem_buffer =*/ nullptr,
@@ -3966,12 +3969,14 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     third = cur;
     struct ggml_tensor * tmp = ggml_mul_mat_idx(ctx, up, cur, idx, gpu_index);
     cb(tmp, "ffn_up_sparse", il);
+#ifdef GGML_USE_CUBLAS
     struct ggml_tensor * tmp2 = ggml_mul_mat_special(ctx, up_gpu, cur, idx, gpu_bucket, up);
     if (tmp2 != NULL) {
         ggml_cuda_assign_buffers_no_alloc(tmp2);
         cb(tmp2, "ffn_up_sparse_gpu", il);
     }
     tmp = ggml_add(ctx, tmp, tmp2);
+#endif
 
 
     if (up_b) {
@@ -3985,12 +3990,14 @@ static struct ggml_tensor * llm_build_ffn_sparse(
         third = cur;
         cur = ggml_mul_mat_idx(ctx, gate, cur, idx, gpu_index);
         cb(cur, "ffn_gate", il);
+#ifdef GGML_USE_CUBLAS
         tmp2 = ggml_mul_mat_special(ctx, gate_gpu, third, idx, gpu_bucket, gate);
         if (tmp2 != NULL) {
             ggml_cuda_assign_buffers_no_alloc(tmp2);
             cb(tmp2, "ffn_up_sparse_gpu", il);
         }
         cur = ggml_add(ctx, cur, tmp2);
+#endif
 
         if (gate_b) {
             cur = ggml_add(ctx, cur, gate_b);
@@ -4017,14 +4024,20 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     }
 
     third = cur;
+#ifdef GGML_USE_CUBLAS
     cur = ggml_axpy(ctx, down_gpu, cur, idx, gpu_bucket);
     if (cur != NULL) {
         ggml_cuda_assign_buffers_no_alloc(cur);
         cb(cur, "ffn_down", il);
     }
+#endif
     tmp = ggml_axpy(ctx, down_t, third, idx, gpu_index);
     cb(tmp, "ffn_down_gpu", il);
+#ifdef GGML_USE_CUBLAS
     cur = ggml_add(ctx, cur, tmp);
+#else
+    cur = tmp;
+#endif
 
     if (down_b) {
         cur = ggml_add(ctx, cur, down_b);
