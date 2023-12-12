@@ -150,7 +150,8 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
-            "layers.{bid}.feed_forward.gate",  # mixtral
+            "layers.{bid}.feed_forward.gate",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.gate", # mixtral
         ),
 
         # Feed-forward up
@@ -169,7 +170,8 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
-            "layers.{bid}.feed_forward.experts.{xid}.w3",             # mixtral
+            "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
         ),
 
         # Feed-forward gate
@@ -180,7 +182,8 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (
-            "layers.{bid}.feed_forward.experts.{xid}.w1", # mixtral
+            "layers.{bid}.feed_forward.experts.{xid}.w1",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w1", # mixtral
         ),
 
         # Feed-forward down
@@ -198,7 +201,8 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
-            "layers.{bid}.feed_forward.experts.{xid}.w2",             # mixtral
+            "layers.{bid}.feed_forward.experts.{xid}.w2",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w2", # mixtral
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (

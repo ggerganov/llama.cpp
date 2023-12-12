@@ -42,6 +42,7 @@ NDArray: TypeAlias = 'np.ndarray[Any, Any]'
 ARCH = gguf.MODEL_ARCH.LLAMA
 
 DEFAULT_CONCURRENCY = 8
+
 #
 # data types
 #
@@ -235,6 +236,13 @@ class Params:
             raise Exception("failed to guess 'n_ctx'. This model is unknown or unsupported.\n"
                             "Suggestion: provide 'config.json' of the model in the same directory containing model files.")
 
+        n_experts      = None
+        n_experts_used = None
+
+        if "num_local_experts" in config:
+            n_experts = config["num_local_experts"]
+            n_experts_used = config["num_experts_per_tok"]
+
         return Params(
             n_vocab           = config["vocab_size"],
             n_embd            = config["hidden_size"],
@@ -243,6 +251,8 @@ class Params:
             n_ff              = config["intermediate_size"],
             n_head            = (n_head := config["num_attention_heads"]),
             n_head_kv         = config.get("num_key_value_heads", n_head),
+            n_experts         = n_experts,
+            n_experts_used    = n_experts_used,
             f_norm_eps        = config["rms_norm_eps"],
             f_rope_freq_base  = config.get("rope_theta"),
             rope_scaling_type = rope_scaling_type,
@@ -257,7 +267,7 @@ class Params:
     def loadOriginalParamsJson(model: LazyModel, config_path: Path) -> Params:
         config = json.load(open(config_path))
 
-        n_experts = None
+        n_experts      = None
         n_experts_used = None
         f_rope_freq_base = None
 
@@ -280,7 +290,7 @@ class Params:
 
         if config.get("moe"):
             n_ff = model["layers.0.feed_forward.experts.0.w1.weight"].shape[0]
-            n_experts = config["moe"]["num_experts"]
+            n_experts      = config["moe"]["num_experts"]
             n_experts_used = config["moe"]["num_experts_per_tok"]
             f_rope_freq_base = 1e6
 
