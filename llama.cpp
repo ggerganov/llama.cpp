@@ -9594,7 +9594,7 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
         memcpy(&logits_cap,  inp, sizeof(logits_cap));  inp += sizeof(logits_cap);
         memcpy(&logits_size, inp, sizeof(logits_size)); inp += sizeof(logits_size);
 
-        GGML_ASSERT(ctx->logits.capacity() == logits_cap);
+        GGML_ASSERT((!ctx->logits_all) || (ctx->logits.capacity() == logits_cap));
 
         if (logits_size) {
             ctx->logits.resize(logits_size);
