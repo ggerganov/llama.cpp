@@ -1080,7 +1080,7 @@ void ggml_metal_graph_compute(
 
                             int64_t nb = ne00;
 
-                            if (ggml_nelements(src1) == ne10 && ggml_is_contiguous(src1) && ne00 % 4 == 0) {
+                            if (ggml_nelements(src1) == ne10 && ggml_is_contiguous(src1) && ne00 % 4 == 0 && ne10 % 4 == 0) {
                                 GGML_ASSERT(ggml_is_contiguous(src0));
 
                                 // src1 is a row
