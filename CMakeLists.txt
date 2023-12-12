@@ -439,8 +439,8 @@ if (LLAMA_ALL_WARNINGS)
 
         get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
 
-        add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS} ${GF_C_FLAGS}>"
-                            "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS} ${GF_CXX_FLAGS}>")
+        add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS};${GF_C_FLAGS}>"
+                            "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS};${GF_CXX_FLAGS}>")
     else()
         # todo : msvc
         set(C_FLAGS   "")
