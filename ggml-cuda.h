@@ -29,7 +29,11 @@ GGML_API void   ggml_cuda_host_free(void * ptr);
 GGML_API bool   ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
 GGML_API void   ggml_cuda_set_tensor_split(const float * tensor_split);
 GGML_API void   ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor);
+GGML_API void   ggml_cuda_alloc_tensor(struct ggml_tensor * tensor);
 GGML_API void   ggml_cuda_free_data(struct ggml_tensor * tensor);
+GGML_API void   ggml_cuda_cpy_1d(struct ggml_tensor * dst, const struct ggml_tensor * src);
+GGML_API bool   debug_equal(short *a, short *b);
+GGML_API void **ggml_cuda_get_data_pp(struct ggml_tensor * tensor);
 
 GGML_API void   ggml_cuda_assign_buffers(struct ggml_tensor * tensor);
 GGML_API void   ggml_cuda_assign_buffers_no_scratch(struct ggml_tensor * tensor);

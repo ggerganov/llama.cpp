@@ -471,6 +471,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 break;
             }
             params.lora_base = argv[i];
+        } else if (arg == "--mlp-adapter") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.mlp_adapter = argv[i];
         } else if (arg == "--mmproj") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -950,8 +956,26 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         return std::make_tuple(nullptr, nullptr);
     }
 
-    auto cparams = llama_context_params_from_gpt_params(params);
+    if (llama_use_sparse_inference(model)) {
+        fprintf(stderr, "%s: postprocessing PowerInfer model '%s'\n", __func__, params.model.c_str());
+        if (!params.mlp_adapter.empty()) {
+            fprintf(stderr, "%s: warning: --mlp-adapter is deprecated and has no effect\n", __func__);
+            int err = llama_model_apply_mlp_from_file(model, params.mlp_adapter.c_str(), true);
+            if (err != 0) {
+                fprintf(stderr, "%s: error: failed to apply mlp adapter\n", __func__);
+                llama_free_model(model);
+                return std::make_tuple(nullptr, nullptr);
+            }
+        }
 
+        if (llama_model_apply_augmentation(model) != 0) {
+            fprintf(stderr, "%s: error: failed to apply augmentation\n", __func__);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+    }
+
+    auto cparams = llama_context_params_from_gpt_params(params);
     llama_context * lctx = llama_new_context_with_model(model, cparams);
     if (lctx == NULL) {
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
@@ -980,6 +1004,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     if (params.ignore_eos) {
         params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
     }
+
+
 
     {
         LOG("warming up the model with an empty run\n");
@@ -1320,6 +1346,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
         fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
     }
     fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
+    fprintf(stream, "mlp_adapter: %s\n", params.mlp_adapter.c_str());
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "memory_f32: %s # default: false\n", !params.memory_f16 ? "true" : "false");
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);

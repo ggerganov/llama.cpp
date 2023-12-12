@@ -293,6 +293,7 @@ extern "C" {
     LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
+    LLAMA_API bool llama_use_sparse_inference(const struct llama_model * model);
 
     LLAMA_API int llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
@@ -339,6 +340,13 @@ extern "C" {
                            float   scale,
                       const char * path_base_model,
                              int   n_threads);
+
+    LLAMA_API int llama_model_apply_mlp_from_file(
+                  struct llama_model * model,
+                          const char * path_mlp,
+                                bool   use_mmap);
+
+    LLAMA_API int llama_model_apply_augmentation(struct llama_model * model);
 
     //
     // KV cache

@@ -207,6 +207,14 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#ifdef __cplusplus
+  #include <atomic>
+  using std::atomic_int;
+  using std::memory_order;
+  using std::memory_order_acquire;
+#else /* not __cplusplus */
+  #include <stdatomic.h>
+#endif /* __cplusplus */
 
 #define GGML_FILE_MAGIC   0x67676d6c // "ggml"
 #define GGML_FILE_VERSION 1
@@ -232,6 +240,7 @@
 #define GGML_EXIT_ABORTED 1
 
 #define GGUF_MAGIC "GGUF"
+#define GGUF_POWERINFER_MAGIC "PWRI"
 
 #define GGUF_VERSION 3
 
@@ -336,6 +345,11 @@ extern "C" {
         GGML_BACKEND_GPU_SPLIT = 20,
     };
 
+    enum ggml_sparse_deriv {
+        GGML_DENSE_INFERENCE = 0,
+        GGML_SPARSE_INFERENCE = 1,
+    };
+
     // model file types
     enum ggml_ftype {
         GGML_FTYPE_UNKNOWN     = -1,
@@ -382,6 +396,7 @@ extern "C" {
         GGML_OP_GROUP_NORM,
 
         GGML_OP_MUL_MAT,
+        GGML_OP_AXPY,
         GGML_OP_OUT_PROD,
 
         GGML_OP_SCALE,
@@ -504,6 +519,7 @@ extern "C" {
         struct ggml_tensor * src[GGML_MAX_SRC];
 
         // performance
+        atomic_int is_finish;
         int     perf_runs;
         int64_t perf_cycles;
         int64_t perf_time_us;
@@ -519,6 +535,9 @@ extern "C" {
 
         char padding[12];
     };
+
+
+    static const int64_t GGML_NE_WILDCARD = -1;
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);
 
@@ -573,6 +592,22 @@ extern "C" {
         void * data;
     };
 
+    struct ggml_context {
+        size_t mem_size;
+        void * mem_buffer;
+        bool   mem_buffer_owned;
+        bool   no_alloc;
+        bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
+
+        int    n_objects;
+
+        struct ggml_object * objects_begin;
+        struct ggml_object * objects_end;
+
+        struct ggml_scratch scratch;
+        struct ggml_scratch scratch_save;
+    };
+
     struct ggml_init_params {
         // memory pool
         size_t mem_size;   // bytes
@@ -600,6 +635,7 @@ extern "C" {
         // work buffer for all threads
         size_t wsize;
         void * wdata;
+        atomic_int *aic;
     };
 
     // misc
@@ -617,6 +653,8 @@ extern "C" {
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
     GGML_API void    ggml_print_objects(const struct ggml_context * ctx);
+
+    GGML_API 
 
     GGML_API int64_t ggml_nelements   (const struct ggml_tensor * tensor);
     GGML_API int64_t ggml_nrows       (const struct ggml_tensor * tensor);
@@ -727,6 +765,7 @@ extern "C" {
 
     GGML_API void *  ggml_get_data    (const struct ggml_tensor * tensor);
     GGML_API float * ggml_get_data_f32(const struct ggml_tensor * tensor);
+    GGML_API int32_t * ggml_get_data_i32(const struct ggml_tensor * tensor);
 
     GGML_API enum ggml_unary_op ggml_get_unary_op(const struct ggml_tensor * tensor);
 
@@ -734,6 +773,9 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_set_name   (      struct ggml_tensor * tensor, const char * name);
     GGML_ATTRIBUTE_FORMAT(2, 3)
     GGML_API struct ggml_tensor * ggml_format_name(      struct ggml_tensor * tensor, const char * fmt, ...);
+
+    GGML_API void ggml_set_backend(struct ggml_tensor * tensor, enum ggml_backend_type backend);
+
 
     //
     // operations on tensors with backpropagation
@@ -752,6 +794,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    GGML_API struct ggml_tensor *ggml_add_idx(
+            struct ggml_context *ctx,
+            struct ggml_tensor *a,
+            struct ggml_tensor *b,
+            struct ggml_tensor *idx);
 
     GGML_API struct ggml_tensor * ggml_add_inplace(
             struct ggml_context * ctx,
@@ -1027,6 +1075,25 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+    GGML_API struct ggml_tensor *ggml_mul_mat_idx(
+            struct ggml_context *ctx,
+            struct ggml_tensor *a,
+            struct ggml_tensor *b,
+            struct ggml_tensor *idx,
+            struct ggml_tensor *d);
+    GGML_API struct ggml_tensor *ggml_mul_mat_special(
+            struct ggml_context *ctx,
+            struct ggml_tensor *a,
+            struct ggml_tensor *b,
+            struct ggml_tensor *idx,
+            struct ggml_tensor *d,
+            struct ggml_tensor *ref);
+    GGML_API struct ggml_tensor *ggml_axpy(
+            struct ggml_context *ctx,
+            struct ggml_tensor *a,
+            struct ggml_tensor *b,
+            struct ggml_tensor *c,
+            struct ggml_tensor *d);
 
     // A: m columns, n rows,
     // B: p columns, n rows,
@@ -2013,6 +2080,7 @@ extern "C" {
     };
 
     GGML_API struct gguf_context * gguf_init_empty(void);
+    GGML_API struct gguf_context * gguf_init_empty_sparse(void);
     GGML_API struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params);
     //GGML_API struct gguf_context * gguf_init_from_buffer(..);
 
@@ -2049,6 +2117,7 @@ extern "C" {
     GGML_API const void * gguf_get_arr_data(const struct gguf_context * ctx, int key_id);
     GGML_API const char * gguf_get_arr_str (const struct gguf_context * ctx, int key_id, int i);
 
+    GGML_API enum ggml_sparse_deriv gguf_get_sparse_deriv(const struct gguf_context * ctx);
     GGML_API int    gguf_get_n_tensors    (const struct gguf_context * ctx);
     GGML_API int    gguf_find_tensor      (const struct gguf_context * ctx, const char * name);
     GGML_API size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i);

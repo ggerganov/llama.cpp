@@ -11,7 +11,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL] [N_THREAD] [MLP_PATH]\n" , argv[0]);
         return 1 ;
     }
 
@@ -44,6 +44,17 @@ int main(int argc, char ** argv) {
         n_gpu_layers = std::atoi(argv[5]);
     }
 
+    if (argc >= 7) {
+        params.n_threads = std::atoi(argv[6]);
+    }
+
+    if (argc >= 8) {
+        params.mlp_adapter = argv[7];
+    }
+
+    printf("params: model = %s, prompt = %s, n_parallel = %d, n_len = %d, n_gpu_layers = %d, n_threads = %d, mlp_adapter = %s\n",
+           params.model.c_str(), params.prompt.c_str(), n_parallel, n_len, n_gpu_layers, params.n_threads, params.mlp_adapter.c_str());
+
     if (params.prompt.empty()) {
         params.prompt = "Hello my name is";
     }
@@ -62,6 +73,21 @@ int main(int argc, char ** argv) {
 
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
+        return 1;
+    }
+
+    if (!params.mlp_adapter.empty()) {
+        int err = llama_model_apply_mlp_from_file(model, params.mlp_adapter.c_str(), true);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply mlp adapter\n", __func__);
+            llama_free_model(model);
+            return 1;
+        }
+    }
+
+    if (llama_model_apply_augmentation(model) != 0) {
+        fprintf(stderr, "%s: error: failed to apply model augmentation\n", __func__);
+        llama_free_model(model);
         return 1;
     }
 

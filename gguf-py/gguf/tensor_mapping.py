@@ -194,6 +194,14 @@ class TensorNameMap:
         MODEL_TENSOR.ROPE_FREQS: (
             "language_model.encoder.layers.{bid}.self_attention.rotary_emb.inv_freq",  # persimmon
         ),
+
+        MODEL_TENSOR.FC_1: (
+            "model.layers.{bid}.fc1",
+        ),
+
+        MODEL_TENSOR.FC_2: (
+            "model.layers.{bid}.fc2",
+        ),
     }
 
     mapping: dict[str, tuple[MODEL_TENSOR, str]]

@@ -509,6 +509,14 @@ class LazyTensor:
         def load() -> Tensor:
             return self.load().astype(data_type)
         return LazyTensor(load, self.shape, data_type, f'convert({data_type}) {self.description}')
+    
+    def transposed(self) -> LazyTensor:
+        def load() -> Tensor:
+            loaded = self.load()
+            assert isinstance(loaded, UnquantizedTensor), f'Cannot transpose {loaded}'
+            loaded.ndarray = loaded.ndarray.T
+            return loaded
+        return LazyTensor(load, self.shape[::-1], self.data_type, f'transpose {self.description}')
 
     def validate_conversion_to(self, data_type: DataType) -> None:
         if data_type != self.data_type and data_type.name not in self.data_type.valid_conversions:
@@ -571,7 +579,8 @@ def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
     except StopIteration:
         vocab = None
 
-    if any("model.embed_tokens.weight" in mp.model for mp in models_plus):
+    if any("model.embed_tokens.weight" in mp.model for mp in models_plus) or \
+       any("model.layers.0.fc1.weight" in mp.model for mp in models_plus):
         # Transformers models put different tensors in different files, but
         # don't split indivdual tensors between files.
         model: LazyModel = {}
@@ -992,6 +1001,18 @@ def convert_model_names(model: LazyModel, params: Params) -> LazyModel:
 
     return out
 
+def postprocess_transpose(model: LazyModel) -> LazyModel:
+    """Transpose ffn_down matrices for Axpy ops."""
+    out: LazyModel = {}
+    
+    for name, lazy_tensor in model.items():
+        if name.endswith(".ffn_down.weight"):
+            out[name.replace("ffn_down", "ffn_down_t")] = lazy_tensor.transposed()
+        else:
+            out[name] = lazy_tensor
+    
+    return out
+
 def nth_multifile_path(path: Path, n: int) -> Path | None:
     '''Given any path belonging to a multi-file model (e.g. foo.bin.1), return
     the nth path in the model.
@@ -1003,7 +1024,9 @@ def nth_multifile_path(path: Path, n: int) -> Path | None:
         # - x-00001-of-00002.bin, x-00002-of-00002.bin, etc.
         (r'-[0-9]{5}-of-(.*)$', fr'-{n:05}-of-\1'),
         # x.bin, x.bin.1, etc.
-        (r'(\.[0-9]+)?$', r'\1' if n == 0 else fr'\1.{n}')
+        (r'(\.[0-9]+)?$', r'\1' if n == 0 else fr'\1.{n}'),
+        # x_0.pt, x_1.pt, etc.
+        (r'(_[0-9]+)?\.pt$', fr'_{n}.pt'),
     ]
     for regex, replacement in patterns:
         if re.search(regex, path.name):
@@ -1056,6 +1079,25 @@ def load_some_model(path: Path) -> ModelPlus:
 
     model_plus = merge_multifile_models(models_plus)
     return model_plus
+
+def load_mlp_model(path: Path) -> ModelPlus:
+    '''Load MLP models for sparse attention from directory.'''
+    assert path.is_dir(), f"MLP model path {path} is not a directory"
+    
+    first_model_path = path / "model_0.pt"
+    assert first_model_path.resolve(), f"MLP model path {path} does not contain model_0.pt"
+
+    model_paths = find_multifile_paths(first_model_path)
+    models_plus: list[ModelPlus] = []
+    for model_path in model_paths:
+        # find number in model_path
+        model_layer = int(re.search(r'model_(\d+).pt', str(model_path)).group(1))
+        print(f"Loading MLP model file {model_path}")
+        mlp_model = lazy_load_file(model_path)
+        mlp_model.model = {f"model.layers.{model_layer}.{name}": tensor for name, tensor in mlp_model.model.items()}
+        models_plus.append(mlp_model)
+
+    return merge_multifile_models(models_plus)
 
 
 def load_vocab(path: Path, vocabtype: str | None) -> Vocab:
@@ -1125,6 +1167,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--vocab-dir",   type=Path,              help="directory containing tokenizer.model, if separate from model file")
     parser.add_argument("--outfile",     type=Path,              help="path to write to; default: based on input")
     parser.add_argument("model",         type=Path,              help="directory containing model file, or model file itself (*.pth, *.pt, *.bin, *.safetensors)")
+    parser.add_argument("mlp_model",     type=Path,              help="MLP model for sparse attention")
     parser.add_argument("--vocabtype",   choices=["spm", "bpe"], help="vocab format (default: spm)", default="spm")
     parser.add_argument("--ctx",         type=int,               help="model training context (default: based on input)")
     parser.add_argument("--concurrency", type=int,               help=f"concurrency used for conversion (default: {DEFAULT_CONCURRENCY})", default = DEFAULT_CONCURRENCY)
@@ -1138,6 +1181,8 @@ def main(args_in: list[str] | None = None) -> None:
 
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
+        mlp_predictor_plus = load_mlp_model(args.mlp_model)
+        model_plus = merge_multifile_models([model_plus, mlp_predictor_plus])
     else:
         model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
 
@@ -1192,6 +1237,7 @@ def main(args_in: list[str] | None = None) -> None:
 
     model   = model_plus.model
     model   = convert_model_names(model, params)
+    model   = postprocess_transpose(model)
     ftype   = pick_output_type(model, args.outtype)
     model   = convert_to_output_type(model, ftype)
     outfile = args.outfile or default_outfile(model_plus.paths, ftype)
@@ -1201,6 +1247,11 @@ def main(args_in: list[str] | None = None) -> None:
 
     OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, concurrency = args.concurrency, endianess=endianess)
     print(f"Wrote {outfile}")
+
+    # post-process: write another unique file header to distinguish from the origianl GGUF file
+    with open(outfile, "r+b") as fout:
+        POWERINFER_MAGIC = int.from_bytes(b"PWRI", "little")
+        fout.write(struct.pack("<I", POWERINFER_MAGIC))
 
 
 if __name__ == '__main__':
