@@ -4277,23 +4277,23 @@ struct llm_build_context {
                 ggml_tensor * logits = ggml_mul_mat(ctx0, model.layers[il].ffn_gate_inp, cur); // [n_tokens, num_experts]
                 cb(logits, "ffn_moe_logits", il);
 
-                ggml_tensor * probs = ggml_soft_max(ctx0, logits);                             // [n_tokens, num_experts]
+                ggml_tensor * probs = ggml_soft_max(ctx0, logits); // [n_tokens, num_experts]
                 cb(probs, "ffn_moe_probs", il);
 
                 // select experts
-                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used);   // [n_tokens, num_experts_per_tok]
+                ggml_tensor * selected_experts = ggml_top_k(ctx0, probs, n_expert_used); // [n_tokens, num_experts_per_tok]
                 cb(selected_experts->src[0], "ffn_moe_argsort", il);
 
                 ggml_tensor * weights = ggml_get_rows(ctx0,
                         ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens), selected_experts);
                 cb(weights, "ffn_moe_weights", il);
 
-                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);          // [n_tokens, num_experts_per_tok]
+                weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens); // [n_tokens, num_experts_per_tok]
 
                 ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights);
                 cb(weights_sum, "ffn_moe_weights_sum", il);
 
-                weights = ggml_div(ctx0, weights, weights_sum);              // [n_tokens, num_experts_per_tok]
+                weights = ggml_div(ctx0, weights, weights_sum); // [n_tokens, num_experts_per_tok]
                 cb(weights, "ffn_moe_weights_norm", il);
 
                 // compute expert outputs

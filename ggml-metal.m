@@ -155,6 +155,7 @@ struct ggml_metal_context {
     //GGML_METAL_DECL_KERNEL(cpy_f32_q5_0);
     //GGML_METAL_DECL_KERNEL(cpy_f32_q5_1);
     GGML_METAL_DECL_KERNEL(cpy_f16_f16);
+    GGML_METAL_DECL_KERNEL(cpy_f16_f32);
     GGML_METAL_DECL_KERNEL(concat);
     GGML_METAL_DECL_KERNEL(sqr);
     GGML_METAL_DECL_KERNEL(sum_rows);
@@ -424,6 +425,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         //GGML_METAL_ADD_KERNEL(cpy_f32_q5_0);
         //GGML_METAL_ADD_KERNEL(cpy_f32_q5_1);
         GGML_METAL_ADD_KERNEL(cpy_f16_f16);
+        GGML_METAL_ADD_KERNEL(cpy_f16_f32);
         GGML_METAL_ADD_KERNEL(concat);
         GGML_METAL_ADD_KERNEL(sqr);
         GGML_METAL_ADD_KERNEL(sum_rows);
@@ -539,6 +541,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     //GGML_METAL_DEL_KERNEL(cpy_f32_q5_0);
     //GGML_METAL_DEL_KERNEL(cpy_f32_q5_1);
     GGML_METAL_DEL_KERNEL(cpy_f16_f16);
+    GGML_METAL_DEL_KERNEL(cpy_f16_f32);
     GGML_METAL_DEL_KERNEL(concat);
     GGML_METAL_DEL_KERNEL(sqr);
     GGML_METAL_DEL_KERNEL(sum_rows);
@@ -867,12 +870,37 @@ static bool ggml_metal_supports_op(const struct ggml_tensor * op) {
         case GGML_OP_ROPE:
         case GGML_OP_IM2COL:
         case GGML_OP_ARGSORT:
-        case GGML_OP_DUP:
-        case GGML_OP_CPY:
-        case GGML_OP_CONT:
         case GGML_OP_MUL_MAT:
         case GGML_OP_MUL_MAT_ID:
             return true;
+        case GGML_OP_CPY:
+        case GGML_OP_DUP:
+        case GGML_OP_CONT:
+            {
+                switch (op->src[0]->type) {
+                    case GGML_TYPE_F32:
+                        switch (op->type) {
+                           case GGML_TYPE_F16:
+                           case GGML_TYPE_F32:
+                           case GGML_TYPE_Q8_0:
+                           case GGML_TYPE_Q4_0:
+                           case GGML_TYPE_Q4_1:
+                                return true;
+                           default:
+                                return false;
+                        }
+                    case GGML_TYPE_F16:
+                        switch (op->type) {
+                           case GGML_TYPE_F16:
+                           case GGML_TYPE_F32:
+                                return true;
+                           default:
+                                return false;
+                        }
+                    default:
+                        return false;
+                };
+            }
         case GGML_OP_DIAG_MASK_INF:
             {
                 return op->ne[0] % 4 == 0;
@@ -2021,7 +2049,7 @@ void ggml_metal_graph_compute(
                                     {
                                         switch (dstt) {
                                             case GGML_TYPE_F16: [encoder setComputePipelineState:ctx->pipeline_cpy_f16_f16]; break;
-                                            case GGML_TYPE_F32: GGML_ASSERT(false && "cpy_f16_f32 not implemented"); break;
+                                            case GGML_TYPE_F32: [encoder setComputePipelineState:ctx->pipeline_cpy_f16_f32]; break;
                                             default: GGML_ASSERT(false && "not implemented");
                                         };
                                     } break;
