@@ -397,96 +397,98 @@ if (LLAMA_HIPBLAS)
     endif()
 endif()
 
-function(get_flags ccid ccver)
-    set(c_flags "")
-    set(cxx_flags "")
+function(get_flags CCID CCVER)
+    set(C_FLAGS "")
+    set(CXX_FLAGS "")
 
-    if (ccid MATCHES "Clang")
-        set(c_flags   -Wunreachable-code-break -Wunreachable-code-return)
-        set(cxx_flags -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi)
+    if (CCID MATCHES "Clang")
+        set(C_FLAGS   -Wunreachable-code-break -Wunreachable-code-return)
+        set(CXX_FLAGS -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi)
 
         if (
-            (ccid STREQUAL "Clang"      AND ccver VERSION_GREATER_EQUAL 3.8.0) OR
-            (ccid STREQUAL "AppleClang" AND ccver VERSION_GREATER_EQUAL 7.3.0)
+            (CCID STREQUAL "Clang"      AND CCVER VERSION_GREATER_EQUAL 3.8.0) OR
+            (CCID STREQUAL "AppleClang" AND CCVER VERSION_GREATER_EQUAL 7.3.0)
         )
-            set(c_flags ${c_flags} -Wdouble-promotion)
+            set(C_FLAGS ${C_FLAGS} -Wdouble-promotion)
         endif()
-    elseif (ccid STREQUAL "GNU")
-        set(c_flags   -Wdouble-promotion)
-        set(cxx_flags -Wno-array-bounds)
+    elseif (CCID STREQUAL "GNU")
+        set(C_FLAGS   -Wdouble-promotion)
+        set(CXX_FLAGS -Wno-array-bounds)
 
-        if (ccver VERSION_GREATER_EQUAL 7.1.0)
-            set(cxx_flags ${cxx_flags} -Wno-format-truncation)
+        if (CCVER VERSION_GREATER_EQUAL 7.1.0)
+            set(CXX_FLAGS ${CXX_FLAGS} -Wno-format-truncation)
         endif()
-        if (ccver VERSION_GREATER_EQUAL 8.1.0)
-            set(cxx_flags ${cxx_flags} -Wextra-semi)
+        if (CCVER VERSION_GREATER_EQUAL 8.1.0)
+            set(CXX_FLAGS ${CXX_FLAGS} -Wextra-semi)
         endif()
     endif()
 
-    set(gf_c_flags   ${c_flags}   PARENT_SCOPE)
-    set(gf_cxx_flags ${cxx_flags} PARENT_SCOPE)
+    set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
+    set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
 endfunction()
 
 if (LLAMA_ALL_WARNINGS)
     if (NOT MSVC)
-        set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
-        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration)
-        set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
+        set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
+        set(C_FLAGS       -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes
+                          -Werror=implicit-int -Werror=implicit-function-declaration)
+        set(CXX_FLAGS     -Wmissing-declarations -Wmissing-noreturn)
+
+        set(C_FLAGS   ${WARNING_FLAGS} ${C_FLAGS})
+        set(CXX_FLAGS ${WARNING_FLAGS} ${CXX_FLAGS})
 
         get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
 
-        set(c_flags   ${c_flags}   ${warning_flags})
-        set(cxx_flags ${cxx_flags} ${warning_flags})
-        add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags} ${gf_c_flags}>"
-                            "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags} ${gf_cxx_flags}>")
+        add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS} ${GF_C_FLAGS}>"
+                            "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS} ${GF_CXX_FLAGS}>")
     else()
         # todo : msvc
-        set(c_flags   "")
-        set(cxx_flags "")
+        set(C_FLAGS   "")
+        set(CXX_FLAGS "")
     endif()
 endif()
 
-set(cuda_flags ${cxx_flags} -use_fast_math)
+set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
 if (NOT MSVC)
-    set(cuda_flags ${cuda_flags} -Wno-pedantic)
+    set(CUDA_FLAGS ${CUDA_FLAGS} -Wno-pedantic)
 endif()
 
-set(nvcc_cmd ${CMAKE_CUDA_COMPILER} .c)
+set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
 if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")
-    set(nvcc_cmd ${nvcc_cmd} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
+    set(NVCC_CMD ${NVCC_CMD} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
 endif()
 
 execute_process(
-    COMMAND ${nvcc_cmd} -Xcompiler --version
-    OUTPUT_VARIABLE cuda_ccfullver
+    COMMAND ${NVCC_CMD} -Xcompiler --version
+    OUTPUT_VARIABLE CUDA_CCFULLVER
     ERROR_QUIET
 )
 
-if (NOT cuda_ccfullver MATCHES clang)
-    set(cuda_ccid "GNU")
+if (NOT CUDA_CCFULLVER MATCHES clang)
+    set(CUDA_CCID "GNU")
     execute_process(
-        COMMAND ${nvcc_cmd} -Xcompiler "-dumpfullversion -dumpversion"
-        OUTPUT_VARIABLE cuda_ccver
+        COMMAND ${NVCC_CMD} -Xcompiler "-dumpfullversion -dumpversion"
+        OUTPUT_VARIABLE CUDA_CCVER
         ERROR_QUIET
     )
 else()
-    if (cuda_ccfullver MATCHES Apple)
-        set(cuda_ccid "AppleClang")
+    if (CUDA_CCFULLVER MATCHES Apple)
+        set(CUDA_CCID "AppleClang")
 	else()
-        set(cuda_ccid "Clang")
+        set(CUDA_CCID "Clang")
 	endif()
-    string(REGEX REPLACE "^.* version ([0-9.]*).*$" "\\1" cuda_ccver ${cuda_ccfullver})
+    string(REGEX REPLACE "^.* version ([0-9.]*).*$" "\\1" CUDA_CCVER ${CUDA_CCFULLVER})
 endif()
 
-message("-- CUDA host compiler is " ${cuda_ccid} " " ${cuda_ccver})
+message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
 
-get_flags(${cuda_ccid} ${cuda_ccver})
-list(JOIN gf_cxx_flags " " cuda_cxx_flags)  # pass host compiler flags as a single argument
-if (NOT cuda_cxx_flags STREQUAL "")
-    set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_cxx_flags})
+get_flags(${CUDA_CCID} ${CUDA_CCVER})
+list(JOIN GF_CXX_FLAGS " " CUDA_CXX_FLAGS)  # pass host compiler flags as a single argument
+if (NOT CUDA_CXX_FLAGS STREQUAL "")
+    set(CUDA_FLAGS ${CUDA_FLAGS} -Xcompiler ${CUDA_CXX_FLAGS})
 endif()
 
-add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
+add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
