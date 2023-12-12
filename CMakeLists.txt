@@ -448,47 +448,51 @@ if (LLAMA_ALL_WARNINGS)
     endif()
 endif()
 
-set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
-if (NOT MSVC)
-    set(CUDA_FLAGS ${CUDA_FLAGS} -Wno-pedantic)
+if (LLAMA_CUBLAS)
+    set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
+    if (NOT MSVC)
+        set(CUDA_FLAGS ${CUDA_FLAGS} -Wno-pedantic)
+    endif()
+
+    if (LLAMA_ALL_WARNINGS AND NOT MSVC)
+        set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
+        if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")
+            set(NVCC_CMD ${NVCC_CMD} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
+        endif()
+
+        execute_process(
+            COMMAND ${NVCC_CMD} -Xcompiler --version
+            OUTPUT_VARIABLE CUDA_CCFULLVER
+            ERROR_QUIET
+        )
+
+        if (NOT CUDA_CCFULLVER MATCHES clang)
+            set(CUDA_CCID "GNU")
+            execute_process(
+                COMMAND ${NVCC_CMD} -Xcompiler "-dumpfullversion -dumpversion"
+                OUTPUT_VARIABLE CUDA_CCVER
+                ERROR_QUIET
+            )
+        else()
+            if (CUDA_CCFULLVER MATCHES Apple)
+                set(CUDA_CCID "AppleClang")
+            else()
+                set(CUDA_CCID "Clang")
+            endif()
+            string(REGEX REPLACE "^.* version ([0-9.]*).*$" "\\1" CUDA_CCVER ${CUDA_CCFULLVER})
+        endif()
+
+        message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
+
+        get_flags(${CUDA_CCID} ${CUDA_CCVER})
+        list(JOIN GF_CXX_FLAGS " " CUDA_CXX_FLAGS)  # pass host compiler flags as a single argument
+        if (NOT CUDA_CXX_FLAGS STREQUAL "")
+            set(CUDA_FLAGS ${CUDA_FLAGS} -Xcompiler ${CUDA_CXX_FLAGS})
+        endif()
+    endif()
+
+    add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 endif()
-
-set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
-if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")
-    set(NVCC_CMD ${NVCC_CMD} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
-endif()
-
-execute_process(
-    COMMAND ${NVCC_CMD} -Xcompiler --version
-    OUTPUT_VARIABLE CUDA_CCFULLVER
-    ERROR_QUIET
-)
-
-if (NOT CUDA_CCFULLVER MATCHES clang)
-    set(CUDA_CCID "GNU")
-    execute_process(
-        COMMAND ${NVCC_CMD} -Xcompiler "-dumpfullversion -dumpversion"
-        OUTPUT_VARIABLE CUDA_CCVER
-        ERROR_QUIET
-    )
-else()
-    if (CUDA_CCFULLVER MATCHES Apple)
-        set(CUDA_CCID "AppleClang")
-	else()
-        set(CUDA_CCID "Clang")
-	endif()
-    string(REGEX REPLACE "^.* version ([0-9.]*).*$" "\\1" CUDA_CCVER ${CUDA_CCFULLVER})
-endif()
-
-message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
-
-get_flags(${CUDA_CCID} ${CUDA_CCVER})
-list(JOIN GF_CXX_FLAGS " " CUDA_CXX_FLAGS)  # pass host compiler flags as a single argument
-if (NOT CUDA_CXX_FLAGS STREQUAL "")
-    set(CUDA_FLAGS ${CUDA_FLAGS} -Xcompiler ${CUDA_CXX_FLAGS})
-endif()
-
-add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
