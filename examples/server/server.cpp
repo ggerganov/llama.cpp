@@ -2382,6 +2382,7 @@ json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Map OpenAI parameters to llama.cpp parameters
+    llama_params["model"]             = json_value(body, "model", std::string("uknown"));
     llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
     llama_params["temperature"]       = json_value(body, "temperature", 0.8);
