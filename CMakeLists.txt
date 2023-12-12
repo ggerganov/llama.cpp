@@ -482,7 +482,7 @@ message("-- CUDA host compiler is " ${cuda_ccid} " " ${cuda_ccver})
 
 get_flags(${cuda_ccid} ${cuda_ccver})
 list(JOIN gf_cxx_flags " " cuda_cxx_flags)  # pass host compiler flags as a single argument
-if (NOT cuda_host_flags STREQUAL "")
+if (NOT cuda_cxx_flags STREQUAL "")
     set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_cxx_flags})
 endif()
 
