@@ -739,7 +739,18 @@
                            "content": {
                               "application/json": {
                                  "example": {
-                                    "value": 11
+                                    "value": 9,
+                                    "ids": [
+                                       1,
+                                       22557,
+                                       28725,
+                                       586,
+                                       1141,
+                                       349,
+                                       11952,
+                                       28709,
+                                       28723
+                                    ]
                                  },
                                  "schema": {
                                     "$ref": "#/components/schemas/ValueResult"
