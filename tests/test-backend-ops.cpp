@@ -432,9 +432,10 @@ struct test_case {
             if (err > ud->max_err) {
                 printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
                 //for (int i = 0; i < f1.size(); i++) {
-                //    printf("(%f, %f) ", f1[i], f2[i]);
+                //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
                 //printf("\n");
+                //exit(1);
                 ud->ok = false;
             }
             return true;
