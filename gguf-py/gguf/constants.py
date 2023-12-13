@@ -93,6 +93,7 @@ class MODEL_ARCH(IntEnum):
     BLOOM     = auto()
     STABLELM  = auto()
     QWEN      = auto()
+    PHI       = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -334,6 +335,9 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
     ],
     MODEL_ARCH.GPT2: [
+        # TODO
+    ],
+    MODEL_ARCH.PHI: [
         # TODO
     ],
     # TODO
