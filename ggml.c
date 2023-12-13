@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
+#define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnings on Windows
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
 #include "ggml-impl.h"
@@ -33,7 +33,7 @@
 // we should just be careful :)
 #pragma warning(disable: 4244 4267)
 
-// disable POSIX deprecation warnigns
+// disable POSIX deprecation warnings
 // these functions are never going away, anyway
 #pragma warning(disable: 4996)
 #endif
@@ -1760,7 +1760,7 @@ static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size 
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
 
 // WARN:
-// Mis-confguration can lead to problem that's hard to reason about:
+// Mis-configuration can lead to problem that's hard to reason about:
 // * At best  it crash or talks nosense.
 // * At worst it talks slightly difference but hard to perceive.
 //
@@ -7520,7 +7520,7 @@ static void ggml_compute_forward_acc_f32(
     GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
 
     // view src0 and dst with these strides and data offset inbytes during acc
-    // nb0 is implicitely element_size because src0 and dst are contiguous
+    // nb0 is implicitly element_size because src0 and dst are contiguous
     size_t nb1     = ((int32_t *) dst->op_params)[0];
     size_t nb2     = ((int32_t *) dst->op_params)[1];
     size_t nb3     = ((int32_t *) dst->op_params)[2];
@@ -10161,7 +10161,7 @@ static void ggml_compute_forward_set_f32(
     GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
 
     // view src0 and dst with these strides and data offset inbytes during set
-    // nb0 is implicitely element_size because src0 and dst are contiguous
+    // nb0 is implicitly element_size because src0 and dst are contiguous
     size_t nb1     = ((int32_t *) dst->op_params)[0];
     size_t nb2     = ((int32_t *) dst->op_params)[1];
     size_t nb3     = ((int32_t *) dst->op_params)[2];
@@ -14475,7 +14475,7 @@ void ggml_build_backward_gradient_checkpointing(
             // insert new tensors recomputing src, reusing already made replacements,
             // remember replacements: remember new tensors with mapping from corresponding gf nodes
             // recurse for input tensors,
-            // unless (i.e. terminating when) input tensors are replacments (like checkpoints)
+            // unless (i.e. terminating when) input tensors are replacements (like checkpoints)
             node->src[k] = ggml_recompute_graph_node(ctx, gf, replacements, node->src[k]);
         }
         // insert rewritten backward node with replacements made into resulting backward graph gb

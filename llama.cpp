@@ -2788,7 +2788,7 @@ static void llm_load_vocab(
         // The assumption is, since special tokens aren't meant to be exposed to end user, they are designed
         //  to be unmatchable by the tokenizer, therefore tokens from the vocab, which are unmatchable by the tokenizer
         //  are special tokens.
-        // From testing, this appears to corelate 1:1 with special tokens.
+        // From testing, this appears to correlate 1:1 with special tokens.
         //
 
         // Counting special tokens and verifying in only one direction
@@ -5876,7 +5876,7 @@ static int llama_decode_internal(
     const int64_t n_embd  = hparams.n_embd;
     const int64_t n_vocab = hparams.n_vocab;
 
-    // helpers for smoother batch API transistion
+    // helpers for smoother batch API transition
     // after deprecating the llama_eval calls, these will be removed
     std::vector<llama_pos> pos;
 
@@ -6876,12 +6876,12 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
 
                 // loop over the text
                 while (true) {
-                    // find the first occurence of a given special token in this fragment
+                    // find the first occurrence of a given special token in this fragment
                     //  passing offset argument only limit the "search area" but match coordinates
                     //  are still relative to the source full raw_text
                     auto match = raw_text->find(special_token, raw_text_base_offset);
 
-                    // no occurences found, stop processing this fragment for a given special token
+                    // no occurrences found, stop processing this fragment for a given special token
                     if (match == std::string::npos) break;
 
                     // check if match is within bounds of offset <-> length
@@ -7766,7 +7766,7 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id    = candidates->data[i].id;
-        const std::string & piece = ctx->model.vocab.id_to_token[id].text;
+        const std::string piece = llama_token_to_piece(ctx, id);
         if (id == eos) {
             if (!allow_eos) {
                 candidates->data[i].logit = -INFINITY;
@@ -7978,7 +7978,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string & piece = ctx->model.vocab.id_to_token[token].text;
+    const std::string piece = llama_token_to_piece(ctx, token);
 
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece, grammar->partial_utf8);
@@ -8092,7 +8092,7 @@ struct llama_beam_search_data {
     }
 
     // Min-heaps are used to efficiently collect the top-k elements (k=n_beams).
-    // The repetative patterns below reflect the 2 stages of heaps:
+    // The repetitive patterns below reflect the 2 stages of heaps:
     //  * Gather elements until the vector is full, then call std::make_heap() on it.
     //  * If the heap is full and a new element is found that should be included, pop the
     //    least element to the back(), replace it with the new, then push it into the heap.
