@@ -5246,30 +5246,19 @@ static __global__ void clamp_f32(const float * x, float * dst, const float min, 
 
 static  __global__ void im2col_f32_f16(
         const float * x, half * dst,
-        int offset_delta, int IW, int IH, int OW, int KW, int KH, int pelements, int CHW,
+        int ofs0, int ofs1, int IW, int IH, int CHW,
         int s0, int s1, int p0, int p1, int d0, int d1) {
-    const int i = threadIdx.x + blockIdx.x * blockDim.x;
-    if (i >= pelements) {
-        return;
-    }
-
-    const int ksize = OW * (KH > 1 ? KW : 1);
-    const int kx = i / ksize;
-    const int kd = kx * ksize;
-    const int ky = (i - kd) / OW;
-    const int ix = i % OW;
-
-    const int iiw = ix * s0 + kx * d0 - p0;
-    const int iih = blockIdx.y * s1 + ky * d1 - p1;
+    const int iiw = blockIdx.z * s0 + threadIdx.z * d0 - p0;
+    const int iih = blockIdx.y * s1 + threadIdx.y * d1 - p1;
 
     const int offset_dst =
-        (blockIdx.y * OW + ix) * CHW +
-        (blockIdx.z * (KW * KH) + ky * KW + kx);
+        (threadIdx.x * gridDim.y * gridDim.z + blockIdx.y * gridDim.z + blockIdx.z) * CHW +
+        (blockIdx.x * (blockDim.y * blockDim.z) + threadIdx.y * blockDim.z + threadIdx.z);
 
     if (iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {
         dst[offset_dst] = __float2half(0.0f);
     } else {
-        const int offset_src = blockIdx.z * offset_delta;
+        const int offset_src =  threadIdx.x * ofs0 + blockIdx.x * ofs1;
         dst[offset_dst] = __float2half(x[offset_src + iih * IW + iiw]);
     }
 }
@@ -6502,14 +6491,13 @@ static void soft_max_f32_cuda(const float * x, const float * y, float * dst, con
     soft_max_f32<<<block_nums, block_dims, 0, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
 }
 
-static void im2col_f32_f16_cuda(const float* x, half* dst,
-    int IW, int IH, int OW, int OH, int KW, int KH, int IC,
-    int offset_delta,
-    int s0,int s1,int p0,int p1,int d0,int d1, cudaStream_t stream) {
-    const int parallel_elements = OW * KW * KH;
-    const int num_blocks = (parallel_elements + CUDA_IM2COL_BLOCK_SIZE - 1) / CUDA_IM2COL_BLOCK_SIZE;
-    dim3 block_nums(num_blocks, OH, IC);
-    im2col_f32_f16<<<block_nums, CUDA_IM2COL_BLOCK_SIZE, 0, stream>>>(x, dst, offset_delta, IW, IH, OW, KW, KH, parallel_elements, (IC * KH * KW), s0, s1, p0, p1, d0, d1);
+static void im2col_f32_f16_cuda(const float * x, half * dst,
+    int OH, int IW, int IH, int OW, int IC,
+    int KH, int KW, int N,  int ofs0, int ofs1,
+    int s0, int s1, int p0, int p1, int d0, int d1, cudaStream_t stream) {
+    dim3 block_nums(IC, OH, OW);
+    dim3 block_dims(N,  KH, KW);
+    im2col_f32_f16<<<block_nums, block_dims, 0, stream>>>(x, dst, ofs0, ofs1, IW, IH, (IC * KH * KW), s0, s1, p0, p1, d0, d1);
 }
 
 // buffer pool for cuda
