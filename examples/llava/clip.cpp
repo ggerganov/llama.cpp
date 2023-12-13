@@ -739,7 +739,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
         temp->ny = longer_side;
         temp->size = 3 * longer_side * longer_side;
         temp->data = new uint8_t[temp->size]();
-        uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
+        uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA
 
         // fill with background color
         for (size_t i = 0; i < temp->size; i++) {
