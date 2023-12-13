@@ -329,7 +329,7 @@ class VocabLoader:
         self.special_ids: set[int] = set(self.tokenizer.all_special_ids)
         self.vocab_size_base: int = self.tokenizer.vocab_size
         self.vocab_size: int = self.vocab_size_base + len(self.added_tokens_dict)
-        self.fname_tokenizer: str = fname_tokenizer
+        self.fname_tokenizer: Path = fname_tokenizer
 
         vocab_file = "tokenizer.model"
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
@@ -373,9 +373,8 @@ class VocabLoader:
 
     def get_token_score(self, token_id: int) -> float:
         if self.spm is not None and token_id < self.spm.vocab_size():
-            return self.spm.get_score(token_id)
-        else:
-            return 0.0
+            return cast(float, self.spm.get_score(token_id))
+        return 0.0
 
     def added_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
 
@@ -1110,13 +1109,11 @@ def find_vocab_file_path(path: Path, vocab_file: str) -> Optional[Path]:
     path3 = path.parent / vocab_file
 
     if path2.exists():
-        path = path2
-    elif path3.exists():
-        path = path3
-    else:
-        path = None
+        return path2
+    if path3.exists():
+        return path3
 
-    return path
+    return None
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
