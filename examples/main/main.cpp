@@ -32,7 +32,7 @@
 #endif
 
 #if defined(GGML_USE_KOMPUTE)
-#include "ggml-vulkan.h"
+#include "ggml-kompute.h"
 #endif
 
 static llama_context           ** g_ctx;

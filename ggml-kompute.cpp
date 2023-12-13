@@ -1,4 +1,4 @@
-#include "ggml-vulkan.h"
+#include "ggml-kompute.h"
 #include "ggml.h"
 
 // These are generated at build time by cmake custom command

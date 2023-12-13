@@ -510,15 +510,15 @@ if (LLAMA_KOMPUTE)
 
         # Create a custom command that depends on the generated_shaders
         add_custom_command(
-            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan.stamp
-            COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan.stamp
+            OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp
+            COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp
             DEPENDS generated_shaders
-            COMMENT "Ensuring shaders are generated before compiling ggml-vulkan.cpp"
+            COMMENT "Ensuring shaders are generated before compiling ggml-kompute.cpp"
         )
 
         # Add the stamp to the main sources to ensure dependency tracking
-        set(GGML_SOURCES_KOMPUTE ggml-vulkan.cpp ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan.stamp)
-        set(GGML_HEADERS_KOMPUTE ggml-vulkan.h ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan.stamp)
+        set(GGML_SOURCES_KOMPUTE ggml-kompute.cpp ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
+        set(GGML_HEADERS_KOMPUTE ggml-kompute.h ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
         add_compile_definitions(GGML_USE_KOMPUTE)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} kompute)
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${CMAKE_BINARY_DIR})

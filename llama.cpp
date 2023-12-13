@@ -12,7 +12,7 @@
 #elif defined(GGML_USE_CLBLAST)
 #  include "ggml-opencl.h"
 #elif defined(GGML_USE_KOMPUTE)
-#   include "ggml-vulkan.h"
+#   include "ggml-kompute.h"
 #endif
 
 #ifdef GGML_USE_METAL
