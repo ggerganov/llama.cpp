@@ -310,7 +310,7 @@ class VocabLoader:
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer), trust_remote_code=True)
-        except Exception:
+        except ValueError:
             self.tokenizer = AutoTokenizer.from_pretrained(str(fname_tokenizer), use_fast=False, trust_remote_code=True)
 
         self.added_tokens_dict: OrderedDict[str, int] = OrderedDict()
@@ -400,25 +400,25 @@ class VocabLoader:
     def get_vocab_type(self) -> str:
         path_candidates = []
         vocab_file = "tokenizer.model"
+        path_candidates.append(vocab_file)
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "llama"
 
-        path_candidates.append(path_candidate)
         vocab_file = "vocab.json"
+        path_candidates.append(vocab_file)
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate is not None:
             return "gpt2"
 
-        path_candidates.append(path_candidate)
         vocab_file = "tokenizer.json"
+        path_candidates.append(vocab_file)
         path_candidate = find_vocab_file_path(self.fname_tokenizer, vocab_file)
         if path_candidate:
             if not self.has_newline_token():
                 return "gpt2"
             return "llama"
 
-        path_candidates.append(path_candidate)
         raise FileNotFoundError(
             f"Could not find {path_candidates} in {self.fname_tokenizer} or its parent; "
             "if it's in another directory, pass the directory as --vocab-dir"
