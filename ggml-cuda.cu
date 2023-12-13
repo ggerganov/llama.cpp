@@ -6295,8 +6295,8 @@ void ggml_init_cublas() {
 
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
-        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   %s\n", __func__,"maybe");
-        fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: %s\n", __func__,"maybe");
+        // fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   %s\n", __func__,"maybe");
+        // fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: %s\n", __func__,"maybe");
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
         for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
