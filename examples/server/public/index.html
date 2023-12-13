@@ -160,6 +160,11 @@
       height: 10em;
     }
 
+    [contenteditable] {
+      display: inline-block;
+      white-space: pre-wrap;
+      outline: 0px solid transparent;
+    }
 
     @keyframes loading-bg-wipe {
       0% {
@@ -218,7 +223,8 @@
       repeat_last_n: 256, // 0 = disable penalty, -1 = context size
       repeat_penalty: 1.18, // 1.0 = disabled
       top_k: 40, // <= 0 to use vocab size
-      top_p: 0.5, // 1.0 = disabled
+      top_p: 0.95, // 1.0 = disabled
+      min_p: 0.05, // 0 = disabled
       tfs_z: 1.0, // 1.0 = disabled
       typical_p: 1.0, // 1.0 = disabled
       presence_penalty: 0.0, // 0.0 = disabled
@@ -232,7 +238,7 @@
       cache_prompt: true
     })
 
-    /* START: Support for storing prompt templates and parameters in borwser LocalStorage */
+    /* START: Support for storing prompt templates and parameters in browsers LocalStorage */
 
     const local_storage_storageKey = "llamacpp_server_local_storage";
 
@@ -276,7 +282,7 @@
     let importedTemplates = local_storage_getDataAsObject('user_templates')
 
     if (importedTemplates) {
-      // saved templates were successfuly imported.
+      // saved templates were successfully imported.
 
       console.log('Processing saved templates and updating default template')
       params.value = { ...params.value, image_data: [] };
@@ -297,7 +303,7 @@
     }
 
     function userTemplateResetToDefault() {
-      console.log('Reseting themplate to default')
+      console.log('Resetting template to default')
       selectedUserTemplate.value.name = 'default';
       selectedUserTemplate.value.data = savedUserTemplates.value['default'];
     }
@@ -461,18 +467,23 @@
       }, "{{char}}");
     }
 
-    const runCompletion = async () => {
+    const runCompletion = () => {
       if (controller.value) {
         console.log('already running...');
         return;
       }
       const { prompt } = session.value;
       transcriptUpdate([...session.value.transcript, ["", prompt]]);
-      await runLlama(prompt, {
+      runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
         stop: [],
-      }, "");
+      }, "").finally(() => {
+        session.value.prompt = session.value.transcript.map(([_, data]) =>
+          Array.isArray(data) ? data.map(msg => msg.content).join('') : data
+        ).join('');
+        session.value.transcript = [];
+      })
     }
 
     const stop = (e) => {
@@ -572,6 +583,7 @@
         }
       }, [messages])
 
+      const isCompletionMode = session.value.type === 'completion'
       const chatLine = ([user, data], index) => {
         let message
         const isArrayMessage = Array.isArray(data)
@@ -581,20 +593,31 @@
           const text = isArrayMessage ?
             data.map(msg => msg.content).join('').replace(/^\s+/, '') :
             data;
-          message = html`<${Markdownish} text=${template(text)} />`
+          message = isCompletionMode ?
+            text :
+            html`<${Markdownish} text=${template(text)} />`
         }
         if (user) {
           return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
         } else {
-          return html`<p key=${index}>${message}</p>`
+          return isCompletionMode ?
+            html`<span key=${index}>${message}</span>` :
+            html`<p key=${index}>${message}</p>`
         }
       };
 
+      const handleCompletionEdit = (e) => {
+        session.value.prompt = e.target.innerText;
+        session.value.transcript = [];
+      }
+
       return html`
-        <section id="chat" ref=${container}>
+        <div id="chat" ref=${container} key=${messages.length}>
           <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-          ${messages.flatMap(chatLine)}
-        </section>`;
+          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
+            ${messages.flatMap(chatLine)}
+          </span>
+        </div>`;
     };
 
     const ConfigForm = (props) => {
@@ -739,11 +762,12 @@
 
           <fieldset class="two">
             ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
-            ${FloatField({ label: "Temperature", max: 1.5, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
             ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
             ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
             ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
             ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
           </fieldset>
           <details>
             <summary>More options</summary>

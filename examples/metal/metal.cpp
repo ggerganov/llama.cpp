@@ -34,7 +34,7 @@ int main(int argc, char ** argv) {
     struct ggml_context * ctx_data = NULL;
     struct ggml_context * ctx_eval = NULL;
 
-    struct ggml_cgraph gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
+    struct ggml_cgraph * gf = ggml_graph_import(fname_cgraph, &ctx_data, &ctx_eval);
 
     // this allocates all Metal resources and memory buffers
     auto * ctx_metal = ggml_metal_init(1);
@@ -46,13 +46,13 @@ int main(int argc, char ** argv) {
 
     // main
     {
-        struct ggml_tensor * input = ggml_graph_get_tensor(&gf, "embd");
+        struct ggml_tensor * input = ggml_graph_get_tensor(gf, "embd");
         *(int32_t *) input->data = 1; // BOS
 
         ggml_metal_set_tensor(ctx_metal, input);
 
         // warmup
-        ggml_metal_graph_compute(ctx_metal, &gf);
+        ggml_metal_graph_compute(ctx_metal, gf);
 
         const int n_iter = 16;
 
@@ -60,7 +60,7 @@ int main(int argc, char ** argv) {
 
         // the actual inference happens here
         for (int i = 0; i < n_iter; ++i) {
-            ggml_metal_graph_compute(ctx_metal, &gf);
+            ggml_metal_graph_compute(ctx_metal, gf);
         }
 
         const int64_t t1 = ggml_time_us();
@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
 
     // debug output
     {
-        struct ggml_tensor * logits = gf.nodes[gf.n_nodes - 1];
+        struct ggml_tensor * logits = gf->nodes[gf->n_nodes - 1];
         ggml_metal_get_tensor(ctx_metal, logits);
 
         float * ptr = (float *) ggml_get_data(logits);

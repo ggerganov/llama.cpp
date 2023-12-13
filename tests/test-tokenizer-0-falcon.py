@@ -1,7 +1,5 @@
 # tests with BPE tokenizer
 
-import os
-import sys
 import argparse
 
 from transformers import AutoTokenizer
@@ -16,34 +14,34 @@ dir_tokenizer = args.dir_tokenizer
 tokenizer = AutoTokenizer.from_pretrained(dir_tokenizer)
 
 tests = [
-        "",
-        " ",
-        "  ",
-        "   ",
-        "\t",
-        "\n",
-        "\t\n",
-        "Hello world",
-        " Hello world",
-        "Hello World",
-        " Hello World",
-        " Hello World!",
-        "Hello, world!",
-        " Hello, world!",
-        " this is 🦙.cpp",
-        "w048 7tuijk dsdfhu",
-        "нещо на Български",
-        "កាន់តែពិសេសអាចខលចេញ",
-        "🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ (only emoji that has its own token)",
-        "Hello",
-        " Hello",
-        "  Hello",
-        "   Hello",
-        "    Hello",
-        "    Hello\n    Hello",
-        "\n =",
-        "' era",
-    ]
+    "",
+    " ",
+    "  ",
+    "   ",
+    "\t",
+    "\n",
+    "\t\n",
+    "Hello world",
+    " Hello world",
+    "Hello World",
+    " Hello World",
+    " Hello World!",
+    "Hello, world!",
+    " Hello, world!",
+    " this is 🦙.cpp",
+    "w048 7tuijk dsdfhu",
+    "нещо на Български",
+    "កាន់តែពិសេសអាចខលចេញ",
+    "🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ (only emoji that has its own token)",
+    "Hello",
+    " Hello",
+    "  Hello",
+    "   Hello",
+    "    Hello",
+    "    Hello\n    Hello",
+    "\n =",
+    "' era",
+]
 
 for text in tests:
     print('text: ', text)

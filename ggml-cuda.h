@@ -17,7 +17,12 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
+// Always success. To check if CUDA is actually loaded, use `ggml_cublas_loaded`.
 GGML_API void   ggml_init_cublas(void);
+
+// Returns `true` if there are available CUDA devices and cublas loads successfully; otherwise, it returns `false`.
+GGML_API bool   ggml_cublas_loaded(void);
+
 GGML_API void * ggml_cuda_host_malloc(size_t size);
 GGML_API void   ggml_cuda_host_free(void * ptr);
 
@@ -44,7 +49,15 @@ GGML_API int    ggml_cuda_get_device_count(void);
 GGML_API void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
 
 // backend API
-GGML_API ggml_backend_t ggml_backend_cuda_init(void); // TODO: take a list of devices to use
+GGML_API ggml_backend_t ggml_backend_cuda_init(int device);
+
+GGML_API bool ggml_backend_is_cuda(ggml_backend_t backend);
+GGML_API int  ggml_backend_cuda_get_device(ggml_backend_t backend);
+
+GGML_API ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device);
+
+// pinned host buffer for use with CPU backend for faster copies between CPU and GPU
+GGML_API ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type(void);
 
 #ifdef  __cplusplus
 }

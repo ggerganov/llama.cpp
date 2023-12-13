@@ -1,3 +1,3 @@
 # llama.cpp/example/parallel
 
-Simplified simluation for serving incoming requests in parallel
+Simplified simulation of serving incoming requests in parallel
