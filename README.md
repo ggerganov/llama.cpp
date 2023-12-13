@@ -425,7 +425,7 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     mkdir build
     cd build
-    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
+    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON
     cmake --build .
     ```
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS):
