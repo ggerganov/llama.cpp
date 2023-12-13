@@ -10,6 +10,7 @@ import itertools
 import json
 import math
 import mmap
+import os
 import pickle
 import re
 import signal
@@ -22,12 +23,11 @@ from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, TypeVar, Optional
+from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, Optional, TypeVar, cast
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor
 
-import os
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
@@ -417,11 +417,13 @@ class VocabLoader:
         if path_candidate:
             if not self.has_newline_token():
                 return "gpt2"
-            else:
-                return "llama"
+            return "llama"
 
         path_candidates.append(path_candidate)
-        raise FileNotFoundError(f"Could not find {path_candidates} in {self.fname_tokenizer} or its parent; if it's in another directory, pass the directory as --vocab-dir")
+        raise FileNotFoundError(
+            f"Could not find {path_candidates} in {self.fname_tokenizer} or its parent; "
+            "if it's in another directory, pass the directory as --vocab-dir"
+        )
 
     def __repr__(self) -> str:
         return f"<VocabLoader with {self.vocab_size_base} base tokens and {len(self.added_tokens_dict)} added tokens>"
@@ -906,10 +908,11 @@ class OutputFile:
         self.gguf.close()
 
     @staticmethod
-    def write_vocab_only(fname_out: Path, params: Params, vocab: Vocab,
-                         svocab: gguf.SpecialVocab,
-                         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
-                         pad_vocab: bool            = False) -> None:
+    def write_vocab_only(
+        fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
+        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
+        pad_vocab: bool = False,
+    ) -> None:
         check_vocab_size(params, vocab, pad_vocab = pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
@@ -937,11 +940,12 @@ class OutputFile:
         return dt.quantize(arr)
 
     @staticmethod
-    def write_all(fname_out  : Path, ftype: GGMLFileType, params: Params,
-                  model      : LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab,
-                  concurrency: int             = DEFAULT_CONCURRENCY,
-                  endianess  : gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
-                  pad_vocab  : bool            = False) -> None:
+    def write_all(
+        fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab,
+        concurrency: int = DEFAULT_CONCURRENCY,
+        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
+        pad_vocab: bool = False,
+    ) -> None:
         check_vocab_size(params, vocab, pad_vocab = pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
