@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 99
+Current version: 100
 -Concedo
 -->
 
@@ -4253,6 +4253,36 @@ Current version: 99
 		var cstoryjson = buf_to_b64(lz_c.compress(storyjson, 1));
 		return cstoryjson;
 	}
+
+	//runs async, complete autosave only if latest to be called
+	var pending_storyjson_autosave = null;
+	function autosave_compressed_story(save_images,export_settings,export_aesthetic_settings) {
+		let story = generate_savefile(save_images,export_settings,export_aesthetic_settings);
+		let storyjson = JSON.stringify(story);
+
+		let ongoing = pending_storyjson_autosave;
+		pending_storyjson_autosave = storyjson;
+		if(ongoing){
+			console.log("Delay Autosave: ", story);
+			return;
+		}
+		console.log("Autosave Start: ", story);
+		(function retry_autosave(json) {
+			lz_c.compress(json, 1, function(res) {
+				console.log("Autosave Done");
+				let compressedstory = buf_to_b64(res);
+				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+				let newer = pending_storyjson_autosave;
+				if (newer && newer !== json) {
+					console.log("Updating Autosave");
+					retry_autosave(newer);
+				}else{
+					pending_storyjson_autosave = null;
+				}
+			});
+		})(storyjson);
+	}
+
 	function export_share_story() {
 		let cstoryjson = generate_compressed_story(false,localsettings.export_settings,false);
 		console.log("Export Len: " + cstoryjson.length);
@@ -4627,9 +4657,9 @@ Current version: 99
 									msgboxYesNo("Could not load selected file!<br><span class=\"color_red\">It appears to be invalid or corrupted!</span><br><br>Do you still want to import it as plaintext?", "Loading Failed",
 										() => {
 											//raw text import
-											restart_new_game();
+											restart_new_game(false);
 											gametext_arr.push(text);
-											render_gametext();
+											render_gametext(true);
 										}, null, true)
 								} else {
 									msgbox("Could not load selected file. Is it valid?");
@@ -4659,7 +4689,7 @@ Current version: 99
 			let old_extrastopseq = extrastopseq;
 
 			//determine if oldui file or newui file format
-			restart_new_game();
+			restart_new_game(false);
 
 			let is_oldui = (storyobj.file_version == null);
 			let is_sharefile = (!storyobj.actions && (storyobj.ga != "" || storyobj.cm != "" || (storyobj.cwi && storyobj.cwi.length > 0) || storyobj.ess != ""));
@@ -4850,7 +4880,7 @@ Current version: 99
 				//force load everything
 				import_settings(true, true, true, true, true, true);
 			}
-			render_gametext();
+			render_gametext(true);
 		});
 	}
 
@@ -4945,7 +4975,7 @@ Current version: 99
 		}
 		else
 		{
-			restart_new_game();
+			restart_new_game(false);
 			localsettings.chatname = myname;
 			localsettings.chatopponent = chatopponent;
 			gametext_arr.push("\n"+chatopponent+": "+greeting);
@@ -4963,7 +4993,7 @@ Current version: 99
 				current_wi = load_agnai_wi(obj,chatopponent,myname);
 			}
 		}
-		render_gametext();
+		render_gametext(true);
 	}
 	function load_ooba_obj(obj)
 	{
@@ -4982,14 +5012,14 @@ Current version: 99
 		{
 			examplemsg = "\n"+examplemsg;
 		}
-		restart_new_game();
+		restart_new_game(false);
 		localsettings.chatname = myname;
 		localsettings.chatopponent = chatopponent;
 		gametext_arr.push("\n"+chatopponent+": "+greeting);
 		current_memory = memory + scenario + examplemsg + "\n***";
 		localsettings.opmode = 3;
 		localsettings.gui_type_chat = 2;
-		render_gametext();
+		render_gametext(true);
 	}
 
 	function get_aetherroom_scenario()
@@ -5262,7 +5292,7 @@ Current version: 99
 	function complete_load_scenario()
 	{
 		console.log("Loading scenario...")
-		restart_new_game();
+		restart_new_game(false);
 
 		//load contexts
 		gametext_arr = [];
@@ -5351,7 +5381,7 @@ Current version: 99
 			if (temp_scenario.instruct_endtag) { localsettings.instruct_endtag = temp_scenario.instruct_endtag; }
 		}
 
-		render_gametext();
+		render_gametext(true);
 	}
 	function togglescenarioallownsfw()
 	{
@@ -7762,7 +7792,7 @@ Current version: 99
 		horde_poll_nearly_completed = false;
 	}
 
-	function restart_new_game() {
+	function restart_new_game(save = true) {
 		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
@@ -7796,7 +7826,7 @@ Current version: 99
 		last_known_filename = "saved_story.json";
 		groupchat_removals = [];
 		welcome = "";
-		render_gametext(true); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
+		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
 	function reset_all_settings()
@@ -8701,7 +8731,6 @@ Current version: 99
 					"presence_penalty": scaled_rep_pen,
 					"temperature": submit_payload.params.temperature,
 					"top_p": submit_payload.params.top_p,
-					"logit_bias": { "50256": -100 },
 				}
 
 				if (document.getElementById("useoaichatcompl").checked) {
@@ -8719,6 +8748,7 @@ Current version: 99
 					}
 				}
 				else {
+					oai_payload.logit_bias = { "50256": -100 };
 					oai_payload.prompt = submit_payload.prompt;
 				}
 
@@ -10622,12 +10652,10 @@ Current version: 99
 			update_prev_custom_endpoint_type();
 			localStorage.setItem(STORAGE_PREFIX + "settings", JSON.stringify(localsettings));
 			if (localsettings.persist_session) {
-				let compressedstory = generate_compressed_story(true, true, true);
-				localStorage.setItem(STORAGE_PREFIX + "story", compressedstory);
+				autosave_compressed_story(true,true,true);
 			}
-			console.log("autosave done");
 		} catch (e) {
-			console.log("autosave failed: " + e);
+			console.log("Autosave Failed: " + e);
 		}
 
 	}
