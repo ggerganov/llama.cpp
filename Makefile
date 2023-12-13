@@ -472,7 +472,7 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 endif # LLAMA_MPI
 
 GF_CC := $(CC)
-include scripts/get_flags.mk
+include scripts/get-flags.mk
 
 # combine build flags with cmdline overrides
 override CFLAGS    := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(GF_CFLAGS) $(CFLAGS)
@@ -484,7 +484,7 @@ override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 # identify CUDA host compiler
 ifdef LLAMA_CUBLAS
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
-include scripts/get_flags.mk
+include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(GF_CXXFLAGS)
 endif
 
