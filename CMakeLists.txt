@@ -403,15 +403,16 @@ if (LLAMA_KOMPUTE)
       set(multiValueArgs SOURCES)
       cmake_parse_arguments(compile_shader "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
       foreach(source ${compile_shader_SOURCES})
-        set(spv_file ${source}.spv)
+        get_filename_component(filename ${source} NAME)
+        set(spv_file ${filename}.spv)
         add_custom_command(
             OUTPUT ${spv_file}
             DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/common.comp
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/op_getrows.comp
-              ${CMAKE_CURRENT_SOURCE_DIR}/kompute/op_mul_mv_q_n.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/common.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_getrows.comp
+              ${CMAKE_CURRENT_SOURCE_DIR}/kompute-shaders/op_mul_mv_q_n.comp
               COMMAND ${glslc_executable} --target-env=vulkan1.2 -o ${spv_file} ${CMAKE_CURRENT_SOURCE_DIR}/${source}
-            COMMENT "Compiling ${source} to ${source}.spv"
+            COMMENT "Compiling ${source} to ${spv_file}"
         )
 
         get_filename_component(RAW_FILE_NAME ${spv_file} NAME)
@@ -444,35 +445,35 @@ if (LLAMA_KOMPUTE)
 
         # Compile our shaders
         compile_shader(SOURCES
-          kompute/op_scale.comp
-          kompute/op_scale_8.comp
-          kompute/op_add.comp
-          kompute/op_addrow.comp
-          kompute/op_mul.comp
-          kompute/op_mulrow.comp
-          kompute/op_silu.comp
-          kompute/op_relu.comp
-          kompute/op_gelu.comp
-          kompute/op_softmax.comp
-          kompute/op_norm.comp
-          kompute/op_rmsnorm.comp
-          kompute/op_diagmask.comp
-          kompute/op_mul_mat_mat_f32.comp
-          kompute/op_mul_mat_f16.comp
-          kompute/op_mul_mat_q8_0.comp
-          kompute/op_mul_mat_q4_0.comp
-          kompute/op_mul_mat_q4_1.comp
-          kompute/op_mul_mat_q6_k.comp
-          kompute/op_getrows_f16.comp
-          kompute/op_getrows_q4_0.comp
-          kompute/op_getrows_q4_1.comp
-          kompute/op_getrows_q6_k.comp
-          kompute/op_rope_f16.comp
-          kompute/op_rope_f32.comp
-          kompute/op_cpy_f16_f16.comp
-          kompute/op_cpy_f16_f32.comp
-          kompute/op_cpy_f32_f16.comp
-          kompute/op_cpy_f32_f32.comp
+          kompute-shaders/op_scale.comp
+          kompute-shaders/op_scale_8.comp
+          kompute-shaders/op_add.comp
+          kompute-shaders/op_addrow.comp
+          kompute-shaders/op_mul.comp
+          kompute-shaders/op_mulrow.comp
+          kompute-shaders/op_silu.comp
+          kompute-shaders/op_relu.comp
+          kompute-shaders/op_gelu.comp
+          kompute-shaders/op_softmax.comp
+          kompute-shaders/op_norm.comp
+          kompute-shaders/op_rmsnorm.comp
+          kompute-shaders/op_diagmask.comp
+          kompute-shaders/op_mul_mat_mat_f32.comp
+          kompute-shaders/op_mul_mat_f16.comp
+          kompute-shaders/op_mul_mat_q8_0.comp
+          kompute-shaders/op_mul_mat_q4_0.comp
+          kompute-shaders/op_mul_mat_q4_1.comp
+          kompute-shaders/op_mul_mat_q6_k.comp
+          kompute-shaders/op_getrows_f16.comp
+          kompute-shaders/op_getrows_q4_0.comp
+          kompute-shaders/op_getrows_q4_1.comp
+          kompute-shaders/op_getrows_q6_k.comp
+          kompute-shaders/op_rope_f16.comp
+          kompute-shaders/op_rope_f32.comp
+          kompute-shaders/op_cpy_f16_f16.comp
+          kompute-shaders/op_cpy_f16_f32.comp
+          kompute-shaders/op_cpy_f32_f16.comp
+          kompute-shaders/op_cpy_f32_f32.comp
         )
 
         # Create a custom target for our generated shaders
