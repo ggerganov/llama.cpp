@@ -1,8 +1,0 @@
-include(CMakeFindDependencyMacro)
-@PACKAGE_INIT@
-
-find_dependency(VULKAN REQUIRED)
-
-include(${CMAKE_CURRENT_LIST_DIR}/komputeTargets.cmake)
-
-check_required_components(kompute)
