@@ -5406,10 +5406,10 @@ struct bin_bcast_cuda {
             size_t nb12 = cnb1[2];
             size_t nb13 = cnb1[3];
 
-            size_t s0 = nb0 / sizeof(src1_t);
-            size_t s1 = nb1 / sizeof(src1_t);
-            size_t s2 = nb2 / sizeof(src1_t);
-            size_t s3 = nb3 / sizeof(src1_t);
+            size_t s0 = nb0 / sizeof(dst_t);
+            size_t s1 = nb1 / sizeof(dst_t);
+            size_t s2 = nb2 / sizeof(dst_t);
+            size_t s3 = nb3 / sizeof(dst_t);
 
             size_t s10 = nb10 / sizeof(src1_t);
             size_t s11 = nb11 / sizeof(src1_t);
