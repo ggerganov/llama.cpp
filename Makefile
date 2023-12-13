@@ -26,20 +26,6 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
-ifeq '' '$(findstring clang,$(shell $(CC) --version))'
-	CC_IS_GCC=1
-	CC_VER := $(shell $(CC) -dumpfullversion -dumpversion | awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
-else
-	CC_IS_CLANG=1
-	ifeq '' '$(findstring Apple,$(shell $(CC) --version))'
-		CC_IS_LLVM_CLANG=1
-	else
-		CC_IS_APPLE_CLANG=1
-	endif
-	CC_VER := $(shell $(CC) --version | sed -n 's/^.* version \([0-9.]*\).*$$/\1/p' \
-				| awk -F. '{ printf("%02d%02d%02d", $$1, $$2, $$3) }')
-endif
-
 # Mac OS + Arm can report x86_64
 # ref: https://github.com/ggerganov/whisper.cpp/issues/66#issuecomment-1282546789
 ifeq ($(UNAME_S),Darwin)
@@ -121,12 +107,12 @@ MK_CXXFLAGS = -std=c++11 -fPIC
 
 # -Ofast tends to produce faster code, but may not be available for some compilers.
 ifdef LLAMA_FAST
-MK_CFLAGS        += -Ofast
-MK_HOST_CXXFLAGS += -Ofast
-MK_CUDA_CXXFLAGS += -O3
+MK_CFLAGS     += -Ofast
+HOST_CXXFLAGS += -Ofast
+MK_NVCCFLAGS  += -O3
 else
-MK_CFLAGS        += -O3
-MK_CXXFLAGS      += -O3
+MK_CFLAGS     += -O3
+MK_CXXFLAGS   += -O3
 endif
 
 # clock_gettime came in POSIX.1b (1993)
@@ -220,30 +206,6 @@ MK_CFLAGS    += $(WARN_FLAGS) -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmis
 				-Werror=implicit-function-declaration
 MK_CXXFLAGS  += $(WARN_FLAGS) -Wmissing-declarations -Wmissing-noreturn
 
-ifeq ($(CC_IS_CLANG), 1)
-	# clang options
-	MK_CFLAGS        += -Wunreachable-code-break -Wunreachable-code-return
-	MK_HOST_CXXFLAGS += -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi
-
-	ifneq '' '$(and $(CC_IS_LLVM_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 030800)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-	ifneq '' '$(and $(CC_IS_APPLE_CLANG),$(filter 1,$(shell expr $(CC_VER) \>= 070300)))'
-		MK_CFLAGS += -Wdouble-promotion
-	endif
-else
-	# gcc options
-	MK_CFLAGS        += -Wdouble-promotion
-	MK_HOST_CXXFLAGS += -Wno-array-bounds
-
-	ifeq ($(shell expr $(CC_VER) \>= 070100), 1)
-		MK_HOST_CXXFLAGS += -Wno-format-truncation
-	endif
-	ifeq ($(shell expr $(CC_VER) \>= 080100), 1)
-		MK_HOST_CXXFLAGS += -Wextra-semi
-	endif
-endif
-
 # this version of Apple ld64 is buggy
 ifneq '' '$(findstring dyld-1015.7,$(shell $(CC) $(LDFLAGS) -Wl,-v 2>&1))'
 	MK_CPPFLAGS += -DHAVE_BUGGY_APPLE_LINKER
@@ -294,8 +256,8 @@ ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
-	MK_CFLAGS   += -march=native -mtune=native
-	MK_HOST_CXXFLAGS += -march=native -mtune=native
+	MK_CFLAGS     += -march=native -mtune=native
+	HOST_CXXFLAGS += -march=native -mtune=native
 
 	# Usage AVX-only
 	#MK_CFLAGS   += -mfma -mf16c -mavx
@@ -398,10 +360,10 @@ ifdef LLAMA_CUBLAS
 	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
 	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
 	OBJS         += ggml-cuda.o
-	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
+	MK_NVCCFLAGS  = --forward-unknown-to-host-compiler -use_fast_math
 
 ifdef LLAMA_DEBUG
-	NVCCFLAGS += -lineinfo
+	MK_NVCCFLAGS += -lineinfo
 endif
 
 ifdef LLAMA_CUDA_NVCC
@@ -410,54 +372,52 @@ else
 	NVCC = nvcc
 endif #LLAMA_CUDA_NVCC
 ifdef CUDA_DOCKER_ARCH
-	NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
-else ifdef CUDA_POWER_ARCH
-	NVCCFLAGS +=
-else
-	NVCCFLAGS += -arch=native
+	MK_NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
+else ifndef CUDA_POWER_ARCH
+	MK_NVCCFLAGS += -arch=native
 endif # CUDA_DOCKER_ARCH
 ifdef LLAMA_CUDA_FORCE_DMMV
-	NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
+	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_DMMV
 endif # LLAMA_CUDA_FORCE_DMMV
 ifdef LLAMA_CUDA_FORCE_MMQ
-	NVCCFLAGS += -DGGML_CUDA_FORCE_MMQ
+	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_MMQ
 endif # LLAMA_CUDA_FORCE_MMQ
 ifdef LLAMA_CUDA_DMMV_X
-	NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
-	NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
+	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=32
 endif # LLAMA_CUDA_DMMV_X
 ifdef LLAMA_CUDA_MMV_Y
-	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
 else ifdef LLAMA_CUDA_DMMV_Y
-	NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_DMMV_Y) # for backwards compatibility
+	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_DMMV_Y) # for backwards compatibility
 else
-	NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
+	MK_NVCCFLAGS += -DGGML_CUDA_MMV_Y=1
 endif # LLAMA_CUDA_MMV_Y
 ifdef LLAMA_CUDA_F16
-	NVCCFLAGS += -DGGML_CUDA_F16
+	MK_NVCCFLAGS += -DGGML_CUDA_F16
 endif # LLAMA_CUDA_F16
 ifdef LLAMA_CUDA_DMMV_F16
-	NVCCFLAGS += -DGGML_CUDA_F16
+	MK_NVCCFLAGS += -DGGML_CUDA_F16
 endif # LLAMA_CUDA_DMMV_F16
 ifdef LLAMA_CUDA_KQUANTS_ITER
-	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
 else
-	NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
+	MK_NVCCFLAGS += -DK_QUANTS_PER_ITERATION=2
 endif
 ifdef LLAMA_CUDA_PEER_MAX_BATCH_SIZE
-	NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=$(LLAMA_CUDA_PEER_MAX_BATCH_SIZE)
+	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=$(LLAMA_CUDA_PEER_MAX_BATCH_SIZE)
 else
-	NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128
+	MK_NVCCFLAGS += -DGGML_CUDA_PEER_MAX_BATCH_SIZE=128
 endif # LLAMA_CUDA_PEER_MAX_BATCH_SIZE
 #ifdef LLAMA_CUDA_CUBLAS
-#	NVCCFLAGS += -DGGML_CUDA_CUBLAS
+#	MK_NVCCFLAGS += -DGGML_CUDA_CUBLAS
 #endif # LLAMA_CUDA_CUBLAS
 ifdef LLAMA_CUDA_CCBIN
-	NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
+	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
-	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -519,16 +479,22 @@ ggml-mpi.o: ggml-mpi.c ggml-mpi.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif # LLAMA_MPI
 
-# combine build flags with cmdline overrides
-override CFLAGS        := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(CFLAGS)
-override CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
-override CUDA_CXXFLAGS := $(MK_CUDA_CXXFLAGS) $(CUDA_CXXFLAGS)
-override HOST_CXXFLAGS := $(MK_HOST_CXXFLAGS) $(HOST_CXXFLAGS)
-override LDFLAGS       := $(MK_LDFLAGS) $(LDFLAGS)
+GF_CC := $(CC)
+include scripts/get-flags.mk
 
-# save CXXFLAGS before we add host-only options
-NVCCFLAGS := $(NVCCFLAGS) $(CXXFLAGS) $(CUDA_CXXFLAGS) -Wno-pedantic -Xcompiler "$(HOST_CXXFLAGS)"
-override CXXFLAGS += $(HOST_CXXFLAGS)
+# combine build flags with cmdline overrides
+override CFLAGS    := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CFLAGS) $(GF_CFLAGS) $(CFLAGS)
+BASE_CXXFLAGS      := $(MK_CPPFLAGS) $(CPPFLAGS) $(MK_CXXFLAGS) $(CXXFLAGS)
+override CXXFLAGS  := $(BASE_CXXFLAGS) $(HOST_CXXFLAGS) $(GF_CXXFLAGS)
+override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
+override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
+
+# identify CUDA host compiler
+ifdef LLAMA_CUBLAS
+GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
+include scripts/get-flags.mk
+CUDA_CXXFLAGS := $(GF_CXXFLAGS)
+endif
 
 #
 # Print build information
