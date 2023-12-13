@@ -64,7 +64,7 @@ struct ggml_kompute_context {
 // we *have* to have the kompute manager no matter what for device discovery, but the kompute context
 // is only created when a device is set and vulkan is explicitly turned on.
 ggml_kompute_context *s_kompute_context = nullptr;
-kp::Manager *komputeManager() {
+static kp::Manager *komputeManager() {
     static kp::Manager *s_mgr = nullptr;
     if (s_mgr && !s_mgr->hasInstance()) {
         delete s_mgr;
@@ -551,7 +551,7 @@ void ggml_vk_d2h_tensor(struct ggml_kompute_context * ctx, struct ggml_tensor * 
     komputeManager()->sequence()->eval<kp::OpTensorSyncLocal>({res});
 }
 
-std::vector<uint32_t> getSpirvShader(const unsigned char* rawData, size_t size) {
+static std::vector<uint32_t> getSpirvShader(const unsigned char* rawData, size_t size) {
     if (size % sizeof(uint32_t) != 0) {
         throw std::runtime_error("Invalid size: must be divisible by sizeof(uint32_t)");
     }
@@ -573,7 +573,7 @@ uint32_t safe_divide(uint32_t a, uint32_t b) {
     return a / b;
 }
 
-void ggml_vk_add(
+static void ggml_vk_add(
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -621,7 +621,7 @@ void ggml_vk_add(
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_addrow(kp::Sequence& seq,
+static void ggml_vk_addrow(kp::Sequence& seq,
                  const std::shared_ptr<kp::Tensor>& inA,
                  const std::shared_ptr<kp::Tensor>& inB,
                  const std::shared_ptr<kp::Tensor>& out,
@@ -652,7 +652,7 @@ void ggml_vk_addrow(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_mul(kp::Sequence& seq,
+static void ggml_vk_mul(kp::Sequence& seq,
                     const std::shared_ptr<kp::Tensor>& inA,
                     const std::shared_ptr<kp::Tensor>& inB,
                     const std::shared_ptr<kp::Tensor>& out,
@@ -681,7 +681,7 @@ void ggml_vk_mul(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_mulrow(kp::Sequence& seq,
+static void ggml_vk_mulrow(kp::Sequence& seq,
                  const std::shared_ptr<kp::Tensor>& inA,
                  const std::shared_ptr<kp::Tensor>& inB,
                  const std::shared_ptr<kp::Tensor>& out,
@@ -712,7 +712,7 @@ void ggml_vk_mulrow(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_scale(kp::Sequence& seq,
+static void ggml_vk_scale(kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in,
                    const std::shared_ptr<kp::Tensor>& out,
                    uint32_t inOff, uint32_t outOff,
@@ -753,7 +753,7 @@ void ggml_vk_scale(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
+static void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
                   const std::shared_ptr<kp::Tensor>& in,
                   const std::shared_ptr<kp::Tensor>& out,
                   uint32_t inOff, uint32_t outOff,
@@ -778,7 +778,7 @@ void ggml_vk_xxlu(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
 }
 
 template <typename... Args>
-void ggml_vk_silu(Args&&... args) {
+static void ggml_vk_silu(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_silu_comp_spv,
         kp::shader_data::op_silu_comp_spv_len);
 
@@ -786,7 +786,7 @@ void ggml_vk_silu(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_relu(Args&&... args) {
+static void ggml_vk_relu(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_relu_comp_spv,
         kp::shader_data::op_relu_comp_spv_len);
 
@@ -794,14 +794,14 @@ void ggml_vk_relu(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_gelu(Args&&... args) {
+static void ggml_vk_gelu(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_gelu_comp_spv,
         kp::shader_data::op_gelu_comp_spv_len);
 
     ggml_vk_xxlu(spirv, std::forward<Args>(args)...);
 }
 
-void ggml_vk_soft_max(kp::Sequence& seq,
+static void ggml_vk_soft_max(kp::Sequence& seq,
                       const std::shared_ptr<kp::Tensor>& in,
                       const std::shared_ptr<kp::Tensor>& out,
                       uint32_t inOff, uint32_t outOff,
@@ -833,7 +833,7 @@ void ggml_vk_soft_max(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_norm_(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
+static void ggml_vk_norm_(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
                    const std::shared_ptr<kp::Tensor>& in,
                    const std::shared_ptr<kp::Tensor>& out,
                    uint32_t inOff, uint32_t outOff,
@@ -865,7 +865,7 @@ void ggml_vk_norm_(const std::vector<uint32_t>& spirv, kp::Sequence& seq,
 }
 
 template <typename... Args>
-void ggml_vk_norm(Args&&... args) {
+static void ggml_vk_norm(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_norm_comp_spv,
         kp::shader_data::op_norm_comp_spv_len);
 
@@ -873,14 +873,14 @@ void ggml_vk_norm(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_rms_norm(Args&&... args) {
+static void ggml_vk_rms_norm(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_rmsnorm_comp_spv,
         kp::shader_data::op_rmsnorm_comp_spv_len);
 
     ggml_vk_norm_(spirv, std::forward<Args>(args)...);
 }
 
-void ggml_vk_diag_mask_inf(kp::Sequence& seq,
+static void ggml_vk_diag_mask_inf(kp::Sequence& seq,
                            const std::shared_ptr<kp::Tensor>& in,
                            const std::shared_ptr<kp::Tensor>& out,
                            uint32_t inOff, uint32_t outOff,
@@ -912,7 +912,7 @@ void ggml_vk_diag_mask_inf(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_mul_mat_f16(kp::Sequence& seq,
+static void ggml_vk_mul_mat_f16(kp::Sequence& seq,
                          const std::shared_ptr<kp::Tensor>& inA,
                          const std::shared_ptr<kp::Tensor>& inB,
                          const std::shared_ptr<kp::Tensor>& out,
@@ -951,7 +951,7 @@ void ggml_vk_mul_mat_f16(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_mul_mat_q8_0(kp::Sequence& seq,
+static void ggml_vk_mul_mat_q8_0(kp::Sequence& seq,
                          const std::shared_ptr<kp::Tensor>& inA,
                          const std::shared_ptr<kp::Tensor>& inB,
                          const std::shared_ptr<kp::Tensor>& out,
@@ -989,7 +989,7 @@ void ggml_vk_mul_mat_q8_0(kp::Sequence& seq,
 }
 
 
-void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
+static void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
                          const std::shared_ptr<kp::Tensor>& inA,
                          const std::shared_ptr<kp::Tensor>& inB,
                          const std::shared_ptr<kp::Tensor>& out,
@@ -1039,7 +1039,7 @@ void ggml_vk_mul_mat_mat_f32(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_size, kp::Sequence& seq,
+static void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_size, kp::Sequence& seq,
                           const std::shared_ptr<kp::Tensor>& inA,
                           const std::shared_ptr<kp::Tensor>& inB,
                           const std::shared_ptr<kp::Tensor>& out,
@@ -1069,7 +1069,7 @@ void ggml_vk_mul_mat_q4_x(const std::vector<uint32_t>& spirv, uint32_t block_siz
 }
 
 template <typename... Args>
-void ggml_vk_mul_mat_q4_0(Args&&... args) {
+static void ggml_vk_mul_mat_q4_0(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_0_comp_spv,
         kp::shader_data::op_mul_mat_q4_0_comp_spv_len);
 
@@ -1077,14 +1077,14 @@ void ggml_vk_mul_mat_q4_0(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_mul_mat_q4_1(Args&&... args) {
+static void ggml_vk_mul_mat_q4_1(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_mul_mat_q4_1_comp_spv,
         kp::shader_data::op_mul_mat_q4_1_comp_spv_len);
 
     ggml_vk_mul_mat_q4_x(spirv, 1/*We access blocks unaligned*/, std::forward<Args>(args)...);
 }
 
-void ggml_vk_mul_mat_q6_k(kp::Sequence& seq,
+static void ggml_vk_mul_mat_q6_k(kp::Sequence& seq,
                           const std::shared_ptr<kp::Tensor>& inA,
                           const std::shared_ptr<kp::Tensor>& inB,
                           const std::shared_ptr<kp::Tensor>& out,
@@ -1116,7 +1116,7 @@ void ggml_vk_mul_mat_q6_k(kp::Sequence& seq,
     seq.record<kp::OpAlgoDispatch>(s_algo);
 }
 
-void ggml_vk_get_rows(const std::vector<uint32_t>& spirv,
+static void ggml_vk_get_rows(const std::vector<uint32_t>& spirv,
                       unsigned element_size, unsigned qk,
                       kp::Sequence& seq,
                       const std::shared_ptr<kp::Tensor>& inA,
@@ -1151,7 +1151,7 @@ void ggml_vk_get_rows(const std::vector<uint32_t>& spirv,
 }
 
 template <typename... Args>
-void ggml_vk_get_rows_f16(Args&&... args) {
+static void ggml_vk_get_rows_f16(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_f16_comp_spv,
         kp::shader_data::op_getrows_f16_comp_spv_len);
 
@@ -1159,7 +1159,7 @@ void ggml_vk_get_rows_f16(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_get_rows_q4_0(Args&&... args) {
+static void ggml_vk_get_rows_q4_0(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q4_0_comp_spv,
         kp::shader_data::op_getrows_q4_0_comp_spv_len);
 
@@ -1167,7 +1167,7 @@ void ggml_vk_get_rows_q4_0(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_get_rows_q4_1(Args&&... args) {
+static void ggml_vk_get_rows_q4_1(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q4_1_comp_spv,
         kp::shader_data::op_getrows_q4_1_comp_spv_len);
 
@@ -1175,13 +1175,13 @@ void ggml_vk_get_rows_q4_1(Args&&... args) {
 }
 
 template <typename... Args>
-void ggml_vk_get_rows_q6_k(Args&&... args) {
+static void ggml_vk_get_rows_q6_k(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_getrows_q6_k_comp_spv,
         kp::shader_data::op_getrows_q6_k_comp_spv_len);
     ggml_vk_get_rows(spirv, 1/*We access blocks unaligned*/, QK_NL, std::forward<Args>(args)...);
 }
 
-void ggml_vk_rope(
+static void ggml_vk_rope(
     kp::Sequence& seq,
     const std::shared_ptr<kp::Tensor>& inA,
     const std::shared_ptr<kp::Tensor>& inB,
@@ -1249,7 +1249,7 @@ void ggml_vk_rope(
 }
 
 template<uint32_t in_element_size, uint32_t out_element_size>
-void ggml_vk_cpy(const std::vector<uint32_t>& spirv,
+static void ggml_vk_cpy(const std::vector<uint32_t>& spirv,
                  kp::Sequence& seq,
                  const std::shared_ptr<kp::Tensor>& in,
                  const std::shared_ptr<kp::Tensor>& out,
@@ -1289,28 +1289,28 @@ void ggml_vk_cpy(const std::vector<uint32_t>& spirv,
 }
 
 template <typename... Args>
-void ggml_vk_cpy_f32_f16(Args&&... args) {
+static void ggml_vk_cpy_f32_f16(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f32_f16_comp_spv,
         kp::shader_data::op_cpy_f32_f16_comp_spv_len);
     ggml_vk_cpy<4, 2>(spirv, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void ggml_vk_cpy_f32_f32(Args&&... args) {
+static void ggml_vk_cpy_f32_f32(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f32_f32_comp_spv,
         kp::shader_data::op_cpy_f32_f32_comp_spv_len);
     ggml_vk_cpy<4, 4>(spirv, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void ggml_vk_cpy_f16_f16(Args&&... args) {
+static void ggml_vk_cpy_f16_f16(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f16_f16_comp_spv,
         kp::shader_data::op_cpy_f16_f16_comp_spv_len);
     ggml_vk_cpy<2, 2>(spirv, std::forward<Args>(args)...);
 }
 
 template <typename... Args>
-void ggml_vk_cpy_f16_f32(Args&&... args) {
+static void ggml_vk_cpy_f16_f32(Args&&... args) {
     const static auto spirv = getSpirvShader(kp::shader_data::op_cpy_f16_f32_comp_spv,
         kp::shader_data::op_cpy_f16_f32_comp_spv_len);
     ggml_vk_cpy<2, 4>(spirv, std::forward<Args>(args)...);
@@ -1349,6 +1349,8 @@ void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph
                 case GGML_OP_TRANSPOSE:
                 case GGML_OP_PERMUTE:
                     continue; // noop -> next node
+                default:
+                    break;
             }
 
             const int32_t ne00 = src0 ? src0->ne[0] : 0;
