@@ -101,9 +101,17 @@ LLAMA_ATTRIBUTE_FORMAT(2, 3)
 static void llama_log_internal        (ggml_log_level level, const char* format, ...);
 static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
+#ifndef LLAMA_LOG_INFO 
 #define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_LOG_DEBUG
 #define LLAMA_LOG_WARN(...)  llama_log_internal(GGML_LOG_LEVEL_WARN , __VA_ARGS__)
+#endif
+
+#ifndef LLAMA_LOG_DEBUG
 #define LLAMA_LOG_ERROR(...) llama_log_internal(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
+#endif
 
 //
 // helpers
