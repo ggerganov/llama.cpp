@@ -10,6 +10,7 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
+- Added Mixtral support: https://github.com/ggerganov/llama.cpp/pull/4406
 - **llama.h API change for handling KV cache offloading and data type: https://github.com/ggerganov/llama.cpp/pull/4309**
 - Using `llama.cpp` with AWS instances: https://github.com/ggerganov/llama.cpp/discussions/4225
 - Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
