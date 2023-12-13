@@ -280,6 +280,18 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             params.yarn_beta_slow = std::stof(argv[i]);
         } else if (arg == "--memory-f32") {
             params.memory_f16 = false;
+        } else if (arg == "--samplers") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.samplers_sequence = parse_samplers_input(argv[i]);
+        } else if (arg == "--sampling-seq") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.samplers_sequence = argv[i];
         } else if (arg == "--top-p") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -678,6 +690,47 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
                 std::istreambuf_iterator<char>(),
                 std::back_inserter(sparams.grammar)
             );
+        } else if (arg == "--override-kv") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            char * sep = strchr(argv[i], '=');
+            if (sep == nullptr || sep - argv[i] >= 128) {
+                fprintf(stderr, "error: Malformed KV override: %s\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            struct llama_model_kv_override kvo;
+            std::strncpy(kvo.key, argv[i], sep - argv[i]);
+            kvo.key[sep - argv[i]] = 0;
+            sep++;
+            if (strncmp(sep, "int:", 4) == 0) {
+                sep += 4;
+                kvo.tag = LLAMA_KV_OVERRIDE_INT;
+                kvo.int_value = std::atol(sep);
+            } else if (strncmp(sep, "float:", 6) == 0) {
+                sep += 6;
+                kvo.tag = LLAMA_KV_OVERRIDE_FLOAT;
+                kvo.float_value = std::atof(sep);
+            } else if (strncmp(sep, "bool:", 5) == 0) {
+                sep += 5;
+                kvo.tag = LLAMA_KV_OVERRIDE_BOOL;
+                if (std::strcmp(sep, "true") == 0) {
+                    kvo.bool_value = true;
+                } else if (std::strcmp(sep, "false") == 0) {
+                    kvo.bool_value = false;
+                } else {
+                    fprintf(stderr, "error: Invalid boolean value for KV override: %s\n", argv[i]);
+                    invalid_param = true;
+                    break;
+                }
+            } else {
+                fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
+                invalid_param = true;
+                break;
+            }
+            params.kv_overrides.push_back(kvo);
 #ifndef LOG_DISABLE_LOGS
         // Parse args for logging parameters
         } else if ( log_param_single_parse( argv[i] ) ) {
@@ -721,6 +774,11 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         }
     }
 
+    if (!params.kv_overrides.empty()) {
+        params.kv_overrides.emplace_back(llama_model_kv_override());
+        params.kv_overrides.back().key[0] = 0;
+    }
+
     return true;
 }
 
@@ -761,6 +819,8 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
     printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
     printf("  -b N, --batch-size N  batch size for prompt processing (default: %d)\n", params.n_batch);
+    printf("  --samplers            samplers that will be used for generation in the order, separated by \';\', for example: \"top_k;tfs;typical;top_p;min_p;temp\"\n");
+    printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sparams.samplers_sequence.c_str());
     printf("  --top-k N             top-k sampling (default: %d, 0 = disabled)\n", sparams.top_k);
     printf("  --top-p N             top-p sampling (default: %.1f, 1.0 = disabled)\n", (double)sparams.top_p);
     printf("  --min-p N             min-p sampling (default: %.1f, 0.0 = disabled)\n", (double)sparams.min_p);
@@ -850,6 +910,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        draft model for speculative decoding (default: %s)\n", params.model.c_str());
     printf("  -ld LOGDIR, --logdir LOGDIR\n");
     printf("                        path under which to save YAML logs (no logging if unset)\n");
+    printf("  --override-kv KEY=TYPE:VALUE\n");
+    printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
+    printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("\n");
 #ifndef LOG_DISABLE_LOGS
     log_print_usage();
@@ -887,6 +950,48 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
 }
 
 //
+// String parsing
+//
+
+std::string parse_samplers_input(std::string input) {
+    std::string output = "";
+    // since samplers names are written multiple ways
+    // make it ready for both system names and input names
+    std::unordered_map<std::string, char> samplers_symbols {
+        {"top_k",      'k'},
+        {"top-k",      'k'},
+        {"top_p",      'p'},
+        {"top-p",      'p'},
+        {"nucleus",    'p'},
+        {"typical_p",  'y'},
+        {"typical-p",  'y'},
+        {"typical",    'y'},
+        {"min_p",      'm'},
+        {"min-p",      'm'},
+        {"tfs_z",      'f'},
+        {"tfs-z",      'f'},
+        {"tfs",        'f'},
+        {"temp",       't'},
+        {"temperature",'t'}
+    };
+    // expected format example: "temp;top_k;tfs_z;typical_p;top_p;min_p"
+    size_t separator = input.find(';');
+    while (separator != input.npos) {
+        std::string name = input.substr(0,separator);
+        input = input.substr(separator+1);
+        separator = input.find(';');
+
+        if (samplers_symbols.find(name) != samplers_symbols.end()) {
+            output += samplers_symbols[name];
+        }
+    }
+    if (samplers_symbols.find(input) != samplers_symbols.end()) {
+        output += samplers_symbols[input];
+    }
+    return output;
+}
+
+//
 // Model utils
 //
 
@@ -900,6 +1005,12 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
     mparams.tensor_split    = params.tensor_split;
     mparams.use_mmap        = params.use_mmap;
     mparams.use_mlock       = params.use_mlock;
+    if (params.kv_overrides.empty()) {
+        mparams.kv_overrides = NULL;
+    } else {
+        GGML_ASSERT(params.kv_overrides.back().key[0] == 0 && "KV overrides not terminated with empty key");
+        mparams.kv_overrides = params.kv_overrides.data();
+    }
 
     return mparams;
 }

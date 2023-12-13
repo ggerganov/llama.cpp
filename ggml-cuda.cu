@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -442,6 +443,7 @@ static_assert(sizeof(block_q6_K) == sizeof(ggml_fp16_t) + 13*QK_K/16, "wrong q6_
 #define CUDA_SCALE_BLOCK_SIZE 256
 #define CUDA_CLAMP_BLOCK_SIZE 256
 #define CUDA_ROPE_BLOCK_SIZE 256
+#define CUDA_SOFT_MAX_BLOCK_SIZE 1024
 #define CUDA_ALIBI_BLOCK_SIZE 32
 #define CUDA_DIAG_MASK_INF_BLOCK_SIZE 32
 #define CUDA_QUANTIZE_BLOCK_SIZE 256
@@ -499,6 +501,31 @@ static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+
+static __device__ __forceinline__ float warp_reduce_sum(float x) {
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        x += __shfl_xor_sync(0xffffffff, x, mask, 32);
+    }
+    return x;
+}
+
+static __device__ __forceinline__ float2 warp_reduce_sum(float2 a) {
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        a.x += __shfl_xor_sync(0xffffffff, a.x, mask, 32);
+        a.y += __shfl_xor_sync(0xffffffff, a.y, mask, 32);
+    }
+    return a;
+}
+
+static __device__ __forceinline__ float warp_reduce_max(float x) {
+#pragma unroll
+    for (int mask = 16; mask > 0; mask >>= 1) {
+        x = fmaxf(x, __shfl_xor_sync(0xffffffff, x, mask, 32));
+    }
+    return x;
+}
 
 static __global__ void add_f32(const float * x, const float * y, float * dst, const int kx, const int ky) {
     const int i = blockDim.x*blockIdx.x + threadIdx.x;
@@ -576,15 +603,6 @@ static __global__ void sqr_f32(const float * x, float * dst, const int k) {
     dst[i] = x[i] * x[i];
 }
 
-static __device__ __forceinline__ float2 warp_reduce_sum(float2 a) {
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        a.x += __shfl_xor_sync(0xffffffff, a.x, mask, 32);
-        a.y += __shfl_xor_sync(0xffffffff, a.y, mask, 32);
-    }
-    return a;
-}
-
 template <int block_size>
 static __global__ void norm_f32(const float * x, float * dst, const int ncols) {
     const int row = blockIdx.x*blockDim.y + threadIdx.y;
@@ -621,14 +639,6 @@ static __global__ void norm_f32(const float * x, float * dst, const int ncols) {
     for (int col = tid; col < ncols; col += block_size) {
         dst[row*ncols + col] = (x[row*ncols + col] - mean) * inv_std;
     }
-}
-
-static __device__ __forceinline__ float warp_reduce_sum(float x) {
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        x += __shfl_xor_sync(0xffffffff, x, mask, 32);
-    }
-    return x;
 }
 
 template <int block_size>
@@ -4609,8 +4619,8 @@ static __global__ void rope(
 
 template<typename T, bool has_pos>
 static __global__ void rope_neox(
-    const T * x, T * dst, int ncols, const int32_t * pos, float freq_scale, int p_delta_rows, float freq_base,
-    float ext_factor, float attn_factor, rope_corr_dims corr_dims
+    const T * x, T * dst, int ncols, int n_dims, const int32_t * pos, float freq_scale, int p_delta_rows,
+    float ext_factor, float attn_factor, rope_corr_dims corr_dims, float theta_scale, float inv_ndims
 ) {
     const int col = 2*(blockDim.y*blockIdx.y + threadIdx.y);
 
@@ -4619,23 +4629,25 @@ static __global__ void rope_neox(
     }
 
     const int row = blockDim.x*blockIdx.x + threadIdx.x;
-    const int i = row*ncols + col/2;
+    const int ib = col / n_dims;
+    const int ic = col % n_dims;
+
+    const int i = row*ncols + ib*n_dims + ic/2;
     const int i2 = row/p_delta_rows;
 
-    // simplified from `(ib * ncols + col) * (-1 / ncols)`, where ib is assumed to be zero
-    const float cur_rot = -float(col)/ncols;
+    float cur_rot = inv_ndims * ic - ib;
 
     const int p = has_pos ? pos[i2] : 0;
-    const float theta_base = p*powf(freq_base, cur_rot);
+    const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f);
 
     float cos_theta, sin_theta;
     rope_yarn(theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
     const float x0 = x[i + 0];
-    const float x1 = x[i + ncols/2];
+    const float x1 = x[i + n_dims/2];
 
-    dst[i + 0]       = x0*cos_theta - x1*sin_theta;
-    dst[i + ncols/2] = x0*sin_theta + x1*cos_theta;
+    dst[i + 0]        = x0*cos_theta - x1*sin_theta;
+    dst[i + n_dims/2] = x0*sin_theta + x1*cos_theta;
 }
 
 static __global__ void rope_glm_f32(
@@ -4714,45 +4726,74 @@ static __global__ void diag_mask_inf_f32(const float * x, float * dst, const int
     dst[i] = x[i] - (col > n_past + row % rows_per_channel) * INT_MAX; // equivalent within rounding error but slightly faster on GPU
 }
 
-// the CUDA soft max implementation differs from the CPU implementation
-// instead of doubles floats are used
-static __global__ void soft_max_f32(const float * x, float * dst, const int ncols) {
-    const int row = blockDim.x*blockIdx.x + threadIdx.x;
-    const int block_size = blockDim.y;
-    const int tid = threadIdx.y;
+static __global__ void soft_max_f32(const float * x, const float * y, float * dst, const int ncols, const int nrows_y, const float scale) {
+    const int tid  = threadIdx.x;
+    const int rowx = blockIdx.x;
+    const int rowy = rowx % nrows_y; // broadcast the mask (y) in the row dimension
+
+    const int block_size = blockDim.x;
+
+    const int warp_id = threadIdx.x / WARP_SIZE;
+    const int lane_id = threadIdx.x % WARP_SIZE;
+
+    __shared__ float buf[CUDA_SOFT_MAX_BLOCK_SIZE/WARP_SIZE];
 
     float max_val = -INFINITY;
 
     for (int col = tid; col < ncols; col += block_size) {
-        const int i = row*ncols + col;
-        max_val = max(max_val, x[i]);
+        const int ix = rowx*ncols + col;
+        const int iy = rowy*ncols + col;
+        max_val = max(max_val, x[ix]*scale + (y ? y[iy] : 0.0f));
     }
 
     // find the max value in the block
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        max_val = max(max_val, __shfl_xor_sync(0xffffffff, max_val, mask, 32));
+    max_val = warp_reduce_max(max_val);
+    if (block_size > WARP_SIZE) {
+        if (warp_id == 0) {
+            buf[lane_id] = -INFINITY;
+        }
+        __syncthreads();
+
+        if (lane_id == 0) {
+            buf[warp_id] = max_val;
+        }
+        __syncthreads();
+
+        max_val = buf[lane_id];
+        max_val = warp_reduce_max(max_val);
     }
 
     float tmp = 0.f;
 
     for (int col = tid; col < ncols; col += block_size) {
-        const int i = row*ncols + col;
-        const float val = expf(x[i] - max_val);
+        const int ix = rowx*ncols + col;
+        const int iy = rowy*ncols + col;
+        const float val = expf((x[ix]*scale + (y ? y[iy] : 0.0f)) - max_val);
         tmp += val;
-        dst[i] = val;
+        dst[ix] = val;
     }
 
-    // sum up partial sums
-#pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
-        tmp += __shfl_xor_sync(0xffffffff, tmp, mask, 32);
+    // find the sum of exps in the block
+    tmp = warp_reduce_sum(tmp);
+    if (block_size > WARP_SIZE) {
+        if (warp_id == 0) {
+            buf[lane_id] = 0.f;
+        }
+        __syncthreads();
+
+        if (lane_id == 0) {
+            buf[warp_id] = tmp;
+        }
+        __syncthreads();
+
+        tmp = buf[lane_id];
+        tmp = warp_reduce_sum(tmp);
     }
 
     const float inv_tmp = 1.f / tmp;
 
     for (int col = tid; col < ncols; col += block_size) {
-        const int i = row*ncols + col;
+        const int i = rowx*ncols + col;
         dst[i] *= inv_tmp;
     }
 }
@@ -5738,20 +5779,26 @@ static void rope_cuda(
 
 template<typename T>
 static void rope_neox_cuda(
-    const T * x, T * dst, int ncols, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
+    const T * x, T * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
     float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
     const int num_blocks_x = (ncols + 2*CUDA_ROPE_BLOCK_SIZE - 1) / (2*CUDA_ROPE_BLOCK_SIZE);
     const dim3 block_nums(nrows, num_blocks_x, 1);
+
+    const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float inv_ndims = -1.0f / n_dims;
+
     if (pos == nullptr) {
         rope_neox<T, false><<<block_nums, block_dims, 0, stream>>>(
-            x, dst, ncols, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims
+            x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+            theta_scale, inv_ndims
         );
     } else {
         rope_neox<T, true><<<block_nums, block_dims, 0, stream>>>(
-            x, dst, ncols, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims
+            x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
+            theta_scale, inv_ndims
         );
     }
 }
@@ -5783,10 +5830,12 @@ static void diag_mask_inf_f32_cuda(const float * x, float * dst, const int ncols
     diag_mask_inf_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols_x, rows_per_channel, n_past);
 }
 
-static void soft_max_f32_cuda(const float * x, float * dst, const int ncols_x, const int nrows_x, cudaStream_t stream) {
-    const dim3 block_dims(1, WARP_SIZE, 1);
+static void soft_max_f32_cuda(const float * x, const float * y, float * dst, const int ncols_x, const int nrows_x, const int nrows_y, const float scale, cudaStream_t stream) {
+    int nth = WARP_SIZE;
+    while (nth < ncols_x && nth < CUDA_SOFT_MAX_BLOCK_SIZE) nth *= 2;
+    const dim3 block_dims(nth,     1, 1);
     const dim3 block_nums(nrows_x, 1, 1);
-    soft_max_f32<<<block_nums, block_dims, 0, stream>>>(x, dst, ncols_x);
+    soft_max_f32<<<block_nums, block_dims, 0, stream>>>(x, y, dst, ncols_x, nrows_y, scale);
 }
 
 static void im2col_f32_f16_cuda(const float * x, half * dst,
@@ -6706,15 +6755,14 @@ inline void ggml_cuda_op_rope(
         GGML_ASSERT(false);
         rope_glm_f32_cuda(src0_dd, dst_dd, ne00, nrows, pos, freq_scale, ne01, freq_base, n_ctx, main_stream);
     } else if (is_neox) {
-        GGML_ASSERT(ne00 == n_dims && "ne00 != n_dims is not implemented for CUDA yet");
         if (src0->type == GGML_TYPE_F32) {
             rope_neox_cuda(
-                (const float *)src0_dd, (float *)dst_dd, ne00, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
+                (const float *)src0_dd, (float *)dst_dd, ne00, n_dims, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, main_stream
             );
         } else if (src0->type == GGML_TYPE_F16) {
             rope_neox_cuda(
-                (const half *)src0_dd, (half *)dst_dd, ne00, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
+                (const half *)src0_dd, (half *)dst_dd, ne00, n_dims, nrows, pos, freq_scale, ne01, freq_base, ext_factor,
                 attn_factor, corr_dims, main_stream
             );
         } else {
@@ -6838,14 +6886,18 @@ inline void ggml_cuda_op_soft_max(
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
+    GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
+
     const int64_t ne00 = src0->ne[0];
-    const int64_t nrows = ggml_nrows(src0);
+    const int64_t nrows_x = ggml_nrows(src0);
+    const int64_t nrows_y = src1 ? ggml_nrows(src1) : 1;
 
-    soft_max_f32_cuda(src0_dd, dst_dd, ne00, nrows, main_stream);
+    float scale = 1.0f;
+    memcpy(&scale, dst->op_params, sizeof(float));
 
-    (void) src1;
+    soft_max_f32_cuda(src0_dd, src1 ? src1_dd : nullptr, dst_dd, ne00, nrows_x, nrows_y, scale, main_stream);
+
     (void) dst;
-    (void) src1_dd;
 }
 
 inline void ggml_cuda_op_scale(
@@ -8057,7 +8109,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
 #ifndef NDEBUG
-            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = %d, src1->ne[3] = %d - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
+            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = " PRId64 ", src1->ne[3] = " PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
 #endif
             return false;
         }
