@@ -131,7 +131,7 @@ int main(int argc, char ** argv)  {
     size_t ctx_size = 0;
     ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
     ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
-    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizez);
     ctx_size += ggml_row_size(qtype,         sizex*sizey);
     ctx_size += ggml_row_size(qtype,         sizex*sizey);
     ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
