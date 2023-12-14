@@ -71,7 +71,7 @@ void free_random_uniform_distribution(struct random_uniform_distribution * rnd) 
 
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
-    switch (tensor->n_dims) {
+    switch (ggml_n_dims(tensor)) {
         case 1:
             scale /= sqrtf((float) tensor->ne[0]);
             for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
@@ -119,7 +119,7 @@ struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct
 }
 
 struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd) {
-    switch (tensor->n_dims) {
+    switch (ggml_n_dims(tensor)) {
         case 1:
             for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
                 float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0]);
@@ -183,25 +183,27 @@ float fclamp(const float v, const float min, const float max) {
 }
 
 void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
-    GGML_ASSERT(tensor->n_dims == 1);
     GGML_ASSERT(tensor->ne[0] == ne0);
+    GGML_ASSERT(tensor->ne[1] == 1);
+    GGML_ASSERT(tensor->ne[2] == 1);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
-    GGML_ASSERT(tensor->n_dims == 2);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
+    GGML_ASSERT(tensor->ne[2] == 1);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
-    GGML_ASSERT(tensor->n_dims == 3);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
-    GGML_ASSERT(tensor->n_dims == 4);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
@@ -225,8 +227,8 @@ int64_t get_example_targets_batch(
     bool                   sample_random_offsets
 ) {
     GGML_ASSERT(samples_count > 0);
-    GGML_ASSERT(tokens_input->n_dims  == 2);
-    GGML_ASSERT(target_probs->n_dims  == 3);
+    GGML_ASSERT(ggml_is_matrix(tokens_input));
+    GGML_ASSERT(ggml_is_3d(target_probs));
     int64_t n_vocab  = target_probs->ne[0];
     int64_t n_tokens = tokens_input->ne[0];
     int64_t n_batch  = tokens_input->ne[1];

@@ -2054,22 +2054,35 @@ size_t ggml_element_size(const struct ggml_tensor * tensor) {
     return ggml_type_size(tensor->type);
 }
 
-static inline bool ggml_is_scalar(const struct ggml_tensor * tensor) {
+bool ggml_is_scalar(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[0] == 1 && tensor->ne[1] == 1 && tensor->ne[2] == 1 && tensor->ne[3] == 1;
 }
 
-static inline bool ggml_is_vector(const struct ggml_tensor * tensor) {
+bool ggml_is_vector(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[1] == 1 && tensor->ne[2] == 1 && tensor->ne[3] == 1;
 }
 
-static inline bool ggml_is_matrix(const struct ggml_tensor * tensor) {
+bool ggml_is_matrix(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return tensor->ne[2] == 1 && tensor->ne[3] == 1;
+}
+
+bool ggml_is_3d(const struct ggml_tensor * tensor) {
+    return tensor->ne[3] == 1;
+}
+
+int ggml_n_dims(const struct ggml_tensor * tensor) {
+    for (int i = GGML_MAX_DIMS - 1; i >= 1; --i) {
+        if (tensor->ne[i] > 1) {
+            return i + 1;
+        }
+    }
+    return 1;
 }
 
 static inline bool ggml_can_mul_mat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
@@ -2521,7 +2534,6 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.type         =*/ type,
         /*.backend      =*/ GGML_BACKEND_CPU,
         /*.buffer       =*/ NULL,
-        /*.n_dims       =*/ n_dims,
         /*.ne           =*/ { 1, 1, 1, 1 },
         /*.nb           =*/ { 0, 0, 0, 0 },
         /*.op           =*/ GGML_OP_NONE,
@@ -2628,7 +2640,7 @@ struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
 }
 
 struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggml_tensor * src) {
-    return ggml_new_tensor(ctx, src->type, src->n_dims, src->ne);
+    return ggml_new_tensor(ctx, src->type, GGML_MAX_DIMS, src->ne);
 }
 
 static void ggml_set_op_params(struct ggml_tensor * tensor, const void * params, size_t params_size) {
@@ -3077,7 +3089,7 @@ struct ggml_tensor * ggml_format_name(struct ggml_tensor * tensor, const char * 
 struct ggml_tensor * ggml_view_tensor(
         struct ggml_context * ctx,
         struct ggml_tensor  * src) {
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, src->type, src->n_dims, src->ne, src, 0);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, src->type, GGML_MAX_DIMS, src->ne, src, 0);
     ggml_format_name(result, "%s (view)", src->name);
 
     for (int i = 0; i < GGML_MAX_DIMS; i++) {
@@ -3235,10 +3247,10 @@ static struct ggml_tensor * ggml_add_cast_impl(
         is_node = true;
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, type, a->n_dims, a->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, type, GGML_MAX_DIMS, a->ne);
 
     result->op   = GGML_OP_ADD;
-    result->grad = is_node ? ggml_new_tensor(ctx, GGML_TYPE_F32, a->n_dims, a->ne) : NULL;
+    result->grad = is_node ? ggml_new_tensor(ctx, GGML_TYPE_F32, GGML_MAX_DIMS, a->ne) : NULL;
     result->src[0] = a;
     result->src[1] = b;
 
@@ -3607,12 +3619,12 @@ struct ggml_tensor * ggml_sum_rows(
         is_node = true;
     }
 
-    int64_t ne[4] = {1,1,1,1};
-    for (int i=1; i<a->n_dims; ++i) {
+    int64_t ne[GGML_MAX_DIMS] = { 1 };
+    for (int i = 1; i < GGML_MAX_DIMS; ++i) {
         ne[i] = a->ne[i];
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, a->n_dims, ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, GGML_MAX_DIMS, ne);
 
     result->op   = GGML_OP_SUM_ROWS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -3633,8 +3645,8 @@ struct ggml_tensor * ggml_mean(
         is_node = true;
     }
 
-    int64_t ne[GGML_MAX_DIMS] = { 1, a->ne[1], a->ne[2], a->ne[3] };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, a->n_dims, ne);
+    int64_t ne[4] = { 1, a->ne[1], a->ne[2], a->ne[3] };
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     result->op   = GGML_OP_MEAN;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -3656,8 +3668,7 @@ struct ggml_tensor * ggml_argmax(
         is_node = true;
     }
 
-    int64_t ne[GGML_MAX_DIMS] = { a->ne[1], 1, 1, 1 };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_I32, a->n_dims, ne);
+    struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, a->ne[1]);
 
     result->op   = GGML_OP_ARGMAX;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -3680,7 +3691,7 @@ struct ggml_tensor * ggml_repeat(
         is_node = true;
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, b->n_dims, b->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, GGML_MAX_DIMS, b->ne);
 
     result->op   = GGML_OP_REPEAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -3707,7 +3718,7 @@ struct ggml_tensor * ggml_repeat_back(
         return a;
     }
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, b->n_dims, b->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, GGML_MAX_DIMS, b->ne);
 
     result->op   = GGML_OP_REPEAT_BACK;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -4083,7 +4094,7 @@ struct ggml_tensor * ggml_mul_mat(
     }
 
     const int64_t ne[4] = { a->ne[1], b->ne[1], b->ne[2], b->ne[3] };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(a->n_dims, b->n_dims), ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -4117,7 +4128,7 @@ struct ggml_tensor * ggml_mul_mat_id(
     }
 
     const int64_t ne[4] = { as[0]->ne[1], b->ne[1], b->ne[2], b->ne[3] };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(as[0]->n_dims, b->n_dims), ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     ggml_set_op_params_i32(result, 0, id);
     ggml_set_op_params_i32(result, 1, n_as);
@@ -4155,7 +4166,7 @@ struct ggml_tensor * ggml_out_prod(
 
     // a is broadcastable to b for ne[2] and ne[3] -> use b->ne[2] and b->ne[3]
     const int64_t ne[4] = { a->ne[0], b->ne[0], b->ne[2], b->ne[3] };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, MAX(a->n_dims, b->n_dims), ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     result->op   = GGML_OP_OUT_PROD;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -4440,7 +4451,7 @@ struct ggml_tensor * ggml_reshape(
         //GGML_ASSERT(false);
     }
 
-    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, b->n_dims, b->ne, a, 0);
+    struct ggml_tensor * result = ggml_new_tensor_impl(ctx, a->type, GGML_MAX_DIMS, b->ne, a, 0);
     ggml_format_name(result, "%s (reshaped)", a->name);
 
     result->op   = GGML_OP_RESHAPE;
@@ -4818,7 +4829,7 @@ struct ggml_tensor * ggml_diag(
     }
 
     const int64_t ne[4] = { a->ne[0], a->ne[0], a->ne[2], a->ne[3] };
-    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, MAX(a->n_dims, 2), ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, a->type, 4, ne);
 
     result->op   = GGML_OP_DIAG;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5465,7 +5476,7 @@ struct ggml_tensor * ggml_pool_1d(
         is_node = true;
     }
 
-    const int64_t ne[3] = {
+    const int64_t ne[2] = {
         ggml_calc_pool_output_size(a->ne[0], k0, s0, p0),
         a->ne[1],
     };
@@ -5584,7 +5595,7 @@ struct ggml_tensor * ggml_argsort(
         enum ggml_sort_order  order) {
     bool is_node = false;
 
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_I32, a->n_dims, a->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_I32, GGML_MAX_DIMS, a->ne);
 
     ggml_set_op_params_i32(result, 0, (int32_t) order);
 
@@ -5631,7 +5642,7 @@ struct ggml_tensor * ggml_flash_attn(
     }
 
     //struct ggml_tensor * result = ggml_dup_tensor(ctx, q);
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, q->n_dims, q->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, GGML_MAX_DIMS, q->ne);
 
     int32_t t = masked ? 1 : 0;
     ggml_set_op_params(result, &t, sizeof(t));
@@ -5664,7 +5675,7 @@ struct ggml_tensor * ggml_flash_ff(
     }
 
     //struct ggml_tensor * result = ggml_dup_tensor(ctx, a);
-    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, a->n_dims, a->ne);
+    struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, GGML_MAX_DIMS, a->ne);
 
     result->op   = GGML_OP_FLASH_FF;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
@@ -5780,7 +5791,6 @@ struct ggml_tensor * ggml_win_part(
     const int np  = npx*npy;
 
     const int64_t ne[4] = { a->ne[0], w, w, np, };
-
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     int32_t params[] = { npx, npy, w };
@@ -14563,7 +14573,7 @@ static struct ggml_tensor * ggml_recompute_graph_node(
         return replacements->vals[i];
     }
 
-    struct ggml_tensor * clone = ggml_new_tensor(ctx, node->type, node->n_dims, node->ne);
+    struct ggml_tensor * clone = ggml_new_tensor(ctx, node->type, GGML_MAX_DIMS, node->ne);
 
     // insert clone into replacements
     GGML_ASSERT(replacements->set.keys[i] == NULL); // assert that we don't overwrite
@@ -16564,7 +16574,7 @@ static void ggml_graph_export_leaf(const struct ggml_tensor * tensor, FILE * fou
     fprintf(fout, "%-6s %-12s %8d %" PRId64 " %" PRId64 " %" PRId64 " %" PRId64 " %16zu %16zu %16zu %16zu %16p %32s\n",
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
-            tensor->n_dims,
+            ggml_n_dims(tensor),
             ne[0], ne[1], ne[2], ne[3],
             nb[0], nb[1], nb[2], nb[3],
             tensor->data,
@@ -16579,7 +16589,7 @@ static void ggml_graph_export_node(const struct ggml_tensor * tensor, const char
             arg,
             ggml_type_name(tensor->type),
             ggml_op_name  (tensor->op),
-            tensor->n_dims,
+            ggml_n_dims(tensor),
             ne[0], ne[1], ne[2], ne[3],
             nb[0], nb[1], nb[2], nb[3],
             tensor->data,
@@ -16669,11 +16679,9 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
                 const uint32_t type   = tensor->type;
                 const uint32_t op     = tensor->op;
-                const uint32_t n_dims = tensor->n_dims;
 
                 fwrite(&type,   sizeof(uint32_t), 1, fout);
                 fwrite(&op,     sizeof(uint32_t), 1, fout);
-                fwrite(&n_dims, sizeof(uint32_t), 1, fout);
 
                 for (int j = 0; j < GGML_MAX_DIMS; ++j) {
                     const uint64_t ne = tensor->ne[j];
@@ -16703,11 +16711,9 @@ void ggml_graph_export(const struct ggml_cgraph * cgraph, const char * fname) {
 
                 const uint32_t type   = tensor->type;
                 const uint32_t op     = tensor->op;
-                const uint32_t n_dims = tensor->n_dims;
 
                 fwrite(&type,   sizeof(uint32_t), 1, fout);
                 fwrite(&op,     sizeof(uint32_t), 1, fout);
-                fwrite(&n_dims, sizeof(uint32_t), 1, fout);
 
                 for (int j = 0; j < GGML_MAX_DIMS; ++j) {
                     const uint64_t ne = tensor->ne[j];
@@ -16879,12 +16885,10 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             uint32_t type;
             uint32_t op;
-            uint32_t n_dims;
 
             for (uint32_t i = 0; i < n_leafs; ++i) {
                 type   = *(const uint32_t *) ptr; ptr += sizeof(type);
                 op     = *(const uint32_t *) ptr; ptr += sizeof(op);
-                n_dims = *(const uint32_t *) ptr; ptr += sizeof(n_dims);
 
                 int64_t ne[GGML_MAX_DIMS];
                 size_t  nb[GGML_MAX_DIMS];
@@ -16900,7 +16904,7 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
                     nb[j] = nb_cur;
                 }
 
-                struct ggml_tensor * tensor = ggml_new_tensor(*ctx_eval, (enum ggml_type) type, n_dims, ne);
+                struct ggml_tensor * tensor = ggml_new_tensor(*ctx_eval, (enum ggml_type) type, GGML_MAX_DIMS, ne);
 
                 tensor->op = (enum ggml_op) op;
 
@@ -16917,7 +16921,7 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
 
                 ptr += ggml_nbytes(tensor);
 
-                fprintf(stderr, "%s: loaded leaf %d: '%16s', %3d dims, %9zu bytes\n", __func__, i, tensor->name, n_dims, ggml_nbytes(tensor));
+                fprintf(stderr, "%s: loaded leaf %d: '%16s', %9zu bytes\n", __func__, i, tensor->name, ggml_nbytes(tensor));
             }
         }
 
@@ -16927,12 +16931,10 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
         {
             uint32_t type;
             uint32_t op;
-            uint32_t n_dims;
 
             for (uint32_t i = 0; i < n_nodes; ++i) {
                 type   = *(const uint32_t *) ptr; ptr += sizeof(type);
                 op     = *(const uint32_t *) ptr; ptr += sizeof(op);
-                n_dims = *(const uint32_t *) ptr; ptr += sizeof(n_dims);
 
                 enum ggml_op eop = (enum ggml_op) op;
 
@@ -17003,7 +17005,7 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
                         } break;
                     default:
                         {
-                            tensor = ggml_new_tensor(*ctx_eval, (enum ggml_type) type, n_dims, ne);
+                            tensor = ggml_new_tensor(*ctx_eval, (enum ggml_type) type, GGML_MAX_DIMS, ne);
 
                             tensor->op = eop;
                         } break;
@@ -17022,7 +17024,7 @@ struct ggml_cgraph * ggml_graph_import(const char * fname, struct ggml_context *
 
                 result->nodes[i] = tensor;
 
-                fprintf(stderr, "%s: loaded node %d: '%16s', %3d dims, %9zu bytes\n", __func__, i, tensor->name, n_dims, ggml_nbytes(tensor));
+                fprintf(stderr, "%s: loaded node %d: '%16s', %9zu bytes\n", __func__, i, tensor->name, ggml_nbytes(tensor));
             }
         }
     }
@@ -17160,7 +17162,7 @@ void ggml_graph_dump_dot(const struct ggml_cgraph * gb, const struct ggml_cgraph
             fprintf(fp, "(%s)|", ggml_type_name(node->type));
         }
 
-        if (node->n_dims == 2) {
+        if (ggml_is_matrix(node)) {
             fprintf(fp, "%d [%" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], ggml_op_symbol(node->op));
         } else {
             fprintf(fp, "%d [%" PRId64 ", %" PRId64 ", %" PRId64 "] | <x>%s", i, node->ne[0], node->ne[1], node->ne[2], ggml_op_symbol(node->op));
@@ -17427,7 +17429,7 @@ static enum ggml_opt_result ggml_opt_adam(
             int64_t i = 0;
             for (int p = 0; p < np; ++p) {
                 const int64_t ne = ggml_nelements(ps[p]);
-                const float p_decay = ((ps[p]->n_dims >= decay_min_ndim) ? decay : 0.0f) * sched;
+                const float p_decay = ((ggml_n_dims(ps[p]) >= decay_min_ndim) ? decay : 0.0f) * sched;
                 for (int64_t j = 0; j < ne; ++j) {
                     float x  = ggml_get_f32_1d(ps[p], j);
                     float g_ = g[i]*gnorm;
@@ -19205,8 +19207,8 @@ void gguf_add_tensor(
         ctx->infos[idx].ne[i] = 1;
     }
 
-    ctx->infos[idx].n_dims = tensor->n_dims;
-    for (int i = 0; i < tensor->n_dims; i++) {
+    ctx->infos[idx].n_dims = ggml_n_dims(tensor);
+    for (uint32_t i = 0; i < ctx->infos[idx].n_dims; i++) {
         ctx->infos[idx].ne[i] = tensor->ne[i];
     }
 
