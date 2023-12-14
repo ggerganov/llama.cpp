@@ -9,7 +9,7 @@
 # 下载
 import torch
 from modelscope import snapshot_download, Model
-# model_dir = snapshot_download("OpenBuddy/openbuddy-mistral-7b-v13.1", revision = 'v1.0.0',cache_dir="../models")
+model_dir = snapshot_download("OpenBuddy/openbuddy-mistral-7b-v13.1", revision = 'v1.0.0',cache_dir="../models")
 
 # 转换
 # python convert.py  ../models/OpenBuddy/openbuddy-mistral-7b-v13.1/
