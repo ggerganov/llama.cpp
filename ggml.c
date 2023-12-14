@@ -2011,6 +2011,10 @@ size_t ggml_type_size(enum ggml_type type) {
     return type_traits[type].type_size;
 }
 
+size_t ggml_row_size(enum ggml_type type, int64_t ne) {
+    return (ggml_type_size(type)*ne)/ggml_blck_size(type);
+}
+
 double ggml_type_sizef(enum ggml_type type) {
     return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
 }
