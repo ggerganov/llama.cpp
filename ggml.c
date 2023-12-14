@@ -1997,12 +1997,6 @@ size_t ggml_nbytes_pad(const struct ggml_tensor * tensor) {
     return GGML_PAD(ggml_nbytes(tensor), GGML_MEM_ALIGN);
 }
 
-size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split) {
-    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
-
-    return (nrows_split*tensor->ne[0]*ggml_type_size(tensor->type))/ggml_blck_size(tensor->type);
-}
-
 int ggml_blck_size(enum ggml_type type) {
     return type_traits[type].blck_size;
 }
@@ -2491,7 +2485,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         view_src   = view_src->view_src;
     }
 
-    size_t data_size = ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
+    size_t data_size = ggml_row_size(type, ne[0]);
     for (int i = 1; i < n_dims; i++) {
         data_size *= ne[i];
     }
@@ -9698,7 +9692,7 @@ static void ggml_compute_forward_mul_mat(
     if (params->type == GGML_TASK_INIT) {
         if (src1->type != vec_dot_type) {
             char * wdata = params->wdata;
-            const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+            const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
             assert(params->wsize >= ne11*ne12*ne13*row_size);
             assert(src1->type == GGML_TYPE_F32);
@@ -9721,7 +9715,7 @@ static void ggml_compute_forward_mul_mat(
     }
 
     const void * wdata    = (src1->type == vec_dot_type) ? src1->data : params->wdata;
-    const size_t row_size = ne10*ggml_type_size(vec_dot_type)/ggml_blck_size(vec_dot_type);
+    const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
     const int64_t nr0 = ne01;           // src0 rows
     const int64_t nr1 = cne1*ne12*ne13; // src1 rows
@@ -16326,7 +16320,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     } else
 #endif
                     if (node->src[1]->type != vec_dot_type) {
-                        cur = ggml_type_size(vec_dot_type)*ggml_nelements(node->src[1])/ggml_blck_size(vec_dot_type);
+                        cur = ggml_row_size(vec_dot_type, ggml_nelements(node->src[1]));
                     }
                 } break;
             case GGML_OP_MUL_MAT_ID:
@@ -16343,7 +16337,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     } else
 #endif
                     if (b->type != vec_dot_type) {
-                        cur = ggml_type_size(vec_dot_type)*ggml_nelements(b)/ggml_blck_size(vec_dot_type);
+                        cur = ggml_row_size(vec_dot_type, ggml_nelements(b));
                     }
                 } break;
             case GGML_OP_OUT_PROD:
@@ -18703,7 +18697,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 return NULL;
             }
 
-            const size_t size_cur = (ne*ggml_type_size(info->type))/ggml_blck_size(info->type);
+            const size_t size_cur = ggml_row_size(info->type, ne);
 
             ctx->size += GGML_PAD(size_cur, ctx->alignment);
         }

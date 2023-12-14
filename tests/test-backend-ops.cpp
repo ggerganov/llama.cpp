@@ -54,7 +54,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
-        std::vector<uint8_t> dataq(ggml_type_size(tensor->type)*size/ggml_blck_size(tensor->type));
+        std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         int64_t hist[16];
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size, hist);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
@@ -72,6 +72,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
 
     ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
     size_t bs = ggml_blck_size(t->type);
+    std::vector<float> vq(ggml_blck_size(t->type));
+    bool quantized = ggml_is_quantized(t->type);
 
     // access elements by index to avoid gaps in views
     for (int64_t i3 = 0; i3 < t->ne[3]; i3++) {
@@ -85,9 +87,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                         tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
                         tv.push_back((float)*(int32_t *) &buf[i]);
-                    } else if (ggml_is_quantized(t->type)) {
-                        std::vector<float> vq(ggml_blck_size(t->type));
-                        tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
+                    } else if (quantized) {
+                        tt.to_float(&buf[i], vq.data(), bs);
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
                         GGML_ASSERT(false);
