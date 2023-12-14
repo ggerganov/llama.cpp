@@ -15,6 +15,9 @@ indent_size = 4
 [Makefile]
 indent_style = tab
 
+[scripts/*.mk]
+indent_style = tab
+
 [prompts/*.txt]
 insert_final_newline = unset
 
