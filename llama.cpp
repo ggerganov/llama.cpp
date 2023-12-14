@@ -3700,7 +3700,7 @@ static bool llm_load_tensors(
     return ok;
 }
 
-// Returns -1 on error, -2 on cancellation via llama_progress_callback
+// Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
 static int llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
     try {
         llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
@@ -3719,7 +3719,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, cons
 
         if (params.vocab_only) {
             LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
-            return true;
+            return 0;
         }
 
         if (!llm_load_tensors(
