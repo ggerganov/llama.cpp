@@ -58,7 +58,7 @@
 #define cudaGetDeviceProperties hipGetDeviceProperties
 #define cudaGetErrorString hipGetErrorString
 #define cudaGetLastError hipGetLastError
-#define cudaMalloc(ptr, size) hipMallocManaged(ptr, size, hipMemAttachGlobal)
+#define cudaMalloc(ptr, size) hipMallocManaged(ptr, size)
 #define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size)
 #define cudaMemcpy hipMemcpy
 #define cudaMemcpy2DAsync hipMemcpy2DAsync
