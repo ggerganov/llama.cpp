@@ -37,7 +37,7 @@ endif()
 #
 
 if (APPLE)
-    set(LLAMA_METAL_DEFAULT ON)
+    set(LLAMA_METAL_DEFAULT OFF) # metal has not been supported on Apple Silicon yet
 else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()

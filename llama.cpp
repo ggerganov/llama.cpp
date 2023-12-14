@@ -2737,7 +2737,7 @@ struct llama_mlp_model_loader {
         offset = (offset + 31) & -32;
         file.seek(offset, SEEK_SET);
         // point to the mmaped mlp model file
-        mlp_tensor -> data = mapping -> addr + static_cast<std::streamoff>(offset);
+        mlp_tensor -> data = (void *) (static_cast<char *>(mapping -> addr) + offset);
         file.seek(tensor_data_size, SEEK_CUR);
         return mlp_tensor;
     }
@@ -2757,7 +2757,7 @@ struct llama_augmentation_model_loader {
         // const int64_t ggml_aux_tensor_size = 4 * (100 * 100 + 5120*40*4 * ggml_tensor_overhead() + (int64_t)13824*5120*40*4);
         int model_layer = model->layers.size();
         int ffn_dim = model->layers[0].ffn_up->ne[1];
-        const int64_t ggml_aux_tensor_size = 4 * (100 * 100 + model_layer*ffn_dim*sizeof(float) * ggml_tensor_overhead() );
+        const size_t ggml_aux_tensor_size = 4 * (100 * 100 + model_layer*ffn_dim*sizeof(float) * ggml_tensor_overhead() );
         printf("augmentation buffer: %ld\n", ggml_aux_tensor_size);
         struct ggml_init_params params = {
             /*.mem_size   =*/ ggml_aux_tensor_size,
@@ -2974,7 +2974,7 @@ static void llm_load_tensors(
     auto create_tensor = [&] (const std::string & name, const std::vector<int64_t> & ne, ggml_backend_type backend) -> ggml_tensor * {
         ggml_tensor * created_tensor = ml.create_tensor(ctx, name, ne, backend);
         if (created_tensor == nullptr) {
-            LLAMA_LOG_ERROR("%s: error: failed to create tensor '%s'\n", __func__, name);
+            LLAMA_LOG_ERROR("%s: error: failed to create tensor '%s'\n", __func__, name.c_str());
             return nullptr;
         }
         if (created_tensor->backend == GGML_BACKEND_GPU || created_tensor->backend == GGML_BACKEND_GPU_SPLIT) {
