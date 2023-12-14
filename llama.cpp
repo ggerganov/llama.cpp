@@ -2297,7 +2297,8 @@ struct llama_model_loader {
         }
     }
 
-    void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, llama_mlock * lmlock) {
+    // Returns false if cancelled by progress_callback
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, llama_mlock * lmlock) {
         size_t size_data = 0;
         size_t size_lock = 0;
         size_t size_pref = 0; // prefetch
@@ -2323,7 +2324,9 @@ struct llama_model_loader {
             GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
 
             if (progress_callback) {
-                progress_callback((float) done_size / size_data, progress_callback_user_data);
+                if (!progress_callback((float) done_size / size_data, progress_callback_user_data)) {
+                    return false;
+                }
             }
 
             // allocate temp buffer if not using mmap
@@ -2371,6 +2374,7 @@ struct llama_model_loader {
 
             done_size += ggml_nbytes(cur);
         }
+        return true;
     }
 };
 
@@ -2937,7 +2941,8 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static void llm_load_tensors(
+// Returns false if cancelled by progress_callback
+static bool llm_load_tensors(
         llama_model_loader & ml,
         llama_model & model,
         int n_gpu_layers,
@@ -2947,6 +2952,8 @@ static void llm_load_tensors(
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
     model.t_start_us = ggml_time_us();
+
+    bool ok = true; // if false, model load was cancelled
 
     auto & ctx     = model.ctx;
     auto & hparams = model.hparams;
@@ -3678,10 +3685,11 @@ static void llm_load_tensors(
     }
 #endif
 
-    ml.load_all_data(ctx, progress_callback, progress_callback_user_data, use_mlock ? &model.mlock_mmap : NULL);
-
+    ok = ok && ml.load_all_data(ctx, progress_callback, progress_callback_user_data, use_mlock ? &model.mlock_mmap : NULL);
     if (progress_callback) {
-        progress_callback(1.0f, progress_callback_user_data);
+        // Even though the model is done loading, we still honor
+        // cancellation since we need to free allocations.
+        ok = ok && progress_callback(1.0f, progress_callback_user_data);
     }
 
     model.mapping = std::move(ml.mapping);
@@ -3689,9 +3697,11 @@ static void llm_load_tensors(
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     model.t_load_us = ggml_time_us() - model.t_start_us;
+    return ok;
 }
 
-static bool llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
+// Returns -1 on error, -2 on cancellation via llama_progress_callback
+static int llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
     try {
         llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
 
@@ -3712,16 +3722,18 @@ static bool llama_model_load(const std::string & fname, llama_model & model, con
             return true;
         }
 
-        llm_load_tensors(
+        if (!llm_load_tensors(
             ml, model, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.use_mlock,
             params.progress_callback, params.progress_callback_user_data
-        );
+        )) {
+            return -2;
+        }
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
-        return false;
+        return -1;
     }
 
-    return true;
+    return 0;
 }
 
 //
@@ -9017,11 +9029,18 @@ struct llama_model * llama_load_model_from_file(
                     LLAMA_LOG_INFO("\n");
                 }
             }
+            return true;
         };
     }
 
-    if (!llama_model_load(path_model, *model, params)) {
-        LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+    int status = llama_model_load(path_model, *model, params);
+    GGML_ASSERT(status <= 0);
+    if (status < 0) {
+        if (status == -1) {
+            LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+        } else if (status == -2) {
+            LLAMA_LOG_INFO("%s, cancelled model load\n", __func__);
+        }
         delete model;
         return nullptr;
     }
