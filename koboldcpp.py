@@ -310,13 +310,13 @@ def generate(prompt, memory="", max_length=32, max_context_length=512, temperatu
     inputs.memory = memory.encode("UTF-8")
     if max_length >= max_context_length:
         max_length = max_context_length-1
-    inputs.max_context_length = max_context_length   # this will resize the context buffer if changed
     global showmaxctxwarning
     if max_context_length > maxctx:
         if showmaxctxwarning:
             print(f"\n(Warning! Request max_context_length={max_context_length} exceeds allocated context size of {maxctx}. It will be reduced to fit. Consider launching with increased --contextsize to avoid errors. This message will only show once per session.)")
             showmaxctxwarning = False
         max_context_length = maxctx
+    inputs.max_context_length = max_context_length   # this will resize the context buffer if changed
     inputs.max_length = max_length
     inputs.temperature = temperature
     inputs.top_k = top_k
