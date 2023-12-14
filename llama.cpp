@@ -8471,7 +8471,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         bool quantize = name.rfind("weight") == name.size() - 6; // ends with 'weight'?
 
         // quantize only 2D tensors
-        quantize &= (tensor->n_dims == 2);
+        quantize &= (ggml_n_dims(tensor) == 2);
         quantize &= params->quantize_output_tensor || name != "output.weight";
         quantize &= !params->only_copy;
 
