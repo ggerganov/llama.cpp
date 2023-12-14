@@ -60,7 +60,7 @@ Several quantization methods are supported. They differ in the resulting model d
 |Llama 7B    | ms/tok @ 4th |    xxx |     xx |     xx |     xx |
 |Llama 7B    | ms/tok @ 8th |    xxx |     xx |     xx |     xx |
 |Llama 7B    | bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
-|AWQ-LLama 7B| perplexity   | 5.9175 | 6.0252 | xxxxxx | xxxxx |
+|AWQ-LLama 7B| perplexity   | 5.9175 | 6.0252 | 5.9987 | xxxxx |
 |AWQ-LLama 7B| file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
 |AWQ-LLama 7B| ms/tok @ 4th |     xxx|    xxx |    xxx |    xxx |
 |AWQ-LLama 7B| ms/tok @ 8th |     xxx|     xx |     xx |     xx |
