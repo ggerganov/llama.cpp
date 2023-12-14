@@ -2011,8 +2011,8 @@ size_t ggml_type_size(enum ggml_type type) {
     return type_traits[type].type_size;
 }
 
-float ggml_type_sizef(enum ggml_type type) {
-    return ((float)(type_traits[type].type_size))/type_traits[type].blck_size;
+double ggml_type_sizef(enum ggml_type type) {
+    return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
 }
 
 const char * ggml_type_name(enum ggml_type type) {
