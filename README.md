@@ -421,13 +421,15 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     make LLAMA_HIPBLAS=1
     ```
-  - Using `CMake` for Linux.
+  - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
     CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
         cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build -- -j 16
     ```
-  - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS):
+    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
+    However, this hurts performance for non-integrated GPUs.
+  - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
     ```bash
     set PATH=%HIP_PATH%\bin;%PATH%
     mkdir build
