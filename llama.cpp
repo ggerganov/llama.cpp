@@ -1555,7 +1555,7 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
-    cache.buf.resize(n_elements*(ggml_type_sizef(ktype) + ggml_type_sizef(vtype)) + 2u*n_layer*ggml_tensor_overhead());
+    cache.buf.resize(n_elements*((size_t)(ggml_type_sizef(ktype) + ggml_type_sizef(vtype))) + 2u*n_layer*ggml_tensor_overhead());
     memset(cache.buf.data, 0, cache.buf.size);
 
     struct ggml_init_params params;
