@@ -1997,13 +1997,6 @@ size_t ggml_nbytes_pad(const struct ggml_tensor * tensor) {
     return GGML_PAD(ggml_nbytes(tensor), GGML_MEM_ALIGN);
 }
 
-// TODO: move to ggml-cuda?
-size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split) {
-    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
-
-    return nrows_split*ggml_row_size(tensor->type, tensor->ne[0]);
-}
-
 int ggml_blck_size(enum ggml_type type) {
     return type_traits[type].blck_size;
 }

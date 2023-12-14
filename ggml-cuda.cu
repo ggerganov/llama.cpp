@@ -8898,6 +8898,12 @@ static void ggml_cuda_nop(const ggml_tensor * src0, const ggml_tensor * src1, gg
     (void) dst;
 }
 
+static size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_split) {
+    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
+
+    return nrows_split*ggml_row_size(tensor->type, tensor->ne[0]);
+}
+
 void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
     const int64_t nrows = ggml_nrows(tensor);
 
