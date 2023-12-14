@@ -50,6 +50,7 @@ llama_build_and_test_executable(test-grad0.cpp)
 llama_build_and_test_executable(test-backend-ops.cpp)
 
 llama_build_and_test_executable(test-rope.cpp)
+llama_build_and_test_executable(test-model-load-cancel.cpp)
 
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
