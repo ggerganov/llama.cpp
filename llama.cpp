@@ -1555,7 +1555,7 @@ static bool llama_kv_cache_init(
     cache.cells.clear();
     cache.cells.resize(n_ctx);
 
-    cache.buf.resize(n_elements*(ggml_type_sizef(ktype) + ggml_type_sizef(vtype)) + 2u*n_layer*ggml_tensor_overhead());
+    cache.buf.resize(ggml_row_size(ktype, n_elements) + ggml_row_size(vtype, n_elements) + 2u*n_layer*ggml_tensor_overhead());
     memset(cache.buf.data, 0, cache.buf.size);
 
     struct ggml_init_params params;
@@ -3822,8 +3822,8 @@ static void llm_build_k_shift(
             ggml_rope_custom_inplace(ctx,
                     ggml_view_3d(ctx, kv.k_l[il],
                         n_embd_head, n_head_kv, n_ctx,
-                        ggml_type_sizef(kv.k_l[il]->type)*n_embd_head,
-                        ggml_type_sizef(kv.k_l[il]->type)*n_embd_gqa,
+                        ggml_row_size(kv.k_l[il]->type, n_embd_head),
+                        ggml_row_size(kv.k_l[il]->type, n_embd_gqa),
                         0),
                     K_shift, n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow);
@@ -3852,7 +3852,7 @@ static void llm_build_kv_store(
     cb(v_cur_t, "v_cur_t", il);
 
     struct ggml_tensor * k_cache_view = ggml_view_1d(ctx, kv.k_l[il], n_tokens*n_embd_gqa,
-            (ggml_type_sizef(kv.k_l[il]->type)*n_embd_gqa)*kv_head);
+            (ggml_row_size(kv.k_l[il]->type, n_embd_gqa))*kv_head);
     cb(k_cache_view, "k_cache_view", il);
 
     struct ggml_tensor * v_cache_view = ggml_view_2d(ctx, kv.v_l[il], n_tokens, n_embd_gqa,
@@ -4011,8 +4011,8 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * k =
         ggml_view_3d(ctx, kv.k_l[il],
                 n_embd_head, n_kv, n_head_kv,
-                ggml_type_sizef(kv.k_l[il]->type)*n_embd_gqa,
-                ggml_type_sizef(kv.k_l[il]->type)*n_embd_head,
+                ggml_row_size(kv.k_l[il]->type, n_embd_gqa),
+                ggml_row_size(kv.k_l[il]->type, n_embd_head),
                 0);
     cb(k, "k", il);
 
