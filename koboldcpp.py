@@ -686,7 +686,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
 Enter Prompt:<br>
 <textarea name="prompt" cols="60" rows="8" wrap="soft" placeholder="Enter Prompt Here">{prompt}</textarea>
 <hr>
-{status}<br>
+<b>{status}</b><br>
 <hr>
 <label>Gen. Amount</label> <input type="text" size="4" value="{max_length}" name="max_length"><br>
 <label>Temperature</label> <input type="text" size="4" value="{temperature}" name="temperature"><br>
