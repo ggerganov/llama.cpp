@@ -234,6 +234,11 @@ static bool ggml_is_view_op(enum ggml_op op) {
     return op == GGML_OP_VIEW || op == GGML_OP_RESHAPE || op == GGML_OP_PERMUTE || op == GGML_OP_TRANSPOSE;
 }
 
+enum test_mode {
+    MODE_TEST,
+    MODE_PERF,
+};
+
 struct test_case {
     virtual ~test_case() {}
 
@@ -268,13 +273,69 @@ struct test_case {
         return size;
     }
 
+    ggml_cgraph * gf = nullptr;
+
+    static const int sentinel_size = 1024;
+
+    test_mode mode;
+
+    std::vector<ggml_tensor *> sentinels;
+
+    void add_sentinel(ggml_context * ctx) {
+        if (mode == MODE_PERF) {
+            return;
+        }
+        ggml_tensor * sentinel = ::ggml_new_tensor_1d(ctx, GGML_TYPE_F32, sentinel_size);
+        ggml_format_name(sentinel, "sent_%zu", sentinels.size());
+        sentinels.push_back(sentinel);
+    }
+
+    // hijack ggml_new_tensor to add sentinels after each tensor to check for overflows in the backend
+
+    ggml_tensor * ggml_new_tensor(ggml_context * ctx, ggml_type type, int n_dims, const int64_t * ne) {
+        ggml_tensor * t = ::ggml_new_tensor(ctx, type, n_dims, ne);
+        add_sentinel(ctx);
+        return t;
+    }
+
+    ggml_tensor * ggml_new_tensor_1d(ggml_context * ctx, ggml_type type, int64_t ne0) {
+        ggml_tensor * t = ::ggml_new_tensor_1d(ctx, type, ne0);
+        add_sentinel(ctx);
+        return t;
+    }
+
+    ggml_tensor * ggml_new_tensor_2d(ggml_context * ctx, ggml_type type, int64_t ne0, int64_t ne1) {
+        ggml_tensor * t = ::ggml_new_tensor_2d(ctx, type, ne0, ne1);
+        add_sentinel(ctx);
+        return t;
+    }
+
+    ggml_tensor * ggml_new_tensor_3d(ggml_context * ctx, ggml_type type, int64_t ne0, int64_t ne1, int64_t ne2) {
+        ggml_tensor * t = ::ggml_new_tensor_3d(ctx, type, ne0, ne1, ne2);
+        add_sentinel(ctx);
+        return t;
+    }
+
+    ggml_tensor * ggml_new_tensor_4d(ggml_context * ctx, ggml_type type, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
+        ggml_tensor * t = ::ggml_new_tensor_4d(ctx, type, ne0, ne1, ne2, ne3);
+        add_sentinel(ctx);
+        return t;
+    }
+
     bool eval(ggml_backend_t backend1, ggml_backend_t backend2, const char * op_name) {
+        mode = MODE_TEST;
+
         ggml_init_params params = {
             /* .mem_size = */ ggml_tensor_overhead()*128 + ggml_graph_overhead(),
             /* .mem_base = */ NULL,
             /* .no_alloc = */ true,
         };
         ggml_context * ctx = ggml_init(params);
+
+        gf = ggml_new_graph(ctx);
+
+        // pre-graph sentinel
+        add_sentinel(ctx);
 
         ggml_tensor * out = build_graph(ctx);
 
@@ -296,12 +357,19 @@ struct test_case {
             }
         }
 
+        // post-graph sentinel
+        add_sentinel(ctx);
+
         // allocate
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(ctx, backend1);
 
         // build graph
-        ggml_cgraph * gf = ggml_new_graph(ctx);
         ggml_build_forward_expand(gf, out);
+
+        // add sentinels as graph nodes so that they are checked in the callback
+        for (ggml_tensor * sentinel : sentinels) {
+            gf->nodes[gf->n_nodes++] = sentinel;
+        }
 
         // randomize tensors
         initialize_tensors(ctx);
@@ -318,9 +386,24 @@ struct test_case {
         };
 
         auto callback = [](int index, ggml_tensor * t1, ggml_tensor * t2, void * user_data) -> bool {
+            callback_userdata * ud = (callback_userdata *) user_data;
+
+            if (t1->op == GGML_OP_NONE) {
+                // sentinels must be unchanged
+                std::vector<uint8_t> t1_data(ggml_nbytes(t1));
+                std::vector<uint8_t> t2_data(ggml_nbytes(t2));
+                ggml_backend_tensor_get(t1, t1_data.data(), 0, ggml_nbytes(t1));
+                ggml_backend_tensor_get(t2, t2_data.data(), 0, ggml_nbytes(t2));
+
+                if (memcmp(t1_data.data(), t2_data.data(), ggml_nbytes(t1)) != 0) {
+                    printf("sentinel mismatch: %s ", t1->name);
+                    ud->ok = false;
+                    return true;
+                }
+            }
+
             std::vector<float> f1 = tensor_to_float(t1);
             std::vector<float> f2 = tensor_to_float(t2);
-            callback_userdata * ud = (callback_userdata *) user_data;
 
             for (size_t i = 0; i < f1.size(); i++) {
                 // check for nans
@@ -349,9 +432,10 @@ struct test_case {
             if (err > ud->max_err) {
                 printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
                 //for (int i = 0; i < f1.size(); i++) {
-                //    printf("(%f, %f) ", f1[i], f2[i]);
+                //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
                 //printf("\n");
+                //exit(1);
                 ud->ok = false;
             }
             return true;
@@ -375,6 +459,8 @@ struct test_case {
     }
 
     bool eval_perf(ggml_backend_t backend, const char * op_name) {
+        mode = MODE_PERF;
+
         static const size_t graph_nodes = 8192;
 
         ggml_init_params params = {
@@ -1135,6 +1221,118 @@ struct test_sum_rows : public test_case {
     }
 };
 
+// GGML_OP_UPSCALE
+struct test_upscale : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+    const int32_t scale_factor;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne, scale_factor);
+    }
+
+    test_upscale(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne = {512, 512, 3, 1},
+            int32_t scale_factor = 2)
+        : type(type), ne(ne), scale_factor(scale_factor) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_tensor * out = ggml_upscale(ctx, a, scale_factor);
+        return out;
+    }
+};
+
+// GGML_OP_GROUP_NORM
+struct test_group_norm : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+    const int32_t num_groups;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne, num_groups);
+    }
+
+    test_group_norm(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne = {64, 64, 320, 1},
+            int32_t num_groups = 32)
+        : type(type), ne(ne), num_groups(num_groups) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_tensor * out = ggml_group_norm(ctx, a, num_groups);
+        return out;
+    }
+};
+
+// GGML_OP_ACC
+struct test_acc : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const std::array<int64_t, 4> ne_b;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne_a, ne_b);
+    }
+
+    test_acc(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {1024, 577, 1, 1},
+            std::array<int64_t, 4> ne_b = {1024, 576, 1, 1})
+        : type(type), ne_a(ne_a), ne_b(ne_b) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne_b.data());
+        ggml_tensor * out = ggml_acc(ctx, a, b, a->nb[1], a->nb[2], a->nb[3], b->nb[1]);
+        return out;
+    }
+};
+
+// GGML_OP_PAD
+struct test_pad : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const int pad_0;
+    const int pad_1;
+
+    std::string vars() override {
+        return VARS_TO_STR4(type, ne_a, pad_0, pad_1);
+    }
+
+    test_pad(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {512, 512, 1, 1},
+            int pad_0 = 1, int pad_1 = 1)
+        : type(type), ne_a(ne_a), pad_0(pad_0), pad_1(pad_1)  {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * out = ggml_pad(ctx, a, pad_0, pad_1, 0, 0);
+        return out;
+    }
+};
+
+// GGML_OP_LEAKY_RELU
+struct test_leaky_relu : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const float negative_slope;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne_a, negative_slope);
+    }
+
+    test_leaky_relu(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {10, 10, 10, 10},
+            float negative_slope = 0.1f)
+        : type(type), ne_a(ne_a), negative_slope(negative_slope)  {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * out = ggml_leaky_relu(ctx, a, negative_slope, true);
+        return out;
+    }
+};
+
 // Mixtral MOE
 struct test_moe : public test_case {
     const int n_experts;
@@ -1217,11 +1415,6 @@ struct test_moe : public test_case {
 
         return cur;
     }
-};
-
-enum test_mode {
-    MODE_TEST,
-    MODE_PERF,
 };
 
 static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op_name) {
@@ -1372,12 +1565,16 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_argsort(GGML_TYPE_F32, {16, 10, 10, 10}, order));
     }
 
-    test_cases.emplace_back(new test_sum_rows(GGML_TYPE_F32, {10, 10, 10, 10}));
-    test_cases.emplace_back(new test_sum_rows(GGML_TYPE_F32, {2, 1, 1, 1}));
+    test_cases.emplace_back(new test_sum_rows());
+    test_cases.emplace_back(new test_upscale());
+    test_cases.emplace_back(new test_group_norm());
+    test_cases.emplace_back(new test_acc());
+    test_cases.emplace_back(new test_pad());
+    test_cases.emplace_back(new test_leaky_relu());
 
 #if !defined(__SANITIZE_THREAD__)
     // FIXME: these tests use too much memory with thread sanitizer
-    test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 14336));
+    test_cases.emplace_back(new test_moe(8, 2, 1, 4096, 8*1024));
     //test_cases.emplace_back(new test_moe(8, 2, 8, 4096, 14336));
 #endif
 
