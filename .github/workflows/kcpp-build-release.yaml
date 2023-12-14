@@ -1,10 +1,6 @@
-name: Koboldcpp Builder
+name: Koboldcpp Builder Linux
 
-on:
-  release:
-    types:
-      - created
-      - edited
+on: workflow_dispatch
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
@@ -27,9 +23,8 @@ jobs:
         run: |
           ./koboldcpp.sh dist
 
-      - name: Upload release binaries
-        uses: alexellis/upload-assets@0.4.0
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Save artifact
+        uses: actions/upload-artifact@v3
         with:
-          asset_paths: '["./dist/*"]'
+          name: kcpp_linux_binary
+          path: dist/
