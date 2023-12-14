@@ -11,6 +11,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v3
+        with:
+          ref: concedo_experimental
 
       - name: Dependencies
         id: depends
