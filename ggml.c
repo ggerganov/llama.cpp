@@ -2012,7 +2012,8 @@ size_t ggml_type_size(enum ggml_type type) {
 }
 
 size_t ggml_row_size(enum ggml_type type, int64_t ne) {
-    return (ggml_type_size(type)*ne)/ggml_blck_size(type);
+    assert(ne % ggml_blck_size(type) == 0);
+    return ggml_type_size(type)*ne/ggml_blck_size(type);
 }
 
 double ggml_type_sizef(enum ggml_type type) {
