@@ -6,7 +6,7 @@ class LlamaState: ObservableObject {
 
     private var llamaContext: LlamaContext?
     private var modelUrl: URL? {
-        Bundle.main.url(forResource: "ggml-model-q8_0", withExtension: "gguf", subdirectory: "models")
+        Bundle.main.url(forResource: "ggml-model", withExtension: "gguf", subdirectory: "models")
         // Bundle.main.url(forResource: "llama-2-7b-chat", withExtension: "Q2_K.gguf", subdirectory: "models")
     }
     init() {
@@ -20,7 +20,7 @@ class LlamaState: ObservableObject {
     private func loadModel() throws {
         messageLog += "Loading model...\n"
         if let modelUrl {
-            llamaContext = try LlamaContext.createContext(path: modelUrl.path())
+            llamaContext = try LlamaContext.create_context(path: modelUrl.path())
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
         } else {
             messageLog += "Could not locate model\n"
@@ -49,7 +49,10 @@ class LlamaState: ObservableObject {
             return
         }
 
+        messageLog += "Model info: "
+        messageLog += await llamaContext.model_info() + "\n"
         messageLog += "Running benchmark...\n"
+        await llamaContext.bench() // heat up
         let result = await llamaContext.bench()
         messageLog += "\(result)"
     }
