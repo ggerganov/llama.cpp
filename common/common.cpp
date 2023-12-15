@@ -656,6 +656,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         } else if (arg == "-h" || arg == "--help") {
             return false;
 
+        } else if (arg == "--version") {
+            fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
+            fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+            exit(0);
         } else if (arg == "--random-prompt") {
             params.random_prompt = true;
         } else if (arg == "--in-prefix-bos") {
@@ -794,6 +798,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("\n");
     printf("options:\n");
     printf("  -h, --help            show this help message and exit\n");
+    printf("      --version         show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
