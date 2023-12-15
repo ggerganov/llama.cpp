@@ -439,9 +439,17 @@ ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 endif # LLAMA_CLBLAST
 
 ifdef LLAMA_HIPBLAS
-	ROCM_PATH	?= /opt/rocm
-	HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
-	GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+
+	ifeq ($(wildcard /opt/rocm),)
+		ROCM_PATH	?= /usr
+		HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
+		GPU_TARGETS ?= $(shell $(ROCM_PATH)/bin/amdgpu-arch)
+	else
+		ROCM_PATH	?= /opt/rocm
+		HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
+		GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+	endif
+	
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
