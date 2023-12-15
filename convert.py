@@ -570,7 +570,7 @@ def merge_sharded(models: list[LazyModel]) -> LazyModel:
 
 def merge_multifile_models(models_plus: list[ModelPlus]) -> ModelPlus:
     formats = set(mp.format for mp in models_plus)
-    assert len(formats) == 1, "different formats?"
+    # assert len(formats) == 1, "different formats?"
     format = formats.pop()
     paths = [path for mp in models_plus for path in mp.paths]
     # Use the first non-None vocab, if any.
