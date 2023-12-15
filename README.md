@@ -5,7 +5,7 @@
 
 https://github.com/hodlen/PowerInfer/assets/34213478/b782ccc8-0a2a-42b6-a6aa-07b2224a66f7
 
-<sub>The demo running environment consists of a single 4090 GPU, the model is Falcon (ReLU)-40B, and the precision is FP16.</sub>
+<sub>The demo is running with a single 24G 4090 GPU, the model is Falcon (ReLU)-40B, and the precision is FP16.</sub>
 
 ---
 ## Abstract
@@ -82,9 +82,9 @@ cmake --build build --config Release
 
 | Base Model | GGUF Format Link | Original Model |
 |------------|------------------|----------------|
-| LLaMA(ReLU)-2-7B   | [PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF](https://huggingface.co/PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF)    | [SparseLLM/ReluLLaMA-7B](https://huggingface.co/SparseLLM/ReluLLaMA-7B)     |
+| LLaMA(ReLU)-2-7B   | [PowerInfer/ReluLLaMA-7B-PowerInfer-GGUF](https://huggingface.co/PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF)    | [SparseLLM/ReluLLaMA-7B](https://huggingface.co/SparseLLM/ReluLLaMA-7B)     |
 | LLaMA(ReLU)-2-13B    | [PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF](https://huggingface.co/PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF)   | [SparseLLM/ReluLLaMA-13B](https://huggingface.co/SparseLLM/ReluLLaMA-13B)  |
-| Falcon(ReLU)-40B    | [PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF](https://huggingface.co/PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF)    | [SparseLLM/ReluFalcon-40B](https://huggingface.co/SparseLLM/ReluFalcon-40B)      |
+| Falcon(ReLU)-40B    | [PowerInfer/ReluFalcon-40B-PowerInfer-GGUF](https://huggingface.co/PowerInfer/ReluLLaMA-13B-PowerInfer-GGUF)    | [SparseLLM/ReluFalcon-40B](https://huggingface.co/SparseLLM/ReluFalcon-40B)      |
 
 ## Inference
 - If you just have CPU:
@@ -107,11 +107,11 @@ Then, you can use the following instruction to run PowerInfer with GPU index:
 
 ## Evaluation
 
-<img src="/Users/apple/Library/CloudStorage/OneDrive-个人/typora图片/image-20231214203009338.png" alt="image-20231214203009338" style="zoom:50%;" />
+![github-eval-4090](https://github.com/SJTU-IPADS/PowerInfer/assets/34213478/d700fa6c-77ba-462f-a2fc-3fd21c898f33)
 
-<img src="/Users/apple/Library/CloudStorage/OneDrive-个人/typora图片/image-20231214203105378.png" alt="image-20231214203105378" style="zoom:50%;" />
+![github-eval-2080ti-q4](https://github.com/SJTU-IPADS/PowerInfer/assets/34213478/0fc1bfc4-aafc-4e82-a865-bec0143aff1a)
 
-PowerInfer achieves up to 11x and 8x speedup for fp16 and int4 model!
+PowerInfer achieves up to 11x and 8x speedup for FP16 and INT4 model!
 
 ## TODOs
 We will release the code and data in the following order, please stay tuned!
@@ -130,7 +130,7 @@ We will release the code and data in the following order, please stay tuned!
 If you find PowerInfer useful or relevant to your project and research, please kindly cite our paper:
 
 ```bibtex
-Stay Tune
+Stay tuned!
 ```
 
 ## Acknowledgement
