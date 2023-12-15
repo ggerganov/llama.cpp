@@ -6,7 +6,7 @@ class LlamaState: ObservableObject {
 
     private var llamaContext: LlamaContext?
     private var modelUrl: URL? {
-        Bundle.main.url(forResource: "q8_0", withExtension: "gguf", subdirectory: "models")
+        Bundle.main.url(forResource: "ggml-model-q8_0", withExtension: "gguf", subdirectory: "models")
         // Bundle.main.url(forResource: "llama-2-7b-chat", withExtension: "Q2_K.gguf", subdirectory: "models")
     }
     init() {
@@ -31,6 +31,7 @@ class LlamaState: ObservableObject {
         guard let llamaContext else {
             return
         }
+
         messageLog += "Attempting to complete text...\n"
         await llamaContext.completion_init(text: text)
         messageLog += "\(text)"
@@ -41,5 +42,15 @@ class LlamaState: ObservableObject {
         }
         await llamaContext.clear()
         messageLog += "\n\ndone\n"
+    }
+
+    func bench() async {
+        guard let llamaContext else {
+            return
+        }
+
+        messageLog += "Running benchmark...\n"
+        let result = await llamaContext.bench()
+        messageLog += "\(result)"
     }
 }

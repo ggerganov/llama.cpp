@@ -161,6 +161,10 @@ actor LlamaContext {
         return new_token_str
     }
 
+    func bench() -> String{
+        return "bench not implemented"
+    }
+
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()

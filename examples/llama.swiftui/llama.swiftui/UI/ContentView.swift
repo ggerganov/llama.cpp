@@ -7,7 +7,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            ScrollView(.vertical) {
+            // automatically scroll to bottom of text view
+            ScrollView(.vertical, showsIndicators: true) {
                 Text(llamaState.messageLog)
             }
 
@@ -15,14 +16,24 @@ struct ContentView: View {
                 .frame(height: 200)
                 .padding()
                 .border(Color.gray, width: 0.5)
-            Button(action: {
-                sendText()
-            }) {
-                Text("Send")
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+
+            // add two buttons "Send" and "Bench" next to each other
+            HStack {
+                Button("Send") {
+                    sendText()
+                }
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+
+                Button("Bench") {
+                    bench()
+                }
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
             }
         }
         .padding()
@@ -34,9 +45,14 @@ struct ContentView: View {
             multiLineText = ""
         }
     }
+
+    func bench() {
+        Task {
+            await llamaState.bench()
+        }
+    }
 }
-/*
+
 #Preview {
     ContentView()
 }
-*/
