@@ -161,6 +161,7 @@ extern "C" {
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
+        float vram_budget_gb; // VRAM budget in GB, -1 for all available VRAM (for a single GPU)
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
         // called with a progress value between 0 and 1, pass NULL to disable

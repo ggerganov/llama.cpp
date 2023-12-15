@@ -51,6 +51,7 @@ GGML_API bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, s
 
 GGML_API int    ggml_cuda_get_device_count(void);
 GGML_API void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
+GGML_API size_t ggml_cuda_get_free_memory(int device);
 
 // backend API
 GGML_API ggml_backend_t ggml_backend_cuda_init(void); // TODO: take a list of devices to use

@@ -565,6 +565,16 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 #else
             fprintf(stderr, "warning: llama.cpp was compiled without cuBLAS. It is not possible to set a tensor split.\n");
 #endif // GGML_USE_CUBLAS
+        } else if (arg == "--vram-budget") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+#ifdef GGML_USE_CUBLAS
+            params.vram_budget_gb = std::stof(argv[i]);
+#else
+            fprintf(stderr, "warning: PowerInfer was compiled without cuBLAS. It is not possible to set a VRAM budget.\n");
+#endif
         } else if (arg == "--no-mul-mat-q" || arg == "-nommq") {
 #ifdef GGML_USE_CUBLAS
             params.mul_mat_q = false;
@@ -801,6 +811,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --memory-f32          use f32 instead of f16 for memory key+value (default: disabled)\n");
     printf("                        not recommended: doubles context memory required and no measurable increase in quality\n");
     printf("  --temp N              temperature (default: %.1f)\n", (double)sparams.temp);
+    printf("  --vram-budget N       VRAM budget in GiB (default: -1, -1 = available VRAM)\n");
     printf("  --logits-all          return logits for all tokens in the batch (default: disabled)\n");
     printf("  --hellaswag           compute HellaSwag score over random tasks from datafile supplied with -f\n");
     printf("  --hellaswag-tasks N   number of tasks to use when computing the HellaSwag score (default: %zu)\n", params.hellaswag_tasks);
@@ -895,6 +906,7 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
         mparams.n_gpu_layers = params.n_gpu_layers;
     }
     mparams.main_gpu        = params.main_gpu;
+    mparams.vram_budget_gb  = params.vram_budget_gb;
     mparams.tensor_split    = params.tensor_split;
     mparams.use_mmap        = params.use_mmap;
     mparams.use_mlock       = params.use_mlock;
@@ -1402,4 +1414,5 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
+    fprintf(stream, "vram_budget: %f # default: -1.0 (all available VRAM)\n", params.vram_budget_gb);
 }

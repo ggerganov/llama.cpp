@@ -9338,6 +9338,13 @@ int ggml_cuda_get_device_count() {
     return device_count;
 }
 
+size_t ggml_cuda_get_free_memory(int device) {
+    size_t free, total;
+    CUDA_CHECK(cudaSetDevice(device));
+    CUDA_CHECK(cudaMemGetInfo(&free, &total));
+    return free;
+}
+
 void ggml_cuda_get_device_description(int device, char * description, size_t description_size) {
     cudaDeviceProp prop;
     CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
@@ -9610,3 +9617,4 @@ ggml_backend_t ggml_backend_cuda_init() {
 
     return cuda_backend;
 }
+

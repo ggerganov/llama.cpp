@@ -64,6 +64,7 @@ struct gpt_params {
     int32_t n_beams                         = 0;     // if non-zero then use beam search of given width.
     float   rope_freq_base                  = 0.0f;  // RoPE base frequency
     float   rope_freq_scale                 = 0.0f;  // RoPE frequency scaling factor
+    float   vram_budget_gb                  = -1.0f; // VRAM budget in GB (-1 - use available VRAM)
     float   yarn_ext_factor                 = -1.0f; // YaRN extrapolation mix factor
     float   yarn_attn_factor                = 1.0f;  // YaRN magnitude scaling factor
     float   yarn_beta_fast                  = 32.0f; // YaRN low correction dim
