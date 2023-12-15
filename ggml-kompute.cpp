@@ -63,17 +63,29 @@ struct ggml_kompute_context {
 // and consolidate the init functions and simplify object lifetime management. As it currently stands,
 // we *have* to have the kompute manager no matter what for device discovery, but the kompute context
 // is only created when a device is set and vulkan is explicitly turned on.
-ggml_kompute_context *s_kompute_context = nullptr;
-static kp::Manager *komputeManager() {
-    static kp::Manager *s_mgr = nullptr;
-    if (s_mgr && !s_mgr->hasInstance()) {
+static ggml_kompute_context *s_kompute_context = nullptr;
+
+class kompute_manager {
+    kp::Manager *s_mgr = nullptr;
+
+public:
+    kp::Manager *operator()() {
+        if (s_mgr && !s_mgr->hasInstance()) {
+            destroy();
+        }
+        if (!s_mgr) {
+            s_mgr = new kp::Manager;
+        }
+        return s_mgr;
+    }
+
+    void destroy() {
         delete s_mgr;
         s_mgr = nullptr;
     }
-    if (!s_mgr)
-        s_mgr = new kp::Manager;
-    return s_mgr;
-}
+};
+
+static kompute_manager komputeManager;
 
 #ifdef __linux__
 __attribute__((constructor))
@@ -257,7 +269,7 @@ bool ggml_vk_init_device(int device) {
 bool ggml_vk_free_device() {
     if (!ggml_vk_has_device())
         return false;
-    komputeManager()->destroy();
+    komputeManager.destroy();
     // FIXME: The lifetime of these two needs to be tied together as we're relying upon the fact
     // the llama_free(ctx) destroys this memory and we just set the singleton to nullptr here which
     // is very brittle
