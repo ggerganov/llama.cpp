@@ -731,7 +731,7 @@ static std::string llama_format_win_err(DWORD err) {
 struct llama_buffer {
     void * data = NULL;
     size_t size = 0;
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
     ggml_vk_memory memory;
 #endif
 
@@ -742,7 +742,7 @@ struct llama_buffer {
     void resize(size_t n) {
         llama_host_free(data);
 
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
         if (ggml_vk_has_device()) {
             this->memory = ggml_vk_allocate(n);
             this->data = (uint8_t*)memory.data;
@@ -764,7 +764,7 @@ struct llama_buffer {
 
     ~llama_buffer() {
         if (data) {
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
             if (ggml_vk_has_device()) {
                 ggml_vk_free_memory(memory);
                 data = NULL;
@@ -1517,7 +1517,6 @@ struct llama_context {
 #ifdef GGML_USE_MPI
     ggml_mpi_context * ctx_mpi = NULL;
 #endif
-
 };
 
 //
@@ -2113,7 +2112,7 @@ struct llama_model_loader {
             use_mmap = false;
         }
 
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
         use_mmap = false;
 #endif
         this->use_mmap = use_mmap;
@@ -3790,8 +3789,7 @@ static struct ggml_tensor * llm_build_inp_embd(
         const llama_hparams & hparams,
           const llama_batch & batch,
          struct ggml_tensor * tok_embd,
-         const llm_build_cb & cb,
-        struct ggml_tensor ** to_device_tensor = nullptr) {
+         const llm_build_cb & cb) {
     const int64_t n_embd = hparams.n_embd;
 
     struct ggml_tensor * inpL;
@@ -3799,9 +3797,6 @@ static struct ggml_tensor * llm_build_inp_embd(
     if (batch.token) {
         struct ggml_tensor * inp_tokens = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, batch.n_tokens);
         cb(inp_tokens, "inp_tokens", -1);
-        if (to_device_tensor) {
-            *to_device_tensor = inp_tokens;
-        }
 
         inpL = ggml_get_rows(ctx, tok_embd, inp_tokens);
     } else {
@@ -3810,9 +3805,6 @@ static struct ggml_tensor * llm_build_inp_embd(
 #endif
 
         inpL = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
-        if (to_device_tensor) {
-            *to_device_tensor = inpL;
-        }
     }
 
     return inpL;
@@ -3820,7 +3812,7 @@ static struct ggml_tensor * llm_build_inp_embd(
 
 // Persimmon: n_rot = n_embd_head/2
 // Other:     n_rot = n_embd_head
-static struct ggml_tensor * llm_build_k_shift(
+static void llm_build_k_shift(
       struct ggml_context * ctx,
       const llama_hparams & hparams,
       const llama_cparams & cparams,
@@ -3869,8 +3861,6 @@ static struct ggml_tensor * llm_build_k_shift(
         cb(tmp, "K_shifted", il);
         ggml_build_forward_expand(graph, tmp);
     }
-
-    return K_shift;
 }
 
 static void llm_build_kv_store(
@@ -4148,7 +4138,7 @@ struct llm_build_context {
 
     llama_buffer & buf_compute;
 
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
     ggml_kompute_context * ctx_kompute;
 #endif
 
@@ -4187,7 +4177,7 @@ struct llm_build_context {
         do_rope_shift (worst_case || kv_self.has_shift),
         cb            (cb),
         buf_compute   (lctx.buf_compute)
-#if defined(GGML_USE_KOMPUTE)
+#ifdef GGML_USE_KOMPUTE
       , ctx_kompute   (lctx.ctx_kompute)
 #endif
         {
@@ -4220,9 +4210,8 @@ struct llm_build_context {
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
-        struct ggml_tensor * to_device_tensor = nullptr;
 
-        inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb, &to_device_tensor);
+        inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb);
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
@@ -4238,9 +4227,8 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // shift the entire K-cache if needed
-        struct ggml_tensor * K_shift = nullptr;
         if (do_rope_shift) {
-            K_shift = llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE, n_ctx, n_embd_head, freq_base, freq_scale, cb);
+            llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE, n_ctx, n_embd_head, freq_base, freq_scale, cb);
         }
 
         for (int il = 0; il < n_layer; ++il) {
@@ -4335,21 +4323,6 @@ struct llm_build_context {
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
-
-#if defined(GGML_USE_KOMPUTE)
-        if (ctx_kompute) {
-            if (!ggml_vk_has_h2d_all(ctx_kompute)) {
-                ggml_vk_h2d_all(ctx_kompute);
-            } else {
-                ggml_vk_h2d_tensor(ctx_kompute, to_device_tensor);
-                ggml_vk_h2d_tensor(ctx_kompute, inp_pos);
-                ggml_vk_h2d_tensor(ctx_kompute, KQ_mask);
-                if (K_shift) {
-                    ggml_vk_h2d_tensor(ctx_kompute, K_shift);
-                }
-            }
-        }
-#endif
 
         return gf;
     }
@@ -4479,9 +4452,8 @@ struct llm_build_context {
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
-        struct ggml_tensor * to_device_tensor = nullptr;
 
-        inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb, &to_device_tensor);
+        inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb);
         cb(inpL, "inp_embd", -1);
 
         // inp_pos - contains the positions
@@ -4497,9 +4469,8 @@ struct llm_build_context {
         cb(KQ_mask, "KQ_mask", -1);
 
         // shift the entire K-cache if needed
-        struct ggml_tensor * K_shift = nullptr;
         if (do_rope_shift) {
-            K_shift = llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE_NEOX, n_ctx, n_embd_head, freq_base, freq_scale, cb);
+            llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE_NEOX, n_ctx, n_embd_head, freq_base, freq_scale, cb);
         }
 
         for (int il = 0; il < n_layer; ++il) {
@@ -4594,21 +4565,6 @@ struct llm_build_context {
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
-
-#if defined(GGML_USE_KOMPUTE)
-        if (ctx_kompute) {
-            if (!ggml_vk_has_h2d_all(ctx_kompute)) {
-                ggml_vk_h2d_all(ctx_kompute);
-            } else {
-                ggml_vk_h2d_tensor(ctx_kompute, to_device_tensor);
-                ggml_vk_h2d_tensor(ctx_kompute, inp_pos);
-                ggml_vk_h2d_tensor(ctx_kompute, KQ_mask);
-                if (K_shift) {
-                    ggml_vk_h2d_tensor(ctx_kompute, K_shift);
-                }
-            }
-        }
-#endif
 
         return gf;
     }
@@ -5627,6 +5583,10 @@ static struct ggml_cgraph * llama_build_graph(
     const bool do_offload = true; // TODO: set to false after finishing refactoring
 #endif
 
+#ifdef GGML_USE_KOMPUTE
+    const bool needs_h2d_all = lctx.ctx_kompute && !ggml_vk_has_h2d_all(lctx.ctx_kompute);
+#endif
+
     int n_non_view = 0; // number of non-view tensors that have been processed by the callback
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
@@ -5746,6 +5706,21 @@ static struct ggml_cgraph * llama_build_graph(
         if (cur->op != GGML_OP_NONE) {
             n_non_view++;
         }
+
+#ifdef GGML_USE_KOMPUTE
+        if (lctx.ctx_kompute && !needs_h2d_all) {
+            const char * offload_tensors[] = {"inp_tokens", "inp_pos", "KQ_mask", "K_shift"};
+            for (auto off : offload_tensors) {
+                if (strcmp(name, off) == 0) {
+                    ggml_vk_h2d_tensor(lctx.ctx_kompute, cur);
+                    break;
+                }
+            }
+            if (strcmp(name, "inp_embd") == 0 && !batch.token) {
+                ggml_vk_h2d_tensor(lctx.ctx_kompute, cur);
+            }
+        }
+#endif
 
         //
         // offload layers
@@ -5914,6 +5889,12 @@ static struct ggml_cgraph * llama_build_graph(
         default:
             GGML_ASSERT(false);
     }
+
+#ifdef GGML_USE_KOMPUTE
+        if (needs_h2d_all) {
+            ggml_vk_h2d_all(lctx.ctx_kompute);
+        }
+#endif
 
     llm.free();
 
@@ -6175,7 +6156,6 @@ static int llama_decode_internal(
         }
     }
 
-#if 0
     // extract embeddings
     if (!lctx.embedding.empty()) {
         auto & embedding_out = lctx.embedding;
@@ -6183,7 +6163,6 @@ static int llama_decode_internal(
         embedding_out.resize(n_embd);
         memcpy(embedding_out.data(), (float *) ggml_get_data(embeddings) + (n_embd*(n_tokens - 1)), sizeof(float)*n_embd);
     }
-#endif
 
     // measure the performance only for the single-token evals
     if (n_tokens == 1) {
@@ -8621,7 +8600,6 @@ static int llama_apply_lora_from_file_internal(
     const struct llama_model & model, const char * path_lora, float scale, const char * path_base_model, int n_threads
 ) {
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
-
 
     const int64_t t_start_lora_us = ggml_time_us();
 
