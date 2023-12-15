@@ -10,6 +10,7 @@
     body {
       font-family: system-ui;
       font-size: 90%;
+      width: 100%;
     }
 
     #container {
@@ -18,6 +19,7 @@
       flex-direction: column;
       justify-content: space-between;
       height: 100%;
+      width: 100%;
     }
 
     main {
@@ -29,18 +31,15 @@
 
       flex-grow: 1;
       overflow-y: auto;
-
-      border: 1px solid #ccc;
-      border-radius: 5px;
       padding: 0.5em;
     }
 
     body {
-      max-width: 600px;
       min-width: 300px;
       line-height: 1.2;
       margin: 0 auto;
       padding: 0 0.5em;
+      box-sizing: border-box;
     }
 
     p {
@@ -142,6 +141,81 @@
       display: inline;
     }
 
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .header_controls {
+      gap: 0.5rem;
+      display: flex;
+    }
+
+    .flexform {
+      display: flex;
+      max-height: 100%;
+      height: 100%;
+      flex-wrap: wrap;
+    }
+
+    .column {
+      flex-grow: 1;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+
+    .aside {
+      max-width: 300px;
+      overflow: auto;
+      background: rgba(220, 220, 220, 0.2);
+    }
+
+    @media (max-width:600px) {
+      .aside {
+        max-width: 100%;
+      }
+    }
+
+    .range_field {
+      border-bottom: 1px dashed;
+      padding-bottom: 0.5em;
+    }
+
+    .range_field:last-child {
+      border-bottom: none;
+    }
+
+    .range_field label {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .range_field input {
+      width: 100%;
+    }
+
+    .basecontainer {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #content {
+      overflow: auto;
+    }
+
+    .response p {
+      padding: 0.5em;
+      margin: 0;
+      border-radius: 0.5em;
+    }
+
+    .response p:nth-child(even) {
+      background-color: rgba(242, 242, 242, 0.5);
+    }
+
     header,
     footer {
       text-align: center;
@@ -150,7 +224,17 @@
     footer {
       font-size: 80%;
       color: #888;
+      box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(229, 231, 235, 0.53) 0px -1px 0px 0px, rgba(0, 0, 0, 0.24) 0px 5px 20px -5px;
+      padding-top: 0.5em;
     }
+
+
+    @media (max-width:600px) {
+      .footernote {
+        display: block;
+      }
+    }
+
 
     .mode-chat textarea[name=prompt] {
       height: 4.5em;
@@ -537,26 +621,26 @@
       }
 
       return html`
-        <form onsubmit=${submit}>
-          <div>
-            <textarea
-               className=${generating.value ? "loading" : null}
-               oninput=${(e) => message.value = e.target.value}
-               onkeypress=${enterSubmits}
-               placeholder="Say something..."
-               rows=2
-               type="text"
-               value="${message}"
-            />
-          </div>
-          <div class="right">
-            <button type="submit" disabled=${generating.value}>Send</button>
-            <button onclick=${uploadImage}>Upload Image</button>
-            <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-            <button onclick=${reset}>Reset</button>
-          </div>
-        </form>
-      `
+      <form onsubmit=${submit}>
+        <div>
+          <textarea
+             className=${generating.value ? "loading" : null}
+             oninput=${(e) => message.value = e.target.value}
+             onkeypress=${enterSubmits}
+             placeholder="Say something..."
+             rows=2
+             type="text"
+             value="${message}"
+          />
+        </div>
+        <div class="right">
+          <button type="submit" disabled=${generating.value}>Send</button>
+          <button onclick=${uploadImage}>Upload Image</button>
+          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+          <button onclick=${reset}>Reset</button>
+        </div>
+      </form>
+    `
     }
 
     function CompletionControls() {
@@ -565,11 +649,11 @@
         runCompletion();
       }
       return html`
-        <div>
-          <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
-          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-          <button onclick=${reset}>Reset</button>
-        </div>`;
+      <div>
+        <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
+        <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+        <button onclick=${reset}>Reset</button>
+      </div>`;
     }
 
     const ChatLog = (props) => {
@@ -613,12 +697,12 @@
       }
 
       return html`
-        <div id="chat" ref=${container} key=${messages.length}>
-          <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-          <span contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
-            ${messages.flatMap(chatLine)}
-          </span>
-        </div>`;
+      <div id="chat" ref=${container} key=${messages.length}>
+        <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
+        <span class="response" contenteditable=${isCompletionMode} ref=${container} oninput=${handleCompletionEdit}>
+          ${messages.flatMap(chatLine)}
+        </span>
+      </div>`;
     };
 
     const ConfigForm = (props) => {
@@ -649,22 +733,20 @@
 
       const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
-          <div>
-            <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
-            <span>${value}</span>
-          </div>
-        `
+        <div class="range_field">
+          <label for="${name}">${label} <span>${value}</span></label>
+          <input  type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
+        </div>
+      `
       };
 
       const IntField = ({ label, max, min, name, value }) => {
         return html`
-          <div>
-            <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-            <span>${value}</span>
-          </div>
-        `
+        <div class="range_field">
+          <label for="${name}">${label} <span>${value}</span></label>
+          <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+        </div>
+      `
       };
 
       const userTemplateReset = (e) => {
@@ -675,129 +757,145 @@
       const UserTemplateResetButton = () => {
         if (selectedUserTemplate.value.name == 'default') {
           return html`
-            <button disabled>Using default template</button>
-          `
+          <button disabled>Using default template</button>
+        `
         }
 
         return html`
-          <button onclick=${userTemplateReset}>Reset all to default</button>
-        `
+        <button onclick=${userTemplateReset}>Reset all to default</button>
+      `
       };
 
       useEffect(() => {
         // autosave template on every change
         userTemplateAutosave()
-      }, [session.value, params.value])
+      }, [session.value])// removed params.value as it would re render the page.
 
       const GrammarControl = () => (
         html`
-          <div>
-            <label for="template">Grammar</label>
-            <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
-            <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-            <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
-          </div>
-          `
+        <details>
+        <summary>Grammer Configuration</summary>
+          <label for="template">Grammar</label>
+          <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+          <input  type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+          <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
+        </details>
+        `
       );
 
       const PromptControlFieldSet = () => (
         html`
-        <fieldset>
-          <div>
-            <label htmlFor="prompt">Prompt</label>
-            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
-          </div>
-        </fieldset>
-        `
+      <fieldset>
+        <div>
+          <label htmlFor="prompt">Prompt</label>
+          <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
+        </div>
+      </fieldset>
+      `
       );
 
       const ChatConfigForm = () => (
         html`
-          ${PromptControlFieldSet()}
+        ${PromptControlFieldSet()}
 
-          <fieldset class="two">
-            <div>
-              <label for="user">User name</label>
-              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
-            </div>
+        <fieldset class="two">
+          <div>
+            <label for="user">User name</label>
+            <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+          </div>
 
-            <div>
-              <label for="bot">Bot name</label>
-              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
-            </div>
-          </fieldset>
+          <div>
+            <label for="bot">Bot name</label>
+            <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
+          </div>
+        </fieldset>
 
-          <fieldset>
-            <div>
-              <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
-            </div>
+        <fieldset>
+          <div>
+            <label for="template">Prompt template</label>
+            <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
+          </div>
 
-            <div>
-              <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
-            </div>
-            ${GrammarControl()}
-          </fieldset>
-      `
+          <div>
+            <label for="template">Chat history template</label>
+            <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+          </div>
+        </fieldset>
+    `
       );
 
       const CompletionConfigForm = () => (
         html`
-          ${PromptControlFieldSet()}
-          <fieldset>${GrammarControl()}</fieldset>
-        `
+        ${PromptControlFieldSet()}
+      `
       );
 
-      return html`
-        <form>
-          <fieldset class="two">
-            <${UserTemplateResetButton}/>
-            <div>
-              <label class="slim"><input type="radio" name="type" value="chat" checked=${session.value.type === "chat"} oninput=${updateSession} /> Chat</label>
-              <label class="slim"><input type="radio" name="type" value="completion" checked=${session.value.type === "completion"} oninput=${updateSession} /> Completion</label>
-            </div>
-          </fieldset>
 
-          ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
+      const ModelOptions = () => (
+        html`
 
-          <fieldset class="two">
-            ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
-            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
-            ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
-            ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
-            ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
-            ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
-            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
-          </fieldset>
-          <details>
+        <details>
+        <summary>Settings</summary>
+        <fieldset>
+          ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
+          ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+          ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+          ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
+          ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
+          ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+          ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
+          ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
+        </fieldset>
+        </details>
+
+        ${GrammarControl()}
+        <details>
             <summary>More options</summary>
-            <fieldset class="two">
-              ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
-              ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
-              ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
-              ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
-            </fieldset>
-            <hr />
-            <fieldset class="three">
-              <div>
-                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> no Mirostat</label>
-                <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
-                <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
-              </div>
-              ${FloatField({ label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
-              ${FloatField({ label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
-            </fieldset>
             <fieldset>
-              ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
+            ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
+            ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+            ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
+            ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
             </fieldset>
-            <fieldset>
-              <label for="api_key">API Key</label>
-              <input type="text" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
-            </fieldset>
-          </details>
-        </form>
+        </details>
+        <details>
+        <summary>Mirostat</summary>
+        <fieldset>
+        <div>
+            <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> no Mirostat</label>
+            <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
+            <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
+        </div>
+        ${FloatField({ label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
+        ${FloatField({ label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
+        </fieldset>
+        </details>
       `
+      );
+
+      const ModeSelector = () => (
+        html`
+            <div class="header_controls">
+                <label class="slim"><input type="radio" name="type" value="chat" checked=${session.value.type === "chat"} oninput=${updateSession} /> Chat</label>
+                <label class="slim"><input type="radio" name="type" value="completion" checked=${session.value.type === "completion"} oninput=${updateSession} /> Completion</label>
+                <${UserTemplateResetButton}/>
+            </div>
+        `
+      )
+
+      if (props?.header)
+        return html`<${ModeSelector} />`
+
+      return html`
+      <form class="flexform">
+        <div class="column">
+        ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
+        </div>
+        <div class="column aside">
+            <${ModelOptions} />
+        </div>
+      </form>
+    `
     }
 
     const probColor = (p) => {
@@ -830,30 +928,30 @@
         const pColor = found ? probColor(found.prob) : 'transparent'
 
         const popoverChildren = html`
-          <div class="prob-set">
-            ${probs.map((p, index) => {
+        <div class="prob-set">
+          ${probs.map((p, index) => {
           return html`
-                <div
-                  key=${index}
-                  title=${`prob: ${p.prob}`}
-                  style=${{
+              <div
+                key=${index}
+                title=${`prob: ${p.prob}`}
+                style=${{
               padding: '0.3em',
               backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
             }}
-                >
-                  <span>${p.tok_str}: </span>
-                  <span>${Math.floor(p.prob * 100)}%</span>
-                </div>
-              `
+              >
+                <span>${p.tok_str}: </span>
+                <span>${Math.floor(p.prob * 100)}%</span>
+              </div>
+            `
         })}
-          </div>
-        `
+        </div>
+      `
 
         return html`
-          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
-            ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
-          </>
-        `
+        <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
+          ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
+        </>
+      `
       });
     }
 
@@ -879,10 +977,10 @@
         return html`<span/>`
       }
       return html`
-        <span>
-          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
-        </span>
-      `
+      <span>
+        ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second | 
+      </span>
+    `
     }
 
     // simple popover impl
@@ -917,22 +1015,22 @@
       }, []);
 
       return html`
-        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
-        ${isOpen.value && html`
-          <${Portal} into="#portal">
-            <div
-              ref=${popoverRef}
-              class="popover-content"
-              style=${{
+      <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
+      ${isOpen.value && html`
+        <${Portal} into="#portal">
+          <div
+            ref=${popoverRef}
+            class="popover-content"
+            style=${{
             top: position.value.top,
             left: position.value.left,
           }}
-            >
-              ${props.popoverChildren}
-            </div>
-          </${Portal}>
-        `}
-      `;
+          >
+            ${props.popoverChildren}
+          </div>
+        </${Portal}>
+      `}
+    `;
     };
 
     // Source: preact-portal (https://github.com/developit/preact-portal/blob/master/src/preact-portal.js)
@@ -975,10 +1073,10 @@
         }
 
         this.remote = render(html`
-          <${PortalProxy} context=${this.context}>
-            ${show && this.props.children || null}
-          </${PortalProxy}>
-        `, this.into, this.remote);
+        <${PortalProxy} context=${this.context}>
+          ${show && this.props.children || null}
+        </${PortalProxy}>
+      `, this.into, this.remote);
       }
 
       render() {
@@ -999,29 +1097,29 @@
     function App(props) {
 
       return html`
-        <div class="mode-${session.value.type}">
-          <header>
-            <h1>llama.cpp</h1>
-          </header>
+      <div class="basecontainer mode-${session.value.type}">
+        <header>
+          <h1>llama.cpp</h1>
+          <${ConfigForm} header/>
+        </header>
 
-          <main id="content">
-            <${chatStarted.value ? ChatLog : ConfigForm} />
-          </main>
+        <main id="content">
+          <${chatStarted.value ? ChatLog : ConfigForm} />
+        </main>
 
-          <section id="write">
-            <${session.value.type === 'chat' ? MessageInput : CompletionControls} />
-          </section>
-
-          <footer>
-            <p><${ModelGenerationInfo} /></p>
-            <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
-          </footer>
-        </div>
-      `;
+        <footer>
+            <section id="write">
+                <${session.value.type === 'chat' ? MessageInput : CompletionControls} />
+            </section>
+          <p><${ModelGenerationInfo} /> <span class="footernote">Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a></span></p>
+        </footer>
+      </div>
+    `;
     }
 
     render(h(App), document.querySelector('#container'));
   </script>
+
 </head>
 
 <body>
@@ -1032,4 +1130,3 @@
 </body>
 
 </html>
-
