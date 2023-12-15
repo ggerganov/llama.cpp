@@ -91,7 +91,7 @@ struct gpt_params {
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter
 
-    std::string mlp_adapter = "";  // sparse activation mlp adapter path
+    std::string gpu_index = "";  // sparse activation mlp adapter path
 
     int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line

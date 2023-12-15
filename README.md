@@ -50,7 +50,6 @@ The SparseLLM Team is currently converting the Mistral-7B model to a sparser ver
 
 - [Installation](##setup--installation)
 - [Model Weights](##model-weights)
-- [Supported Models](https://vllm.readthedocs.io/en/latest/models/supported_models.html)
 
 ## Setup & Installation
 ### Get the Code
@@ -60,28 +59,24 @@ git clone https://github.com/hodlen/PowerInfer
 cd PowerInfer
 ```
 ### Build
-In order to build PowerInfer you have two different options.
+In order to build PowerInfer you have two different options. These commands are supposed to be run from the root directory of the project.
 
-- Using `make`:
-  - On Linux or MacOS:
-    ```bash
-      make
-    ```
-- Using `CMake`:
-  - If you have one GPU:
-  ```bash
-    mkdir build
-    cd build
-    cmake .. -DLLAMA_CUBLAS=ON
-    cmake --build . --config Release
-  ```
-  - If you just CPU:
-  ```bash
-    mkdir build
-    cd build
-    cmake .. 
-    cmake --build . --config Release
-  ```
+Using `make` on Linux or MacOS:
+```bash
+make
+```
+
+Using `CMake`:
+* If you have one GPU:
+```bash
+cmake -S . -B build -DLLAMA_CUBLAS=ON
+cmake --build build --config Release
+```
+* If you just CPU:
+```bash
+cmake -S . -B build
+cmake --build build --config Release
+```
 
 ## Model Weights
 
@@ -96,11 +91,19 @@ In order to build PowerInfer you have two different options.
 ```bash
   ./build/bin/main -m /PATH/TO/MODEL -n $(output_token_count) -t $(thread_num) -p $(prompt)
 ```
-- If you have CPU with one consumer grade GPU:
+- If you have CPU with one GPU:
 ```bash
-  ./build/bin/main -m /PATH/TO/MODEL -n $(output_token_count) -t $(thread_num) -p $(prompt)
+./build/bin/main -m /PATH/TO/MODEL -n $(output_token_count) -t $(thread_num) -p $(prompt)
 ```
 
+As for now, it requires a offline-generated "GPU index" file to split FFNs on GPU. If you want to try it, please use the following instruction to generate the GPU index file:
+```bash
+python scripts/export-gpu-split.py $(activation_count_path) $(output_idx_path) solver
+```
+Then, you can use the following instruction to run PowerInfer with GPU index:
+```bash
+./build/bin/main -m /PATH/TO/MODEL -n $(output_token_count) -t $(thread_num) -p $(prompt) --gpu-index $(split_path)
+```
 
 ## Evaluation
 

@@ -9660,7 +9660,7 @@ int llama_model_apply_lora_from_file(const struct llama_model * model, const cha
     }
 }
 
-int llama_model_apply_mlp_from_file(struct llama_model * model, const char * path_mlp, bool use_mmap) {
+int llama_model_apply_gpu_idx_from_file(struct llama_model * model, const char * path_mlp, bool use_mmap) {
     llama_mlp_model_loader * mlp_ml = new llama_mlp_model_loader(path_mlp, use_mmap);
     if (mlp_ml -> apply_tensors_to_base_model(model) > 0) {
         LLAMA_LOG_ERROR("%s: failed to apply mlp adapter\n", __func__);

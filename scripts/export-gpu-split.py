@@ -134,7 +134,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "output_path",
         help="path to the output GGML adapter",
-        default="./ggml-mlp-adapters.bin",
+        default="./gpu-index.bin",
     )
     parser.add_argument("solver", help="path to the solver")
 

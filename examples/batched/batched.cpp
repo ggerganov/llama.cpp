@@ -49,11 +49,11 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 8) {
-        params.mlp_adapter = argv[7];
+        params.gpu_index = argv[7];
     }
 
-    printf("params: model = %s, prompt = %s, n_parallel = %d, n_len = %d, n_gpu_layers = %d, n_threads = %d, mlp_adapter = %s\n",
-           params.model.c_str(), params.prompt.c_str(), n_parallel, n_len, n_gpu_layers, params.n_threads, params.mlp_adapter.c_str());
+    printf("params: model = %s, prompt = %s, n_parallel = %d, n_len = %d, n_gpu_layers = %d, n_threads = %d, gpu_index = %s\n",
+           params.model.c_str(), params.prompt.c_str(), n_parallel, n_len, n_gpu_layers, params.n_threads, params.gpu_index.c_str());
 
     if (params.prompt.empty()) {
         params.prompt = "Hello my name is";
@@ -76,8 +76,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    if (!params.mlp_adapter.empty()) {
-        int err = llama_model_apply_mlp_from_file(model, params.mlp_adapter.c_str(), true);
+    if (!params.gpu_index.empty()) {
+        int err = llama_model_apply_gpu_idx_from_file(model, params.gpu_index.c_str(), true);
         if (err != 0) {
             fprintf(stderr, "%s: error: failed to apply mlp adapter\n", __func__);
             llama_free_model(model);
