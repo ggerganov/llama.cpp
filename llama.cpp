@@ -4088,6 +4088,7 @@ static struct ggml_tensor * llm_build_kqv(
                     int32_t   n_tokens,
                     int32_t   n_kv,
                     float     max_alibi_bias,
+                    float     scale,
          const llm_build_cb & cb,
                     int       il) {
     const int64_t n_embd      = hparams.n_embd;
@@ -4129,7 +4130,7 @@ static struct ggml_tensor * llm_build_kqv(
         kq = ggml_soft_max(ctx, kq);
         cb(kq, "kq_soft_max", il);
     } else {
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, 1.0f/sqrtf(float(n_embd_head)));
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, scale);
         cb(kq, "kq_soft_max_ext", il);
     }
 
@@ -4338,7 +4339,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4521,7 +4522,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, max_alibi_bias, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4645,7 +4646,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4745,7 +4746,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -4954,7 +4955,7 @@ struct llm_build_context {
                 // TODO: not tested, could be broken
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Q, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Q, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5045,7 +5046,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, 8.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, 8.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5142,7 +5143,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, 8.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, 8.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5236,7 +5237,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, hparams.f_max_alibi_bias, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, hparams.f_max_alibi_bias, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5349,7 +5350,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5466,7 +5467,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, NULL,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5525,6 +5526,10 @@ struct llm_build_context {
         struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
         cb(inp_pos, "inp_pos", -1);
 
+        // Q_scale
+        struct ggml_tensor * Q_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
+        cb(Q_scale, "Q_scale", -1);
+
         // KQ_scale
         struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
         cb(KQ_scale, "KQ_scale", -1);
@@ -5570,6 +5575,9 @@ struct llm_build_context {
                 );
                 cb(Qcur, "Qcur", il);
 
+                Qcur = ggml_scale(ctx0, Qcur, Q_scale);
+                cb(Qcur, "Qcur", il);
+
                 Kcur = ggml_rope_custom(
                     ctx0, Kcur, inp_pos, hparams.n_rot, 2, 0, n_orig_ctx,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
@@ -5580,7 +5588,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, cb, il);
+                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f, cb, il);
                 cb(cur, "kqv_out", il);
             }
 
@@ -5717,6 +5725,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
     { "inp_pos",                    OFFLOAD_FUNC_FRC }, // this is often used for KQ ops (e.g. rope)
+    { "Q_scale",                    OFFLOAD_FUNC_FRC },
     { "KQ_scale",                   OFFLOAD_FUNC_FRC },
     { "KQ_mask",                    OFFLOAD_FUNC_FRC },
     { "K_shift",                    OFFLOAD_FUNC_FRC },
@@ -5819,6 +5828,7 @@ static struct ggml_cgraph * llama_build_graph(
     bool alloc_inp_tokens   = false;
     bool alloc_inp_embd     = false;
     bool alloc_inp_pos      = false;
+    bool alloc_inp_Q_scale  = false;
     bool alloc_inp_KQ_scale = false;
     bool alloc_inp_KQ_mask  = false;
     bool alloc_inp_K_shift  = false;
@@ -5886,12 +5896,29 @@ static struct ggml_cgraph * llama_build_graph(
             alloc_inp_pos = true;
         }
 
-        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale") == 0) {
+        if (!alloc_inp_Q_scale && strcmp(name, "Q_scale") == 0) {
             ggml_allocr_alloc(lctx.alloc, cur);
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
                 const int64_t n_embd_head = model.hparams.n_embd_head();
                 ggml_set_f32(cur, 1.0f/sqrtf(float(n_embd_head)));
+            }
+
+            alloc_inp_Q_scale = true;
+        }
+
+        if (!alloc_inp_KQ_scale && strcmp(name, "KQ_scale") == 0) {
+            ggml_allocr_alloc(lctx.alloc, cur);
+
+            if (!ggml_allocr_is_measure(lctx.alloc)) {
+                const int64_t n_embd_head = model.hparams.n_embd_head();
+                if (model.arch == LLM_ARCH_PHI2) {
+                    // with phi2, we scale the Q to avoid precision issues
+                    // ref: https://github.com/ml-explore/mlx-examples/blob/08e862336ade809bc37d1035f94b359e7d1a5152/phi2/phi2.py#L64-L66
+                    ggml_set_f32(cur, 1.0f);
+                } else {
+                    ggml_set_f32(cur, 1.0f/sqrtf(float(n_embd_head)));
+                }
             }
 
             alloc_inp_KQ_scale = true;
