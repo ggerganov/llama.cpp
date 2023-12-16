@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import struct
 import sys
 from typing import Any, BinaryIO, Sequence
@@ -18,6 +17,7 @@ import gguf
 
 
 NUMPY_TYPE_TO_FTYPE: dict[str, int] = {"float32": 0, "float16": 1}
+
 
 def write_file_header(fout: BinaryIO, params: dict[str, Any]) -> None:
     fout.write(b"ggla"[::-1])  # magic (ggml lora)
@@ -124,7 +124,7 @@ with open(output_path, "wb") as fout:
         tname = name_map.get_name(k)
         if tname is None:
             print(f"Error: could not map tensor name {orig_k}")
-            print(f" Note: the arch parameter must be specified if the model is not llama")
+            print(" Note: the arch parameter must be specified if the model is not llama")
             sys.exit(1)
 
         if suffix == ".lora_A.weight":
