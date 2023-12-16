@@ -984,6 +984,7 @@ class QwenModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
+
 class Phi2Model(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams["n_layer"]
@@ -998,6 +999,7 @@ class Phi2Model(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
         self.gguf_writer.add_file_type(self.ftype)
+
 
 ###### CONVERSION LOGIC ######
 
