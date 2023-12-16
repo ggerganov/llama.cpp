@@ -8647,53 +8647,60 @@ static int llama_apply_lora_from_file_internal(
 
     const int64_t t_start_lora_us = ggml_time_us();
 
-    auto fin = std::ifstream(path_lora, std::ios::binary);
-    if (!fin) {
-        LLAMA_LOG_ERROR("%s: failed to open '%s'\n", __func__, path_lora);
-        return 1;
-    }
+    llama_file fin(path_lora, "rb");
 
     // verify magic and version
     {
-        uint32_t magic;
-        fin.read((char *) &magic, sizeof(magic));
-        uint32_t format_version;
-        fin.read((char *) &format_version, sizeof(format_version));
+        uint32_t magic = fin.read_u32();
+        if (magic != LLAMA_FILE_MAGIC_GGLA) {
+            LLAMA_LOG_ERROR("%s: bad file magic\n", __func__);
+            return 1;
+        }
 
+        uint32_t format_version = fin.read_u32();
         if (format_version != 1) {
             LLAMA_LOG_ERROR("%s: unsupported file version\n", __func__ );
             return 1;
         }
     }
 
-    int32_t lora_r;
-    int32_t lora_alpha;
-    fin.read((char *) &lora_r, sizeof(lora_r));
-    fin.read((char *) &lora_alpha, sizeof(lora_alpha));
+    int32_t lora_r = fin.read_u32();
+    int32_t lora_alpha = fin.read_u32();
     float scaling = scale * (float)lora_alpha / (float)lora_r;
 
     LLAMA_LOG_INFO("%s: r = %d, alpha = %d, scaling = %.2f\n", __func__, lora_r, lora_alpha, scaling);
 
+    // create a name -> tensor map of the model to accelerate lookups
+    // find the max tensor size to estimate the required temporary buffer size
+    size_t max_tensor_size = 0;
+    std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
+    for (const auto & kv : model.tensors_by_name) {
+        model_tensors.insert(kv);
+        size_t f32_size = ggml_nelements(kv.second) * sizeof(float);
+        max_tensor_size = std::max(max_tensor_size, f32_size);
+    }
+
     // create a temporary ggml context to store the lora tensors
-    // todo: calculate size from biggest possible tensor
-    std::vector<uint8_t> lora_buf(1024ull * 1024ull * 1024ull);
+    // TODO: use ggml-alloc
+    size_t lora_ctx_size = max_tensor_size * 3;
+    LLAMA_LOG_INFO("%s: allocating %.f MB for lora temporary buffer\n", __func__, lora_ctx_size / 1024.0 / 1024.0);
+    std::vector<uint8_t> lora_buf(lora_ctx_size);
+
     struct ggml_init_params params;
     params.mem_size   = lora_buf.size();
     params.mem_buffer = lora_buf.data();
     params.no_alloc   = false;
 
-    ggml_context * lora_ctx = ggml_init(params);
-    std::unordered_map<std::string, struct ggml_tensor *> lora_tensors;
+    using unique_context = std::unique_ptr<ggml_context, decltype(&ggml_free)>;
 
-    // create a name -> tensor map of the model to accelerate lookups
-    std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
-    for (const auto & kv : model.tensors_by_name) {
-        model_tensors.insert(kv);
-    }
+    unique_context lora_ctx(nullptr, ggml_free);
+    lora_ctx.reset(ggml_init(params));
+    std::unordered_map<std::string, struct ggml_tensor *> lora_tensors;
 
     // load base model
     std::unique_ptr<llama_model_loader> ml;
-    ggml_context * base_ctx = NULL;
+
+    unique_context base_ctx(nullptr, ggml_free);
     std::vector<uint8_t> base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
@@ -8702,6 +8709,7 @@ static int llama_apply_lora_from_file_internal(
         size_t ctx_size;
         size_t mmapped_size;
         ml->calc_sizes(ctx_size, mmapped_size);
+
         base_buf.resize(ctx_size);
 
         ggml_init_params base_params;
@@ -8709,9 +8717,9 @@ static int llama_apply_lora_from_file_internal(
         base_params.mem_buffer = base_buf.data();
         base_params.no_alloc   = ml->use_mmap;
 
-        base_ctx = ggml_init(base_params);
+        base_ctx.reset(ggml_init(base_params));
 
-        // maybe this should in llama_model_loader
+        // maybe this should be in llama_model_loader
         if (ml->use_mmap) {
             ml->mapping.reset(new llama_mmap(&ml->file, /* prefetch */ 0, ggml_is_numa()));
         }
@@ -8724,27 +8732,35 @@ static int llama_apply_lora_from_file_internal(
     std::vector<uint8_t> work_buffer;
 
     while (true) {
+        if (fin.tell() == fin.size) {
+            // eof
+            break;
+        }
+
         int32_t n_dims;
-        int32_t length;
+        int32_t name_len;
         int32_t ftype;
 
-        fin.read(reinterpret_cast<char *>(&n_dims), sizeof(n_dims));
-        fin.read(reinterpret_cast<char *>(&length), sizeof(length));
-        fin.read(reinterpret_cast<char *>(&ftype),  sizeof(ftype));
-        if (fin.eof()) {
-            break;
+        fin.read_raw(&n_dims, sizeof(n_dims));
+        fin.read_raw(&name_len, sizeof(name_len));
+        fin.read_raw(&ftype,  sizeof(ftype));
+
+        if (n_dims != 1 && n_dims != 2) {
+            LLAMA_LOG_ERROR("%s: unsupported tensor dimension %d\n", __func__, n_dims);
+            return 1;
         }
 
         int32_t ne[2] = { 1, 1 };
         for (int i = 0; i < n_dims; ++i) {
-            fin.read(reinterpret_cast<char *>(&ne[i]), sizeof(ne[i]));
+            fin.read_raw(&ne[i], sizeof(ne[i]));
         }
 
         std::string name;
         {
+            GGML_ASSERT(name_len <= 1024);
             char buf[1024];
-            fin.read(buf, length);
-            name = std::string(buf, length);
+            fin.read_raw(buf, name_len);
+            name = std::string(buf, name_len);
         }
 
         // check for lora suffix and get the type of tensor
@@ -8758,7 +8774,7 @@ static int llama_apply_lora_from_file_internal(
         std::string lora_type = name.substr(pos + lora_suffix.length());
         std::string base_name = name;
         base_name.erase(pos);
-        // LLAMA_LOG_INFO("%s: %s => %s (lora type %s) \n", __func__, name.c_str(),base_name.c_str(), lora_type.c_str());
+        // LLAMA_LOG_INFO("%s: %s => %s (lora type %s) \n", __func__, name.c_str(), base_name.c_str(), lora_type.c_str());
 
         if (model_tensors.find(base_name) == model_tensors.end()) {
             LLAMA_LOG_ERROR("%s: unknown tensor '%s' in lora adapter\n", __func__, name.data());
@@ -8777,22 +8793,15 @@ static int llama_apply_lora_from_file_internal(
                         return false;
                     }
         }
-        ggml_tensor * lora_tensor;
-        if (n_dims == 2) {
-            lora_tensor = ggml_new_tensor_2d(lora_ctx, wtype, ne[0], ne[1]);
-        }
-        else {
-            LLAMA_LOG_ERROR("%s: unsupported tensor dimension %d\n", __func__, n_dims);
-            return 1;
-        }
-        ggml_set_name(lora_tensor, "lora_tensor");
+        ggml_tensor * lora_tensor = ggml_new_tensor_2d(lora_ctx.get(), wtype, ne[0], ne[1]);
+        ggml_set_name(lora_tensor, name.c_str());
 
         // load tensor data
-        size_t offset = fin.tellg();
+        size_t offset = fin.tell();
         size_t tensor_data_size = ggml_nbytes(lora_tensor);
         offset = (offset + 31) & -32;
-        fin.seekg(offset);
-        fin.read((char*)lora_tensor->data, tensor_data_size);
+        fin.seek(offset, SEEK_SET);
+        fin.read_raw(lora_tensor->data, tensor_data_size);
 
         lora_tensors[name] = lora_tensor;
 
@@ -8822,13 +8831,11 @@ static int llama_apply_lora_from_file_internal(
 
                 // load from base model
                 if (gguf_find_tensor(ctx_gguf, base_name.c_str()) < 0) {
-                    // TODO: throw
                     LLAMA_LOG_ERROR("%s: error: tensor '%s' not found in base model\n", __func__, base_name.c_str());
                     return 1;
                 }
 
-                // TODO: not tested!! maybe not working!
-                base_t = ml->create_tensor(base_ctx, base_name, { (uint32_t)dest_t->ne[0], (uint32_t)dest_t->ne[1] }, GGML_BACKEND_CPU);
+                base_t = ml->create_tensor(base_ctx.get(), base_name, { dest_t->ne[0], dest_t->ne[1] }, GGML_BACKEND_CPU);
                 ml->load_data_for(base_t);
             } else {
                 base_t = dest_t;
@@ -8857,43 +8864,45 @@ static int llama_apply_lora_from_file_internal(
             }
 
             // w = w + BA*s
-            ggml_tensor * BA = ggml_mul_mat(lora_ctx, loraA, loraB);
+            ggml_tensor * BA = ggml_mul_mat(lora_ctx.get(), loraA, loraB);
             offload_func(BA);
             ggml_set_name(BA, "BA");
 
             if (scaling != 1.0f) {
-                ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
+                ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx.get(), scaling);
                 ggml_set_name(scale_tensor, "scale_tensor");
 
-                BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
+                BA = ggml_scale_inplace(lora_ctx.get(), BA, scale_tensor);
                 offload_func(BA);
                 ggml_set_name(BA, "BA_scaled");
             }
 
             ggml_tensor * r;
             if (base_t == dest_t) {
-                r = ggml_add_inplace(lora_ctx, dest_t, BA);
+                r = ggml_add_inplace(lora_ctx.get(), dest_t, BA);
                 offload_func_force_inplace(r);
                 ggml_set_name(r, "r_add_inplace");
             }
             else {
-                r = ggml_add(lora_ctx, base_t, BA);
+                r = ggml_add(lora_ctx.get(), base_t, BA);
                 offload_func(r);
                 ggml_set_name(r, "r_add");
 
-                r = ggml_cpy(lora_ctx, r, dest_t);
+                r = ggml_cpy(lora_ctx.get(), r, dest_t);
                 offload_func(r);
                 ggml_set_name(r, "r_cpy");
             }
 
-            struct ggml_cgraph * gf = ggml_new_graph(lora_ctx);
+            struct ggml_cgraph * gf = ggml_new_graph(lora_ctx.get());
             ggml_build_forward_expand(gf, r);
 
             ggml_graph_compute_helper(work_buffer, gf, n_threads);
 
+            // the tensors in the adapter must be sorted such that loraA and loraB of the same tensor are next to each other
+            GGML_ASSERT(lora_tensors.size() == 2);
+
             // we won't need these tensors again, reset the context to save memory
-            ggml_free(lora_ctx);
-            lora_ctx = ggml_init(params);
+            lora_ctx.reset(ggml_init(params));
             lora_tensors.clear();
 
             n_tensors++;
@@ -8901,12 +8910,6 @@ static int llama_apply_lora_from_file_internal(
                 LLAMA_LOG_INFO(".");
             }
         }
-    }
-
-    // TODO: this should be in a destructor, it will leak on failure
-    ggml_free(lora_ctx);
-    if (base_ctx) {
-        ggml_free(base_ctx);
     }
 
     const int64_t t_lora_us = ggml_time_us() - t_start_lora_us;
