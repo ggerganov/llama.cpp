@@ -5591,7 +5591,7 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
         
         cur = ggml_mul_mat(ctx0, model.output, cur);
-        cb(cur, "result_output", -1);
+        cb(cur, "result_norm", -1);
 
         cur = ggml_add(ctx0, cur, model.output_b);
         cb(cur, "result_output", -1);
@@ -6236,7 +6236,7 @@ static int llama_decode_internal(
     ggml_allocr_alloc_graph(lctx.alloc, gf);
 
     struct ggml_tensor * res        = gf->nodes[gf->n_nodes - 1];
-    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 3];
+    struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 2];
 
     GGML_ASSERT(strcmp(res->name,        "result_output") == 0);
     GGML_ASSERT(strcmp(embeddings->name, "result_norm")   == 0);
