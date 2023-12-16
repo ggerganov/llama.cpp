@@ -249,7 +249,7 @@ class Model:
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
-                if tokenizer.added_tokens_decoder[i].special:
+                if hasattr(tokenizer, "added_tokens_decoder") and tokenizer.added_tokens_decoder[i].special:
                     toktypes.append(gguf.TokenType.CONTROL)
                 else:
                     toktypes.append(gguf.TokenType.USER_DEFINED)
@@ -998,7 +998,7 @@ class Phi2Model(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
         self.gguf_writer.add_file_type(self.ftype)
-        
+
 ###### CONVERSION LOGIC ######
 
 
