@@ -426,32 +426,28 @@ void main() {
 
 mulmat_split_k_reduce_src = """#version 450
 
-layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {float data_a[];};
 layout (binding = 1) writeonly buffer D {float data_d[];};
 
 layout (push_constant) uniform parameter {
-    int M;
-    int N;
-    int k_num;
-    int d_offset;
+    uint ne;
+    uint k_num;
+    uint d_offset;
 } p;
 
 void main() {
-    const int glr = int(gl_GlobalInvocationID.x);
-    const int glc = int(gl_GlobalInvocationID.y);
+    const uint idx = gl_GlobalInvocationID.x;
 
-    if (glr >= p.M || glc >= p.N) {
+    if (idx >= p.ne) {
         return;
     }
-
-    const int idx = glc * p.M + glr;
 
     float result = 0.0f;
 
     for (int i = 0; i < p.k_num; i++) {
-        result += data_a[i * p.M * p.N + idx];
+        result += data_a[i * p.ne + idx];
     }
 
     data_d[p.d_offset + idx] = result;
@@ -1846,19 +1842,21 @@ soft_max_body = """
 layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer X {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+layout (binding = 1) readonly buffer Y {B_TYPE data_b[];};
+layout (binding = 2) buffer D {D_TYPE data_d[];};
 
 shared FLOAT_TYPE vals[BLOCK_SIZE];
 
 void main() {
-    const uint row = gl_WorkGroupID.x;
     const uint tid = gl_LocalInvocationID.x;
+    const uint rowx = gl_WorkGroupID.x;
+    const uint rowy = rowx % p.KY;
 
     // Find max
     vals[tid] = uintBitsToFloat(0xFF800000);
 
     [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
-        vals[tid] = max(vals[tid], FLOAT_TYPE(data_a[row * p.KX + col]));
+        vals[tid] = max(vals[tid], FLOAT_TYPE(data_a[rowx * p.KX + col]) * p.param1 + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)));
     }
 
     barrier();
@@ -1876,8 +1874,8 @@ void main() {
     vals[tid] = FLOAT_TYPE(0.0f);
 
     [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
-        const uint i = row*p.KX + col;
-        const FLOAT_TYPE val = exp(FLOAT_TYPE(data_a[i]) - max_val);
+        const uint i = rowx * p.KX + col;
+        const FLOAT_TYPE val = exp(FLOAT_TYPE(data_a[i]) * p.param1 + (p.KY > 0 ? FLOAT_TYPE(data_b[rowy * p.KX + col]) : FLOAT_TYPE(0.0f)) - max_val);
         vals[tid] += val;
         data_d[i] = D_TYPE(val);
     }
@@ -1893,7 +1891,7 @@ void main() {
     const D_TYPE divisor = D_TYPE(vals[0]);
 
     [[unroll]] for (uint col = tid; col < p.KX; col += BLOCK_SIZE) {
-        data_d[row*p.KX + col] /= divisor;
+        data_d[rowx*p.KX + col] /= divisor;
     }
 }
 """
@@ -2221,7 +2219,7 @@ async def main():
 
     tasks.append(string_to_spv("diag_mask_inf_f32", f"{diag_mask_inf_head}\n{shader_f32}\n{diag_mask_inf_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
 
-    tasks.append(string_to_spv("soft_max_f32", f"{generic_head}\n{shader_f32}\n{soft_max_body}", {"A_TYPE": "float", "D_TYPE": "float"}, True))
+    tasks.append(string_to_spv("soft_max_f32", f"{generic_head}\n{shader_f32}\n{soft_max_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float"}, True))
 
     tasks.append(string_to_spv("rope_f32", rope_src, {"A_TYPE": "float", "D_TYPE": "float"}, True))
     tasks.append(string_to_spv("rope_f16", rope_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}, True))
