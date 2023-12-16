@@ -7,7 +7,7 @@ Command line options:
 -   `--threads N`, `-t N`: Set the number of threads to use during generation.
 -   `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation.
 -   `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
--   `-m ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
+-   `-a ALIAS`, `--alias ALIAS`: Set an alias for the model. The alias will be returned in API responses.
 -   `-c N`, `--ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference. The size may differ in other models, for example, baichuan models were build with a context of 4096.
 -   `-ngl N`, `--n-gpu-layers N`: When compiled with appropriate support (currently CLBlast or cuBLAS), this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 -   `-mg i, --main-gpu i`: When using multiple GPUs this option controls which GPU is used for small tensors for which the overhead of splitting the computation across all GPUs is not worthwhile. The GPU in question will use slightly more VRAM to store a scratch buffer for temporary results. By default GPU 0 is used. Requires cuBLAS.
@@ -24,6 +24,10 @@ Command line options:
 -   `--port`: Set the port to listen. Default: `8080`.
 -   `--path`: path from which to serve static files (default examples/server/public)
 -   `--embedding`: Enable embedding extraction, Default: disabled.
+-   `-np N`, `--parallel N`: Set the number of slots for process requests (default: 1)
+-   `-cb`, `--cont-batching`: enable continuous batching (a.k.a dynamic batching) (default: disabled)
+-   `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load "a system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+-   `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
 
 ## Build
 
@@ -106,24 +110,26 @@ node index.js
 
 ## API Endpoints
 
--   **POST** `/completion`: Given a prompt, it returns the predicted completion.
+-   **POST** `/completion`: Given a `prompt`, it returns the predicted completion.
 
     *Options:*
+
+    `prompt`: Provide the prompt for this completion as a string or as an array of strings or numbers representing tokens. Internally, the prompt is compared to the previous completion and only the "unseen" suffix is evaluated. If the prompt is a string or an array with the first element given as a string, a `bos` token is inserted in the front like `main` does.
 
     `temperature`: Adjust the randomness of the generated text (default: 0.8).
 
     `top_k`: Limit the next token selection to the K most probable tokens (default: 40).
 
-    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.9).
+    `top_p`: Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P (default: 0.95).
 
-    `n_predict`: Set the number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: 128, -1 = infinity).
+    `min_p`: The minimum probability for a token to be considered, relative to the probability of the most likely token (default: 0.05).
 
-    `n_keep`: Specify the number of tokens from the initial prompt to retain when the model resets its internal context.
-    By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the initial prompt.
+    `n_predict`: Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. (default: -1, -1 = infinity).
+
+    `n_keep`: Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded.
+    By default, this value is set to 0 (meaning no tokens are kept). Use `-1` to retain all tokens from the prompt.
 
     `stream`: It allows receiving each predicted token in real-time instead of waiting for the completion to finish. To enable this, set to `true`.
-
-    `prompt`: Provide a prompt as a string, or as an array of strings and numbers representing tokens. Internally, the prompt is compared, and it detects if a part has already been evaluated, and the remaining part will be evaluate. If the prompt is a string, or an array with the first element given as a string, a space is inserted in the front like main.cpp does.
 
     `stop`: Specify a JSON array of stopping strings.
     These words will not be included in the completion, so make sure to add them to the prompt for the next iteration (default: []).
@@ -156,6 +162,46 @@ node index.js
 
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced (default: []).
 
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token (default: 0)
+
+    `image_data`: An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:` In this case, `[img-12]` will be replaced by the embeddings of the image id 12 in the following `image_data` array: `{..., "image_data": [{"data": "<BASE64_STRING>", "id": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.
+
+    *Result JSON:*
+
+    Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
+
+    `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
+
+    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
+
+    `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+
+    `model`: The path to the model loaded with `-m`
+
+    `prompt`: The provided `prompt`
+
+    `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
+
+    `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
+
+    `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
+
+    `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
+
+    `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
+
+    `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
+
+    `tokens_evaluated`: Number of tokens evaluated in total from the prompt
+
+    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+
+    `slot_id`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot (default: -1)
+
+    `cache_prompt`: Save the prompt and generation for avoid reprocess entire prompt if a part of this isn't change (default: false)
+
+    `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
+
 -   **POST** `/tokenize`: Tokenize a given text.
 
     *Options:*
@@ -176,7 +222,90 @@ node index.js
 
     `content`: Set the text to process.
 
+-   **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
+
+    *Options:*
+
+    `input_prefix`: Set the prefix of the code to infill.
+
+    `input_suffix`: Set the suffix of the code to infill.
+
+    It also accepts all the options of `/completion` except `stream` and `prompt`.
+
+-   **GET** `/props`: Return the required assistant name and anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
+
+-   **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
+
+    *Options:*
+
+    See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such are `mirostat` are supported.
+
+    *Examples:*
+
+    You can use either Python `openai` library with appropriate checkpoints:
+
+    ```python
+    import openai
+
+    client = openai.OpenAI(
+        base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+        api_key = "sk-no-key-required"
+    )
+
+    completion = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
+        {"role": "user", "content": "Write a limerick about python exceptions"}
+    ]
+    )
+
+    print(completion.choices[0].message)
+    ```
+    ... or raw HTTP requests:
+
+    ```shell
+    curl http://localhost:8080/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer no-key" \
+    -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [
+    {
+        "role": "system",
+        "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
+    },
+    {
+        "role": "user",
+        "content": "Write a limerick about python exceptions"
+    }
+    ]
+    }'
+    ```
+
 ## More examples
+
+### Change system prompt on runtime
+
+To use the server example to serve multiple chat-type clients while keeping the same system prompt, you can utilize the option `system_prompt` to achieve that. This only needs to be done once to establish it.
+
+`prompt`: Specify a context that you want all connecting clients to respect.
+
+`anti_prompt`: Specify the word you want to use to instruct the model to stop. This must be sent to each client through the `/props` endpoint.
+
+`assistant_name`: The bot's name is necessary for each customer to generate the prompt. This must be sent to each client through the `/props` endpoint.
+
+```json
+{
+    "system_prompt": {
+        "prompt": "Transcript of a never ending dialog, where the User interacts with an Assistant.\nThe Assistant is helpful, kind, honest, good at writing, and never fails to answer the User's requests immediately and with precision.\nUser: Recommend a nice restaurant in the area.\nAssistant: I recommend the restaurant \"The Golden Duck\". It is a 5 star restaurant with a great view of the city. The food is delicious and the service is excellent. The prices are reasonable and the portions are generous. The restaurant is located at 123 Main Street, New York, NY 10001. The phone number is (212) 555-1234. The hours are Monday through Friday from 11:00 am to 10:00 pm. The restaurant is closed on Saturdays and Sundays.\nUser: Who is Richard Feynman?\nAssistant: Richard Feynman was an American physicist who is best known for his work in quantum mechanics and particle physics. He was awarded the Nobel Prize in Physics in 1965 for his contributions to the development of quantum electrodynamics. He was a popular lecturer and author, and he wrote several books, including \"Surely You're Joking, Mr. Feynman!\" and \"What Do You Care What Other People Think?\".\nUser:",
+        "anti_prompt": "User:",
+        "assistant_name": "Assistant:"
+    }
+}
+```
+
+**NOTE**: You can do this automatically when starting the server by simply creating a .json file with these options and using the CLI option `-spf FNAME` or `--system-prompt-file FNAME`.
 
 ### Interactive mode
 

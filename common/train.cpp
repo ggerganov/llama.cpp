@@ -32,6 +32,7 @@ struct train_state  * init_train_state() {
     state->opt = new struct ggml_opt_context;
     state->opt->ctx = NULL;
     state->opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    state->opt->params.graph_size = LLAMA_TRAIN_MAX_NODES;
     state->opt->loss_after = 0.0f;
 
     return state;
@@ -70,7 +71,7 @@ void free_random_uniform_distribution(struct random_uniform_distribution * rnd) 
 
 struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct random_normal_distribution * rnd) {
     float scale = 1.0f; // xavier
-    switch (tensor->n_dims) {
+    switch (ggml_n_dims(tensor)) {
         case 1:
             scale /= sqrtf((float) tensor->ne[0]);
             for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
@@ -118,7 +119,7 @@ struct ggml_tensor * randomize_tensor_normal(struct ggml_tensor * tensor, struct
 }
 
 struct ggml_tensor * randomize_tensor_uniform(struct ggml_tensor * tensor, struct random_uniform_distribution * rnd) {
-    switch (tensor->n_dims) {
+    switch (ggml_n_dims(tensor)) {
         case 1:
             for (int i0 = 0; i0 < tensor->ne[0]; i0++) {
                 float * dst = (float *) ((char *) tensor->data + i0*tensor->nb[0]);
@@ -182,25 +183,27 @@ float fclamp(const float v, const float min, const float max) {
 }
 
 void assert_shape_1d(struct ggml_tensor * tensor, int64_t ne0) {
-    GGML_ASSERT(tensor->n_dims == 1);
     GGML_ASSERT(tensor->ne[0] == ne0);
+    GGML_ASSERT(tensor->ne[1] == 1);
+    GGML_ASSERT(tensor->ne[2] == 1);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_2d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1) {
-    GGML_ASSERT(tensor->n_dims == 2);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
+    GGML_ASSERT(tensor->ne[2] == 1);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_3d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2) {
-    GGML_ASSERT(tensor->n_dims == 3);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
+    GGML_ASSERT(tensor->ne[3] == 1);
 }
 
 void assert_shape_4d(struct ggml_tensor * tensor, int64_t ne0, int64_t ne1, int64_t ne2, int64_t ne3) {
-    GGML_ASSERT(tensor->n_dims == 4);
     GGML_ASSERT(tensor->ne[0] == ne0);
     GGML_ASSERT(tensor->ne[1] == ne1);
     GGML_ASSERT(tensor->ne[2] == ne2);
@@ -224,8 +227,8 @@ int64_t get_example_targets_batch(
     bool                   sample_random_offsets
 ) {
     GGML_ASSERT(samples_count > 0);
-    GGML_ASSERT(tokens_input->n_dims  == 2);
-    GGML_ASSERT(target_probs->n_dims  == 3);
+    GGML_ASSERT(ggml_is_matrix(tokens_input));
+    GGML_ASSERT(ggml_is_3d(target_probs));
     int64_t n_vocab  = target_probs->ne[0];
     int64_t n_tokens = tokens_input->ne[0];
     int64_t n_batch  = tokens_input->ne[1];
@@ -236,8 +239,8 @@ int64_t get_example_targets_batch(
     int64_t used_samples = 0;
 
     ggml_set_f32(target_probs, 0.0f);
-    llama_token bos = llama_token_bos(lctx);
-    llama_token eos = llama_token_eos(lctx);
+    llama_token bos = llama_token_bos(llama_get_model(lctx));
+    llama_token eos = llama_token_eos(llama_get_model(lctx));
     // printf("%s: example_id=%d n_batch=%d n_train_samples=%zu\n", __func__, example_id, n_batch, n_train_samples);
     for (int k=0; k<n_batch; ++k) {
         // printf("%s: batch %d\n", __func__, k);
@@ -863,7 +866,7 @@ size_t tokenize_file(
             (int) buf.size(),
             out_tokens.data(),
             (int) out_tokens.size(),
-            false);
+            false, false);
         if (n_tokens < 0) {
             out_tokens.resize(-n_tokens);
             n_tokens = llama_tokenize(
@@ -872,7 +875,7 @@ size_t tokenize_file(
                 (int) buf.size(),
                 out_tokens.data(),
                 (int) out_tokens.size(),
-                false);
+                false, false);
         }
         if (n_tokens >= 0) {
             out_tokens.resize(n_tokens);
@@ -924,7 +927,7 @@ size_t tokenize_file(
         for (llama_token token=0; token < n_vocab; ++token) {
             max_token_text_size = std::max(
                 max_token_text_size,
-                strlen(llama_token_get_text(lctx, token)));
+                strlen(llama_token_get_text(llama_get_model(lctx), token)));
         }
 
         // upper bound of context byte length.
@@ -966,7 +969,7 @@ size_t tokenize_file(
                     (int) buf_sample.size(),
                     tok_sample.data(),
                     (int) tok_sample.size(),
-                    false);
+                    false, false);
                 if (n_tokens < 0) {
                     tok_sample.resize(-n_tokens);
                     n_tokens = llama_tokenize(llama_get_model(lctx),
@@ -974,7 +977,7 @@ size_t tokenize_file(
                         (int) buf_sample.size(),
                         tok_sample.data(),
                         (int) tok_sample.size(),
-                        false);
+                        false, false);
                     GGML_ASSERT(n_tokens >= 0);
                 }
                 GGML_ASSERT(n_tokens <= (int) tok_sample.size());
@@ -1045,6 +1048,7 @@ struct train_params_common get_default_train_params_common() {
     params.n_batch    =    8;
     params.n_gradient_accumulation = 1;
     params.n_epochs   = -1;
+    params.n_gpu_layers = 0;
 
     params.custom_n_ctx = false;
 
@@ -1080,6 +1084,7 @@ struct train_params_common get_default_train_params_common() {
     params.adam_beta2          = 0.999f;
     params.adam_gclip          = 1.0f;
     params.adam_eps_f          = 0.0f;
+
     return params;
 }
 
@@ -1133,6 +1138,7 @@ void print_common_train_usage(int /*argc*/, char ** /*argv*/, const struct train
     fprintf(stderr, "  --adam-beta2 N             AdamW beta2 in interval [0,1). How much to smooth the second moment of gradients. (default %f)\n", params->adam_beta2);
     fprintf(stderr, "  --adam-gclip N             AdamW gradient clipping. Disabled when zero. (default %f)\n", params->adam_gclip);
     fprintf(stderr, "  --adam-epsf N              AdamW epsilon for convergence test. Disabled when <= zero. (default %f)\n", params->adam_eps_f);
+    fprintf(stderr, "  -ngl N, --n-gpu-layers N   Number of model layers to offload to GPU (default %d)", params->n_gpu_layers);
     fprintf(stderr, "\n");
 }
 
@@ -1352,6 +1358,17 @@ bool consume_common_train_arg(
             return true;
         }
         params->adam_gclip = std::stof(argv[i]);
+    } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
+            if (++i >= argc) {
+                *invalid_param = true;
+                return true;
+            }
+#ifdef LLAMA_SUPPORTS_GPU_OFFLOAD
+            params->n_gpu_layers = std::stoi(argv[i]);
+#else
+            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
+#endif
     } else if (arg == "-h" || arg == "--help") {
         params->print_usage = true;
         return true;
@@ -1425,7 +1442,7 @@ void train_opt_callback(void * vdata, int accum_step, float * sched, bool * canc
 
         int impr_plot = -(int)(1 + (opt->loss_before - opt->loss_after) * 10.0f + 0.5f);
         if (impr_plot > 0) impr_plot = 0;
-        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_before)) impr_plot = 0;
+        if (std::isnan(opt->loss_before) || std::isnan(opt->loss_after)) impr_plot = 0;
         printf("%s: iter=%6d sample=%zu/%zu sched=%f loss=%f",
             __func__, opt->iter, std::min(1+train->shuffle_next_sample, train->shuffle_sample_count), train->shuffle_sample_count,
             *sched, opt->loss_after);

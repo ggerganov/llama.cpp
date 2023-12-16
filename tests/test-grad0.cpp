@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
+#define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnings on Windows
 #include "ggml.h"
 
 #include <cmath>
@@ -208,26 +208,6 @@ static struct ggml_tensor * get_random_tensor_i32(
     return result;
 }
 
-static void print_elements(const char* label, const struct ggml_tensor * t) {
-    if (!t) {
-        printf("%s: %s = null\n", __func__, label);
-        return;
-    }
-    const int nelements = ggml_nelements(t);
-    printf("%s: %s = [", __func__, label);
-    for (int k = 0; k < nelements; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%.5f", ggml_get_f32_1d(t, k));
-    }
-    printf("] shape: [");
-    for (int k = 0; k < t->n_dims; ++k) {
-        if (k > 0) { printf(", "); }
-        printf("%d", (int)t->ne[k]);
-    }
-    printf("]\n");
-
-}
-
 static bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
@@ -251,9 +231,10 @@ static bool check_gradient(
         printf("GGML_N_THREADS = %d\n", n_threads);
     }
 
-    struct ggml_cgraph * gf = ggml_build_forward_ctx(ctx0, f);
-    struct ggml_cgraph * gb = ggml_new_graph(ctx0);
-    *gb = *gf;
+    struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, GGML_DEFAULT_GRAPH_SIZE, true);
+    struct ggml_cgraph * gb = ggml_new_graph_custom(ctx0, GGML_DEFAULT_GRAPH_SIZE, true);
+    ggml_build_forward_expand(gf, f);
+    ggml_graph_cpy(gf, gb);
     ggml_build_backward_expand(ctx0, gf, gb, false);
 
     ggml_graph_compute_with_ctx(ctx0, gf, n_threads);

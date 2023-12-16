@@ -16,6 +16,8 @@ add_library(common OBJECT
     ${_common_path}/console.cpp
     ${_common_path}/grammar-parser.h
     ${_common_path}/grammar-parser.cpp
+    ${_common_path}/sampling.h
+    ${_common_path}/sampling.cpp
     )
 
 # WARNING: because build-info.h is auto-generated, it will only
@@ -27,6 +29,16 @@ configure_file(${_common_path}/../build-info.h
 
 target_include_directories(common PUBLIC ${LLAMA_INCLUDE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR})
+
+# If the common project was part of "main-cmake-pkg" the transient
+# defines would automatically be attached. Because the common func-
+# tionality is separate, but dependent upon the defines, it must be
+# explicitly extracted from the "llama" target.
+#
+get_target_property(_llama_transient_defines llama
+    INTERFACE_COMPILE_DEFINITIONS)
+
+target_compile_definitions(common PRIVATE "${_llama_transient_defines}")
 
 add_executable(${TARGET} ${CMAKE_CURRENT_LIST_DIR}/../main/main.cpp)
 target_include_directories(${TARGET} PRIVATE ${_common_path})

@@ -3,9 +3,7 @@
 
 import argparse
 import gguf
-import os
 import struct
-import sys
 import numpy as np
 from pathlib import Path
 
@@ -313,7 +311,7 @@ class ModelParams:
         gguf_writer.add_feed_forward_length(self.get_n_ff())
 
 def tensor_name(key, bid=None, suffix=".weight"):
-    return gguf.MODEL_TENSOR_NAMES[gguf.MODEL_ARCH.LLAMA][key].format(bid=bid) + suffix
+    return gguf.TENSOR_NAMES[key].format(bid=bid) + suffix
 
 class Layer:
     def __init__(self, params, lora_params, bid):

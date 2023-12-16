@@ -1,5 +1,6 @@
 #include "llama.h"
 #include "common.h"
+#include "console.h"
 
 #include <cstdio>
 #include <string>
@@ -35,6 +36,8 @@ static const std::map<std::string, std::vector<llama_token>> & k_tests() {
         { "   Hello"              , {     258,  23090, }, },
         { "    Hello"             , {     466,  23090, }, },
         { "    Hello\n    Hello"  , {     466,  23090,    742,  23090, }, },
+        { "\n ="                  , {    1212,     40, }, },
+        { "' era"                 , {      18,   4932, }, },
     };
 
     return _k_tests;
@@ -85,11 +88,17 @@ int main(int argc, char **argv) {
     }
 
     if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
-        fprintf(stderr, "%s : error: vocab type is not SPM\n", __func__);
+        fprintf(stderr, "%s : error: vocab type is not BPE\n", __func__);
         llama_free_model(model);
         llama_free(ctx);
         return 2;
     }
+
+#ifdef _WIN32
+    // We need this for unicode console support
+    console::init(false, false);
+    atexit([]() { console::cleanup(); });
+#endif
 
     bool success = true;
 
@@ -148,7 +157,7 @@ int main(int argc, char **argv) {
 
         fprintf(stderr, "%s : text size: %zu\n", __func__, text.size());
 
-        const std::vector<llama_token> res = llama_tokenize(ctx, text, true);
+        const std::vector<llama_token> res = llama_tokenize(ctx, text, false);
 
         fprintf(stderr, "%s : tokens: %zu\n", __func__, res.size());
 
@@ -162,10 +171,8 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                ofs << tok << " ";
+                ofs << tok << " '" << llama_detokenize_bpe(ctx, std::vector<int>{tok}) << "'" << std::endl;
             }
-
-            ofs << "\n";
         }
 
         fprintf(stderr, "%s : tokens written to '%s'\n", __func__, (fname_text + ".tokcpp").c_str());
