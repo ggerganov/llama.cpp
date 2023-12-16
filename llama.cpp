@@ -8676,11 +8676,6 @@ static int llama_apply_lora_from_file_internal(
     std::unordered_map<std::string, struct ggml_tensor*> model_tensors;
     for (const auto & kv : model.tensors_by_name) {
         model_tensors.insert(kv);
-        // skip input and output layers as they are not often finetuned and can be very large
-        if (kv.first.find("token_embd") != std::string::npos ||
-            kv.first.find("output") != std::string::npos) {
-            continue;
-        }
         size_t f32_size = ggml_nelements(kv.second) * sizeof(float);
         max_tensor_size = std::max(max_tensor_size, f32_size);
     }
