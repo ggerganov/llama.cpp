@@ -86,6 +86,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
     std::string logdir            = "";  // directory in which to save YAML log files
 
+    std::vector<llama_model_kv_override> kv_overrides;
+
     // TODO: avoid tuple, use struct
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter
@@ -98,7 +100,6 @@ struct gpt_params {
     size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
 
     bool mul_mat_q         = true;  // if true, use mul_mat_q kernels instead of cuBLAS
-    bool memory_f16        = true;  // use f16 instead of f32 for memory kv
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
@@ -123,10 +124,14 @@ struct gpt_params {
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool infill            = false; // use infill mode
     bool dump_kv_cache     = false; // dump the KV cache contents for debugging purposes
+    bool no_kv_offload     = false; // disable KV offloading
+
+    std::string cache_type_k = "f16"; // KV cache data type for the K
+    std::string cache_type_v = "f16"; // KV cache data type for the V
 
     // multimodal models (see examples/llava)
     std::string mmproj = ""; // path to multimodal projector
-    std::string image = ""; // path to an image file
+    std::string image  = ""; // path to an image file
 };
 
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
@@ -140,6 +145,12 @@ std::string get_system_info(const gpt_params & params);
 std::string gpt_random_prompt(std::mt19937 & rng);
 
 void process_escapes(std::string& input);
+
+//
+// String parsing
+//
+
+std::string parse_samplers_input(std::string input);
 
 //
 // Model utils
