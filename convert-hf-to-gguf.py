@@ -999,6 +999,7 @@ class Phi2Model(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
         self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_add_bos_token(False)
 
 
 ###### CONVERSION LOGIC ######
