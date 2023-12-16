@@ -249,7 +249,7 @@ class Model:
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
                 tokens.append(reverse_vocab[i])
-                if hasattr(tokenizer, "added_tokens_decoder") and tokenizer.added_tokens_decoder[i].special:
+                if tokenizer.added_tokens_decoder[i].special:
                     toktypes.append(gguf.TokenType.CONTROL)
                 else:
                     toktypes.append(gguf.TokenType.USER_DEFINED)
