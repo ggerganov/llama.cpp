@@ -38,9 +38,10 @@ The perplexity measurements in table above are done against the `wikitext2` test
 
 ## Results
 
-### Memory/Disk Requirements
+### Llama 7B
+Build with OpenBLAS
 
-Llama 7B
+#### Memory/Disk Requirements
 
 | Model |     Original  |     AWQ-4bit  | 
 |------:|--------------:|--------------:|
@@ -49,19 +50,49 @@ Llama 7B
 |  q4_1 |     4.041  GB |     4.041  GB |
 |  q2_k |     2.649  GB |     2.649  GB |
 
-### Quantization
+#### Quantization
 
 Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
 
 | Model      | Measure      | F16    | Q4_0   | Q4_1   | Q2_K   |
 |-----------:|--------------|-------:|-------:|-------:|-------:|
-|Llama 7B    | perplexity   | 5.9066 | 6.1214 | 6.0643 | xxxxxx|
+|Llama 7B    | perplexity   | 5.9066 | 6.1214 | 6.0643 | 6.5808 |
 |Llama 7B    | file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
 |Llama 7B    | ms/tok @ 4th |    xxx |     xx |     xx |     xx |
 |Llama 7B    | ms/tok @ 8th |    xxx |     xx |     xx |     xx |
 |Llama 7B    | bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
-|AWQ-LLama 7B| perplexity   | 5.9175 | 6.0252 | 5.9987 | xxxxx |
+|AWQ-LLama 7B| perplexity   | 5.9175 | 6.0252 | 5.9987 | 6.3692 |
 |AWQ-LLama 7B| file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
 |AWQ-LLama 7B| ms/tok @ 4th |     xxx|    xxx |    xxx |    xxx |
 |AWQ-LLama 7B| ms/tok @ 8th |     xxx|     xx |     xx |     xx |
 |AWQ-LLama 7B| bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
+
+
+### Llama2 7B
+Build with CuBLAS
+
+#### Memory/Disk Requirements
+
+| Model |     Original  |     AWQ-4bit  | 
+|------:|--------------:|--------------:|
+|  fp16 |     12.853 GB |     12.853 GB |
+|  q4_0 |     3.647  GB |     3.647  GB |
+|  q4_1 |     4.041  GB |     4.041  GB |
+|  q2_k |     2.649  GB |     2.649  GB |
+
+#### Quantization
+
+Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+| Model       | Measure      | F16    | Q4_0   | Q4_1   | Q2_K   |
+|------------:|--------------|-------:|-------:|-------:|-------:|
+|Llama2 7B    | perplexity   | 5.8664 | 6.0260 | 6.0656 | 6.4496 |
+|Llama2 7B    | file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
+|Llama2 7B    | ms/tok @ 4th |    xxx |     xx |     xx |     xx |
+|Llama2 7B    | ms/tok @ 8th |    xxx |     xx |     xx |     xx |
+|Llama2 7B    | bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
+|AWQ-LLama2 7B| perplexity   | 5.8801 | 6.0054 | 5.9849 | 6.3650 |
+|AWQ-LLama2 7B| file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
+|AWQ-LLama2 7B| ms/tok @ 4th |     xxx|    xxx |    xxx |    xxx |
+|AWQ-LLama2 7B| ms/tok @ 8th |     xxx|     xx |     xx |     xx |
+|AWQ-LLama2 7B| bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
