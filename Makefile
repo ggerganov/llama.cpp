@@ -460,6 +460,27 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 endif # LLAMA_HIPBLAS
 
+ifdef LLAMA_CHIPSTAR
+	CUSPVC 		?= cuspvc
+	LLAMA_CUDA_DMMV_X       ?= 32
+	LLAMA_CUDA_MMV_Y        ?= 1
+	LLAMA_CUDA_KQUANTS_ITER ?= 2
+	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS -DGGML_USE_CHIPSTAR
+	MK_CPPFLAGS += -I/opt/H4IBLAS/include
+	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
+	# MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
+	MK_LDFLAGS	+= -L/opt/chipstar/lib -lCHIP -L/opt/H4IBLAS/lib -lhipblas -L/opt/H4IMKL/lib -lMKLShim
+	# HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
+	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
+	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
+	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
+	HIPFLAGS 	+= -DGGML_CUDA_FORCE_DMMV
+	OBJS        += ggml-cuda.o
+ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+	$(CUSPVC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
+endif # LLAMA_HIPBLAS
+
+
 ifdef LLAMA_METAL
 	MK_CPPFLAGS += -DGGML_USE_METAL
 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
