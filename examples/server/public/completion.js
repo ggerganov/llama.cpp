@@ -34,7 +34,8 @@ export async function* llama(prompt, params = {}, config = {}) {
     headers: {
       'Connection': 'keep-alive',
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream'
+      'Accept': 'text/event-stream',
+      ...(params.api_key ? {'Authorization': `Bearer ${params.api_key}`} : {})
     },
     signal: controller.signal,
   });

@@ -1110,7 +1110,7 @@ static void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, 
         name = ggml_get_name(tensor);
     }
     uint32_t name_len = strlen(name);
-    uint32_t nd = tensor->n_dims;
+    uint32_t nd = ggml_n_dims(tensor);
     uint32_t ne[4] = { (uint32_t)tensor->ne[0],
                        (uint32_t)tensor->ne[1],
                        (uint32_t)tensor->ne[2],

@@ -427,7 +427,7 @@ static void print_row(struct ggml_tensor * probs, int i) {
 }
 
 static void print_matrix(struct ggml_tensor * probs) {
-    assert(probs->n_dims == 2);
+    assert(ggml_is_matrix(probs));
     for (int i = 0; i < probs->ne[1]; ++i) {
         for (int k = 0; k < probs->ne[0]; ++k) {
             float p = get_f32_2d(probs, k, i);
@@ -639,7 +639,7 @@ static void load_vocab(const char *filename, Config *config, struct llama_vocab 
 
 static void convert_weights_ak_to_gg(struct ggml_tensor * gg_weights, const float * karpathy_weights) {
     int ct;
-    switch (gg_weights->n_dims){
+    switch (ggml_n_dims(gg_weights)) {
         case 1:
             ct = 0;
             for (int i0 = 0; i0 < gg_weights->ne[0]; i0++){
