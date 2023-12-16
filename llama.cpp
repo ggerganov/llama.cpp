@@ -6372,7 +6372,7 @@ static int llama_apply_lora_from_file_internal(
         fin.read_raw(&name_len, sizeof(name_len));
         fin.read_raw(&ftype,  sizeof(ftype));
 
-        if (n_dims != 2) {
+        if (n_dims != 1 && n_dims != 2) {
             LLAMA_LOG_ERROR("%s: unsupported tensor dimension %d\n", __func__, n_dims);
             return 1;
         }
