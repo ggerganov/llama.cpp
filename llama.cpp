@@ -1451,6 +1451,9 @@ struct llama_model {
             ggml_cl_free_data(tensors_by_name[i].second);
         }
 #elif defined(GGML_USE_VULKAN)
+        for (size_t i = 0; i < tensors_by_name.size(); ++i) {
+            ggml_vk_free_data(tensors_by_name[i].second);
+        }
         ggml_vk_cleanup();
 #endif
     }
