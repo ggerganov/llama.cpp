@@ -3215,6 +3215,7 @@ Current version: 100
 	const default_oai_base = "https://api.openai.com";
 	const default_claude_base = "https://api.anthropic.com";
 	const default_palm_base = "https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=";
+	const default_gemini_base = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=";
 
 	const a1111_models_endpoint = "/sdapi/v1/sd-models";
     const a1111_options_endpoint = "/sdapi/v1/options";
@@ -6526,6 +6527,7 @@ Current version: 100
 		else if(epchoice==4) //palm endpoint
 		{
 			let desired_palm_key = document.getElementById("custom_palm_key").value.trim();
+			let mdlname = document.getElementById("custom_palm_model").value;
 
 			if(desired_palm_key!="")
 			{
@@ -6535,7 +6537,7 @@ Current version: 100
 				custom_palm_key = desired_palm_key;
 				localsettings.saved_palm_key = custom_palm_key;
 
-				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": "text-bison-001", "count": 1 }];
+				selected_models = [{ "performance": 100.0, "queued": 0.0, "eta": 0, "name": mdlname, "count": 1 }];
 				selected_workers = [];
 				if (perfdata == null) {
 					//generate some fake perf data if horde is offline and using custom endpoint
@@ -8912,7 +8914,7 @@ Current version: 100
 			}
 			else if (custom_palm_key != "")//handle for PaLM
 			{
-				let targetep = default_palm_base + custom_palm_key;
+				let urlbase = default_palm_base;
 				let payload = {"prompt":{"text":submit_payload.prompt},
 				"temperature":submit_payload.params.temperature,
 				"maxOutputTokens": submit_payload.params.max_length,
@@ -8920,6 +8922,75 @@ Current version: 100
 				"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
 				"candidateCount":1};
 
+				if(document.getElementById("custom_palm_model").value=="text-bison-001")
+				{
+					payload.safetySettings = [
+						{
+						"category": "HARM_CATEGORY_TOXICITY",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_UNSPECIFIED",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_VIOLENCE",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_SEXUAL",
+						"threshold": "BLOCK_NONE"
+						}
+					];
+				}
+				else if(document.getElementById("custom_palm_model").value=="gemini-pro")
+				{
+					if(localsettings.opmode==1)
+					{
+						submit_payload.prompt = submit_payload.prompt + " \n ASSISTANT: Here is a continuation of the story: \nASSISTANT:";
+					}
+
+					urlbase = default_gemini_base;
+					payload = {
+					"contents": [
+						{
+						"parts": [
+							{
+							"text": submit_payload.prompt
+							}
+						]
+						}
+					],
+					"safetySettings": [
+						{
+						"category": "HARM_CATEGORY_HARASSMENT",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_HATE_SPEECH",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+						"threshold": "BLOCK_NONE"
+						},
+						{
+						"category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+						"threshold": "BLOCK_NONE"
+						}
+					],
+					"generationConfig": {
+						"temperature":submit_payload.params.temperature,
+						"maxOutputTokens": submit_payload.params.max_length,
+						"topP": submit_payload.params.top_p,
+						"topK": (submit_payload.params.top_k<1?300:submit_payload.params.top_k),
+						"candidateCount":1,
+						"stopSequences": []
+					}
+					};
+				}
+
+				let targetep = urlbase + custom_palm_key;
 				last_request_str = JSON.stringify(payload);
 
 				fetch(targetep, {
@@ -8933,8 +9004,10 @@ Current version: 100
 					.then((response) => response.json())
 					.then((data) => {
 						console.log("sync finished response: " + JSON.stringify(data));
-						if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output != "") {
+						if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].output && data.candidates[0].output != "") {
 							synchro_polled_response = data.candidates[0].output;
+						}else if (custom_palm_key != "" && data.candidates != null && data.candidates.length>0 && data.candidates[0].content && data.candidates[0].content.parts != null && data.candidates[0].content.parts.length>0) {
+							synchro_polled_response = data.candidates[0].content.parts[0].text;
 						}
 						else {
 							//error occurred, maybe captcha failed
@@ -11769,7 +11842,7 @@ Current version: 100
 				<option value="1">OpenAI API</option>
 				<option value="2">Spellbook By Scale API</option>
 				<option value="3">Claude By Anthropic API</option>
-				<option value="4">PaLM By Google API</option>
+				<option value="4">PaLM/Gemini By Google API</option>
 				<option value="5">OpenRouter API</option>
 			</select>
 			</div>
@@ -11898,10 +11971,14 @@ Current version: 100
 				<div class="box-label" title="Rename User and Bot tags to work with claude, force inject them otherwise">Claude Compatibility Rename Fix</div>
 			</div>
 			<div id="palmcustom" class="aidgpopuplistheader anotelabel hidden">
-				Uses PaLM Text Bison by Google.<br><br>
+				Uses Gemini or PaLM Text Bison by Google.<br><br>
 				Note that KoboldAI Lite takes no responsibility for your usage or consequences of this feature.<br><br>
-				<span class="color_green" style="font-weight: bold;">Please input PaLM API Key.</span><br><br>
-				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM API Key" value=""><br>
+				<select style="padding:4px;" class="form-control" id="custom_palm_model">
+					<option value="text-bison-001" selected="selected">text-bison-001</option>
+					<option value="gemini-pro">gemini-pro</option>
+				</select>
+				<span class="color_green" style="font-weight: bold;">Please input Gemini or PaLM API Key.</span><br><br>
+				<input class="form-control" type="text" id="custom_palm_key" placeholder="PaLM/Gemini API Key" value=""><br>
 			</div>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="connect_custom_endpoint()">Ok</button>
