@@ -5520,6 +5520,10 @@ struct llm_build_context {
         inpL = llm_build_inp_embd(ctx0, hparams, batch, model.tok_embd, cb);
         cb(inpL, "inp_embd", -1);
 
+        // inp_pos - contains the positions
+        struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
+        cb(inp_pos, "inp_pos", -1);
+
         // KQ_scale
         struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
         cb(KQ_scale, "KQ_scale", -1);
@@ -5527,10 +5531,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, n_kv, n_tokens, 1);
         cb(KQ_mask, "KQ_mask", -1);
-
-        // inp_pos - contains the positions
-        struct ggml_tensor * inp_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
-        cb(inp_pos, "inp_pos", -1);
 
         // shift the entire K-cache if needed
         if (do_rope_shift) {
@@ -5544,137 +5544,104 @@ struct llm_build_context {
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
-            cb(cur, "attention_norm_0", il);
+            cb(cur, "attention_norm", il);
 
             struct ggml_tensor * attention_norm = cur;
 
             // self-attention
             {
                 // compute Q and K and RoPE them
-                struct ggml_tensor * tmpk = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
-                cb(tmpk, "tmpk", il);
+                struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                cb(Qcur, "Qcur", il);
 
-                struct ggml_tensor * tmpq = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
-                cb(tmpq, "tmpq", il);
-
-                struct ggml_tensor * Kcur = ggml_rope_custom(
-                        ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), inp_pos,
-                        n_embd_head, 2, 0, n_orig_ctx, freq_base, freq_scale,
-                        ext_factor, attn_factor, beta_fast, beta_slow);
+                struct ggml_tensor * Kcur = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
                 cb(Kcur, "Kcur", il);
 
-                struct ggml_tensor * Qcur = ggml_rope_custom(
-                        ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), inp_pos,
+                struct ggml_tensor * Vcur = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
+                cb(Vcur, "Vcur", il);
+
+                Qcur = ggml_rope_custom(
+                        ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos,
                         n_embd_head, 2, 0, n_orig_ctx, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Qcur, "Qcur", il);
 
-                // store key and value to memory
-                {
-                    // compute the transposed [n_tokens, n_embd] V matrix
+                Kcur = ggml_rope_custom(
+                        ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos,
+                        n_embd_head, 2, 0, n_orig_ctx, freq_base, freq_scale,
+                        ext_factor, attn_factor, beta_fast, beta_slow);
+                cb(Kcur, "Kcur", il);
 
-                    struct ggml_tensor * tmpv = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
-                    cb(tmpv, "tmpv", il);
+                llm_build_kv_store(ctx0, hparams, kv_self, gf, Kcur, Vcur, n_ctx, n_tokens, kv_head, cb, il);
 
-                    struct ggml_tensor * Vcur = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, tmpv, n_embd_gqa, n_tokens));
-                    cb(Vcur, "Vcur", il);
+                auto plamo_llm_build_kqv = [](
+                    struct ggml_context * ctx,
+                    const llama_hparams & hparams,
+                   const llama_kv_cache & kv,
+                     struct ggml_tensor * wo,
+                     struct ggml_tensor * q_cur,
+                     struct ggml_tensor * kq_mask,
+                                int64_t   n_ctx,
+                                int32_t   n_tokens,
+                                int32_t   n_kv,
+                     const llm_build_cb & cb,
+                                int       il) {
+                    const int64_t n_embd      = hparams.n_embd;
+                    const int64_t n_head_kv   = hparams.n_head_kv;
+                    const int64_t n_embd_head = hparams.n_embd_head();
+                    const int64_t n_embd_gqa  = hparams.n_embd_gqa();
 
-                    //struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k_l[il])*n_embd_gqa)*(il*n_ctx + kv_head));
-                    struct ggml_tensor * k = ggml_view_1d(ctx0, kv_self.k_l[il], n_tokens*n_embd_gqa, (ggml_element_size(kv_self.k_l[il])*n_embd_gqa)*kv_head);
+                    struct ggml_tensor * q = ggml_permute(ctx, q_cur, 0, 2, 1, 3);
+                    cb(q, "q", il);
+
+                    struct ggml_tensor * k =
+                        ggml_view_3d(ctx, kv.k_l[il],
+                                n_embd_head, n_kv, n_head_kv,
+                                ggml_row_size(kv.k_l[il]->type, n_embd_gqa),
+                                ggml_row_size(kv.k_l[il]->type, n_embd_head),
+                                0);
                     cb(k, "k", il);
 
-                    /*
-                    struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v, n_tokens, n_embd_gqa,
-                            (   n_ctx)*ggml_element_size(kv_self.v),
-                            (il*n_ctx)*ggml_element_size(kv_self.v)*n_embd_gqa + kv_head*ggml_element_size(kv_self.v));
-                    */
-                    struct ggml_tensor * v = ggml_view_2d(ctx0, kv_self.v_l[il], n_tokens, n_embd_gqa,
-                            n_ctx*ggml_element_size(kv_self.v_l[il]),
-                            kv_head*ggml_element_size(kv_self.v_l[il]));
+                    // we should avoid to repeat K but current ggml_mul_mat generates wrong values for grouped query att
+                    struct ggml_tensor * k_repeated = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, k->ne[0], k->ne[1], q->ne[2]);
+                    cb(k_repeated, "k_repeated", il);
+
+                    struct ggml_tensor * kq = ggml_mul_mat(ctx, ggml_repeat(ctx, k, k_repeated), q);
+                    cb(kq, "kq", il);
+
+                    kq = ggml_soft_max_ext(ctx, kq, kq_mask, 1.0f/sqrtf(float(n_embd_head)));
+                    cb(kq, "kq_soft_max_ext", il);
+
+                    // split cached v into n_head heads
+                    struct ggml_tensor * v =
+                        ggml_view_3d(ctx, kv.v_l[il],
+                                n_kv, n_embd_head, n_head_kv,
+                                ggml_element_size(kv.v_l[il])*n_ctx,
+                                ggml_element_size(kv.v_l[il])*n_ctx*n_embd_head,
+                                0);
                     cb(v, "v", il);
 
-                    // important: storing RoPE-ed version of K in the KV cache!
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, Kcur, k));
-                    ggml_build_forward_expand(gf, ggml_cpy(ctx0, Vcur, v));
-                }
+                    // we should avoid to repeat V but current ggml_mul_mat generates wrong values for grouped query att
+                    struct ggml_tensor * v_repeated = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, v->ne[0], v->ne[1], q->ne[2]);
+                    cb(k_repeated, "v_repeated", il);
 
-                struct ggml_tensor * Q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
-                cb(Q, "Q", il);
+                    struct ggml_tensor * kqv = ggml_mul_mat(ctx, ggml_repeat(ctx, v, v_repeated), kq);
+                    cb(kqv, "kqv", il);
 
-                /*
-                struct ggml_tensor * K =
-                    ggml_view_3d(ctx0, kv_self.k,
-                            n_embd_head, n_kv, n_head_kv,
-                            ggml_element_size(kv_self.k)*n_embd_gqa,
-                            ggml_element_size(kv_self.k)*n_embd_head,
-                            ggml_element_size(kv_self.k)*n_embd_gqa*n_ctx*il);
-                */
-                struct ggml_tensor * K =
-                    ggml_view_3d(ctx0, kv_self.k_l[il],
-                            n_embd_head, n_kv, n_head_kv,
-                            ggml_element_size(kv_self.k_l[il])*n_embd_gqa,
-                            ggml_element_size(kv_self.k_l[il])*n_embd_head,
-                            0);
-                cb(K, "K", il);
+                    struct ggml_tensor * kqv_merged = ggml_permute(ctx, kqv, 0, 2, 1, 3);
+                    cb(kqv_merged, "kqv_merged", il);
 
-                // K * Q
-                //struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-                // we should avoid to repeat K but current ggml_mul_mat generates wrong values for grouped query att 
-                struct ggml_tensor * K_repeated = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, K->ne[0], K->ne[1], Q->ne[2]);
-                cb(K_repeated, "K_repeated", il);
-                struct ggml_tensor * KQ = ggml_mul_mat(ctx0, ggml_repeat(ctx0, K, K_repeated), Q);
-                cb(KQ, "KQ", il);
+                    struct ggml_tensor * cur = ggml_cont_2d(ctx, kqv_merged, n_embd, n_tokens);
+                    cb(cur, "kqv_merged_cont", il);
 
-                // KQ_scaled = KQ / sqrt(n_embd_head)
-                // KQ_scaled shape [n_kv, n_tokens, n_head, 1]
-                struct ggml_tensor * KQ_scaled = ggml_scale(ctx0, KQ, KQ_scale);
-                cb(KQ_scaled, "KQ_scaled", il);
+                    cur = ggml_mul_mat(ctx, wo, cur);
+                    return cur;
+                };
 
-                // KQ_masked = mask_past(KQ_scaled)
-                struct ggml_tensor * KQ_masked = ggml_add(ctx0, KQ_scaled, KQ_mask);
-                cb(KQ_masked, "KQ_masked", il);
-
-                // KQ = soft_max(KQ_masked)
-                struct ggml_tensor * KQ_soft_max = ggml_soft_max(ctx0, KQ_masked);
-                cb(KQ_soft_max, "KQ_soft_max", il);
-
-                // split cached V into n_head heads
-                /*
-                struct ggml_tensor * V =
-                    ggml_view_3d(ctx0, kv_self.v,
-                            n_kv, n_embd_head, n_head_kv,
-                            ggml_element_size(kv_self.v)*n_ctx,
-                            ggml_element_size(kv_self.v)*n_ctx*n_embd_head,
-                            ggml_element_size(kv_self.v)*n_ctx*n_embd_gqa*il);
-                */
-                struct ggml_tensor * V =
-                    ggml_view_3d(ctx0, kv_self.v_l[il],
-                            n_kv, n_embd_head, n_head_kv,
-                            ggml_element_size(kv_self.v_l[il])*n_ctx,
-                            ggml_element_size(kv_self.v_l[il])*n_ctx*n_embd_head,
-                            0);
-                cb(V, "V", il);
-
-                //struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ_soft_max);
-                // we should avoid to repeat V but current ggml_mul_mat generates wrong values for grouped query att 
-                struct ggml_tensor * V_repeated = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, V->ne[0], V->ne[1], Q->ne[2]);
-                cb(V_repeated, "V_repeated", il);
-                struct ggml_tensor * KQV = ggml_mul_mat(ctx0, ggml_repeat(ctx0, V, V_repeated), KQ_soft_max);
-                cb(KQV, "KQV", il);
-
-                // KQV_merged = KQV.permute(0, 2, 1, 3)
-                struct ggml_tensor * KQV_merged = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-                cb(KQV_merged, "KQV_merged", il);
-
-                // cur = KQV_merged.contiguous().view(n_embd, n_tokens)
-                cur = ggml_cont_2d(ctx0, KQV_merged, n_embd, n_tokens);
-                cb(cur, "KQV_merged_contiguous", il);
-
-                // projection (no bias)
-                cur = ggml_mul_mat(ctx0,
+                cur = plamo_llm_build_kqv(ctx0, hparams, kv_self,
                         model.layers[il].wo,
-                        cur);
-                cb(cur, "result_wo", il);
+                        Qcur, KQ_mask, n_ctx, n_tokens, n_kv, cb, il);
+                cb(cur, "kqv_out", il);
             }
             struct ggml_tensor * sa_out = cur;
 
