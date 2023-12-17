@@ -650,8 +650,10 @@
             <textarea
                id="chat_input"
                className=${generating.value ? "loading" : null}
-               oninput=${(e) => message.value = e.target.value}
-               onchange=${(e) => message.value = e.target.value}
+               oninput=${(e) => {
+                message.value = e.target.value;  
+                chatMessage.value = "";
+               }}
                onkeypress=${enterSubmits}
                placeholder="Say something..."
                rows=2
@@ -836,6 +838,7 @@
           } else{
             document.getElementById('_prompt').value = selectedValue;
             session.value.prompt = selectedValue; 
+            chatMessage.value = "";
           }
         };
         return (
