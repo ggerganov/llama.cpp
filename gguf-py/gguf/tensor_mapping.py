@@ -149,6 +149,11 @@ class TensorNameMap:
             "model.layers.{bid}.ln2",                                        # yi
         ),
 
+        MODEL_TENSOR.FFN_GATE_INP: (
+            "layers.{bid}.feed_forward.gate",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.gate", # mixtral
+        ),
+
         # Feed-forward up
         MODEL_TENSOR.FFN_UP: (
             "gpt_neox.layers.{bid}.mlp.dense_h_to_4h",                # gptneox
@@ -164,11 +169,21 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.w1",                             # qwen
         ),
 
+        MODEL_TENSOR.FFN_UP_EXP: (
+            "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
+        ),
+
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
-            "model.layers.{bid}.mlp.gate_proj",  # llama-hf refact
-            "layers.{bid}.feed_forward.w1",      # llama-pth
-            "transformer.h.{bid}.mlp.w2",        # qwen
+            "model.layers.{bid}.mlp.gate_proj",           # llama-hf refact
+            "layers.{bid}.feed_forward.w1",               # llama-pth
+            "transformer.h.{bid}.mlp.w2",                 # qwen
+        ),
+
+        MODEL_TENSOR.FFN_GATE_EXP: (
+            "layers.{bid}.feed_forward.experts.{xid}.w1",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w1", # mixtral
         ),
 
         # Feed-forward down
@@ -183,6 +198,11 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.dense",                       # bert
             "transformer.h.{bid}.mlp.fc_out",                         # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h",  # persimmon
+        ),
+
+        MODEL_TENSOR.FFN_DOWN_EXP: (
+            "layers.{bid}.feed_forward.experts.{xid}.w2",           # mixtral
+            "model.layers.{bid}.block_sparse_moe.experts.{xid}.w2", # mixtral
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -213,11 +233,14 @@ class TensorNameMap:
             for tensor, keys in self.block_mappings_cfg.items():
                 if tensor not in MODEL_TENSORS[arch]:
                     continue
-                tensor_name = TENSOR_NAMES[tensor].format(bid = bid)
-                self.mapping[tensor_name] = (tensor, tensor_name)
-                for key in keys:
-                    key = key.format(bid = bid)
-                    self.mapping[key] = (tensor, tensor_name)
+                # TODO: make this configurable
+                n_experts = 8
+                for xid in range(n_experts):
+                    tensor_name = TENSOR_NAMES[tensor].format(bid = bid, xid = xid)
+                    self.mapping[tensor_name] = (tensor, tensor_name)
+                    for key in keys:
+                        key = key.format(bid = bid, xid = xid)
+                        self.mapping[key] = (tensor, tensor_name)
 
     def get_type_and_name(self, key: str, try_suffixes: Sequence[str] = ()) -> tuple[MODEL_TENSOR, str] | None:
         result = self.mapping.get(key)

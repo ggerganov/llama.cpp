@@ -20,5 +20,6 @@ cp -rpv ../ggml/include/ggml/ggml.h         ./ggml.h
 cp -rpv ../ggml/include/ggml/ggml-alloc.h   ./ggml-alloc.h
 cp -rpv ../ggml/include/ggml/ggml-backend.h ./ggml-backend.h
 
-cp -rpv ../ggml/tests/test-opt.cpp    ./tests/test-opt.cpp
-cp -rpv ../ggml/tests/test-grad0.cpp  ./tests/test-grad0.cpp
+cp -rpv ../ggml/tests/test-opt.cpp         ./tests/test-opt.cpp
+cp -rpv ../ggml/tests/test-grad0.cpp       ./tests/test-grad0.cpp
+cp -rpv ../ggml/tests/test-backend-ops.cpp ./tests/test-backend-ops.cpp

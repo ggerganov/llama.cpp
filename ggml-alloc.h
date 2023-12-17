@@ -8,6 +8,7 @@ extern "C" {
 
 struct ggml_backend;
 struct ggml_backend_buffer;
+struct ggml_backend_buffer_type;
 
 //
 // Legacy API
@@ -42,7 +43,7 @@ GGML_API size_t ggml_allocr_alloc_graph(ggml_allocr_t alloc, struct ggml_cgraph 
 // ggml-backend v2 API
 //
 
-// Seperate tensor and graph allocator objects
+// Separate tensor and graph allocator objects
 // This is necessary for multi-backend allocation because the graph allocator needs to use multiple tensor allocators
 // The original API is kept as a wrapper around the new API
 
@@ -79,6 +80,12 @@ GGML_API void   ggml_gallocr_alloc_graph_n(
                     struct ggml_cgraph * graph,
                     struct ggml_hash_set hash_set,
                     ggml_tallocr_t * hash_node_talloc);
+
+
+// Utils
+// Create a buffer and allocate all the tensors in a ggml_context
+GGML_API struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_context * ctx, struct ggml_backend_buffer_type * buft);
+GGML_API struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(struct ggml_context * ctx, struct ggml_backend * backend);
 
 #ifdef  __cplusplus
 }

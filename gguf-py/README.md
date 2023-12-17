@@ -61,7 +61,7 @@ If you want to publish the package manually for any reason, you need to have `tw
 pip install build twine
 ```
 
-Then, folow these steps to release a new version:
+Then, follow these steps to release a new version:
 
 1. Bump the version in `pyproject.toml`.
 2. Build the package:

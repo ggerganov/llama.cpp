@@ -203,8 +203,9 @@ int main(int argc, char ** argv) {
 
             const std::string token_str = llama_token_to_piece(ctx_tgt, id);
 
-            printf("%s", token_str.c_str());
-            fflush(stdout);
+            if (!params.use_color) {
+                printf("%s", token_str.c_str());
+            }
 
             if (id == llama_token_eos(model_tgt)) {
                 has_eos = true;
@@ -236,10 +237,18 @@ int main(int argc, char ** argv) {
                     ++n_past_tgt;
                     ++n_past_dft;
                     ++i_dft;
-
+                    if (params.use_color) {
+                        // Color token according to its origin sequence
+                        printf("\u001b[%dm%s\u001b[37m", (36 - s_keep % 6), token_str.c_str());
+                        fflush(stdout);
+                    }
                     continue;
                 }
             }
+            if (params.use_color) {
+                printf("%s", token_str.c_str());
+            }
+            fflush(stdout);
 
             LOG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
 
@@ -419,7 +428,7 @@ int main(int argc, char ** argv) {
             ++n_past_tgt;
         }
 
-        // the first token is always proposed by the traget model before the speculation loop so we erase it here
+        // the first token is always proposed by the target model before the speculation loop so we erase it here
         for (int s = 0; s < n_seq_dft; ++s) {
             if (!drafts[s].active) {
                 continue;

@@ -1295,10 +1295,6 @@ int main(int argc, char ** argv) {
         opt_cb_data.last_save_iter = opt->iter;
     }
 
-    if (alloc) {
-        ggml_allocr_free(alloc);
-    }
-
     ggml_free(opt->ctx);
     free_train_state(train);
     ggml_free(model.ctx);
