@@ -17,7 +17,7 @@ int main(int argc, char ** argv){
     const int max_ngram_size = 3;
 
     // length of the candidate / draft sequence, if match is found
-    const int n_draft = 10;
+    const int n_draft = params.n_draft;
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
