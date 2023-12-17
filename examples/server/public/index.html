@@ -250,13 +250,15 @@
       }
     }
 
-
-    .mode-chat textarea[name=prompt] {
-      height: 4.5em;
+    textarea {
+      width: 100%;
+      border-color: rgba(135, 135, 135, 0.4);
+      padding: 0.5em;
+      box-sizing: border-box;
     }
-
-    .mode-completion textarea[name=prompt] {
-      height: 10em;
+    textarea[name=prompt] {
+      height: 20em;
+      margin: 1em 0;
     }
 
     [contenteditable] {
@@ -316,12 +318,18 @@
       image_selected: ''
     })
 
+    // state of all prompts
+    const prompts = signal([])
+
+    // state for first messages of custom prompts.
+    const chatMessage = signal("")
+
     const params = signal({
-      n_predict: 400,
-      temperature: 0.7,
+      n_predict: -1,
+      temperature: 1.0,
       repeat_last_n: 256, // 0 = disable penalty, -1 = context size
       repeat_penalty: 1.18, // 1.0 = disabled
-      top_k: 40, // <= 0 to use vocab size
+      top_k: 0, // <= 0 to use vocab size
       top_p: 0.95, // 1.0 = disabled
       min_p: 0.05, // 0 = disabled
       tfs_z: 1.0, // 1.0 = disabled
@@ -625,8 +633,9 @@
 
       const submit = (e) => {
         stop(e);
-        chat(message.value);
+        chat(chatMessage.value || message.value);
         message.value = "";
+        chatMessage.value = "";
       }
 
       const enterSubmits = (event) => {
@@ -639,8 +648,10 @@
         <form onsubmit=${submit}>
           <div>
             <textarea
+               id="chat_input"
                className=${generating.value ? "loading" : null}
                oninput=${(e) => message.value = e.target.value}
+               onchange=${(e) => message.value = e.target.value}
                onkeypress=${enterSubmits}
                placeholder="Say something..."
                rows=2
@@ -786,6 +797,16 @@
         userTemplateAutosave()
       }, [session.value])
 
+      useEffect(()=> {
+        fetch('/prompts.json')
+        .then(res=> res.json())
+        .then(res=> {
+              prompts.value = res;
+              console.log('updated prompts');
+            })
+      },[])
+
+
       const GrammarControl = () => (
         html`
         <details>
@@ -798,16 +819,44 @@
         `
       );
 
-      const PromptControlFieldSet = () => (
-        html`
-        <fieldset>
-          <div>
-            <label htmlFor="prompt">Prompt</label>
-            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
-          </div>
-        </fieldset>
-        `
-      );
+      const PromptControlFieldSet = () => {
+        const regex = /(.*\.) (My(.*))/i;
+        const handlePromptChange = (event) => {
+          const selectedValue = `${event.target.value} \n\n `; 
+          const match = selectedValue.match(regex);
+          if(session.value.type === 'chat' && match){
+            const _prompt = match[1];
+            const _chatMessage = match[2];
+            
+            document.getElementById('_prompt').value = _prompt;
+            session.value.prompt = selectedValue; 
+            
+            document.getElementById('chat_input').value = _chatMessage;
+            chatMessage.value = _chatMessage;
+          } else{
+            document.getElementById('_prompt').value = selectedValue;
+            session.value.prompt = selectedValue; 
+          }
+        };
+        return (
+          html`
+          <fieldset>
+            <div style="display:flex; flex-direction: column">
+              <label htmlFor="prompt">Prompt</label>
+              <select id="promptlist" onchange=${handlePromptChange}>
+                <option>Select a Custom prompt</option>
+                ${prompts.value.map(prompt => {
+                  return html`
+                    <option value="${prompt.prompt}">${prompt.act}</option>
+                  `;
+                })}
+              </select>
+              <textarea id="_prompt" type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession} onchange=${updateSession}/>
+            </div>
+          </fieldset>
+          `
+        );
+      }
 
       const ChatConfigForm = () => (
         html`
