@@ -2414,7 +2414,7 @@ json oaicompat_completion_params_parse(
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
     llama_params["tfs_z"]             = json_value(body, "tfs_z", 0.0);
 
-    if (llama_params.count("grammar") != 0) {
+    if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
