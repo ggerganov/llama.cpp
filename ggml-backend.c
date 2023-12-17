@@ -378,7 +378,6 @@ static void * ggml_backend_cpu_buffer_get_base(ggml_backend_buffer_t buffer) {
 
 static void ggml_backend_cpu_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     free(buffer->context);
-    GGML_UNUSED(buffer);
 }
 
 static void ggml_backend_cpu_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -456,7 +455,7 @@ static bool ggml_backend_cpu_buffer_type_supports_backend(ggml_backend_buffer_ty
 }
 
 ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
-    static struct ggml_backend_buffer_type ggml_backend_buffer_type_cpu = {
+    static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type = {
         /* .iface = */ {
             /* .alloc_buffer     = */ ggml_backend_cpu_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
@@ -466,8 +465,50 @@ ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
         /* .context = */ NULL,
     };
 
-    return &ggml_backend_buffer_type_cpu;
+    return &ggml_backend_cpu_buffer_type;
 }
+
+#ifdef GGML_USE_CPU_HBM
+#include <hbwmalloc.h>
+
+// HBM buffer type
+static void ggml_backend_cpu_hbm_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    hbw_free(buffer->context);
+}
+
+static ggml_backend_buffer_t ggml_backend_cpu_hbm_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    //void * ptr = hbw_malloc(size);
+    void * ptr;
+    int result = hbw_posix_memalign(&ptr, ggml_backend_cpu_buffer_type_get_alignment(buft), size);
+    if (result != 0) {
+        fprintf(stderr, "failed to allocate HBM buffer of size %zu\n", size);
+        return NULL;
+    }
+
+    // FIXME: this is a hack to avoid having to implement a new buffer type
+    ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
+    buffer->buft = buft;
+    buffer->iface.free_buffer = ggml_backend_cpu_hbm_buffer_free_buffer;
+
+    return buffer;
+}
+
+struct ggml_backend_buffer_type_i cpu_backend_hbm_buffer_type_interface = {
+    /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
+    /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
+    /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+    /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
+};
+
+ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type() {
+    static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type_hbm = {
+        /* .iface    = */ cpu_backend_hbm_buffer_type_interface,
+        /* .context  = */ NULL,
+    };
+
+    return &ggml_backend_cpu_buffer_type_hbm;
+}
+#endif
 
 struct ggml_backend_cpu_context {
     int n_threads;
@@ -505,7 +546,7 @@ static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
 
     cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
-    cpu_plan->cgraph = *cgraph;
+    cpu_plan->cgraph = *cgraph; // FIXME: deep copy
 
     if (cpu_plan->cplan.work_size > 0) {
         cpu_plan->cplan.work_data = malloc(cpu_plan->cplan.work_size);
