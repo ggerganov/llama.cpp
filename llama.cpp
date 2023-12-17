@@ -9039,7 +9039,7 @@ struct llama_model * llama_load_model_from_file(
         if (status == -1) {
             LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
         } else if (status == -2) {
-            LLAMA_LOG_INFO("%s, cancelled model load\n", __func__);
+            LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
         }
         delete model;
         return nullptr;
