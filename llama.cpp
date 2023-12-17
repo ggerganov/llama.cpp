@@ -2397,25 +2397,25 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
 
     switch (ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
-        case LLAMA_FTYPE_MOSTLY_F16:  return "mostly F16";
-        case LLAMA_FTYPE_MOSTLY_Q4_0: return "mostly Q4_0";
-        case LLAMA_FTYPE_MOSTLY_Q4_1: return "mostly Q4_1";
+        case LLAMA_FTYPE_MOSTLY_F16:  return "F16";
+        case LLAMA_FTYPE_MOSTLY_Q4_0: return "Q4_0";
+        case LLAMA_FTYPE_MOSTLY_Q4_1: return "Q4_1";
         case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
-                                      return "mostly Q4_1, some F16";
-        case LLAMA_FTYPE_MOSTLY_Q5_0: return "mostly Q5_0";
-        case LLAMA_FTYPE_MOSTLY_Q5_1: return "mostly Q5_1";
-        case LLAMA_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
+                                      return "Q4_1, some F16";
+        case LLAMA_FTYPE_MOSTLY_Q5_0: return "Q5_0";
+        case LLAMA_FTYPE_MOSTLY_Q5_1: return "Q5_1";
+        case LLAMA_FTYPE_MOSTLY_Q8_0: return "Q8_0";
 
         // K-quants
-        case LLAMA_FTYPE_MOSTLY_Q2_K:   return "mostly Q2_K";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_S: return "mostly Q3_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_M: return "mostly Q3_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q3_K_L: return "mostly Q3_K - Large";
-        case LLAMA_FTYPE_MOSTLY_Q4_K_S: return "mostly Q4_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q4_K_M: return "mostly Q4_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "mostly Q5_K - Small";
-        case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "mostly Q5_K - Medium";
-        case LLAMA_FTYPE_MOSTLY_Q6_K:   return "mostly Q6_K";
+        case LLAMA_FTYPE_MOSTLY_Q2_K:   return "Q2_K";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_S: return "Q3_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_M: return "Q3_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q3_K_L: return "Q3_K - Large";
+        case LLAMA_FTYPE_MOSTLY_Q4_K_S: return "Q4_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q4_K_M: return "Q4_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q5_K_S: return "Q5_K - Small";
+        case LLAMA_FTYPE_MOSTLY_Q5_K_M: return "Q5_K - Medium";
+        case LLAMA_FTYPE_MOSTLY_Q6_K:   return "Q6_K";
 
         default: return "unknown, may not work";
     }
@@ -2533,6 +2533,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
+                    case 22: model.type = e_model::MODEL_1B; break;
                     case 26: model.type = e_model::MODEL_3B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = e_model::MODEL_13B; break;
