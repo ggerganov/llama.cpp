@@ -11408,10 +11408,13 @@ static void ggml_compute_forward_rope_f32(
                     }
                 } else {
                     // TODO: this might be wrong for ne0 != n_dims - need double check
-                    // ref:  https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt_neox/modeling_gpt_neox.py#LL251C1-L294C28
+                    //       it seems we have to rope just the first n_dims elements and do nothing with the rest
+                    // ref:  https://github.com/ml-explore/mlx/blob/dc2edc762c797e3b8de50b1dad4dc0a131691033/benchmarks/python/llama_jax_bench.py#L11-L26
                     theta_base *= freq_scale;
-                    for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-                        for (int64_t ic = 0; ic < n_dims; ic += 2) {
+                    for (int64_t ic = 0; ic < ne0; ic += 2) {
+                        if (ic < n_dims) {
+                            const int64_t ib = 0;
+
                             // simplified from `(ib * n_dims + ic) * inv_ndims`
                             float cur_rot = inv_ndims * ic - ib;
 
@@ -11434,6 +11437,14 @@ static void ggml_compute_forward_rope_f32(
 
                             dst_data[0]        = x0*cos_theta - x1*sin_theta;
                             dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
+                        } else {
+                            const int64_t i0 = ic;
+
+                            const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                                  float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+                            dst_data[0] = src[0];
+                            dst_data[1] = src[1];
                         }
                     }
                 }
@@ -11561,10 +11572,13 @@ static void ggml_compute_forward_rope_f16(
                     }
                 } else {
                     // TODO: this might be wrong for ne0 != n_dims - need double check
-                    // ref:  https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt_neox/modeling_gpt_neox.py#LL251C1-L294C28
+                    //       it seems we have to rope just the first n_dims elements and do nothing with the rest
+                    // ref:  https://github.com/ml-explore/mlx/blob/dc2edc762c797e3b8de50b1dad4dc0a131691033/benchmarks/python/llama_jax_bench.py#L11-L26
                     theta_base *= freq_scale;
-                    for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-                        for (int64_t ic = 0; ic < n_dims; ic += 2) {
+                    for (int64_t ic = 0; ic < ne0; ic += 2) {
+                        if (ic < n_dims) {
+                            const int64_t ib = 0;
+
                             // simplified from `(ib * n_dims + ic) * inv_ndims`
                             float cur_rot = inv_ndims * ic - ib;
 
@@ -11587,6 +11601,14 @@ static void ggml_compute_forward_rope_f16(
 
                             dst_data[0]        = GGML_FP32_TO_FP16(x0*cos_theta - x1*sin_theta);
                             dst_data[n_dims/2] = GGML_FP32_TO_FP16(x0*sin_theta + x1*cos_theta);
+                        } else {
+                            const int64_t i0 = ic;
+
+                            const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                                  ggml_fp16_t * dst_data  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+                            dst_data[0] = src[0];
+                            dst_data[1] = src[1];
                         }
                     }
                 }

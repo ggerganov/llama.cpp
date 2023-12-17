@@ -4998,31 +4998,29 @@ static __global__ void rope_neox(
     const int ib = col / n_dims;
     const int ic = col % n_dims;
 
-    // IMPORTANT: consider the case ncols == 80 and n_dims == 32 (phi-2)
-    //            I don't know what we are supposed to compute, because the row is not divisible by n_dims
-    //            this check matches the CPU code, but it is likely wrong as well
-    //            I can't understand the Python code, so if you know what to do here, please fix it
-    //            ref: https://github.com/ml-explore/mlx/blob/dc2edc762c797e3b8de50b1dad4dc0a131691033/benchmarks/python/llama_jax_bench.py#L11-L26
-    if (ncols % n_dims != 0 && ib == ncols/n_dims) {
-        return;
+    if (ib == 0) {
+        const int i  = row*ncols + ib*n_dims + ic/2;
+        const int i2 = row/p_delta_rows;
+
+        float cur_rot = inv_ndims * ic - ib;
+
+        const int p = has_pos ? pos[i2] : 0;
+        const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f);
+
+        float cos_theta, sin_theta;
+        rope_yarn(theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
+
+        const float x0 = x[i + 0];
+        const float x1 = x[i + n_dims/2];
+
+        dst[i + 0]        = x0*cos_theta - x1*sin_theta;
+        dst[i + n_dims/2] = x0*sin_theta + x1*cos_theta;
+    } else {
+        const int i = row*ncols + ib*n_dims + ic;
+
+        dst[i + 0] = x[i + 0];
+        dst[i + 1] = x[i + 1];
     }
-
-    const int i  = row*ncols + ib*n_dims + ic/2;
-    const int i2 = row/p_delta_rows;
-
-    float cur_rot = inv_ndims * ic - ib;
-
-    const int p = has_pos ? pos[i2] : 0;
-    const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f);
-
-    float cos_theta, sin_theta;
-    rope_yarn(theta_base, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
-
-    const float x0 = x[i + 0];
-    const float x1 = x[i + n_dims/2];
-
-    dst[i + 0]        = x0*cos_theta - x1*sin_theta;
-    dst[i + n_dims/2] = x0*sin_theta + x1*cos_theta;
 }
 
 static __global__ void rope_glm_f32(
