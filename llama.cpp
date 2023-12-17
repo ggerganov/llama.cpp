@@ -5611,11 +5611,13 @@ struct llm_build_context {
 
         cur = inpL;
 
-        cur = llm_build_norm(ctx0, cur, hparams,
-                model.output_norm,
-                model.output_norm_b,
-                LLM_NORM, cb, -1);
-        cb(cur, "result_norm", -1);
+        // norm
+        {
+            cur = llm_build_norm(ctx0, cur, hparams,
+                    model.output_norm, NULL,
+                    LLM_NORM_RMS, cb, -1);
+            cb(cur, "result_norm", -1);
+        }
 
         // lm_head
         cur = ggml_mul_mat(ctx0, model.output, cur);
