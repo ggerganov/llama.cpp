@@ -75,6 +75,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.LayerNorm",       # bert
             "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
             "model.layers.{bid}.ln1",                               # yi
+            "model.layers.layers.{bid}.norm",                       # plamo
         ),
 
         # Attention norm 2
@@ -94,26 +95,29 @@ class TensorNameMap:
 
         # Attention query
         MODEL_TENSOR.ATTN_Q: (
-            "model.layers.{bid}.self_attn.q_proj",       # llama-hf
-            "layers.{bid}.attention.wq",                 # llama-pth
-            "encoder.layer.{bid}.attention.self.query",  # bert
-            "transformer.h.{bid}.attn.q_proj",           # gpt-j
+            "model.layers.{bid}.self_attn.q_proj",         # llama-hf
+            "layers.{bid}.attention.wq",                   # llama-pth
+            "encoder.layer.{bid}.attention.self.query",    # bert
+            "transformer.h.{bid}.attn.q_proj",             # gpt-j
+            "model.layers.layers.{bid}.self_attn.q_proj",  # plamo
         ),
 
         # Attention key
         MODEL_TENSOR.ATTN_K: (
-            "model.layers.{bid}.self_attn.k_proj",     # llama-hf
-            "layers.{bid}.attention.wk",               # llama-pth
-            "encoder.layer.{bid}.attention.self.key",  # bert
-            "transformer.h.{bid}.attn.k_proj",         # gpt-j
+            "model.layers.{bid}.self_attn.k_proj",         # llama-hf
+            "layers.{bid}.attention.wk",                   # llama-pth
+            "encoder.layer.{bid}.attention.self.key",      # bert
+            "transformer.h.{bid}.attn.k_proj",             # gpt-j
+            "model.layers.layers.{bid}.self_attn.k_proj",  # plamo
         ),
 
         # Attention value
         MODEL_TENSOR.ATTN_V: (
-            "model.layers.{bid}.self_attn.v_proj",       # llama-hf
-            "layers.{bid}.attention.wv",                 # llama-pth
-            "encoder.layer.{bid}.attention.self.value",  # bert
-            "transformer.h.{bid}.attn.v_proj",           # gpt-j
+            "model.layers.{bid}.self_attn.v_proj",         # llama-hf
+            "layers.{bid}.attention.wv",                   # llama-pth
+            "encoder.layer.{bid}.attention.self.value",    # bert
+            "transformer.h.{bid}.attn.v_proj",             # gpt-j
+            "model.layers.layers.{bid}.self_attn.v_proj",  # plamo
         ),
 
         # Attention output
@@ -128,12 +132,14 @@ class TensorNameMap:
             "encoder.layer.{bid}.attention.output.dense",                # bert
             "transformer.h.{bid}.attn.out_proj",                         # gpt-j
             "language_model.encoder.layers.{bid}.self_attention.dense",  # persimmon
+            "model.layers.layers.{bid}.self_attn.o_proj",                # plamo
         ),
 
         # Rotary embeddings
         MODEL_TENSOR.ATTN_ROT_EMBD: (
-            "model.layers.{bid}.self_attn.rotary_emb.inv_freq",   # llama-hf
-            "layers.{bid}.attention.inner_attention.rope.freqs",  # llama-pth
+            "model.layers.{bid}.self_attn.rotary_emb.inv_freq",        # llama-hf
+            "layers.{bid}.attention.inner_attention.rope.freqs",       # llama-pth
+            "model.layers.layers.{bid}.self_attn.rotary_emb.inv_freq", # plamo
         ),
 
         # Feed-forward norm
@@ -167,6 +173,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.fc_in",                          # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
             "transformer.h.{bid}.mlp.w1",                             # qwen
+            "model.layers.layers.{bid}.mlp.up_proj",                  # plamo
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -179,6 +186,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.gate_proj",           # llama-hf refact
             "layers.{bid}.feed_forward.w1",               # llama-pth
             "transformer.h.{bid}.mlp.w2",                 # qwen
+            "model.layers.layers.{bid}.mlp.gate_proj",    # plamo
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (
@@ -198,6 +206,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.output.dense",                       # bert
             "transformer.h.{bid}.mlp.fc_out",                         # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h",  # persimmon
+            "model.layers.layers.{bid}.mlp.down_proj",                # plamo
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
