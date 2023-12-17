@@ -8,7 +8,7 @@ struct DownloadButton: View {
 
     @State private var status: String
 
-    @State private var downloadTask: URLSessionDataTask?
+    @State private var downloadTask: URLSessionDownloadTask?
     @State private var progress = 0.0
     @State private var observation: NSKeyValueObservation?
 
@@ -32,7 +32,10 @@ struct DownloadButton: View {
     private func download() {
         status = "downloading"
         print("Downloading model \(modelName) from \(modelUrl)")
-        downloadTask = URLSession.shared.dataTask(with: URL(string: modelUrl)!) { data, response, error in
+        guard let url = URL(string: modelUrl) else { return }
+        let fileURL = DownloadButton.getFileURL(filename: filename)
+
+        downloadTask = URLSession.shared.downloadTask(with: url) { temporaryURL, response, error in
             if let error = error {
                 print("Error: \(error.localizedDescription)")
                 return
@@ -43,24 +46,24 @@ struct DownloadButton: View {
                 return
             }
 
-            if let data = data {
-                do {
-                    print("Writing to \(filename)")
-                    let fileURL = DownloadButton.getFileURL(filename: filename)
-                    try data.write(to: fileURL)
+            do {
+                if let temporaryURL = temporaryURL {
+                    try FileManager.default.copyItem(at: temporaryURL, to: fileURL)
+                    print("Writing to \(filename) completed")
 
                     llamaState.cacheCleared = false
 
                     status = "downloaded"
-                    try llamaState.loadModel(modelUrl: fileURL)
-                } catch let err {
-                    print("Error: \(err.localizedDescription)")
                 }
+            } catch let err {
+                print("Error: \(err.localizedDescription)")
             }
         }
+
         observation = downloadTask?.progress.observe(\.fractionCompleted) { progress, _ in
             self.progress = progress.fractionCompleted
         }
+
         downloadTask?.resume()
     }
 
