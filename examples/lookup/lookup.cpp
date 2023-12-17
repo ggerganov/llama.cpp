@@ -19,6 +19,8 @@ int main(int argc, char ** argv){
     // length of the candidate / draft sequence, if match is found
     const int n_draft = 10;
 
+    const bool dump_kv_cache = params.dump_kv_cache;
+
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("lookup", "log"));
     LOG_TEE("Log start\n");
@@ -37,7 +39,7 @@ int main(int argc, char ** argv){
     // tokenize the prompt
     const bool add_bos = llama_should_add_bos_token(model);
     LOG("add_bos tgt: %d\n", add_bos);
-    
+
     std::vector<llama_token> inp;
     inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
 
@@ -69,24 +71,33 @@ int main(int argc, char ** argv){
     int n_predict = 0;
     int n_drafted = 0;
     int n_accept  = 0;
-    
+
     int n_past = inp.size();
 
     bool has_eos = false;
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);
 
-    std::vector<llama_token> draft(n_draft);
+    std::vector<llama_token> draft;
 
     llama_batch batch_tgt = llama_batch_init(params.n_ctx, 0, 1);
 
+    // debug
+    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, 1);
+
     const auto t_dec_start = ggml_time_us();
 
-    while(true){
+    while (true) {
+        // debug
+        if (dump_kv_cache) {
+            llama_kv_cache_view_update(ctx, &kvc_view);
+            dump_kv_cache_view_seqs(kvc_view, 40);
+        }
+
         // print current draft sequence
         LOG("drafted %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, draft).c_str());
 
-        int i_dft  = 0;        
+        int i_dft = 0;
         while (true) {
             // sample from the target model
             llama_token id = llama_sampling_sample(ctx_sampling, ctx, NULL, i_dft);
@@ -120,13 +131,13 @@ int main(int argc, char ** argv){
                 }
                 continue;
             }
-            
+
             if (params.use_color) {
                 printf("%s", token_str.c_str());
-            } 
+            }
             fflush(stdout);
 
-            
+
             LOG("the sampled target token (%d, '%s') did not match, or we ran out of drafted tokens\n", id, token_str.c_str());
 
             draft.clear();
@@ -135,7 +146,7 @@ int main(int argc, char ** argv){
             break;
         }
 
-        if (n_predict > params.n_predict || has_eos) {
+        if ((params.n_predict > 0 && n_predict > params.n_predict) || has_eos) {
             break;
         }
 
@@ -149,9 +160,9 @@ int main(int argc, char ** argv){
         // generate n_pred tokens through prompt lookup
         auto prompt_lookup = [&]() -> void {
             int inp_size = inp.size();
-            for (int ngram_size = max_ngram_size ; ngram_size > 0; --ngram_size){    
+            for (int ngram_size = max_ngram_size ; ngram_size > 0; --ngram_size){
                 const llama_token * ngram = &inp[inp_size - ngram_size];
-                
+
                 for (int i = 0; i <= (int) inp_size - (ngram_size * 2); ++i) {
                     bool match = true;
                     for (int j = 0; j < ngram_size; ++j) {
@@ -164,11 +175,11 @@ int main(int argc, char ** argv){
                     if (match) {
                         const int startIdx = i + ngram_size;
                         const int endIdx = startIdx + n_draft;
-                        if (endIdx < inp_size){
+                        if (endIdx < inp_size) {
                             for (int j = startIdx; j < endIdx; ++j) {
                                 LOG(" - draft candidate %d: %d\n", j, inp[j]);
                                 draft.push_back(inp[j]);
-                                llama_batch_add(batch_tgt, inp[j], n_past + j + 1, { 0 }, true);
+                                llama_batch_add(batch_tgt, inp[j], n_past + (j - startIdx) + 1, { 0 }, true);
                                 ++n_drafted;
                             }
                             return;
@@ -180,7 +191,7 @@ int main(int argc, char ** argv){
         };
 
         prompt_lookup();
-    
+
         llama_decode(ctx, batch_tgt);
         ++n_past;
 
