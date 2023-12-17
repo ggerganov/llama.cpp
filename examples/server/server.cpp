@@ -2699,7 +2699,7 @@ int main(int argc, char **argv)
         }
 
         // API key is invalid or not provided
-        res.set_content("Unauthorized: Invalid API Key", "text/plain");
+        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
         res.status = 401; // Unauthorized
 
         LOG_WARNING("Unauthorized: Invalid API Key", {});
@@ -2714,28 +2714,28 @@ int main(int argc, char **argv)
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.js is found in the public --path
     svr.Get("/index.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
+                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/completion.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/json-schema-to-grammar.mjs", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
@@ -2746,7 +2746,7 @@ int main(int argc, char **argv)
                     { "user_name",      llama.name_user.c_str() },
                     { "assistant_name", llama.name_assistant.c_str() }
                 };
-                res.set_content(data.dump(), "application/json");
+                res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/completion", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
@@ -2760,12 +2760,12 @@ int main(int argc, char **argv)
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop) {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2836,7 +2836,7 @@ int main(int argc, char **argv)
                     }}
                 };
 
-                res.set_content(models.dump(), "application/json");
+                res.set_content(models.dump(), "application/json; charset=utf-8");
             });
 
     // TODO: add mount point without "/v1" prefix -- how?
@@ -2858,10 +2858,10 @@ int main(int argc, char **argv)
 
                         res.set_content(oaicompat_result.dump(-1, ' ', false,
                                             json::error_handler_t::replace),
-                                            "application/json");
+                                            "application/json; charset=utf-8");
                     } else {
                         res.status = 500;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2925,12 +2925,12 @@ int main(int argc, char **argv)
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop)
                     {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2979,11 +2979,11 @@ int main(int argc, char **argv)
     svr.Get("/model.json", [&llama](const httplib::Request &, httplib::Response &res)
             {
                 const json data = llama.get_model_props();
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response &res)
-                { return res.set_content("", "application/json"); });
+                { return res.set_content("", "application/json; charset=utf-8"); });
 
     svr.Post("/tokenize", [&llama](const httplib::Request &req, httplib::Response &res)
             {
@@ -2994,7 +2994,7 @@ int main(int argc, char **argv)
                     tokens = llama.tokenize(body["content"], false);
                 }
                 const json data = format_tokenizer_response(tokens);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/detokenize", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -3008,7 +3008,7 @@ int main(int argc, char **argv)
                 }
 
                 const json data = format_detokenized_response(content);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/embedding", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -3025,7 +3025,7 @@ int main(int argc, char **argv)
                 }
                 const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true, -1);
                 task_result result = llama.next_result(task_id);
-                return res.set_content(result.result_json.dump(), "application/json");
+                return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
             });
 
     svr.set_logger(log_server_request);
@@ -3046,7 +3046,7 @@ int main(int argc, char **argv)
                 {
                     snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
                 }
-                res.set_content(buf, "text/plain");
+                res.set_content(buf, "text/plain; charset=utf-8");
                 res.status = 500;
             });
 
@@ -3054,15 +3054,15 @@ int main(int argc, char **argv)
             {
                 if (res.status == 401)
                 {
-                    res.set_content("Unauthorized", "text/plain");
+                    res.set_content("Unauthorized", "text/plain; charset=utf-8");
                 }
                 if (res.status == 400)
                 {
-                    res.set_content("Invalid request", "text/plain");
+                    res.set_content("Invalid request", "text/plain; charset=utf-8");
                 }
                 else if (res.status == 404)
                 {
-                    res.set_content("File Not Found", "text/plain");
+                    res.set_content("File Not Found", "text/plain; charset=utf-8");
                     res.status = 404;
                 }
             });
