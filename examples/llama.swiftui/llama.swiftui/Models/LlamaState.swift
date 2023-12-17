@@ -50,12 +50,28 @@ class LlamaState: ObservableObject {
             return
         }
 
+        messageLog += "\n"
+        messageLog += "Running benchmark...\n"
         messageLog += "Model info: "
         messageLog += await llamaContext.model_info() + "\n"
-        messageLog += "Running benchmark...\n"
-        await llamaContext.bench() // heat up
-        let result = await llamaContext.bench()
+
+        let t_start = DispatchTime.now().uptimeNanoseconds
+        await llamaContext.bench(pp: 8, tg: 4, pl: 1) // heat up
+        let t_end = DispatchTime.now().uptimeNanoseconds
+
+        let t_heat = Double(t_end - t_start) / 1_000_000_000.0
+        messageLog += "Heat up time: \(t_heat) seconds, please wait...\n"
+
+        // if more than 5 seconds, then we're probably running on a slow device
+        if t_heat > 5.0 {
+            messageLog += "Heat up time is too long, aborting benchmark\n"
+            return
+        }
+
+        let result = await llamaContext.bench(pp: 512, tg: 128, pl: 1, nr: 3)
+
         messageLog += "\(result)"
+        messageLog += "\n"
     }
 
     func clear() async {

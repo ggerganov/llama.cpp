@@ -62,6 +62,14 @@ struct ContentView: View {
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(8)
+
+                Button("Copy") {
+                    UIPasteboard.general.string = llamaState.messageLog
+                }
+                .padding(8)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
             }
 
             VStack {

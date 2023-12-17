@@ -27,6 +27,7 @@ actor LlamaContext {
     private var context: OpaquePointer
     private var batch: llama_batch
     private var tokens_list: [llama_token]
+
     /// This variable is used to store temporarily invalid cchars
     private var temporary_invalid_cchars: [CChar]
 
@@ -195,62 +196,100 @@ actor LlamaContext {
         return new_token_str
     }
 
-    func bench() -> String {
-        let pp = 512
-        let tg = 128
-        let pl = 1
+    func bench(pp: Int, tg: Int, pl: Int, nr: Int = 1) -> String {
+        var pp_avg: Double = 0
+        var tg_avg: Double = 0
 
-        // bench prompt processing
+        var pp_std: Double = 0
+        var tg_std: Double = 0
 
-        llama_batch_clear(&batch)
+        for r in 0..<nr {
+            // bench prompt processing
 
-        let n_tokens = pp
-
-        for i in 0..<n_tokens {
-            llama_batch_add(&batch, 0, Int32(i), [0], false)
-        }
-        batch.logits[Int(batch.n_tokens) - 1] = 1 // true
-
-        llama_kv_cache_clear(context)
-
-        let t_pp_start = ggml_time_us()
-
-        if llama_decode(context, batch) != 0 {
-            print("llama_decode() failed during prompt")
-        }
-
-        let t_pp_end = ggml_time_us()
-
-        // bench text generation
-
-        llama_kv_cache_clear(context)
-
-        let t_tg_start = ggml_time_us()
-
-        for i in 0..<tg {
             llama_batch_clear(&batch)
 
-            for j in 0..<pl {
-                llama_batch_add(&batch, 0, Int32(i), [Int32(j)], true)
+            let n_tokens = pp
+
+            for i in 0..<n_tokens {
+                llama_batch_add(&batch, 0, Int32(i), [0], false)
             }
+            batch.logits[Int(batch.n_tokens) - 1] = 1 // true
+
+            llama_kv_cache_clear(context)
+
+            let t_pp_start = ggml_time_us()
 
             if llama_decode(context, batch) != 0 {
-                print("llama_decode() failed during text generation")
+                print("llama_decode() failed during prompt")
             }
+
+            let t_pp_end = ggml_time_us()
+
+            // bench text generation
+
+            llama_kv_cache_clear(context)
+
+            let t_tg_start = ggml_time_us()
+
+            for i in 0..<tg {
+                llama_batch_clear(&batch)
+
+                for j in 0..<pl {
+                    llama_batch_add(&batch, 0, Int32(i), [Int32(j)], true)
+                }
+
+                if llama_decode(context, batch) != 0 {
+                    print("llama_decode() failed during text generation")
+                }
+            }
+
+            let t_tg_end = ggml_time_us()
+
+            llama_kv_cache_clear(context)
+
+            let t_pp = Double(t_pp_end - t_pp_start) / 1000000.0
+            let t_tg = Double(t_tg_end - t_tg_start) / 1000000.0
+
+            let speed_pp = Double(pp)    / t_pp
+            let speed_tg = Double(pl*tg) / t_tg
+
+            pp_avg += speed_pp
+            tg_avg += speed_tg
+
+            pp_std += speed_pp * speed_pp
+            tg_std += speed_tg * speed_tg
+
+            print("pp \(speed_pp) t/s, tg \(speed_tg) t/s")
         }
 
-        let t_tg_end = ggml_time_us()
+        pp_avg /= Double(nr)
+        tg_avg /= Double(nr)
 
-        llama_kv_cache_clear(context)
+        if nr > 1 {
+            pp_std = sqrt(pp_std / Double(nr - 1) - pp_avg * pp_avg * Double(nr) / Double(nr - 1))
+            tg_std = sqrt(tg_std / Double(nr - 1) - tg_avg * tg_avg * Double(nr) / Double(nr - 1))
+        } else {
+            pp_std = 0
+            tg_std = 0
+        }
 
-        let t_pp = Double(t_pp_end - t_pp_start) / 1000000.0
-        let t_tg = Double(t_tg_end - t_tg_start) / 1000000.0
+        let model_desc     = model_info();
+        let model_size     = String(format: "%.2f GiB", Double(llama_model_size(model)) / 1024.0 / 1024.0 / 1024.0);
+        let model_n_params = String(format: "%.2f B", Double(llama_model_n_params(model)) / 1e9);
+        let backend        = "Metal";
+        let pp_avg_str     = String(format: "%.2f", pp_avg);
+        let tg_avg_str     = String(format: "%.2f", tg_avg);
+        let pp_std_str     = String(format: "%.2f", pp_std);
+        let tg_std_str     = String(format: "%.2f", tg_std);
 
-        let speed_pp = Double(pp)    / t_pp
-        let speed_tg = Double(pl*tg) / t_tg
+        var result = ""
 
-        return String(format: "PP 512 speed: %7.2f t/s\n", speed_pp) +
-               String(format: "TG 128 speed: %7.2f t/s\n", speed_tg)
+        result += String("| model | size | params | backend | test | t/s |\n")
+        result += String("| --- | --- | --- | --- | --- | --- |\n")
+        result += String("| \(model_desc) | \(model_size) | \(model_n_params) | \(backend) | pp \(pp) | \(pp_avg_str) ± \(pp_std_str) |\n")
+        result += String("| \(model_desc) | \(model_size) | \(model_n_params) | \(backend) | tg \(tg) | \(tg_avg_str) ± \(tg_std_str) |\n")
+
+        return result;
     }
 
     func clear() {
