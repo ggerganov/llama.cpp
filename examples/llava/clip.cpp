@@ -514,7 +514,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             ctx_size += padded_size;
             if (verbosity >= 3) {
                 printf("%s: tensor[%d]: n_dims = %d, name = %s, tensor_size=%zu, padded_size=%zu, offset=%zu\n", __func__, i,
-                       cur->n_dims, cur->name, tensor_size, padded_size, offset);
+                       ggml_n_dims(cur), cur->name, tensor_size, padded_size, offset);
             }
         }
     }
@@ -739,7 +739,7 @@ bool clip_image_preprocess(const clip_ctx * ctx, const clip_image_u8 * img, clip
         temp->ny = longer_side;
         temp->size = 3 * longer_side * longer_side;
         temp->data = new uint8_t[temp->size]();
-        uint8_t bc[3] = {122, 116, 104}; // bakground color in RGB from LLaVA
+        uint8_t bc[3] = {122, 116, 104}; // background color in RGB from LLaVA
 
         // fill with background color
         for (size_t i = 0; i < temp->size; i++) {
@@ -962,7 +962,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         }
 
         // quantize only 2D tensors
-        quantize &= (cur->n_dims == 2);
+        quantize &= (ggml_n_dims(cur) == 2);
 
         if (quantize) {
             new_type = type;
@@ -1035,7 +1035,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
             fout.put(0);
         }
 
-        printf("%s: n_dims = %d | quantize=%d | size = %f MB -> %f MB\n", name.c_str(), cur->n_dims, quantize,
+        printf("%s: n_dims = %d | quantize=%d | size = %f MB -> %f MB\n", name.c_str(), ggml_n_dims(cur), quantize,
                orig_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
     }
 
