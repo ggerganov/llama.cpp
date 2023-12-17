@@ -428,7 +428,7 @@ int main(int argc, char ** argv) {
             ++n_past_tgt;
         }
 
-        // the first token is always proposed by the traget model before the speculation loop so we erase it here
+        // the first token is always proposed by the target model before the speculation loop so we erase it here
         for (int s = 0; s < n_seq_dft; ++s) {
             if (!drafts[s].active) {
                 continue;

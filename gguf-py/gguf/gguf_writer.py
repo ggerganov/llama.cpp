@@ -339,6 +339,12 @@ class GGUFWriter:
     def add_clamp_kqv(self, value: float) -> None:
         self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
 
+    def add_expert_count(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
+
+    def add_expert_used_count(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_USED_COUNT.format(arch=self.arch), count)
+
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
