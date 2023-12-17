@@ -31,6 +31,7 @@ struct DownloadButton: View {
 
     private func download() {
         status = "downloading"
+        print("Downloading model \(modelName) from \(modelUrl)")
         downloadTask = URLSession.shared.dataTask(with: URL(string: modelUrl)!) { data, response, error in
             if let error = error {
                 print("Error: \(error.localizedDescription)")
@@ -44,12 +45,12 @@ struct DownloadButton: View {
 
             if let data = data {
                 do {
+                    print("Writing to \(filename)")
                     let fileURL = DownloadButton.getFileURL(filename: filename)
                     try data.write(to: fileURL)
 
                     llamaState.cacheCleared = false
 
-                    print("Downloaded model \(modelName) to \(fileURL)")
                     status = "downloaded"
                     try llamaState.loadModel(modelUrl: fileURL)
                 } catch let err {

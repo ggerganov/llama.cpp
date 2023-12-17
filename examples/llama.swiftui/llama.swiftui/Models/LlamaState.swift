@@ -34,7 +34,6 @@ class LlamaState: ObservableObject {
             return
         }
 
-        messageLog += "Attempting to complete text...\n"
         await llamaContext.completion_init(text: text)
         messageLog += "\(text)"
 
@@ -57,5 +56,14 @@ class LlamaState: ObservableObject {
         await llamaContext.bench() // heat up
         let result = await llamaContext.bench()
         messageLog += "\(result)"
+    }
+
+    func clear() async {
+        guard let llamaContext else {
+            return
+        }
+
+        await llamaContext.clear()
+        messageLog = ""
     }
 }

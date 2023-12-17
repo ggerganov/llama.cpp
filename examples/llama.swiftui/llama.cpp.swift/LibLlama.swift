@@ -30,7 +30,7 @@ actor LlamaContext {
     /// This variable is used to store temporarily invalid cchars
     private var temporary_invalid_cchars: [CChar]
 
-    var n_len: Int32 = 512
+    var n_len: Int32 = 64
     var n_cur: Int32 = 0
 
     var n_decode: Int32 = 0
@@ -241,6 +241,8 @@ actor LlamaContext {
 
         let t_tg_end = ggml_time_us()
 
+        llama_kv_cache_clear(context)
+
         let t_pp = Double(t_pp_end - t_pp_start) / 1000000.0
         let t_tg = Double(t_tg_end - t_tg_start) / 1000000.0
 
@@ -254,11 +256,12 @@ actor LlamaContext {
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
+        llama_kv_cache_clear(context)
     }
 
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
         let utf8Count = text.utf8.count
-        let n_tokens = utf8Count + (add_bos ? 1 : 0)
+        let n_tokens = utf8Count + (add_bos ? 1 : 0) + 1
         let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
         let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, false)
 

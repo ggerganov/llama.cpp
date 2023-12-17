@@ -23,22 +23,26 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            // automatically scroll to bottom of text view
             ScrollView(.vertical, showsIndicators: true) {
                 Text(llamaState.messageLog)
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .onTapGesture {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
             }
 
             TextEditor(text: $multiLineText)
-                .frame(height: 200)
+                .frame(height: 80)
                 .padding()
                 .border(Color.gray, width: 0.5)
 
-            // add two buttons "Send" and "Bench" next to each other
             HStack {
                 Button("Send") {
                     sendText()
                 }
-                .padding()
+                .padding(8)
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(8)
@@ -46,7 +50,15 @@ struct ContentView: View {
                 Button("Bench") {
                     bench()
                 }
-                .padding()
+                .padding(8)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+
+                Button("Clear") {
+                    clear()
+                }
+                .padding(8)
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(8)
@@ -55,20 +67,27 @@ struct ContentView: View {
             VStack {
                 DownloadButton(
                     llamaState: llamaState,
-                    modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q4_0)",
+                    modelName: "TinyLlama-1.1B (Q4_0)",
                     modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
                     filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
                 )
+                .font(.system(size: 12))
+                .padding(.top, 4)
+
                 DownloadButton(
                     llamaState: llamaState,
-                    modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q8_0)",
+                    modelName: "TinyLlama-1.1B (Q8_0)",
                     modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q8_0.gguf?download=true",
                     filename: "tinyllama-1.1b-1t-openorca.Q8_0.gguf"
                 )
+                .font(.system(size: 12))
+
                 Button("Clear downloaded models") {
                     ContentView.cleanupModelCaches()
                     llamaState.cacheCleared = true
                 }
+                .padding(8)
+                .font(.system(size: 12))
             }
         }
         .padding()
@@ -84,6 +103,12 @@ struct ContentView: View {
     func bench() {
         Task {
             await llamaState.bench()
+        }
+    }
+
+    func clear() {
+        Task {
+            await llamaState.clear()
         }
     }
 }
