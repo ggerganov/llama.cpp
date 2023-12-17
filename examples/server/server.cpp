@@ -10,7 +10,8 @@
 // crash the server in debug mode, otherwise send an http 500 error
 #define CPPHTTPLIB_NO_EXCEPTIONS 1
 #endif
-
+// increase max payload length to allow use of larger context size
+#define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
 #include "json.hpp"
 
