@@ -5537,8 +5537,8 @@ struct llm_build_context {
             llm_build_k_shift(ctx0, hparams, cparams, kv_self, gf, LLM_ROPE, n_ctx, n_embd_head, freq_base, freq_scale, cb);
         }
 
-        //for (int il = 0; il < n_layer; ++il) {
-        for (int il = 0; il < 1; ++il) {
+        for (int il = 0; il < n_layer; ++il) {
+        //for (int il = 0; il < 1; ++il) {
 
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
