@@ -2645,6 +2645,9 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
 
 int main(int argc, char **argv)
 {
+#if SERVER_VERBOSE != 1
+    log_disable();
+#endif
     // own arguments required by this example
     gpt_params params;
     server_params sparams;
