@@ -7,9 +7,12 @@
   <title>llama.cpp - chat</title>
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: system-ui;
-      font-size: 90%;
       width: 100%;
     }
 
@@ -128,7 +131,6 @@
     }
 
     code {
-      font-family: monospace;
       padding: 0.1em 0.3em;
       border-radius: 3px;
     }
@@ -188,7 +190,7 @@
       width: 100%;
     }
 
-    button{
+    button {
       padding: 0.5em;
     }
 
@@ -221,15 +223,13 @@
       overflow: auto;
     }
 
-    .response p {
+    .response>p {
       padding: 0.5em;
       margin: 0;
+      margin-bottom: 0.5em;
       border-radius: 0.5em;
     }
 
-    .response p:nth-child(even) {
-      background-color: rgba(242, 242, 242, 0.5);
-    }
 
     header,
     footer {
@@ -256,6 +256,7 @@
       padding: 0.5em;
       box-sizing: border-box;
     }
+
     textarea[name=prompt] {
       height: 20em;
       margin: 1em 0;
@@ -296,6 +297,27 @@
       }
     }
   </style>
+  <script>
+    window.ZeroMdConfig = {
+      markedUrl: 'https://cdn.jsdelivr.net/gh/markedjs/marked@4/marked.min.js',
+      prismUrl: [
+        ['https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js', 'data-manual'],
+        'https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js',
+      ],
+      cssUrls: window.matchMedia("(prefers-color-scheme: light)").matches
+        ? [
+          'https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.0/github-markdown.min.css',
+          'https://cdn.jsdelivr.net/gh/katorlys/prism-theme-github/themes/prism-theme-github-light.css'
+        ]
+        : [
+          'https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.0/github-markdown.min.css',
+          'https://cdn.jsdelivr.net/gh/katorlys/prism-theme-github/themes/prism-theme-github-dark.css'
+        ],
+      // Host styles that apply to each instance
+      hostCss: ':host{display:block;position:relative;contain:content;}:host([hidden]){display:none;}'
+    }
+  </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/zero-md@2.5.3/dist/zero-md.min.js"></script>
 
   <script type="module">
     import {
@@ -647,19 +669,19 @@
       return html`
         <form onsubmit=${submit}>
           <div>
-            <textarea
-               id="chat_input"
-               className=${generating.value ? "loading" : null}
-               oninput=${(e) => {
-                message.value = e.target.value;  
-                chatMessage.value = "";
-               }}
-               onkeypress=${enterSubmits}
-               placeholder="Say something..."
-               rows=2
-               type="text"
-               value="${message}"
-            />
+          <textarea
+          id="chat_input"
+          className=${generating.value ? "loading" : null}
+          oninput=${(e) => {
+                    message.value = e.target.value;
+                    chatMessage.value = "";
+                  }}
+          onkeypress=${enterSubmits}
+          placeholder="Say something..."
+          rows=2
+          type="text"
+          value="${message}"
+          />
           </div>
           <div class="right">
             <button type="submit" disabled=${generating.value}>Send</button>
@@ -799,14 +821,13 @@
         userTemplateAutosave()
       }, [session.value])
 
-      useEffect(()=> {
+      useEffect(() => {
         fetch('/prompts.json')
-        .then(res=> res.json())
-        .then(res=> {
-              prompts.value = res;
-              console.log('updated prompts');
-            })
-      },[])
+          .then(res => res.json())
+          .then(res => {
+            prompts.value = res;
+          })
+      }, [])
 
 
       const GrammarControl = () => (
@@ -824,20 +845,20 @@
       const PromptControlFieldSet = () => {
         const regex = /(.*\.) (My(.*))/i;
         const handlePromptChange = (event) => {
-          const selectedValue = `${event.target.value} \n\n `; 
+          const selectedValue = `${event.target.value} \n\n `;
           const match = selectedValue.match(regex);
-          if(session.value.type === 'chat' && match){
+          if (session.value.type === 'chat' && match) {
             const _prompt = match[1];
             const _chatMessage = match[2];
-            
+
             document.getElementById('_prompt').value = _prompt;
-            session.value.prompt = selectedValue; 
-            
+            session.value.prompt = selectedValue;
+
             document.getElementById('chat_input').value = _chatMessage;
             chatMessage.value = _chatMessage;
-          } else{
+          } else {
             document.getElementById('_prompt').value = selectedValue;
-            session.value.prompt = selectedValue; 
+            session.value.prompt = selectedValue;
             chatMessage.value = "";
           }
         };
@@ -848,11 +869,11 @@
               <label htmlFor="prompt">Prompt</label>
               <select id="promptlist" onchange=${handlePromptChange}>
                 <option>Select a Custom prompt</option>
-                ${prompts.value.map(prompt => {
-                  return html`
+                ${prompts.value.sort((a, b) => a.act.localeCompare(b.act)).map(prompt => {
+            return html`
                     <option value="${prompt.prompt}">${prompt.act}</option>
                   `;
-                })}
+          })}
               </select>
               <textarea id="_prompt" type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession} onchange=${updateSession}/>
             </div>
@@ -1024,19 +1045,7 @@
 
     // poor mans markdown replacement
     const Markdownish = (params) => {
-      const md = params.text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/__(.*?)__/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/_(.*?)_/g, '<em>$1</em>')
-        .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/gim, '<br />');
-      return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
+      return html`<zero-md>  <script type="text/markdown"  dangerouslySetInnerHTML=${{ __html: params.text }} /></zero-md>`;
     };
 
     const ModelGenerationInfo = (params) => {
@@ -1045,7 +1054,7 @@
       }
       return html`
         <span>
-          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second | 
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second |
         </span>
       `
     }
