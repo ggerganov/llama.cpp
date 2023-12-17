@@ -49,7 +49,6 @@
 		8A1C837A2AC328BE0096AF73 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		8A1C837D2AC328BE0096AF73 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		8A39BE092AC7601000BFEB40 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
-		8A3F841F2AC4C824005E2EE8 /* llama-2-7b-chat.Q2_K.gguf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "llama-2-7b-chat.Q2_K.gguf"; sourceTree = "<group>"; };
 		8A3F84232AC4C891005E2EE8 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = llama.swiftui/Resources/models; sourceTree = "<group>"; };
 		8A907F322AC7134E006146EA /* LibLlama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibLlama.swift; sourceTree = "<group>"; };
 		8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaState.swift; sourceTree = "<group>"; };
@@ -149,7 +148,6 @@
 		8A3F84112AC4BD8C005E2EE8 /* models */ = {
 			isa = PBXGroup;
 			children = (
-				8A3F841F2AC4C824005E2EE8 /* llama-2-7b-chat.Q2_K.gguf */,
 			);
 			path = models;
 			sourceTree = "<group>";
