@@ -3,21 +3,23 @@ import Foundation
 @MainActor
 class LlamaState: ObservableObject {
     @Published var messageLog = ""
+    @Published var cacheCleared = false
 
     private var llamaContext: LlamaContext?
-    private var modelUrl: URL? {
+    private var defaultModelUrl: URL? {
         Bundle.main.url(forResource: "ggml-model", withExtension: "gguf", subdirectory: "models")
         // Bundle.main.url(forResource: "llama-2-7b-chat", withExtension: "Q2_K.gguf", subdirectory: "models")
     }
+
     init() {
         do {
-            try loadModel()
+            try loadModel(modelUrl: defaultModelUrl)
         } catch {
             messageLog += "Error!\n"
         }
     }
 
-    private func loadModel() throws {
+    func loadModel(modelUrl: URL?) throws {
         messageLog += "Loading model...\n"
         if let modelUrl {
             llamaContext = try LlamaContext.create_context(path: modelUrl.path())
