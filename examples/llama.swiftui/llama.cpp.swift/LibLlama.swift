@@ -52,8 +52,12 @@ actor LlamaContext {
 
     static func create_context(path: String) throws -> LlamaContext {
         llama_backend_init(false)
-        let model_params = llama_model_default_params()
+        var model_params = llama_model_default_params()
 
+#if targetEnvironment(simulator)
+        model_params.n_gpu_layers = 0
+        print("Running on simulator, force use n_gpu_layers = 0")
+#endif
         let model = llama_load_model_from_file(path, model_params)
         guard let model else {
             print("Could not load model at \(path)")
