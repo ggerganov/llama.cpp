@@ -7066,6 +7066,7 @@ inline void ggml_cuda_op_upscale(
 
     (void) src1;
     (void) dst;
+    (void) src1_dd;
 }
 
 inline void ggml_cuda_op_pad(
@@ -7082,6 +7083,7 @@ inline void ggml_cuda_op_pad(
 
     (void) src1;
     (void) dst;
+    (void) src1_dd;
 }
 
 inline void ggml_cuda_op_rms_norm(
@@ -7387,7 +7389,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
     const int compute_capability = g_compute_capabilities[id];
 
-    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1]) {
+    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
         half * src0_as_f16 = nullptr;
         size_t src0_as = 0;
