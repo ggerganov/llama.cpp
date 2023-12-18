@@ -666,6 +666,16 @@
         }
       }
 
+      const rephraseChat = (e) => {
+        e.preventDefault();
+        const _transcript = session.value.transcript;
+        _transcript.pop();
+        const _chatMsg = _transcript.pop();
+        transcriptUpdate(_transcript);
+        if (typeof (_chatMsg[1]) === 'string')
+          message.value = _chatMsg[1];
+      }
+
       return html`
         <form onsubmit=${submit}>
           <div>
@@ -688,6 +698,7 @@
             <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
             <button onclick=${reset}>Reset</button>
+            <button onclick=${rephraseChat}>Rephrase last message</button>
           </div>
         </form>
       `
