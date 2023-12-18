@@ -6184,7 +6184,7 @@ static int llama_decode_internal(
             logits_out.resize(n_vocab);
             memcpy(logits_out.data(), (float *) ggml_get_data(res) + (n_vocab*(n_tokens - 1)), sizeof(float)*n_vocab);
 #ifndef NDEBUG
-            logits_valid[n_tokens - 1] = true;
+            logits_valid[0] = true;
 #endif
         }
     }
