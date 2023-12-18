@@ -7378,8 +7378,6 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
     const int64_t row_diff = row_high - row_low;
 
-    // TODO: handle dst->op_params[0] != GGML_PREC_DEFAULT
-
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
