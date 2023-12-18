@@ -96,3 +96,33 @@ Several quantization methods are supported. They differ in the resulting model d
 |AWQ-LLama2 7B| ms/tok @ 4th |     xxx|    xxx |    xxx |    xxx |
 |AWQ-LLama2 7B| ms/tok @ 8th |     xxx|     xx |     xx |     xx |
 |AWQ-LLama2 7B| bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
+
+
+### Mistral 7B v0.1
+Build with CuBLAS
+
+#### Memory/Disk Requirements
+
+| Model |     Original  |     AWQ-4bit  | 
+|------:|--------------:|--------------:|
+|  fp16 |     12.853 GB |     12.853 GB |
+|  q4_0 |     3.647  GB |     3.647  GB |
+|  q4_1 |     4.041  GB |     4.041  GB |
+|  q2_k |     2.649  GB |     2.649  GB |
+
+#### Quantization
+
+Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+| Model        | Measure      | F16    | Q4_0   | Q4_1   | Q2_K   |
+|-------------:|--------------|-------:|-------:|-------:|-------:|
+|Mistral 7B    | perplexity   | 5.6931 | 5.8202 | 5.8268 | 6.1645 |
+|Mistral 7B    | file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
+|Mistral 7B    | ms/tok @ 4th |    xxx |     xx |     xx |     xx |
+|Mistral 7B    | ms/tok @ 8th |    xxx |     xx |     xx |     xx |
+|Mistral 7B    | bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
+|AWQ-Mistral 7B| perplexity   | 5.6934 | 5.8020 | 5.7691 | 6.0426 |
+|AWQ-Mistral 7B| file size    |  12.9G  |   3.5G |   3.9G |   2.7G |
+|AWQ-Mistral 7B| ms/tok @ 4th |     xxx|    xxx |    xxx |    xxx |
+|AWQ-Mistral 7B| ms/tok @ 8th |     xxx|     xx |     xx |     xx |
+|AWQ-Mistral 7B| bits/weight  |   16.0 |    4.5 |    5.0 |    2.6 |
