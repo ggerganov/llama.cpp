@@ -131,6 +131,23 @@ function gg_sum_ctest_release {
     gg_printf '```\n'
 }
 
+function gg_run_ctest_with_model {
+    cd ${SRC}
+    set -e
+    (time ctest --output-on-failure -L model) 2>&1 | tee -a $OUT/${ci}-ctest_with_model.log
+    set +e
+}
+
+function gg_sum_ctest_with_model {
+    gg_printf '### %s\n\n' "${ci}"
+
+    gg_printf 'Runs ctest with model files\n'
+    gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
+    gg_printf '```\n'
+    gg_printf '%s\n' "$(cat $OUT/${ci}-ctest_with_model.log)"
+    gg_printf '```\n'
+}
+
 # open_llama_3b_v2
 
 function gg_run_open_llama_3b_v2 {
@@ -508,6 +525,7 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
         else
             test $ret -eq 0 && gg_run open_llama_7b_v2
         fi
+        test $ret -eq 0 && gg_run ctest_with_model
     fi
 fi
 
