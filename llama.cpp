@@ -1937,7 +1937,7 @@ namespace GGUFMeta {
                 target = override->bool_value;
                 return true;
             }
-            return true;
+            return false;
         }
 
         template<typename OT>
