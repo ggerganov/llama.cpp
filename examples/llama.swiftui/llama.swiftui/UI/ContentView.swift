@@ -75,20 +75,47 @@ struct ContentView: View {
             VStack {
                 DownloadButton(
                     llamaState: llamaState,
-                    modelName: "TinyLlama-1.1B (Q4_0)",
+                    modelName: "TinyLlama-1.1B (Q4_0, 0.6 GiB)",
                     modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
                     filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
                 )
                 .font(.system(size: 12))
                 .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 DownloadButton(
                     llamaState: llamaState,
-                    modelName: "TinyLlama-1.1B (Q8_0)",
+                    modelName: "TinyLlama-1.1B (Q8_0, 1.1 GiB)",
                     modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q8_0.gguf?download=true",
                     filename: "tinyllama-1.1b-1t-openorca.Q8_0.gguf"
                 )
                 .font(.system(size: 12))
+
+                DownloadButton(
+                    llamaState: llamaState,
+                    modelName: "Phi-2.7B (Q4_0, 1.6 GiB)",
+                    modelUrl: "https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true",
+                    filename: "phi-2-q4_0.gguf"
+                )
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                DownloadButton(
+                    llamaState: llamaState,
+                    modelName: "Phi-2.7B (Q8_0, 2.8 GiB)",
+                    modelUrl: "https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q8_0.gguf?download=true",
+                    filename: "phi-2-q8_0.gguf"
+                )
+                .font(.system(size: 12))
+
+                DownloadButton(
+                    llamaState: llamaState,
+                    modelName: "Mistral-7B-v0.1 (Q4_0, 3.8 GiB)",
+                    modelUrl: "https://huggingface.co/TheBloke/Mistral-7B-v0.1-GGUF/resolve/main/mistral-7b-v0.1.Q4_0.gguf?download=true",
+                    filename: "mistral-7b-v0.1.Q4_0.gguf"
+                )
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button("Clear downloaded models") {
                     ContentView.cleanupModelCaches()
