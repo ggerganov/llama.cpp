@@ -93,12 +93,20 @@ struct ContentView: View {
 
                 DownloadButton(
                     llamaState: llamaState,
+                    modelName: "TinyLlama-1.1B (F16, 2.2 GiB)",
+                    modelUrl: "https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b/ggml-model-f16.gguf?download=true",
+                    filename: "tinyllama-1.1b-f16.gguf"
+                )
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                DownloadButton(
+                    llamaState: llamaState,
                     modelName: "Phi-2.7B (Q4_0, 1.6 GiB)",
                     modelUrl: "https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf?download=true",
                     filename: "phi-2-q4_0.gguf"
                 )
                 .font(.system(size: 12))
-                .frame(maxWidth: .infinity, alignment: .leading)
 
                 DownloadButton(
                     llamaState: llamaState,
@@ -107,6 +115,7 @@ struct ContentView: View {
                     filename: "phi-2-q8_0.gguf"
                 )
                 .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 DownloadButton(
                     llamaState: llamaState,
@@ -115,7 +124,6 @@ struct ContentView: View {
                     filename: "mistral-7b-v0.1.Q4_0.gguf"
                 )
                 .font(.system(size: 12))
-                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button("Clear downloaded models") {
                     ContentView.cleanupModelCaches()
