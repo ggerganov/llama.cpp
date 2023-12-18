@@ -108,6 +108,8 @@
 // max batch size to use MMQ kernels when tensor cores are available
 #define MMQ_MAX_BATCH_SIZE 32
 
+__constant__ float dev_sparse_threshold;
+
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
 
@@ -4483,7 +4485,7 @@ static __global__ void dequantize_mul_mat_axpy_sparse(const void * __restrict__ 
     //     printf("row in gpu %d cols %d, value %d %d %d\n", id, ncols, *d, *(d+1), *(d+4095));
     // }
     // int id = row;
-    if (idx[id] < 0.0f) {
+    if (idx[id] < dev_sparse_threshold) {
         return;
     }
 
@@ -4552,12 +4554,7 @@ static __global__ void dequantize_mul_mat_axpy_sparse_batch(const void * __restr
         return;
     }
     int id = lst[row];
-    // int id = row;
-    // if (idx[id] < 0.0f) {
-    //     return;
-    // }
     const int bid = blockIdx.y;
-    // if (bid == 0) global_lock = 0;
 
     extern __shared__ float shared_dst[]; // TODO:dynamic
 
@@ -4578,7 +4575,7 @@ static __global__ void dequantize_mul_mat_axpy_sparse_batch(const void * __restr
     // __syncthreads();
     for (int col_id = 0; col_id < src1_ncols; col_id++) {
         __syncthreads();
-        if (loop_idx[id] < 0.0f) {
+        if (loop_idx[id] < dev_sparse_threshold) {
             loop_dst += ncols;
             loop_idx += src1_ne0;
             loop_y += src1_ne0;
@@ -4640,7 +4637,7 @@ static __global__ void dequantize_axpy_sparse(const void * __restrict__ vx, cons
         return;
     }
     int id = lst[row];
-    if (idx[id] < 0.0f) {
+    if (idx[id] < dev_sparse_threshold) {
         return;
     }
 
@@ -4689,8 +4686,7 @@ static __global__ void dequantize_mul_mat_vec_sparse(const void * __restrict__ v
         return;
     }
     int id = lst[row];
-    // int id = row;
-    if (idx[id] < 0.0f) {
+    if (idx[id] < dev_sparse_threshold) {
         return;
     }
 
@@ -4782,7 +4778,7 @@ static __global__ void dequantize_mul_mat_batch_sparse(const void * __restrict__
     {
         __syncthreads();
         tmp = 0.0f;
-        if (loop_idx[id] < 0.0f)
+        if (loop_idx[id] < dev_sparse_threshold)
         {
             loop_dst += dst_ne0;
             loop_idx += dst_ne0;
@@ -9618,3 +9614,6 @@ ggml_backend_t ggml_backend_cuda_init() {
     return cuda_backend;
 }
 
+void ggml_cuda_set_device_constants(float sparse_pred_threshold) {
+    CUDA_CHECK(cudaMemcpyToSymbol(dev_sparse_threshold, &sparse_pred_threshold, sizeof(float)));
+}

@@ -93,6 +93,13 @@
 
 #define LLAMA_MAX_NODES 4096
 
+// 
+// global variables
+// 
+
+// sparsity threshold for sparse matrix multiplication prediction
+float sparse_pred_threshold = 0.;
+
 //
 // logging
 //
@@ -257,6 +264,8 @@ enum llm_kv {
     LLM_KV_TOKENIZER_PAD_ID,
     LLM_KV_TOKENIZER_HF_JSON,
     LLM_KV_TOKENIZER_RWKV,
+
+    LLM_KV_SPARSE_THRESHOLD,
 };
 
 static std::map<llm_kv, std::string> LLM_KV_NAMES = {
@@ -305,6 +314,8 @@ static std::map<llm_kv, std::string> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_PAD_ID,              "tokenizer.ggml.padding_token_id"   },
     { LLM_KV_TOKENIZER_HF_JSON,             "tokenizer.huggingface.json"        },
     { LLM_KV_TOKENIZER_RWKV,                "tokenizer.rwkv.world"              },
+
+    { LLM_KV_SPARSE_THRESHOLD,              "powerinfer.sparse_threshold" },
 };
 
 struct LLM_KV {
@@ -1150,6 +1161,9 @@ struct llama_hparams {
 
     float f_clamp_kqv;
     float f_max_alibi_bias;
+    
+    // sparse predictor threshold if sparse inference is enabled
+    float sparse_pred_threshold = atof(getenv("LLAMA_SPARSE_PRED_THRESHOLD") ?: "0.0");
 
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only  != other.vocab_only)  return true;
@@ -2220,6 +2234,11 @@ static void llm_load_hparams(
         // gpt-j n_rot = rotary_dim
     }
 
+    if (gguf_get_sparse_deriv(ctx)) {
+        // read sparse threshold override if sparse deriv is enabled
+        GGUF_GET_KEY(ctx, hparams.sparse_pred_threshold, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_SPARSE_THRESHOLD));
+    }
+
     // arch-specific KVs
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -2607,6 +2626,9 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.special_sep_id != -1) { LLAMA_LOG_INFO( "%s: SEP token = %d '%s'\n", __func__, vocab.special_sep_id, vocab.id_to_token[vocab.special_sep_id].text.c_str() ); }
     if (vocab.special_pad_id != -1) { LLAMA_LOG_INFO( "%s: PAD token = %d '%s'\n", __func__, vocab.special_pad_id, vocab.id_to_token[vocab.special_pad_id].text.c_str() ); }
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token  = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
+
+    // sparse inference
+    LLAMA_LOG_INFO("%s: sparse_pred_threshold = %.2f\n", __func__, hparams.sparse_pred_threshold);
 }
 
 
@@ -2808,7 +2830,7 @@ struct llama_augmentation_model_loader {
             return NULL;
         }
         // allocate and copy selected weights to gpu
-        #ifdef GGML_USE_CUBLAS
+#ifdef GGML_USE_CUBLAS
         int64_t row_len = src->ne[0];
         int64_t gpu_rows = gpu_bucket->ne[0];
         if (gpu_rows == 0)
@@ -2841,10 +2863,9 @@ struct llama_augmentation_model_loader {
         ggml_set_no_alloc(aux_ctx, false);
 
         return gpu_dst;
-        #else
-            printf("As you do not support CUDA. Split to GPU is not allowed.\n");
+#else
         return NULL;
-        #endif
+#endif
     }
 
     void slice_ffn_mat_to_gpu(llama_layer & layer) {
@@ -2882,22 +2903,11 @@ struct llama_augmentation_model_loader {
         const int64_t t_start_aug_us = ggml_time_us();
         std::vector<uint8_t> work_buffer;
 
-        // transpose ffn_down to use axpy
-        // ggml_cgraph * tmp_transpose_gf = ggml_new_graph(aux_ctx);
-        // for (llama_layer &model_layer : model -> layers) {
-        //     // gpu_w2 transpose load
-        //     ggml_tensor * ffn_down_t = ggml_cont(aux_ctx, ggml_transpose(aux_ctx, model_layer.ffn_down));
-        //     ggml_build_forward_expand(tmp_transpose_gf, ffn_down_t);
-        //     model_layer.ffn_down_t = ffn_down_t;
-        //     LLAMA_LOG_INFO(".");
-        // }
-        // ggml_graph_compute_helper(work_buffer, tmp_transpose_gf, 2);
-        // for (llama_layer &model_layer : model -> layers) {
-        //     model_layer.ffn_down_t->op = GGML_OP_NONE;
-        //     model_layer.ffn_down_t->src[0] = NULL;
-        //     model_layer.ffn_down_t->src[1] = NULL;
-        //     model_layer.ffn_down_t->src[2] = NULL;
-        // }
+        // Set sparsity threshold via global virables
+        sparse_pred_threshold = model->hparams.sparse_pred_threshold;
+#if defined (GGML_USE_CUBLAS)
+        ggml_cuda_set_device_constants(model->hparams.sparse_pred_threshold);
+#endif
 
         // load gpu_idx and slice mat to gpu
         for (llama_layer &model_layer : model -> layers) {

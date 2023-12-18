@@ -2197,6 +2197,12 @@ extern "C" {
     GGML_API int ggml_cpu_has_vsx        (void);
 
     //
+    // global variables
+    // 
+    // TODO: these should be moved to the context
+    extern float sparse_pred_threshold;
+
+    //
     // Internal types and functions exposed for tests and benchmarks
     //
 

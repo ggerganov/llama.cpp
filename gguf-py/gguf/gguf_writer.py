@@ -399,6 +399,9 @@ class GGUFWriter:
     def add_add_eos_token(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_EOS, value)
 
+    def add_sparse_threshold(self, value: float) -> None:
+        self.add_float32(Keys.PowerInfer.SPARSE_THRESHOLD, value)
+
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
         if not skip_pack_prefix:

@@ -70,6 +70,9 @@ class Keys:
         ADD_EOS    = "tokenizer.ggml.add_eos_token"
         HF_JSON    = "tokenizer.huggingface.json"
         RWKV       = "tokenizer.rwkv.world"
+    
+    class PowerInfer:
+        SPARSE_THRESHOLD = "powerinfer.sparse_threshold"
 
 
 #

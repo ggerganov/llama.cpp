@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import dataclasses
 import enum
 import faulthandler
 import functools
@@ -139,6 +140,28 @@ GGML_FILE_TYPE_TO_DATA_TYPE: dict[GGMLFileType, DataType] = {
 #
 
 @dataclass
+class PredictorParams:
+    sparse_threshold: float | None = None
+
+    @staticmethod
+    def loadPredictorJson(model: LazyModel, config_path: Path) -> PredictorParams:
+        config = json.load(open(config_path))
+        return PredictorParams(
+            sparse_threshold = config.get("sparse_threshold"),
+        )
+
+    @staticmethod
+    def load(model_plus: ModelPlus) -> PredictorParams:
+        config_path   = model_plus.paths[0].parent / "config.json"
+
+        if config_path.exists():
+            params = PredictorParams.loadPredictorJson(model_plus.model, config_path)
+        else:
+            params = PredictorParams()
+
+        return params
+
+@dataclass
 class Params:
     n_vocab:    int
     n_embd:     int
@@ -159,6 +182,9 @@ class Params:
 
     # path to the directory containing the model files
     path_model: Path | None = None
+
+    # MLP predictor parameters
+    predictor_params: PredictorParams = dataclasses.field(default_factory=PredictorParams)
 
     @staticmethod
     def guessed(model: LazyModel) -> Params:
@@ -843,6 +869,9 @@ class OutputFile:
         if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
+        if params.predictor_params.sparse_threshold is not None:
+            self.gguf.add_sparse_threshold(params.predictor_params.sparse_threshold)
+
     def add_meta_vocab(self, vocab: Vocab) -> None:
         tokens = []
         scores = []
@@ -1181,10 +1210,13 @@ def main(args_in: list[str] | None = None) -> None:
 
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
+        params = Params.load(model_plus)
         mlp_predictor_plus = load_mlp_model(args.mlp_model)
+        params.predictor_params = PredictorParams.load(mlp_predictor_plus)
         model_plus = merge_multifile_models([model_plus, mlp_predictor_plus])
     else:
         model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
+        params = Params.load(model_plus)
 
     if args.dump:
         do_dump_model(model_plus)
@@ -1193,7 +1225,6 @@ def main(args_in: list[str] | None = None) -> None:
     if args.bigendian:
         endianess = gguf.GGUFEndian.BIG
 
-    params = Params.load(model_plus)
     if params.n_ctx == -1:
         if args.ctx is None:
             raise Exception("The model doesn't have a context size, and you didn't specify one with --ctx\n"
