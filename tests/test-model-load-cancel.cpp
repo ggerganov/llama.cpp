@@ -4,16 +4,16 @@
 #include <cstdlib>
 
 int main(void) {
-    auto model_path = "models/7B/ggml-model-f16.gguf";
-    auto file = fopen(model_path, "r");
+    const auto * model_path = "models/7B/ggml-model-f16.gguf";
+    auto * file = fopen(model_path, "r");
 
     if (file == nullptr) {
         fprintf(stderr, "no model at '%s' found\n", model_path);
         return EXIT_FAILURE;
-    } else {
-        fprintf(stderr, "using '%s'\n", model_path);
-        fclose(file);
     }
+
+    fprintf(stderr, "using '%s'\n", model_path);
+    fclose(file);
 
     llama_backend_init(false);
     auto params = llama_model_params{};
