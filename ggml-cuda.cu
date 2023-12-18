@@ -8419,8 +8419,8 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
         cu_compute_type = CUBLAS_COMPUTE_32F;
         cu_data_type    = CUDA_R_32F;
 
-        alpha = (const char *) &alpha_f32;
-        beta  = (const char *) &beta_f32;
+        alpha = &alpha_f32;
+        beta  = &beta_f32;
     }
 
     GGML_ASSERT(ne12 % ne02 == 0);
