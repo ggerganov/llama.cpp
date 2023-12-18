@@ -7,8 +7,8 @@
 - [x] LLaMA 2 🦙🦙
 - [X] MPT
 - [X] Mistral AI v0.1
-- [] Bloom
-- [] Mixtral MoE
+- [ ] Bloom
+- [ ] Mixtral MoE
 
 
 ## Contents
