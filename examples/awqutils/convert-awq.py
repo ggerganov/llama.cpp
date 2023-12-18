@@ -25,7 +25,7 @@ from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, TypeVar
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor
-from awqutils.apply_awq import add_scale_weights
+from apply_awq import add_scale_weights
 from transformers import AutoModelForCausalLM, AutoConfig
 
 
@@ -1158,11 +1158,7 @@ def main(args_in: list[str] | None = None) -> None:
 
     args = parser.parse_args(args_in)
     if args.awq_path and args.tmp_model_path:
-        config = AutoConfig.from_pretrained(args.model, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(
-                args.model, config=config, trust_remote_code=True)
-        model.eval()
-        add_scale_weights(model, args.model, args.awq_path, args.tmp_model_path)
+        add_scale_weights(str(args.model), str(args.awq_path), str(args.tmp_model_path))
         args.model = args.tmp_model_path
     
     if args.dump_single:

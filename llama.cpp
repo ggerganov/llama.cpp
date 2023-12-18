@@ -341,6 +341,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_GATE,
     LLM_TENSOR_FFN_DOWN,
     LLM_TENSOR_FFN_UP,
+    LLM_TENSOR_FFN_ACT,
     LLM_TENSOR_FFN_NORM,
     LLM_TENSOR_ATTN_Q_NORM,
     LLM_TENSOR_ATTN_K_NORM,
@@ -453,6 +454,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            {LLM_TENSOR_FFN_ACT, "blk.%d.ffn.act"},
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
@@ -1271,6 +1273,7 @@ struct llama_layer {
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
     struct ggml_tensor * ffn_up_b;   // b3
+    struct ggml_tensor *ffn_act;
 };
 
 struct llama_kv_cell {
@@ -3420,6 +3423,7 @@ static void llm_load_tensors(
                         layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
                         layer.ffn_down = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+                        layer.ffn_act = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, backend);
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
@@ -3429,6 +3433,7 @@ static void llm_load_tensors(
                                 ggml_nbytes(layer.wo)        +
                                 ggml_nbytes(layer.ffn_norm)  +
                                 ggml_nbytes(layer.ffn_down)  +
+                                ggml_nbytes(layer.ffn_act) +
                                 ggml_nbytes(layer.ffn_up);
                         }
                     }
@@ -3672,6 +3677,7 @@ enum llm_rope_type {
 enum llm_ffn_op_type {
     LLM_FFN_SILU,
     LLM_FFN_GELU,
+    LLM_FFN_GELU_ACT,
     LLM_FFN_RELU,
     LLM_FFN_RELU_SQR,
 };
@@ -3839,6 +3845,7 @@ static struct ggml_tensor * llm_build_ffn(
          struct ggml_tensor * gate_b,
          struct ggml_tensor * down,
          struct ggml_tensor * down_b,
+         struct ggml_tensor *act_scales,
             llm_ffn_op_type   type_op,
           llm_ffn_gate_type   type_gate,
          const llm_build_cb & cb,
@@ -3889,6 +3896,16 @@ static struct ggml_tensor * llm_build_ffn(
                 cur = ggml_relu(ctx, cur);
                 cb(cur, "ffn_relu", il);
             } break;
+        case LLM_FFN_GELU_ACT:
+            {
+                cur = ggml_gelu(ctx, cur);
+                cb(cur, "ffn_relu", il);
+                struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
+                cb(repeat, "ffn_repeat(scales)", il);
+                cur = ggml_div(ctx, cur, repeat);
+                cb(cur, "ffn_div(gelu)", il);
+            }
+            break;
         case LLM_FFN_RELU_SQR:
             {
                 cur = ggml_relu(ctx, cur);
@@ -4194,6 +4211,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4314,6 +4332,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4432,6 +4451,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4540,6 +4560,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4748,6 +4769,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_RELU_SQR, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4838,6 +4860,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4937,6 +4960,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5031,7 +5055,8 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, NULL,
-                        LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
+                        model.layers[il].ffn_act,
+                        LLM_FFN_GELU_ACT, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
 
@@ -5143,6 +5168,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5259,6 +5285,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5441,6 +5468,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_gate",                   OFFLOAD_FUNC     },
     { "ffn_gate_b",                 OFFLOAD_FUNC     },
     { "ffn_gate_par",               OFFLOAD_FUNC     },
+    {"ffn_act",                     OFFLOAD_FUNC     },
     { "ffn_down",                   OFFLOAD_FUNC     },
     { "ffn_down_b",                 OFFLOAD_FUNC     },
     { "ffn_out",                    OFFLOAD_FUNC     },

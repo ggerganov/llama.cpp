@@ -163,6 +163,11 @@ class TensorNameMap:
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
             "transformer.h.{bid}.mlp.w1",                             # qwen
         ),
+        
+        # Awq-activation gate
+        MODEL_TENSOR.FFN_ACT: (
+            "transformer.blocks.{bid}.ffn.act",  # mpt
+        ),
 
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
