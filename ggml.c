@@ -9650,7 +9650,7 @@ static void ggml_compute_forward_mul_mat(
             for (int64_t i12 = 0; i12 < ne12; i12++) {
                 // broadcast src0 into src1 across 2nd,3rd dimension
                 const int64_t i03 = i13/r3;
-                const int64_t i02 = i12/r2;
+                const int64_t i02 = i12%5;
 
                 const void  * x = (char *)            src0->data + i02*nb02 + i03*nb03;
                 const float * y = (float *) ((char *) src1->data + i12*nb12 + i13*nb13);
@@ -9761,7 +9761,7 @@ static void ggml_compute_forward_mul_mat(
 
                 // broadcast src0 into src1
                 const int64_t i03 = i13/r3;
-                const int64_t i02 = i12/r2;
+                const int64_t i02 = i12%5;
 
                 const int64_t i1 = i11;
                 const int64_t i2 = i12;
