@@ -8404,8 +8404,8 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
     const float alpha_f32 = 1.0f;
     const float beta_f32  = 0.0f;
 
-    const char * alpha = (const char *) &alpha_f16;
-    const char * beta  = (const char *) &beta_f16;
+    const void * alpha = &alpha_f16;
+    const void * beta  = &beta_f16;
 
     if (dst->op_params[0] == GGML_PREC_DEFAULT) {
         dst_f16 = (half *) ggml_cuda_pool_malloc(ne * sizeof(half), &dst_as);
