@@ -53,14 +53,19 @@ We have tested PowerInfer on the following platforms:
 - x86-64 CPU (with AVX2 instructions) on Linux
 - x86-64 CPU and NVIDIA GPU on Linux
 - Apple M Chips on macOS (As we do not optimize for Mac, the performance improvement is not significant now.)
-  
 
+And new features coming soon:
+
+- Mistral-7B model
+- Online fine-grained FFN offloading to GPU
+- Metal backend for sparse inference on macOS
+  
 ## Getting Started
 
-- [Installation](##setup--installation)
-- [Model Weights](##model-weights)
+- [Installation](#setup-and-installation)
+- [Model Weights](#model-weights)
 
-## Setup & Installation
+## Setup and Installation
 ### Get the Code
 
 ```bash
@@ -70,12 +75,7 @@ cd PowerInfer
 ### Build
 In order to build PowerInfer you have two different options. These commands are supposed to be run from the root directory of the project.
 
-Using `make` on Linux or macOS:
-```bash
-make
-```
-
-Using `CMake`:
+Using `CMake` on Linux or macOS:
 * If you have one GPU:
 ```bash
 cmake -S . -B build -DLLAMA_CUBLAS=ON
@@ -130,6 +130,7 @@ PowerInfer achieves up to 11x and 8x speedup for FP16 and INT4 models!
 We will release the code and data in the following order, please stay tuned!
 
 - [x] Release core code of PowerInfer, supporting Llama-2, Falcon-40B.
+- [ ] Support Mistral-7B
 - [ ] Release perplexity evaluation code
 - [ ] Support Metal for Mac
 - [ ] Release code for OPT models
