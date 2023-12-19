@@ -13,7 +13,6 @@ import os
 import argparse
 import json, sys, http.server, time, asyncio, socket, threading
 from concurrent.futures import ThreadPoolExecutor
-import multiprocessing
 
 sampler_order_max = 7
 stop_token_max = 16
@@ -2342,8 +2341,9 @@ def run_in_queue(launch_args, input_queue, output_queue):
                     (args, kwargs) = data['data']
                 output_queue.put({'command': 'generated text', 'data': generate(*args, **kwargs)})
         time.sleep(0.2)
-        
+
 def start_in_seperate_process(launch_args):
+    import multiprocessing
     input_queue = multiprocessing.Queue()
     output_queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=run_in_queue, args=(launch_args, input_queue, output_queue))
