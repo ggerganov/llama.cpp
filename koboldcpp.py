@@ -13,6 +13,7 @@ import os
 import argparse
 import json, sys, http.server, time, asyncio, socket, threading
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 sampler_order_max = 7
 stop_token_max = 16
@@ -2329,6 +2330,25 @@ def main(launch_args,start_server=True):
         asyncio.run(RunServerMultiThreaded(args.host, args.port, embedded_kailite, embedded_kcpp_docs))
     else:
         print(f"Server was not started, main function complete. Idling.")
+
+def run_in_queue(launch_args, input_queue, output_queue):
+    main(launch_args, start_server=False)
+    output_queue.put({'command': 'complete'})
+    while True:
+        if not input_queue.empty():
+            while not input_queue.empty():
+                data = input_queue.get()
+                if data['command'] == 'generate':
+                    (args, kwargs) = data['data']
+                output_queue.put({'command': 'generated text', 'data': generate(*args, **kwargs)})
+        time.sleep(0.2)
+        
+def start_in_seperate_process(launch_args):
+    input_queue = multiprocessing.Queue()
+    output_queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=run_in_queue, args=(launch_args, input_queue, output_queue))
+    p.start()
+    return (output_queue, input_queue, p)
 
 if __name__ == '__main__':
     print("***\nWelcome to KoboldCpp - Version " + KcppVersion) # just update version manually
