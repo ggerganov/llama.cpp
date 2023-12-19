@@ -103,10 +103,10 @@ export const promptFormats = {
     user: "Instruction"
   },
   "mistralInstruct": {
-    template: "<s>{{history}} [/INST]\n{{char}}</s>",
+    template: "<s>[INST] ({{prompt}}) {{history}} {{char}}</s>",
     historyTemplate: "{{name}} {{message}}",
-    char: "",
-    user: "[INST] "
+    char: "[/INST] Assistant:",
+    user: "[INST] User:"
   },
   "mistralOpenOrca": {
     template: "<|im_start|>system\n{{prompt}}<|im_end|>\n{{history}}\n<|im_start|>{{char}}",
