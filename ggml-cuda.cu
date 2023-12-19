@@ -9568,6 +9568,7 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
     /* .get_alloc_size   = */ ggml_backend_cuda_buffer_type_get_alloc_size,
     /* .supports_backend = */ ggml_backend_cuda_buffer_type_supports_backend,
+    /* .is_host          = */ nullptr,
 };
 
 ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
@@ -9606,16 +9607,15 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     return buffer;
 }
 
-struct ggml_backend_buffer_type_i ggml_backend_cuda_host_buffer_type_interface = {
-    /* .alloc_buffer     = */ ggml_backend_cuda_host_buffer_type_alloc_buffer,
-    /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
-    /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
-    /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
-};
-
 ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_type_host = {
-        /* .iface    = */ ggml_backend_cuda_host_buffer_type_interface,
+        /* .iface    = */ {
+            /* .alloc_buffer     = */ ggml_backend_cuda_host_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
+            /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
+            /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
+        },
         /* .context  = */ nullptr,
     };
 

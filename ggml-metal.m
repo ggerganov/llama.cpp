@@ -2521,6 +2521,12 @@ static bool ggml_backend_metal_buffer_type_supports_backend(ggml_backend_buffer_
     UNUSED(buft);
 }
 
+static bool ggml_backend_metal_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    return true;
+
+    UNUSED(buft);
+}
+
 ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
     static struct ggml_backend_buffer_type ggml_backend_buffer_type_metal = {
         /* .iface = */ {
@@ -2528,6 +2534,7 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_metal_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
         },
         /* .context = */ NULL,
     };

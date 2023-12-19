@@ -35,6 +35,13 @@ bool ggml_backend_buft_supports_backend(ggml_backend_buffer_type_t buft, ggml_ba
     return buft->iface.supports_backend(buft, backend);
 }
 
+bool ggml_backend_buft_is_host(ggml_backend_buffer_type_t buft) {
+    if (buft->iface.is_host) {
+        return buft->iface.is_host(buft);
+    }
+    return false;
+}
+
 // backend buffer
 
 ggml_backend_buffer_t ggml_backend_buffer_init(
@@ -96,6 +103,10 @@ size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct g
 
 void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     buffer->iface.clear(buffer, value);
+}
+
+bool ggml_backend_buffer_is_host(ggml_backend_buffer_t buffer) {
+    return ggml_backend_buft_is_host(ggml_backend_buffer_type(buffer));
 }
 
 ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer) {
@@ -464,6 +475,12 @@ static bool ggml_backend_cpu_buffer_type_supports_backend(ggml_backend_buffer_ty
     GGML_UNUSED(buft);
 }
 
+static bool ggml_backend_cpu_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    return true;
+
+    GGML_UNUSED(buft);
+}
+
 ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
     static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type = {
         /* .iface = */ {
@@ -471,6 +488,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
         },
         /* .context = */ NULL,
     };
@@ -479,9 +497,11 @@ ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void) {
 }
 
 #ifdef GGML_USE_CPU_HBM
+
+// buffer type HBM
+
 #include <hbwmalloc.h>
 
-// HBM buffer type
 static void ggml_backend_cpu_hbm_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     hbw_free(buffer->context);
 }
@@ -503,16 +523,15 @@ static ggml_backend_buffer_t ggml_backend_cpu_hbm_buffer_type_alloc_buffer(ggml_
     return buffer;
 }
 
-struct ggml_backend_buffer_type_i cpu_backend_hbm_buffer_type_interface = {
-    /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
-    /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
-    /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
-    /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
-};
-
 ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_cpu_buffer_type_hbm = {
-        /* .iface    = */ cpu_backend_hbm_buffer_type_interface,
+        /* .iface    = */ {
+            /* .alloc_buffer     = */ ggml_backend_cpu_hbm_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type_get_alignment,
+            /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
+            /* .supports_backend = */ ggml_backend_cpu_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type_is_host,
+        },
         /* .context  = */ NULL,
     };
 

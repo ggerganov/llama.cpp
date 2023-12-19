@@ -20,6 +20,9 @@ extern "C" {
         size_t                (*get_alignment)   (ggml_backend_buffer_type_t buft); // tensor alignment
         size_t                (*get_alloc_size)  (ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor); // data size needed to allocate the tensor, including padding
         bool                  (*supports_backend)(ggml_backend_buffer_type_t buft, ggml_backend_t backend); // check if the buffer type is usable by the backend
+        // check if tensor data is in host memory
+        // should be equivalent to supports_backend(buft, ggml_backend_cpu_init())
+        bool                  (*is_host)         (ggml_backend_buffer_type_t buft);
     };
 
     struct ggml_backend_buffer_type {
@@ -79,7 +82,7 @@ extern "C" {
         void (*cpy_tensor_from_async)(ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
         void (*cpy_tensor_to_async)  (ggml_backend_t backend, struct ggml_tensor * src, struct ggml_tensor * dst);
 
-        void (*synchronize)     (ggml_backend_t backend);
+        void (*synchronize)(ggml_backend_t backend);
 
         // compute graph with a plan
         ggml_backend_graph_plan_t (*graph_plan_create) (ggml_backend_t backend, struct ggml_cgraph * cgraph);

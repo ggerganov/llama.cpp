@@ -1539,7 +1539,7 @@ static bool llama_kv_cache_init(
                 ggml_cuda_assign_buffers_no_scratch(v);
                 vram_kv_cache += ggml_nbytes(k);
                 vram_kv_cache += ggml_nbytes(v);
-                // HACK: mark tensor as allocated, but crash if we try to use it from the CPU
+                // HACK: mark tensor as allocated
                 k->data = v->data = (void *)(uintptr_t)1;
             }
         }
@@ -2285,9 +2285,15 @@ struct llama_model_loader {
                             ggml_backend_tensor_set(cur, (uint8_t *)mapping->addr + offs, 0, ggml_nbytes(cur));
                         }
                     } else {
-                        // FIXME: use read_buf for device buffers without unified memory
-                        file.seek(offs, SEEK_SET);
-                        file.read_raw(cur->data, ggml_nbytes(cur));
+                        if (ggml_backend_buffer_is_host(cur->buffer)) {
+                            file.seek(offs, SEEK_SET);
+                            file.read_raw(cur->data, ggml_nbytes(cur));
+                        } else {
+                            read_buf.resize(ggml_nbytes(cur));
+                            file.seek(offs, SEEK_SET);
+                            file.read_raw(read_buf.data(), ggml_nbytes(cur));
+                            ggml_backend_tensor_set(cur, read_buf.data(), 0, ggml_nbytes(cur));
+                        }
                     }
 
                     if (use_mmap && lmlock) {
@@ -2298,7 +2304,7 @@ struct llama_model_loader {
 
                 case GGML_BACKEND_GPU:
                 case GGML_BACKEND_GPU_SPLIT: {
-                    // HACK: mark tensor as allocated, but crash if we try to use it from the CPU
+                    // HACK: mark tensor as allocated
                     cur->data = (void *)(uintptr_t)1;
                     void * data;
                     if (use_mmap) {
@@ -5773,7 +5779,7 @@ static struct ggml_cgraph * llama_build_graph(
                 const int64_t n_tokens = cur->ne[1];
 
                 float * data;
-                if (/*is_sys_mem_buf(cur->buffer)*/false) { // TODO
+                if (ggml_backend_buffer_is_host(cur->buffer)) {
                     data = (float *) cur->data;
                 } else {
                     lctx.buf_copy.resize(ggml_nbytes(cur));
@@ -5812,7 +5818,7 @@ static struct ggml_cgraph * llama_build_graph(
                 const int64_t n_ctx = cur->ne[0];
 
                 int32_t * data;
-                if (/*is_sys_mem_buf(cur->buffer)*/false) { // TODO
+                if (ggml_backend_buffer_is_host(cur->buffer)) {
                     data = (int32_t *) cur->data;
                 } else {
                     lctx.buf_copy.resize(ggml_nbytes(cur));
@@ -9230,13 +9236,15 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-        if (ctx->backend == nullptr) {
-            // FIXME: this may fail if the model buffer is not compatible with the CPU backend
+        if (ctx->backend == nullptr && ggml_backend_buffer_is_host(model->buf)) {
             ctx->backend = ggml_backend_cpu_init();
+            if (ctx->backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
+            }
         }
 
         if (ctx->backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
+            LLAMA_LOG_ERROR("%s: failed to initialize a backend\n", __func__);
             delete ctx;
             return nullptr;
         }
