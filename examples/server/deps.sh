@@ -28,6 +28,7 @@ done
 
 
 tar -xvf $PUBLIC/assets/prismjs-1.29.0.tgz -C $PUBLIC/assets/
+rm -rf "$PUBLIC/assets/prismjs/package"
 mv $PUBLIC/assets/package $PUBLIC/assets/prismjs
 rm $PUBLIC/assets/prismjs-1.29.0.tgz
 
