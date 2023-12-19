@@ -46,7 +46,7 @@ class Model:
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
         self.model_arch = self._get_model_architecture()
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess)
+        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=False)
 
     def set_vocab(self):
         self._set_vocab_gpt2()
@@ -59,7 +59,7 @@ class Model:
                 from safetensors import safe_open
                 ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
             else:
-                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", mmap=True, weights_only=True))
+                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", weights_only=True))
 
             with ctx as model_part:
                 for name in model_part.keys():
@@ -444,7 +444,7 @@ class MPTModel(Model):
             # map tensor names
             if "scales" in name:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
-                new_name = new_name + ".scales"
+                new_name = new_name.replace("scales", "act.scales")
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
@@ -1001,6 +1001,7 @@ dir_model = args.model
 if args.awq_path:
     from awqpy.apply_awq import add_scale_weights
     tmp_model_path = args.model / "weighted_model"
+    dir_model = tmp_model_path
     if tmp_model_path.is_dir():
         print(f"{tmp_model_path} exists as a weighted model.")
     else:
@@ -1008,7 +1009,6 @@ if args.awq_path:
         print("Saving new weighted model ...")
         add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
         print(f"Saved weighted model at {tmp_model_path}.") 
-        dir_model = tmp_model_path
 
 if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
@@ -1028,6 +1028,7 @@ else:
 print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
+
 
 with torch.inference_mode():
     model_class = Model.from_model_architecture(hparams["architectures"][0])

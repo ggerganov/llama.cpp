@@ -1178,6 +1178,7 @@ struct llama_hparams {
 
     float f_clamp_kqv;
     float f_max_alibi_bias;
+    bool use_awq;
 
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only  != other.vocab_only)  return true;
@@ -3379,7 +3380,6 @@ static void llm_load_tensors(
             case LLM_ARCH_MPT:
                 {
                     model.tok_embd = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
-
                     // output
                     {
                         ggml_backend_type backend_norm;
@@ -3423,18 +3423,31 @@ static void llm_load_tensors(
                         layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
                         layer.ffn_down = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
-                        layer.ffn_act = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, backend);
+                        if (model.hparams.use_awq) {
+                            layer.ffn_act = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, backend);
+                        }
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
-                            vram_weights +=
+                            if (model.hparams.use_awq) {
+                                vram_weights +=
                                 ggml_nbytes(layer.attn_norm) +
                                 ggml_nbytes(layer.wqkv)      +
                                 ggml_nbytes(layer.wo)        +
                                 ggml_nbytes(layer.ffn_norm)  +
                                 ggml_nbytes(layer.ffn_down)  +
-                                ggml_nbytes(layer.ffn_act) +
+                                ggml_nbytes(layer.ffn_act)   +
                                 ggml_nbytes(layer.ffn_up);
+                            }
+                            else {
+                                vram_weights +=
+                                ggml_nbytes(layer.attn_norm) +
+                                ggml_nbytes(layer.wqkv)      +
+                                ggml_nbytes(layer.wo)        +
+                                ggml_nbytes(layer.ffn_norm)  +
+                                ggml_nbytes(layer.ffn_down)  +
+                                ggml_nbytes(layer.ffn_up);
+                            }
                         }
                     }
                 } break;
@@ -3634,7 +3647,7 @@ static bool llama_model_load(const std::string & fname, llama_model & model, con
         llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
-
+        model.hparams.use_awq = params.use_awq;
         llm_load_arch   (ml, model);
         llm_load_hparams(ml, model);
         llm_load_vocab  (ml, model);
@@ -5119,13 +5132,23 @@ struct llm_build_context {
                         NULL,
                         LLM_NORM, cb, il);
                 cb(cur, "ffn_norm", il);
-
-                cur = llm_build_ffn(ctx0, cur,
-                        model.layers[il].ffn_up,   NULL,
-                        NULL,                      NULL,
-                        model.layers[il].ffn_down, NULL,
-                        model.layers[il].ffn_act,
-                        LLM_FFN_GELU_ACT, LLM_FFN_SEQ, cb, il);
+                if (hparams.use_awq) {
+                    cur = llm_build_ffn(ctx0, cur,
+                            model.layers[il].ffn_up,   NULL,
+                            NULL,                      NULL,
+                            model.layers[il].ffn_down, NULL,
+                            model.layers[il].ffn_act,
+                            LLM_FFN_GELU_ACT, LLM_FFN_SEQ, cb, il);
+                    
+                }
+                else {
+                    cur = llm_build_ffn(ctx0, cur,
+                            model.layers[il].ffn_up,   NULL,
+                            NULL,                      NULL,
+                            model.layers[il].ffn_down, NULL,
+                            LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
+                    
+                }
                 cb(cur, "ffn_out", il);
             }
 
@@ -8841,6 +8864,7 @@ struct llama_model_params llama_model_default_params() {
         /*.progress_callback_user_data =*/ nullptr,
         /*.kv_overrides                =*/ nullptr,
         /*.vocab_only                  =*/ false,
+        /*.use_awq                     =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
     };
@@ -8936,9 +8960,7 @@ struct llama_model * llama_load_model_from_file(
                              const char * path_model,
               struct llama_model_params   params) {
     ggml_time_init();
-
     llama_model * model = new llama_model;
-
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
         params.progress_callback_user_data = &cur_percentage;
@@ -9065,7 +9087,7 @@ struct llama_context * llama_new_context_with_model(
         if (params.embedding){
             ctx->embedding.resize(hparams.n_embd);
         }
-
+        
         {
             static const size_t tensor_alignment = 32;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
