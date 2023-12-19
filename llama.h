@@ -315,6 +315,7 @@ extern "C" {
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
     LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API int llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 
