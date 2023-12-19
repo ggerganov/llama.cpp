@@ -1006,7 +1006,6 @@ if args.awq_path:
     else:
         tmp_model_path.mkdir(parents=True, exist_ok=True)
         print("Saving new weighted model ...")
-        tmp_model_path.mkdirs(exist_ok=True)
         add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
         print(f"Saved weighted model at {tmp_model_path}.") 
         dir_model = tmp_model_path
