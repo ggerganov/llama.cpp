@@ -11,10 +11,10 @@
 - [ ] Mixtral MoE
 
 **TODO:**
+- [x] Update version work with both MPT and MPT-AWQ model
 - [ ] Add OPT model
 - [ ] Add Bloom model
 - [ ] Add Mixtral MoE
-- [ ] Update version work with both MPT and MPT-AWQ model
 - [ ] Support w3, w2
 
 
