@@ -12,8 +12,6 @@ from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast, Optional
 
-from awqpy.apply_awq import add_scale_weights
-
 import numpy as np
 import torch
 
@@ -999,7 +997,7 @@ def parse_args() -> argparse.Namespace:
 args = parse_args()
 
 if args.awq_path:
-    from awqpy import add_scale_weights
+    from awqpy.apply_awq import add_scale_weights
     tmp_model_path = args.model / "weighted_model"
     if tmp_model_path.is_dir():
         print(f"{tmp_model_path} exists as a weighted model.")

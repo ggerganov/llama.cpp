@@ -23,8 +23,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Any, Callable, Iterable, Literal, TypeVar
 
-from awqpy.apply_awq import add_scale_weights
-
 import numpy as np
 from sentencepiece import SentencePieceProcessor
 
@@ -1156,7 +1154,7 @@ def main(args_in: list[str] | None = None) -> None:
 
     args = parser.parse_args(args_in)
     if args.awq_path:
-        from awqpy import add_scale_weights
+        from awqpy.apply_awq import add_scale_weights        
         tmp_model_path = args.model / "weighted_model"
         if tmp_model_path.is_dir():
             print(f"{tmp_model_path} exists as a weighted model.")
