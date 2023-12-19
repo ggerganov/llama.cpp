@@ -996,6 +996,8 @@ def parse_args() -> argparse.Namespace:
 
 args = parse_args()
 
+dir_model = args.model
+
 if args.awq_path:
     from awqpy.apply_awq import add_scale_weights
     tmp_model_path = args.model / "weighted_model"
@@ -1008,8 +1010,6 @@ if args.awq_path:
         add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
         print(f"Saved weighted model at {tmp_model_path}.") 
         dir_model = tmp_model_path
-else:
-    dir_model = args.model
 
 if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
