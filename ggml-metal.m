@@ -2429,8 +2429,6 @@ static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) 
     }
 
     free(ctx);
-
-    UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -2457,6 +2455,12 @@ static void ggml_backend_metal_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer
     UNUSED(buffer);
 }
 
+static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+
+    memset(ctx->all_data, value, ctx->all_size);
+}
+
 static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
@@ -2465,6 +2469,7 @@ static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
     /* .get_tensor      = */ ggml_backend_metal_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_metal_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_metal_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_metal_buffer_clear,
 };
 
 // default buffer type

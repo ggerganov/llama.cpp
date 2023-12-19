@@ -1551,9 +1551,8 @@ static bool llama_kv_cache_init(
 
     // buf may be NULL with full offload
     if (cache.buf) {
-        // TODO: ggml_backend_buffer_memset
-        // this is only valid with CPU buffers!
-        //memset(ggml_backend_buffer_get_base(cache.buf), 0, ggml_backend_buffer_get_size(cache.buf));
+        // initialize the buffer to avoid NaNs in the padding
+        ggml_backend_buffer_clear(cache.buf, 0);
     }
 
     if (vram_kv_cache > 0) {
@@ -3569,8 +3568,12 @@ static void llm_load_tensors(
     {
         size_t sys_mem_required = ctx_size + buf_size;
 
-        LLAMA_LOG_INFO("%s: system memory used  = %7.2f MiB\n", __func__, sys_mem_required / 1024.0 / 1024.0);
-        LLAMA_LOG_INFO("%s: VRAM used           = %7.2f MiB\n", __func__, vram_weights / 1024.0 / 1024.0);
+        {
+            LLAMA_LOG_INFO("%s: system memory used  = %7.2f MiB\n", __func__, sys_mem_required / 1024.0 / 1024.0);
+        }
+        if (vram_weights > 0) {
+            LLAMA_LOG_INFO("%s: VRAM used           = %7.2f MiB\n", __func__, vram_weights / 1024.0 / 1024.0);
+        }
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
@@ -3586,7 +3589,6 @@ static void llm_load_tensors(
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
 #else
         GGML_UNUSED(n_gpu_layers);
-        GGML_UNUSED(vram_weights);
         GGML_UNUSED(tensor_split);
 #endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     }
@@ -3601,7 +3603,6 @@ static void llm_load_tensors(
     ggml_cuda_set_tensor_split(tensor_split);
 #endif // GGML_USE_CUBLAS
 
-    // TODO: only pass buf if it is a mmap buffer
     ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL);
 
     if (progress_callback) {

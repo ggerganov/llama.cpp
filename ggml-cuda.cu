@@ -9494,6 +9494,15 @@ static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer, co
     CUDA_CHECK(cudaMemcpy(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost));
 }
 
+static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaMemset(ctx->dev_ptr, value, buffer->size));
+}
+
 static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
     /* .free_buffer     = */ ggml_backend_cuda_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cuda_buffer_get_base,
@@ -9502,6 +9511,7 @@ static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
     /* .get_tensor      = */ ggml_backend_cuda_buffer_get_tensor,
     /* .cpy_tensor_from = */ NULL,
     /* .cpy_tensor_to   = */ NULL,
+    /* .clear           = */ ggml_backend_cuda_buffer_clear,
 };
 
 // cuda buffer type

@@ -94,6 +94,10 @@ size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct g
     return ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type(buffer), tensor);
 }
 
+void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    buffer->iface.clear(buffer, value);
+}
+
 ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer) {
     return buffer->buft;
 }
@@ -410,6 +414,10 @@ static void ggml_backend_cpu_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer, 
     GGML_UNUSED(buffer);
 }
 
+static void ggml_backend_cpu_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    memset(buffer->context, value, buffer->size);
+}
+
 static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .free_buffer     = */ ggml_backend_cpu_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cpu_buffer_get_base,
@@ -418,6 +426,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i = {
     /* .get_tensor      = */ ggml_backend_cpu_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_cpu_buffer_clear,
 };
 
 // for buffers from ptr, free is not called
@@ -429,6 +438,7 @@ static struct ggml_backend_buffer_i cpu_backend_buffer_i_from_ptr = {
     /* .get_tensor      = */ ggml_backend_cpu_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_cpu_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_cpu_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_cpu_buffer_clear,
 };
 
 static const size_t TENSOR_ALIGNMENT = 64; // should be enough for AVX 512
