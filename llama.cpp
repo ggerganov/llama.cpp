@@ -2881,17 +2881,20 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
 }
 
 // TODO: metal should be disabled with ngl=0 -> cpu_buffer_type
-static ggml_backend_buffer_type_t llama_default_buffer_type() {
+static ggml_backend_buffer_type_t llama_default_buffer_type(int n_gpu_layers) {
 #ifdef GGML_USE_METAL
-    return ggml_backend_metal_buffer_type();
+    if (n_gpu_layers > 0) {
+        return ggml_backend_metal_buffer_type();
+    }
 #elif GGML_USE_CUBLAS
-    printf("Using " GGML_CUDA_NAME " host buffer type\n");
     return ggml_backend_cuda_host_buffer_type();
 #elif GGML_USE_CPU_HBM
     return ggml_backend_cpu_hbm_buffer_type();
-#else
-    return ggml_backend_cpu_buffer_type();
 #endif
+
+    return ggml_backend_cpu_buffer_type();
+
+    GGML_UNUSED(n_gpu_layers);
 }
 
 static void llm_load_tensors(
@@ -3430,7 +3433,7 @@ static void llm_load_tensors(
     size_t vram_weights = 0;
     size_t buf_size = 0;
 
-    ggml_backend_buffer_type_t buft = llama_default_buffer_type();
+    ggml_backend_buffer_type_t buft = llama_default_buffer_type(n_gpu_layers);
 
     for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
         if (t->backend == GGML_BACKEND_CPU) {
@@ -3440,13 +3443,14 @@ static void llm_load_tensors(
         }
     }
 
-
     // create backend buffer
     bool sys_mem_buf = false;
 
 #ifdef GGML_USE_METAL
+// todo: disable with 0 gpu layers
     if (ml.use_mmap) {
-        model.buf = ggml_backend_metal_buffer_from_ptr(ml.mapping->addr, ml.mapping->size);
+        const size_t max_size = ggml_get_max_tensor_size(ctx);
+        model.buf = ggml_backend_metal_buffer_from_ptr(ml.mapping->addr, ml.mapping->size, max_size);
     } else {
         model.buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_metal_buffer_type());
         sys_mem_buf = true;
@@ -5940,12 +5944,12 @@ static int llama_decode_internal(
     if (ggml_backend_is_metal(lctx.backend)) {
         ggml_backend_metal_set_n_cb(lctx.backend, n_threads);
     }
-#else
+#endif
+
     if (ggml_backend_is_cpu(lctx.backend)) {
         ggml_backend_cpu_set_n_threads(lctx.backend, n_threads);
     }
     ggml_backend_graph_compute(lctx.backend, gf);
-#endif
 
 #if GGML_USE_MPI
     ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
@@ -8952,6 +8956,9 @@ struct llama_context * llama_new_context_with_model(
 #ifdef GGML_USE_METAL
         if (model->n_gpu_layers > 0) {
             ctx->backend = ggml_backend_metal_init();
+            if (ctx->backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
+            }
         }
 #endif
         if (ctx->backend == nullptr) {
@@ -8959,12 +8966,14 @@ struct llama_context * llama_new_context_with_model(
         }
 
         if (ctx->backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize backend\n", __func__);
+            LLAMA_LOG_ERROR("%s: failed to initialize CPU backend\n", __func__);
             delete ctx;
             return nullptr;
         }
 
-        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, type_k, type_v, cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv, llama_default_buffer_type())) {
+        if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, type_k, type_v,
+                cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv,
+                llama_default_buffer_type(model->n_gpu_layers))) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
