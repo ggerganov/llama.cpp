@@ -7579,8 +7579,7 @@ static void ggml_cuda_op_mul_mat_cublas(
 
     const int compute_capability = g_device_caps[id].cc;
 
-    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
-        //printf("this branch\n");
+    if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1]) {
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
         cuda_pool_alloc<half> src0_as_f16;
         if (src0->type != GGML_TYPE_F16) {
@@ -7601,23 +7600,44 @@ static void ggml_cuda_op_mul_mat_cublas(
             to_fp16_cuda(src1_ddf_i, src1_as_f16.get(), ne, stream);
         }
         const half * src1_ptr = src1->type == GGML_TYPE_F16 ? (const half *) src1_ddf_i : src1_as_f16.get();
-        cuda_pool_alloc<half> dst_f16(row_diff*src1_ncols);
 
-        const half alpha_f16 = 1.0f;
-        const half beta_f16 = 0.0f;
+        switch (dst->op_params[0]) {
+            case GGML_PREC_DEFAULT:
+                {
+                    cuda_pool_alloc<half> dst_f16(row_diff*src1_ncols);
 
-        CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
-        CUBLAS_CHECK(
-            cublasGemmEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
-                    row_diff, src1_ncols, ne10,
-                    &alpha_f16, src0_ptr,       CUDA_R_16F, ne00,
-                                src1_ptr,       CUDA_R_16F, ne10,
-                    &beta_f16,   dst_f16.get(), CUDA_R_16F, ldc,
-                    CUBLAS_COMPUTE_16F,
-                    CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+                    const half alpha_f16 = 1.0f;
+                    const half beta_f16  = 0.0f;
 
-        const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(GGML_TYPE_F16);
-        to_fp32_cuda(dst_f16.get(), dst_dd_i, row_diff*src1_ncols, stream);
+                    CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
+                    CUBLAS_CHECK(
+                            cublasGemmEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
+                                row_diff,   src1_ncols, ne10,
+                                &alpha_f16, src0_ptr,      CUDA_R_16F, ne00,
+                                            src1_ptr,      CUDA_R_16F, ne10,
+                                &beta_f16,  dst_f16.get(), CUDA_R_16F, ldc,
+                                CUBLAS_COMPUTE_16F,
+                                CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+
+                    const to_fp32_cuda_t to_fp32_cuda = ggml_get_to_fp32_cuda(GGML_TYPE_F16);
+                    to_fp32_cuda(dst_f16.get(), dst_dd_i, row_diff*src1_ncols, stream);
+                } break;
+            case GGML_PREC_F32:
+                {
+                    const float alpha_f32 = 1.0f;
+                    const float beta_f32  = 0.0f;
+
+                    CUBLAS_CHECK(cublasSetStream(g_cublas_handles[id], stream));
+                    CUBLAS_CHECK(
+                        cublasGemmEx(g_cublas_handles[id], CUBLAS_OP_T, CUBLAS_OP_N,
+                                row_diff, src1_ncols, ne10,
+                                &alpha_f32, src0_ptr, CUDA_R_16F, ne00,
+                                            src1_ptr, CUDA_R_16F, ne10,
+                                &beta_f32,  dst_dd_i, CUDA_R_32F, ldc,
+                                CUBLAS_COMPUTE_32F,
+                                CUBLAS_GEMM_DEFAULT_TENSOR_OP));
+                } break;
+        }
     } else {
         cuda_pool_alloc<float> src0_ddq_as_f32;
         cuda_pool_alloc<float> src1_ddq_as_f32;
@@ -7635,7 +7655,7 @@ static void ggml_cuda_op_mul_mat_cublas(
             to_fp32_cuda(src1_ddf_i, src1_ddq_as_f32.get(), src1_ncols*ne10, stream);
         }
 
-        const float * src0_ddf_i = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i : src0_ddq_as_f32.get();
+        const float * src0_ddf_i  = src0->type == GGML_TYPE_F32 ? (const float *) src0_dd_i  : src0_ddq_as_f32.get();
         const float * src1_ddf1_i = src1->type == GGML_TYPE_F32 ? (const float *) src1_ddf_i : src1_ddq_as_f32.get();
 
         const float alpha = 1.0f;
@@ -9234,6 +9254,20 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
 }
 
 void ggml_cuda_free_data(struct ggml_tensor * tensor) {
+    // print current mem usage using cudaMemGetInfo
+    // TODO: this is a hack - need better solution
+    {
+        size_t free;
+        size_t total;
+        CUDA_CHECK(cudaMemGetInfo(&free, &total));
+
+        static size_t used = 0;
+        if (used < total - free) {
+            printf("CUDA: used %zu MB, free %zu MB\n", (total - free)/1024/1024, free/1024/1024);
+            used = total - free;
+        }
+    }
+
     if (!tensor || !tensor->extra || (tensor->backend != GGML_BACKEND_GPU && tensor->backend != GGML_BACKEND_GPU_SPLIT) ) {
         return;
     }

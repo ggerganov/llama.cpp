@@ -4077,6 +4077,12 @@ struct ggml_tensor * ggml_mul_mat(
     const int64_t ne[4] = { a->ne[1], b->ne[1], b->ne[2], b->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
+    // TMP: force f32 precision
+    {
+        const int32_t prec_i32 = GGML_PREC_F32;
+        ggml_set_op_params_i32(result, 0, prec_i32);
+    }
+
     result->op   = GGML_OP_MUL_MAT;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
