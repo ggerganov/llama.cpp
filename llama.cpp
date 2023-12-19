@@ -9536,7 +9536,7 @@ int llama_n_ctx(const struct llama_context * ctx) {
     return ctx->cparams.n_ctx;
 }
 
-int llama_n_batch(const struct llama_context * ctx) {
+uint32_t llama_n_batch(const struct llama_context * ctx) {
     return ctx->cparams.n_batch;
 }
 
