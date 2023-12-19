@@ -203,7 +203,7 @@ actor LlamaContext {
         var pp_std: Double = 0
         var tg_std: Double = 0
 
-        for r in 0..<nr {
+        for _ in 0..<nr {
             // bench prompt processing
 
             llama_batch_clear(&batch)
