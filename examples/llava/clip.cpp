@@ -315,14 +315,13 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     }
 
     embeddings =
-        ggml_add(ctx0, embeddings, ggml_repeat(ctx0, ggml_get_rows(ctx0, model.position_embeddings, positions), embeddings));
+        ggml_add(ctx0, embeddings, ggml_get_rows(ctx0, model.position_embeddings, positions));
 
     // pre-layernorm
     {
         embeddings = ggml_norm(ctx0, embeddings, eps);
 
-        embeddings = ggml_add(ctx0, ggml_mul(ctx0, ggml_repeat(ctx0, model.pre_ln_w, embeddings), embeddings),
-                              ggml_repeat(ctx0, model.pre_ln_b, embeddings));
+        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
 
     struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
@@ -342,15 +341,15 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         {
             cur = ggml_norm(ctx0, cur, eps);
 
-            cur = ggml_add(ctx0, ggml_mul(ctx0, ggml_repeat(ctx0, model.layers[il].ln_1_w, cur), cur),
-                           ggml_repeat(ctx0, model.layers[il].ln_1_b, cur));
+            cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.layers[il].ln_1_w),
+                           model.layers[il].ln_1_b);
         }
 
         // self-attention
         {
 
             struct ggml_tensor * Q =
-                ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].q_b, cur), ggml_mul_mat(ctx0, model.layers[il].q_w, cur));
+                ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].q_w, cur), model.layers[il].q_b);
 
             Q = ggml_scale_inplace(ctx0, Q, KQ_scale);
             Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
@@ -358,14 +357,14 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
             Q = ggml_reshape_3d(ctx0, Q, d_head, num_positions, n_head * batch_size);
 
             struct ggml_tensor * K =
-                ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].k_b, cur), ggml_mul_mat(ctx0, model.layers[il].k_w, cur));
+                ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].k_w, cur), model.layers[il].k_b);
 
             K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
             K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
             K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
 
             struct ggml_tensor * V =
-                ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].v_b, cur), ggml_mul_mat(ctx0, model.layers[il].v_w, cur));
+                ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].v_w, cur), model.layers[il].v_b);
 
             V = ggml_reshape_4d(ctx0, V, d_head, n_head, num_positions, batch_size);
             V = ggml_cont(ctx0, ggml_permute(ctx0, V, 1, 2, 0, 3));
@@ -381,7 +380,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         }
 
         // attention output
-        cur = ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].o_b, cur), ggml_mul_mat(ctx0, model.layers[il].o_w, cur));
+        cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].o_w, cur), model.layers[il].o_b);
 
         // re-add the layer input, e.g., residual
         cur = ggml_add(ctx0, cur, embeddings);
@@ -392,12 +391,11 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         {
             cur = ggml_norm(ctx0, cur, eps);
 
-            cur = ggml_add(ctx0, ggml_mul(ctx0, ggml_repeat(ctx0, model.layers[il].ln_2_w, cur), cur),
-                           ggml_repeat(ctx0, model.layers[il].ln_2_b, cur));
+            cur = ggml_add(ctx0, ggml_mul(ctx0, cur, model.layers[il].ln_2_w), model.layers[il].ln_2_b);
         }
 
         cur = ggml_mul_mat(ctx0, model.layers[il].ff_i_w, cur);
-        cur = ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].ff_i_b, cur), cur);
+        cur = ggml_add(ctx0, cur, model.layers[il].ff_i_b);
 
         if (ctx->use_gelu) {
             cur = ggml_gelu_inplace(ctx0, cur);
@@ -406,7 +404,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         }
 
         cur = ggml_mul_mat(ctx0, model.layers[il].ff_o_w, cur);
-        cur = ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].ff_o_b, cur), cur);
+        cur = ggml_add(ctx0, cur, model.layers[il].ff_o_b);
 
         // residual 2
         cur = ggml_add(ctx0, embeddings, cur);
@@ -433,12 +431,12 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
 
         // mm projection 0
         embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
-        embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_0_b, embeddings), embeddings);
+        embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
 
         embeddings = ggml_gelu(ctx0, embeddings);
 
         embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
-        embeddings = ggml_add(ctx0, ggml_repeat(ctx0, model.mm_2_b, embeddings), embeddings);
+        embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
     }
 
     // build the graph
@@ -517,7 +515,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
     clip_ctx * new_clip = new clip_ctx;
 #ifdef CLIP_USE_CUBLAS
-    new_clip->backend = ggml_backend_cuda_init();
+    new_clip->backend = ggml_backend_cuda_init(0);
     printf("CLIP using CUDA backend\n");
 #endif
 

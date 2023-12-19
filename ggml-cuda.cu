@@ -9286,9 +9286,6 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
                 case GGML_UNARY_OP_RELU:
                     func = ggml_cuda_relu;
                     break;
-                case GGML_UNARY_OP_GELU_QUICK:
-                    func = ggml_cuda_gelu_quick;
-                    break;
                 default:
                     return false;
             }
