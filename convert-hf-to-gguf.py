@@ -12,6 +12,8 @@ from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ContextManager, Iterator, cast, Optional
 
+from awqpy.apply_awq import add_scale_weights
+
 import numpy as np
 import torch
 
@@ -442,7 +444,11 @@ class MPTModel(Model):
             data = data_torch.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if "scales" in name:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
+                new_name = new_name + ".scales"
+            else:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -971,6 +977,9 @@ def parse_args() -> argparse.Namespace:
         help="extract only the vocab",
     )
     parser.add_argument(
+        "--awq-path", type=Path, default=None,
+        help="Path to scale awq cache file")
+    parser.add_argument(
         "--outfile", type=Path,
         help="path to write to; default: based on input",
     )
@@ -989,7 +998,21 @@ def parse_args() -> argparse.Namespace:
 
 args = parse_args()
 
-dir_model = args.model
+if args.awq_path:
+    from awqpy import add_scale_weights
+    tmp_model_path = args.model / "weighted_model"
+    if tmp_model_path.is_dir():
+        print(f"{tmp_model_path} exists as a weighted model.")
+    else:
+        tmp_model_path.mkdir(parents=True, exist_ok=True)
+        print("Saving new weighted model ...")
+        tmp_model_path.mkdirs(exist_ok=True)
+        add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
+        print(f"Saved weighted model at {tmp_model_path}.") 
+        dir_model = tmp_model_path
+else:
+    dir_model = args.model
+
 if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
     sys.exit(1)

@@ -454,7 +454,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
-            {LLM_TENSOR_FFN_ACT, "blk.%d.ffn.act"},
+            { LLM_TENSOR_FFN_ACT,         "blk.%d.ffn.act"},
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
     },
@@ -3845,7 +3845,6 @@ static struct ggml_tensor * llm_build_ffn(
          struct ggml_tensor * gate_b,
          struct ggml_tensor * down,
          struct ggml_tensor * down_b,
-         struct ggml_tensor *act_scales,
             llm_ffn_op_type   type_op,
           llm_ffn_gate_type   type_gate,
          const llm_build_cb & cb,
@@ -3896,16 +3895,6 @@ static struct ggml_tensor * llm_build_ffn(
                 cur = ggml_relu(ctx, cur);
                 cb(cur, "ffn_relu", il);
             } break;
-        case LLM_FFN_GELU_ACT:
-            {
-                cur = ggml_gelu(ctx, cur);
-                cb(cur, "ffn_relu", il);
-                struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
-                cb(repeat, "ffn_repeat(scales)", il);
-                cur = ggml_div(ctx, cur, repeat);
-                cb(cur, "ffn_div(gelu)", il);
-            }
-            break;
         case LLM_FFN_RELU_SQR:
             {
                 cur = ggml_relu(ctx, cur);
@@ -3927,6 +3916,93 @@ static struct ggml_tensor * llm_build_ffn(
     }
 
     if (down_b) {
+        cur = ggml_add(ctx, cur, down_b);
+    }
+
+    return cur;
+}
+
+static struct ggml_tensor *llm_build_ffn(
+    struct ggml_context *ctx,
+    struct ggml_tensor *cur,
+    struct ggml_tensor *up,
+    struct ggml_tensor *up_b,
+    struct ggml_tensor *gate,
+    struct ggml_tensor *gate_b,
+    struct ggml_tensor *down,
+    struct ggml_tensor *down_b,
+    struct ggml_tensor *act_scales,
+    llm_ffn_op_type type_op,
+    llm_ffn_gate_type type_gate,
+    const llm_build_cb &cb,
+    int il)
+{
+    struct ggml_tensor *tmp = ggml_mul_mat(ctx, up, cur);
+    cb(tmp, "ffn_up", il);
+
+    if (up_b)
+    {
+        tmp = ggml_add(ctx, tmp, up_b);
+        cb(tmp, "ffn_up_b", il);
+    }
+
+    if (gate)
+    {
+        switch (type_gate)
+        {
+        case LLM_FFN_SEQ:
+        {
+            cur = ggml_mul_mat(ctx, gate, tmp);
+            cb(cur, "ffn_gate", il);
+        }
+        break;
+        case LLM_FFN_PAR:
+        {
+            cur = ggml_mul_mat(ctx, gate, cur);
+            cb(cur, "ffn_gate", il);
+        }
+        break;
+        }
+
+        if (gate_b)
+        {
+            cur = ggml_add(ctx, cur, gate_b);
+            cb(cur, "ffn_gate_b", il);
+        }
+    }
+    else
+    {
+        cur = tmp;
+    }
+
+    switch (type_op)
+    {
+    case LLM_FFN_GELU_ACT:
+    {
+        cur = ggml_gelu(ctx, cur);
+        cb(cur, "ffn_relu", il);
+        struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
+        cb(repeat, "ffn_repeat(scales)", il);
+        cur = ggml_div(ctx, cur, repeat);
+        cb(cur, "ffn_div(gelu)", il);
+    }
+    break;
+    }
+
+    if (type_gate == LLM_FFN_PAR)
+    {
+        cur = ggml_mul(ctx, cur, tmp);
+        cb(cur, "ffn_gate_par", il);
+    }
+
+    cur = ggml_mul_mat(ctx, down, cur);
+    if (down_b)
+    {
+        cb(cur, "ffn_down", il);
+    }
+
+    if (down_b)
+    {
         cur = ggml_add(ctx, cur, down_b);
     }
 
@@ -4211,7 +4287,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4332,7 +4407,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4451,7 +4525,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4560,7 +4633,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
-                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4769,7 +4841,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
-                        NULL,
                         LLM_FFN_RELU_SQR, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4860,7 +4931,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4960,7 +5030,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
-                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5168,7 +5237,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5285,7 +5353,6 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
-                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }

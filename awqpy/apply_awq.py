@@ -1,13 +1,17 @@
 """
-Original code from:
-1. https://github.com/casper-hansen/AutoAWQ
-2. https://github.com/mit-han-lab/llm-awq
+Implements the AWQ for llama.cpp use cases.
+Original paper: https://arxiv.org/abs/2306.00978
+
+This code is based on versions of the AWQ implementation found in the following repositories:
+* https://github.com/mit-han-lab/llm-awq
+* https://github.com/casper-hansen/AutoAWQ
 """
+
 import os
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoConfig
 
+from transformers import AutoModelForCausalLM, AutoConfig
 from transformers.models.bloom.modeling_bloom import BloomGelu
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 from transformers.activations import GELUActivation
@@ -65,7 +69,7 @@ def get_op_by_name(module, op_name):
 
     Args:
         module (nn.Module): The layer containing the submodule to find.
-        op_name (str): The name of the submodule to search for, using dot notation for nested modules.
+        op_name (str): The name of the submodule.
 
     Returns:
         nn.Module: The requested submodule found within the given layer.
@@ -87,7 +91,7 @@ def scale_ln_fcs(ln, fcs, scales):
     Args:
         ln (nn.LayerNorm): The LayerNorm module to be scaled.
         fcs (List[nn.Linear]): A list of fully-connected layers to be scaled.
-        scales (torch.Tensor): A 1D tensor of size (num_features,) containing the scaling factors for each feature.
+        scales (torch.Tensor): A 1D tensor of size (num_features,).
     """
 
     if not isinstance(fcs, list):
@@ -117,14 +121,14 @@ def scale_fc_fc(fc1, fc2, scales):
     Args:
         fc1 (nn.Linear): The first fully-connected layer to be scaled.
         fc2 (nn.Linear): The second fully-connected layer to be scaled.
-        scales (torch.Tensor): A 1D tensor of size (num_features,) containing the scaling factors for each feature.
+        scales (torch.Tensor): A 1D tensor of size (num_features,).
     """
     assert isinstance(fc1, nn.Linear)
     assert isinstance(fc2, nn.Linear)
 
     scales = scales.to(fc1.weight.device)
 
-    fc1.weight[-scales.size(0) :].div_(scales.view(-1, 1))
+    fc1.weight[-scales.size(0):].div_(scales.view(-1, 1))
     if fc1.bias is not None:
         fc1.bias.div_(scales.view(-1))
 
@@ -144,7 +148,7 @@ def scale_gelu_fc(gelu, fc, scales):
     Args:
         gelu (Union[nn.GELU, BloomGelu, GELUActivation]): The GELU activation module to be scaled.
         fc (nn.Linear): The fully-connected layer to be scaled.
-        scales (torch.Tensor): A 1D tensor of size (num_features,) containing the scaling factors for each feature.
+        scales (torch.Tensor): A 1D tensor of size (num_features,).
 
     Raises:
         TypeError: If the `gelu` module is not of type `nn.GELU`, `BloomGelu`, or `GELUActivation`.
@@ -166,13 +170,12 @@ def apply_scale(module, scales_list, input_feat_dict=None):
     Args:
         module (nn.Module): The module containing the layers to be scaled.
         scales_list (List[Tuple[str, List[str], torch.Tensor]]): A list of tuples containing:
-            * prev_op_name (str): The name of the preceding operation or module, relative to which the layers to be
-                                  scaled are located.
+            * prev_op_name (str): The name of the preceding operation or module, 
+                relative to which the layers to be scaled are located.
             * layer_names (List[str]): A list of names of the layers to be scaled, relative to the preceding operation.
             * scales (torch.Tensor): A 1D tensor of size (num_features,) containing the scaling factors for each feature.
         input_feat_dict (Optional[Dict[str, torch.Tensor]]): A dictionary mapping layer names to their corresponding
-            input features (optional). If provided, the input features are also
-            scaled proportionally after scaling the layer weights.
+            input features (optional).
     """
     for prev_op_name, layer_names, scales in scales_list:
         prev_op = get_op_by_name(module, prev_op_name)
@@ -234,7 +237,8 @@ def apply_clip(module, clip_list):
 
 def add_scale_weights(model_path, scale_path, tmp_path):
     """
-    Adds pre-computed Activation Weight Quantization (AWQ) results to a model, including scaling factors and clipping bounds.
+    Adds pre-computed Activation Weight Quantization (AWQ) results to a model, 
+    including scaling factors and clipping bounds.
 
     Args:
         model_path (str): Path to the pre-trained model to be equipped with AWQ.
