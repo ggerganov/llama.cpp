@@ -124,7 +124,7 @@ Then, you can use the following instructions to run PowerInfer with GPU index:
 
 ![github-eval-2080ti-q4](https://github.com/SJTU-IPADS/PowerInfer/assets/34213478/0fc1bfc4-aafc-4e82-a865-bec0143aff1a)
 
-PowerInfer achieves up to 11.69x and 8.00x speedup for FP16 and INT4 models!
+PowerInfer achieves up to 11x and 8x speedup for FP16 and INT4 models!
 
 ## TODOs
 We will release the code and data in the following order, please stay tuned!
