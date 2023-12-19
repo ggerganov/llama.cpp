@@ -95,6 +95,7 @@ class MODEL_ARCH(IntEnum):
     BLOOM     = auto()
     STABLELM  = auto()
     QWEN      = auto()
+    PHI2      = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -140,6 +141,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
+    MODEL_ARCH.PHI2:           "phi2",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -350,6 +352,17 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.GPT2: [
         # TODO
     ],
+    MODEL_ARCH.PHI2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ]
     # TODO
 }
 
