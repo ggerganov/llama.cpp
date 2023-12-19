@@ -138,12 +138,18 @@ We will release the code and data in the following order, please stay tuned!
 - [ ] Support Multi-GPU
 
 
-## Citation
+## Paper and Citation
+More technical details can be found in our [paper](https://ipads.se.sjtu.edu.cn/_media/publications/powerinfer-20231219.pdf).
 
 If you find PowerInfer useful or relevant to your project and research, please kindly cite our paper:
 
 ```bibtex
-Stay tuned!
+@techreport{song2023powerinfer,
+  author      = {Yixin Song and Zeyu Mi and Haotong Xie and Haibo Chen},
+  title       = {PowerInfer: Fast Large Language Model Serving with a Consumer-grade GPU},
+  institution = {Institute of Parallel and Distributed Systems (IPADS), Shanghai Jiao Tong University},
+  year        = {2023}
+}
 ```
 
 ## Acknowledgement
