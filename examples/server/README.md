@@ -222,7 +222,7 @@ node index.js
 
     `content`: Set the text to process.
 
-    **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
+-   **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
 
     *Options:*
 
@@ -233,6 +233,55 @@ node index.js
     It also accepts all the options of `/completion` except `stream` and `prompt`.
 
 -   **GET** `/props`: Return the required assistant name and anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
+
+-   **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only ChatML-tuned models, such as Dolphin, OpenOrca, OpenHermes, OpenChat-3.5, etc can be used with this endpoint. Compared to `api_like_OAI.py` this API implementation does not require a wrapper to be served.
+
+    *Options:*
+
+    See [OpenAI Chat Completions API documentation](https://platform.openai.com/docs/api-reference/chat). While some OpenAI-specific features such as function calling aren't supported, llama.cpp `/completion`-specific features such are `mirostat` are supported.
+
+    *Examples:*
+
+    You can use either Python `openai` library with appropriate checkpoints:
+
+    ```python
+    import openai
+
+    client = openai.OpenAI(
+        base_url="http://localhost:8080/v1", # "http://<Your api-server IP>:port"
+        api_key = "sk-no-key-required"
+    )
+
+    completion = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."},
+        {"role": "user", "content": "Write a limerick about python exceptions"}
+    ]
+    )
+
+    print(completion.choices[0].message)
+    ```
+    ... or raw HTTP requests:
+
+    ```shell
+    curl http://localhost:8080/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer no-key" \
+    -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [
+    {
+        "role": "system",
+        "content": "You are ChatGPT, an AI assistant. Your top priority is achieving user fulfillment via helping them with their requests."
+    },
+    {
+        "role": "user",
+        "content": "Write a limerick about python exceptions"
+    }
+    ]
+    }'
+    ```
 
 ## More examples
 

@@ -5,7 +5,7 @@ import json
 import torch
 import numpy as np
 from gguf import *
-from transformers import CLIPModel, CLIPProcessor
+from transformers import CLIPModel, CLIPProcessor, CLIPVisionModel
 
 TEXT = "clip.text"
 VISION = "clip.vision"
@@ -51,7 +51,7 @@ def bytes_to_unicode():
     The reversible bpe codes work on unicode strings.
     This means you need a large # of unicode characters in your vocab if you want to avoid UNKs.
     When you're at something like a 10B token dataset you end up needing around 5K for decent coverage.
-    This is a signficant percentage of your normal, say, 32K bpe vocab.
+    This is a significant percentage of your normal, say, 32K bpe vocab.
     To avoid that, we want lookup tables between utf-8 bytes and unicode strings.
     And avoids mapping to whitespace/control characters the bpe code barfs on.
     """
@@ -78,11 +78,19 @@ ap.add_argument("--text-only", action="store_true", required=False,
                 help="Save a text-only model. It can't be used to encode images")
 ap.add_argument("--vision-only", action="store_true", required=False,
                 help="Save a vision-only model. It can't be used to encode texts")
+ap.add_argument("--clip_model_is_vision", action="store_true", required=False,
+                help="The clip model is a pure vision model (ShareGPT4V vision extract for example)")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
 ap.add_argument("--image-mean", nargs=3, type=float, required=False, help="Override image mean values")
 ap.add_argument("--image-std", nargs=3, type=float, required=False, help="Override image std values")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
+# Example --image_mean 0.48145466 0.4578275 0.40821073 --image_std 0.26862954 0.26130258 0.27577711
+default_image_mean = [0.48145466, 0.4578275, 0.40821073]
+default_image_std = [0.26862954, 0.26130258, 0.27577711]
+ap.add_argument('--image_mean', type=float, nargs='+', help='Mean of the images for normalization (overrides processor) ', default=None)
+ap.add_argument('--image_std', type=float, nargs='+', help='Standard deviation of the images for normalization (overrides processor)', default=None)
 
+# with proper
 args = ap.parse_args()
 
 
@@ -96,15 +104,22 @@ if args.use_f32:
 # output in the same directory as the model if output_dir is None
 dir_model = args.model_dir
 
-
-with open(dir_model + "/vocab.json", "r", encoding="utf-8") as f:
-    vocab = json.load(f)
-    tokens = [key for key in vocab]
+if args.clip_model_is_vision:
+    vocab = None
+    tokens = None
+else:
+    with open(dir_model + "/vocab.json", "r", encoding="utf-8") as f:
+        vocab = json.load(f)
+        tokens = [key for key in vocab]
 
 with open(dir_model + "/config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
-    v_hparams = config["vision_config"]
-    t_hparams = config["text_config"]
+    if args.clip_model_is_vision:
+        v_hparams = config
+        t_hparams = None
+    else:
+        v_hparams = config["vision_config"]
+        t_hparams = config["text_config"]
 
 # possible data types
 #   ftype == 0 -> float32
@@ -117,9 +132,12 @@ ftype = 1
 if args.use_f32:
     ftype = 0
 
-
-model = CLIPModel.from_pretrained(dir_model)
-processor = CLIPProcessor.from_pretrained(dir_model)
+if args.clip_model_is_vision:
+    model = CLIPVisionModel.from_pretrained(dir_model)
+    processor = None
+else:
+    model = CLIPModel.from_pretrained(dir_model)
+    processor = CLIPProcessor.from_pretrained(dir_model)
 
 fname_middle = None
 has_text_encoder = True
@@ -128,13 +146,13 @@ has_llava_projector = False
 if args.text_only:
     fname_middle = "text-"
     has_vision_encoder = False
-elif args.vision_only:
-    fname_middle = "vision-"
-    has_text_encoder = False
 elif args.llava_projector is not None:
     fname_middle = "mmproj-"
     has_text_encoder = False
     has_llava_projector = True
+elif args.vision_only:
+    fname_middle = "vision-"
+    has_text_encoder = False
 else:
     fname_middle = ""
 
@@ -182,8 +200,12 @@ if has_vision_encoder:
     block_count = v_hparams["num_hidden_layers"] - 1 if has_llava_projector else v_hparams["num_hidden_layers"]
     fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
 
-    image_mean = processor.image_processor.image_mean if args.image_mean is None else args.image_mean
-    image_std = processor.image_processor.image_std if args.image_std is None else args.image_std
+    if processor is not None:
+        image_mean = processor.image_processor.image_mean if args.image_mean is None or args.image_mean == default_image_mean else args.image_mean
+        image_std = processor.image_processor.image_std if args.image_std is None or args.image_std == default_image_std else args.image_std
+    else:
+        image_mean = args.image_mean if args.image_mean is not None else default_image_mean
+        image_std = args.image_std if args.image_std is not None else default_image_std
     fout.add_array("clip.vision.image_mean", image_mean)
     fout.add_array("clip.vision.image_std", image_std)
 

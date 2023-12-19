@@ -109,8 +109,10 @@ class SpecialVocab:
         return True
 
     def _set_special_token(self, typ: str, tid: Any) -> None:
-        if not isinstance(tid, int) or tid < 0:
+        if not isinstance(tid, int):
             return
+        if tid < 0:
+            raise ValueError(f'invalid value for special token type {typ}: {tid}')
         if self.n_vocab is None or tid < self.n_vocab:
             if typ in self.special_token_ids:
                 return
