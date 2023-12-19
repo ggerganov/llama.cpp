@@ -1,11 +1,10 @@
 # AWQ: Activation-aware Weight Quantization for LLM - version apply to llamacpp
 [[Paper](https://arxiv.org/abs/2306.00978)][[Original Repo](https://github.com/mit-han-lab/llm-awq)][[Easy-to-use Repo](https://github.com/casper-hansen/AutoAWQ)]
-Thank VinAI Team a lot for helping me on this project.
 
 **Supported models:**
 
-- [X] LLaMA 🦙
-- [x] LLaMA 2 🦙🦙
+- [X] LLaMA
+- [x] LLaMA 2 
 - [X] MPT
 - [X] Mistral AI v0.1
 - [ ] Bloom
