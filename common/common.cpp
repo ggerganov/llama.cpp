@@ -150,10 +150,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             params.seed = std::stoul(argv[i]);
         } else if (arg == "-awq" || arg == "--use-awq") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
             params.use_awq = true;
         } else if (arg == "-t" || arg == "--threads") {
             if (++i >= argc) {
