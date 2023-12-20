@@ -195,7 +195,7 @@ enum llm_arch {
     LLM_ARCH_BLOOM,
     LLM_ARCH_STABLELM,
     LLM_ARCH_QWEN,
-    LLM_ARCH_PHI2,
+    LLM_ARCH_PHI,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -213,7 +213,7 @@ static std::map<llm_arch, std::string> LLM_ARCH_NAMES = {
     { LLM_ARCH_BLOOM,           "bloom"     },
     { LLM_ARCH_STABLELM,        "stablelm"  },
     { LLM_ARCH_QWEN,            "qwen"      },
-    { LLM_ARCH_PHI2,            "phi2"      },
+    { LLM_ARCH_PHI,             "phi"      },
 };
 
 enum llm_kv {
@@ -553,7 +553,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
         },
     },
     {
-        LLM_ARCH_PHI2,
+        LLM_ARCH_PHI,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
@@ -2651,11 +2651,12 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-        case LLM_ARCH_PHI2:
+        case LLM_ARCH_PHI:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
 
                 switch (hparams.n_layer) {
+                    case 24: model.type = e_model::MODEL_1B; break;
                     case 32: model.type = e_model::MODEL_3B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
@@ -3655,7 +3656,7 @@ static void llm_load_tensors(
                         }
                     }
                 } break;
-            case LLM_ARCH_PHI2:
+            case LLM_ARCH_PHI:
                 {
                     model.tok_embd = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
 
@@ -4117,7 +4118,7 @@ static struct ggml_tensor * llm_build_kqv(
     struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
     cb(kq, "kq", il);
 
-    if (model.arch == LLM_ARCH_PHI2) {
+    if (model.arch == LLM_ARCH_PHI) {
         // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
         // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
@@ -5523,7 +5524,7 @@ struct llm_build_context {
 
         return gf;
     }
-    struct ggml_cgraph * build_phi2() {
+    struct ggml_cgraph * build_phi() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
         struct ggml_tensor * cur;
@@ -5924,8 +5925,8 @@ static struct ggml_cgraph * llama_build_graph(
 
             if (!ggml_allocr_is_measure(lctx.alloc)) {
                 const int64_t n_embd_head = model.hparams.n_embd_head();
-                if (model.arch == LLM_ARCH_PHI2) {
-                    // with phi2, we scale the Q to avoid precision issues
+                if (model.arch == LLM_ARCH_PHI) {
+                    // with phi, we scale the Q to avoid precision issues
                     // ref: https://github.com/ml-explore/mlx-examples/blob/08e862336ade809bc37d1035f94b359e7d1a5152/phi2/phi2.py#L64-L66
                     ggml_set_f32(cur, 1.0f);
                 } else {
@@ -6157,9 +6158,9 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_qwen();
             } break;
-        case LLM_ARCH_PHI2:
+        case LLM_ARCH_PHI:
             {
-                result = llm.build_phi2();
+                result = llm.build_phi();
             } break;
         default:
             GGML_ASSERT(false);
