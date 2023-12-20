@@ -1,6 +1,3 @@
-numpy==1.24.4
-sentencepiece==0.1.98
-torch>=2.0.0
-transformers>=4.34.0
-gguf>=0.1.0
-protobuf>=4.21.0
+-r convert_requirements.txt
+-r convert-hf-to-gguf_requirements.txt
+-r convert-lora-to-ggml_requirements.txt
