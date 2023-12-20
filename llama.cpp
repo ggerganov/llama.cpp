@@ -2435,6 +2435,10 @@ struct llama_model_loader {
             mapping->unmap(0, mmap_first);
             mapping->unmap(mmap_last, mapping->size - mmap_last);
         }
+
+        if (progress_callback) {
+            progress_callback(1.0f, progress_callback_user_data);
+        }
     }
 };
 
@@ -3690,10 +3694,6 @@ static void llm_load_tensors(
     }
 
     ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL);
-
-    if (progress_callback) {
-        progress_callback(1.0f, progress_callback_user_data);
-    }
 
     model.mapping = std::move(ml.mapping);
 
