@@ -816,18 +816,18 @@ struct llama_mmap {
 
     llama_mmap(const llama_mmap &) = delete;
 
-    static void align_offset(size_t & offset, size_t & len, size_t page_size) {
+    static void align_offset(size_t * offset, size_t * len, size_t page_size) {
         // align offset to the next page
-        size_t offset_in_page = offset & (page_size - 1);
+        size_t offset_in_page = *offset & (page_size - 1);
         size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
-        offset += offset_to_page;
+        *offset += offset_to_page;
 
-        if (offset_to_page >= len) {
-            len = 0;
+        if (offset_to_page >= *len) {
+            *len = 0;
         } else {
-            len -= offset_to_page;
+            *len -= offset_to_page;
             // align len to the previous page
-            len -= len & (page_size - 1);
+            *len -= *len & (page_size - 1);
         }
     }
 
@@ -871,7 +871,7 @@ struct llama_mmap {
 
     void unmap(size_t offset, size_t len) {
         int page_size = sysconf(_SC_PAGESIZE);
-        align_offset(offset, len, page_size);
+        align_offset(&offset, &len, page_size);
         if (len < (size_t)page_size) {
             return;
         }
@@ -940,7 +940,7 @@ struct llama_mmap {
         SYSTEM_INFO si;
         GetSystemInfo(&si);
         DWORD page_size = si.dwAllocationGranularity;
-        align_offset(offset, len, page_size);
+        align_offset(&offset, &len, page_size);
 
         if (len < (size_t)page_size) {
             return;
