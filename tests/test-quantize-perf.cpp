@@ -286,7 +286,7 @@ int main(int argc, char * argv[]) {
                         qfns.from_float_reference(test_data1, test_q1, size);
                         return test_q1[0];
                     };
-                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    size_t quantized_size = ggml_row_size(type, size);
                     benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
@@ -300,7 +300,7 @@ int main(int argc, char * argv[]) {
                         qfns.from_float(test_data1, test_q1, size);
                         return test_q1[0];
                     };
-                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    size_t quantized_size = ggml_row_size(type, size);
                     benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
@@ -315,7 +315,7 @@ int main(int argc, char * argv[]) {
                         qfns.to_float(test_q1, test_out, size);
                         return test_out[0];
                     };
-                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    size_t quantized_size = ggml_row_size(type, size);
                     benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
@@ -330,7 +330,7 @@ int main(int argc, char * argv[]) {
                         vdot.from_float(test_data1, test_q1, size);
                         return test_q1[0];
                     };
-                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    size_t quantized_size = ggml_row_size(type, size);
                     benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");
@@ -347,7 +347,7 @@ int main(int argc, char * argv[]) {
                         qfns.vec_dot(size, &result, test_q1, test_q2);
                         return result;
                     };
-                    size_t quantized_size = size / ggml_blck_size(type) * ggml_type_size(type);
+                    size_t quantized_size = ggml_row_size(type, size);
                     benchmark_function(size, quantized_size, iterations, quantize_fn);
                 }
                 printf("\n");

@@ -10,7 +10,8 @@
 // crash the server in debug mode, otherwise send an http 500 error
 #define CPPHTTPLIB_NO_EXCEPTIONS 1
 #endif
-
+// increase max payload length to allow use of larger context size
+#define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
 #include "json.hpp"
 
@@ -36,6 +37,7 @@ using json = nlohmann::json;
 struct server_params
 {
     std::string hostname = "127.0.0.1";
+    std::string api_key;
     std::string public_path = "examples/server/public";
     int32_t port = 8080;
     int32_t read_timeout = 600;
@@ -376,7 +378,6 @@ struct llama_client_slot
 
     int32_t num_prompt_tokens           = 0;
     int32_t num_prompt_tokens_processed = 0;
-    int32_t multibyte_pending           = 0;
 
     json prompt;
     std::string generated_text;
@@ -425,7 +426,6 @@ struct llama_client_slot
         stopped_word           = false;
         stopped_limit          = false;
         stopping_word          = "";
-        multibyte_pending      = 0;
         n_past                 = 0;
         sent_count             = 0;
         sent_token_probs_index = 0;
@@ -992,35 +992,36 @@ struct llama_server_context
         slot.generated_text += token_str;
         slot.has_next_token = true;
 
-        if (slot.multibyte_pending > 0)
+        // check if there is incomplete UTF-8 character at the end
+        bool incomplete = false;
+        for (unsigned i = 1; i < 5 && i <= slot.generated_text.size(); ++i)
         {
-            slot.multibyte_pending -= token_str.size();
-        }
-        else if (token_str.size() == 1)
-        {
-            const char c = token_str[0];
-            // 2-byte characters: 110xxxxx 10xxxxxx
+            unsigned char c = slot.generated_text[slot.generated_text.size() - i];
+            if ((c & 0xC0) == 0x80)
+            {
+                // continuation byte: 10xxxxxx
+                continue;
+            }
             if ((c & 0xE0) == 0xC0)
             {
-                slot.multibyte_pending = 1;
-                // 3-byte characters: 1110xxxx 10xxxxxx 10xxxxxx
+                // 2-byte character: 110xxxxx ...
+                incomplete = i < 2;
             }
             else if ((c & 0xF0) == 0xE0)
             {
-                slot.multibyte_pending = 2;
-                // 4-byte characters: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                // 3-byte character: 1110xxxx ...
+                incomplete = i < 3;
             }
             else if ((c & 0xF8) == 0xF0)
             {
-                slot.multibyte_pending = 3;
+                // 4-byte character: 11110xxx ...
+                incomplete = i < 4;
             }
-            else
-            {
-                slot.multibyte_pending = 0;
-            }
+            // else 1-byte character or invalid byte
+            break;
         }
 
-        if (slot.multibyte_pending == 0)
+        if (!incomplete)
         {
             size_t pos = std::min(slot.sent_count, slot.generated_text.size());
             const std::string str_test = slot.generated_text.substr(pos);
@@ -1055,7 +1056,7 @@ struct llama_server_context
             }
         }
 
-        if (slot.multibyte_pending > 0 && !slot.has_next_token)
+        if (incomplete)
         {
             slot.has_next_token = true;
         }
@@ -1954,6 +1955,7 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --host                ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT           port to listen (default  (default: %d)\n", sparams.port);
     printf("  --path PUBLIC_PATH    path from which to serve static files (default %s)\n", sparams.public_path.c_str());
+    printf("  --api-key API_KEY     optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  -to N, --timeout N    server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
     printf("  --embedding           enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N   number of slots for process requests (default: %d)\n", params.n_parallel);
@@ -2002,6 +2004,15 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             sparams.public_path = argv[i];
+        }
+        else if (arg == "--api-key")
+        {
+            if (++i >= argc)
+            {
+                invalid_param = true;
+                break;
+            }
+            sparams.api_key = argv[i];
         }
         else if (arg == "--timeout" || arg == "-to")
         {
@@ -2403,7 +2414,7 @@ json oaicompat_completion_params_parse(
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
     llama_params["tfs_z"]             = json_value(body, "tfs_z", 0.0);
 
-    if (llama_params.count("grammar") != 0) {
+    if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
@@ -2634,6 +2645,9 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
 
 int main(int argc, char **argv)
 {
+#if SERVER_VERBOSE != 1
+    log_disable();
+#endif
     // own arguments required by this example
     gpt_params params;
     server_params sparams;
@@ -2670,6 +2684,32 @@ int main(int argc, char **argv)
 
     httplib::Server svr;
 
+    // Middleware for API key validation
+    auto validate_api_key = [&sparams](const httplib::Request &req, httplib::Response &res) -> bool {
+        // If API key is not set, skip validation
+        if (sparams.api_key.empty()) {
+            return true;
+        }
+
+        // Check for API key in the header
+        auto auth_header = req.get_header_value("Authorization");
+        std::string prefix = "Bearer ";
+        if (auth_header.substr(0, prefix.size()) == prefix) {
+            std::string received_api_key = auth_header.substr(prefix.size());
+            if (received_api_key == sparams.api_key) {
+                return true; // API key is valid
+            }
+        }
+
+        // API key is invalid or not provided
+        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
+        res.status = 401; // Unauthorized
+
+        LOG_WARNING("Unauthorized: Invalid API Key", {});
+
+        return false;
+    };
+
     svr.set_default_headers({{"Server", "llama.cpp"},
                              {"Access-Control-Allow-Origin", "*"},
                              {"Access-Control-Allow-Headers", "content-type"}});
@@ -2677,28 +2717,28 @@ int main(int argc, char **argv)
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.js is found in the public --path
     svr.Get("/index.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
+                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/completion.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/json-schema-to-grammar.mjs", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
@@ -2709,23 +2749,26 @@ int main(int argc, char **argv)
                     { "user_name",      llama.name_user.c_str() },
                     { "assistant_name", llama.name_assistant.c_str() }
                 };
-                res.set_content(data.dump(), "application/json");
+                res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
-    svr.Post("/completion", [&llama](const httplib::Request &req, httplib::Response &res)
+    svr.Post("/completion", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                if (!validate_api_key(req, res)) {
+                    return;
+                }
                 json data = json::parse(req.body);
                 const int task_id = llama.request_completion(data, false, false, -1);
                 if (!json_value(data, "stream", false)) {
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop) {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2796,12 +2839,15 @@ int main(int argc, char **argv)
                     }}
                 };
 
-                res.set_content(models.dump(), "application/json");
+                res.set_content(models.dump(), "application/json; charset=utf-8");
             });
 
     // TODO: add mount point without "/v1" prefix -- how?
-    svr.Post("/v1/chat/completions", [&llama](const httplib::Request &req, httplib::Response &res)
+    svr.Post("/v1/chat/completions", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                if (!validate_api_key(req, res)) {
+                    return;
+                }
                 json data = oaicompat_completion_params_parse(json::parse(req.body));
 
                 const int task_id = llama.request_completion(data, false, false, -1);
@@ -2815,10 +2861,10 @@ int main(int argc, char **argv)
 
                         res.set_content(oaicompat_result.dump(-1, ' ', false,
                                             json::error_handler_t::replace),
-                                            "application/json");
+                                            "application/json; charset=utf-8");
                     } else {
                         res.status = 500;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2870,8 +2916,11 @@ int main(int argc, char **argv)
                 }
             });
 
-    svr.Post("/infill", [&llama](const httplib::Request &req, httplib::Response &res)
+    svr.Post("/infill", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
             {
+                if (!validate_api_key(req, res)) {
+                    return;
+                }
                 json data = json::parse(req.body);
                 const int task_id = llama.request_completion(data, true, false, -1);
                 if (!json_value(data, "stream", false)) {
@@ -2879,12 +2928,12 @@ int main(int argc, char **argv)
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop)
                     {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2933,11 +2982,11 @@ int main(int argc, char **argv)
     svr.Get("/model.json", [&llama](const httplib::Request &, httplib::Response &res)
             {
                 const json data = llama.get_model_props();
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response &res)
-                { return res.set_content("", "application/json"); });
+                { return res.set_content("", "application/json; charset=utf-8"); });
 
     svr.Post("/tokenize", [&llama](const httplib::Request &req, httplib::Response &res)
             {
@@ -2948,7 +2997,7 @@ int main(int argc, char **argv)
                     tokens = llama.tokenize(body["content"], false);
                 }
                 const json data = format_tokenizer_response(tokens);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/detokenize", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -2962,7 +3011,7 @@ int main(int argc, char **argv)
                 }
 
                 const json data = format_detokenized_response(content);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/embedding", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -2979,7 +3028,7 @@ int main(int argc, char **argv)
                 }
                 const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true, -1);
                 task_result result = llama.next_result(task_id);
-                return res.set_content(result.result_json.dump(), "application/json");
+                return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
             });
 
     svr.set_logger(log_server_request);
@@ -3000,19 +3049,23 @@ int main(int argc, char **argv)
                 {
                     snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
                 }
-                res.set_content(buf, "text/plain");
+                res.set_content(buf, "text/plain; charset=utf-8");
                 res.status = 500;
             });
 
     svr.set_error_handler([](const httplib::Request &, httplib::Response &res)
             {
+                if (res.status == 401)
+                {
+                    res.set_content("Unauthorized", "text/plain; charset=utf-8");
+                }
                 if (res.status == 400)
                 {
-                    res.set_content("Invalid request", "text/plain");
+                    res.set_content("Invalid request", "text/plain; charset=utf-8");
                 }
-                else if (res.status != 500)
+                else if (res.status == 404)
                 {
-                    res.set_content("File Not Found", "text/plain");
+                    res.set_content("File Not Found", "text/plain; charset=utf-8");
                     res.status = 404;
                 }
             });
@@ -3033,11 +3086,15 @@ int main(int argc, char **argv)
     // to make it ctrl+clickable:
     LOG_TEE("\nllama server listening at http://%s:%d\n\n", sparams.hostname.c_str(), sparams.port);
 
-    LOG_INFO("HTTP server listening", {
-                                          {"hostname", sparams.hostname},
-                                          {"port", sparams.port},
-                                      });
+    std::unordered_map<std::string, std::string> log_data;
+    log_data["hostname"] = sparams.hostname;
+    log_data["port"] = std::to_string(sparams.port);
 
+    if (!sparams.api_key.empty()) {
+        log_data["api_key"] = "api_key: ****" + sparams.api_key.substr(sparams.api_key.length() - 4);
+    }
+
+    LOG_INFO("HTTP server listening", log_data);
     // run the HTTP server in a thread - see comment below
     std::thread t([&]()
             {

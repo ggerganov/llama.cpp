@@ -1110,7 +1110,7 @@ static void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, 
         name = ggml_get_name(tensor);
     }
     uint32_t name_len = strlen(name);
-    uint32_t nd = tensor->n_dims;
+    uint32_t nd = ggml_n_dims(tensor);
     uint32_t ne[4] = { (uint32_t)tensor->ne[0],
                        (uint32_t)tensor->ne[1],
                        (uint32_t)tensor->ne[2],
@@ -1620,8 +1620,6 @@ int main(int argc, char ** argv) {
     opt->params.adam.gclip              = params.common.adam_gclip;
     opt->params.adam.eps_f              = params.common.adam_eps_f;
 
-    ggml_allocr * alloc = NULL;
-
     printf("%s: init model\n", __func__);
     bool existed = load_checkpoint_lora_file(params.common.fn_checkpoint_in, &model, &lora, train);
 
@@ -1725,10 +1723,9 @@ int main(int argc, char ** argv) {
 
     // allocate input tensors
     mem_input_data.resize(max_input_size);
-    alloc = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc, tokens_input);
-    ggml_allocr_alloc(alloc, target_probs);
-    ggml_allocr_free(alloc);
+    ggml_allocr_t alloc_inps = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
+    ggml_allocr_alloc(alloc_inps, tokens_input);
+    ggml_allocr_alloc(alloc_inps, target_probs);
 
     // context for compute tensors without their data
     const size_t estimated_compute_size_wo_data = (
@@ -1755,7 +1752,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
-        alloc = ggml_allocr_new_measure(tensor_alignment);
+        ggml_allocr_t alloc = ggml_allocr_new_measure(tensor_alignment);
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1788,7 +1785,7 @@ int main(int argc, char ** argv) {
     // allocate compute tensors
     mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
-    alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
+    ggml_allocr_t alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1804,6 +1801,8 @@ int main(int argc, char ** argv) {
         params.common.use_checkpointing
     );
     ggml_allocr_free(alloc);
+    ggml_allocr_free(alloc_inps);
+
 
     // tokenize data
     std::vector<llama_token> train_tokens;
