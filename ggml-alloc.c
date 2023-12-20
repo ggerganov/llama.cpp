@@ -792,6 +792,11 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
             } else {
                 ggml_backend_view_init(buffer, t);
             }
+        } else {
+            if (t->view_src != NULL) {
+                // view of a pre-allocated tensor
+                ggml_backend_view_init(buffer, t);
+            }
         }
     }
 

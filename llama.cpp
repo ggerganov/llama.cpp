@@ -3661,7 +3661,7 @@ static void llm_load_tensors(
             LLAMA_LOG_INFO("%s: VRAM used           = %7.2f MiB\n", __func__, vram_weights / 1024.0 / 1024.0);
         }
 
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
+#if (defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)) || defined(GGML_USE_CLBLAST)
         const int n_gpu = std::min(n_gpu_layers, int(hparams.n_layer));
 
         LLAMA_LOG_INFO("%s: offloading %d repeating layers to GPU\n", __func__, n_gpu);
@@ -9830,17 +9830,12 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
             ggml_context * cpy_ctx = ggml_init({ 6*n_layer*ggml_tensor_overhead() + ggml_graph_overhead(), NULL, /* no_alloc */ true });
             ggml_cgraph * gf = ggml_new_graph(cpy_ctx);
 
-            std::vector<std::vector<uint8_t>> kout2d_data(n_layer);
-            std::vector<std::vector<uint8_t>> vout2d_data(n_layer);
+            std::vector<struct ggml_tensor *> kout2d(n_layer);
+            std::vector<struct ggml_tensor *> vout2d(n_layer);
 
             for (int il = 0; il < (int) n_layer; ++il) {
-                ggml_tensor * kout2d = ggml_new_tensor_2d(cpy_ctx, kv_self.k_l[il]->type, n_embd, kv_head);
-                kout2d_data[il].resize(ggml_nbytes(kout2d));
-                kout2d->data = kout2d_data[il].data();
-
-                ggml_tensor * vout2d = ggml_new_tensor_2d(cpy_ctx, kv_self.v_l[il]->type, kv_head, n_embd);
-                vout2d_data[il].resize(ggml_nbytes(vout2d));
-                vout2d->data = vout2d_data[il].data();
+                kout2d[il] = ggml_new_tensor_2d(cpy_ctx, kv_self.k_l[il]->type, n_embd, kv_head);
+                vout2d[il] = ggml_new_tensor_2d(cpy_ctx, kv_self.v_l[il]->type, kv_head, n_embd);
 
                 ggml_tensor * k2d = ggml_view_2d(cpy_ctx, kv_self.k_l[il],
                         n_embd, kv_head,
@@ -9850,21 +9845,28 @@ static void llama_copy_state_data_internal(struct llama_context * ctx, llama_dat
                         kv_head, n_embd,
                         elt_size*n_ctx, 0);
 
-                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, k2d, kout2d));
-                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, v2d, vout2d));
+                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, k2d, kout2d[il]));
+                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, v2d, vout2d[il]));
             }
 
-            std::vector<uint8_t> work_buffer;
-            ggml_graph_compute_helper(work_buffer, gf, ctx->cparams.n_threads);
+            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(cpy_ctx, ctx->backend);
+
+            ggml_backend_graph_compute(ctx->backend, gf);
+
+            std::vector<uint8_t> tmp_buf;
+            for (int il = 0; il < (int) n_layer; ++il) {
+                tmp_buf.resize(ggml_nbytes(kout2d[il]));
+                ggml_backend_tensor_get(kout2d[il], tmp_buf.data(), 0, tmp_buf.size());
+                data_ctx->write(tmp_buf.data(), tmp_buf.size());
+
+                tmp_buf.resize(ggml_nbytes(vout2d[il]));
+                ggml_backend_tensor_get(vout2d[il], tmp_buf.data(), 0, tmp_buf.size());
+                data_ctx->write(tmp_buf.data(), tmp_buf.size());
+            }
 
             ggml_free(cpy_ctx);
 
-            // our data is now in the kout2d_data and vout2d_data buffers
-            // write them to file
-            for (uint32_t il = 0; il < n_layer; ++il) {
-                data_ctx->write(kout2d_data[il].data(), kout2d_data[il].size());
-                data_ctx->write(vout2d_data[il].data(), vout2d_data[il].size());
-            }
+            ggml_backend_buffer_free(buf);
         }
 
         for (uint32_t i = 0; i < kv_size; ++i) {
@@ -9969,14 +9971,12 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
             ggml_context * cpy_ctx = ggml_init({ 6*n_layer*ggml_tensor_overhead() + ggml_graph_overhead(), NULL, /* no_alloc */ true });
             ggml_cgraph * gf = ggml_new_graph(cpy_ctx);
 
-            for (int il = 0; il < n_layer; ++il) {
-                ggml_tensor * kin2d = ggml_new_tensor_2d(cpy_ctx, kv_self.k_l[il]->type, n_embd, kv_head);
-                kin2d->data = (void *) inp;
-                inp += ggml_nbytes(kin2d);
+            std::vector<struct ggml_tensor *> kin2d(n_layer);
+            std::vector<struct ggml_tensor *> vin2d(n_layer);
 
-                ggml_tensor * vin2d = ggml_new_tensor_2d(cpy_ctx, kv_self.v_l[il]->type, kv_head, n_embd);
-                vin2d->data = (void *) inp;
-                inp += ggml_nbytes(vin2d);
+            for (int il = 0; il < n_layer; ++il) {
+                kin2d[il] = ggml_new_tensor_2d(cpy_ctx, kv_self.k_l[il]->type, n_embd, kv_head);
+                vin2d[il] = ggml_new_tensor_2d(cpy_ctx, kv_self.v_l[il]->type, kv_head, n_embd);
 
                 ggml_tensor * k2d = ggml_view_2d(cpy_ctx, kv_self.k_l[il],
                     n_embd, kv_head,
@@ -9986,14 +9986,26 @@ size_t llama_set_state_data(struct llama_context * ctx, uint8_t * src) {
                     kv_head, n_embd,
                     elt_size*n_ctx, 0);
 
-                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, kin2d, k2d));
-                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, vin2d, v2d));
+                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, kin2d[il], k2d));
+                ggml_build_forward_expand(gf, ggml_cpy(cpy_ctx, vin2d[il], v2d));
             }
 
-            std::vector<uint8_t> work_buffer;
-            ggml_graph_compute_helper(work_buffer, gf, ctx->cparams.n_threads);
+            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors(cpy_ctx, ctx->backend);
+
+            // load data into the tensors
+            for (int il = 0; il < n_layer; ++il) {
+                ggml_backend_tensor_set(kin2d[il], inp, 0, ggml_nbytes(kin2d[il]));
+                inp += ggml_nbytes(kin2d[il]);
+
+                ggml_backend_tensor_set(vin2d[il], inp, 0, ggml_nbytes(vin2d[il]));
+                inp += ggml_nbytes(vin2d[il]);
+            }
+
+            ggml_backend_graph_compute(ctx->backend, gf);
 
             ggml_free(cpy_ctx);
+
+            ggml_backend_buffer_free(buf);
         }
 
         ctx->kv_self.head = kv_head;

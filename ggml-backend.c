@@ -1250,7 +1250,7 @@ void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml
 // utils
 void ggml_backend_view_init(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor->buffer == NULL);
-    GGML_ASSERT(tensor->data == NULL);
+    //GGML_ASSERT(tensor->data == NULL); // views of pre-allocted tensors may have the data set, but still need to be initialized
     GGML_ASSERT(tensor->view_src != NULL);
     GGML_ASSERT(tensor->view_src->buffer != NULL);
     GGML_ASSERT(tensor->view_src->data != NULL);
