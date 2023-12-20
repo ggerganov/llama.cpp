@@ -1,5 +1,5 @@
 #define LLAMA_API_INTERNAL
-#define LLAMA_GGML_BACKEND_CUDA_TEST // for testing only - disables partial offloading
+//#define LLAMA_GGML_BACKEND_CUDA_TEST // for testing only - enables ggml-cuda through ggml-backend, disables partial offloading
 #include "llama.h"
 
 #include "unicode.h"
@@ -1087,6 +1087,26 @@ static std::string llama_token_to_piece(const struct llama_context * ctx, llama_
     return std::string(result.data(), result.size());
 }
 
+static ggml_backend_buffer_type_t llama_default_buffer_type(int n_gpu_layers) {
+#ifdef GGML_USE_METAL
+    if (n_gpu_layers > 0) {
+        return ggml_backend_metal_buffer_type();
+    }
+#elif defined(GGML_USE_CUBLAS) && defined(LLAMA_GGML_BACKEND_CUDA_TEST)
+    if (n_gpu_layers > 0) {
+        return ggml_backend_cuda_buffer_type(0);
+    }
+#elif defined(GGML_USE_CUBLAS)
+    return ggml_backend_cuda_host_buffer_type();
+#elif defined(GGML_USE_CPU_HBM)
+    return ggml_backend_cpu_hbm_buffer_type();
+#endif
+
+    return ggml_backend_cpu_buffer_type();
+
+    GGML_UNUSED(n_gpu_layers);
+}
+
 //
 // globals
 //
@@ -1492,8 +1512,7 @@ static bool llama_kv_cache_init(
                          ggml_type   vtype,
                           uint32_t   n_ctx,
                                int   n_gpu_layers,
-                              bool   offload,
-        ggml_backend_buffer_type_t   buft) {
+                              bool   offload) {
     const uint32_t n_embd  = hparams.n_embd_gqa();
     const uint32_t n_layer = hparams.n_layer;
 
@@ -1532,7 +1551,7 @@ static bool llama_kv_cache_init(
         ggml_format_name(v, "cache_v_l%d", i);
         cache.k_l.push_back(k);
         cache.v_l.push_back(v);
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
         if (i >= i_gpu_start) {
             if (offload) {
                 ggml_cuda_assign_buffers_no_scratch(k);
@@ -1547,7 +1566,7 @@ static bool llama_kv_cache_init(
     }
 
     // allocate tensors
-    cache.buf = ggml_backend_alloc_ctx_tensors_from_buft(cache.ctx, buft);
+    cache.buf = ggml_backend_alloc_ctx_tensors_from_buft(cache.ctx, llama_default_buffer_type(n_gpu_layers));
 
     // buf may be NULL with full offload
     if (cache.buf) {
@@ -1559,7 +1578,6 @@ static bool llama_kv_cache_init(
         LLAMA_LOG_INFO("%s: VRAM kv self = %.2f MB\n", __func__, vram_kv_cache / 1024.0 / 1024.0);
     }
 
-    GGML_UNUSED(n_gpu_layers);
     GGML_UNUSED(i_gpu_start);
     GGML_UNUSED(offload);
 
@@ -2252,6 +2270,8 @@ struct llama_model_loader {
         }
     }
 
+
+
     void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) {
         size_t size_lock = 0;
         size_t size_data = 0;
@@ -2267,68 +2287,65 @@ struct llama_model_loader {
             }
         }
 
+#if (defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)) || defined(GGML_USE_CLBLAST)
+        const bool legacy_offload = true;
+#else
+        const bool legacy_offload = false;
+#endif
+
         std::vector<no_init<uint8_t>> read_buf;
 
         size_t done_size = 0;
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
             GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
-
             const size_t offs = file_offset(ggml_get_name(cur));
 
-            switch (cur->backend) {
-                case GGML_BACKEND_CPU:
-                    if (use_mmap) {
-                        if (buf_mmap) {
-                            ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *)mapping->addr + offs);
-                        } else {
-                            ggml_backend_tensor_set(cur, (uint8_t *)mapping->addr + offs, 0, ggml_nbytes(cur));
-                        }
+            if (!legacy_offload || cur->backend == GGML_BACKEND_CPU) {
+                if (use_mmap) {
+                    if (buf_mmap) {
+                        ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + offs);
                     } else {
-                        if (ggml_backend_buffer_is_host(cur->buffer)) {
-                            file.seek(offs, SEEK_SET);
-                            file.read_raw(cur->data, ggml_nbytes(cur));
-                        } else {
-                            read_buf.resize(ggml_nbytes(cur));
-                            file.seek(offs, SEEK_SET);
-                            file.read_raw(read_buf.data(), ggml_nbytes(cur));
-                            ggml_backend_tensor_set(cur, read_buf.data(), 0, ggml_nbytes(cur));
-                        }
+                        ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + offs, 0, ggml_nbytes(cur));
                     }
-
-                    if (use_mmap && lmlock) {
-                        size_lock += ggml_nbytes(cur);
-                        lmlock->grow_to(size_lock);
-                    }
-                    break;
-
-                case GGML_BACKEND_GPU:
-                case GGML_BACKEND_GPU_SPLIT: {
-                    // HACK: mark tensor as allocated
-                    cur->data = (void *)(uintptr_t)1;
-                    void * data;
-                    if (use_mmap) {
-                        data = (uint8_t *)mapping->addr + offs;
+                } else {
+                    if (ggml_backend_buffer_is_host(cur->buffer)) {
+                        file.seek(offs, SEEK_SET);
+                        file.read_raw(cur->data, ggml_nbytes(cur));
                     } else {
                         read_buf.resize(ggml_nbytes(cur));
                         file.seek(offs, SEEK_SET);
                         file.read_raw(read_buf.data(), ggml_nbytes(cur));
-                        data = read_buf.data();
+                        ggml_backend_tensor_set(cur, read_buf.data(), 0, ggml_nbytes(cur));
                     }
+                }
 
-#ifdef GGML_USE_CUBLAS
-                    ggml_cuda_transform_tensor(data, cur);
+                if (use_mmap && lmlock) {
+                    size_lock += ggml_nbytes(cur);
+                    lmlock->grow_to(size_lock);
+                }
+            } else {
+                // HACK: mark tensor as allocated
+                cur->data = (void *)(uintptr_t)1;
+                void * data;
+                if (use_mmap) {
+                    data = (uint8_t *) mapping->addr + offs;
+                } else {
+                    read_buf.resize(ggml_nbytes(cur));
+                    file.seek(offs, SEEK_SET);
+                    file.read_raw(read_buf.data(), ggml_nbytes(cur));
+                    data = read_buf.data();
+                }
+
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
+                ggml_cuda_transform_tensor(data, cur);
 #elif defined(GGML_USE_CLBLAST)
-                    GGML_ASSERT(cur->backend == GGML_BACKEND_GPU);
-                    ggml_cl_transform_tensor(data, cur);
+                GGML_ASSERT(cur->backend == GGML_BACKEND_GPU);
+                ggml_cl_transform_tensor(data, cur);
 #else
-                    GGML_ASSERT(!"GPU tensor without a GPU backend");
-                    GGML_UNUSED(data);
+                GGML_ASSERT(!"GPU tensor without a GPU backend");
+                GGML_UNUSED(data);
 #endif
-                } break;
-
-                default:
-                    continue;
             }
 
             done_size += ggml_nbytes(cur);
@@ -2915,24 +2932,6 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type(int n_gpu_layers) {
-#ifdef GGML_USE_METAL
-    if (n_gpu_layers > 0) {
-        return ggml_backend_metal_buffer_type();
-    }
-#elif defined(GGML_USE_CUBLAS) && defined(LLAMA_GGML_BACKEND_CUDA_TEST)
-    return ggml_backend_cuda_buffer_type(0);
-#elif defined(GGML_USE_CUBLAS)
-    return ggml_backend_cuda_host_buffer_type();
-#elif defined(GGML_USE_CPU_HBM)
-    return ggml_backend_cpu_hbm_buffer_type();
-#endif
-
-    return ggml_backend_cpu_buffer_type();
-
-    GGML_UNUSED(n_gpu_layers);
-}
-
 static void llm_load_tensors(
         llama_model_loader & ml,
         llama_model & model,
@@ -2972,7 +2971,7 @@ static void llm_load_tensors(
     enum ggml_backend_type llama_backend_offload       = GGML_BACKEND_CPU;
     enum ggml_backend_type llama_backend_offload_split = GGML_BACKEND_CPU;
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
     if (ggml_cublas_loaded()) {
         LLAMA_LOG_INFO("%s: using " GGML_CUDA_NAME " for GPU acceleration\n", __func__);
         ggml_cuda_set_main_device(main_gpu);
@@ -3522,6 +3521,7 @@ static void llm_load_tensors(
     ggml_backend_buffer_type_t buft = llama_default_buffer_type(n_gpu_layers);
 
     for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
+        // GGML_BACKEND_GPU tensors are for CUDA and OpenCL only, which are handled separately without ggml-backend
         if (t->backend == GGML_BACKEND_CPU) {
             buf_size += GGML_PAD(ggml_backend_buft_get_alloc_size(buft, t), ggml_backend_buft_get_alignment(buft));
         } else {
@@ -3530,42 +3530,44 @@ static void llm_load_tensors(
     }
 
     // create backend buffer
-    bool sys_mem_buf = false;
     ggml_backend_buffer_t buf_mmap = nullptr;
 
 #ifdef GGML_USE_METAL
-// todo: disable with 0 gpu layers
-    if (ml.use_mmap) {
-        const size_t max_size = ggml_get_max_tensor_size(ctx);
-        model.buf = ggml_backend_metal_buffer_from_ptr(ml.mapping->addr, ml.mapping->size, max_size);
-        buf_mmap = model.buf;
-    } else {
-        model.buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_metal_buffer_type());
-        sys_mem_buf = true;
+    if (n_gpu_layers > 0) {
+        if (ml.use_mmap) {
+            const size_t max_size = ggml_get_max_tensor_size(ctx);
+            model.buf = ggml_backend_metal_buffer_from_ptr(ml.mapping->addr, ml.mapping->size, max_size);
+            buf_mmap = model.buf;
+        } else {
+            model.buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_metal_buffer_type());
+        }
     }
 #elif defined(GGML_USE_CUBLAS) && defined(LLAMA_GGML_BACKEND_CUDA_TEST)
     // for testing only
-    model.buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_cuda_buffer_type(0));
-#else
-    // CPU backend, and indirectly CUDA and OpenCL
-    if (ml.use_mmap) {
-        model.buf = ggml_backend_cpu_buffer_from_ptr(ml.mapping->addr, ml.mapping->size);
-        buf_mmap = model.buf;
-    } else {
-        // allocate only CPU tensors
-        model.buf = ggml_backend_buft_alloc_buffer(buft, buf_size);
-        ggml_tallocr_t alloc = ggml_tallocr_new_from_buffer(model.buf);
-        for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
-            if (t->backend == GGML_BACKEND_CPU) {
-                ggml_tallocr_alloc(alloc, t);
-            }
-        }
-        ggml_tallocr_free(alloc);
-        sys_mem_buf = true;
+    if (n_gpu_layers > 0) {
+        model.buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_cuda_buffer_type(0));
     }
 #endif
 
-    if (use_mlock && sys_mem_buf) {
+    if (model.buf == nullptr) {
+        // CPU backend, and indirectly CUDA and OpenCL
+        if (ml.use_mmap) {
+            model.buf = ggml_backend_cpu_buffer_from_ptr(ml.mapping->addr, ml.mapping->size);
+            buf_mmap = model.buf;
+        } else {
+            // allocate only CPU tensors
+            model.buf = ggml_backend_buft_alloc_buffer(buft, buf_size);
+            ggml_tallocr_t alloc = ggml_tallocr_new_from_buffer(model.buf);
+            for (struct ggml_tensor * t = ggml_get_first_tensor(ctx); t != nullptr; t = ggml_get_next_tensor(ctx, t)) {
+                if (t->backend == GGML_BACKEND_CPU) {
+                    ggml_tallocr_alloc(alloc, t);
+                }
+            }
+            ggml_tallocr_free(alloc);
+        }
+    }
+
+    if (use_mlock && ggml_backend_buffer_is_host(model.buf)) {
         model.mlock_buf.init   (ggml_backend_buffer_get_base(model.buf));
         model.mlock_buf.grow_to(ggml_backend_buffer_get_size(model.buf));
     }
@@ -3574,7 +3576,7 @@ static void llm_load_tensors(
     {
         size_t sys_mem_required = ctx_size + buf_size;
 
-        {
+        if (sys_mem_required > 0) {
             LLAMA_LOG_INFO("%s: system memory used  = %7.2f MiB\n", __func__, sys_mem_required / 1024.0 / 1024.0);
         }
         if (vram_weights > 0) {
@@ -3593,21 +3595,20 @@ static void llm_load_tensors(
         const int max_offloadable_layers       = hparams.n_layer + 1;
 
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
-#else
-        GGML_UNUSED(n_gpu_layers);
-        GGML_UNUSED(tensor_split);
 #endif // defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST)
     }
+
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
+    ggml_cuda_set_tensor_split(tensor_split);
+#else
+    GGML_UNUSED(tensor_split);
+#endif // GGML_USE_CUBLAS
 
     // populate tensors_by_name
     for (int i = 0; i < ml.n_tensors; ++i) {
         struct ggml_tensor * cur = ggml_get_tensor(ctx, ml.get_tensor_name(i));
         model.tensors_by_name.emplace_back(ggml_get_name(cur), cur);
     }
-
-#ifdef GGML_USE_CUBLAS
-    ggml_cuda_set_tensor_split(tensor_split);
-#endif // GGML_USE_CUBLAS
 
     ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL);
 
@@ -5680,7 +5681,7 @@ static struct ggml_cgraph * llama_build_graph(
     bool alloc_inp_KQ_mask  = false;
     bool alloc_inp_K_shift  = false;
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
     const bool do_offload = true;
 #else
     const bool do_offload = true; // TODO: set to false after finishing refactoring
@@ -5868,7 +5869,7 @@ static struct ggml_cgraph * llama_build_graph(
         static const std::unordered_map<llm_offload_func_e, std::string, std::hash<int>> k_offload_func_name = {
             { OFFLOAD_FUNC_NOP, "CPU" },
             { OFFLOAD_FUNC_OUT, "CPU" },
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
             { OFFLOAD_FUNC,     "GPU (CUDA)"     },
             { OFFLOAD_FUNC_FRC, "GPU (CUDA) FRC" },
             { OFFLOAD_FUNC_KQV, "GPU (CUDA) KQV" },
@@ -5941,7 +5942,7 @@ static struct ggml_cgraph * llama_build_graph(
         offload_func_t func = ggml_offload_nop;
 
         // this is needed for compatibility with Metal for example
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
         static offload_func_t ggml_offload_gpu = ggml_cuda_assign_buffers_no_alloc;
 #else
         static offload_func_t ggml_offload_gpu = ggml_offload_nop;
@@ -8799,22 +8800,16 @@ static int llama_apply_lora_from_file_internal(
     std::unique_ptr<llama_model_loader> ml;
 
     unique_context base_ctx(nullptr, ggml_free);
-    std::vector<uint8_t> base_buf;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
         ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/ NULL));
 
-        size_t ctx_size;
-        size_t mmapped_size;
-        GGML_ASSERT(!"not implemented");
-        //ml->calc_sizes(ctx_size, mmapped_size);
-
-        base_buf.resize(ctx_size);
+        size_t ctx_size = ggml_tensor_overhead() * ml->n_tensors;
 
         ggml_init_params base_params;
-        base_params.mem_size   = base_buf.size();
-        base_params.mem_buffer = base_buf.data();
-        base_params.no_alloc   = ml->use_mmap;
+        base_params.mem_size   = ctx_size;
+        base_params.mem_buffer = NULL;
+        base_params.no_alloc   = true;
 
         base_ctx.reset(ggml_init(base_params));
 
@@ -8913,7 +8908,7 @@ static int llama_apply_lora_from_file_internal(
             offload_func_t offload_func               = ggml_offload_nop;
             offload_func_t offload_func_force_inplace = ggml_offload_nop;
 
-#ifdef GGML_USE_CUBLAS
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
             if (dest_t->backend == GGML_BACKEND_GPU || dest_t->backend == GGML_BACKEND_GPU_SPLIT) {
                 if (dest_t->type != GGML_TYPE_F16) {
                     throw std::runtime_error(format(
@@ -9230,9 +9225,11 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_CUBLAS) && defined(LLAMA_GGML_BACKEND_CUDA_TEST)
         // for testing only
-        ctx->backend = ggml_backend_cuda_init(0);
-        if (ctx->backend == nullptr) {
-            LLAMA_LOG_ERROR("%s: failed to initialize CUDA backend\n", __func__);
+        if (model->n_gpu_layers > 0) {
+            ctx->backend = ggml_backend_cuda_init(0);
+            if (ctx->backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize CUDA backend\n", __func__);
+            }
         }
 #endif
 
@@ -9250,8 +9247,7 @@ struct llama_context * llama_new_context_with_model(
         }
 
         if (!llama_kv_cache_init(ctx->model.hparams, ctx->kv_self, type_k, type_v,
-                cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv,
-                llama_default_buffer_type(model->n_gpu_layers))) {
+                cparams.n_ctx, model->n_gpu_layers, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
@@ -9309,36 +9305,38 @@ struct llama_context * llama_new_context_with_model(
 
             ctx->buf_alloc = ggml_backend_alloc_buffer(ctx->backend, alloc_size);
             ctx->alloc = ggml_allocr_new_from_buffer(ctx->buf_alloc);
-#ifdef GGML_USE_CUBLAS
-            ggml_cuda_set_scratch_size(alloc_size);
-            LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MiB\n", __func__, alloc_size / 1024.0 / 1024.0);
+#if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
+            if (model->n_gpu_layers > 0) {
+                ggml_cuda_set_scratch_size(alloc_size);
+                LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MiB\n", __func__, alloc_size / 1024.0 / 1024.0);
 
-            // calculate total VRAM usage
-            auto add_tensor = [](const ggml_tensor * t, size_t & size) {
-                if (t->backend == GGML_BACKEND_GPU || t->backend == GGML_BACKEND_GPU_SPLIT) {
-                    size += ggml_nbytes(t);
+                // calculate total VRAM usage
+                auto add_tensor = [](const ggml_tensor * t, size_t & size) {
+                    if (t->backend == GGML_BACKEND_GPU || t->backend == GGML_BACKEND_GPU_SPLIT) {
+                        size += ggml_nbytes(t);
+                    }
+                };
+                size_t model_vram_size = 0;
+                for (const auto & kv : model->tensors_by_name) {
+                    add_tensor(kv.second, model_vram_size);
                 }
-            };
-            size_t model_vram_size = 0;
-            for (const auto & kv : model->tensors_by_name) {
-                add_tensor(kv.second, model_vram_size);
-            }
 
-            size_t kv_vram_size = 0;
-            for (auto & k : ctx->kv_self.k_l) {
-                add_tensor(k, kv_vram_size);
-            }
-            for (auto & v : ctx->kv_self.v_l) {
-                add_tensor(v, kv_vram_size);
-            }
+                size_t kv_vram_size = 0;
+                for (auto & k : ctx->kv_self.k_l) {
+                    add_tensor(k, kv_vram_size);
+                }
+                for (auto & v : ctx->kv_self.v_l) {
+                    add_tensor(v, kv_vram_size);
+                }
 
-            size_t ctx_vram_size = alloc_size + kv_vram_size;
-            size_t total_vram_size = model_vram_size + ctx_vram_size;
+                size_t ctx_vram_size = alloc_size + kv_vram_size;
+                size_t total_vram_size = model_vram_size + ctx_vram_size;
 
-            LLAMA_LOG_INFO("%s: total VRAM used: %.2f MiB (model: %.2f MiB, context: %.2f MiB)\n", __func__,
-                    total_vram_size / 1024.0 / 1024.0,
-                    model_vram_size / 1024.0 / 1024.0,
-                    ctx_vram_size   / 1024.0 / 1024.0);
+                LLAMA_LOG_INFO("%s: total VRAM used: %.2f MiB (model: %.2f MiB, context: %.2f MiB)\n", __func__,
+                        total_vram_size / 1024.0 / 1024.0,
+                        model_vram_size / 1024.0 / 1024.0,
+                        ctx_vram_size   / 1024.0 / 1024.0);
+            }
 #endif
         }
     }

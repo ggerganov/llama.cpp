@@ -9442,7 +9442,7 @@ static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, g
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
     if (tensor->view_src != NULL && tensor->view_offs == 0) {
-        assert(tensor->view_src->buffer->buft == buffer->buft); // TODO
+        assert(tensor->view_src->buffer->buft == buffer->buft);
         tensor->backend = tensor->view_src->backend;
         tensor->extra = tensor->view_src->extra;
         return;
