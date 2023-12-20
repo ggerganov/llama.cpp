@@ -2372,6 +2372,11 @@ struct llama_model_loader {
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
             GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
+
+            if (progress_callback) {
+                progress_callback((float) size_done / size_data, progress_callback_user_data);
+            }
+
             const size_t offs = file_offset(ggml_get_name(cur));
 
             if (!legacy_offload || cur->backend == GGML_BACKEND_CPU) {
@@ -2422,10 +2427,6 @@ struct llama_model_loader {
             }
 
             size_done += ggml_nbytes(cur);
-
-            if (progress_callback) {
-                progress_callback((float) size_done / size_data, progress_callback_user_data);
-            }
         }
 
         // unmap GPU tensors
