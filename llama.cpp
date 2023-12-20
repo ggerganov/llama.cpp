@@ -1190,6 +1190,9 @@ enum e_model {
     MODEL_65B,
     MODEL_70B,
     MODEL_SMALL,
+    MODEL_MEDIUM,
+    MODEL_LARGE,
+    MODEL_XL,
 };
 
 static const size_t kiB = 1024;
@@ -2461,6 +2464,9 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_65B: return "65B";
         case MODEL_70B: return "70B";
         case MODEL_SMALL: return "0.1B";
+        case MODEL_MEDIUM: return "0.4B";
+        case MODEL_LARGE: return "0.8B";
+        case MODEL_XL: return "1.5B";
         default:        return "?B";
     }
 }
@@ -2676,6 +2682,9 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 switch (hparams.n_layer) {
                     case 12: model.type = e_model::MODEL_SMALL; break;
+                    case 24: model.type = e_model::MODEL_MEDIUM; break;
+                    case 36: model.type = e_model::MODEL_LARGE; break;
+                    case 48: model.type = e_model::MODEL_XL; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
