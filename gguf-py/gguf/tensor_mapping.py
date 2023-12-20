@@ -18,6 +18,7 @@ class TensorNameMap:
             "embeddings.word_embeddings",                # bert
             "language_model.embedding.word_embeddings",  # persimmon
             "wte",                                       # gpt2
+            "transformer.embd.wte",                      # phi2
         ),
 
         # Token type embeddings
@@ -43,6 +44,7 @@ class TensorNameMap:
             "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen
             "output",                    # llama-pth bloom
             "word_embeddings_for_head",  # persimmon
+            "lm_head.linear",            # phi2
         ),
 
         # Output norm
@@ -55,6 +57,7 @@ class TensorNameMap:
             "transformer.norm_f",                      # mpt
             "ln_f",                                    # refact bloom qwen gpt2
             "language_model.encoder.final_layernorm",  # persimmon
+            "lm_head.ln",                              # phi2
         ),
 
         # Rope frequencies
@@ -78,6 +81,7 @@ class TensorNameMap:
             "language_model.encoder.layers.{bid}.input_layernorm",  # persimmon
             "model.layers.{bid}.ln1",                               # yi
             "h.{bid}.ln_1",                                         # gpt2
+            "transformer.h.{bid}.ln",                               # phi2
         ),
 
         # Attention norm 2
@@ -94,6 +98,7 @@ class TensorNameMap:
             "h.{bid}.self_attention.query_key_value",                              # bloom
             "language_model.encoder.layers.{bid}.self_attention.query_key_value",  # persimmon
             "h.{bid}.attn.c_attn",                                                 # gpt2
+            "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
         ),
 
         # Attention query
@@ -133,6 +138,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.out_proj",                         # gpt-j
             "language_model.encoder.layers.{bid}.self_attention.dense",  # persimmon
             "h.{bid}.attn.c_proj",                                       # gpt2
+            "transformer.h.{bid}.mixer.out_proj",                        # phi2
         ),
 
         # Rotary embeddings
@@ -174,6 +180,7 @@ class TensorNameMap:
             "language_model.encoder.layers.{bid}.mlp.dense_h_to_4h",  # persimmon
             "transformer.h.{bid}.mlp.w1",                             # qwen
             "h.{bid}.mlp.c_fc",                                       # gpt2
+            "transformer.h.{bid}.mlp.fc1",                            # phi2
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -206,6 +213,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.fc_out",                         # gpt-j
             "language_model.encoder.layers.{bid}.mlp.dense_4h_to_h",  # persimmon
             "h.{bid}.mlp.c_proj",                                     # gpt2
+            "transformer.h.{bid}.mlp.fc2",                            # phi2
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (

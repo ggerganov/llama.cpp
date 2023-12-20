@@ -303,7 +303,7 @@ extern "C" {
 
 #if defined(__ARM_NEON) && defined(__CUDACC__)
     typedef half ggml_fp16_t;
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && !defined(_MSC_VER)
     typedef __fp16 ggml_fp16_t;
 #else
     typedef uint16_t ggml_fp16_t;
@@ -341,6 +341,12 @@ extern "C" {
         GGML_TYPE_I16,
         GGML_TYPE_I32,
         GGML_TYPE_COUNT,
+    };
+
+    // precision
+    enum ggml_prec {
+        GGML_PREC_DEFAULT,
+        GGML_PREC_F32,
     };
 
     enum ggml_backend_type {
@@ -1056,6 +1062,12 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
+
+    // change the precision of a matrix multiplication
+    // set to GGML_PREC_F32 for higher precision (useful for phi-2)
+    GGML_API void ggml_mul_mat_set_prec(
+            struct ggml_tensor * a,
+            enum ggml_prec       prec);
 
     // indirect matrix multiplication
     //  ggml_mul_mat_id(ctx, as, ids, id, b) ~= ggml_mul_mat(as[ids[id]], b)
