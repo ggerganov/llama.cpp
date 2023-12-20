@@ -3,6 +3,9 @@
 #
 # Package versions must stay compatible across all top-level python scripts.
 #
+
 -r convert_requirements.txt
+
 -r convert-hf-to-gguf_requirements.txt
 -r convert-lora-to-ggml_requirements.txt
+-r convert-persimmon-to-gguf_requirements.txt
