@@ -9434,7 +9434,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
             return false;
     }
 
-    if (tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT) {
+    if (tensor->src[0] != nullptr && tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT) {
         ggml_cuda_set_peer_access(tensor->src[1]->ne[1]);
     }
 
