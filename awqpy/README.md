@@ -56,7 +56,7 @@ The perplexity measurements in table above are done against the `wikitext2` test
 
 ## Results
 Results are run on OpenBLAS (CPU) and CuBLAS (GPU) for fair comparison
-We use three types of llamacpp quantization methods to work with our version, including q4, q4_1, and q2_k
+We use three types of llamacpp quantization methods to work with our version, including q4_0, q4_1, and q2_k
 
 ### Llama 7B (Build with OpenBLAS)
 

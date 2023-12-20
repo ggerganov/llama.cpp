@@ -1163,7 +1163,7 @@ def main(args_in: list[str] | None = None) -> None:
             print("Saving new weighted model ...")
             add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
             print(f"Saved weighted model at {tmp_model_path}.") 
-            args.model = tmp_model_path
+        args.model = tmp_model_path
     
     if args.dump_single:
         model_plus = lazy_load_file(args.model)

@@ -3937,20 +3937,17 @@ static struct ggml_tensor * llm_build_ffn(
 }
 
 static struct ggml_tensor * llm_build_ffn_mpt_awq(
-    struct ggml_context *ctx,
-    struct ggml_tensor *cur,
-    struct ggml_tensor *up,
-    struct ggml_tensor *up_b,
-    struct ggml_tensor *gate,
-    struct ggml_tensor *gate_b,
-    struct ggml_tensor *down,
-    struct ggml_tensor *down_b,
-    struct ggml_tensor *act_scales,
-    llm_ffn_op_type type_op,
-    llm_ffn_gate_type type_gate,
-    const llm_build_cb &cb,
-    int il)
-{
+        struct ggml_context * ctx,
+         struct ggml_tensor * cur,
+         struct ggml_tensor * up,
+         struct ggml_tensor * up_b,
+         struct ggml_tensor * down,
+         struct ggml_tensor * down_b,
+         struct ggml_tensor * act_scales,
+            llm_ffn_op_type   type_op,
+          llm_ffn_gate_type   type_gate,
+         const llm_build_cb & cb,
+                        int   il) {
     struct ggml_tensor * tmp = ggml_mul_mat(ctx, up, cur);
     cb(tmp, "ffn_up", il);
 

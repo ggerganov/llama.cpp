@@ -150,6 +150,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
             }
             params.seed = std::stoul(argv[i]);
         } else if (arg == "-awq" || arg == "--use-awq") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
             params.use_awq = true;
         } else if (arg == "-t" || arg == "--threads") {
             if (++i >= argc) {
@@ -806,7 +810,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        (can be specified more than once for multiple prompts).\n");
     printf("  --color               colorise output to distinguish prompt and user input from generations\n");
     printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    printf("  -awq SEED, -use-awq   Using AWQ quantization model in inferences\n");
+    printf("  -awq, --use-awq       Using AWQ quantization model in inferences\n");
     printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
     printf("  -tb N, --threads-batch N\n");
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");

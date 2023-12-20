@@ -1029,7 +1029,6 @@ print(f"Loading model: {dir_model.name}")
 
 hparams = Model.load_hparams(dir_model)
 
-
 with torch.inference_mode():
     model_class = Model.from_model_architecture(hparams["architectures"][0])
     model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)

@@ -164,7 +164,7 @@ class TensorNameMap:
             "transformer.h.{bid}.mlp.w1",                             # qwen
         ),
         
-        # Awq-activation gate
+        # AWQ-activation gate
         MODEL_TENSOR.FFN_ACT: (
             "transformer.blocks.{bid}.ffn.act",  # mpt
         ),
