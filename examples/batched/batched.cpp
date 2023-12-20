@@ -48,12 +48,11 @@ int main(int argc, char ** argv) {
         params.n_threads = std::atoi(argv[6]);
     }
 
-    if (argc >= 8) {
-        params.gpu_index = argv[7];
-    }
+    // For testing purposes, we always reset the GPU index
+    params.reset_gpu_index = true;
 
-    printf("params: model = %s, prompt = %s, n_parallel = %d, n_len = %d, n_gpu_layers = %d, n_threads = %d, gpu_index = %s\n",
-           params.model.c_str(), params.prompt.c_str(), n_parallel, n_len, n_gpu_layers, params.n_threads, params.gpu_index.c_str());
+    printf("params: model = %s, prompt = %s, n_parallel = %d, n_len = %d, n_gpu_layers = %d, n_threads = %d, reset_gpu_index = true\n",
+           params.model.c_str(), params.prompt.c_str(), n_parallel, n_len, n_gpu_layers, params.n_threads);
 
     if (params.prompt.empty()) {
         params.prompt = "Hello my name is";
@@ -73,21 +72,6 @@ int main(int argc, char ** argv) {
 
     if (model == NULL) {
         fprintf(stderr , "%s: error: unable to load model\n" , __func__);
-        return 1;
-    }
-
-    if (!params.gpu_index.empty()) {
-        int err = llama_model_apply_gpu_idx_from_file(model, params.gpu_index.c_str(), true);
-        if (err != 0) {
-            fprintf(stderr, "%s: error: failed to apply mlp adapter\n", __func__);
-            llama_free_model(model);
-            return 1;
-        }
-    }
-
-    if (llama_model_apply_augmentation(model) != 0) {
-        fprintf(stderr, "%s: error: failed to apply model augmentation\n", __func__);
-        llama_free_model(model);
         return 1;
     }
 

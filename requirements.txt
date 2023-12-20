@@ -1,3 +1,4 @@
 numpy==1.24.4
 sentencepiece==0.1.98
 -e ./gguf-py
+-e ./powerinfer-py

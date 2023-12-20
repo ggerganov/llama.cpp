@@ -71,6 +71,7 @@ And new features coming soon:
 ```bash
 git clone https://github.com/SJTU-IPADS/PowerInfer
 cd PowerInfer
+pip install -r requirements.txt # install Python helpers' dependencies
 ```
 ### Build
 In order to build PowerInfer you have two different options. These commands are supposed to be run from the root directory of the project.
@@ -89,7 +90,8 @@ cmake --build build --config Release
 
 ## Model Weights
 
-PowerInfer models are stored in a special format called *PowerInfer GGUF* based on GGUF format, consisting of both LLM weights and predictor weights. You can download PowerInfer GGUF weights from Hugging Face or convert them from the original model weights and predictor weights.
+PowerInfer models are stored in a special format called *PowerInfer GGUF* based on GGUF format, consisting of both LLM weights and predictor weights. 
+You can obtain PowerInfer GGUF weights at `*.powerinfer.gguf` as well as profiled model activation statistics under `activation/` for 'hot'-neuron offloading from each Hugging Face model repo under "PowerInfer GGUF Format" column. You can also convert them from the original model weights and predictor weights.
 
 | Base Model | PowerInfer GGUF Format | Original Model | Predictor |
 |------------|------------------|----------------|---------------------|
@@ -102,14 +104,16 @@ PowerInfer models are stored in a special format called *PowerInfer GGUF* based 
 
 For CPU-only and CPU-GPU hybrid inference with all available VRAM, you can use the following instructions to run PowerInfer:
 ```bash
-  ./build/bin/main -m /PATH/TO/MODEL -n $output_token_count -t $thread_num -p $prompt
-```
-If you want to limit the VRAM usage of GPU:
-```bash
-  ./build/bin/main -m /PATH/TO/MODEL -n $output_token_count -t $thread_num -p $prompt --vram-budget $vram_gb
+./build/bin/main -m /PATH/TO/MODEL -n $output_token_count -t $thread_num -p $prompt
+# ./build/bin/main -m ./ReluFalcon-40B-PowerInfer-GGUF/falcon-40b-relu.q4.powerinfer.gguf -n 128 -t 8 -p "Once upon a time"
 ```
 
-As for now, it requires an offline-generated "GPU index" file to split FFNs on GPU. And we found these files are hard to maintain and distribute. We will ship automatic FFN split based on VRAM capacity via [#11](https://github.com/SJTU-IPADS/PowerInfer/pull/11) very soon.
+If you want to limit the VRAM usage of GPU:
+```bash
+./build/bin/main -m /PATH/TO/MODEL -n $output_token_count -t $thread_num -p $prompt --vram-budget $vram_gb
+# ./build/bin/main -m ./ReluLLaMA-7B-PowerInfer-GGUF/llama-7b-relu.powerinfer.gguf -n 128 -t 8 -p "Once upon a time" --vram-budget 8
+```
+Under CPU-GPU hybrid inference, PowerInfer will automatically offload all dense activation blocks to GPU and split FFN on GPU if possible. 
 
 ## Evaluation
 
@@ -118,6 +122,13 @@ As for now, it requires an offline-generated "GPU index" file to split FFNs on G
 ![github-eval-2080ti-q4](https://github.com/SJTU-IPADS/PowerInfer/assets/34213478/0fc1bfc4-aafc-4e82-a865-bec0143aff1a)
 
 PowerInfer achieves up to 11x and 8x speedup for FP16 and INT4 models!
+
+## FAQs
+1. What if I encountered `CUDA_ERROR_OUT_OF_MEMORY`?
+   - You can try to run with `--reset-gpu-index` argument to rebuild GPU index for this model to avoid any stale cache.
+   - Due to our current implementation, model offloading might not be accurate as expected. You can try with `--vram-budget` with a slightly lower value or `--disable-gpu-index` to disable FFN offloading. 
+2. What if...
+   - Issues are welcomed! Please feel free to open an issue and attach your running environment and running parameters. We will try our best to help you.
 
 ## TODOs
 We will release the code and data in the following order, please stay tuned!
@@ -130,7 +141,7 @@ We will release the code and data in the following order, please stay tuned!
 - [ ] Support Metal for Mac
 - [ ] Release code for OPT models
 - [ ] Release predictor training code 
-- [ ] Support online split for FFN network
+- [x] Support online split for FFN network
 - [ ] Support Multi-GPU
 
 

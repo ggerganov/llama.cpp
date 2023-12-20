@@ -74,6 +74,9 @@ class Keys:
     class PowerInfer:
         SPARSE_THRESHOLD = "powerinfer.sparse_threshold"
 
+    class Split:
+        VRAM_CAPACITY = "split.vram_capacity"
+
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -385,6 +388,9 @@ class GGMLQuantizationType(IntEnum):
     Q5_K = 13
     Q6_K = 14
     Q8_K = 15
+    I8 = 16,
+    I16 = 17
+    I32 = 18,
 
 
 class GGUFEndian(IntEnum):

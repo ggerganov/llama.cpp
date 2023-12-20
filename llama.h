@@ -173,6 +173,8 @@ extern "C" {
         bool vocab_only; // only load the vocabulary, no weights
         bool use_mmap;   // use mmap if possible
         bool use_mlock;  // force system to keep model in RAM
+        bool reset_gpu_index; // force reset of the GPU index
+        bool disable_gpu_index; // bypass the GPU index and FFN split
     };
 
     struct llama_context_params {
@@ -347,7 +349,7 @@ extern "C" {
                           const char * path_mlp,
                                 bool   use_mmap);
 
-    LLAMA_API int llama_model_apply_augmentation(struct llama_model * model);
+    LLAMA_API size_t llama_model_offload_ffn_split(struct llama_model * model);
 
     //
     // KV cache

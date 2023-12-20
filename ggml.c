@@ -17497,7 +17497,7 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     }
 
     const int n_threads = cplan->n_threads;
-#ifdef LLAMA_CUBLAS
+#ifdef GGML_USE_CUBLAS
     struct ggml_compute_state_shared state_shared = {
         /*.cgraph                  =*/ cgraph,
         /*.cgraph_plan             =*/ cplan,
@@ -17534,7 +17534,7 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
                 .ith = j,
                 .shared = &state_shared,
             };
-#ifdef LLAMA_CUBLAS
+#ifdef GGML_USE_CUBLAS
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread_hybrid, &workers[j]);
 #else
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
@@ -17551,7 +17551,8 @@ int ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     const int64_t perf_start_time_us = ggml_perf_time_us();
 
     // this is a work thread too
-#ifdef LLAMA_CUBLAS
+
+#ifdef GGML_USE_CUBLAS
     int compute_status = (size_t) ggml_graph_compute_thread_hybrid(&workers[0]);
 #else
     int compute_status = (size_t) ggml_graph_compute_thread(&workers[0]);
@@ -19590,7 +19591,6 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             sparse_deriv = GGML_DENSE_INFERENCE;
         } else if (strncmp(magic, GGUF_POWERINFER_MAGIC, sizeof(magic)) == 0) {
             sparse_deriv = GGML_SPARSE_INFERENCE;
-            fprintf(stderr, "%s: PowerInfer derived model detected. Sparse inference will be used.\n", __func__);
         } else {
             fprintf(stderr, "%s: invalid magic characters %s.\n", __func__, magic);
             fclose(file);
