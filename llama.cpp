@@ -841,8 +841,8 @@ struct llama_mmap {
         // prefetch/readahead impairs performance on NUMA systems
         if (numa) { prefetch = 0; }
 #ifdef __linux__
-        if (posix_fadvise64(fd, 0, file->size, POSIX_FADV_SEQUENTIAL)) {
-            fprintf(stderr, "warning: fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
+        if (posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
+            fprintf(stderr, "warning: posix_fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
                     strerror(errno));
         }
         if (prefetch) { flags |= MAP_POPULATE; }
