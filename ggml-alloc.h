@@ -43,7 +43,7 @@ GGML_API size_t ggml_allocr_alloc_graph(ggml_allocr_t alloc, struct ggml_cgraph 
 // ggml-backend v2 API
 //
 
-// Seperate tensor and graph allocator objects
+// Separate tensor and graph allocator objects
 // This is necessary for multi-backend allocation because the graph allocator needs to use multiple tensor allocators
 // The original API is kept as a wrapper around the new API
 

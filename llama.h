@@ -39,6 +39,7 @@
 
 #define LLAMA_MAX_RNG_STATE (64*1024)
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
@@ -217,7 +218,7 @@ extern "C" {
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        bool logits_all;  // the llama_eval() call computes all logits, not just the last one
+        bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embedding;   // embedding mode only
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
     };

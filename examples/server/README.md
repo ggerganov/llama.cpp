@@ -222,7 +222,7 @@ node index.js
 
     `content`: Set the text to process.
 
-    **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
+-   **POST** `/infill`: For code infilling. Takes a prefix and a suffix and returns the predicted completion as stream.
 
     *Options:*
 
