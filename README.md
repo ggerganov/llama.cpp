@@ -440,7 +440,13 @@ Building the program with BLAS support may lead to some performance improvements
         && cmake --build build -- -j 16
     ```
     On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
-    However, this hurts performance for non-integrated GPUs.
+    However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
+
+  - Using `make` (example for target gfx1030, build with 16 CPU threads):
+    ```bash
+    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gxf1030
+    ```
+
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
     ```bash
     set PATH=%HIP_PATH%\bin;%PATH%
