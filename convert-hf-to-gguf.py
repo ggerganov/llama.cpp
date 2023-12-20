@@ -182,6 +182,8 @@ class Model:
             return QwenModel
         if model_architecture == "MixtralForCausalLM":
             return MixtralModel
+        if model_architecture == "PhiForCausalLM":
+            return Phi2Model
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -221,6 +223,8 @@ class Model:
             return gguf.MODEL_ARCH.QWEN
         if arch == "MixtralForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
+        if arch == "PhiForCausalLM":
+            return gguf.MODEL_ARCH.PHI2
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -979,6 +983,24 @@ class QwenModel(Model):
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+
+
+class Phi2Model(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["n_layer"]
+
+        self.gguf_writer.add_name("Phi2")
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_head_count_kv(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_add_bos_token(False)
+
 
 ###### CONVERSION LOGIC ######
 
