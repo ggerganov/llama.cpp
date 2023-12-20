@@ -33,6 +33,7 @@
         #include <unistd.h>
         #if defined(_POSIX_MAPPED_FILES)
             #include <sys/mman.h>
+            #include <fcntl.h>
         #endif
         #if defined(_POSIX_MEMLOCK_RANGE)
             #include <sys/resource.h>
@@ -840,6 +841,10 @@ struct llama_mmap {
         // prefetch/readahead impairs performance on NUMA systems
         if (numa) { prefetch = 0; }
 #ifdef __linux__
+        if (posix_fadvise64(fd, 0, file->size, POSIX_FADV_SEQUENTIAL)) {
+            fprintf(stderr, "warning: fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
+                    strerror(errno));
+        }
         if (prefetch) { flags |= MAP_POPULATE; }
 #endif
         addr = mmap(NULL, file->size, PROT_READ, flags, fd, 0);
@@ -2314,7 +2319,9 @@ struct llama_model_loader {
         }
         */
         // prefetch the whole file - all the data is needed anyway
-        mapping.reset(new llama_mmap(&file, -1, ggml_is_numa()));
+        if (use_mmap) {
+            mapping.reset(new llama_mmap(&file, -1, ggml_is_numa()));
+        }
     }
 
     // for backwards compatibility only
