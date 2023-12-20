@@ -2270,10 +2270,7 @@ struct llama_model_loader {
         }
     }
 
-
-
-    void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) {
-        size_t size_lock = 0;
+    void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) const {
         size_t size_data = 0;
 
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
@@ -2281,7 +2278,7 @@ struct llama_model_loader {
             size_data += ggml_nbytes(cur);
         }
 
-        if (use_mmap) {
+        if (use_mmap && buf_mmap) {
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -2305,6 +2302,9 @@ struct llama_model_loader {
                 if (use_mmap) {
                     if (buf_mmap) {
                         ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + offs);
+                        if (lmlock) {
+                            lmlock->grow_to(offs + ggml_nbytes(cur));
+                        }
                     } else {
                         ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + offs, 0, ggml_nbytes(cur));
                     }
@@ -2318,11 +2318,6 @@ struct llama_model_loader {
                         file.read_raw(read_buf.data(), ggml_nbytes(cur));
                         ggml_backend_tensor_set(cur, read_buf.data(), 0, ggml_nbytes(cur));
                     }
-                }
-
-                if (use_mmap && lmlock) {
-                    size_lock += ggml_nbytes(cur);
-                    lmlock->grow_to(size_lock);
                 }
             } else {
                 // HACK: mark tensor as allocated
