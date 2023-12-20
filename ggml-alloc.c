@@ -778,7 +778,7 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
     }
 
     if (nbytes == 0) {
-        //fprintf(stderr, "%s: no tensors to allocate\n", __func__);
+        // all the tensors in the context are already allocated
         return NULL;
     }
 
