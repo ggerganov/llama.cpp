@@ -2452,22 +2452,22 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
 
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
-        case MODEL_1B:  return "1B";
-        case MODEL_3B:  return "3B";
-        case MODEL_7B:  return "7B";
-        case MODEL_8B:  return "8B";
-        case MODEL_13B: return "13B";
-        case MODEL_15B: return "15B";
-        case MODEL_30B: return "30B";
-        case MODEL_34B: return "34B";
-        case MODEL_40B: return "40B";
-        case MODEL_65B: return "65B";
-        case MODEL_70B: return "70B";
-        case MODEL_SMALL: return "0.1B";
+        case MODEL_1B:     return "1B";
+        case MODEL_3B:     return "3B";
+        case MODEL_7B:     return "7B";
+        case MODEL_8B:     return "8B";
+        case MODEL_13B:    return "13B";
+        case MODEL_15B:    return "15B";
+        case MODEL_30B:    return "30B";
+        case MODEL_34B:    return "34B";
+        case MODEL_40B:    return "40B";
+        case MODEL_65B:    return "65B";
+        case MODEL_70B:    return "70B";
+        case MODEL_SMALL:  return "0.1B";
         case MODEL_MEDIUM: return "0.4B";
-        case MODEL_LARGE: return "0.8B";
-        case MODEL_XL: return "1.5B";
-        default:        return "?B";
+        case MODEL_LARGE:  return "0.8B";
+        case MODEL_XL:     return "1.5B";
+        default:           return "?B";
     }
 }
 
