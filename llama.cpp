@@ -454,8 +454,8 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_QKV,        "blk.%d.attn_qkv" },
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
-            { LLM_TENSOR_FFN_ACT,         "blk.%d.ffn.act"},
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_ACT,         "blk.%d.ffn.act" },
         },
     },
     {
@@ -1178,6 +1178,7 @@ struct llama_hparams {
 
     float f_clamp_kqv;
     float f_max_alibi_bias;
+
     bool use_awq;
 
     bool operator!=(const llama_hparams & other) const {
@@ -1274,7 +1275,7 @@ struct llama_layer {
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
     struct ggml_tensor * ffn_up_b;   // b3
-    struct ggml_tensor *ffn_act;
+    struct ggml_tensor * ffn_act;
 };
 
 struct llama_kv_cell {
@@ -3423,10 +3424,10 @@ static void llm_load_tensors(
                         layer.ffn_norm = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd}, backend);
 
                         layer.ffn_down = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
+                        layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
                         if (model.hparams.use_awq) {
                             layer.ffn_act = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, backend);
                         }
-                        layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
 
                         if (backend == GGML_BACKEND_GPU) {
                             if (model.hparams.use_awq) {
@@ -3436,10 +3437,9 @@ static void llm_load_tensors(
                                 ggml_nbytes(layer.wo)        +
                                 ggml_nbytes(layer.ffn_norm)  +
                                 ggml_nbytes(layer.ffn_down)  +
-                                ggml_nbytes(layer.ffn_act)   +
-                                ggml_nbytes(layer.ffn_up);
-                            }
-                            else {
+                                ggml_nbytes(layer.ffn_up)    +
+                                ggml_nbytes(layer.ffn_act);
+                            } else {
                                 vram_weights +=
                                 ggml_nbytes(layer.attn_norm) +
                                 ggml_nbytes(layer.wqkv)      +
@@ -3647,7 +3647,8 @@ static bool llama_model_load(const std::string & fname, llama_model & model, con
         llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
-        model.hparams.use_awq = params.use_awq;
+        model.hparams.use_awq    = params.use_awq;
+
         llm_load_arch   (ml, model);
         llm_load_hparams(ml, model);
         llm_load_vocab  (ml, model);
@@ -3935,7 +3936,7 @@ static struct ggml_tensor * llm_build_ffn(
     return cur;
 }
 
-static struct ggml_tensor *llm_build_ffn(
+static struct ggml_tensor * llm_build_ffn_mpt_awq(
     struct ggml_context *ctx,
     struct ggml_tensor *cur,
     struct ggml_tensor *up,
@@ -3950,72 +3951,39 @@ static struct ggml_tensor *llm_build_ffn(
     const llm_build_cb &cb,
     int il)
 {
-    struct ggml_tensor *tmp = ggml_mul_mat(ctx, up, cur);
+    struct ggml_tensor * tmp = ggml_mul_mat(ctx, up, cur);
     cb(tmp, "ffn_up", il);
 
-    if (up_b)
-    {
+    if (up_b) {
         tmp = ggml_add(ctx, tmp, up_b);
         cb(tmp, "ffn_up_b", il);
     }
 
-    if (gate)
-    {
-        switch (type_gate)
-        {
-        case LLM_FFN_SEQ:
-        {
-            cur = ggml_mul_mat(ctx, gate, tmp);
-            cb(cur, "ffn_gate", il);
-        }
-        break;
-        case LLM_FFN_PAR:
-        {
-            cur = ggml_mul_mat(ctx, gate, cur);
-            cb(cur, "ffn_gate", il);
-        }
-        break;
-        }
+    cur = tmp;
 
-        if (gate_b)
-        {
-            cur = ggml_add(ctx, cur, gate_b);
-            cb(cur, "ffn_gate_b", il);
-        }
-    }
-    else
-    {
-        cur = tmp;
+    switch (type_op) {
+        case LLM_FFN_GELU_ACT:
+            {
+                cur = ggml_gelu(ctx, cur);
+                cb(cur, "ffn_relu", il);
+                struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
+                cb(repeat, "ffn_repeat(scales)", il);
+                cur = ggml_div(ctx, cur, repeat);
+                cb(cur, "ffn_div(gelu)", il);
+            } break;
     }
 
-    switch (type_op)
-    {
-    case LLM_FFN_GELU_ACT:
-    {
-        cur = ggml_gelu(ctx, cur);
-        cb(cur, "ffn_relu", il);
-        struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
-        cb(repeat, "ffn_repeat(scales)", il);
-        cur = ggml_div(ctx, cur, repeat);
-        cb(cur, "ffn_div(gelu)", il);
-    }
-    break;
-    }
-
-    if (type_gate == LLM_FFN_PAR)
-    {
+    if (type_gate == LLM_FFN_PAR) {
         cur = ggml_mul(ctx, cur, tmp);
         cb(cur, "ffn_gate_par", il);
     }
 
     cur = ggml_mul_mat(ctx, down, cur);
-    if (down_b)
-    {
+    if (down_b) {
         cb(cur, "ffn_down", il);
     }
 
-    if (down_b)
-    {
+    if (down_b) {
         cur = ggml_add(ctx, cur, down_b);
     }
 
@@ -5133,21 +5101,17 @@ struct llm_build_context {
                         LLM_NORM, cb, il);
                 cb(cur, "ffn_norm", il);
                 if (hparams.use_awq) {
-                    cur = llm_build_ffn(ctx0, cur,
+                    cur = llm_build_ffn_mpt_awq(ctx0, cur,
                             model.layers[il].ffn_up,   NULL,
-                            NULL,                      NULL,
                             model.layers[il].ffn_down, NULL,
                             model.layers[il].ffn_act,
                             LLM_FFN_GELU_ACT, LLM_FFN_SEQ, cb, il);
-                    
-                }
-                else {
+                } else {
                     cur = llm_build_ffn(ctx0, cur,
                             model.layers[il].ffn_up,   NULL,
                             NULL,                      NULL,
                             model.layers[il].ffn_down, NULL,
                             LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
-                    
                 }
                 cb(cur, "ffn_out", il);
             }
@@ -5558,7 +5522,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_gate",                   OFFLOAD_FUNC     },
     { "ffn_gate_b",                 OFFLOAD_FUNC     },
     { "ffn_gate_par",               OFFLOAD_FUNC     },
-    {"ffn_act",                     OFFLOAD_FUNC     },
+    { "ffn_act",                    OFFLOAD_FUNC     },
     { "ffn_down",                   OFFLOAD_FUNC     },
     { "ffn_down_b",                 OFFLOAD_FUNC     },
     { "ffn_out",                    OFFLOAD_FUNC     },
@@ -8864,9 +8828,9 @@ struct llama_model_params llama_model_default_params() {
         /*.progress_callback_user_data =*/ nullptr,
         /*.kv_overrides                =*/ nullptr,
         /*.vocab_only                  =*/ false,
-        /*.use_awq                     =*/ false,
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
+        /*.use_awq                     =*/ false,
     };
 
 #ifdef GGML_USE_METAL
@@ -8960,7 +8924,9 @@ struct llama_model * llama_load_model_from_file(
                              const char * path_model,
               struct llama_model_params   params) {
     ggml_time_init();
+
     llama_model * model = new llama_model;
+
     unsigned cur_percentage = 0;
     if (params.progress_callback == NULL) {
         params.progress_callback_user_data = &cur_percentage;
@@ -9087,7 +9053,7 @@ struct llama_context * llama_new_context_with_model(
         if (params.embedding){
             ctx->embedding.resize(hparams.n_embd);
         }
-        
+
         {
             static const size_t tensor_alignment = 32;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
