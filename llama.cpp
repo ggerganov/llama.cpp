@@ -2236,8 +2236,12 @@ struct llama_model_loader {
         return gguf_get_tensor_name(ctx_gguf, i);
     }
 
+    struct ggml_tensor * get_tensor_meta(const char * name) const {
+        return ggml_get_tensor(ctx_meta, name);
+    }
+
     struct ggml_tensor * get_tensor_meta(int i) const {
-        return ggml_get_tensor(ctx_meta, get_tensor_name(i));
+        return get_tensor_meta(get_tensor_name(i));
     }
 
     struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, struct ggml_tensor * meta, ggml_backend_type backend) {
@@ -2302,7 +2306,7 @@ struct llama_model_loader {
         return gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, idx);
     }
 
-    void init_mapping() {
+    void init_mapping(bool prefetch = true) {
         /*
         // prefetch only CPU tensors
         if (use_mmap) {
@@ -2320,17 +2324,19 @@ struct llama_model_loader {
         */
         // prefetch the whole file - all the data is needed anyway
         if (use_mmap) {
-            mapping.reset(new llama_mmap(&file, -1, ggml_is_numa()));
+            mapping.reset(new llama_mmap(&file, prefetch ? -1 : 0, ggml_is_numa()));
         }
     }
 
-    // for backwards compatibility only
+    // for backwards compatibility, does not support ggml-backend
     void load_data_for(struct ggml_tensor * cur) const {
         const size_t offs = file_offset(ggml_get_name(cur));
 
-        if (use_mmap) {
+        if (use_mmap && mapping) {
+            GGML_ASSERT(cur->data == nullptr);
             cur->data = (uint8_t *)mapping->addr + offs;
         } else {
+            GGML_ASSERT(cur->data != nullptr);
             file.seek(offs, SEEK_SET);
             file.read_raw(cur->data, ggml_nbytes(cur));
         }
@@ -8569,9 +8575,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 #endif
 
     llama_model_loader ml(fname_inp, use_mmap, NULL);
-    if (ml.use_mmap) {
-        ml.mapping.reset(new llama_mmap(&ml.file, /* prefetch */ 0, ggml_is_numa()));
-    }
+    ml.init_mapping(false); // no prefetching?
 
     llama_model model;
     llm_load_arch(ml, model);
@@ -8650,8 +8654,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             }
             tensor->data = read_data.data();
         }
-        GGML_ASSERT(!"not implemented");
-        //ml.load_data_for(tensor); TODO
+        ml.load_data_for(tensor);
 
         LLAMA_LOG_INFO("[%4d/%4d] %36s - [%s], type = %6s, ",
                ++idx, ml.n_tensors,
@@ -8871,24 +8874,10 @@ static int llama_apply_lora_from_file_internal(
     // load base model
     std::unique_ptr<llama_model_loader> ml;
 
-    unique_context base_ctx(nullptr, ggml_free);
-    if (path_base_model) {
+   if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
-        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/ NULL));
-
-        size_t ctx_size = ggml_tensor_overhead() * ml->n_tensors;
-
-        ggml_init_params base_params;
-        base_params.mem_size   = ctx_size;
-        base_params.mem_buffer = NULL;
-        base_params.no_alloc   = true;
-
-        base_ctx.reset(ggml_init(base_params));
-
-        // maybe this should be in llama_model_loader
-        if (ml->use_mmap) {
-            ml->mapping.reset(new llama_mmap(&ml->file, /* prefetch */ 0, ggml_is_numa()));
-        }
+        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*kv_overrides*/ nullptr));
+        ml->init_mapping(false); // no prefetching
     }
 
     // read tensors and apply
@@ -9001,9 +8990,8 @@ static int llama_apply_lora_from_file_internal(
                     return 1;
                 }
 
-                base_t = ml->create_tensor(base_ctx.get(), base_name, { dest_t->ne[0], dest_t->ne[1] }, GGML_BACKEND_CPU);
-                GGML_ASSERT(!"not implemented");
-                //ml->load_data_for(base_t); // TODO
+                base_t = ml->get_tensor_meta(base_name.c_str());
+                ml->load_data_for(base_t);
             } else {
                 base_t = dest_t;
             }
