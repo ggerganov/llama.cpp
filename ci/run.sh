@@ -533,6 +533,7 @@ mkdir -p ${mnt_models}
 ln -sfn ${mnt_models} ${SRC}/models-mnt
 
 # Create a fresh python3 venv and enter it
+rm -rf "${MNT}/venv"
 python3 -m venv "${MNT}/venv"
 source "${MNT}/venv/bin/activate"
 
