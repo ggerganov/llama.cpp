@@ -815,6 +815,21 @@ struct llama_mmap {
 
     llama_mmap(const llama_mmap &) = delete;
 
+    static void align_offset(size_t & offset, size_t & len, size_t page_size) {
+        // align offset to the next page
+        size_t offset_in_page = offset & (page_size - 1);
+        size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
+        offset += offset_to_page;
+
+        if (offset_to_page >= len) {
+            len = 0;
+        } else {
+            len -= offset_to_page;
+            // align len to the previous page
+            len -= len & (page_size - 1);
+        }
+    }
+
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
 
@@ -846,6 +861,24 @@ struct llama_mmap {
                 fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
+        }
+    }
+
+    void unmap(size_t offset, size_t len) {
+        int page_size = sysconf(_SC_PAGESIZE);
+        align_offset(offset, len, page_size);
+        if (len < (size_t)page_size) {
+            return;
+        }
+
+        void * next_page_start = (uint8_t *) addr + offset;
+        // unmap and discard the pages
+        if (munmap(next_page_start, len)) {
+            fprintf(stderr, "warning: munmap failed: %s\n", strerror(errno));
+        }
+        if (posix_madvise(next_page_start, len, POSIX_MADV_DONTNEED)) {
+            fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_DONTNEED) failed: %s\n",
+                    strerror(errno));
         }
     }
 
@@ -898,6 +931,20 @@ struct llama_mmap {
         }
     }
 
+    void unmap(size_t offset, size_t len) {
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        DWORD page_size = si.dwAllocationGranularity;
+        align_offset(offset, len, page_size);
+
+        if (len < (size_t)page_size) {
+            return;
+        }
+
+        void * next_page_start = (uint8_t *) addr + offset;
+        VirtualAlloc(next_page_start, len, MEM_RESET, PAGE_NOACCESS);
+    }
+
     ~llama_mmap() {
         if (!UnmapViewOfFile(addr)) {
             fprintf(stderr, "warning: UnmapViewOfFile failed: %s\n",
@@ -911,6 +958,13 @@ struct llama_mmap {
         (void) file;
         (void) prefetch;
         (void) numa;
+
+        throw std::runtime_error(std::string("mmap not supported"));
+    }
+
+    void unmap(size_t offset, size_t len) {
+        (void) offset;
+        (void) len;
 
         throw std::runtime_error(std::string("mmap not supported"));
     }
@@ -2243,7 +2297,9 @@ struct llama_model_loader {
         return gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, idx);
     }
 
-    void init_mapping(struct ggml_context * ctx) {
+    void init_mapping() {
+        /*
+        // prefetch only CPU tensors
         if (use_mmap) {
             size_t size_pref = 0; // prefetch
 
@@ -2256,6 +2312,9 @@ struct llama_model_loader {
             }
             mapping.reset(new llama_mmap(&file, gguf_get_data_offset(ctx_gguf) + size_pref, ggml_is_numa()));
         }
+        */
+        // prefetch the whole file - all the data is needed anyway
+        mapping.reset(new llama_mmap(&file, -1, ggml_is_numa()));
     }
 
     // for backwards compatibility only
@@ -2292,19 +2351,25 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
 
-        size_t done_size = 0;
+        size_t size_done = 0;
+
+        size_t mmap_first = -1;
+        size_t mmap_last  = 0;
+
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
             GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
             const size_t offs = file_offset(ggml_get_name(cur));
 
             if (!legacy_offload || cur->backend == GGML_BACKEND_CPU) {
-                if (use_mmap) {
+                if (use_mmap && mapping) {
                     if (buf_mmap) {
                         ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + offs);
                         if (lmlock) {
                             lmlock->grow_to(offs + ggml_nbytes(cur));
                         }
+                        mmap_first = std::min(mmap_first, offs);
+                        mmap_last  = std::max(mmap_last,  offs + ggml_nbytes(cur));
                     } else {
                         ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + offs, 0, ggml_nbytes(cur));
                     }
@@ -2323,7 +2388,7 @@ struct llama_model_loader {
                 // HACK: mark tensor as allocated
                 cur->data = (void *)(uintptr_t)1;
                 void * data;
-                if (use_mmap) {
+                if (use_mmap && mapping) {
                     data = (uint8_t *) mapping->addr + offs;
                 } else {
                     read_buf.resize(ggml_nbytes(cur));
@@ -2343,14 +2408,19 @@ struct llama_model_loader {
 #endif
             }
 
-            done_size += ggml_nbytes(cur);
+            size_done += ggml_nbytes(cur);
 
             if (progress_callback) {
-                progress_callback((float) done_size / size_data, progress_callback_user_data);
+                progress_callback((float) size_done / size_data, progress_callback_user_data);
             }
         }
 
-        // TODO: unmap GPU tensors
+        // unmap GPU tensors
+        if (use_mmap && mapping) {
+            // unmap offloaded tensors and metadata
+            mapping->unmap(0, mmap_first);
+            mapping->unmap(mmap_last, mapping->size - mmap_last);
+        }
     }
 };
 
@@ -3507,7 +3577,7 @@ static void llm_load_tensors(
 
     ml.done_getting_tensors();
 
-    ml.init_mapping(ctx);
+    ml.init_mapping();
 
     // allocate tensors
     size_t vram_weights = 0;
