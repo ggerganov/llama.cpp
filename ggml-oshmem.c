@@ -84,15 +84,15 @@ void ggml_openshmem_eval_init(
     // synchronize the worker node parameters with the root node
     shmem_barrier_all();
 
-    memcpy(dst_symmetric_comm_offset, n_tokens, sizeof(int));
-    memcpy(dst_symmetric_comm_offset+sizeof(int), n_past, sizeof(int));
-    memcpy(dst_symmetric_comm_offset+sizeof(int)+sizeof(int), n_past, sizeof(int));
+    memcpy((int*)dst_symmetric_comm_offset, n_tokens, sizeof(int));
+    memcpy(((int*)dst_symmetric_comm_offset)+sizeof(int), n_past, sizeof(int));
+    memcpy(((int*)dst_symmetric_comm_offset)+sizeof(int)+sizeof(int), n_threads, sizeof(int));
 
     shmem_int32_broadcast(SHMEM_TEAM_WORLD, (int*)dst_symmetric_comm_offset, (int*)dst_symmetric_comm_offset, 3, 0);
 
-    memcpy(n_tokens, dst_symmetric_comm_offset, sizeof(int));
-    memcpy(n_past, dst_symmetric_comm_offset+sizeof(int), sizeof(int));
-    memcpy(n_threads, dst_symmetric_comm_offset+sizeof(int)+sizeof(int), sizeof(int));
+    memcpy(n_tokens, ((int*)dst_symmetric_comm_offset), sizeof(int));
+    memcpy(n_past, ((int*)dst_symmetric_comm_offset)+sizeof(int), sizeof(int));
+    memcpy(n_threads, ((int*)dst_symmetric_comm_offset)+sizeof(int)+sizeof(int), sizeof(int));
 
     shmem_quiet();
 }
