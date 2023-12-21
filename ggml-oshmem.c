@@ -151,13 +151,21 @@ static void ggml_openshmem_tensor_send(struct ggml_openshmem_context * ctx, stru
     }
 
     int64_t init_segments = (xmt_size / OPENSHMEM_SYMMETRIC_BUFFER_SIZE);
-    int64_t xmt_amount [2] = { OPENSHMEM_SYMMETRIC_BUFFER_SIZE, xmt_size - (OPENSHMEM_SYMMETRIC_BUFFER_SIZE * init_segments) };
+    int64_t xmt_amount [2] = {
+        OPENSHMEM_SYMMETRIC_BUFFER_SIZE,
+        xmt_size - (OPENSHMEM_SYMMETRIC_BUFFER_SIZE * init_segments)
+    };
     int64_t xmt_byte_offset = 0;
     int64_t xmt_byte_amount = 0;
  
-    const int64_t total_loop_count = init_segments + !( xmt_amount[1] < 1);
+    const int64_t total_loop_count =
+        init_segments + !( xmt_amount[1] < 1);
 
-    memcpy(dst_symmetric_comm_offset, &total_loop_count, sizeof(int64_t));
+    memcpy(
+        dst_symmetric_comm_offset,
+        &total_loop_count,
+        sizeof(int64_t)
+    );
 
     shmem_int64_put_signal(
         dst_symmetric_comm_offset,
@@ -227,14 +235,30 @@ static void ggml_openshmem_tensor_recv(struct ggml_openshmem_context * ctx, stru
 
     int64_t total_loop_count = 0;
 
-    shmem_wait_until(my_recv_signal, SHMEM_CMP_EQ, 1);
+    shmem_wait_until(
+        my_recv_signal,
+        SHMEM_CMP_EQ,
+        1
+    );
     (*my_recv_signal) = 0;
 
     memcpy(src_symmetric_comm_offset, &total_loop_count, sizeof(int64_t));
-    shmem_uint8_put_signal(src_symmetric_comm_structure, src_symmetric_comm_structure, 0, src_recv_signal, 1, SHMEM_SIGNAL_SET, src_pe);
+    shmem_uint8_put_signal(
+        src_symmetric_comm_structure,
+        src_symmetric_comm_structure,
+        0,
+        src_recv_signal,
+        1,
+        SHMEM_SIGNAL_SET,
+        src_pe
+    );
 
     for(int32_t i = 0; i < total_loop_count; ++i) {
-        shmem_wait_until(my_recv_signal, SHMEM_CMP_EQ, 1);
+        shmem_wait_until(
+            my_recv_signal,
+            SHMEM_CMP_EQ,
+            1
+        );
         (*my_recv_signal) = 0;
 
         memcpy(
@@ -243,7 +267,15 @@ static void ggml_openshmem_tensor_recv(struct ggml_openshmem_context * ctx, stru
             (*src_symmetric_comm_length)
         );
 
-        shmem_uint8_put_signal(src_symmetric_comm_structure, src_symmetric_comm_structure, 0, src_recv_signal, 1, SHMEM_SIGNAL_SET, src_pe);
+        shmem_uint8_put_signal(
+            src_symmetric_comm_structure,
+            src_symmetric_comm_structure,
+            0,
+            src_recv_signal,
+            1,
+            SHMEM_SIGNAL_SET,
+            src_pe
+        );
     }
 
     shmem_fence();
