@@ -512,6 +512,7 @@ static size_t g_scratch_offset = 0;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
 
+[[noreturn]]
 static __device__ void bad_arch() {
     printf("ERROR: ggml-cuda was compiled without support for the current GPU architecture.\n");
     __trap();
@@ -1980,7 +1981,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_0_q8_1_imp
     return d4 * (sumi * ds8f.x - (8*vdr/QI4_0) * ds8f.y);
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2018,7 +2018,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_1_q8_1_imp
     return sumi * d4d8 + m4s8 / (QI8_1 / (vdr * QR4_1));
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2054,7 +2053,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_0_q8_1_imp
     return d5 * (sumi * ds8f.x - (16*vdr/QI5_0) * ds8f.y);
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2100,7 +2098,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_1_q8_1_imp
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2122,7 +2119,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_0_q8_1_imp
     return d8_0*d8_1 * sumi;
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2153,7 +2149,6 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_1_q8_1_imp
     return sumi*d8d8 + m8s8 / (QI8_1 / vdr);
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2189,7 +2184,6 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmvq(
     return dm2f.x*sumf_d - dm2f.y*sumf_m;
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2227,7 +2221,6 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmq(
     return d8 * (dm2f.x*sumi_d - dm2f.y*sumi_m);
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2268,7 +2261,6 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmvq(
     return d3 * sumf;
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2294,7 +2286,6 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmq(
     return d3*d8 * sumi;
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2328,7 +2319,6 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_vmmq(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2362,7 +2352,6 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2403,7 +2392,6 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_vmmq(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2437,7 +2425,6 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_mmq(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2468,7 +2455,6 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmvq(
     return d*sumf;
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2500,7 +2486,6 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmq(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -3367,7 +3352,6 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
 #endif
@@ -3551,7 +3535,6 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
 
 #else
     bad_arch();
-    return 0.0f; // only to satisfy the compiler
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
 #endif
