@@ -24,4 +24,4 @@ jobs:
         with:
           python-version: "3.11"
       - name: Run check-requirements.sh script
-        run:  bash check-requirements.sh
+        run:  bash check-requirements.sh nocleanup

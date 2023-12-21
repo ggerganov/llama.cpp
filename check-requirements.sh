@@ -6,9 +6,18 @@
 # WARNING: This is quite IO intensive, because a fresh venv is set up for every
 # python script.
 #
+# usage:    ./check-requirements.sh [<working_dir>]
+#           ./check-requirements.sh 'nocleanup' [<working_dir>]
+#
+# where:
+#           - <working_dir> is a directory that can be used as the base for
+#               setting up the venvs. Defaults to `/tmp`.
+#           - 'nocleanup' as the first argument will disable automatic cleanup
+#               of the files created by this script.
+#
 # requires:
-# * bash >= 3.2.57
-# * shellcheck
+#           - bash >= 3.2.57
+#           - shellcheck
 #
 # For each script, it creates a fresh venv, `pip install -r` the
 # requirements, and finally executes the python script with no arguments to
@@ -54,8 +63,12 @@ abort() {
     exit 1
 }
 
-trap abort SIGINT SIGTERM SIGQUIT SIGABRT
-trap cleanup EXIT
+if [[ $1 == nocleanup ]]; then
+    shift # discard nocleanup arg
+else
+    trap abort SIGINT SIGTERM SIGQUIT SIGABRT
+    trap cleanup EXIT
+fi
 
 set -eu -o pipefail
 this="$(realpath "$0")"
@@ -107,6 +120,10 @@ check_convert_script() {
     info "$py: beginning check"
 
     local reqs="requirements-$pyname.txt"
+    if [[ ! -r "$reqs" ]]; then
+        fatal "$py missing requirements. Expected: $reqs"
+    fi
+
     local venv="$workdir/$pyname-venv"
     python3 -m venv "$venv"
 
