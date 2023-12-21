@@ -330,12 +330,6 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
                               ggml_repeat(ctx0, model.pre_ln_b, embeddings));
     }
 
-    struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_allocr_alloc(ctx->alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(ctx->alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f / sqrt((float)d_head));
-    }
-
     // loop over layers
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
@@ -356,7 +350,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
             struct ggml_tensor * Q =
                 ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].q_b, cur), ggml_mul_mat(ctx0, model.layers[il].q_w, cur));
 
-            Q = ggml_scale_inplace(ctx0, Q, KQ_scale);
+            Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
             Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
             Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
             Q = ggml_reshape_3d(ctx0, Q, d_head, num_positions, n_head * batch_size);
