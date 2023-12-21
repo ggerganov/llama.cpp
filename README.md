@@ -337,7 +337,7 @@ mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 
 ### OpenSHMEM Build
 
-OpenSHMEM lets you distribute the computation over a cluster of machines using a Partitioned Global Address Space (PGAS). Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
+OpenSHMEM lets you distribute the computation over a cluster of machines using a Partitioned Global Address Space (PGAS). OpenSHMEM is a single-sided communication model that tends to yield improved performance for certain applications. LLM prediction is an inherently serial process. This means using OpenSHMEM will not yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
 
 First you will need the OpenSHMEM libraries installed on your system. There are 3 options: [OpenMPI's OpenSHMEM](https://www.open-mpi.org), [OSSS-OpenSHMEM](https://github.com/openshmem-org/osss-ucx) and [Sandia-OpenSHMEM](https://github.com/Sandia-OpenSHMEM/SOS). OSSS-OpenSHMEM has a dependency on the [UCX](https://github.com/openucx/ucx) communication library. Sandia-OpenSHMEM can run over udp, [UCX](https://github.com/openucx/ucx), or [libfabric](https://github.com/ofiwg/libfabric). OpenMPI's OpenSHMEM can be installed with a package manager (apt, homebrew, etc). UCX, OSSS-OpenSHMEM, and Sandia-OpenSHMEM can all be installed from source.
 
@@ -355,7 +355,7 @@ Next you will need to build the project with `LLAMA_OPENSHMEM` set to true on al
   cmake -S . -B build -DLLAMA_MPI=ON -DCMAKE_C_COMPILER=oshcc -DCMAKE_CXX_COMPILER=oshc++
   ```
 
-If you have access to a distributed file system (NFS) it's suggested you copy the programs and weights onto the distributed file system.
+If you have access to a distributed file system (NFS) it's suggested you copy the programs and weights onto the distributed file system. This cluster configration is strongly encouraged.
 
 Additionally, if you have a cluster with a bulk-synchronous scheduler ie: (Slurm)[https://slurm.schedmd.com] all you need to do is run the program from the distributed file system using the bulk-synchronous scheduler. The following example assumes a slurm cluster. The example additionally assumes  an NFS installation wth the distributed file system mounted with the following path on all machines: `/nfs_path`.
 
