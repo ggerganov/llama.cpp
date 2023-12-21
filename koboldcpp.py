@@ -568,43 +568,47 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         current_token = 0
         incomplete_token_buffer = bytearray()
         await asyncio.sleep(0.05) #anti race condition, prevent check from overtaking generate
-        while True:
-            streamDone = handle.has_finished() #exit next loop on done
-            tokenStr = ""
-            streamcount = handle.get_stream_count()
-            while current_token < streamcount:
-                token = handle.new_token(current_token)
-
-                if token is None: # Token isnt ready yet, received nullpointer
-                    break
-
-                current_token += 1
-                newbyte = ctypes.string_at(token)
-                incomplete_token_buffer += bytearray(newbyte)
-                tokenSeg = incomplete_token_buffer.decode("UTF-8","ignore")
-                if tokenSeg!="":
-                    incomplete_token_buffer.clear()
-                    tokenStr += tokenSeg
-
-            if tokenStr!="":
-                if api_format == 4:  # if oai chat, set format to expected openai streaming response
-                    event_str = json.dumps({"id":"koboldcpp","object":"chat.completion.chunk","created":1,"model":friendlymodelname,"choices":[{"index":0,"finish_reason":"length","delta":{'role':'assistant','content':tokenStr}}]})
-                    await self.send_oai_sse_event(event_str)
-                elif api_format == 3:  # non chat completions
-                    event_str = json.dumps({"id":"koboldcpp","object":"text_completion","created":1,"model":friendlymodelname,"choices":[{"index":0,"finish_reason":"length","text":tokenStr}]})
-                    await self.send_oai_sse_event(event_str)
-                else:
-                    event_str = json.dumps({"token": tokenStr})
-                    await self.send_kai_sse_event(event_str)
+        try:
+            while True:
+                streamDone = handle.has_finished() #exit next loop on done
                 tokenStr = ""
+                streamcount = handle.get_stream_count()
+                while current_token < streamcount:
+                    token = handle.new_token(current_token)
 
-            else:
-                await asyncio.sleep(0.02) #this should keep things responsive
+                    if token is None: # Token isnt ready yet, received nullpointer
+                        break
 
-            if streamDone:
-                if api_format == 4:  # if oai chat, send last [DONE] message consistent with openai format
-                    await self.send_oai_sse_event('[DONE]')
-                break
+                    current_token += 1
+                    newbyte = ctypes.string_at(token)
+                    incomplete_token_buffer += bytearray(newbyte)
+                    tokenSeg = incomplete_token_buffer.decode("UTF-8","ignore")
+                    if tokenSeg!="":
+                        incomplete_token_buffer.clear()
+                        tokenStr += tokenSeg
+
+                if tokenStr!="":
+                    if api_format == 4:  # if oai chat, set format to expected openai streaming response
+                        event_str = json.dumps({"id":"koboldcpp","object":"chat.completion.chunk","created":1,"model":friendlymodelname,"choices":[{"index":0,"finish_reason":"length","delta":{'role':'assistant','content':tokenStr}}]})
+                        await self.send_oai_sse_event(event_str)
+                    elif api_format == 3:  # non chat completions
+                        event_str = json.dumps({"id":"koboldcpp","object":"text_completion","created":1,"model":friendlymodelname,"choices":[{"index":0,"finish_reason":"length","text":tokenStr}]})
+                        await self.send_oai_sse_event(event_str)
+                    else:
+                        event_str = json.dumps({"token": tokenStr})
+                        await self.send_kai_sse_event(event_str)
+                    tokenStr = ""
+
+                else:
+                    await asyncio.sleep(0.02) #this should keep things responsive
+
+                if streamDone:
+                    if api_format == 4:  # if oai chat, send last [DONE] message consistent with openai format
+                        await self.send_oai_sse_event('[DONE]')
+                    break
+        except Exception as ex:
+            print("SSE streaming was interrupted due to an exception")
+            print(ex)
 
         # flush buffers, sleep a bit to make sure all data sent, and then force close the connection
         self.wfile.flush()
@@ -629,7 +633,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionAbortedError) as cae: # attempt to abort if connection lost
             print(cae)
             handle.abort_generate()
-            time.sleep(0.1) #short delay
+            time.sleep(0.2) #short delay
         except Exception as e:
             print(e)
 
@@ -938,8 +942,10 @@ Enter Prompt:<br>
                         self.send_header('content-length', str(len(genresp)))
                         self.end_headers(content_type='application/json')
                         self.wfile.write(genresp)
-                except:
+                except Exception as ex:
                     print("Generate: The response could not be sent, maybe connection was terminated?")
+                    handle.abort_generate()
+                    time.sleep(0.2) #short delay
                 return
         finally:
             modelbusy.release()
