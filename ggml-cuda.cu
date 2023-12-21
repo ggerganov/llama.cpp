@@ -89,6 +89,7 @@
 #include "ggml-cuda.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
+#include "common/log.h"
 
 #define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
@@ -193,9 +194,9 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
         if (err_ != cudaSuccess) {                                                      \
             int id;                                                                     \
             cudaGetDevice(&id);                                                         \
-            fprintf(stderr, "\nCUDA error %d at %s:%d: %s\n", err_, __FILE__, __LINE__, \
+            LOG_TEE("\nCUDA error %d at %s:%d: %s\n", err_, __FILE__, __LINE__,         \
                 cudaGetErrorString(err_));                                              \
-            fprintf(stderr, "current device: %d\n", id);                                \
+            LOG_TEE("current device: %d\n", id);                                        \
             GGML_ASSERT(!"CUDA error");                                                 \
         }                                                                               \
     } while (0)
@@ -207,9 +208,9 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
         if (err_ != CUBLAS_STATUS_SUCCESS) {                                            \
             int id;                                                                     \
             cudaGetDevice(&id);                                                         \
-            fprintf(stderr, "\ncuBLAS error %d at %s:%d: %s\n",                         \
+            LOG_TEE("\ncuBLAS error %d at %s:%d: %s\n",                                 \
                     err_, __FILE__, __LINE__, cublasGetStatusString(err_));             \
-            fprintf(stderr, "current device: %d\n", id);                                \
+            LOG_TEE("current device: %d\n", id);                                        \
             GGML_ASSERT(!"cuBLAS error");                                               \
         }                                                                               \
     } while (0)
@@ -220,8 +221,8 @@ static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
         if (err_ != CUBLAS_STATUS_SUCCESS) {                                            \
             int id;                                                                     \
             cudaGetDevice(&id);                                                         \
-            fprintf(stderr, "\ncuBLAS error %d at %s:%d\n", err_, __FILE__, __LINE__);  \
-            fprintf(stderr, "current device: %d\n", id);                                \
+            LOG_TEE("\ncuBLAS error %d at %s:%d\n", err_, __FILE__, __LINE__);          \
+            LOG_TEE("current device: %d\n", id);                                        \
             GGML_ASSERT(!"cuBLAS error");                                               \
         }                                                                               \
     } while (0)
@@ -6591,7 +6592,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
         return ptr;
     }
 #ifdef DEBUG_CUDA_MALLOC
-    fprintf(stderr, "%s: %d buffers, max_size = %u MB, tot_size = %u MB, requested %u MB\n", __func__, nnz,
+    LOG_TEE("%s: %d buffers, max_size = %u MB, tot_size = %u MB, requested %u MB\n", __func__, nnz,
             (uint32_t)(max_size/1024/1024), (uint32_t)(tot_size/1024/1024), (uint32_t)(size/1024/1024));
 #endif
     void * ptr;
@@ -6615,7 +6616,7 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
             return;
         }
     }
-    fprintf(stderr, "WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
+    LOG_TEE("WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
     CUDA_CHECK(cudaFree(ptr));
 }
 
@@ -6646,20 +6647,20 @@ void ggml_init_cublas() {
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
 #if defined(GGML_CUDA_FORCE_MMQ)
-        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   yes\n", __func__);
+        LOG_TEE("%s: GGML_CUDA_FORCE_MMQ:   yes\n", __func__);
 #else
-        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   no\n", __func__);
+        LOG_TEE("%s: GGML_CUDA_FORCE_MMQ:   no\n", __func__);
 #endif
 #if defined(CUDA_USE_TENSOR_CORES)
-        fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: yes\n", __func__);
+        LOG_TEE("%s: CUDA_USE_TENSOR_CORES: yes\n", __func__);
 #else
-        fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
+        LOG_TEE("%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
 #endif
-        fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
+        LOG_TEE("%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
         for (int id = 0; id < g_device_count; ++id) {
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
+            LOG_TEE("  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
@@ -6729,7 +6730,7 @@ void * ggml_cuda_host_malloc(size_t size) {
         // The allocation error can be bypassed. A null ptr will assigned out of this function.
         // This can fixed the OOM error in WSL.
         cudaGetLastError();
-        fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
+        LOG_TEE("WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
         return nullptr;
     }
@@ -6844,7 +6845,7 @@ inline void ggml_cuda_op_bin_bcast(
     } else if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F32) {
         op()(src0, src1, dst, (const half *) src0_dd, src1_dd, dst_dd, main_stream);
     } else {
-        fprintf(stderr, "%s: unsupported types: dst: %s, src0: %s, src1: %s\n", __func__,
+        LOG_TEE("%s: unsupported types: dst: %s, src0: %s, src1: %s\n", __func__,
             ggml_type_name(dst->type), ggml_type_name(src0->type), ggml_type_name(src1->type));
         GGML_ASSERT(false);
     }
@@ -8958,7 +8959,7 @@ static void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, gg
     } else if (src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F16) {
         ggml_cpy_f16_f16_cuda (src0_ddc, src1_ddc, ne, ne00, ne01, nb00, nb01, nb02, ne10, ne11, nb10, nb11, nb12, main_stream);
     } else {
-        fprintf(stderr, "%s: unsupported type combination (%s to %s)\n", __func__,
+        LOG_TEE("%s: unsupported type combination (%s to %s)\n", __func__,
                 ggml_type_name(src0->type), ggml_type_name(src1->type));
         GGML_ASSERT(false);
     }
@@ -9259,7 +9260,7 @@ void ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tensor) {
 
 void ggml_cuda_set_main_device(const int main_device) {
     if (main_device >= g_device_count) {
-        fprintf(stderr, "warning: cannot set main_device=%d because there are only %d devices. Using device %d instead.\n",
+        LOG_TEE("warning: cannot set main_device=%d because there are only %d devices. Using device %d instead.\n",
                 main_device, g_device_count, g_main_device);
         return;
     }
@@ -9268,7 +9269,7 @@ void ggml_cuda_set_main_device(const int main_device) {
         g_main_device = main_device;
         cudaDeviceProp prop;
         CUDA_CHECK(cudaGetDeviceProperties(&prop, g_main_device));
-        fprintf(stderr, "%s: using device %d (%s) as main device\n", __func__, g_main_device, prop.name);
+        LOG_TEE("%s: using device %d (%s) as main device\n", __func__, g_main_device, prop.name);
     }
 }
 
@@ -9305,7 +9306,7 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
 #ifndef NDEBUG
-            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = " PRId64 ", src1->ne[3] = " PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
+            LOG_TEE("%s: cannot compute %s: src0->ne[3] = " PRId64 ", src1->ne[3] = " PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
 #endif
             return false;
         }
@@ -9787,7 +9788,7 @@ static void ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph 
 
         bool ok = ggml_cuda_compute_forward(&params, node);
         if (!ok) {
-            fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
+            LOG_TEE("%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
         }
         GGML_ASSERT(ok);
 
@@ -9945,7 +9946,7 @@ ggml_backend_t ggml_backend_cuda_init(int device) {
     ggml_init_cublas(); // TODO: remove from ggml.c
 
     if (device < 0 || device >= ggml_cuda_get_device_count()) {
-        fprintf(stderr, "%s: error: invalid device %d\n", __func__, device);
+        LOG_TEE("%s: error: invalid device %d\n", __func__, device);
         return nullptr;
     }
 
