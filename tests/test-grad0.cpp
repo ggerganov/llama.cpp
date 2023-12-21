@@ -881,7 +881,7 @@ int main(int argc, const char ** argv) {
         // scale
         {
             srand(seed);
-            const int nargs = 2;
+            const int nargs = 1;
 
             int64_t ne2[4];
             ne2[0] = 1;
@@ -892,7 +892,6 @@ int main(int argc, const char ** argv) {
                 const float s = -1.0f + 2.0f*frand();
 
                 ggml_set_param(ctx0, x[0]);
-                ggml_set_param(ctx0, x[1]);
 
                 struct ggml_tensor * f = ggml_sum(ctx0, ggml_scale(ctx0, x[0], s));
 
