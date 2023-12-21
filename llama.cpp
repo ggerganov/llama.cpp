@@ -816,23 +816,11 @@ struct llama_mmap {
 
     llama_mmap(const llama_mmap &) = delete;
 
-    static void align_offset(size_t * offset, size_t * len, size_t page_size) {
-        // align offset to the next page
-        size_t offset_in_page = *offset & (page_size - 1);
-        size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
-        *offset += offset_to_page;
-
-        if (offset_to_page >= *len) {
-            *len = 0;
-        } else {
-            *len -= offset_to_page;
-            // align len to the previous page
-            *len -= *len & (page_size - 1);
-        }
-    }
-
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
+
+    // list of mapped fragments (first_offset, last_offset)
+    std::vector<std::pair<size_t, size_t>> mapped_fragments;
 
     llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false) {
         size = file->size;
@@ -841,8 +829,9 @@ struct llama_mmap {
         // prefetch/readahead impairs performance on NUMA systems
         if (numa) { prefetch = 0; }
 #ifdef __linux__
+        // advise the kernel to read the file sequentially (increases readahead)
         if (posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL)) {
-            fprintf(stderr, "warning: posix_fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
+            LLAMA_LOG_WARN("warning: posix_fadvise(.., POSIX_FADV_SEQUENTIAL) failed: %s\n",
                     strerror(errno));
         }
         if (prefetch) { flags |= MAP_POPULATE; }
@@ -853,9 +842,9 @@ struct llama_mmap {
         }
 
         if (prefetch > 0) {
-            // Advise the kernel to preload the mapped memory
+            // advise the kernel to preload the mapped memory
             if (posix_madvise(addr, std::min(file->size, prefetch), POSIX_MADV_WILLNEED)) {
-                fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
+                LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }
         }
@@ -863,32 +852,81 @@ struct llama_mmap {
             // advise the kernel not to use readahead
             // (because the next page might not belong on the same node)
             if (posix_madvise(addr, file->size, POSIX_MADV_RANDOM)) {
-                fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
+                LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
         }
+
+        // initialize list of mapped_fragments
+        mapped_fragments.emplace_back(0, file->size);
     }
 
-    void unmap(size_t offset, size_t len) {
+    static void align_range(size_t * first, size_t * last, size_t page_size) {
+        // align first to the next page
+        size_t offset_in_page = *first & (page_size - 1);
+        size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
+        *first += offset_to_page;
+
+        // align last to the previous page
+        *last = *last & ~(page_size - 1);
+
+        if (*last <= *first) {
+            *last = *first;
+        }
+    }
+
+    // partially unmap the file in the range [first, last)
+    void unmap_fragment(size_t first, size_t last) {
+        // note: this function must not be called multiple times with overlapping ranges
+        // otherwise, there is a risk of invalidating addresses that have been repurposed for other mappings
         int page_size = sysconf(_SC_PAGESIZE);
-        align_offset(&offset, &len, page_size);
-        if (len < (size_t)page_size) {
+        align_range(&first, &last, page_size);
+        size_t len = last - first;
+
+        if (len == 0) {
             return;
         }
 
-        void * next_page_start = (uint8_t *) addr + offset;
-        // unmap and discard the pages
+        GGML_ASSERT(first % page_size == 0);
+        GGML_ASSERT(last % page_size == 0);
+        GGML_ASSERT(last > first);
+
+        void * next_page_start = (uint8_t *) addr + first;
+
+        // unmap the range
         if (munmap(next_page_start, len)) {
-            fprintf(stderr, "warning: munmap failed: %s\n", strerror(errno));
+            LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
         }
-        if (posix_madvise(next_page_start, len, POSIX_MADV_DONTNEED)) {
-            fprintf(stderr, "warning: posix_madvise(.., POSIX_MADV_DONTNEED) failed: %s\n",
-                    strerror(errno));
+
+        // update the list of mapped fragments to avoid unmapping the same range again in the destructor
+        std::vector<std::pair<size_t, size_t>> new_mapped_fragments;
+        for (const auto & frag : mapped_fragments) {
+            if (frag.first < first && frag.second > last) {
+                // the range is in the middle of the fragment, split it
+                new_mapped_fragments.emplace_back(frag.first, first);
+                new_mapped_fragments.emplace_back(last, frag.second);
+            } else if (frag.first < first && frag.second > first) {
+                // the range starts in the middle of the fragment
+                new_mapped_fragments.emplace_back(frag.first, first);
+            } else if (frag.first < last && frag.second > last) {
+                // the range ends in the middle of the fragment
+                new_mapped_fragments.emplace_back(last, frag.second);
+            } else if (frag.first >= first && frag.second <= last) {
+                // the range covers the entire fragment
+            } else {
+                // the range is outside the fragment
+                new_mapped_fragments.push_back(frag);
+            }
         }
+        mapped_fragments = std::move(new_mapped_fragments);
     }
 
     ~llama_mmap() {
-        munmap(addr, size);
+        for (const auto & frag : mapped_fragments) {
+            if (munmap((char *) addr + frag.first, frag.second - frag.first)) {
+                LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
+            }
+        }
     }
 #elif defined(_WIN32)
     static constexpr bool SUPPORTED = true;
@@ -936,18 +974,10 @@ struct llama_mmap {
         }
     }
 
-    void unmap(size_t offset, size_t len) {
-        SYSTEM_INFO si;
-        GetSystemInfo(&si);
-        DWORD page_size = si.dwAllocationGranularity;
-        align_offset(&offset, &len, page_size);
-
-        if (len < (size_t)page_size) {
-            return;
-        }
-
-        void * next_page_start = (uint8_t *) addr + offset;
-        VirtualAlloc(next_page_start, len, MEM_RESET, PAGE_NOACCESS);
+    void unmap_fragment(size_t first, size_t last) {
+        // not supported
+        GGML_UNUSED(first);
+        GGML_UNUSED(last);
     }
 
     ~llama_mmap() {
@@ -2429,11 +2459,11 @@ struct llama_model_loader {
             size_done += ggml_nbytes(cur);
         }
 
-        // unmap GPU tensors
+        // unmap offloaded tensors and metadata
         if (use_mmap && mapping) {
-            // unmap offloaded tensors and metadata
-            mapping->unmap(0, mmap_first);
-            mapping->unmap(mmap_last, mapping->size - mmap_last);
+            mapping->unmap_fragment(0, mmap_first);
+            mapping->unmap_fragment(mmap_last, mmap_last);
+            mapping->unmap_fragment(mmap_last, mapping->size);
         }
 
         if (progress_callback) {
