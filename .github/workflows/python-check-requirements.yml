@@ -17,10 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     name: check-requirements
     steps:
-      - name: Install shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install shellcheck
       - name: Check out source repository
         uses: actions/checkout@v3
       - name: Set up Python environment
