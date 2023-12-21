@@ -84,6 +84,9 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
+#define CUBLAS_TF32_TENSOR_OP_MATH CUBLAS_TENSOR_OP_MATH
+#define CUBLAS_COMPUTE_16F CUDA_R_16F
+#define CUBLAS_COMPUTE_32F CUDA_R_32F
 #endif // defined(GGML_USE_HIPBLAS)
 
 #include "ggml-cuda.h"
@@ -8396,7 +8399,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
     half * dst_f16 = nullptr;
     char * dst_t   = nullptr;
 
-    cublasComputeType_t cu_compute_type = CUBLAS_COMPUTE_16F;
+    cudaDataType_t cu_compute_type = CUBLAS_COMPUTE_16F;
     cudaDataType_t      cu_data_type    = CUDA_R_16F;
 
     // dst strides
