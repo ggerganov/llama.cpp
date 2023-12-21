@@ -484,7 +484,8 @@ extern "C" {
     enum ggml_log_level {
         GGML_LOG_LEVEL_ERROR = 2,
         GGML_LOG_LEVEL_WARN = 3,
-        GGML_LOG_LEVEL_INFO = 4
+        GGML_LOG_LEVEL_INFO = 4,
+        GGML_LOG_LEVEL_DEBUG = 5
     };
 
     // ggml object
