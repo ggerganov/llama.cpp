@@ -6825,7 +6825,7 @@ static void ggml_cuda_op_get_rows(
             break;
         default:
             // TODO: k-quants
-            GGML_ASSERT(false);
+            GGML_ASSERT(false && "Unsupported CUDA Quantization Mode");
             break;
     }
 }
