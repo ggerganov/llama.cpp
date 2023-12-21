@@ -9532,8 +9532,12 @@ const llama_model * llama_get_model(const struct llama_context * ctx) {
     return &ctx->model;
 }
 
-int llama_n_ctx(const struct llama_context * ctx) {
+uint32_t llama_n_ctx(const struct llama_context * ctx) {
     return ctx->cparams.n_ctx;
+}
+
+uint32_t llama_n_batch(const struct llama_context * ctx) {
+    return ctx->cparams.n_batch;
 }
 
 enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
