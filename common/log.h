@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <cinttypes>
+#include <cctype>
 
 // --------------------------------
 //

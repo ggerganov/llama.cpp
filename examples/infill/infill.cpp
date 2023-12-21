@@ -101,6 +101,13 @@ static void sigint_handler(int signo) {
 }
 #endif
 
+#if defined (_WIN32)
+	BOOL ConsoleCtrlHandler(DWORD ctrl_type)
+	{
+		return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
+	}
+#endif
+
 int main(int argc, char ** argv) {
     gpt_params params;
     llama_sampling_params & sparams = params.sparams;
@@ -344,10 +351,7 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-        auto console_ctrl_handler = +[](DWORD ctrl_type) -> BOOL {
-            return (ctrl_type == CTRL_C_EVENT) ? (sigint_handler(SIGINT), true) : false;
-        };
-        SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(console_ctrl_handler), true);
+		SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(ConsoleCtrlHandler), TRUE);
 #endif
 
         LOG_TEE("%s: interactive mode on.\n", __func__);

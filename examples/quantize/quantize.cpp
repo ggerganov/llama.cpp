@@ -5,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <string>
+#include <cctype>
 
 struct quant_option {
     std::string name;

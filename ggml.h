@@ -2217,8 +2217,8 @@ extern "C" {
     // Internal types and functions exposed for tests and benchmarks
     //
 
-#ifdef  __cplusplus
-// restrict not standard in C++
+#if defined(__cplusplus) || defined(_MSC_VER)
+// GGML_RESTRICT not standard in C++
 #define GGML_RESTRICT
 #else
 #define GGML_RESTRICT restrict

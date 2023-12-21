@@ -16,6 +16,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cinttypes>
+#include <cctype>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
