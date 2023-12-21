@@ -284,8 +284,8 @@ static void ggml_openshmem_tensor_recv(struct ggml_openshmem_context * ctx, stru
 // TODO: there are many improvements that can be done to this implementation
 void ggml_openshmem_graph_compute_pre(
         struct ggml_openshmem_context * ctx_openshmem,
-             struct ggml_cgraph * gf,
-                            int   n_layers) {
+        struct ggml_cgraph * gf,
+        int   n_layers) {
     const int openshmem_pe = ctx_openshmem->pe;
     const int openshmem_size = ctx_openshmem->n_pes;
 
