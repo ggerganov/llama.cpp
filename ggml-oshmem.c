@@ -20,7 +20,7 @@ struct ggml_openshmem_context {
     int64_t symmetric_buffer_size;
     int64_t symmetric_comm_structure_size;
     uint8_t * symmetric_comm_structure;
-    long * recv_signal;
+    uint64_t * recv_signal;
 };
 
 void ggml_openshmem_backend_init(void) {
@@ -56,7 +56,7 @@ struct ggml_openshmem_context * ggml_openshmem_init(void) {
     /*
      * uint8_t signal_byte[shmem_npes()];
      */
-    ctx->recv_signal = (long*)shmem_calloc(1, ctx->n_pes*sizeof(long));
+    ctx->recv_signal = (uint64_t*)shmem_calloc(1, ctx->n_pes*sizeof(uint64_t));
 
     return ctx;
 }
@@ -115,9 +115,9 @@ static void ggml_openshmem_tensor_send(struct ggml_openshmem_context * ctx, stru
         ((int64_t*)dst_symmetric_comm_offset)+sizeof(int64_t);
     uint8_t * dst_symmetric_comm_buffer =
         ((uint8_t*)dst_symmetric_comm_length)+sizeof(int64_t);
-    long * dst_recv_signal =
+    uint64_t * dst_recv_signal =
         ctx->recv_signal+dst_pe;
-    long * my_recv_signal =
+    uint64_t * my_recv_signal =
         ctx->recv_signal+ctx->pe;
 
     const int64_t nelements = ggml_nelements(t);
@@ -203,9 +203,9 @@ static void ggml_openshmem_tensor_recv(struct ggml_openshmem_context * ctx, stru
         ((int64_t*)src_symmetric_comm_offset)+sizeof(int64_t);
     uint8_t * src_symmetric_comm_buffer =
         ((uint8_t*)src_symmetric_comm_length)+sizeof(int64_t);
-    long * src_recv_signal =
+    uint64_t * src_recv_signal =
         ctx->recv_signal+src_pe;
-    long* my_recv_signal =
+    uint64_t * my_recv_signal =
         ctx->recv_signal+ctx->pe;
 
     int64_t total_loop_count = 0;

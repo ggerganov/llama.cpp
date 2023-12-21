@@ -18,7 +18,7 @@ void ggml_openshmem_backend_free(void);
 struct ggml_openshmem_context * ggml_openshmem_init(void);
 void ggml_openshmem_free(struct ggml_openshmem_context * ctx);
 
-int ggml_openshmem_rank(struct ggml_openshmem_context * ctx);
+int ggml_openshmem_pe(struct ggml_openshmem_context * ctx);
 
 void ggml_openshmem_eval_init(
         struct ggml_openshmem_context * ctx_openshmem,
