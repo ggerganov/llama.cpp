@@ -1,0 +1,36 @@
+name: Koboldcpp Builder Windows CUDA
+
+on: workflow_dispatch
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+        with:
+          ref: concedo_experimental
+
+      - uses: Jimver/cuda-toolkit@v0.2.11
+        id: cuda-toolkit
+        with:
+          cuda: '11.7.1'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_CUBLAS=ON
+          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - name: Save artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kcpp_windows_cuda_binary
+          path: build/bin/Release/
