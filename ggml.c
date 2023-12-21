@@ -2383,20 +2383,8 @@ size_t ggml_get_mem_size(const struct ggml_context * ctx) {
 size_t ggml_get_max_tensor_size(const struct ggml_context * ctx) {
     size_t max_size = 0;
 
-    struct ggml_object * obj = ctx->objects_begin;
-
-    while (obj != NULL) {
-        if (obj->type == GGML_OBJECT_TENSOR) {
-            struct ggml_tensor * tensor = (struct ggml_tensor *) ((char *) ctx->mem_buffer + obj->offs);
-
-            const size_t size = ggml_nbytes(tensor);
-
-            if (max_size < size) {
-                max_size = size;
-            }
-        }
-
-        obj = obj->next;
+    for (struct ggml_tensor * tensor = ggml_get_first_tensor(ctx); tensor != NULL; tensor = ggml_get_next_tensor(ctx, tensor)) {
+        max_size = MAX(max_size, ggml_nbytes(tensor));
     }
 
     return max_size;
@@ -3093,7 +3081,7 @@ struct ggml_tensor * ggml_view_tensor(
     return result;
 }
 
-struct ggml_tensor * ggml_get_first_tensor(struct ggml_context * ctx) {
+struct ggml_tensor * ggml_get_first_tensor(const struct ggml_context * ctx) {
     struct ggml_object * obj = ctx->objects_begin;
 
     char * const mem_buffer = ctx->mem_buffer;
@@ -3109,7 +3097,7 @@ struct ggml_tensor * ggml_get_first_tensor(struct ggml_context * ctx) {
     return NULL;
 }
 
-struct ggml_tensor * ggml_get_next_tensor(struct ggml_context * ctx, struct ggml_tensor * tensor) {
+struct ggml_tensor * ggml_get_next_tensor(const struct ggml_context * ctx, struct ggml_tensor * tensor) {
     struct ggml_object * obj = (struct ggml_object *) ((char *)tensor - GGML_OBJECT_SIZE);
     obj = obj->next;
 
@@ -19211,6 +19199,10 @@ size_t gguf_get_tensor_offset(const struct gguf_context * ctx, int i) {
 
 char * gguf_get_tensor_name(const struct gguf_context * ctx, int i) {
     return ctx->infos[i].name.data;
+}
+
+enum ggml_type gguf_get_tensor_type(const struct gguf_context * ctx, int i) {
+    return ctx->infos[i].type;
 }
 
 // returns the index
