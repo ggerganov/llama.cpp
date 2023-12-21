@@ -337,7 +337,7 @@ mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 
 ### OpenSHMEM Build
 
-OpenSHMEM lets you distribute the computation over a cluster of machines using a Partitioned Global Address Space (PGAS). OpenSHMEM is a single-sided communication model that tends to yield improved performance for certain applications. LLM prediction is an inherently serial process. This means using OpenSHMEM will not yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
+OpenSHMEM lets you distribute a computation over a cluster of machines using a Partitioned Global Address Space (PGAS). OpenSHMEM's cluster abstraction is the Parallel-Random-Access-Machine (PRAM). OpenSHMEM's status as a PRAM abstraction means applications are written using the Single-Program-Many-Data (SPMD) style. OpenSHMEM is a shared memory machine abstraction for a cluster. The shared-memory machine abstraction means distributed communications operate like memory copies (memcpy). The receiver does not get a "notification" that communication events have occurred. Senders and recievers can "put" and "get" to remote memory at will. OpenSHMEM is a single-sided communication model that tends to yield improved performance for certain applications. The caveat to that statement is the underlying hardware and software layers. OpenSHMEM operates best when the communication protocol is "fire and forget" (similar to UDP). OpenSHMEM operates best on systems with remote-direct-memory-access (RDMA) enabled network-interface-cards (NICs). OpenSHMEM can work over a commodity ethernet cluster. OpenSHMEM can work on a single machine using a shared memory backend. llama.cpp's OpenSHMEM backend is designed for cluster environments. LLM inference is an inherently serial process. Using OpenSHMEM will not yield any significant [strong scaling](https://hpc-wiki.info/hpc/Scaling#Strong_or_Weak_Scaling) effects. OpenSHMEM it will let you run larger models (over a cluster) than would otherwise fit into the memory (RAM) of a single machine.
 
 First you will need the OpenSHMEM libraries installed on your system. There are 3 options: [OpenMPI's OpenSHMEM](https://www.open-mpi.org), [OSSS-OpenSHMEM](https://github.com/openshmem-org/osss-ucx) and [Sandia-OpenSHMEM](https://github.com/Sandia-OpenSHMEM/SOS). OSSS-OpenSHMEM has a dependency on the [UCX](https://github.com/openucx/ucx) communication library. Sandia-OpenSHMEM can run over udp, [UCX](https://github.com/openucx/ucx), or [libfabric](https://github.com/ofiwg/libfabric). OpenMPI's OpenSHMEM can be installed with a package manager (apt, homebrew, etc). UCX, OSSS-OpenSHMEM, and Sandia-OpenSHMEM can all be installed from source.
 
@@ -346,18 +346,16 @@ Next you will need to build the project with `LLAMA_OPENSHMEM` set to true on al
 - Using `make`:
 
   ```bash
-  make CC=oshcc CXX=oshc++ LLAMA_MPI=1
+  make CC=oshcc CXX=oshc++ LLAMA_OPENSHMEM=1
   ```
 
 - Using `CMake`:
 
   ```bash
-  cmake -S . -B build -DLLAMA_MPI=ON -DCMAKE_C_COMPILER=oshcc -DCMAKE_CXX_COMPILER=oshc++
+  cmake -S . -B build -DCMAKE_C_COMPILER=oshcc -DCMAKE_CXX_COMPILER=oshc++ -DLLAMA_OPENSHMEM=ON 
   ```
 
-If you have access to a distributed file system (NFS) it's suggested you copy the programs and weights onto the distributed file system. This cluster configration is strongly encouraged.
-
-Additionally, if you have a cluster with a bulk-synchronous scheduler ie: (Slurm)[https://slurm.schedmd.com] all you need to do is run the program from the distributed file system using the bulk-synchronous scheduler. The following example assumes a slurm cluster. The example additionally assumes  an NFS installation wth the distributed file system mounted with the following path on all machines: `/nfs_path`.
+It's strongly encouraged that users exercise this backend over a cluster that is configured to operate like a parallel machine. This means users should consider installing and configuring a distributed file system (NFS). Users are also encouraged to install a bulk-synchronous scheduler (ie: (Slurm)[https://slurm.schedmd.com]). Typical parallel machine configurations usually have 2 networks, a network for slurm/NFS and a seperate network for compute. This may not be practical for most users. After compiling llama.cpp w/OpenSHMEM, users will just need to copy the programs and weights onto the distributed file system. In order to run llama.cpp w/OpenSHMEM a user will need to run the program from the distributed file system using a bulk-synchronous scheduler. The following example assumes a slurm cluster is setup and configured. The example asserts an NFS installation is setup, configured, and mounted on each machine with the following path: `/nfs_path`.
 
 ```
 srun -n 2 /nfs_path/main -m /nfs_path/models/7B/ggml-model-q4_0.gguf -n 128

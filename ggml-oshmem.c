@@ -243,7 +243,7 @@ void ggml_openshmem_graph_compute_pre(
         struct ggml_openshmem_context * ctx_openshmem,
              struct ggml_cgraph * gf,
                             int   n_layers) {
-    const int openshmem_rank = ctx_openshmem->pe;
+    const int openshmem_pe = ctx_openshmem->pe;
     const int openshmem_size = ctx_openshmem->n_pes;
 
     struct ggml_tensor * inp_tokens = ggml_graph_get_tensor(gf, "inp_tokens");
@@ -274,8 +274,8 @@ void ggml_openshmem_graph_compute_pre(
     {
         struct ggml_tensor * input_tokens[2] = { inp_tokens, inp0 };
 
-        if (openshmem_rank > 0) {
-            ggml_openshmem_tensor_recv(ctx_openshmem, input_tokens[openshmem_rank == 1], openshmem_rank-1);
+        if (openshmem_pe > 0) {
+            ggml_openshmem_tensor_recv(ctx_openshmem, input_tokens[openshmem_pe == 1], openshmem_pe-1);
         }
         else if (openshmem_size > 1) {
             // node 0 sends the input tokens to node 1
@@ -289,7 +289,7 @@ void ggml_openshmem_graph_compute_pre(
     {
         const int n_per_node = (n_layers + (openshmem_size - 1)) / openshmem_size;
 
-        const int openshmem_idx = openshmem_rank > 0 ? openshmem_rank - 1 : openshmem_size - 1;
+        const int openshmem_idx = openshmem_pe > 0 ? openshmem_pe - 1 : openshmem_size - 1;
 
         const int il0 =               (openshmem_idx + 0) * n_per_node;
         const int il1 = MIN(n_layers, (openshmem_idx + 1) * n_per_node);
@@ -301,7 +301,7 @@ void ggml_openshmem_graph_compute_pre(
         snprintf(name_l1, sizeof(name_l1), "layer_inp_%d", il1);
 
         const int idx_l0 =                ggml_graph_get_node_idx(gf, name_l0);
-        const int idx_l1 = openshmem_rank > 0 ? ggml_graph_get_node_idx(gf, name_l1) + 1 : gf->n_nodes;
+        const int idx_l1 = openshmem_pe > 0 ? ggml_graph_get_node_idx(gf, name_l1) + 1 : gf->n_nodes;
 
         if (idx_l0 < 0 || idx_l1 < 0) {
             fprintf(stderr, "%s: layer input nodes not found\n", __func__);
@@ -332,7 +332,7 @@ void ggml_openshmem_graph_compute_pre(
 
         gf->n_nodes = idx_l1 - idx_l0;
 
-        //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, openshmem_rank, gf->n_nodes, il0, il1);
+        //fprintf(stderr, "%s: node %d: processing %d nodes [%d, %d)\n", __func__, openshmem_pe, gf->n_nodes, il0, il1);
     }
 }
 
@@ -342,11 +342,11 @@ void ggml_openshmem_graph_compute_post(
                             int   n_layers) {
     UNUSED(n_layers);
 
-    const int openshmem_rank = ctx_openshmem->pe;
+    const int openshmem_pe = ctx_openshmem->pe;
     const int openshmem_size = ctx_openshmem->n_pes;
 
     // send the output data to the next node
-    if (openshmem_rank > 0) {
-        ggml_openshmem_tensor_send(ctx_openshmem, gf->nodes[gf->n_nodes - 1], (openshmem_rank + 1) % openshmem_size);
+    if (openshmem_pe > 0) {
+        ggml_openshmem_tensor_send(ctx_openshmem, gf->nodes[gf->n_nodes - 1], (openshmem_pe + 1) % openshmem_size);
     }
 }
