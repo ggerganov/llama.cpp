@@ -965,7 +965,7 @@ struct llama_mmap {
                 // advise the kernel to preload the mapped memory
                 WIN32_MEMORY_RANGE_ENTRY range;
                 range.VirtualAddress = addr;
-                range.NumberOfBytes = (SIZE_T) prefetch;
+                range.NumberOfBytes = (SIZE_T) std::min(size, prefetch);
                 if (!pPrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
                     LLAMA_LOG_WARN("warning: PrefetchVirtualMemory failed: %s\n",
                             llama_format_win_err(GetLastError()).c_str());
@@ -998,7 +998,6 @@ struct llama_mmap {
     }
 
     void unmap_fragment(size_t first, size_t last) {
-        // not supported
         GGML_UNUSED(first);
         GGML_UNUSED(last);
 
