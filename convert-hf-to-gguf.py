@@ -77,8 +77,18 @@ class Model:
             self.gguf_writer.add_embedding_length(n_embd)
         if (n_ff := self.hparams.get("intermediate_size")) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
-        if (n_head := self.hparams.get("num_attention_head")) is not None:
+        if (n_head := self.hparams.get("num_attention_heads")) is not None:
             self.gguf_writer.add_head_count(n_head)
+        if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
+            self.gguf_writer.add_head_count_kv(n_head_kv)
+
+        if (n_rms_eps := self.hparams.get("rms_norm_eps")) is not None:
+            self.gguf_writer.add_layer_norm_rms_eps(n_rms_eps)
+        if (n_experts := self.hparams.get("num_local_experts")) is not None:
+            self.gguf_writer.add_expert_count(n_experts)
+        if (n_experts_used := self.hparams.get("num_experts_per_tok")) is not None:
+            self.gguf_writer.add_expert_used_count(n_experts_used)
+
         self.gguf_writer.add_parallel_residual(self.hparams.get("use_parallel_residual", True))
 
     def write_tensors(self):
@@ -170,6 +180,10 @@ class Model:
             return StableLMModel
         if model_architecture == "QWenLMHeadModel":
             return QwenModel
+        if model_architecture == "MixtralForCausalLM":
+            return MixtralModel
+        if model_architecture == "PhiForCausalLM":
+            return Phi2Model
         return Model
 
     def _is_model_safetensors(self) -> bool:
@@ -207,6 +221,10 @@ class Model:
             return gguf.MODEL_ARCH.STABLELM
         if arch == "QWenLMHeadModel":
             return gguf.MODEL_ARCH.QWEN
+        if arch == "MixtralForCausalLM":
+            return gguf.MODEL_ARCH.LLAMA
+        if arch == "PhiForCausalLM":
+            return gguf.MODEL_ARCH.PHI2
 
         raise NotImplementedError(f'Architecture "{arch}" not supported!')
 
@@ -837,6 +855,11 @@ class StableLMModel(Model):
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
 
+class MixtralModel(Model):
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+
 class QwenModel(Model):
     @staticmethod
     def token_bytes_to_string(b):
@@ -960,6 +983,24 @@ class QwenModel(Model):
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+
+
+class Phi2Model(Model):
+    def set_gguf_parameters(self):
+        block_count = self.hparams["n_layer"]
+
+        self.gguf_writer.add_name("Phi2")
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_head_count_kv(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_rope_dimension_count(self.hparams["rotary_dim"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_add_bos_token(False)
+
 
 ###### CONVERSION LOGIC ######
 

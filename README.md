@@ -1,11 +1,6 @@
 # llama.cpp
 
-
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
-
-
-
-
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
@@ -15,9 +10,11 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- Using `llama.cpp` with AWS instances: https://github.com/ggerganov/llama.cpp/discussions/4225
+- Collecting Apple Silicon performance stats:
+  - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
+  - A-series: https://github.com/ggerganov/llama.cpp/discussions/4508
+- Added Mixtral support: https://github.com/ggerganov/llama.cpp/pull/4406
 - Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
-- Collecting Apple Silicon performance stats: https://github.com/ggerganov/llama.cpp/discussions/4167
 
 ----
 
@@ -100,7 +97,18 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+- [x] [Yi models](https://huggingface.co/models?search=01-ai/Yi)
 - [X] [StableLM-3b-4e1t](https://github.com/ggerganov/llama.cpp/pull/3586)
+- [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
+- [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
+- [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
+
+**Multimodal models:**
+
+- [x] [Llava 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
+- [x] [Bakllava](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
+- [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
+- [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 
 
 **Bindings:**

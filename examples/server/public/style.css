@@ -1,4 +1,4 @@
-@import url("colorthemes.css");
+@import url("color-themes/colorthemes.css");
 
 body {
   font-family: 'Arial', sans-serif;
@@ -11,6 +11,11 @@ body {
   margin: 0 auto;
   padding: 0 0.5em;
   transition: background-color 0.3s;
+}
+
+::selection {
+  color: var(--button-primary-text) ;
+  background: var(--button-primary-color);
 }
 
 code, pre code {
@@ -59,12 +64,32 @@ p {
   flex-direction: row;
   gap: 0.5em;
   justify-content: flex-end;
+  margin-bottom: 30px;
 }
 
 .two-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1em;
+  position: relative;
+}
+
+.json-schema-controls {
+  margin-top: 10px;
+  width: 100%;
+  display: grid;
+  grid-template: "a a";
+  gap: 1em;
+  font-size: x-small;
+  color: var(--theme-nuance-color-3);
+  padding-top: 16px;
+  padding-bottom: 16px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.json-schema-controls > * {
+  flex: 1;
 }
 
 /* titles of the details-summary boxes */
@@ -73,6 +98,7 @@ p {
   font-size: x-small;
   color: var(--text-color-subtile-1);
   text-transform: uppercase;
+  /* transition: ; */
 }
 
 fieldset {
@@ -111,7 +137,17 @@ fieldset.names {
   font-weight: 600;
 }
 
+/* input of name fields*/
+.names input[type="text"] {
+  font-family: Arial, sans-serif;
+  font-size: medium;
+  font-weight: 500;
+  padding: 5px;
+  border: 1px solid var(--border-color-2);
+}
+
 fieldset.dropdowns {
+  -webkit-appearance: none;
   display: flex;
   grid-template: "a a";
   gap: 1em;
@@ -123,8 +159,21 @@ fieldset.dropdowns {
   font-weight: 600;
 }
 
-/* input of name fields*/
-.names input[type="text"] {
+fieldset.api-input {
+  display: grid;
+  grid-template: "a a";
+  gap: 1em;
+  font-weight: 600;
+  font-size: small;
+  color: var(--theme-nuance-color-4);
+  text-transform: uppercase;
+  margin-top: 10px;
+  padding-top: 10px;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+}
+
+.api-input input[type="text"] {
   font-family: Arial, sans-serif;
   font-size: medium;
   font-weight: 500;
@@ -424,7 +473,7 @@ input[type="range"] {
   border: 1px solid var(--border-color-1);
 }
 
-/* "names and props" frame focused*/
+/* "names and props" frame focused */
 input[type="text"]:focus {
   outline: none;
   border: 1px solid var(--border-focus-color);
@@ -502,6 +551,7 @@ textarea#chat-input {
   padding-left: 10px;
   font-size: medium;
   border: 1px solid var(--border-color-2);
+  resize: vertical;
 }
 
 textarea#chat-input:focus {
@@ -537,10 +587,8 @@ textarea#chat-input:focus {
   font-size: small;
   background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px); /* for safari */
+  -webkit-backdrop-filter: blur(10px); /* adressing safari */
   width: 97%;
-  /* display: block;
-  box-sizing: border-box; */
 }
 
 /* embedded title of the prompt style areas */
@@ -562,6 +610,7 @@ textarea.persistent-input {
   padding-top: 42px;
   padding-left: 11px;
   font-size: medium;
+  overscroll-behavior: contain;
 }
 
 /* chat history box */
@@ -589,6 +638,7 @@ textarea.persistent-input-sec {
   padding-left: 11px;
   font-size: small;
   border: 1px solid var(--border-color-1);
+  overscroll-behavior: contain;
 }
 
 textarea.persistent-input-sec:focus {
@@ -602,10 +652,12 @@ textarea.persistent-input-sec:focus {
   min-height: 150px;
 }
 
-.json-schema-controls {
-  margin-top: 10px;
-  display: flex;
-  width: 100%;
+img {
+  border-radius: 8px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
 }
 
 .json-schema-controls > * {
@@ -639,26 +691,35 @@ fieldset label.slim {
   display: inline;
 }
 
-header,
-footer {
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   text-align: center;
+  padding-left: 15px;
+}
+
+.generation-statistics:hover {
+  color: var(--theme-nuance-color-4);
+  cursor: default;
 }
 
 footer {
   font-size: 80%;
   color: var(--background-color-3);
   text-align: center;
+  cursor: default;
   }
 
 footer a {
-  color: var(--background-color-4); /* Color of the link */
-  text-decoration: none; /* No underlining */
-  font-weight: bold; /* Bold print */
+  color: var(--background-color-4); /* color of the link */
+  text-decoration: none; /* no underlining */
+  font-weight: bold;
 }
 
 footer a:hover {
-  color: var(--theme-nuance-color-4); /* Color of the link when hovering */
-  text-decoration: underline; /* Underlining when hovering */
+  color: var(--theme-nuance-color-4); /* color of the link when hovering */
+  text-decoration: underline; /* underlining when hovering */
 }
 
 .mode-chat textarea[name=prompt] {
@@ -684,4 +745,105 @@ footer a:hover {
   background-size: 50% 100%;
   background-image: linear-gradient(90deg, var(--loading-color-1), var(--loading-color-2), var(--loading-color-1));
   animation: loading-bg-wipe 2s linear infinite;
+}
+
+.dropbtn {
+  color: var(--button-primary-color);
+  background-color: var(--background-color-1);
+  border: 1px solid var(--background-color-1);
+  transition: background-color 0.1s;
+  border-radius: 4px 4px 0px 0px;
+  font-size: x-small;
+  font-weight: 600;
+  text-shadow: 0px 0px 2px #99999990;
+  text-align: center;
+  text-decoration: none;
+  margin: 4px 2px;
+  padding: 5px 20px;
+  display: inline-block;
+  cursor: pointer;
+  top: 0;
+}
+
+.dropbtn svg {
+  vertical-align: middle;
+  margin-right: 0px;
+  stroke: var(--button-primary-color);
+}
+
+.dropbtn:hover svg {
+  vertical-align: middle;
+  margin-right: 0px;
+  stroke: var(--button-primary-text);
+}
+
+.dropbtn:focus {
+  outline: none; /* removes the blue border that appears when the button is focused */
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  /* display: none; */
+  position: absolute;
+  right: 0;
+  text-align: end;
+  color: var(--button-secondary-color);
+  background-color: var(--text-color-subtile-2);
+  border-radius: 4px 4px 4px 4px;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+  /* hide the contents immediately */
+  opacity: 0;
+  visibility: hidden;
+  /* transition delay for the disappearance */
+  transition: visibility 0.4s linear 0s, opacity 0.2s ease-in-out;
+  transition-delay: 0.2s;
+}
+
+#dropdown-content {transition-timing-function: ease;}
+
+.dropdown-content:hover {
+  background-color: var(--text-color-subtile-2);
+}
+
+.dropdown-content a {
+  color: var(--border-color-2);
+  padding: 12px 16px;
+  border-radius: 4px 4px 4px 4px;
+  text-decoration: none;
+  display: block;
+  background-color: var(--text-color-subtile-2);
+}
+
+.dropdown-content a:hover {
+  color: var(--border-color-2);
+  background-color: var(--text-color-subtile-1);
+  font-weight: 600;
+}
+
+.dropdown:hover .dropdown-content {
+  /* display: block; */
+  border-radius: 4px 4px 4px 4px;
+  /* transition without delay for the appearance */
+  opacity: 1;
+  visibility: visible;
+  transition: visibility 0s linear 0s, opacity 0.1s linear, height 1s;
+}
+
+.dropdown:hover .dropbtn {
+  color: var(--button-primary-text);
+  background-color: var(--button-primary-color);
+  border: 1px solid var(--button-primary-border);
+  font-size: x-small;
+  font-weight: 600;
+  stroke: var(--button-primary-text);
+}
+
+.dropdown:hover .dropbtn svg{
+  stroke: var(--button-primary-text);
 }

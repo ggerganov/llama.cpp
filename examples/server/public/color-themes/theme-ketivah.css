@@ -1,10 +1,7 @@
-@import url("theme-playground.css");
-@import url("theme-polarnight.css");
-@import url("theme-snowstorm.css");
-@import url("theme-been_in_order.css");
-@import url("theme-mangotango.css");
+/* Author: Yazan Agha-Schrader */
+/* Inspiration from OpenAI's Playground platform https://platform.openai.com/playground/ */
 
-:root {
+.theme-ketivah {
 
     /* ---------- PRIMARY COLORS ----------------- */
     --primary-color-1: hsl(0, 0%,    99.2%);
@@ -43,38 +40,38 @@
     --secondary-color-3-saturation:  0%;
     --secondary-color-3-lightness:   29%;
 
-    --secondary-color-4: hsl(0, 0%,    36.1%);
-    --secondary-color-4-hue:         0;
-    --secondary-color-4-saturation:  0%;
-    --secondary-color-4-lightness:   36.1%;
+    --secondary-color-4: hsl(0, 0.0%,  36.1%);
+    --secondary-color-4-hue:              0.0;
+    --secondary-color-4-saturation:       0.0%;
+    --secondary-color-4-lightness:       36.1%;
 
     /* ----------- NUANCES COLORS ---------------- */
     --theme-nuance-color-1: hsl(165.2, 0%, 35.1%);
     --theme-nuance-color-1-hue:             165.2;
-    --theme-nuance-color-1-saturation:      82.1%;
-    --theme-nuance-color-1-lightness:       35.1%;
+    --theme-nuance-color-1-saturation:       82.1%;
+    --theme-nuance-color-1-lightness:        35.1%;
 
     --theme-nuance-color-2: hsl(165.2, 0%, 35.1%);
     --theme-nuance-color-2-hue:             165.2;
-    --theme-nuance-color-2-saturation:      82.1%;
-    --theme-nuance-color-2-lightness:       35.1%;
+    --theme-nuance-color-2-saturation:       82.1%;
+    --theme-nuance-color-2-lightness:        35.1%;
 
     --theme-nuance-color-3: hsl(165.2, 0%, 35.3%);
     --theme-nuance-color-3-hue:             165.2;
-    --theme-nuance-color-3-saturation:      81.1%;
-    --theme-nuance-color-3-lightness:       35.3%;
+    --theme-nuance-color-3-saturation:       81.1%;
+    --theme-nuance-color-3-lightness:        35.3%;
 
     --theme-nuance-color-4: hsl(164.9, 0%, 27.6%);
     --theme-nuance-color-4-hue:             164.9;
-    --theme-nuance-color-4-saturation:      81.6%;
-    --theme-nuance-color-4-lightness:       27.6%;
+    --theme-nuance-color-4-saturation:       81.6%;
+    --theme-nuance-color-4-lightness:        27.6%;
 
     /* ----------- ROYGP COLORS ------------------ */
-    --theme-red-color:     hsl(0.3, 80%, 50%);
+    --theme-red-color:     hsl(0.3, 80.0%, 50.0%);
     --theme-orange-color:  #e76f51;
-    --theme-yellow-color:  hsl(60, 70.6%, 73.3%);
+    --theme-yellow-color:  hsl(60,  70.6%, 73.3%);
     --theme-green-color:   #A3BE8C;
-    --theme-purple-color:  hsl(0.3, 70%, 45%);
+    --theme-purple-color:  hsl(0.3, 70.0%, 45.0%);
 
     /* ------------------------------------------- */
     --background-color-1:    var(--primary-color-1);
@@ -201,152 +198,3 @@
     --loading-color-1: #eeeeee00;
     --loading-color-2: #eeeeeeff;
     }
-
-/*
-
-.theme-template {
-
-
-    If light theme: should go from bright to darker
-    If dark theme: should go from dark to brighter
-    ideally this should not be anything but steps of
-    gray or slightly variants from it
-
-    --primary-color-1: #2E3440;
-    --primary-color-2: #3B4252;
-    --primary-color-3: #434C5E;
-    --primary-color-4: #4C566A;
-
-
-
-    If light theme: should go from dark to brighter
-    If dark theme: should go from bright to darker
-    ideally this should not be anything but steps of
-    gray or slightly variants from it
-
-    --secondary-color-1: #ECEFF4;
-    --secondary-color-2: #E5E9F0;
-    --secondary-color-3: #D8DEE9;
-    --secondary-color-4: #C8CED9;
-
-
-
-    Choose wisely nuance colors. It is not easy to find
-    4 harmonizing nuance colors. But keep in mind, that
-    only one accent color could work too.
-
-    --theme-nuance-color-1: #8FBCBB;
-    --theme-nuance-color-2: #88C0D0;
-    --theme-nuance-color-3: #81A1C1;
-    --theme-nuance-color-4: #5E81AC;
-
-
-
-    adapt the color red, orange, yellow, green,
-    purple to the 'mood' of your overall design
-    e.g is it low-contrast? vibrant? dynamic? etc
-
-    --theme-red-color:    #BF616A;
-    --theme-orange-color: #D08770;
-    --theme-yellow-color: #EBCB8B;
-    --theme-green-color:  #A3BE8C;
-    --theme-purple-color: #B48EAD;
-
-
-
-NOTE: comment all those line `--- ...` out
-------------------------------------------------
---background-color-1:
---background-color-2:
---background-color-3:
---background-color-4:
-
---border-color-1:
---border-color-2:
---border-color-3:
-
---border-focus-color:
---border-focus-shadow:
-
---text-color-plain:
---text-color-subtile-1:
---text-color-subtile-2:
-
---code-background-color:
---code-text-color:
-
---ui-range-thumb-color:
---ui-range-thumb-border:
-
---textarea-border-color:
-
-
-
--------------------------------------------
---button-alert-text-hover:
---button-alert-color-hover:
---button-alert-border-hover:
-
---button-alert-text-active:
---button-alert-color-active:
---button-alert-border-active:
-
-
-
------------ PRIMARY -----------------------
---button should immediately catch the eye--
-
---button-primary-text:
---button-primary-color:
---button-primary-border:
-
-
----------hover----------
---button-primary-text-hover:
---button-primary-color-hover:
---button-primary-border-hover:
-
-
----------active---------
---button-primary-text-active:
---button-primary-color-active:
---button-primary-border-active:
-
-
-
------------- SECONDARY ------------------------
---button should NOT immediately catch the eye--
-
---button-secondary-text:
---button-secondary-color:
---button-secondary-border:
-
-
----------hover----------
---button-secondary-text-hover:
---button-secondary-color-hover:
---button-secondary-border-hover:
-
-
----------active---------
---button-secondary-text-active:
---button-secondary-color-active:
---button-secondary-border-active:
-
-
-
----------- TERTIARY -----------------------
----------- disabled buttons ---------------
---button-tertiary-text:
---button-tertiary-color:
---button-tertiary-border:
-
-
----------hover----------
---button-tertiary-text:
---button-tertiary-color:
---button-tertiary-border:
-
-}
-
-*/

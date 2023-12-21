@@ -63,6 +63,10 @@ server.exe -m models\7B\ggml-model.gguf -c 2048
 The above command will start a server that by default listens on `127.0.0.1:8080`.
 You can consume the endpoints with Postman or NodeJS with axios library. You can visit the web front end at the same url.
 
+### Web Front End
+
+There are two UIs, the classic one and a new one. The new UI offers, among other things, the possibility to select prompt style templates. Note: This feature may only be temporary and may soon be replaced by a universal solution that is currently being worked on #4216.
+
 ## Testing with CURL
 
 Using [curl](https://curl.se/). On Windows `curl.exe` should be available in the base OS.

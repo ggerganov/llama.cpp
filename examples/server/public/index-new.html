@@ -1,0 +1,1222 @@
+<!-- <!DOCTYPE html> -->
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="color-scheme" content="light dark">
+  <title>llama.cpp - chat</title>
+  <link rel="stylesheet" href="style.css">
+
+  <script type="module">
+    import {
+      html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
+    } from '/index.js';
+
+    import { llama } from '/completion.js';
+    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    import { promptFormats } from './promptFormats.js';
+    import { systemPrompts } from './DEFAULT_systemPrompts.js'; // multilingual is wip
+    let selected_image = false;
+    var slot_id = -1;
+
+    const session = signal({
+      prompt: "This is a conversation between a user and a friendly chatbot. The chatbot is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
+      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
+      historyTemplate: "{{name}}: {{message}}",
+      transcript: [],
+      type: "chat",  // "chat" | "completion"
+      char: "Assistant",
+      user: "User",
+      image_selected: ''
+    })
+
+    const params = signal({
+      n_predict: 358, // -1 = infinite generation
+      temperature: 1.0, // adapt to optimized min-p requierements
+      repeat_last_n: 0, // 0 = disable penalty, -1 = context size
+      repeat_penalty: 1.0, // 1.0 = disabled
+      top_k: 0, // 0 = use vocab size
+      top_p: 1.0, // 1.0 = disabled
+      min_p: 0.05, // 0 = disabled
+      tfs_z: 1.0, // 1.0 = disabled
+      typical_p: 1.0, // 1.0 = disabled
+      presence_penalty: 0.0, // 0.0 = disabled
+      frequency_penalty: 0.0, // 0.0 = disabled
+      mirostat: 0, // 0/1/2
+      mirostat_tau: 5, // target entropy
+      mirostat_eta: 0.96, // learning rate
+      grammar: '',
+      n_probs: 0, // no completion_probabilities,
+      image_data: [],
+      cache_prompt: true,
+      api_key: ''
+    })
+
+
+
+    /* START: Support for storing prompt templates and parameters in browser's LocalStorage */
+
+    const local_storage_storageKey = "llamacpp_server_local_storage";
+
+    function local_storage_setDataFromObject(tag, content) {
+      localStorage.setItem(local_storage_storageKey + '/' + tag, JSON.stringify(content));
+    }
+
+    function local_storage_setDataFromRawText(tag, content) {
+      localStorage.setItem(local_storage_storageKey + '/' + tag, content);
+    }
+
+    function local_storage_getDataAsObject(tag) {
+      const item = localStorage.getItem(local_storage_storageKey + '/' + tag);
+      if (!item) {
+        return null;
+      } else {
+        return JSON.parse(item);
+      }
+    }
+
+    function local_storage_getDataAsRawText(tag) {
+      const item = localStorage.getItem(local_storage_storageKey + '/' + tag);
+      if (!item) {
+        return null;
+      } else {
+        return item;
+      }
+    }
+
+    // create a container for user templates and settings
+
+    const savedUserTemplates = signal({})
+    const selectedUserTemplate = signal({ name: '', template: { session: {}, params: {} } })
+
+    // let's import locally saved templates and settings if there are any
+    // user templates and settings are stored in one object
+    // in form of { "templatename": "templatedata" } and { "settingstemplatename":"settingsdata" }
+
+    console.log('Importing saved templates')
+
+    let importedTemplates = local_storage_getDataAsObject('user_templates')
+
+    if (importedTemplates) {
+      // saved templates were successfuly imported.
+
+      console.log('Processing saved templates and updating default template')
+      params.value = { ...params.value, image_data: [] };
+
+      //console.log(importedTemplates);
+      savedUserTemplates.value = importedTemplates;
+
+      //override default template
+      savedUserTemplates.value.default = { session: session.value, params: params.value }
+      local_storage_setDataFromObject('user_templates', savedUserTemplates.value)
+    } else {
+      // no saved templates detected.
+
+      console.log('Initializing LocalStorage and saving default template')
+
+      savedUserTemplates.value = { "default": { session: session.value, params: params.value } }
+      local_storage_setDataFromObject('user_templates', savedUserTemplates.value)
+    }
+
+    function userTemplateResetToDefault() {
+      console.log('Reseting themplate to default')
+      selectedUserTemplate.value.name = 'default';
+      selectedUserTemplate.value.data = savedUserTemplates.value['default'];
+    }
+
+    function userTemplateApply(t) {
+      session.value = t.data.session;
+      session.value = { ...session.value, image_selected: '' };
+      params.value = t.data.params;
+      params.value = { ...params.value, image_data: [] };
+    }
+
+    function userTemplateResetToDefaultAndApply() {
+      userTemplateResetToDefault()
+      userTemplateApply(selectedUserTemplate.value)
+    }
+
+    function userTemplateLoadAndApplyAutosaved() {
+      // get autosaved last used template
+      let lastUsedTemplate = local_storage_getDataAsObject('user_templates_last')
+
+      if (lastUsedTemplate) {
+
+        console.log('Autosaved template found, restoring')
+
+        selectedUserTemplate.value = lastUsedTemplate
+      }
+      else {
+
+        console.log('No autosaved template found, using default template')
+        // no autosaved last used template was found, so load from default.
+
+        userTemplateResetToDefault()
+      }
+
+      console.log('Applying template')
+      // and update internal data from templates
+
+      userTemplateApply(selectedUserTemplate.value)
+    }
+
+    //console.log(savedUserTemplates.value)
+    //console.log(selectedUserTemplate.value)
+
+    function userTemplateAutosave() {
+      console.log('Template Autosave...')
+      if (selectedUserTemplate.value.name == 'default') {
+        // we don't want to save over default template, so let's create a new one
+        let newTemplateName = 'UserTemplate-' + Date.now().toString()
+        let newTemplate = { 'name': newTemplateName, 'data': { 'session': session.value, 'params': params.value } }
+
+        console.log('Saving as ' + newTemplateName)
+
+        // save in the autosave slot
+        local_storage_setDataFromObject('user_templates_last', newTemplate)
+
+        // and load it back and apply
+        userTemplateLoadAndApplyAutosaved()
+      } else {
+        local_storage_setDataFromObject('user_templates_last', { 'name': selectedUserTemplate.value.name, 'data': { 'session': session.value, 'params': params.value } })
+      }
+    }
+
+    console.log('Checking for autosaved last used template')
+    userTemplateLoadAndApplyAutosaved()
+
+    /* END: Support for storing prompt templates and parameters in browser's LocalStorage */
+
+    const llamaStats = signal(null)
+    const controller = signal(null)
+
+    // currently generating a completion?
+    const generating = computed(() => controller.value != null)
+
+    // has the user started a chat?
+    const chatStarted = computed(() => session.value.transcript.length > 0)
+
+    const transcriptUpdate = (transcript) => {
+      session.value = {
+        ...session.value,
+        transcript
+      }
+    }
+
+    // simple template replace
+    const template = (str, extraSettings) => {
+      let settings = session.value;
+      if (extraSettings) {
+        settings = { ...settings, ...extraSettings };
+      }
+      return String(str).replaceAll(/\{\{(.*?)\}\}/g, (_, key) => template(settings[key]));
+    }
+
+    async function runLlama(prompt, llamaParams, char) {
+      const currentMessages = [];
+      const history = session.value.transcript;
+      if (controller.value) {
+        throw new Error("already running");
+      }
+      controller.value = new AbortController();
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
+        const data = chunk.data;
+        if (data.stop) {
+          while (
+            currentMessages.length > 0 &&
+            currentMessages[currentMessages.length - 1].content.match(/\n$/) != null
+          ) {
+            currentMessages.pop();
+          }
+          transcriptUpdate([...history, [char, currentMessages]])
+          console.log("Completion finished: '", currentMessages.map(msg => msg.content).join(''), "', summary: ", data);
+        } else {
+          currentMessages.push(data);
+          slot_id = data.slot_id;
+          if (selected_image && !data.multimodal) {
+            alert("The server was not compiled for multimodal or the model projector can't be loaded.");            return;
+          }
+          transcriptUpdate([...history, [char, currentMessages]])
+        }
+        if (data.timings) {
+          llamaStats.value = data.timings;
+        }
+      }
+      controller.value = null;
+    }
+
+    // send message to server
+    const chat = async (msg) => {
+      if (controller.value) {
+        console.log('already running...');
+        return;
+      }
+
+      transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
+
+      let prompt = template(session.value.template, {
+        message: msg,
+        history: session.value.transcript.flatMap(
+          ([name, data]) =>
+            template(
+              session.value.historyTemplate,
+              {
+                name,
+                message: Array.isArray(data) ?
+                  data.map(msg => msg.content).join('').replace(/^\s/, '') :
+                  data,
+              }
+            )
+        ).join("\n"),
+      });
+      if (selected_image) {
+        prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
+      }
+      await runLlama(prompt, {
+        ...params.value,
+        slot_id: slot_id,
+        stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
+      }, "{{char}}");
+    }
+
+    const runCompletion = async () => {
+      if (controller.value) {
+        console.log('already running...');
+        return;
+      }
+      const { prompt } = session.value;
+      transcriptUpdate([...session.value.transcript, ["", prompt]]);
+      await runLlama(prompt, {
+        ...params.value,
+        slot_id: slot_id,
+        stop: [],
+      }, "");
+    }
+
+    const stop = (e) => {
+      e.preventDefault();
+      if (controller.value) {
+        controller.value.abort();
+        controller.value = null;
+      }
+    }
+
+    const reset = (e) => {
+      stop(e);
+      transcriptUpdate([]);
+    }
+
+    const uploadImage = (e) => {
+      e.preventDefault();
+      document.getElementById("fileInput").click();
+      document.getElementById("fileInput").addEventListener("change", function (event) {
+        const selectedFile = event.target.files[0];
+        if (selectedFile) {
+          const reader = new FileReader();
+          reader.onload = function () {
+            const image_data = reader.result;
+            session.value = { ...session.value, image_selected: image_data };
+            params.value = {
+              ...params.value, image_data: [
+                { data: image_data.replace(/data:image\/[^;]+;base64,/, ''), id: 10 }]
+            }
+          };
+          selected_image = true;
+          reader.readAsDataURL(selectedFile);
+        }
+      });
+    }
+
+    function MessageInput() {
+      const message = useSignal("")
+
+      const submit = (e) => {
+        stop(e);
+        chat(message.value);
+        message.value = "";
+      }
+
+      const enterSubmits = (event) => {
+        if (event.which === 13 && !event.shiftKey) {
+          submit(event);
+        }
+      }
+
+      return html`
+      <form onsubmit=${submit}>
+        <div class="chat-input-container">
+          <textarea
+            id="chat-input" placeholder="Shift + Enter for new line ..."
+            class="${generating.value ? 'loading' : null}"
+            oninput=${(e) => message.value = e.target.value}
+            onkeypress=${enterSubmits}
+            rows="2"
+            type="text"
+            value="${message}"
+          ></textarea>
+        </div>
+
+          <div class="right">
+            <button class="button-back" onclick=${reset}>Back</button>
+            <button onclick=${uploadImage}>Upload Image</button>
+            <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+            <button type="submit" disabled=${generating.value}>Submit</button>
+          </div>
+        </form>
+      `
+    }
+
+    // the completion view needs some ux improvements
+    function CompletionControls() {
+      const submit = (e) => {
+        stop(e);
+        runCompletion();
+      }
+      return html`
+        <div class="right">
+          <button class="button-back" onclick=${reset}>Back</button>
+          <button onclick=${stop} disabled=${!generating.value}>Stop</button>
+          <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
+        </div>`;
+    }
+
+    const ChatLog = (props) => {
+      const messages = session.value.transcript;
+      const container = useRef(null)
+
+      useEffect(() => {
+        // scroll to bottom (if needed)
+        const parent = container.current.parentElement;
+        if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
+          parent.scrollTo(0, parent.scrollHeight)
+        }
+      }, [messages])
+
+      const chatLine = ([user, data], index) => {
+        let message
+        const isArrayMessage = Array.isArray(data)
+        if (params.value.n_probs > 0 && isArrayMessage) {
+          message = html`<${Probabilities} data=${data} />`
+        } else {
+          const text = isArrayMessage ?
+            data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+            data;
+          message = html`<${Markdownish} text=${template(text)} />`
+        }
+        if (user) {
+          return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+        } else {
+          return html`<p key=${index}>${message}</p>`
+        }
+      };
+
+      return html`
+        <section id="chat" contenteditable="false" ref=${container}>
+          <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
+          ${messages.flatMap(chatLine)}
+        </section>`;
+    };
+
+    const handleToggleChange = (e) => {
+      const isChecked = e.target.checked;
+      session.value = { ...session.value, type: isChecked ? 'completion' : 'chat' };
+      // may require further actions to update the user interface
+    }
+
+function updatePromptFormat(e) {
+  const promptFormat = e.target.value;
+  if (promptFormats.hasOwnProperty(promptFormat)) {
+    session.value = {
+      ...session.value,
+      ...promptFormats[promptFormat]
+    };
+  } else {
+    // llama.cpp's default setting
+    session.value = {
+      ...session.value,
+      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
+      historyTemplate: "{{name}}: {{message}}",
+      char: "Assistant",
+      user: "User"
+    };
+  }
+  console.log('Updated session value:', session.value); //
+}
+
+
+///////////////////////////////////////////////////////////////////////////
+//
+///////////// CAVE ///////////// MAY BECOME DEPRECATED VERY SOON //////////
+//
+// think of the following as a temporary solution, since there are ////////
+// some folks working on a universal chat template solution at #4216 //////
+// https://github.com/ggerganov/llama.cpp/issues/4216 /////////////////////
+//
+//
+function updatePromptFormatFromDropdown(element) {
+  const promptFormat = element.getAttribute('data-value');
+  console.log('Selected prompt format:', promptFormat); // debugging
+  updatePromptFormat({ target: { value: promptFormat } });
+}
+// add the event listeners as soon as the element is available
+function addEventListenersWhenAvailable() {
+  var themeSelector = document.getElementById('theme-selector');
+  if (themeSelector) {
+    themeSelector.addEventListener('change', function(event) {
+      // todo event-handle-code
+    });
+    // todo add more event listeners
+  } else {
+    // element is not there yet, keep waiting
+    requestAnimationFrame(addEventListenersWhenAvailable);
+  }
+}
+// start the check
+requestAnimationFrame(addEventListenersWhenAvailable);
+
+function handleDropdownSelection(e, promptFormat) {
+  // prevent the default behavior of the link
+  e.preventDefault();
+  // create a new event object with the value from the data-value attribute
+  const customEvent = {
+    target: {
+      value: promptFormat
+    }
+  };
+  // call the updatePromptFormat function with the new event object
+  updatePromptFormat(customEvent);
+}
+//
+///////////// CAVE ///////////// MAY BECOME DEPRECATED VERY SOON //////////
+//
+///////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////
+//
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+//
+// support is very welcome. feel free to complete the feature or add //////
+// language files, especially for french, italian, spanish and german /////
+// since those are supported languages by Mixtral 8x7B ////////////////////
+//
+//
+function updateSystemPrompt(e) {
+  const SystemPrompt = e.target.value;
+  if (systemPrompts.hasOwnProperty(SystemPrompt)) {
+    session.value = {
+      ...session.value,
+      prompt: systemPrompts[SystemPrompt].systemPrompt
+    };
+  }
+}
+//
+///////////////////////////////////////////////////////////////////////////
+//
+// document.addEventListener('DOMContentLoaded', (event) => {
+//   // Add event listener for the language selection dropdown
+//   document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
+// });
+// //
+// async function updateSystemLanguage(event) {
+//   const language = event.target.value;
+//   const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
+//   const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
+// //
+//   try {
+//     // System prompts
+//     const promptsModule = await import(`./${languageFile}`);
+//     const systemPrompts = promptsModule.systemPrompts;
+//     // Update the system prompt
+//     document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
+//     // The UI texts
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Update the label
+//     document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
+//     document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
+//     document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
+//     document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
+//     document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
+//     document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
+//     document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
+//     document.getElementById('id_reset').textContent = uiTexts.RESET;
+//     document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
+//     document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
+//     document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
+//     document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
+//     document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
+//     document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
+//     document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
+//     document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
+//     document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
+//     document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
+//     document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
+//     document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
+//     document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
+//     document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
+//     document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
+//     document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
+//     document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
+//     document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
+//     document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
+//     document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
+//     document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
+//     document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
+//     document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
+//     document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
+//     document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
+//     document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
+//     document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
+//     document.getElementById('id_and').textContent = uiTexts.AND;
+//   } catch (error) {
+//     console.error('Error loading the language files:', error);
+//   }
+// }
+///////////////////////////////////////////////////////////////////////////
+//
+// async function updateTexts(systemPrompts) {
+//   // Update the texts that come from the language files
+//   document.querySelector('#someElement').textContent = systemPrompts.default.systemPrompt;
+//   // Load the JSON file for the UI elements
+//   const uiLanguageFile = `./${language}_texts.json`;
+//   try {
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Update the UI elements
+//     // document.querySelector('label[for="user"]').textContent = uiTexts.USER_NAME;
+//     document.getElementById('label-user').textContent = uiTexts.USER_NAME;
+//     // Update further elements
+//   } catch (error) {
+//     console.error('Error when loading the UI texts:', error);
+//   }
+// }
+//
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+///////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+      const ConfigForm = (props) => {
+      const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
+      const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
+      const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
+      const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
+
+      const grammarJsonSchemaPropOrder = signal('')
+      const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
+      const convertJSONSchemaGrammar = () => {
+        try {
+          const schema = JSON.parse(params.value.grammar)
+          const converter = new SchemaConverter(
+            grammarJsonSchemaPropOrder.value
+              .split(',')
+              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
+          )
+          converter.visit(schema, '')
+          params.value = {
+            ...params.value,
+            grammar: converter.formatGrammar(),
+          }
+        } catch (e) {
+          alert(`Conversion failed: ${e.message}`)
+        }
+      }
+
+
+
+      const FloatField = ({ label, max, min, name, step, value }) => {
+        return html`
+          <div>
+            <label for="${name}">${label}</label>
+            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
+            <span id="${name}-value">${value}</span>
+          </div>
+        `
+      };
+
+      const IntField = ({ label, max, min, step, name, value }) => {
+        return html`
+          <div>
+            <label for="${name}">${label}</label>
+              <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+              <span id="${name}-value">${value}</span>
+          </div>
+        `
+      };
+
+      const userTemplateReset = (e) => {
+        e.preventDefault();
+        userTemplateResetToDefaultAndApply()
+      }
+
+      const UserTemplateResetButton = () => {
+        if (selectedUserTemplate.value.name == 'default') {
+          return html`
+          <button class="reset-button" id="id_reset" onclick="${userTemplateReset}">Reset</button>
+          `
+        }
+
+        return html`
+          <div class="button-container">
+            <button class="reset-button" title="Caution: This resets the entire form." onclick="${userTemplateReset}">Reset</button>
+          </div>
+        `
+      };
+
+      useEffect(() => {
+        // autosave template on every change
+        userTemplateAutosave()
+      }, [session.value, params.value])
+
+      const GrammarControl = () => (
+        html`
+          <div>
+            <label for="template"></label>
+            <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            <div class="grammar-columns">
+              <div class="json-schema-controls">
+                <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+                <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON-Scheme</button>
+              </div>
+            </div>
+          </div>
+        `
+      );
+
+      const PromptControlFieldSet = () => (
+        html`
+          <fieldset>
+            <div class="input-container">
+              <label for="prompt" class="input-label">System</label>
+              <textarea
+                id="prompt"
+                class="persistent-input"
+                name="prompt"
+                value="${session.value.prompt}"
+                oninput=${updateSession}
+              ></textarea>
+            </div>
+          </fieldset>
+        `
+      );
+
+      const ChatConfigForm = () => (
+        html`
+          <fieldset class="dropdowns">
+            <div>
+
+              <!-- FOLLOWING MAY BECOME DEPRECATED VERY SOON  -->
+              <select id="promptFormat" name="promptFormat" onchange=${updatePromptFormat}>
+                  <option value="default">Prompt Style</option>
+                  <option value=""></option>
+                <optgroup label="Common Prompt-Styles">
+                  <option value="alpaca">Alpaca</option>
+                  <option value="chatml">ChatML</option>
+                  <option value="llama2">Llama 2</option>
+                  <option value="vicuna">Vicuna</option>
+                  <option value=""></option>
+                </optgroup>
+                <optgroup label="More Prompt-Styles">
+                  <option value="airoboros180">Airoboros L2</option>
+                  <option value="bakllava">BakLLaVA-1</option>
+                  <option value="codeCherryPop">Code Cherry Pop</option>
+                  <option value="deepseekCoder">Deepseek Coder</option>
+                  <option value="dolphinMistral">Dolphin Mistral</option>
+                  <option value="evolvedSeeker">evolvedSeeker 1.3B</option>
+                  <option value="goliath120b">Goliath 120B</option>
+                  <option value="jordan">Jordan</option>
+                  <option value="llava">LLaVA</option>
+                  <option value="leoHessianai">Leo Hessianai</option>
+                  <option value="leoMistral">Leo Mistral</option>
+                  <option value="marx">Marx</option>
+                  <option value="med42">Med42</option>
+                  <option value="metaMath">MetaMath</option>
+                  <option value="mistralInstruct">Mistral Instruct</option>
+                  <option value="mistralOpenOrca">Mistral 7B OpenOrca</option>
+                  <option value="mythomax">MythoMax</option>
+                  <option value="neuralchat">Neural Chat</option>
+                  <option value="nousCapybara">Nous Capybara</option>
+                  <option value="nousHermes">Nous Hermes</option>
+                  <option value="openChat">OpenChat</option>
+                  <option value="openhermes2Mistral">OpenHermes 2.5-Mistral</option>
+                  <option value="orcamini">Orca Mini v3</option>
+                  <option value="sauerkrautLM">SauerkrautLM</option>
+                  <option value="samantha">Samantha</option>
+                  <option value="samanthaMistral">Samantha Mistral</option>
+                  <option value="scarlett">Scarlett</option>
+                  <option value="starlingLM">Starling-7B</option>
+                  <option value="starlingLM">Starling-7B Coding</option>
+                  <option value="sydney">Sydney</option>
+                  <option value="synthia">Synthia</option>
+                  <option value="tess">Tess</option>
+                  <option value="yi34b">Yi-34B</option>
+                  <option value="zephyr">Zephyr</option>
+                  <option value=""></option>
+                </optgroup>
+              </select>
+              <!-- THE ABOVE MAY BECOME DEPRECATED VERY SOON  -->
+
+              <select id="SystemPrompt" name="SystemPrompt" onchange=${updateSystemPrompt}>
+                <option value="default">System Prompt</option>
+                <option value="empty">None</option>
+                <option value="airoboros">Airoboros</option>
+                <option value="alpaca">Alpaca</option>
+                <option value="atlas">Atlas</option>
+                <option value="atlas_de">Atlas - DE</option>
+                <option value="cot">Chain of Tought</option>
+                <option value="deduce">Critical Thinking</option>
+                <option value="deepseekcoder">Deepseek Coder</option>
+                <option value="jordan">Jordan</option>
+                <option value="leomistral">Leo Mistral</option>
+                <option value="med42">Med42</option>
+                <option value="migeltot">Migel's Tree of Thought</option>
+                <option value="mistralopenorca">Mistral OpenOrca</option>
+                <option value="orcamini">Orca Mini</option>
+                <option value="samantha">Samantha</option>
+                <option value="sauerkraut">Sauerkraut</option>
+                <option value="scarlett">Scarlett</option>
+                <option value="synthia">Synthia</option>
+              </select>
+              <!--<select id="systemLanguage" name="systemLanguage">-->
+                <!--<option value="default">English</option>-->
+                <!--<option value="DE">German</option>-->
+                <!--<option value="placeholderLanguage">Placeholder</option>-->
+              <!--</select>-->
+            </div>
+          </fieldset>
+          ${PromptControlFieldSet()}
+          <fieldset class="names">
+            <div>
+              <label for="user" id="id_user-name">User Name</label>
+              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+            </div>
+            <div>
+              <label for="bot" id="id_bot-name">AI Name</label>
+              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
+            </div>
+          </fieldset>
+          <fieldset>
+            <details>
+              <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
+              <div class="two-columns">
+                <div>
+                  <div class="input-container">
+                    <label for="template" class="input-label-sec" id_prompt-template>Prompt Template</label>
+                    <textarea id="template" class="persistent-input-sec" name="template" value="${session.value.template}" rows=6 oninput=${updateSession}/>
+                  </div>
+                </div>
+                <div>
+                  <div class="input-container">
+                    <label for="template" class="input-label-sec" id="id_history-template">Chat History</label>
+                    <textarea id="template" class="persistent-input-sec" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+                  </div>
+                </div>
+              </div>
+            </details>
+            <details>
+              <summary><span class="summary-title" id="id_grammar-title" id_grammar-title>Grammar</span></summary>
+              ${GrammarControl()}
+            </details>
+
+            </fieldset>
+        `
+      );
+
+      const CompletionConfigForm = () => (
+        html`
+          ${PromptControlFieldSet()}
+          <fieldset>${GrammarControl()}</fieldset>
+        `
+      );
+
+      return html`
+        <form>
+          <fieldset class="two">
+              <input type="checkbox" id="toggle" class="toggleCheckbox" onchange=${handleToggleChange} />
+                <label for="toggle" class="toggleContainer">
+                  <div id="id_toggle-label-chat">Chat</div>
+                  <div id="id_toggle-label-complete">Complete</div>
+                </label>
+            <${UserTemplateResetButton}/>
+          </fieldset>
+
+          ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
+
+          <fieldset class="two">
+            ${IntField({ label: "Prediction", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
+            ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
+            ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
+          </fieldset>
+
+          <details>
+            <summary><span class="summary-title">Further Options</span></summary>
+            <fieldset class="two">
+              ${IntField({ label: "Top-K", max: 100, min: 0, step: 1, name: "top_k", value: params.value.top_k })}
+              ${IntField({ label: "Penalize Last N", max: 2048, min: 0, step: 16, name: "repeat_last_n", value: params.value.repeat_last_n })}
+              ${FloatField({ label: "Top-P", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+              ${FloatField({ label: "Presence Penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
+              ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
+              ${FloatField({ label: "Frequency Penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
+              ${FloatField({ label: "Typical-P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+            </fieldset>
+
+            <hr style="height: 1px; background-color: #ececf1; border: none;" />
+
+            <fieldset class="three">
+              <div>
+                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> Mirostat off</label>
+                <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
+                <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
+              </div>
+              ${FloatField({ label: "Entropy tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
+              ${FloatField({ label: "Learning-rate eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
+
+              ${IntField({ label: "Show Probabilities", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
+            </fieldset>
+            <fieldset class=api-input>
+              <p>
+              <label for="api_key">API Key</label>
+              <input type="text" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
+              </p>
+            </fieldset>
+          </details>
+        </form>
+      `
+    }
+
+
+    const probColor = (p) => {
+      const r = Math.floor(192 * (1 - p));
+      const g = Math.floor(192 * p);
+      return `rgba(${r},${g},0,0.3)`;
+    }
+
+    const Probabilities = (params) => {
+      return params.data.map(msg => {
+        const { completion_probabilities } = msg;
+        if (
+          !completion_probabilities ||
+          completion_probabilities.length === 0
+        ) return msg.content
+
+        if (completion_probabilities.length > 1) {
+          // Not for byte pair
+          if (completion_probabilities[0].content.startsWith('byte: \\')) return msg.content
+
+          const splitData = completion_probabilities.map(prob => ({
+            content: prob.content,
+            completion_probabilities: [prob]
+          }))
+          return html`<${Probabilities} data=${splitData} />`
+        }
+
+        const { probs, content } = completion_probabilities[0]
+        const found = probs.find(p => p.tok_str === msg.content)
+        const pColor = found ? probColor(found.prob) : 'transparent'
+
+        const popoverChildren = html`
+          <div class="prob-set">
+            ${probs.map((p, index) => {
+          return html`
+                <div
+                  key=${index}
+                  title=${`prob: ${p.prob}`}
+                  style=${{
+              padding: '0.3em',
+              backgroundColor: p.tok_str === content ? probColor(p.prob) : 'transparent'
+            }}
+                >
+                  <span>${p.tok_str}: </span>
+                  <span>${Math.floor(p.prob * 100)}%</span>
+                </div>
+              `
+        })}
+          </div>
+        `
+
+        return html`
+          <${Popover} style=${{ backgroundColor: pColor }} popoverChildren=${popoverChildren}>
+            ${msg.content.match(/\n/gim) ? html`<br />` : msg.content}
+          </>
+        `
+      });
+    }
+
+    // poor mans markdown replacement
+    const Markdownish = (params) => {
+      const md = params.text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.*?)__/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/_(.*?)_/g, '<em>$1</em>')
+        .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/gim, '<br />');
+      return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
+    };
+
+    let accumulatedTokens = 0; // variable to store the accumulated state
+
+    const ModelGenerationInfo = (params) => {
+      if (!llamaStats.value) {
+        return html`<span/>`;
+      }
+      // update the accumulated number of tokens
+      accumulatedTokens += llamaStats.value.prompt_n + llamaStats.value.predicted_n;
+
+      const tokensCached = llamaStats.value.tokens_cached;
+      return html`
+        <span>
+          <p class=generation-statistics>
+            ${llamaStats.value.predicted_n.toFixed()} tokens generated at last response. ${accumulatedTokens.toFixed()} tokens in total context
+          </p>
+
+          <p class=generation-statistics>
+            ${llamaStats.value.predicted_per_token_ms.toFixed()} ms per token or ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+          </p>
+        </span>
+      `;
+    }
+
+    // simple popover impl
+    const Popover = (props) => {
+      const isOpen = useSignal(false);
+      const position = useSignal({ top: '0px', left: '0px' });
+      const buttonRef = useRef(null);
+      const popoverRef = useRef(null);
+
+      const togglePopover = () => {
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          position.value = {
+            top: `${rect.bottom + window.scrollY}px`,
+            left: `${rect.left + window.scrollX}px`,
+          };
+        }
+        isOpen.value = !isOpen.value;
+      };
+
+      const handleClickOutside = (event) => {
+        if (popoverRef.current && !popoverRef.current.contains(event.target) && !buttonRef.current.contains(event.target)) {
+          isOpen.value = false;
+        }
+      };
+
+      useEffect(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+        };
+      }, []);
+
+      return html`
+        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover} contenteditable="true">${props.children}</span>
+        ${isOpen.value && html`
+          <${Portal} into="#portal">
+            <div
+              ref=${popoverRef}
+              class="popover-content"
+              style=${{
+            top: position.value.top,
+            left: position.value.left,
+          }}
+            >
+              ${props.popoverChildren}
+            </div>
+          </${Portal}>
+        `}
+      `;
+    };
+
+    // Source: preact-portal (https://github.com/developit/preact-portal/blob/master/src/preact-portal.js)
+    /** Redirect rendering of descendants into the given CSS selector */
+    class Portal extends Component {
+      componentDidUpdate(props) {
+        for (let i in props) {
+          if (props[i] !== this.props[i]) {
+            return setTimeout(this.renderLayer);
+          }
+        }
+      }
+
+      componentDidMount() {
+        this.isMounted = true;
+        this.renderLayer = this.renderLayer.bind(this);
+        this.renderLayer();
+      }
+
+      componentWillUnmount() {
+        this.renderLayer(false);
+        this.isMounted = false;
+        if (this.remote && this.remote.parentNode) this.remote.parentNode.removeChild(this.remote);
+      }
+
+      findNode(node) {
+        return typeof node === 'string' ? document.querySelector(node) : node;
+      }
+
+      renderLayer(show = true) {
+        if (!this.isMounted) return;
+
+        // clean up old node if moving bases:
+        if (this.props.into !== this.intoPointer) {
+          this.intoPointer = this.props.into;
+          if (this.into && this.remote) {
+            this.remote = render(html`<${PortalProxy} />`, this.into, this.remote);
+          }
+          this.into = this.findNode(this.props.into);
+        }
+
+        this.remote = render(html`
+          <${PortalProxy} context=${this.context}>
+            ${show && this.props.children || null}
+          </${PortalProxy}>
+        `, this.into, this.remote);
+      }
+
+      render() {
+        return null;
+      }
+    }
+    // high-order component that renders its first child if it exists.
+    // used as a conditional rendering proxy.
+    class PortalProxy extends Component {
+      getChildContext() {
+        return this.props.context;
+      }
+      render({ children }) {
+        return children || null;
+      }
+    }
+
+    function App(props) {
+      return html`
+        <div class="mode-${session.value.type}">
+          <header>
+            <h2>llama.cpp</h2>
+            <div class="dropdown">
+              <button class="dropbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg></button>
+              <div class="dropdown-content" id="theme-selector">
+                <a href="index.html">Old UI</a>
+                <a href="#" data-theme="ketivah">Ketivah</a>
+                <a href="#" data-theme="mangotango">Mango Tango</a>
+                <a href="#" data-theme="default">Playground</a>
+                <a href="#" data-theme="polarnight">Polar Night</a>
+                <a href="#" data-theme="snowstorm">Snow Storm</a>
+                <a href="#" data-theme="beeninorder">Been In Order</a>
+              </div>
+            </div>
+          </header>
+
+          <main id="content">
+            <${chatStarted.value ? ChatLog : ConfigForm} />
+          </main>
+
+          <section id="write">
+            <${session.value.type === 'chat' ? MessageInput : CompletionControls} />
+          </section>
+          <footer>
+            <p><${ModelGenerationInfo} /></p>
+            <p>Powered By <a href="https://github.com/ggerganov/llama.cpp#readme" target="_blank">llama.cpp</a> and <a href="https://ggml.ai/" target="_blank">ggml.ai</a></p>
+          </footer>
+        </div>
+      `;
+    }
+
+  document.addEventListener('DOMContentLoaded', function() {
+  var themeSelector = document.getElementById('theme-selector');
+  var themeLinks = themeSelector.querySelectorAll('a[data-theme]');
+
+  themeLinks.forEach(function(link) {
+    link.addEventListener('click', function(event) {
+      event.preventDefault(); // avoid default behaviour
+      var selectedTheme = event.target.getAttribute('data-theme');
+      changeTheme(selectedTheme);
+    });
+  });
+
+  function changeTheme(theme) {
+    document.body.classList.remove('theme-default', 'theme-mangotango', 'theme-ketivah', 'theme-polarnight', 'theme-snowstorm', 'theme-beeninorder');
+    if (theme !== 'default') {
+      document.body.classList.add('theme-' + theme);
+    }
+    localStorage.setItem('selected-theme', theme);
+  }
+
+  // set the selected theme when loading the page
+  var savedTheme = localStorage.getItem('selected-theme');
+  if (savedTheme && savedTheme !== 'default') {
+    document.body.classList.add('theme-' + savedTheme);
+    // update the dropdown if it still exists
+    var dropdown = document.getElementById('theme-selector-dropdown');
+    if (dropdown) {
+      dropdown.value = savedTheme;
+    }
+  }
+});
+
+
+// snapping of the slider to indicate 'disabled'
+document.addEventListener('DOMContentLoaded', (event) => {
+  // define an object that contains snap values and ranges for each slider
+  const snapSettings = {
+    temperature: { snapValue: 1.0, snapRangeMultiplier: 6 },
+    min_p: { snapValue: 0.05, snapRangeMultiplier: 2 },
+    top_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    tfs_z: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    typical_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    repeat_penalty: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    presence_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+    frequency_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+  };
+  // add an event listener for each slider
+  Object.keys(snapSettings).forEach(sliderName => {
+    const slider = document.querySelector(`input[name="${sliderName}"]`);
+    const settings = snapSettings[sliderName];
+
+    slider.addEventListener('input', (e) => {
+      let value = parseFloat(e.target.value);
+      const step = parseFloat(e.target.step);
+      const snapRange = step * settings.snapRangeMultiplier;
+      const valueDisplay = document.getElementById(`${e.target.name}-value`);
+
+      if (value >= settings.snapValue - snapRange && value <= settings.snapValue + snapRange) {
+        value = settings.snapValue; // set value to the snap value
+        e.target.value = value; // update the slider value
+      }
+      // update the displayed value
+      if (valueDisplay) {
+        valueDisplay.textContent = value.toFixed(2); // display value with two decimal places
+      }
+    });
+  });
+});
+
+    render(h(App), document.querySelector('#container'));
+
+  </script>
+</head>
+
+<body>
+
+  <div id="container">
+    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+  </div>
+  <div id="portal"></div>
+</body>
+
+</html>

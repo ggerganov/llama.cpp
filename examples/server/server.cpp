@@ -2432,6 +2432,7 @@ static json format_final_response_oaicompat(const json &request, const task_resu
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
+    int
     std::string content      = json_value(result, "content", std::string(""));
 
     std::string finish_reason = "length";
