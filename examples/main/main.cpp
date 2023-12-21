@@ -684,7 +684,6 @@ int main(int argc, char ** argv) {
         if (input_echo && (int) embd_inp.size() == n_consumed) {
             console::set_display(console::reset);
             display = true;
-
         }
 
         // if not currently processing queued inputs;
