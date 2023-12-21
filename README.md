@@ -335,6 +335,53 @@ Finally, you're ready to run a computation using `mpirun`:
 mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 
+### OpenSHMEM Build
+
+OpenSHMEM lets you distribute the computation over a cluster of machines using a Partitioned Global Address Space (PGAS). Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
+
+First you will need the OpenSHMEM libraries installed on your system. There are 3 options: [OpenMPI's OpenSHMEM](https://www.open-mpi.org), [OSSS-OpenSHMEM](https://github.com/openshmem-org/osss-ucx) and [Sandia-OpenSHMEM](https://github.com/Sandia-OpenSHMEM/SOS). OSSS-OpenSHMEM has a dependency on the [UCX](https://github.com/openucx/ucx) communication library. Sandia-OpenSHMEM can run over udp, [UCX](https://github.com/openucx/ucx), or [libfabric](https://github.com/ofiwg/libfabric). OpenMPI's OpenSHMEM can be installed with a package manager (apt, homebrew, etc). UCX, OSSS-OpenSHMEM, and Sandia-OpenSHMEM can all be installed from source.
+
+Next you will need to build the project with `LLAMA_OPENSHMEM` set to true on all machines; if you're building with `make`, you will also need to specify an OpenSHMEM-capable compiler (when building with CMake, this is configured automatically):
+
+- Using `make`:
+
+  ```bash
+  make CC=oshcc CXX=oshc++ LLAMA_MPI=1
+  ```
+
+- Using `CMake`:
+
+  ```bash
+  cmake -S . -B build -DLLAMA_MPI=ON -DCMAKE_C_COMPILER=oshcc -DCMAKE_CXX_COMPILER=oshc++
+  ```
+
+If you have access to a distributed file system (NFS) it's suggested you copy the programs and weights onto the distributed file system.
+
+Additionally, if you have a cluster with a bulk-synchronous scheduler ie: (Slurm)[https://slurm.schedmd.com] all you need to do is run the program from the distributed file system using the bulk-synchronous scheduler. The following example assumes a slurm cluster. The example additionally assumes  an NFS installation wth the distributed file system mounted with the following path on all machines: `/nfs_path`.
+
+```
+srun -n 2 /nfs_path/main -m /nfs_path/models/7B/ggml-model-q4_0.gguf -n 128
+```
+
+If you do not have access to a cluster with a bulk-synchronous scheduler or a distributed file system, the following instructions will help you stage an installation and run the application. Build the programs, download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines.
+
+Next, ensure password-less SSH access to each machine from the primary host, and create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
+
+Here is an example hostfile:
+
+```
+192.168.0.1:1
+malvolio.local:1
+```
+
+The above will distribute the computation across 1 processes on the first host and 1 process on the second host. Each process will use roughly an equal amount of RAM. Try to keep these numbers small, as inter-process (intra-host) communication is expensive. It is a requirement of OpenSHMEM that the distributed job be performed over a number of machines that is equal to a power of 2.
+
+Finally, you're ready to run a computation using `mpirun`:
+
+```bash
+oshrun -hostfile hostfile -n 2 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
+```
+
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
