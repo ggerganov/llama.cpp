@@ -2469,7 +2469,9 @@ struct llama_model_loader {
         }
 
         if (progress_callback) {
-            progress_callback(1.0f, progress_callback_user_data);
+            // Even though the model is done loading, we still honor
+            // cancellation since we need to free allocations.
+            return progress_callback(1.0f, progress_callback_user_data);
         }
         return true;
     }
@@ -3059,8 +3061,6 @@ static bool llm_load_tensors(
         llama_progress_callback progress_callback,
         void * progress_callback_user_data) {
     model.t_start_us = ggml_time_us();
-
-    bool ok = true; // if false, model load was cancelled
 
     auto & ctx     = model.ctx;
     auto & hparams = model.hparams;
@@ -3729,11 +3729,8 @@ static bool llm_load_tensors(
         model.tensors_by_name.emplace_back(ggml_get_name(cur), cur);
     }
 
-    ok = ok && ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL);
-    if (progress_callback) {
-        // Even though the model is done loading, we still honor
-        // cancellation since we need to free allocations.
-        ok = ok && progress_callback(1.0f, progress_callback_user_data);
+    if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL)) {
+        return false;
     }
 
     model.mapping = std::move(ml.mapping);
@@ -3741,7 +3738,7 @@ static bool llm_load_tensors(
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     model.t_load_us = ggml_time_us() - model.t_start_us;
-    return ok;
+    return true;
 }
 
 // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
