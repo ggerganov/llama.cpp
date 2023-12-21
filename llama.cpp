@@ -19,6 +19,9 @@
 #ifdef GGML_USE_MPI
 #  include "ggml-mpi.h"
 #endif
+#ifdef GGML_USE_OPENSHMEM
+#  include "ggml-oshmem.h"
+#endif
 #ifndef QK_K
 #  ifdef GGML_QKK_64
 #    define QK_K 64

@@ -95,6 +95,7 @@ option(LLAMA_CLBLAST                         "llama: use CLBlast"               
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
+option(LLAMA_OPENSHMEM                       "llama: use OpenSHMEM"                             OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
@@ -342,6 +343,29 @@ if (LLAMA_MPI)
     else()
         message(WARNING "MPI not found")
     endif()
+endif()
+
+if (LLAMA_OPENSHMEM)
+  cmake_minimum_required(VERSION 3.10)
+  include(cmake/FindOpenSHMEM.cmake)
+
+  setup_openshmem()
+
+  if (OPENSHMEM_FOUND)
+    message(STATUS "OpenSHMEM found")
+    set(GGML_HEADERS_OPENSHMEM ggml-oshmem.h)
+    set(GGML_SOURCES_OPENSHMEM ggml-oshmem.c ggml-oshmem.h)
+    add_compile_definitions(GGML_USE_OPENSHMEM)
+
+    if (NOT MSVC)
+      add_compile_options(-Wno-cast-qual)
+    endif()
+    set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${OPENSHMEM_LDFLAGS})
+    string(REPLACE "-I" "" OPENSHMEM_CFLAGS ${OPENSHMEM_CFLAGS})
+    set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${OPENSHMEM_CFLAGS})
+  else()
+    message(WARNING "OpenSHMEM not found")
+  endif()
 endif()
 
 if (LLAMA_CLBLAST)
@@ -722,6 +746,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_OPENSHMEM}    ${GGML_HEADERS_OPENSHMEM}
             ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
             )
 
