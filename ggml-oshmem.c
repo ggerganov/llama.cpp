@@ -103,6 +103,12 @@ static int ggml_graph_get_node_idx(struct ggml_cgraph * gf, const char * name) {
     return -1;
 }
 
+/*
+ * The OpenSHMEM mechanism used in this application reflects a message passing model; this is a byproduct of OpenSHMEM's symmetric memory requirements.
+ * Care has been taken to limit the number of branches made in send/recv and the amount of two-sided communication. Memory consistency maybe an issue
+ * which is why a `shmem_fence` is placed at the end of both send/recv.
+ *
+ */
 static void ggml_openshmem_tensor_send(struct ggml_openshmem_context * ctx, struct ggml_tensor * t, int dst_pe) {
 
     const int64_t symmetric_comm_structure_size =
