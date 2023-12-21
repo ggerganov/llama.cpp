@@ -6815,6 +6815,7 @@ static void ggml_cuda_op_get_rows(
             break;
         default:
             // TODO: k-quants
+            fprintf(stderr, "%s: unsupported type: %s\n", __func__, ggml_type_name(src0->type));
             GGML_ASSERT(false);
             break;
     }
