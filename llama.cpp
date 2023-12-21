@@ -5652,8 +5652,8 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "pos_embd",                   OFFLOAD_FUNC_NR  },
 
     { "inp_pos",                    OFFLOAD_FUNC_FRC }, // this is often used for KQ ops (e.g. rope)
-    { "Q_scale",                    OFFLOAD_FUNC_FRC },
-    { "KQ_scale",                   OFFLOAD_FUNC_FRC },
+    { "Q_scale",                    OFFLOAD_FUNC_NOP },
+    { "KQ_scale",                   OFFLOAD_FUNC_NOP },
     { "KQ_mask",                    OFFLOAD_FUNC_FRC },
     { "K_shift",                    OFFLOAD_FUNC_FRC },
 
