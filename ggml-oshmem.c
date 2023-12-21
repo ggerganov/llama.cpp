@@ -32,7 +32,8 @@ void ggml_openshmem_backend_free(void) {
 }
 
 struct ggml_openshmem_context * ggml_openshmem_init(void) {
-    struct ggml_openshmem_context * ctx = calloc(1, sizeof(struct ggml_openshmem_context));
+    struct ggml_openshmem_context * ctx =
+        (struct ggml_openshmem_context *)calloc(1, sizeof(struct ggml_openshmem_context));
 
     ctx->pe = shmem_my_pe(); 
     ctx->n_pes = shmem_n_pes();
@@ -62,6 +63,8 @@ struct ggml_openshmem_context * ggml_openshmem_init(void) {
 }
 
 void ggml_openshmem_free(struct ggml_openshmem_context * ctx) {
+    shmem_free(ctx->symmetric_comm_structure);
+    shmem_free(ctx->recv_signal);
     free(ctx);
 }
 
