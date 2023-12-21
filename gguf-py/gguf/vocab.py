@@ -84,7 +84,7 @@ class SpecialVocab:
         merges_file = path / 'merges.txt'
         if not merges_file.is_file():
             return False
-        with open(merges_file, 'r') as fp:
+        with open(merges_file, 'r', encoding = 'utf-8') as fp:
             first_line = next(fp, '').strip()
             if not first_line.startswith('#'):
                 fp.seek(0)
