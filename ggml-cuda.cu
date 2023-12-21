@@ -6825,7 +6825,8 @@ static void ggml_cuda_op_get_rows(
             break;
         default:
             // TODO: k-quants
-            GGML_ASSERT(false && "Unsupported CUDA Quantization Mode");
+            fprintf(stderr, "ERROR: Unsupported CUDA Data Type:%s\n", ggml_type_name(src0->type));
+            GGML_ASSERT(false);
             break;
     }
 }
