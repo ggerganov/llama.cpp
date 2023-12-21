@@ -10337,19 +10337,17 @@ static void ggml_compute_forward_out_prod(
 static void ggml_compute_forward_scale_f32(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_is_contiguous(src0));
     GGML_ASSERT(ggml_is_contiguous(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
-    GGML_ASSERT(ggml_is_scalar(src1));
 
     if (params->type == GGML_TASK_INIT || params->type == GGML_TASK_FINALIZE) {
         return;
     }
 
     // scale factor
-    const float v = *(float *) src1->data;
+    const float v = *(float *) dst->op_params;
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -10380,12 +10378,11 @@ static void ggml_compute_forward_scale_f32(
 static void ggml_compute_forward_scale(
         const struct ggml_compute_params * params,
         const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
         struct ggml_tensor * dst) {
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_scale_f32(params, src0, src1, dst);
+                ggml_compute_forward_scale_f32(params, src0, dst);
             } break;
         default:
             {
@@ -14395,7 +14392,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_SCALE:
             {
-                ggml_compute_forward_scale(params, tensor->src[0], tensor->src[1], tensor);
+                ggml_compute_forward_scale(params, tensor->src[0], tensor);
             } break;
         case GGML_OP_SET:
             {
