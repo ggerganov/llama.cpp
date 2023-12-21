@@ -180,7 +180,15 @@ struct ggml_metal_context {
 @implementation GGMLMetalClass
 @end
 
-ggml_log_callback ggml_metal_log_callback = NULL;
+
+static void ggml_metal_default_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
+    fprintf(stderr, "%s", msg);
+
+    UNUSED(level);
+    UNUSED(user_data);
+}
+
+ggml_log_callback ggml_metal_log_callback = ggml_metal_default_log_callback;
 void * ggml_metal_log_user_data = NULL;
 
 void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
@@ -622,7 +630,7 @@ struct ggml_backend_metal_buffer_context {
 
     // multiple buffers are used only to avoid the maximum buffer size limitation when using mmap
     int n_buffers;
-    struct ggml_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
+    struct ggml_backend_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
 };
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -2499,13 +2507,29 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
                     deallocator:nil];
 
     if (ctx->buffers[0].metal == nil) {
-        GGML_METAL_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MiB\n", __func__, "default", size_aligned / 1024.0 / 1024.0);
+        GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
         free(ctx);
         ggml_backend_metal_free_device();
         return NULL;
     }
 
-    GGML_METAL_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MiB\n", __func__, "default", size_aligned / 1024.0 / 1024.0);
+    GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
+
+
+#if TARGET_OS_OSX
+    GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
+            device.currentAllocatedSize / 1024.0 / 1024.0,
+            device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+    if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
+        GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+    } else {
+        GGML_METAL_LOG_INFO("\n");
+    }
+#else
+    GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
+#endif
+
 
     return ggml_backend_buffer_init(buft, ggml_backend_metal_buffer_i, ctx, size);
 }
@@ -2560,22 +2584,19 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
 
     id<MTLDevice> device = ggml_backend_metal_get_device();
 
-    const char * name = "from_ptr";
-
     // the buffer fits into the max buffer size allowed by the device
     if (size_aligned <= device.maxBufferLength) {
-        ctx->buffers[ctx->n_buffers].name = name;
         ctx->buffers[ctx->n_buffers].data = data;
         ctx->buffers[ctx->n_buffers].size = size;
 
         ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
         if (ctx->buffers[ctx->n_buffers].metal == nil) {
-            GGML_METAL_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MiB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+            GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
             return false;
         }
 
-        GGML_METAL_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MiB\n", __func__, name, size_aligned / 1024.0 / 1024.0);
+        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
 
         ++ctx->n_buffers;
     } else {
@@ -2588,18 +2609,17 @@ ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t siz
         for (size_t i = 0; i < size; i += size_step) {
             const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
 
-            ctx->buffers[ctx->n_buffers].name = name;
             ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
             ctx->buffers[ctx->n_buffers].size = size_step_aligned;
 
             ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
 
             if (ctx->buffers[ctx->n_buffers].metal == nil) {
-                GGML_METAL_LOG_ERROR("%s: error: failed to allocate '%-16s' buffer, size = %8.2f MiB\n", __func__, name, size_step_aligned / 1024.0 / 1024.0);
+                GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_step_aligned / 1024.0 / 1024.0);
                 return false;
             }
 
-            GGML_METAL_LOG_INFO("%s: allocated '%-16s' buffer, size = %8.2f MiB, offs = %12ld", __func__, name, size_step_aligned / 1024.0 / 1024.0, i);
+            GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, offs = %12ld", __func__, size_step_aligned / 1024.0 / 1024.0, i);
             if (i + size_step < size) {
                 GGML_METAL_LOG_INFO("\n");
             }
@@ -2673,17 +2693,7 @@ static struct ggml_backend_i metal_backend_i = {
     /* .supports_op             = */ ggml_backend_metal_supports_op,
 };
 
-// TODO: make a common log callback for all backends in ggml-backend
-static void ggml_backend_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
-    fprintf(stderr, "%s", msg);
-
-    UNUSED(level);
-    UNUSED(user_data);
-}
-
 ggml_backend_t ggml_backend_metal_init(void) {
-    ggml_metal_log_set_callback(ggml_backend_log_callback, NULL);
-
     struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
 
     if (ctx == NULL) {
