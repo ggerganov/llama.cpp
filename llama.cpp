@@ -2462,7 +2462,6 @@ struct llama_model_loader {
         // unmap offloaded tensors and metadata
         if (use_mmap && mapping) {
             mapping->unmap_fragment(0, mmap_first);
-            mapping->unmap_fragment(mmap_last, mmap_last);
             mapping->unmap_fragment(mmap_last, mapping->size);
         }
 
