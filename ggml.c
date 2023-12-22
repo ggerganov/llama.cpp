@@ -10335,7 +10335,8 @@ static void ggml_compute_forward_scale_f32(
     }
 
     // scale factor
-    const float v = *(float *) dst->op_params;
+    float v;
+    memcpy(&v, dst->op_params, sizeof(float));
 
     const int ith = params->ith;
     const int nth = params->nth;
@@ -15152,7 +15153,8 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
             {
                 // necessary for llama
                 if (src0->grad) {
-                    const float s = ((float *) tensor->op_params)[0];
+                    float s;
+                    memcpy(&s, tensor->op_params, sizeof(float));
 
                     src0->grad =
                         ggml_add_or_set(ctx,

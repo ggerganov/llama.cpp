@@ -7702,7 +7702,8 @@ inline void ggml_cuda_op_scale(
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
-    const float scale = ((float *) dst->op_params)[0];
+    float scale;
+    memcpy(&scale, dst->op_params, sizeof(float));
 
     scale_f32_cuda(src0_dd, dst_dd, scale, ggml_nelements(src0), main_stream);
     CUDA_CHECK(cudaGetLastError());
