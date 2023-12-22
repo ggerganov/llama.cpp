@@ -48,7 +48,7 @@ python convert-hf-to-gguf.py models/llama-7b/ --awq-path awq_cache/llama-7b-w4-g
 
 ## Quantize
 ```bash
-# For now I only benchmark and confirm the results on q4_0, q4_1 and q2_k types.
+# We only benchmark and confirm the results on q4_0, q4_1, and q2_k types.
 ./quantize models/llama_7b_fp16.gguf models/llama_7b_q4_0.gguf q4_0
 ```
 
