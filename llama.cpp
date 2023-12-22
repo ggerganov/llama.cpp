@@ -4072,9 +4072,7 @@ static struct ggml_tensor * llm_build_ffn_mpt_awq(
             {
                 cur = ggml_gelu(ctx, cur);
                 cb(cur, "ffn_relu", il);
-                struct ggml_tensor *repeat = ggml_repeat(ctx, act_scales, cur);
-                cb(repeat, "ffn_repeat(scales)", il);
-                cur = ggml_div(ctx, cur, repeat);
+                cur = ggml_div(ctx, cur, act_scales);
                 cb(cur, "ffn_div(gelu)", il);
             } break;
     }
