@@ -779,7 +779,7 @@ struct llama_file {
             throw std::runtime_error(format("read error: %s", strerror(errno)));
         }
         if (ret != 1) {
-            throw std::runtime_error(std::string("unexpectedly reached end of file"));
+            throw std::runtime_error("unexpectedly reached end of file");
         }
     }
 
@@ -932,22 +932,22 @@ struct llama_mmap {
 #elif defined(_WIN32)
     static constexpr bool SUPPORTED = true;
 
-    llama_mmap(struct llama_file * file, bool prefetch = true, bool numa = false) {
-        (void) numa;
+    llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1, bool numa = false) {
+        GGML_UNUSED(numa);
 
         size = file->size;
 
         HANDLE hFile = (HANDLE) _get_osfhandle(_fileno(file->fp));
 
         HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
-        DWORD error = GetLastError();
 
         if (hMapping == NULL) {
+            DWORD error = GetLastError();
             throw std::runtime_error(format("CreateFileMappingA failed: %s", llama_format_win_err(error).c_str()));
         }
 
         addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
-        error = GetLastError();
+        DWORD error = GetLastError();
         CloseHandle(hMapping);
 
         if (addr == NULL) {
@@ -955,7 +955,7 @@ struct llama_mmap {
         }
 
         #ifndef USE_FAILSAFE
-        if (prefetch) {
+        if (prefetch > 0) {
             // PrefetchVirtualMemory is only present on Windows 8 and above, so we dynamically load it
             BOOL (WINAPI *pPrefetchVirtualMemory) (HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
             HMODULE hKernel32 = GetModuleHandleW(L"kernel32.dll");
@@ -967,9 +967,9 @@ struct llama_mmap {
                 // advise the kernel to preload the mapped memory
                 WIN32_MEMORY_RANGE_ENTRY range;
                 range.VirtualAddress = addr;
-                range.NumberOfBytes = (SIZE_T)size;
+                range.NumberOfBytes = (SIZE_T) std::min(size, prefetch);
                 if (!pPrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0)) {
-                    fprintf(stderr, "warning: PrefetchVirtualMemory failed: %s\n",
+                    LLAMA_LOG_WARN("warning: PrefetchVirtualMemory failed: %s\n",
                             llama_format_win_err(GetLastError()).c_str());
                 }
             }
@@ -987,26 +987,26 @@ struct llama_mmap {
 
     ~llama_mmap() {
         if (!UnmapViewOfFile(addr)) {
-            fprintf(stderr, "warning: UnmapViewOfFile failed: %s\n",
+            LLAMA_LOG_WARN("warning: UnmapViewOfFile failed: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
         }
     }
 #else
     static constexpr bool SUPPORTED = false;
 
-    llama_mmap(struct llama_file * file, bool prefetch = true, bool numa = false) {
-        (void) file;
-        (void) prefetch;
-        (void) numa;
+    llama_mmap(struct llama_file * file, size_t prefetch = -1, bool numa = false) {
+        GGML_UNUSED(file);
+        GGML_UNUSED(prefetch);
+        GGML_UNUSED(numa);
 
-        throw std::runtime_error(std::string("mmap not supported"));
+        throw std::runtime_error("mmap not supported");
     }
 
-    void unmap(size_t offset, size_t len) {
-        (void) offset;
-        (void) len;
+    void unmap_fragment(size_t first, size_t last) {
+        GGML_UNUSED(first);
+        GGML_UNUSED(last);
 
-        throw std::runtime_error(std::string("mmap not supported"));
+        throw std::runtime_error("mmap not supported");
     }
 #endif
 };
@@ -2383,7 +2383,8 @@ struct llama_model_loader {
         }
     }
 
-    void load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) const {
+    // Returns false if cancelled by progress_callback
+    bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) const {
         size_t size_data = 0;
 
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
@@ -2415,7 +2416,9 @@ struct llama_model_loader {
             GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
 
             if (progress_callback) {
-                progress_callback((float) size_done / size_data, progress_callback_user_data);
+                if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
+                    return false;
+                }
             }
 
             const size_t offs = file_offset(ggml_get_name(cur));
@@ -2477,8 +2480,11 @@ struct llama_model_loader {
         }
 
         if (progress_callback) {
-            progress_callback(1.0f, progress_callback_user_data);
+            // Even though the model is done loading, we still honor
+            // cancellation since we need to free allocations.
+            return progress_callback(1.0f, progress_callback_user_data);
         }
+        return true;
     }
 };
 
@@ -3074,7 +3080,8 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.linefeed_id    != -1) { LLAMA_LOG_INFO( "%s: LF token         = %d '%s'\n", __func__, vocab.linefeed_id,    vocab.id_to_token[vocab.linefeed_id].text.c_str() );    }
 }
 
-static void llm_load_tensors(
+// Returns false if cancelled by progress_callback
+static bool llm_load_tensors(
         llama_model_loader & ml,
         llama_model & model,
         int n_gpu_layers,
@@ -3751,16 +3758,20 @@ static void llm_load_tensors(
         model.tensors_by_name.emplace_back(ggml_get_name(cur), cur);
     }
 
-    ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL);
+    if (!ml.load_all_data(ctx, progress_callback, progress_callback_user_data, buf_mmap, use_mlock ? &model.mlock_mmap : NULL)) {
+        return false;
+    }
 
     model.mapping = std::move(ml.mapping);
 
     // loading time will be recalculate after the first eval, so
     // we take page faults deferred by mmap() into consideration
     model.t_load_us = ggml_time_us() - model.t_start_us;
+    return true;
 }
 
-static bool llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
+// Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
+static int llama_model_load(const std::string & fname, llama_model & model, const llama_model_params & params) {
     try {
         llama_model_loader ml(fname, params.use_mmap, params.kv_overrides);
 
@@ -3778,19 +3789,21 @@ static bool llama_model_load(const std::string & fname, llama_model & model, con
 
         if (params.vocab_only) {
             LLAMA_LOG_INFO("%s: vocab only - skipping tensors\n", __func__);
-            return true;
+            return 0;
         }
 
-        llm_load_tensors(
+        if (!llm_load_tensors(
             ml, model, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.use_mlock,
             params.progress_callback, params.progress_callback_user_data
-        );
+        )) {
+            return -2;
+        }
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("error loading model: %s\n", err.what());
-        return false;
+        return -1;
     }
 
-    return true;
+    return 0;
 }
 
 //
@@ -9406,11 +9419,18 @@ struct llama_model * llama_load_model_from_file(
                     LLAMA_LOG_INFO("\n");
                 }
             }
+            return true;
         };
     }
 
-    if (!llama_model_load(path_model, *model, params)) {
-        LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+    int status = llama_model_load(path_model, *model, params);
+    GGML_ASSERT(status <= 0);
+    if (status < 0) {
+        if (status == -1) {
+            LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+        } else if (status == -2) {
+            LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+        }
         delete model;
         return nullptr;
     }
