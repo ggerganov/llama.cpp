@@ -394,7 +394,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```
 
   - Using oneAPI docker image:
-    If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI container](https://hub.docker.com/r/intel/oneapi-runtime)
+    If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI-runtime](https://hub.docker.com/r/intel/oneapi-runtime)
 
       ```bash
       mkdir build
