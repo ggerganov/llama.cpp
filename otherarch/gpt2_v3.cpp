@@ -564,7 +564,7 @@ bool gpt2_eval(
             struct ggml_tensor * KQ_scaled =
                 ggml_scale_inplace(ctx0,
                         KQ,
-                        ggml_new_f32(ctx0, 1.0f/sqrt(float(n_embd)/n_head))
+                        1.0f/sqrt(float(n_embd)/n_head)
                         );
 
             // KQ_masked = mask_past(KQ_scaled)

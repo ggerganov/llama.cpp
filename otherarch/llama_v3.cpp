@@ -1554,6 +1554,9 @@ static struct ggml_cgraph * llama_v3_build_graph(
 #else
     ggml_set_f32(KQ_scale, 1.0f/sqrtf(float(n_embd)/n_head));
 #endif
+
+    float KQ_scale_float = 1.0f/sqrtf(float(n_embd)/n_head);
+
     ggml_set_name(KQ_scale, "1/sqrt(n_embd_head)");
 
     for (int il = 0; il < n_layer; ++il) {
@@ -1673,7 +1676,7 @@ static struct ggml_cgraph * llama_v3_build_graph(
 
             // KQ_scaled = KQ / sqrt(n_embd_head)
             // KQ_scaled shape [n_past + N, N, n_head, 1]
-            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale);
+            struct ggml_tensor * KQ_scaled = ggml_scale_inplace(ctx0, KQ, KQ_scale_float);
             offload_func_kq(KQ_scaled);
             ggml_set_name(KQ_scaled, "KQ_scaled");
 
@@ -3829,7 +3832,7 @@ int llama_v3_apply_lora_from_file_internal(const struct llama_v3_model & model, 
                 ggml_tensor * scale_tensor = ggml_new_f32(lora_ctx, scaling);
                 ggml_set_name(scale_tensor, "scale_tensor");
 
-                BA = ggml_scale_inplace(lora_ctx, BA, scale_tensor);
+                BA = ggml_scale_inplace(lora_ctx, BA, scaling);
                 offload_func(BA);
                 ggml_set_name(BA, "BA_scaled");
             }

@@ -461,7 +461,7 @@ bool mpt_eval(const mpt_model & model, const int n_threads, const int n_past,
 
             // KQ_scaled = KQ / sqrt(n_embd/n_head)
             struct ggml_tensor * KQ_scaled =
-                ggml_scale(ctx0, KQ, ggml_new_f32(ctx0, 1.0f / sqrt(float(n_embd) / n_head)));
+                ggml_scale(ctx0, KQ, 1.0f / sqrt(float(n_embd) / n_head));
 
             struct ggml_tensor * KQ_scaled_alibi =
                 ggml_alibi(ctx0, KQ_scaled, n_past, n_head, model.hparams.alibi_bias_max);
