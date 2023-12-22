@@ -4,7 +4,7 @@
 **Supported models:**
 
 - [X] LLaMA
-- [x] LLaMA 2 
+- [x] LLaMA 2
 - [X] MPT
 - [X] Mistral AI v0.1
 - [ ] Bloom
@@ -33,7 +33,7 @@ Install requirements
 pip install -r requirements.txt
 ```
 Get the pre-computed AWQ search results for multiple model families, including LLaMA, LLaMA2, MPT, OPT
-```bash 
+```bash
 git clone https://huggingface.co/datasets/mit-han-lab/awq-model-zoo awq_cache
 ```
 

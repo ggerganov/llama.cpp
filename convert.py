@@ -1201,7 +1201,7 @@ def main(args_in: list[str] | None = None) -> None:
     args = parser.parse_args(args_in)
     if args.awq_path:
         sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-        from awq.apply_awq import add_scale_weights        
+        from awq.apply_awq import add_scale_weights
         tmp_model_path = args.model / "weighted_model"
         if tmp_model_path.is_dir():
             print(f"{tmp_model_path} exists as a weighted model.")
@@ -1209,9 +1209,9 @@ def main(args_in: list[str] | None = None) -> None:
             tmp_model_path.mkdir(parents=True, exist_ok=True)
             print("Saving new weighted model ...")
             add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
-            print(f"Saved weighted model at {tmp_model_path}.") 
+            print(f"Saved weighted model at {tmp_model_path}.")
         args.model = tmp_model_path
-    
+
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)

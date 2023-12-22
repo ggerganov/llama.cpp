@@ -1041,7 +1041,7 @@ dir_model = args.model
 
 if args.awq_path:
     sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-    from awq.apply_awq import add_scale_weights     
+    from awq.apply_awq import add_scale_weights    
     tmp_model_path = args.model / "weighted_model"
     dir_model = tmp_model_path
     if tmp_model_path.is_dir():
@@ -1050,7 +1050,7 @@ if args.awq_path:
         tmp_model_path.mkdir(parents=True, exist_ok=True)
         print("Saving new weighted model ...")
         add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
-        print(f"Saved weighted model at {tmp_model_path}.") 
+        print(f"Saved weighted model at {tmp_model_path}.")
 
 if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)

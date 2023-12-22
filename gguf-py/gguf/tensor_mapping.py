@@ -180,7 +180,7 @@ class TensorNameMap:
             "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
         ),
-        
+
         # AWQ-activation gate
         MODEL_TENSOR.FFN_ACT: (
             "transformer.blocks.{bid}.ffn.act",  # mpt

@@ -170,7 +170,7 @@ def apply_scale(module, scales_list, input_feat_dict=None):
     Args:
         module (nn.Module): The module containing the layers to be scaled.
         scales_list (List[Tuple[str, List[str], torch.Tensor]]): A list of tuples containing:
-            * prev_op_name (str): The name of the preceding operation or module, 
+            * prev_op_name (str): The name of the preceding operation or module,
                 relative to which the layers to be scaled are located.
             * layer_names (List[str]): A list of names of the layers to be scaled, relative to the preceding operation.
             * scales (torch.Tensor): A 1D tensor of size (num_features,) containing the scaling factors for each feature.
@@ -237,7 +237,7 @@ def apply_clip(module, clip_list):
 
 def add_scale_weights(model_path, scale_path, tmp_path):
     """
-    Adds pre-computed Activation Weight Quantization (AWQ) results to a model, 
+    Adds pre-computed Activation Weight Quantization (AWQ) results to a model,
     including scaling factors and clipping bounds.
 
     Args:
