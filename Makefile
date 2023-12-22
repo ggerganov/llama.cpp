@@ -452,6 +452,9 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
 	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+ifdef LLAMA_HIP_UMA
+	MK_CPPFLAGS += -DGGML_HIP_UMA
+endif # LLAMA_HIP_UMA
 	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
