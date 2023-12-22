@@ -27,7 +27,6 @@ struct load_model_inputs
     const int threads;
     const int blasthreads;
     const int max_context_length;
-    const int batch_size;
     const bool low_vram;
     const bool use_mmq;
     const char * executable_path;

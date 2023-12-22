@@ -23,7 +23,6 @@ class load_model_inputs(ctypes.Structure):
     _fields_ = [("threads", ctypes.c_int),
                 ("blasthreads", ctypes.c_int),
                 ("max_context_length", ctypes.c_int),
-                ("batch_size", ctypes.c_int),
                 ("low_vram", ctypes.c_bool),
                 ("use_mmq", ctypes.c_bool),
                 ("executable_path", ctypes.c_char_p),
@@ -229,7 +228,6 @@ def load_model(model_filename):
     global args
     inputs = load_model_inputs()
     inputs.model_filename = model_filename.encode("UTF-8")
-    inputs.batch_size = 8
     inputs.max_context_length = maxctx #initial value to use for ctx, can be overwritten
     inputs.threads = args.threads
     inputs.low_vram = (True if (args.usecublas and "lowvram" in args.usecublas) else False)

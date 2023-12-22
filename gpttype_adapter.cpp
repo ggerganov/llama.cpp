@@ -82,6 +82,9 @@ static int n_batch = 8;
 static bool useSmartContext = false;
 static bool useContextShift = false;
 static int blasbatchsize = 512;
+static int dontblasbatchsize = 16;
+static int normalbatchsize = 32;
+static int smallbatchsize = 8;
 static int debugmode = 0; //-1 = hide all, 0 = normal, 1 = showall
 static std::string modelname;
 static std::vector<gpt_vocab::id> last_n_tokens;
@@ -671,7 +674,9 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     file_format = in_file_format;
     n_threads = params.n_threads = inputs.threads;
     n_blasthreads = params.n_threads_batch = inputs.blasthreads;
-    n_batch = params.n_batch = inputs.batch_size;
+    bool isGguf = (file_format == FileFormat::GGUF_LLAMA || file_format==FileFormat::GGUF_FALCON);
+
+    n_batch = params.n_batch = (isGguf?normalbatchsize:smallbatchsize);
     modelname = params.model = inputs.model_filename;
     useSmartContext = inputs.use_smartcontext;
     useContextShift = inputs.use_contextshift;
@@ -679,7 +684,7 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
     blasbatchsize = inputs.blasbatchsize;
     if(blasbatchsize<=0)
     {
-        blasbatchsize = 8;
+        blasbatchsize = (isGguf?dontblasbatchsize:smallbatchsize);
     }
 
     auto clamped_max_context_length = inputs.max_context_length;
