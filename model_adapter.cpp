@@ -274,12 +274,11 @@ void print_tok_vec(std::vector<float> &embd)
         else if(modelarch=="falcon")
         {
             fileformat = FileFormat::GGUF_FALCON; //uses the same loader
-            printf("\nDetected GGUF FALCON format.\n");
         }
-        else
-        {
-            printf("\nERROR: Detected unimplemented GGUF Arch: %s\n",modelarch.c_str());
-        }
+
+
+        printf("\nThe reported GGUF Arch is: %s\n",(modelarch==""?"unknown":modelarch.c_str()));
+
 
         if(modelarch!="" && fileformatmeta!=nullptr)
         {
