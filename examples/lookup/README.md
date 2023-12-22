@@ -4,7 +4,7 @@ Demonstration of Prompt Lookup Decoding
 
 https://github.com/apoorvumang/prompt-lookup-decoding
 
-The two key parameters for lookup decoding are `max_ngram_size` and `n_draft`. The first, determines how many ngrams to use when searching through the prompt for a match and the second specifies how many subsequent tokens to draft if a match is found.
+The key parameters for lookup decoding are `ngram_min`, `ngram_max` and `n_draft`. The first two determine the size of the ngrams to search for in the prompt for a match. The latter specifies how many subsequent tokens to draft if a match is found.
 
 More info:
 

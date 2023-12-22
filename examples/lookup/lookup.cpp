@@ -9,12 +9,13 @@
 int main(int argc, char ** argv){
     gpt_params params;
 
-    if(gpt_params_parse(argc, argv, params) == false){
+    if (!gpt_params_parse(argc, argv, params)) {
         return 1;
     }
 
-    // maximum n-grams to search for in prompt
-    const int max_ngram_size = 3;
+    // max/min n-grams size to search for in prompt
+    const int ngram_max = 4;
+    const int ngram_min = 1;
 
     // length of the candidate / draft sequence, if match is found
     const int n_draft = params.n_draft;
@@ -160,7 +161,7 @@ int main(int argc, char ** argv){
         // generate n_pred tokens through prompt lookup
         auto prompt_lookup = [&]() -> void {
             int inp_size = inp.size();
-            for (int ngram_size = max_ngram_size ; ngram_size > 0; --ngram_size){
+            for (int ngram_size = ngram_max ; ngram_size > ngram_min; --ngram_size){
                 const llama_token * ngram = &inp[inp_size - ngram_size];
 
                 for (int i = 0; i <= (int) inp_size - (ngram_size * 2); ++i) {
