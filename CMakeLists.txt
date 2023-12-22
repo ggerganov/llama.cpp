@@ -501,6 +501,7 @@ endif()
 
 if (WIN32)
     if (MSVC)
+# extend number of sections in object files to 2^32 to use C++ templates
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
     endif()
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)

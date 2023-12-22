@@ -351,7 +351,7 @@ int main(int argc, char ** argv) {
         sigint_action.sa_flags = 0;
         sigaction(SIGINT, &sigint_action, NULL);
 #elif defined (_WIN32)
-		SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(ConsoleCtrlHandler), TRUE);
+        SetConsoleCtrlHandler(reinterpret_cast<PHANDLER_ROUTINE>(ConsoleCtrlHandler), TRUE);
 #endif
 
         LOG_TEE("%s: interactive mode on.\n", __func__);

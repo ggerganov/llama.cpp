@@ -2218,7 +2218,7 @@ extern "C" {
     //
 
 #if defined(__cplusplus) || defined(_MSC_VER)
-// GGML_RESTRICT not standard in C++
+// restrict not standard in C++
 #define GGML_RESTRICT
 #else
 #define GGML_RESTRICT restrict
