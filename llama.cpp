@@ -778,7 +778,7 @@ struct llama_file {
             throw std::runtime_error(format("read error: %s", strerror(errno)));
         }
         if (ret != 1) {
-            throw std::runtime_error(std::string("unexpectedly reached end of file"));
+            throw std::runtime_error("unexpectedly reached end of file");
         }
     }
 
@@ -946,10 +946,10 @@ struct llama_mmap {
         }
 
         addr = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+        DWORD error = GetLastError();
         CloseHandle(hMapping);
 
         if (addr == NULL) {
-            DWORD error = GetLastError();
             throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(error).c_str()));
         }
 
@@ -994,14 +994,14 @@ struct llama_mmap {
         GGML_UNUSED(prefetch);
         GGML_UNUSED(numa);
 
-        throw std::runtime_error(std::string("mmap not supported"));
+        throw std::runtime_error("mmap not supported");
     }
 
     void unmap_fragment(size_t first, size_t last) {
         GGML_UNUSED(first);
         GGML_UNUSED(last);
 
-        throw std::runtime_error(std::string("mmap not supported"));
+        throw std::runtime_error("mmap not supported");
     }
 #endif
 };
