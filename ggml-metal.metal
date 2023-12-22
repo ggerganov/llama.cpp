@@ -1702,8 +1702,9 @@ kernel void kernel_rope(
             dst_data[1] = x0*sin_theta + x1*cos_theta;
         }
     } else {
-        for (int64_t ib = 0; ib < ne0/n_dims; ++ib) {
-            for (int64_t ic = 2*tiitg; ic < n_dims; ic += 2*tptg.x) {
+        for (int64_t ic = 2*tiitg; ic < ne0; ic += 2*tptg.x) {
+            if (ic < n_dims) {
+                const int64_t ib = 0;
 
                 // simplified from `(ib * n_dims + ic) * inv_ndims`
                 const float cur_rot = inv_ndims*ic - ib;
@@ -1722,6 +1723,14 @@ kernel void kernel_rope(
 
                 dst_data[0]        = x0*cos_theta - x1*sin_theta;
                 dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
+            } else {
+                const int64_t i0 = ic;
+
+                device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+                device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+                dst_data[0] = src[0];
+                dst_data[1] = src[1];
             }
         }
     }

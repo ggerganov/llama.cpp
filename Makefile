@@ -65,7 +65,7 @@ test: $(TEST_TARGETS)
 			./$$test_target; \
 		fi; \
 		if [ $$? -ne 0 ]; then \
-			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			printf 'Test %s FAILED!\n\n' $$test_target; \
 			failures=$$(( failures + 1 )); \
 		else \
 			printf 'Test %s passed.\n\n' $$test_target; \
@@ -439,9 +439,15 @@ ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
 endif # LLAMA_CLBLAST
 
 ifdef LLAMA_HIPBLAS
-	ROCM_PATH	?= /opt/rocm
-	HIPCC	    ?= $(ROCM_PATH)/bin/hipcc
-	GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+
+	ifeq ($(wildcard /opt/rocm),)
+		ROCM_PATH	?= /usr
+		GPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
+	else
+		ROCM_PATH	?= /opt/rocm
+		GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+	endif
+	HIPCC                   ?= $(ROCM_PATH)/bin/hipcc
 	LLAMA_CUDA_DMMV_X       ?= 32
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
@@ -600,7 +606,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o $(C
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp examples/llava/clip.cpp examples/llava/clip.h common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS) $(LWINSOCK2) -Wno-cast-qual
 
-gguf: examples/gguf/gguf.cpp ggml.o llama.o $(OBJS)
+gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)

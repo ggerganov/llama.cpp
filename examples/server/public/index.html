@@ -235,7 +235,8 @@
       grammar: '',
       n_probs: 0, // no completion_probabilities,
       image_data: [],
-      cache_prompt: true
+      cache_prompt: true,
+      api_key: ''
     })
 
     /* START: Support for storing prompt templates and parameters in browsers LocalStorage */
@@ -789,6 +790,10 @@
             </fieldset>
             <fieldset>
               ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
+            </fieldset>
+            <fieldset>
+              <label for="api_key">API Key</label>
+              <input type="text" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
             </fieldset>
           </details>
         </form>

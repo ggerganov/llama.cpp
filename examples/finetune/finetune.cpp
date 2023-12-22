@@ -269,7 +269,7 @@ static void load_model_hparams_gguf(struct gguf_context * ctx, struct my_llama_h
     float rope_freq_scale = 1.0f;
     GGUF_GET_KEY(ctx, hparams->f_norm_rms_eps, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS));
     GGUF_GET_KEY(ctx, hparams->rope_freq_base, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_FREQ_BASE));
-    GGUF_GET_KEY(ctx, rope_freq_scale, gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
+    GGUF_GET_KEY(ctx, rope_freq_scale,         gguf_get_val_f32, GGUF_TYPE_FLOAT32, false, kv(LLM_KV_ROPE_SCALE_LINEAR));
     if (rope_freq_scale != 1.0f) {
         hparams->rope_freq_scale = 1.0f / rope_freq_scale;
     }
@@ -612,6 +612,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     const int n_rot       = hparams.n_embd_head();
     const int n_embd_head = hparams.n_embd_head();
     const int n_embd_gqa  = hparams.n_embd_gqa();
+
     const float rms_norm_eps    = hparams.f_norm_rms_eps;
     const float rope_freq_base  = hparams.rope_freq_base;
     const float rope_freq_scale = hparams.rope_freq_scale;
@@ -680,10 +681,7 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         checkpoints.push_back(t01);
     }
 
-    struct ggml_tensor * kv_scale = NULL;
-    if (!enable_flash_attn) {
-        kv_scale = ggml_new_f32(ctx, 1.0f/sqrtf(float(n_embd)/n_head));
-    }
+    const float kv_scale = 1.0f/sqrtf(float(n_embd)/n_head);
 
     for (int il = 0; il < n_layer; ++il) {
         struct my_llama_layer & layer = model->layers[il];
@@ -781,32 +779,32 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
     // make sure some tensors are not reallocated by inserting new temporary nodes depending on them
     int n_leafs_before = gb->n_leafs;
     int n_nodes_before = gb->n_nodes;
-    struct ggml_tensor * one = ggml_new_f32(ctx, 1.0f);
+
     // output tensors
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, one));
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t35, 1.0f));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36, 1.0f));
     // input gradient
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, t36->grad, 1.0f));
     GGML_ASSERT(t36->grad->data == NULL && t36->grad->view_src == NULL);
     ggml_allocr_alloc(alloc, t36->grad);
     // KQ_pos
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, KQ_pos, 1.0f));
 
     // make sure base model tensors data cannot be used in viewable operations
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, one));
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->norm, one));
-    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->output, one));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->tok_embeddings, 1.0f));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->norm, 1.0f));
+    ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, model->output, 1.0f));
     for (int il = 0; il < n_layer; ++il) {
         struct my_llama_layer & layer = model->layers[il];
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.attention_norm, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_norm, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wq, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wk, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wv, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wo, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w1, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w2, one));
-        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, one));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.attention_norm, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.ffn_norm, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wq, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wk, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wv, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.wo, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w1, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w2, 1.0f));
+        ggml_build_forward_expand(gb, ggml_scale_inplace(ctx, layer.w3, 1.0f));
     }
 
     // allocating checkpoints in one block to reduce memory fragmentation
@@ -1110,7 +1108,7 @@ static void write_tensor(struct llama_file * file, struct ggml_tensor * tensor, 
         name = ggml_get_name(tensor);
     }
     uint32_t name_len = strlen(name);
-    uint32_t nd = tensor->n_dims;
+    uint32_t nd = ggml_n_dims(tensor);
     uint32_t ne[4] = { (uint32_t)tensor->ne[0],
                        (uint32_t)tensor->ne[1],
                        (uint32_t)tensor->ne[2],
@@ -1620,8 +1618,6 @@ int main(int argc, char ** argv) {
     opt->params.adam.gclip              = params.common.adam_gclip;
     opt->params.adam.eps_f              = params.common.adam_eps_f;
 
-    ggml_allocr * alloc = NULL;
-
     printf("%s: init model\n", __func__);
     bool existed = load_checkpoint_lora_file(params.common.fn_checkpoint_in, &model, &lora, train);
 
@@ -1725,10 +1721,9 @@ int main(int argc, char ** argv) {
 
     // allocate input tensors
     mem_input_data.resize(max_input_size);
-    alloc = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
-    ggml_allocr_alloc(alloc, tokens_input);
-    ggml_allocr_alloc(alloc, target_probs);
-    ggml_allocr_free(alloc);
+    ggml_allocr_t alloc_inps = ggml_allocr_new(mem_input_data.data(), mem_input_data.size(), tensor_alignment);
+    ggml_allocr_alloc(alloc_inps, tokens_input);
+    ggml_allocr_alloc(alloc_inps, target_probs);
 
     // context for compute tensors without their data
     const size_t estimated_compute_size_wo_data = (
@@ -1755,7 +1750,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
-        alloc = ggml_allocr_new_measure(tensor_alignment);
+        ggml_allocr_t alloc = ggml_allocr_new_measure(tensor_alignment);
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1788,7 +1783,7 @@ int main(int argc, char ** argv) {
     // allocate compute tensors
     mem_compute_data.resize(max_compute_size);
     ctx_compute = ggml_init(ctx_compute_params);
-    alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
+    ggml_allocr_t alloc = ggml_allocr_new(mem_compute_data.data(), mem_compute_data.size(), tensor_alignment);
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1804,6 +1799,8 @@ int main(int argc, char ** argv) {
         params.common.use_checkpointing
     );
     ggml_allocr_free(alloc);
+    ggml_allocr_free(alloc_inps);
+
 
     // tokenize data
     std::vector<llama_token> train_tokens;

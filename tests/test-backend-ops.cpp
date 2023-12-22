@@ -54,7 +54,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
-        std::vector<uint8_t> dataq(ggml_type_size(tensor->type)*size/ggml_blck_size(tensor->type));
+        std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         int64_t hist[16];
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size, hist);
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
@@ -72,6 +72,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
 
     ggml_type_traits_t tt = ggml_internal_get_type_traits(t->type);
     size_t bs = ggml_blck_size(t->type);
+    std::vector<float> vq(ggml_blck_size(t->type));
+    bool quantized = ggml_is_quantized(t->type);
 
     // access elements by index to avoid gaps in views
     for (int64_t i3 = 0; i3 < t->ne[3]; i3++) {
@@ -85,9 +87,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                         tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
                         tv.push_back((float)*(int32_t *) &buf[i]);
-                    } else if (ggml_is_quantized(t->type)) {
-                        std::vector<float> vq(ggml_blck_size(t->type));
-                        tt.to_float(&buf[i], vq.data(), ggml_blck_size(t->type));
+                    } else if (quantized) {
+                        tt.to_float(&buf[i], vq.data(), bs);
                         tv.insert(tv.end(), vq.begin(), vq.end());
                     } else {
                         GGML_ASSERT(false);
@@ -765,18 +766,19 @@ struct test_bin_bcast : public test_case {
 struct test_scale : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
+    float scale;
 
     std::string vars() override {
-        return VARS_TO_STR2(type, ne);
+        return VARS_TO_STR3(type, ne, scale);
     }
 
     test_scale(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10})
-        : type(type), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 10},
+            float scale = 2.0f)
+        : type(type), ne(ne), scale(scale) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * scale = ggml_new_tensor_1d(ctx, type, 1);
         ggml_tensor * out = ggml_scale(ctx, a, scale);
         return out;
     }
@@ -1554,6 +1556,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_rope(type, { 64,   8, 10, 1},  64, 2, 512)); // neox (falcon 40B)
         test_cases.emplace_back(new test_rope(type, { 64, 128, 10, 1},  64, 2, 512)); // neox (falcon 40B)
         test_cases.emplace_back(new test_rope(type, { 80,  32, 10, 1},  20, 2, 512)); // neox (stablelm)
+        test_cases.emplace_back(new test_rope(type, { 80,  32, 10, 1},  32, 2, 512)); // neox (phi-2)
     }
 
     test_cases.emplace_back(new test_alibi());

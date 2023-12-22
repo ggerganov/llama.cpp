@@ -84,7 +84,7 @@ class SpecialVocab:
         merges_file = path / 'merges.txt'
         if not merges_file.is_file():
             return False
-        with open(merges_file, 'r') as fp:
+        with open(merges_file, 'r', encoding = 'utf-8') as fp:
             first_line = next(fp, '').strip()
             if not first_line.startswith('#'):
                 fp.seek(0)
@@ -109,8 +109,10 @@ class SpecialVocab:
         return True
 
     def _set_special_token(self, typ: str, tid: Any) -> None:
-        if not isinstance(tid, int) or tid < 0:
+        if not isinstance(tid, int):
             return
+        if tid < 0:
+            raise ValueError(f'invalid value for special token type {typ}: {tid}')
         if self.n_vocab is None or tid < self.n_vocab:
             if typ in self.special_token_ids:
                 return

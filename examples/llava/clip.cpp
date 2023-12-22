@@ -330,12 +330,6 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
                               ggml_repeat(ctx0, model.pre_ln_b, embeddings));
     }
 
-    struct ggml_tensor * KQ_scale = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-    ggml_allocr_alloc(ctx->alloc, KQ_scale);
-    if (!ggml_allocr_is_measure(ctx->alloc)) {
-        ggml_set_f32(KQ_scale, 1.0f / sqrt((float)d_head));
-    }
-
     // loop over layers
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
@@ -356,7 +350,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
             struct ggml_tensor * Q =
                 ggml_add(ctx0, ggml_repeat(ctx0, model.layers[il].q_b, cur), ggml_mul_mat(ctx0, model.layers[il].q_w, cur));
 
-            Q = ggml_scale_inplace(ctx0, Q, KQ_scale);
+            Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
             Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_positions, batch_size);
             Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
             Q = ggml_reshape_3d(ctx0, Q, d_head, num_positions, n_head * batch_size);
@@ -514,7 +508,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             ctx_size += padded_size;
             if (verbosity >= 3) {
                 printf("%s: tensor[%d]: n_dims = %d, name = %s, tensor_size=%zu, padded_size=%zu, offset=%zu\n", __func__, i,
-                       cur->n_dims, cur->name, tensor_size, padded_size, offset);
+                       ggml_n_dims(cur), cur->name, tensor_size, padded_size, offset);
             }
         }
     }
@@ -962,7 +956,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
         }
 
         // quantize only 2D tensors
-        quantize &= (cur->n_dims == 2);
+        quantize &= (ggml_n_dims(cur) == 2);
 
         if (quantize) {
             new_type = type;
@@ -1035,7 +1029,7 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
             fout.put(0);
         }
 
-        printf("%s: n_dims = %d | quantize=%d | size = %f MB -> %f MB\n", name.c_str(), cur->n_dims, quantize,
+        printf("%s: n_dims = %d | quantize=%d | size = %f MB -> %f MB\n", name.c_str(), ggml_n_dims(cur), quantize,
                orig_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
     }
 

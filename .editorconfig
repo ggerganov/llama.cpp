@@ -23,3 +23,6 @@ insert_final_newline = unset
 
 [examples/server/public/*]
 indent_size = 2
+
+[examples/llama.swiftui/llama.swiftui.xcodeproj/*]
+indent_style = tab
