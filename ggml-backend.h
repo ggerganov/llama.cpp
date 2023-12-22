@@ -21,6 +21,7 @@ extern "C" {
     GGML_API size_t ggml_backend_buft_get_alignment (ggml_backend_buffer_type_t buft);
     GGML_API size_t ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor);
     GGML_API bool ggml_backend_buft_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend);
+    GGML_API bool ggml_backend_buft_is_host         (ggml_backend_buffer_type_t buft);
 
     // buffer
     GGML_API void   ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
@@ -29,6 +30,8 @@ extern "C" {
     GGML_API void   ggml_backend_buffer_init_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
     GGML_API size_t ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
     GGML_API size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+    GGML_API void   ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
+    GGML_API bool   ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
     GGML_API ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer);
 
     //
@@ -75,6 +78,10 @@ extern "C" {
     GGML_API ggml_backend_buffer_t ggml_backend_cpu_buffer_from_ptr(void * ptr, size_t size);
 
     GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type(void);
+
+#ifdef GGML_USE_CPU_HBM
+    GGML_API ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void);
+#endif
 
     //
     // Backend registry
