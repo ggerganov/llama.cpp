@@ -1,4 +1,11 @@
-numpy==1.24.4
-sentencepiece==0.1.98
-transformers>=4.34.0
-gguf>=0.1.0
+# These requirements include all dependencies for all top-level python scripts
+# for llama.cpp. Avoid adding packages here directly.
+#
+# Package versions must stay compatible across all top-level python scripts.
+#
+
+-r requirements-convert.txt
+
+-r requirements-convert-hf-to-gguf.txt
+-r requirements-convert-lora-to-ggml.txt
+-r requirements-convert-persimmon-to-gguf.txt
