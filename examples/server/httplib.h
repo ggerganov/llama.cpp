@@ -192,6 +192,11 @@ using socket_t = SOCKET;
 #include <sys/un.h>
 #include <unistd.h>
 
+#if defined(_POSIX_VERSION) && _POSIX_VERSION >= 200112L
+#include <strings.h>
+#endif
+
+
 using socket_t = int;
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET (-1)
