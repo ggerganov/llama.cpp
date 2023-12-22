@@ -881,19 +881,19 @@ int main(int argc, const char ** argv) {
         // scale
         {
             srand(seed);
-            const int nargs = 2;
+            const int nargs = 1;
 
             int64_t ne2[4];
             ne2[0] = 1;
 
             for (int ndims = 1; ndims <= 2; ++ndims) {
-                x[1] = get_random_tensor_f32(ctx0, 1, ne2, -1.0f, 1.0f);
                 x[0] = get_random_tensor_f32(ctx0, ndims, ne, -1.0f, 1.0f);
 
-                ggml_set_param(ctx0, x[0]);
-                ggml_set_param(ctx0, x[1]);
+                const float s = -1.0f + 2.0f*frand();
 
-                struct ggml_tensor * f = ggml_sum(ctx0, ggml_scale(ctx0, x[0], x[1]));
+                ggml_set_param(ctx0, x[0]);
+
+                struct ggml_tensor * f = ggml_sum(ctx0, ggml_scale(ctx0, x[0], s));
 
                 check_gradient("scale", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
             }
@@ -1395,7 +1395,7 @@ int main(int argc, const char ** argv) {
                                                 ggml_add1(ctx0,
                                                     ggml_scale(ctx0,
                                                         ggml_soft_max(ctx0, x[0]),
-                                                        ggml_new_f32(ctx0, 1.0f - eps)),
+                                                        1.0f - eps),
                                                     ggml_new_f32(ctx0, eps))));
 
                 check_gradient("softmax", ctx0, x, f, ndims, nargs, 1e-3f, 2e-1f, INFINITY);
