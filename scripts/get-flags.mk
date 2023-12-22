@@ -32,4 +32,7 @@ else
 	ifeq ($(shell expr $(GF_CC_VER) \>= 070100), 1)
 		GF_CXXFLAGS += -Wno-format-truncation
 	endif
+	ifeq ($(shell expr $(GF_CC_VER) \>= 080100), 1)
+		GF_CXXFLAGS += -Wextra-semi
+	endif
 endif
