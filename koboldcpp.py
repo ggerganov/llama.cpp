@@ -408,6 +408,7 @@ totalgens = 0
 currentusergenkey = "" #store a special key so polled streaming works even in multiuser
 args = None #global args
 gui_layers_untouched = True
+runmode_untouched = True
 preloaded_story = None
 sslvalid = False
 
@@ -1288,12 +1289,13 @@ def show_new_gui():
                     MaxMemory[0] = max(int(FetchedCUdeviceMem[idx])*1024*1024,MaxMemory[0])
 
         #autopick cublas if suitable, requires at least 3.5GB VRAM to auto pick
-        global exitcounter
-        if exitcounter < 100 and MaxMemory[0]>3500000000 and CUDevicesNames[0]!="" and ("Use CuBLAS" in runopts or "Use hipBLAS (ROCM)" in runopts) and runopts_var.get()=="Use OpenBLAS":
+        global exitcounter, runmode_untouched
+        #we do not want to autoselect hip/cublas if the user has already changed their desired backend!
+        if exitcounter < 100 and MaxMemory[0]>3500000000 and (("Use CuBLAS" in runopts and CUDevicesNames[0]!="") or "Use hipBLAS (ROCm)" in runopts) and (any(CUDevicesNames) or any(CLDevicesNames)) and runmode_untouched:
             if "Use CuBLAS" in runopts:
                 runopts_var.set("Use CuBLAS")
-            elif "Use hipBLAS (ROCM)" in runopts:
-                runopts_var.set("Use hipBLAS (ROCM)")
+            elif "Use hipBLAS (ROCm)" in runopts:
+                runopts_var.set("Use hipBLAS (ROCm)")
 
         changed_gpu_choice_var()
         return
@@ -1394,6 +1396,8 @@ def show_new_gui():
     gpulayers_var.trace("w", changed_gpulayers)
 
     def changerunmode(a,b,c):
+        global runmode_untouched
+        runmode_untouched = False
         index = runopts_var.get()
         if index == "Use CLBlast" or index == "CLBlast NoAVX2 (Old CPU)" or index == "Use CuBLAS" or index == "Use hipBLAS (ROCm)":
             quick_gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
@@ -1525,6 +1529,8 @@ def show_new_gui():
 
     runopts_var.trace('w', changerunmode)
     changerunmode(1,1,1)
+    global runmode_untouched
+    runmode_untouched = True
 
     # Tokens Tab
     tokens_tab = tabcontent["Tokens"]
@@ -1704,7 +1710,7 @@ def show_new_gui():
                 if cublas_option:
                     runopts_var.set(cublas_option)
                 elif hipblas_option:
-                    runopts_var.set(cublas_option)
+                    runopts_var.set(hipblas_option)
                 lowvram_var.set(1 if "lowvram" in dict["usecublas"] else 0)
                 mmq_var.set(1 if "mmq" in dict["usecublas"] else 0)
                 gpu_choice_var.set("All")
