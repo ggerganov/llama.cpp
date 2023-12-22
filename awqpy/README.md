@@ -23,6 +23,7 @@
 - [Install](##Install)
 - [Convert](##Convert)
 - [Quantize](##Quantize)
+- [Test](##Test)
 - [Benchmark](##Benchmark)
 - [Results](##Results)
 
@@ -37,21 +38,35 @@ git clone https://huggingface.co/datasets/mit-han-lab/awq-model-zoo awq_cache
 ```
 
 ## Convert
-Example for llama 7b model
+Example for llama model
 ```bash
-# For llama7b and llama27b models
+# For llama7b and llama2 models
 python convert.py models/llama-7b/ --awq-path awq_cache/llama-7b-w4-g128.pt --outfile models/llama_7b_fp16.gguf
+# For mistral and mpt models
+python convert-hf-to-gguf.py models/llama-7b/ --awq-path awq_cache/llama-7b-w4-g128.pt --outfile models/llama_7b_fp16.gguf
 ```
 
 ## Quantize
 ```bash
+# For now I only benchmark and confirm the results on q4_0, q4_1 and q2_k types.
 ./quantize models/llama_7b_fp16.gguf models/llama_7b_q4_0.gguf q4_0
+```
+
+## Test
+```bash
+# For llama and llama2, and mistral models.
+./build/bin/main -m models/llama_7b_q4_0.gguf -n 128 --prompt "Once upon a time"
+# For mpt models.
+./build/bin/main -m models/llama_7b_q4_0.gguf -awq -n 128 --prompt "Once upon a time"
 ```
 
 ## Benchmark
 The perplexity measurements in table above are done against the `wikitext2` test dataset (https://paperswithcode.com/dataset/wikitext-2), with context length of 512.
 ```bash
+# For llama and llama2, and mistral models.
 ./perplexity -m models/llama_7b_q4_0.gguf -f datasets/wikitext-2-raw/wiki.test.raw
+# For mpt models.
+./perplexity -m models/mpt_7b_q4_0.gguf -awq -f datasets/wikitext-2-raw/wiki.test.raw
 ```
 
 ## Results
