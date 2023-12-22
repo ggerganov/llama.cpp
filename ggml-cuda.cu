@@ -8843,7 +8843,7 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
         const cudaMemcpyKind src1_kind = src1->backend == GGML_BACKEND_CPU ?
             cudaMemcpyHostToDevice : cudaMemcpyDeviceToDevice;
         const cudaMemcpyKind dst_kind  =  dst->backend == GGML_BACKEND_CPU ?
-            cudaMemcpyHostToDevice : cudaMemcpyDeviceToDevice;
+            cudaMemcpyDeviceToHost : cudaMemcpyDeviceToDevice;
 
         for (int32_t row_id = 0; row_id < n_as; ++row_id) {
             const struct ggml_tensor * src0_row = dst->src[row_id + 2];
