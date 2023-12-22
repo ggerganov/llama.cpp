@@ -244,7 +244,7 @@ static void ggml_openshmem_tensor_recv(struct ggml_openshmem_context * ctx, stru
     );
     (*my_recv_signal) = 0;
 
-    memcpy(src_symmetric_comm_offset, &total_loop_count, sizeof(int64_t));
+    memcpy(&total_loop_count, src_symmetric_comm_offset, sizeof(int64_t));
     shmem_uint8_put_signal(
         src_symmetric_comm_structure,
         src_symmetric_comm_structure,
