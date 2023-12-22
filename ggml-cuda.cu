@@ -84,7 +84,8 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
-#if CUDA_VERSION < 1100
+// CUDA 10.2 does not have these macro definitions.
+#ifndef CUBLAS_TF32_TENSOR_OP_MATH
 #define CUBLAS_TF32_TENSOR_OP_MATH CUBLAS_TENSOR_OP_MATH
 #define CUBLAS_COMPUTE_16F CUDA_R_16F
 #define CUBLAS_COMPUTE_32F CUDA_R_32F
