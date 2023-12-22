@@ -8,6 +8,7 @@
 #include <limits>
 #include <stdint.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <vector>
 
 
@@ -7999,6 +8000,9 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
             }
         }
     }
+
+    usleep(100000); // 0.1 s
+
 #endif // NDEBUG
 
     peer_access_enabled = enable_peer_access;
