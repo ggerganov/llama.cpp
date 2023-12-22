@@ -9026,8 +9026,8 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
             }
         }
 
-        ggml_cuda_pool_free(src1_contiguous, as_src1);
         ggml_cuda_pool_free(dst_contiguous,  as_dst);
+        ggml_cuda_pool_free(src1_contiguous, as_src1);
     }
 
     if (dst->backend == GGML_BACKEND_CPU) {
