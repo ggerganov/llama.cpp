@@ -282,8 +282,17 @@ endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
+	# Nvidia Jetson
 	MK_CFLAGS   += -mcpu=native
 	MK_CXXFLAGS += -mcpu=native
+	JETSON_RELEASE_INFO = $(shell jetson_release)
+	ifdef JETSON_RELEASE_INFO
+		ifneq ($(filter TX2%,$(JETSON_RELEASE_INFO)),)
+			JETSON_EOL_MODULE_DETECT = 1
+			CC = aarch64-unknown-linux-gnu-gcc
+			cxx = aarch64-unknown-linux-gnu-g++
+		endif
+	endif
 endif
 
 ifneq ($(filter armv6%,$(UNAME_M)),)
@@ -357,10 +366,13 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
+	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include -I/usr/local/cuda/targets/aarch64-linux/include
+	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib
 	OBJS         += ggml-cuda.o
-	MK_NVCCFLAGS  = --forward-unknown-to-host-compiler -use_fast_math
+	MK_NVCCFLAGS  = -use_fast_math
+ifndef JETSON_EOL_MODULE_DETECT
+	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
+endif # JETSON_EOL_MODULE_DETECT
 
 ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
@@ -417,7 +429,11 @@ ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+ifdef JETSON_EOL_MODULE_DETECT
+	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+else
 	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+endif # JETSON_EOL_MODULE_DETECT
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
