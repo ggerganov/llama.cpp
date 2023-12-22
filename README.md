@@ -403,7 +403,7 @@ Building the program with BLAS support may lead to some performance improvements
       cmake --build . --config Release
       ```
 
-  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that does not support avx512 and avx512_vnni.
+  Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni.
 
   Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
