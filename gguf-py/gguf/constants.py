@@ -120,7 +120,6 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN        = auto()
     FFN_UP          = auto()
     FFN_ACT         = auto()
-    FFN_NORM        = auto()
     FFN_GATE_EXP    = auto()
     FFN_DOWN_EXP    = auto()
     FFN_UP_EXP      = auto()
