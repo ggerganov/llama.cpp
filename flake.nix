@@ -1,139 +1,93 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
   };
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        name = "llama.cpp";
-        src = ./.;
-        meta.mainProgram = "llama";
-        inherit (pkgs.stdenv) isAarch32 isAarch64 isDarwin;
-        buildInputs = with pkgs; [ openmpi ];
-        osSpecific = with pkgs; buildInputs ++ (
-          if isAarch64 && isDarwin then
-            with pkgs.darwin.apple_sdk_11_0.frameworks; [
-              Accelerate
-              MetalKit
-            ]
-          else if isAarch32 && isDarwin then
-            with pkgs.darwin.apple_sdk.frameworks; [
-              Accelerate
-              CoreGraphics
-              CoreVideo
-            ]
-          else if isDarwin then
-            with pkgs.darwin.apple_sdk.frameworks; [
-              Accelerate
-              CoreGraphics
-              CoreVideo
-            ]
-          else
-            with pkgs; [ openblas ]
-        );
-        pkgs = import nixpkgs { inherit system; };
-        nativeBuildInputs = with pkgs; [ cmake ninja pkg-config ];
-        cudatoolkit_joined = with pkgs; symlinkJoin {
-          # HACK(Green-Sky): nix currently has issues with cmake findcudatoolkit
-          # see https://github.com/NixOS/nixpkgs/issues/224291
-          # copied from jaxlib
-          name = "${cudaPackages.cudatoolkit.name}-merged";
-          paths = [
-            cudaPackages.cudatoolkit.lib
-            cudaPackages.cudatoolkit.out
-          ] ++ lib.optionals (lib.versionOlder cudaPackages.cudatoolkit.version "11") [
-            # for some reason some of the required libs are in the targets/x86_64-linux
-            # directory; not sure why but this works around it
-            "${cudaPackages.cudatoolkit}/targets/${system}"
+
+  outputs =
+    { self, nixpkgs }:
+
+    let
+      systems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-darwin" # x86_64-darwin isn't tested (and likely isn't relevant)
+        "x86_64-linux"
+      ];
+      eachSystem = f: nixpkgs.lib.genAttrs systems (system: f system);
+    in
+
+    {
+      # These define the various ways to build the llama.cpp project.
+      # Integrate them into your flake.nix configuration by adding this overlay to nixpkgs.overlays.
+      overlays.default = import ./.devops/nix/overlay.nix;
+
+      # These use the package definition from `./.devops/nix/package.nix`.
+      # There's one per backend that llama-cpp uses. Add more as needed!
+      packages = eachSystem (
+        system:
+        let
+          defaultConfig = {
+            inherit system;
+            overlays = [ self.overlays.default ];
+          };
+          pkgs = import nixpkgs defaultConfig;
+
+          # Let's not make a big deal about getting the CUDA bits.
+          cudaConfig = defaultConfig // {
+            config.cudaSupport = true;
+            config.allowUnfreePredicate =
+              p:
+              builtins.all
+                (
+                  license:
+                  license.free
+                  || builtins.elem license.shortName [
+                    "CUDA EULA"
+                    "cuDNN EULA"
+                  ]
+                )
+                (p.meta.licenses or [ p.meta.license ]);
+          };
+          pkgsCuda = import nixpkgs cudaConfig;
+
+          # Let's make sure to turn on ROCm support across the whole package ecosystem.
+          rocmConfig = defaultConfig // {
+            config.rocmSupport = true;
+          };
+          pkgsRocm = import nixpkgs rocmConfig;
+        in
+        {
+          default = pkgs.llama-cpp;
+          opencl = pkgs.llama-cpp.override { useOpenCL = true; };
+          cuda = pkgsCuda.llama-cpp;
+          rocm = pkgsRocm.llama-cpp;
+        }
+      );
+
+      # These use the definition of llama-cpp from `./.devops/nix/package.nix`
+      # and expose various binaries as apps with `nix run .#app-name`.
+      # Note that none of these apps use anything other than the default backend.
+      apps = eachSystem (
+        system:
+        import ./.devops/nix/apps.nix {
+          package = self.packages.${system}.default;
+          binaries = [
+            "llama"
+            "llama-embedding"
+            "llama-server"
+            "quantize"
+            "train-text-from-scratch"
           ];
-        };
-        llama-python =
-          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece ]);
-        # TODO(Green-Sky): find a better way to opt-into the heavy ml python runtime
-        llama-python-extra =
-          pkgs.python3.withPackages (ps: with ps; [ numpy sentencepiece torchWithoutCuda transformers ]);
-        postPatch = ''
-          substituteInPlace ./ggml-metal.m \
-            --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-          substituteInPlace ./*.py --replace '/usr/bin/env python' '${llama-python}/bin/python'
-        '';
-        postInstall = ''
-          mv $out/bin/main $out/bin/llama
-          mv $out/bin/server $out/bin/llama-server
-          mkdir -p $out/include
-          cp ${src}/llama.h $out/include/
-        '';
-        cmakeFlags = [ "-DLLAMA_NATIVE=OFF" "-DLLAMA_BUILD_SERVER=ON" "-DBUILD_SHARED_LIBS=ON" "-DCMAKE_SKIP_BUILD_RPATH=ON" ];
-      in
-      {
-        packages.default = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = osSpecific;
-          cmakeFlags = cmakeFlags
-            ++ (if isAarch64 && isDarwin then [
-            "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
-            "-DLLAMA_METAL=ON"
-          ] else [
-            "-DLLAMA_BLAS=ON"
-            "-DLLAMA_BLAS_VENDOR=OpenBLAS"
-          ]);
-        };
-        packages.opencl = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs; buildInputs ++ [ clblast ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_CLBLAST=ON"
-          ];
-        };
-        packages.cuda = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs; buildInputs ++ [ cudatoolkit_joined ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_CUBLAS=ON"
-          ];
-        };
-        packages.rocm = pkgs.stdenv.mkDerivation {
-          inherit name src meta postPatch nativeBuildInputs postInstall;
-          buildInputs = with pkgs.rocmPackages; buildInputs ++ [ clr hipblas rocblas ];
-          cmakeFlags = cmakeFlags ++ [
-            "-DLLAMA_HIPBLAS=1"
-            "-DCMAKE_C_COMPILER=hipcc"
-            "-DCMAKE_CXX_COMPILER=hipcc"
-            # Build all targets supported by rocBLAS. When updating search for TARGET_LIST_ROCM
-            # in github.com/ROCmSoftwarePlatform/rocBLAS/blob/develop/CMakeLists.txt
-            # and select the line that matches the current nixpkgs version of rocBLAS.
-            "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
-          ];
-        };
-        apps.llama-server = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/llama-server";
-        };
-        apps.llama-embedding = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/embedding";
-        };
-        apps.llama = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/llama";
-        };
-        apps.quantize = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/quantize";
-        };
-        apps.train-text-from-scratch = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/train-text-from-scratch";
-        };
-        apps.default = self.apps.${system}.llama;
-        devShells.default = pkgs.mkShell {
-          buildInputs = [ llama-python ];
-          packages = nativeBuildInputs ++ osSpecific;
-        };
-        devShells.extra = pkgs.mkShell {
-          buildInputs = [ llama-python-extra ];
-          packages = nativeBuildInputs ++ osSpecific;
-        };
-      });
+        }
+      );
+
+      # These expose a build environment for either a "default" or an "extra" set of dependencies.
+      devShells = eachSystem (
+        system:
+        import ./.devops/nix/devshells.nix {
+          concatMapAttrs = nixpkgs.lib.concatMapAttrs;
+          packages = self.packages.${system};
+        }
+      );
+    };
 }
