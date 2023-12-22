@@ -8403,7 +8403,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
     half * dst_f16 = nullptr;
     char * dst_t   = nullptr;
 
-    cudaDataType_t cu_compute_type = CUBLAS_COMPUTE_16F;
+    cublasComputeType_t cu_compute_type = CUBLAS_COMPUTE_16F;
     cudaDataType_t      cu_data_type    = CUDA_R_16F;
 
     // dst strides
