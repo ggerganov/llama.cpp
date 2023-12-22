@@ -5739,6 +5739,7 @@ struct llm_build_context {
 
         return gf;
     }
+
     struct ggml_cgraph * build_gpt2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 

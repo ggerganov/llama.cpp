@@ -988,6 +988,7 @@ class QwenModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
+
 class GPT2Model(Model):
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
@@ -1002,7 +1003,7 @@ class GPT2Model(Model):
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        # import pdb; pdb.set_trace()
+
         for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq", ".attn.bias")):
@@ -1048,6 +1049,7 @@ class GPT2Model(Model):
             if new_name == "token_embd.weight":
                 print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
                 self.gguf_writer.add_tensor("output.weight", data)
+
 
 class Phi2Model(Model):
     def set_gguf_parameters(self):
