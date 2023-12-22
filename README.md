@@ -384,8 +384,7 @@ Building the program with BLAS support may lead to some performance improvements
 
 - #### Intel oneMKL
   - Using manual oneAPI installation:
-      By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
-
+    By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
       mkdir build
       cd build
@@ -395,7 +394,7 @@ Building the program with BLAS support may lead to some performance improvements
       ```
 
   - Using oneAPI docker image:
-      If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI container](https://hub.docker.com/r/intel/oneapi-runtime)
+    If you do not want to source the environment vars and install oneAPI manually, you can also build the code using intel docker container: [oneAPI container](https://hub.docker.com/r/intel/oneapi-runtime)
 
       ```bash
       mkdir build
