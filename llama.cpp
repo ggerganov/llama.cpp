@@ -1044,7 +1044,7 @@ struct llama_mlock {
         }
     }
 
-#ifdef _POSIX_MEMLOCK_RANGE
+#if defined(_POSIX_MEMLOCK_RANGE) && defined(RLIMIT_MEMLOCK)
     static constexpr bool SUPPORTED = true;
 
     static size_t lock_granularity() {
