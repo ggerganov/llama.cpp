@@ -110,6 +110,15 @@
           type = "app";
           program = "${self.packages.${system}.default}/bin/llama-server";
         };
+        apps.llama-server-openai-proxy = {
+          type = "app";
+          program = "${
+            (let pythonWithPkgs = pkgs.python3.withPackages (ps: with ps; [ flask requests ]);
+             in pkgs.writeShellScriptBin "run-openai-proxy" ''
+                  ${pythonWithPkgs}/bin/python3 ${self}/examples/server/api_like_OAI.py
+             '')
+          }/bin/run-openai-proxy";
+        };
         apps.llama-embedding = {
           type = "app";
           program = "${self.packages.${system}.default}/bin/embedding";
