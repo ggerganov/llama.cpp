@@ -6564,18 +6564,16 @@ struct scoped_spin_lock {
 
 static std::atomic_flag g_cuda_pool_lock = ATOMIC_FLAG_INIT;
 
-#if 0
-#define DEBUG_CUDA_MALLOC
+// #define DEBUG_CUDA_MALLOC
 struct cuda_buffer {
     void * ptr = nullptr;
     size_t size = 0;
 };
 
 static cuda_buffer g_cuda_buffer_pool[GGML_CUDA_MAX_DEVICES][MAX_CUDA_BUFFERS];
-
 static size_t g_cuda_pool_size[GGML_CUDA_MAX_DEVICES] = {0};
 
-static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+static void * ggml_cuda_pool_malloc_leg(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
@@ -6629,7 +6627,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     return ptr;
 }
 
-static void ggml_cuda_pool_free(void * ptr, size_t size) {
+static void ggml_cuda_pool_free_leg(void * ptr, size_t size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
@@ -6646,19 +6644,15 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
     CUDA_CHECK(cudaFree(ptr));
     g_cuda_pool_size[id] -= size;
 }
-#else
 
+#if !defined(GGML_USE_HIPBLAS)
+// pool with virtual memory
 static std::vector<CUmemGenericAllocationHandle> g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
 static CUdeviceptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
-static size_t g_cuda_pool_size[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
+static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
 
-static const size_t CUDA_POOL_MAX_SIZE = 1ull << 36; // 64 GB
-
-//#define DEBUG_CUDA_MALLOC
-
-#define ggml_cuda_pool_malloc(size, actual_size) ggml_cuda_pool_malloc_(size, actual_size, #size " " #actual_size)
-static void * ggml_cuda_pool_malloc_(size_t size, size_t * actual_size, const char * call) {
+static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
@@ -6681,14 +6675,14 @@ static void * ggml_cuda_pool_malloc_(size_t size, size_t * actual_size, const ch
         // round up to the nearest granularity
         reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
 
-        GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_MAX_SIZE);
+        GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_VMM_MAX_SIZE);
 
         CUmemGenericAllocationHandle handle;
         CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
 
         // reserve virtual address space (if not already reserved)
         if (g_cuda_pool_addr[id] == 0) {
-            CU_CHECK(cuMemAddressReserve(&g_cuda_pool_addr[id], CUDA_POOL_MAX_SIZE, 0, 0, 0));
+            CU_CHECK(cuMemAddressReserve(&g_cuda_pool_addr[id], CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0));
         }
 
         // map at the end of the pool
@@ -6705,9 +6699,9 @@ static void * ggml_cuda_pool_malloc_(size_t size, size_t * actual_size, const ch
         g_cuda_pool_handles[id].push_back(handle);
         g_cuda_pool_size[id] += reserve_size;
 
-        printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB) [%s]\n",
-               id, (unsigned long long) (g_cuda_pool_size[id]/1024/1024),
-               (unsigned long long) (reserve_size/1024/1024), call);
+        //printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
+        //       id, (unsigned long long) (g_cuda_pool_size[id]/1024/1024),
+        //       (unsigned long long) (reserve_size/1024/1024));
     }
 
     GGML_ASSERT(g_cuda_pool_addr[id] != 0);
@@ -6717,32 +6711,51 @@ static void * ggml_cuda_pool_malloc_(size_t size, size_t * actual_size, const ch
     g_cuda_pool_used[id] += size;
 
 #ifdef DEBUG_CUDA_MALLOC
-    printf("cuda pool[%d]: allocated %llu bytes at %llx [%s]\n", id, (unsigned long long) size, ptr, call);
+    printf("cuda pool[%d]: allocated %llu bytes at %llx [%s]\n", id, (unsigned long long) size, ptr);
 #endif
 
     return ptr;
-
-    GGML_UNUSED(call);
 }
 
-#define ggml_cuda_pool_free(ptr, size) ggml_cuda_pool_free_(ptr, size, #ptr " " #size)
-static void ggml_cuda_pool_free_(void * ptr, size_t size, const char * call) {
+static void ggml_cuda_pool_free_vmm(void * ptr, size_t size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
 #ifdef DEBUG_CUDA_MALLOC
-    printf("cuda pool[%d]: free %llu bytes at %llx [%s]\n", id, (unsigned long long) size, ptr, call);
+    printf("cuda pool[%d]: freed %llu bytes at %llx\n", id, (unsigned long long) size, ptr);
 #endif
 
     g_cuda_pool_used[id] -= size;
 
     // all deallocations must be in reverse order of the allocations
     GGML_ASSERT(ptr == (void *) (g_cuda_pool_addr[id] + g_cuda_pool_used[id]));
-
-    GGML_UNUSED(call);
 }
 
+static bool g_device_vmm[GGML_CUDA_MAX_DEVICES] = {false};
+
+static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
+    int id;
+    CUDA_CHECK(cudaGetDevice(&id));
+    if (g_device_vmm[id]) {
+        return ggml_cuda_pool_malloc_vmm(size, actual_size);
+    } else {
+        return ggml_cuda_pool_malloc_leg(size, actual_size);
+    }
+}
+
+static void ggml_cuda_pool_free(void * ptr, size_t size) {
+    int id;
+    CUDA_CHECK(cudaGetDevice(&id));
+    if (g_device_vmm[id]) {
+        ggml_cuda_pool_free_vmm(ptr, size);
+    } else {
+        ggml_cuda_pool_free_leg(ptr, size);
+    }
+}
+#else
+#define ggml_cuda_pool_malloc ggml_cuda_pool_malloc_leg
+#define ggml_cuda_pool_free ggml_cuda_pool_free_leg
 #endif
 
 static bool g_cublas_loaded = false;
@@ -6783,9 +6796,17 @@ void ggml_init_cublas() {
 #endif
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
         for (int id = 0; id < g_device_count; ++id) {
+            int deviceSupportsVmm = 0;
+#if !defined(GGML_USE_HIPBLAS)
+            CUdevice device;
+            CU_CHECK(cuDeviceGet(&device, id));
+            CU_CHECK(cuDeviceGetAttribute(&deviceSupportsVmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
+#endif
+            g_device_vmm[id] = !!deviceSupportsVmm;
+
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id, prop.name, prop.major, prop.minor);
+            fprintf(stderr, "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id, prop.name, prop.major, prop.minor, g_device_vmm[id] ? "yes" : "no");
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
