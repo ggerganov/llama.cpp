@@ -36,6 +36,9 @@ typedef struct llama_sampling_params {
     float       cfg_scale     = 1.f; // how strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+
+    std::vector<llama_token> penalty_prompt_tokens;
+    bool                     use_penalty_prompt_tokens = false;
 } llama_sampling_params;
 
 // general sampler context

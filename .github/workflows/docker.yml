@@ -98,5 +98,5 @@ jobs:
           context: .
           push: ${{ github.event_name == 'push' }}
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }}" , "ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
+          tags: "ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
           file: ${{ matrix.config.dockerfile }}
