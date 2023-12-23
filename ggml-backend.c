@@ -297,7 +297,7 @@ static void ggml_backend_registry_init(void) {
 void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
     GGML_ASSERT(ggml_backend_registry_count < GGML_MAX_BACKENDS_REG);
 
-    int id = ggml_backend_registry_count;
+    size_t id = ggml_backend_registry_count;
 
     ggml_backend_registry[id] = (struct ggml_backend_reg) {
         /* .name                = */ {0},
