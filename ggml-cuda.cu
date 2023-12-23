@@ -6796,17 +6796,18 @@ void ggml_init_cublas() {
 #endif
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
         for (int id = 0; id < g_device_count; ++id) {
-            int deviceSupportsVmm = 0;
+            int device_vmm = 0;
+
 #if !defined(GGML_USE_HIPBLAS)
             CUdevice device;
             CU_CHECK(cuDeviceGet(&device, id));
-            CU_CHECK(cuDeviceGetAttribute(&deviceSupportsVmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
+            CU_CHECK(cuDeviceGetAttribute(&device_vmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
+            g_device_vmm[id] = !!device_vmm;
 #endif
-            g_device_vmm[id] = !!deviceSupportsVmm;
 
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
-            fprintf(stderr, "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id, prop.name, prop.major, prop.minor, g_device_vmm[id] ? "yes" : "no");
+            fprintf(stderr, "  Device %d: %s, compute capability %d.%d, VMM: %s\n", id, prop.name, prop.major, prop.minor, device_vmm ? "yes" : "no");
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
