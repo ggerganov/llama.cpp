@@ -135,18 +135,20 @@ check_convert_script() {
     python3 -m venv "$venv"
 
     check_requirements "$venv" "$reqs"
-    set +e
-    (
+
+    # Because we mask the return value of the subshell,
+    # we don't need to use set +e/-e.
+    # shellcheck disable=SC2155
+    local py_err=$(
         # shellcheck source=/dev/null
         source "$venv/bin/activate"
-        py_err="$workdir/$pyname.out"
-        python "$py" 2> "$py_err"
-        >&2 cat "$py_err"
-        grep -e 'ModuleNotFoundError' "$py_err"
+        python "$py" 2>&1
     )
-    set -e
+
     # shellcheck disable=SC2181
-    (( $? )) && fatal "$py: some imports not declared in $reqs"
+    if grep -Fe 'ModuleNotFoundError' <<< "$py_err"; then
+        fatal "$py: some imports not declared in $reqs"
+    fi
     info "$py: imports OK"
 }
 
@@ -162,7 +164,7 @@ for req in "$reqs_dir"/*; do
     # Filters out the ignore string
     req_no_ignore_eq_eq="$(grep -vF "$ignore_eq_eq" "$req")"
     if grep -Fe '==' <<< "$req_no_ignore_eq_eq" ; then
-        fatal "Avoid pinning exact package versions. Use '=~' instead.\nYou can suppress this error by appending the following to the line: \n\t# $ignore_eq_eq"
+        fatal "Avoid pinning exact package versions. Use '~=' instead.\nYou can suppress this error by appending the following to the line: \n\t# $ignore_eq_eq"
     fi
 done
 
