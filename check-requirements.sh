@@ -150,10 +150,19 @@ check_convert_script() {
     info "$py: imports OK"
 }
 
-# Check that all sub-requirements are added to top-level requirements.txt
+readonly ignore_eq_eq='check_requirements: ignore "=="'
+
 for req in "$reqs_dir"/*; do
+    # Check that all sub-requirements are added to top-level requirements.txt
     if ! grep -qFe "$req" ./requirements.txt; then
         fatal "$req needs to be added to ./requirements.txt"
+    fi
+
+    # Make sure exact release versions aren't being pinned in the requirements
+    # Filters out the ignore string
+    req_no_ignore_eq_eq="$(grep -vF "$ignore_eq_eq" "$req")"
+    if grep -Fe '==' <<< "$req_no_ignore_eq_eq" ; then
+        fatal "Avoid pinning exact package versions. Use '=~' instead.\nYou can suppress this error by appending the following to the line: \n\t# $ignore_eq_eq"
     fi
 done
 
