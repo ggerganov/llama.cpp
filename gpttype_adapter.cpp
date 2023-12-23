@@ -398,7 +398,7 @@ void sample_rep_pen(int n_ctx, int rep_pen_range, float rep_pen, float presence_
     llama_token_data_array * candidates = candidates_p;
     float penalty = rep_pen;
 
-    if (last_tokens_size == 0 || penalty == 1.0f) {
+    if (last_tokens_size == 0 || (penalty == 1.0f && presence_penalty==0)) {
         return;
     }
 

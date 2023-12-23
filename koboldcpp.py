@@ -444,7 +444,7 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
                 genparams["max_length"] = genparams.get('max_tokens', 100)
                 presence_penalty = genparams.get('presence_penalty', genparams.get('frequency_penalty', 0.0))
                 genparams["presence_penalty"] = presence_penalty
-                if presence_penalty > 0:
+                if presence_penalty > 0 and (genparams.get('rep_pen', 0)==0):
                     genparams["rep_pen"] = 1.0
                 # openai allows either a string or a list as a stop sequence
                 if isinstance(genparams.get('stop',[]), list):
