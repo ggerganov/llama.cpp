@@ -32,6 +32,10 @@ log() {
     >&2 printf "$level: $format\n" "$@"
 }
 
+debug () {
+    log 'DEBUG' "$@"
+}
+
 info() {
     log 'INFO' "$@"
 }
@@ -72,11 +76,12 @@ else
 fi
 
 set -eu -o pipefail
-this="$(realpath "$0")"
-readonly this
+this="$(realpath "$0")"; readonly this
 cd "$(dirname "$this")"
 
 shellcheck "$this"
+
+readonly reqs_dir='./requirements'
 
 workdir=
 if [[ -n ${1+x} ]]; then
@@ -115,12 +120,13 @@ check_requirements() {
 
 check_convert_script() {
     assert_arg_count 1 "$@"
-    local py="$1"
-    local pyname="${py%.py}"
+    local py="$1"; shift                     # e.g. ./convert-hf-to-gguf.py
+    local pyname; pyname="$(basename "$py")" # e.g. convert-hf-to-gguf.py
+    pyname="${pyname%.py}"                   # e.g. convert-hf-to-gguf
 
     info "$py: beginning check"
 
-    local reqs="requirements-$pyname.txt"
+    local reqs="$reqs_dir/requirements-$pyname.txt"
     if [[ ! -r "$reqs" ]]; then
         fatal "$py missing requirements. Expected: $reqs"
     fi
@@ -144,13 +150,19 @@ check_convert_script() {
     info "$py: imports OK"
 }
 
-# Check requirements.txt
+# Check that all sub-requirements are added to top-level requirements.txt
+for req in "$reqs_dir"/*; do
+    if ! grep -qFe "$req" ./requirements.txt; then
+        fatal "$req needs to be added to ./requirements.txt"
+    fi
+done
+
 all_venv="$workdir/all-venv"
 python3 -m venv "$all_venv"
-check_requirements "$all_venv" 'requirements.txt'
+check_requirements "$all_venv" './requirements.txt'
 
-check_convert_script 'convert.py'
-for py in convert-*.py; do
+check_convert_script './convert.py'
+for py in ./convert-*.py;do
     check_convert_script "$py"
 done
 
