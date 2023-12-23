@@ -6669,10 +6669,10 @@ static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
         prop.location.id = id;
 
         // get the minimum allocation granularity for this device
-        size_t granularity = 0;
+        size_t granularity;
         CU_CHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
 
-        // round up to the nearest granularity
+        // round up to the next multiple of the granularity
         reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
 
         GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_VMM_MAX_SIZE);
