@@ -203,12 +203,14 @@ static llama_token llama_sampling_sample_impl(
     }
 
     // apply penalties
-    if (!prev.empty()) {
+    const auto& penalty_tokens = params.use_penalty_prompt_tokens ? params.penalty_prompt_tokens : prev;
+    const int penalty_tokens_used_size = std::min((int)penalty_tokens.size(), penalty_last_n);
+    if (penalty_tokens_used_size) {
         const float nl_logit = logits[llama_token_nl(llama_get_model(ctx_main))];
 
         llama_sample_repetition_penalties(ctx_main, &cur_p,
-                prev.data() + prev.size() - penalty_last_n,
-                penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+                penalty_tokens.data() + penalty_tokens.size() - penalty_tokens_used_size,
+                penalty_tokens_used_size, penalty_repeat, penalty_freq, penalty_present);
 
         if (!penalize_nl) {
             for (size_t idx = 0; idx < cur_p.size; idx++) {
