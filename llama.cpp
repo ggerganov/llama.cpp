@@ -1177,21 +1177,27 @@ static std::string llama_token_to_piece(const struct llama_context * ctx, llama_
 }
 
 static ggml_backend_buffer_type_t llama_default_buffer_type(int n_gpu_layers) {
+    ggml_backend_buffer_type_t buft = nullptr;
+
 #ifdef GGML_USE_METAL
     if (n_gpu_layers > 0) {
-        return ggml_backend_metal_buffer_type();
+        buft = ggml_backend_metal_buffer_type();
     }
 #elif defined(GGML_USE_CUBLAS) && defined(LLAMA_GGML_BACKEND_CUDA_TEST)
     if (n_gpu_layers > 0) {
-        return ggml_backend_cuda_buffer_type(0);
+        buft = ggml_backend_cuda_buffer_type(0);
     }
 #elif defined(GGML_USE_CUBLAS)
-    return ggml_backend_cuda_host_buffer_type();
+    buft = ggml_backend_cuda_host_buffer_type();
 #elif defined(GGML_USE_CPU_HBM)
-    return ggml_backend_cpu_hbm_buffer_type();
+    buft = ggml_backend_cpu_hbm_buffer_type();
 #endif
 
-    return ggml_backend_cpu_buffer_type();
+    if (buft == nullptr) {
+        buft = ggml_backend_cpu_buffer_type();
+    }
+
+    return buft;
 
     GGML_UNUSED(n_gpu_layers);
 }
