@@ -48,6 +48,7 @@ models-mnt
 /llama-bench
 /llava-cli
 /lookahead
+/lookup
 /main
 /metal
 /perplexity
@@ -101,3 +102,4 @@ poetry.toml
 /tests/test-tokenizer-1-llama
 /tests/test-tokenizer-1-bpe
 /tests/test-rope
+/tests/test-backend-ops

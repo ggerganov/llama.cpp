@@ -129,13 +129,13 @@ int main(int argc, char ** argv)  {
     const ggml_type qtype = GGML_TYPE_Q4_1;
 
     size_t ctx_size = 0;
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizez*ggml_type_sizef(GGML_TYPE_F32);
-    ctx_size += sizex*sizey*ggml_type_sizef(qtype);
-    ctx_size += sizex*sizey*ggml_type_sizef(qtype);
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
-    ctx_size += sizex*sizey*ggml_type_sizef(GGML_TYPE_F32); // BLAS
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizez);
+    ctx_size += ggml_row_size(qtype,         sizex*sizey);
+    ctx_size += ggml_row_size(qtype,         sizex*sizey);
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
+    ctx_size += ggml_row_size(GGML_TYPE_F32, sizex*sizey); // BLAS
     ctx_size += 1024*1024*16;
 
     printf("Allocating Memory of size %zi bytes, %zi MB\n",ctx_size, (ctx_size/1024/1024));

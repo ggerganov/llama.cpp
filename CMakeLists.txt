@@ -91,15 +91,16 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
+option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
-option(LLAMA_BUILD_TESTS                "llama: build tests"    ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_EXAMPLES             "llama: build examples" ${LLAMA_STANDALONE})
-option(LLAMA_BUILD_SERVER               "llama: build server example"                           ON)
+option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -291,7 +292,12 @@ if (LLAMA_CUBLAS)
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
 
         if (LLAMA_STATIC)
-            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
+            if (WIN32)
+                # As of 12.3.1 CUDA Tookit for Windows does not offer a static cublas library
+                set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
+            else ()
+                set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
+            endif()
         else()
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
@@ -372,6 +378,9 @@ if (LLAMA_HIPBLAS)
     if (${hipblas_FOUND} AND ${hip_FOUND})
         message(STATUS "HIP and hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
+        if (LLAMA_HIP_UMA)
+            add_compile_definitions(GGML_HIP_UMA)
+        endif()
         add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
         if (BUILD_SHARED_LIBS)
             set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -397,57 +406,102 @@ if (LLAMA_HIPBLAS)
     endif()
 endif()
 
-if (LLAMA_ALL_WARNINGS)
-    if (NOT MSVC)
-        set(warning_flags -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
-        set(c_flags -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration)
-        set(cxx_flags -Wmissing-declarations -Wmissing-noreturn)
-        set(host_cxx_flags "")
+function(get_flags CCID CCVER)
+    set(C_FLAGS "")
+    set(CXX_FLAGS "")
 
-        if (CMAKE_C_COMPILER_ID MATCHES "Clang")
-            set(warning_flags ${warning_flags} -Wunreachable-code-break -Wunreachable-code-return)
-            set(host_cxx_flags ${host_cxx_flags} -Wmissing-prototypes -Wextra-semi)
+    if (CCID MATCHES "Clang")
+        set(C_FLAGS   -Wunreachable-code-break -Wunreachable-code-return)
+        set(CXX_FLAGS -Wunreachable-code-break -Wunreachable-code-return -Wmissing-prototypes -Wextra-semi)
 
-            if (
-                (CMAKE_C_COMPILER_ID STREQUAL "Clang"      AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 3.8.0) OR
-                (CMAKE_C_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 7.3.0)
-            )
-                set(c_flags ${c_flags} -Wdouble-promotion)
-            endif()
-        elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-            set(c_flags ${c_flags} -Wdouble-promotion)
-            set(host_cxx_flags ${host_cxx_flags} -Wno-array-bounds)
-
-            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 7.1.0)
-                set(host_cxx_flags ${host_cxx_flags} -Wno-format-truncation)
-            endif()
-            if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 8.1.0)
-                set(host_cxx_flags ${host_cxx_flags} -Wextra-semi)
-            endif()
+        if (
+            (CCID STREQUAL "Clang"      AND CCVER VERSION_GREATER_EQUAL 3.8.0) OR
+            (CCID STREQUAL "AppleClang" AND CCVER VERSION_GREATER_EQUAL 7.3.0)
+        )
+            set(C_FLAGS ${C_FLAGS} -Wdouble-promotion)
         endif()
-    else()
-        # todo : msvc
+    elseif (CCID STREQUAL "GNU")
+        set(C_FLAGS   -Wdouble-promotion)
+        set(CXX_FLAGS -Wno-array-bounds)
+
+        if (CCVER VERSION_GREATER_EQUAL 7.1.0)
+            set(CXX_FLAGS ${CXX_FLAGS} -Wno-format-truncation)
+        endif()
+        if (CCVER VERSION_GREATER_EQUAL 8.1.0)
+            set(CXX_FLAGS ${CXX_FLAGS} -Wextra-semi)
+        endif()
     endif()
 
-    set(c_flags   ${c_flags}   ${warning_flags})
-    set(cxx_flags ${cxx_flags} ${warning_flags})
-    add_compile_options("$<$<COMPILE_LANGUAGE:C>:${c_flags}>"
-                        "$<$<COMPILE_LANGUAGE:CXX>:${cxx_flags}>"
-                        "$<$<COMPILE_LANGUAGE:CXX>:${host_cxx_flags}>")
+    set(GF_C_FLAGS   ${C_FLAGS}   PARENT_SCOPE)
+    set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
+endfunction()
 
+if (LLAMA_ALL_WARNINGS)
+    if (NOT MSVC)
+        set(WARNING_FLAGS -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function)
+        set(C_FLAGS       -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes
+                          -Werror=implicit-int -Werror=implicit-function-declaration)
+        set(CXX_FLAGS     -Wmissing-declarations -Wmissing-noreturn)
+
+        set(C_FLAGS   ${WARNING_FLAGS} ${C_FLAGS})
+        set(CXX_FLAGS ${WARNING_FLAGS} ${CXX_FLAGS})
+
+        get_flags(${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION})
+
+        add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_FLAGS};${GF_C_FLAGS}>"
+                            "$<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS};${GF_CXX_FLAGS}>")
+    else()
+        # todo : msvc
+        set(C_FLAGS   "")
+        set(CXX_FLAGS "")
+    endif()
 endif()
 
-if (NOT MSVC)
-    set(cuda_flags -Wno-pedantic)
-endif()
-set(cuda_flags ${cxx_flags} -use_fast_math ${cuda_flags})
+if (LLAMA_CUBLAS)
+    set(CUDA_FLAGS ${CXX_FLAGS} -use_fast_math)
+    if (NOT MSVC)
+        set(CUDA_FLAGS ${CUDA_FLAGS} -Wno-pedantic)
+    endif()
 
-list(JOIN host_cxx_flags " " cuda_host_flags)  # pass host compiler flags as a single argument
-if (NOT cuda_host_flags STREQUAL "")
-    set(cuda_flags ${cuda_flags} -Xcompiler ${cuda_host_flags})
-endif()
+    if (LLAMA_ALL_WARNINGS AND NOT MSVC)
+        set(NVCC_CMD ${CMAKE_CUDA_COMPILER} .c)
+        if (NOT CMAKE_CUDA_HOST_COMPILER STREQUAL "")
+            set(NVCC_CMD ${NVCC_CMD} -ccbin ${CMAKE_CUDA_HOST_COMPILER})
+        endif()
 
-add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${cuda_flags}>")
+        execute_process(
+            COMMAND ${NVCC_CMD} -Xcompiler --version
+            OUTPUT_VARIABLE CUDA_CCFULLVER
+            ERROR_QUIET
+        )
+
+        if (NOT CUDA_CCFULLVER MATCHES clang)
+            set(CUDA_CCID "GNU")
+            execute_process(
+                COMMAND ${NVCC_CMD} -Xcompiler "-dumpfullversion -dumpversion"
+                OUTPUT_VARIABLE CUDA_CCVER
+                ERROR_QUIET
+            )
+        else()
+            if (CUDA_CCFULLVER MATCHES Apple)
+                set(CUDA_CCID "AppleClang")
+            else()
+                set(CUDA_CCID "Clang")
+            endif()
+            string(REGEX REPLACE "^.* version ([0-9.]*).*$" "\\1" CUDA_CCVER ${CUDA_CCFULLVER})
+        endif()
+
+        message("-- CUDA host compiler is ${CUDA_CCID} ${CUDA_CCVER}")
+
+        get_flags(${CUDA_CCID} ${CUDA_CCVER})
+        list(JOIN GF_CXX_FLAGS " " CUDA_CXX_FLAGS)  # pass host compiler flags as a single argument
+        if (NOT CUDA_CXX_FLAGS STREQUAL "")
+            set(CUDA_FLAGS ${CUDA_FLAGS} -Xcompiler ${CUDA_CXX_FLAGS})
+        endif()
+    endif()
+
+    add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>")
+endif()
 
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
@@ -471,6 +525,7 @@ endif()
 execute_process(
     COMMAND ${CMAKE_C_COMPILER} ${CMAKE_EXE_LINKER_FLAGS} -Wl,-v
     ERROR_VARIABLE output
+    OUTPUT_QUIET
 )
 if (output MATCHES "dyld-1015\.7")
     add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
@@ -593,6 +648,11 @@ else()
     message(STATUS "Unknown architecture")
 endif()
 
+if (MINGW)
+    # Target Windows 8 for PrefetchVirtualMemory
+    add_compile_definitions(_WIN32_WINNT=0x602)
+endif()
+
 #
 # POSIX conformance
 #
@@ -662,11 +722,11 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
-            ${GGML_SOURCES_CUDA} ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_CUDA}   ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL} ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_METAL} ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI} ${GGML_HEADERS_MPI}
-            ${GGML_SOURCES_EXTRA} ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
