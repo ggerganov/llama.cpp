@@ -91,13 +91,14 @@
 #include <cuda.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
-// CUDA 10.2 does not have these macro definitions.
-#ifndef CUBLAS_TF32_TENSOR_OP_MATH
+
+#if CUDART_VERSION < 11020
 #define CUBLAS_TF32_TENSOR_OP_MATH CUBLAS_TENSOR_OP_MATH
 #define CUBLAS_COMPUTE_16F CUDA_R_16F
 #define CUBLAS_COMPUTE_32F CUDA_R_32F
 #define cublasComputeType_t cudaDataType_t
-#endif
+#endif // CUDART_VERSION < 11020
+
 #endif // defined(GGML_USE_HIPBLAS)
 
 #include "ggml-cuda.h"
