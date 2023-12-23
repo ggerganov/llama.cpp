@@ -7937,12 +7937,16 @@ static void ggml_cuda_op_mul_mat(
 
             if (id != 0) {
                 row_low[id]  = ne01*g_tensor_split[id];
-                row_low[id] -= row_low[id] % rounding;
+                if (row_low[id] < ne01) {
+                    row_low[id] -= row_low[id] % rounding;
+                }
             }
 
             if (id != g_device_count - 1) {
                 row_high[id]  = ne01*g_tensor_split[id + 1];
-                row_high[id] -= row_high[id] % rounding;
+                if (row_high[id] < ne01) {
+                    row_high[id] -= row_high[id] % rounding;
+                }
             }
         }
     }
