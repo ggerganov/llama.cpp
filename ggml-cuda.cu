@@ -535,8 +535,16 @@ inline cudaError_t ggml_cuda_set_device(const int device) {
 
 static int g_device_count = -1;
 static int g_main_device = 0;
-static int g_compute_capabilities[GGML_CUDA_MAX_DEVICES];
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
+
+struct device_capabilities {
+    int     cc;                 // compute capability
+    bool    vmm;                // virtual memory support
+    size_t  vmm_granularity;    // granularity of virtual memory
+};
+
+static device_capabilities g_device_caps[GGML_CUDA_MAX_DEVICES] = { {0, false, 0} };
+
 
 static void * g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
@@ -5894,7 +5902,7 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -5939,7 +5947,7 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -5984,7 +5992,7 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6029,7 +6037,7 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6074,7 +6082,7 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6119,7 +6127,7 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6166,7 +6174,7 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6212,7 +6220,7 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6257,7 +6265,7 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6302,7 +6310,7 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(
 
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= CC_RDNA2) {
@@ -6660,23 +6668,18 @@ static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
     size_t avail = g_cuda_pool_size[id] - g_cuda_pool_used[id];
 
     if (size > avail) {
+        // round up to the next multiple of the granularity
         size_t reserve_size = size - avail;
+        const size_t granularity = g_device_caps[id].vmm_granularity;
+        reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
+
+        GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_VMM_MAX_SIZE);
 
         // allocate more physical memory
         CUmemAllocationProp prop = {};
         prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
         prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
         prop.location.id = id;
-
-        // get the minimum allocation granularity for this device
-        size_t granularity;
-        CU_CHECK(cuMemGetAllocationGranularity(&granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
-
-        // round up to the next multiple of the granularity
-        reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
-
-        GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_VMM_MAX_SIZE);
-
         CUmemGenericAllocationHandle handle;
         CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
 
@@ -6732,12 +6735,10 @@ static void ggml_cuda_pool_free_vmm(void * ptr, size_t size) {
     GGML_ASSERT(ptr == (void *) (g_cuda_pool_addr[id] + g_cuda_pool_used[id]));
 }
 
-static bool g_device_vmm[GGML_CUDA_MAX_DEVICES] = {false};
-
 static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    if (g_device_vmm[id]) {
+    if (g_device_caps[id].vmm) {
         return ggml_cuda_pool_malloc_vmm(size, actual_size);
     } else {
         return ggml_cuda_pool_malloc_leg(size, actual_size);
@@ -6747,7 +6748,7 @@ static void * ggml_cuda_pool_malloc(size_t size, size_t * actual_size) {
 static void ggml_cuda_pool_free(void * ptr, size_t size) {
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
-    if (g_device_vmm[id]) {
+    if (g_device_caps[id].vmm) {
         ggml_cuda_pool_free_vmm(ptr, size);
     } else {
         ggml_cuda_pool_free_leg(ptr, size);
@@ -6802,8 +6803,16 @@ void ggml_init_cublas() {
             CUdevice device;
             CU_CHECK(cuDeviceGet(&device, id));
             CU_CHECK(cuDeviceGetAttribute(&device_vmm, CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED, device));
-            g_device_vmm[id] = !!device_vmm;
+
+            if (device_vmm) {
+                CUmemAllocationProp alloc_prop = {};
+                alloc_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+                alloc_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+                alloc_prop.location.id = id;
+                CU_CHECK(cuMemGetAllocationGranularity(&g_device_caps[id].vmm_granularity, &alloc_prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+            }
 #endif
+            g_device_caps[id].vmm = !!device_vmm;
 
             cudaDeviceProp prop;
             CUDA_CHECK(cudaGetDeviceProperties(&prop, id));
@@ -6812,9 +6821,9 @@ void ggml_init_cublas() {
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-            g_compute_capabilities[id] = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
+            g_device_caps[id] = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
 #else
-            g_compute_capabilities[id] = 100*prop.major + 10*prop.minor;
+            g_device_caps[id].cc = 100*prop.major + 10*prop.minor;
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         }
         for (int id = 0; id < g_device_count; ++id) {
@@ -7324,11 +7333,11 @@ static int64_t get_row_rounding(ggml_type type) {
     int64_t max_compute_capability = INT_MIN;
     for (int64_t id = 0; id < g_device_count; ++id) {
         if (g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
-            if (min_compute_capability > g_compute_capabilities[id]) {
-                min_compute_capability = g_compute_capabilities[id];
+            if (min_compute_capability > g_device_caps[id].cc) {
+                min_compute_capability = g_device_caps[id].cc;
             }
-            if (max_compute_capability < g_compute_capabilities[id]) {
-                max_compute_capability = g_compute_capabilities[id];
+            if (max_compute_capability < g_device_caps[id].cc) {
+                max_compute_capability = g_device_caps[id].cc;
             }
         }
     }
@@ -7536,7 +7545,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
     // ldc == nrows of the matrix that cuBLAS writes into
     int ldc = dst->backend == GGML_BACKEND_GPU && id == g_main_device ? ne0 : row_diff;
 
-    const int compute_capability = g_compute_capabilities[id];
+    const int compute_capability = g_device_caps[id].cc;
 
     if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
@@ -8671,8 +8680,8 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
     int64_t min_compute_capability = INT_MAX;
     for (int64_t id = 0; id < g_device_count; ++id) {
-        if (min_compute_capability > g_compute_capabilities[id] && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
-            min_compute_capability = g_compute_capabilities[id];
+        if (min_compute_capability > g_device_caps[id].cc && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
+            min_compute_capability = g_device_caps[id].cc;
         }
     }
 
