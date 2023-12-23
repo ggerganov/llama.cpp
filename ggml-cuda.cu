@@ -6835,7 +6835,7 @@ void ggml_init_cublas() {
             g_tensor_split[id] = total_vram;
             total_vram += prop.totalGlobalMem;
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-            g_device_caps[id] = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
+            g_device_caps[id].cc = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
 #else
             g_device_caps[id].cc = 100*prop.major + 10*prop.minor;
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
