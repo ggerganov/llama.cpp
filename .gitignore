@@ -49,6 +49,7 @@ models-mnt
 /llama-bench
 /llava-cli
 /lookahead
+/lookup
 /main
 /metal
 /perplexity

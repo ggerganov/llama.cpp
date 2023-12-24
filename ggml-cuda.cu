@@ -60,8 +60,13 @@
 #define cudaGetDeviceProperties hipGetDeviceProperties
 #define cudaGetErrorString hipGetErrorString
 #define cudaGetLastError hipGetLastError
+#ifdef GGML_HIP_UMA
+#define cudaMalloc hipMallocManaged
+#define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size)
+#else
 #define cudaMalloc hipMalloc
 #define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size, hipHostMallocDefault)
+#endif
 #define cudaMemcpy hipMemcpy
 #define cudaMemcpy2DAsync hipMemcpy2DAsync
 #define cudaMemcpyAsync hipMemcpyAsync
@@ -80,10 +85,18 @@
 #define cudaStreamWaitEvent(stream, event, flags) hipStreamWaitEvent(stream, event, flags)
 #define cudaStream_t hipStream_t
 #define cudaSuccess hipSuccess
+#define __trap abort
 #else
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <cuda_fp16.h>
+// CUDA 10.2 does not have these macro definitions.
+#ifndef CUBLAS_TF32_TENSOR_OP_MATH
+#define CUBLAS_TF32_TENSOR_OP_MATH CUBLAS_TENSOR_OP_MATH
+#define CUBLAS_COMPUTE_16F CUDA_R_16F
+#define CUBLAS_COMPUTE_32F CUDA_R_32F
+#define cublasComputeType_t cudaDataType_t
+#endif
 #endif // defined(GGML_USE_HIPBLAS)
 
 #include "ggml-cuda.h"
@@ -511,6 +524,14 @@ static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 static cublasHandle_t g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+
+[[noreturn]]
+static __device__ void bad_arch() {
+    printf("ERROR: ggml-cuda was compiled without support for the current GPU architecture.\n");
+    __trap();
+
+    (void) bad_arch; // suppress unused function warning
+}
 
 static __device__ __forceinline__ float warp_reduce_sum(float x) {
 #pragma unroll
@@ -1972,8 +1993,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_0_q8_1_imp
     // second part effectively subtracts 8 from each quant value
     return d4 * (sumi * ds8f.x - (8*vdr/QI4_0) * ds8f.y);
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2010,8 +2030,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q4_1_q8_1_imp
     // scale second part of sum by QI8_1/(vdr * QR4_1) to compensate for multiple threads adding it
     return sumi * d4d8 + m4s8 / (QI8_1 / (vdr * QR4_1));
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2046,8 +2065,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_0_q8_1_imp
     // second part effectively subtracts 16 from each quant value
     return d5 * (sumi * ds8f.x - (16*vdr/QI5_0) * ds8f.y);
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2092,8 +2110,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q5_1_q8_1_imp
     return sumi*d5d8 + m5s8 / (QI5_1 / vdr);
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2114,8 +2131,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_0_q8_1_imp
 
     return d8_0*d8_1 * sumi;
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2145,8 +2161,7 @@ template <int vdr> static __device__ __forceinline__ float vec_dot_q8_1_q8_1_imp
     // scale second part of sum by QI8_1/ vdr to compensate for multiple threads adding it
     return sumi*d8d8 + m8s8 / (QI8_1 / vdr);
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2181,8 +2196,7 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmvq(
 
     return dm2f.x*sumf_d - dm2f.y*sumf_m;
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2219,8 +2233,7 @@ static __device__ __forceinline__ float vec_dot_q2_K_q8_1_impl_mmq(
 
     return d8 * (dm2f.x*sumi_d - dm2f.y*sumi_m);
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2260,8 +2273,7 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmvq(
 
     return d3 * sumf;
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2286,8 +2298,7 @@ static __device__ __forceinline__ float vec_dot_q3_K_q8_1_impl_mmq(
 
     return d3*d8 * sumi;
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2320,8 +2331,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_vmmq(
     return dm4f.x*sumf_d - dm4f.y*sumf_m;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2354,8 +2364,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1_impl_mmq(
     return dm4f.x*sumf_d - dm4f.y*sumf_m;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2395,8 +2404,7 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_vmmq(
     return dm5f.x*sumf_d - dm5f.y*sumf_m;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2429,8 +2437,7 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1_impl_mmq(
     return dm4f.x*sumf_d - dm4f.y*sumf_m;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2460,8 +2467,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmvq(
 
     return d*sumf;
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2492,8 +2498,7 @@ static __device__ __forceinline__ float vec_dot_q6_K_q8_1_impl_mmq(
     return d6 * sumf_d;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -3359,8 +3364,7 @@ static __device__ __forceinline__ float vec_dot_q4_K_q8_1(
     return dall * sumf_d - dmin * sumf_m;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
 #endif
@@ -3543,8 +3547,7 @@ static __device__ __forceinline__ float vec_dot_q5_K_q8_1(
     return d * sumf_d;
 
 #else
-    assert(false);
-    return 0.0f; // only to satisfy the compiler
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 
 #endif
@@ -3954,7 +3957,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_0_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4023,7 +4026,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_1_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4090,7 +4093,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_0_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4157,7 +4160,7 @@ mul_mat_q5_1(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_1_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4224,7 +4227,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q8_0_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4291,7 +4294,7 @@ mul_mat_q2_K(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q2_K_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4360,7 +4363,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q3_K_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4429,7 +4432,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_K_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4496,7 +4499,7 @@ mul_mat_q5_K(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_K_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4565,7 +4568,7 @@ template <bool need_check> static __global__ void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q6_K_q8_1_mul_mat;
-    assert(false);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -5270,17 +5273,17 @@ static  __global__ void im2col_f32_f16(
     const int ky = (i - kd) / OW;
     const int ix = i % OW;
 
-    const int iiw = ix * s0 + kx * d0 - p0;
-    const int iih = blockIdx.y * s1 + ky * d1 - p1;
+    const int64_t iiw = ix * s0 + kx * d0 - p0;
+    const int64_t iih = blockIdx.y * s1 + ky * d1 - p1;
 
-    const int offset_dst =
+    const int64_t offset_dst =
         (blockIdx.y * OW + ix) * CHW +
         (blockIdx.z * (KW * KH) + ky * KW + kx);
 
     if (iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {
         dst[offset_dst] = __float2half(0.0f);
     } else {
-        const int offset_src = blockIdx.z * offset_delta;
+        const int64_t offset_src = blockIdx.z * offset_delta;
         dst[offset_dst] = __float2half(x[offset_src + iih * IW + iiw]);
     }
 }
@@ -6726,8 +6729,7 @@ void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
     cudaError_t err = cudaMallocHost((void **) &ptr, size);
     if (err != cudaSuccess) {
-        // The allocation error can be bypassed. A null ptr will assigned out of this function.
-        // This can fixed the OOM error in WSL.
+        // clear the error
         cudaGetLastError();
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
@@ -6825,6 +6827,7 @@ static void ggml_cuda_op_get_rows(
             break;
         default:
             // TODO: k-quants
+            fprintf(stderr, "%s: unsupported type: %s\n", __func__, ggml_type_name(src0->type));
             GGML_ASSERT(false);
             break;
     }
@@ -7703,17 +7706,10 @@ inline void ggml_cuda_op_scale(
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
-    GGML_ASSERT(src1->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
     float scale;
-    // HACK: support for ggml backend interface
-    if (src1->backend == GGML_BACKEND_CPU) {
-        scale = ((float *) src1->data)[0];
-    } else {
-        // TODO: pass pointer to kernel instead of copying to host
-        CUDA_CHECK(cudaMemcpy(&scale, src1->data, sizeof(float), cudaMemcpyDeviceToHost));
-    }
+    memcpy(&scale, dst->op_params, sizeof(float));
 
     scale_f32_cuda(src0_dd, dst_dd, scale, ggml_nelements(src0), main_stream);
     CUDA_CHECK(cudaGetLastError());
@@ -7760,8 +7756,6 @@ static void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * s
     const bool src1_on_device = use_src1 && src1->backend == GGML_BACKEND_GPU;
     const bool  dst_on_device =              dst->backend == GGML_BACKEND_GPU;
 
-    const bool src1_stays_on_host = use_src1 && dst->op == GGML_OP_SCALE;
-
     // dd = data device
     float * src0_ddf = nullptr;
     float * src1_ddf = nullptr;
@@ -7782,7 +7776,7 @@ static void ggml_cuda_op_flatten(const ggml_tensor * src0, const ggml_tensor * s
         CUDA_CHECK(ggml_cuda_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
     }
 
-    if (use_src1 && !src1_stays_on_host) {
+    if (use_src1) {
         if (src1_on_device) {
             src1_ddf = (float *) src1_extra->data_device[g_main_device];
         } else {
@@ -7942,12 +7936,16 @@ static void ggml_cuda_op_mul_mat(
 
             if (id != 0) {
                 row_low[id]  = ne01*g_tensor_split[id];
-                row_low[id] -= row_low[id] % rounding;
+                if (row_low[id] < ne01) {
+                    row_low[id] -= row_low[id] % rounding;
+                }
             }
 
             if (id != g_device_count - 1) {
                 row_high[id]  = ne01*g_tensor_split[id + 1];
-                row_high[id] -= row_high[id] % rounding;
+                if (row_high[id] < ne01) {
+                    row_high[id] -= row_high[id] % rounding;
+                }
             }
         }
     }
@@ -8782,8 +8780,6 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
     // TODO: mmq/mmv support
 #endif
 
-    GGML_ASSERT(dst->backend == GGML_BACKEND_GPU);
-
     const int64_t nb11 = src1->nb[1];
     const int64_t nb1  =  dst->nb[1];
 
@@ -8812,13 +8808,21 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
     ggml_tensor src1_row = *src1;
     ggml_tensor dst_row = *dst;
 
+    src1_row.backend = GGML_BACKEND_GPU;
+    dst_row.backend  = GGML_BACKEND_GPU;
+
     src1_row.extra = &src1_row_extra;
     dst_row.extra = &dst_row_extra;
 
-    char * src1_original = (char *) src1_extra->data_device[g_main_device];
-    char * dst_original  = (char *)  dst_extra->data_device[g_main_device];
+    char * src1_original = src1->backend == GGML_BACKEND_CPU ?
+        (char *) src1->data : (char *) src1_extra->data_device[g_main_device];
+    char * dst_original  =  dst->backend == GGML_BACKEND_CPU ?
+        (char *)  dst->data : (char *)  dst_extra->data_device[g_main_device];
 
     if (src1->ne[1] == 1) {
+        GGML_ASSERT(src1->backend == GGML_BACKEND_GPU);
+        GGML_ASSERT(dst->backend  == GGML_BACKEND_GPU);
+
         for (int64_t i01 = 0; i01 < ids->ne[1]; i01++) {
             //int32_t row_id;
             //CUDA_CHECK(cudaMemcpyAsync(&row_id, ids_dev + i01*ids->nb[1] + id*ids->nb[0], sizeof(int32_t), cudaMemcpyDeviceToHost, g_cudaStreams[g_main_device][0]));
@@ -8846,6 +8850,11 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
         src1_row_extra.data_device[g_main_device] = src1_contiguous;
         dst_row_extra.data_device[g_main_device]  =  dst_contiguous;
 
+        const cudaMemcpyKind src1_kind = src1->backend == GGML_BACKEND_CPU ?
+            cudaMemcpyHostToDevice : cudaMemcpyDeviceToDevice;
+        const cudaMemcpyKind dst_kind  =  dst->backend == GGML_BACKEND_CPU ?
+            cudaMemcpyDeviceToHost : cudaMemcpyDeviceToDevice;
+
         for (int32_t row_id = 0; row_id < n_as; ++row_id) {
             const struct ggml_tensor * src0_row = dst->src[row_id + 2];
 
@@ -8860,7 +8869,7 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
                 GGML_ASSERT(row_id >= 0 && row_id < n_as);
 
                 CUDA_CHECK(cudaMemcpyAsync(src1_contiguous + num_src1_rows*nb11, src1_original + i01*nb11,
-                                        nb11, cudaMemcpyDeviceToDevice, stream));
+                                        nb11, src1_kind, stream));
                 num_src1_rows++;
             }
 
@@ -8892,13 +8901,17 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor * src0, const ggml_tensor * s
                 GGML_ASSERT(row_id >= 0 && row_id < n_as);
 
                 CUDA_CHECK(cudaMemcpyAsync(dst_original + i01*nb1, dst_contiguous + num_src1_rows*nb1,
-                                        nb1, cudaMemcpyDeviceToDevice, stream));
+                                        nb1, dst_kind, stream));
                 num_src1_rows++;
             }
         }
 
         ggml_cuda_pool_free(src1_contiguous, as_src1);
         ggml_cuda_pool_free(dst_contiguous,  as_dst);
+    }
+
+    if (dst->backend == GGML_BACKEND_CPU) {
+        CUDA_CHECK(cudaStreamSynchronize(stream));
     }
 }
 
@@ -9069,7 +9082,7 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
 
         char * buf;
         CUDA_CHECK(cudaMalloc(&buf, size));
-        char * buf_host = (char*)data + offset_split;
+        char * buf_host = (char *)data + offset_split;
 
         // set padding to 0 to avoid possible NaN values
         if (size > original_size) {
@@ -9091,7 +9104,7 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
 }
 
 void ggml_cuda_free_data(struct ggml_tensor * tensor) {
-    if (!tensor || (tensor->backend != GGML_BACKEND_GPU && tensor->backend != GGML_BACKEND_GPU_SPLIT) ) {
+    if (!tensor || !tensor->extra || (tensor->backend != GGML_BACKEND_GPU && tensor->backend != GGML_BACKEND_GPU_SPLIT) ) {
         return;
     }
 
@@ -9214,11 +9227,10 @@ void ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset)
 
     ggml_tensor_extra_gpu * extra = ggml_cuda_alloc_temp_tensor_extra();
 
-    const bool inplace = (tensor->src[0] != nullptr && tensor->src[0]->data == tensor->data) ||
-        tensor->op == GGML_OP_VIEW;
+    const bool inplace = tensor->view_src != nullptr;
 
-    if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
-        ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
+    if (inplace && (tensor->view_src->backend == GGML_BACKEND_GPU || tensor->view_src->backend == GGML_BACKEND_GPU_SPLIT)) {
+        ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->view_src->extra;
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
         size_t view_offset = 0;
         if (tensor->op == GGML_OP_VIEW) {
@@ -9298,14 +9310,14 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
         || (tensor->src[0] != nullptr && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT))
         || (tensor->src[1] != nullptr && tensor->src[1]->backend == GGML_BACKEND_GPU);
 
-    if (!any_on_device && tensor->op != GGML_OP_MUL_MAT) {
+    if (!any_on_device && tensor->op != GGML_OP_MUL_MAT && tensor->op != GGML_OP_MUL_MAT_ID) {
         return false;
     }
 
     if (tensor->op == GGML_OP_MUL_MAT) {
         if (tensor->src[0]->ne[3] != tensor->src[1]->ne[3]) {
 #ifndef NDEBUG
-            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = " PRId64 ", src1->ne[3] = " PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
+            fprintf(stderr, "%s: cannot compute %s: src0->ne[3] = %" PRId64 ", src1->ne[3] = %" PRId64 " - fallback to CPU\n", __func__, tensor->name, tensor->src[0]->ne[3], tensor->src[1]->ne[3]);
 #endif
             return false;
         }
@@ -9511,7 +9523,7 @@ static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, g
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
     if (tensor->view_src != NULL && tensor->view_offs == 0) {
-        assert(tensor->view_src->buffer->buft == buffer->buft); // TODO
+        assert(tensor->view_src->buffer->buft == buffer->buft);
         tensor->backend = tensor->view_src->backend;
         tensor->extra = tensor->view_src->extra;
         return;
@@ -9542,23 +9554,34 @@ static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer, g
 }
 
 static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    CUDA_CHECK(cudaMemcpy((char *)tensor->data + offset, data, size, cudaMemcpyHostToDevice));
+    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
-    UNUSED(buffer);
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaMemcpy((char *)tensor->data + offset, data, size, cudaMemcpyHostToDevice));
 }
 
 static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    CUDA_CHECK(cudaMemcpy(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost));
+    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
-    UNUSED(buffer);
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaMemcpy(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost));
+}
+
+static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
+
+    ggml_cuda_set_device(ctx->device);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    CUDA_CHECK(cudaMemset(ctx->dev_ptr, value, buffer->size));
 }
 
 static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
@@ -9569,6 +9592,7 @@ static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
     /* .get_tensor      = */ ggml_backend_cuda_buffer_get_tensor,
     /* .cpy_tensor_from = */ NULL,
     /* .cpy_tensor_to   = */ NULL,
+    /* .clear           = */ ggml_backend_cuda_buffer_clear,
 };
 
 // cuda buffer type
@@ -9620,40 +9644,43 @@ static bool ggml_backend_cuda_buffer_type_supports_backend(ggml_backend_buffer_t
     UNUSED(buft);
 }
 
-static ggml_backend_buffer_type_i cuda_backend_buffer_type_interface = {
+static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
     /* .get_alloc_size   = */ ggml_backend_cuda_buffer_type_get_alloc_size,
     /* .supports_backend = */ ggml_backend_cuda_buffer_type_supports_backend,
+    /* .is_host          = */ nullptr,
 };
 
 ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
-    static struct ggml_backend_buffer_type ggml_backend_buffer_type_cuda[GGML_CUDA_MAX_DEVICES];
-    static bool ggml_backend_buffer_type_cuda_initialized = false;
-    if (!ggml_backend_buffer_type_cuda_initialized) {
+    static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_types[GGML_CUDA_MAX_DEVICES];
+
+    static bool ggml_backend_cuda_buffer_type_initialized = false;
+
+    if (!ggml_backend_cuda_buffer_type_initialized) {
         for (int i = 0; i < GGML_CUDA_MAX_DEVICES; i++) {
-            ggml_backend_buffer_type_cuda[i] = {
-                /* .iface    = */ cuda_backend_buffer_type_interface,
+            ggml_backend_cuda_buffer_types[i] = {
+                /* .iface    = */ ggml_backend_cuda_buffer_type_interface,
                 /* .context  = */ (ggml_backend_buffer_type_context_t) (intptr_t) i,
             };
         }
-        ggml_backend_buffer_type_cuda_initialized = true;
+        ggml_backend_cuda_buffer_type_initialized = true;
     }
 
-    return &ggml_backend_buffer_type_cuda[device];
+    return &ggml_backend_cuda_buffer_types[device];
 }
 
 // host buffer type
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
-    CUDA_CHECK(cudaFreeHost(ctx->dev_ptr));
-    delete ctx;
+    ggml_cuda_host_free(buffer->context);
 }
 
 static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    void * ptr;
-    CUDA_CHECK(cudaMallocHost(&ptr, size));
+    void * ptr = ggml_cuda_host_malloc(size);
+    if (ptr == nullptr) {
+        return nullptr;
+    }
 
     // FIXME: this is a hack to avoid having to implement a new buffer type
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
@@ -9661,24 +9688,21 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     buffer->iface.free_buffer = ggml_backend_cuda_host_buffer_free_buffer;
 
     return buffer;
-
-    UNUSED(buft);
 }
 
-struct ggml_backend_buffer_type_i cuda_backend_host_buffer_type_interface = {
-    /* .alloc_buffer     = */ ggml_backend_cuda_host_buffer_type_alloc_buffer,
-    /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
-    /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
-    /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
-};
-
 ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
-    static struct ggml_backend_buffer_type ggml_backend_buffer_type_cuda_host = {
-        /* .iface    = */ cuda_backend_host_buffer_type_interface,
+    static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_type_host = {
+        /* .iface    = */ {
+            /* .alloc_buffer     = */ ggml_backend_cuda_host_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
+            /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
+            /* .supports_backend = */ ggml_backend_cpu_buffer_type()->iface.supports_backend,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
+        },
         /* .context  = */ nullptr,
     };
 
-    return &ggml_backend_buffer_type_cuda_host;
+    return &ggml_backend_cuda_buffer_type_host;
 }
 
 // backend
@@ -9710,8 +9734,6 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend, ggml_tens
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
 
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
     CUDA_CHECK(cudaMemcpyAsync((char *)tensor->data + offset, data, size, cudaMemcpyHostToDevice, g_cudaStreams[cuda_ctx->device][0]));
@@ -9721,8 +9743,6 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend, const ggm
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
 
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
     CUDA_CHECK(cudaMemcpyAsync(data, (const char *)tensor->data + offset, size, cudaMemcpyDeviceToHost, g_cudaStreams[cuda_ctx->device][0]));
