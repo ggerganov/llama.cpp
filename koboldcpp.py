@@ -394,7 +394,7 @@ maxhordelen = 256
 modelbusy = threading.Lock()
 requestsinqueue = 0
 defaultport = 5001
-KcppVersion = "1.53"
+KcppVersion = "1.53.1"
 showdebug = True
 showsamplerwarning = True
 showmaxctxwarning = True
@@ -766,7 +766,7 @@ Enter Prompt:<br>
 
         elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
-            if requestsinqueue==0 and totalgens>0 and (not args.multiuser or currentusergenkey==""):
+            if requestsinqueue==0 and totalgens>0 and currentusergenkey=="":
                 pendtxt = handle.get_pending_output()
                 pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
@@ -861,7 +861,7 @@ Enter Prompt:<br>
                 multiuserkey = ""
 
             if totalgens>0:
-                if (multiuserkey=="" and multiuserkey==currentusergenkey) or (multiuserkey=="" and requestsinqueue==0 and not args.multiuser) or (multiuserkey!="" and multiuserkey==currentusergenkey): #avoid leaking prompts in multiuser
+                if (multiuserkey=="" and multiuserkey==currentusergenkey and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey): #avoid leaking prompts in multiuser
                     pendtxt = handle.get_pending_output()
                     pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
