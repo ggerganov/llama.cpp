@@ -11,14 +11,18 @@
   mpi,
   openblas, # TODO: Use the generic `blas` so users could switch betwen alternative implementations
   cudaPackages,
+  darwin,
   rocmPackages,
   clblast,
-  Accelerate ? null,
-  MetalKit ? null,
-  CoreVideo ? null,
-  CoreGraphics ? null,
-  useOpenCL ? false,
+  useBlas ? builtins.all (x: !x) [
+    useCuda
+    useMetalKit
+    useOpenCL
+    useRocm
+  ],
   useCuda ? config.cudaSupport,
+  useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
+  useOpenCL ? false,
   useRocm ? config.rocmSupport,
 }@inputs:
 
@@ -29,7 +33,6 @@ let
     optionals
     versionOlder
     ;
-  isDefault = !useOpenCL && !useCuda && !useRocm;
 
   # It's necessary to consistently use backendStdenv when building with CUDA support,
   # otherwise we get libstdc++ errors downstream.
@@ -44,7 +47,7 @@ let
       " (CUDA accelerated)"
     else if useRocm then
       " (ROCm accelerated)"
-    else if (MetalKit != null) then
+    else if useMetalKit then
       " (MetalKit accelerated)"
     else
       "";
@@ -70,13 +73,16 @@ let
     ]
   );
 
-  # See ./overlay.nix for where these dependencies are passed in.
-  defaultBuildInputs = builtins.filter (p: p != null) [
-    Accelerate
-    MetalKit
-    CoreVideo
-    CoreGraphics
-  ];
+  # apple_sdk is supposed to choose sane defaults, no need to handle isAarch64
+  # separately
+  darwinBuildInputs =
+    with darwin.apple_sdk.frameworks;
+    [ Accelerate ]
+    ++ optionals useMetalKit [ MetalKit ]
+    ++ optionals (!useMetalKit) [
+      CoreVideo
+      CoreGraphics
+    ];
 
   cudaBuildInputs = with cudaPackages; [
     cuda_cccl.dev # <nv/target>
@@ -121,7 +127,7 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     ++ optionals useOpenCL [ clblast ]
     ++ optionals useCuda cudaBuildInputs
     ++ optionals useRocm rocmBuildInputs
-    ++ optionals isDefault defaultBuildInputs;
+    ++ optionals effectiveStdenv.isDarwin darwinBuildInputs;
 
   cmakeFlags =
     [
@@ -129,6 +135,8 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       (cmakeBool "LLAMA_BUILD_SERVER" true)
       (cmakeBool "BUILD_SHARED_LIBS" true)
       (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
+      (cmakeBool "LLAMA_METAL" useMetalKit)
+      (cmakeBool "LLAMA_BLAS" useBlas)
     ]
     ++ optionals useOpenCL [ (cmakeBool "LLAMA_CLBLAST" true) ]
     ++ optionals useCuda [ (cmakeBool "LLAMA_CUBLAS" true) ]
@@ -143,18 +151,8 @@ effectiveStdenv.mkDerivation (finalAttrs: {
       # Should likely use `rocmPackages.clr.gpuTargets`.
       "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
     ]
-    ++ optionals isDefault (
-      if (MetalKit != null) then
-        [
-          "-DCMAKE_C_FLAGS=-D__ARM_FEATURE_DOTPROD=1"
-          "-DLLAMA_METAL=ON"
-        ]
-      else
-        [
-          "-DLLAMA_BLAS=ON"
-          "-DLLAMA_BLAS_VENDOR=OpenBLAS"
-        ]
-    );
+    ++ optionals useMetalKit [ (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1") ]
+    ++ optionals useBlas [ (lib.cmakeFeature "LLAMA_BLAS_VENDOR" "OpenBLAS") ];
 
   # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
   # if they haven't been added yet.
