@@ -6749,7 +6749,7 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
 #else
 #define ggml_cuda_pool_malloc ggml_cuda_pool_malloc_leg
 #define ggml_cuda_pool_free ggml_cuda_pool_free_leg
-#endif
+#endif // !defined(GGML_USE_HIPBLAS)
 
 template<typename T>
 struct cuda_pool_alloc {
