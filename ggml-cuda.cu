@@ -6647,7 +6647,6 @@ static void ggml_cuda_pool_free_leg(void * ptr, size_t size) {
 
 #if !defined(GGML_USE_HIPBLAS)
 // pool with virtual memory
-static std::vector<CUmemGenericAllocationHandle> g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
 static CUdeviceptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
 static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
@@ -6687,6 +6686,9 @@ static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
         // map at the end of the pool
         CU_CHECK(cuMemMap(g_cuda_pool_addr[id] + g_cuda_pool_size[id], reserve_size, 0, handle, 0));
 
+        // the memory allocation handle is no longer needed after mapping
+        CU_CHECK(cuMemRelease(handle));
+
         // set access
         CUmemAccessDesc access = {};
         access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
@@ -6695,7 +6697,6 @@ static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
         CU_CHECK(cuMemSetAccess(g_cuda_pool_addr[id] + g_cuda_pool_size[id], reserve_size, &access, 1));
 
         // add to the pool
-        g_cuda_pool_handles[id].push_back(handle);
         g_cuda_pool_size[id] += reserve_size;
 
         //printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
@@ -8193,13 +8194,13 @@ static void ggml_cuda_op_mul_mat(
                     if (id != g_main_device) {
                         if (convert_src1_to_q8_1) {
                             char * src1_ddq_i_source = src1_ddq[g_main_device] + src1_ddq_i_offset;
-                            CUDA_CHECK(cudaMemcpyAsync(src1_ddq_i, src1_ddq_i_source, src1_ncols*src1_padded_col_size*q8_1_ts/q8_1_bs,
-                                                    cudaMemcpyDeviceToDevice, stream));
+                            CUDA_CHECK(cudaMemcpyPeerAsync(src1_ddq_i, id, src1_ddq_i_source, g_main_device,
+                                                            src1_ncols*src1_padded_col_size*q8_1_ts/q8_1_bs, stream));
                         } else {
                             float * src1_ddf_i_source = (float *) src1_extra->data_device[g_main_device];
                             src1_ddf_i_source += (i0*ne11 + src1_col_0) * ne10;
-                            CUDA_CHECK(cudaMemcpyAsync(src1_ddf_i, src1_ddf_i_source, src1_ncols*ne10*sizeof(float),
-                                                    cudaMemcpyDeviceToDevice, stream));
+                            CUDA_CHECK(cudaMemcpyPeerAsync(src1_ddf_i, id, src1_ddf_i_source, g_main_device,
+                                                            src1_ncols*ne10*sizeof(float), stream));
                         }
                     }
                 } else if (src1->backend == GGML_BACKEND_CPU || (src1_on_device && !src1_is_contiguous)) {
