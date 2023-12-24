@@ -335,6 +335,24 @@ Finally, you're ready to run a computation using `mpirun`:
 mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 ```
 
+### HPX Build
+
+This build has a dependency on the [HPX](https://github.com/STEllAR-GROUP/hpx) asynchronous many task runtime system. Users are encouraged to compile HPX with tcmalloc. HPX provides a user-land thread implementation and a work-stealing thread management implementation. Both features reduce the number of system calls required of the application which can improve performance. HPX emphasizes 'futurization' of applications; users are encouraged to craft dataflow dependency graphs using futures and HPX's implementation of `std::async`. HPX achieves best performance on large workloads. The BLIS BLAS library has support for HPX. The HPX support provided by this build will improve the performance of the BLIS HPX backend when applied to llama.cpp.
+
+  - Using `make`:
+    - On Linux:
+      ```bash
+      make LLAMA_HPX=1
+      ```
+
+  - Using `CMake` on Linux:
+      ```bash
+      mkdir build
+      cd build
+      CXX=<C++ compiler used to build HPX> cmake -DHPX_DIR=<PATH_TO_HPX_CMAKE> -DLLAMA_HPX=1 ..
+      make
+      ```
+
 ### BLAS Build
 
 Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
