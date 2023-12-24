@@ -6657,6 +6657,10 @@ static void * ggml_cuda_pool_malloc_vmm(size_t size, size_t * actual_size) {
     int id;
     CUDA_CHECK(cudaGetDevice(&id));
 
+    // round up the allocation size to the alignment to ensure that all allocations are aligned for all data types
+    const size_t alignment = 128;
+    size = alignment * ((size + alignment - 1) / alignment);
+
     size_t avail = g_cuda_pool_size[id] - g_cuda_pool_used[id];
 
     if (size > avail) {
