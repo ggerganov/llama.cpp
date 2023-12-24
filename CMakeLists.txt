@@ -95,6 +95,7 @@ option(LLAMA_CLBLAST                         "llama: use CLBlast"               
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
+option(LLAMA_HPX                             "llama: use HPX"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
@@ -320,6 +321,10 @@ if (LLAMA_CUBLAS)
     endif()
 endif()
 
+if(LLAMA_MPI AND LLAMA_HPX)
+    message(FATAL "MPI and HPX are not currently compatible together")
+endif()
+
 if (LLAMA_MPI)
     cmake_minimum_required(VERSION 3.10)
     find_package(MPI)
@@ -341,6 +346,17 @@ if (LLAMA_MPI)
         endif()
     else()
         message(WARNING "MPI not found")
+    endif()
+endif()
+
+if (LLAMA_HPX)
+    cmake_minimum_required(VERSION 3.10)
+    find_package (HPX)
+    if (HPX_FOUND)
+        add_compile_definitions(GGML_USE_HPX)
+        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${HPX_CXXFLAGS})
+    else()
+        message(FATAL "HPX not found")
     endif()
 endif()
 
@@ -727,7 +743,11 @@ add_library(ggml OBJECT
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features(ggml PUBLIC c_std_11) # don't bump
-target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+if(LLAMA_HPX AND HPX_FOUND)
+   target_link_libraries(ggml PUBLIC HPX::hpx ${LLAMA_EXTRA_LIBS})
+else()
+   target_link_libraries(ggml PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
+endif()
 if (GGML_USE_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
@@ -749,6 +769,12 @@ add_library(llama
 
 target_include_directories(llama PUBLIC .)
 target_compile_features(llama PUBLIC cxx_std_11) # don't bump
+
+if(LLAMA_HPX AND HPX_FOUND)
+   target_link_libraries(llama PUBLIC HPX::hpx ${LLAMA_EXTRA_LIBS})
+   target_compile_options (llama PRIVATE ${HPX_CXXFLAGS})
+endif()
+
 target_link_libraries(llama PRIVATE
     ggml
     ${LLAMA_EXTRA_LIBS}
