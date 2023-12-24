@@ -9,7 +9,7 @@
   git,
   python3,
   mpi,
-  openblas, # This could be `blas` to enable easy swapping out with `lapack`
+  openblas, # TODO: Use the generic `blas` so users could switch betwen alternative implementations
   cudaPackages,
   rocmPackages,
   clblast,
@@ -158,13 +158,6 @@ effectiveStdenv.mkDerivation (finalAttrs: {
 
   # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
   # if they haven't been added yet.
-  #
-  # For example:
-  #
-  #  1. Avoid GLOBs
-  #  2. Add whatever COMPONENTs are missing
-  #  3. Fix whatever issues remain with override-ability.
-  #
   postInstall = ''
     mv $out/bin/main $out/bin/llama
     mv $out/bin/server $out/bin/llama-server
