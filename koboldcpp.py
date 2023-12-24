@@ -716,7 +716,7 @@ Enter Prompt:<br>
         self.wfile.write(finalhtml)
 
     def do_GET(self):
-        global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story, exitcounter
+        global maxctx, maxhordelen, friendlymodelname, KcppVersion, totalgens, preloaded_story, exitcounter, currentusergenkey
         self.path = self.path.rstrip('/')
         response_body = None
         content_type = 'application/json'
@@ -766,7 +766,7 @@ Enter Prompt:<br>
 
         elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
-            if requestsinqueue==0 and totalgens>0:
+            if requestsinqueue==0 and totalgens>0 and (not args.multiuser or currentusergenkey==""):
                 pendtxt = handle.get_pending_output()
                 pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
@@ -861,7 +861,7 @@ Enter Prompt:<br>
                 multiuserkey = ""
 
             if totalgens>0:
-                if (multiuserkey=="" and requestsinqueue==0) or (multiuserkey!="" and multiuserkey==currentusergenkey):
+                if (multiuserkey=="" and multiuserkey==currentusergenkey) or (multiuserkey=="" and requestsinqueue==0 and not args.multiuser) or (multiuserkey!="" and multiuserkey==currentusergenkey): #avoid leaking prompts in multiuser
                     pendtxt = handle.get_pending_output()
                     pendtxtStr = ctypes.string_at(pendtxt).decode("UTF-8","ignore")
             response_body = (json.dumps({"results": [{"text": pendtxtStr}]}).encode())
