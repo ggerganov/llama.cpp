@@ -6758,12 +6758,12 @@ static void ggml_cuda_pool_free(void * ptr, size_t size) {
 template<typename T>
 struct cuda_pool_alloc {
     T * ptr = nullptr;
-    size_t act_size = 0;
+    size_t actual_size = 0;
 
     // size is in number of elements
     T * alloc(size_t size) {
         GGML_ASSERT(ptr == nullptr);
-        ptr = (T *) ggml_cuda_pool_malloc(size * sizeof(T), &this->act_size);
+        ptr = (T *) ggml_cuda_pool_malloc(size * sizeof(T), &this->actual_size);
         return ptr;
     }
 
@@ -6773,7 +6773,7 @@ struct cuda_pool_alloc {
 
     ~cuda_pool_alloc() {
         if (ptr != nullptr) {
-            ggml_cuda_pool_free(ptr, act_size);
+            ggml_cuda_pool_free(ptr, actual_size);
         }
     }
 
