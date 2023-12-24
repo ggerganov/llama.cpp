@@ -23,7 +23,8 @@ struct ggml_openshmem_context {
 };
 
 void ggml_openshmem_backend_init(void) {
-    shmem_init();
+    int provided = 0;
+    shmem_init_thread(SHMEM_THREAD_MULTIPLE, &provided);
 }
 
 void ggml_openshmem_backend_free(void) {
