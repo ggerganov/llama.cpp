@@ -77,12 +77,12 @@ let
   # separately
   darwinBuildInputs =
     with darwin.apple_sdk.frameworks;
-    [ Accelerate ]
-    ++ optionals useMetalKit [ MetalKit ]
-    ++ optionals (!useMetalKit) [
+    [
+      Accelerate
       CoreVideo
       CoreGraphics
-    ];
+    ]
+    ++ optionals useMetalKit [ MetalKit ];
 
   cudaBuildInputs = with cudaPackages; [
     cuda_cccl.dev # <nv/target>
