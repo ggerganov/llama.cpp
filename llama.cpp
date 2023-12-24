@@ -5543,7 +5543,7 @@ struct llm_build_context {
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
-            cb(cur, "attention_norm", il);
+            cb(cur, "attn_norm", il);
 
             struct ggml_tensor * attention_norm = cur;
 
@@ -5603,13 +5603,10 @@ struct llm_build_context {
 
         cur = inpL;
 
-        // norm
-        {
-            cur = llm_build_norm(ctx0, cur, hparams,
-                    model.output_norm, NULL,
-                    LLM_NORM_RMS, cb, -1);
-            cb(cur, "result_norm", -1);
-        }
+        cur = llm_build_norm(ctx0, cur, hparams,
+                model.output_norm, NULL,
+                LLM_NORM_RMS, cb, -1);
+        cb(cur, "result_norm", -1);
 
         // lm_head
         cur = ggml_mul_mat(ctx0, model.output, cur);
