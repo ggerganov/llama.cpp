@@ -8771,13 +8771,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     std::vector<int64_t> hist_all(1 << 4, 0);
 
 #if defined(GGML_USE_HPX)
-    {
-      std::string thread_arg = "--hpx:threads=" + std::to_string(nthread);
-      hpx::init_params params;
-      params.cfg = { thread_arg };
-      hpx::start(nullptr, 0, nullptr, params);
-    }
-
     std::vector<hpx::future<void>> futures;
     futures.reserve(nthread);
 #else
@@ -9352,6 +9345,7 @@ void llama_backend_init(bool numa) {
         struct ggml_init_params params = { 0, NULL, false };
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
+
     }
 
     if (numa) {
@@ -9361,11 +9355,26 @@ void llama_backend_init(bool numa) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_init();
 #endif
+#ifdef GGML_USE_HPX
+    {
+        const auto nthread = std::thread::hardware_concurrency();
+        std::string thread_arg = "--hpx:threads=" + std::to_string(nthread);
+        hpx::init_params params;
+        params.cfg = { thread_arg };
+        hpx::start(nullptr, 0, nullptr, params);
+    }
+#endif
 }
 
 void llama_backend_free(void) {
 #ifdef GGML_USE_MPI
     ggml_mpi_backend_free();
+#endif
+#ifdef GGML_USE_HPX
+    {
+        hpx::post([]() { hpx::finalize(); });
+        hpx::stop();
+    }
 #endif
 }
 
