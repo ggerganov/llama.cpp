@@ -6836,7 +6836,7 @@ void ggml_init_cublas() {
                 alloc_prop.location.id = id;
                 CU_CHECK(cuMemGetAllocationGranularity(&g_device_caps[id].vmm_granularity, &alloc_prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
             }
-#endif
+#endif // !defined(GGML_USE_HIPBLAS)
             g_device_caps[id].vmm = !!device_vmm;
 
             cudaDeviceProp prop;
