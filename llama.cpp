@@ -5601,11 +5601,14 @@ struct llm_build_context {
                                 0);
                     cb(k, "k", il);
 
+                    /*
                     // we should avoid to repeat K but current ggml_mul_mat generates wrong values for grouped query att
                     struct ggml_tensor * k_repeated = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, k->ne[0], k->ne[1], q->ne[2]);
                     cb(k_repeated, "k_repeated", il);
 
                     struct ggml_tensor * kq = ggml_mul_mat(ctx, ggml_repeat(ctx, k, k_repeated), q);
+                    */
+                    struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
                     cb(kq, "kq", il);
 
                     kq = ggml_soft_max_ext(ctx, kq, kq_mask, 1.0f/sqrtf(float(n_embd_head)));
@@ -5620,11 +5623,14 @@ struct llm_build_context {
                                 0);
                     cb(v, "v", il);
 
+                    /*
                     // we should avoid to repeat V but current ggml_mul_mat generates wrong values for grouped query att
                     struct ggml_tensor * v_repeated = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, v->ne[0], v->ne[1], q->ne[2]);
                     cb(k_repeated, "v_repeated", il);
 
                     struct ggml_tensor * kqv = ggml_mul_mat(ctx, ggml_repeat(ctx, v, v_repeated), kq);
+                    */
+                    struct ggml_tensor * kqv = ggml_mul_mat(ctx, v, kq);
                     cb(kqv, "kqv", il);
 
                     struct ggml_tensor * kqv_merged = ggml_permute(ctx, kqv, 0, 2, 1, 3);

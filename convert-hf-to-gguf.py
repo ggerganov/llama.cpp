@@ -1002,6 +1002,20 @@ class PlamoModel(Model):
         self.gguf_writer.add_head_count_kv(5)  # hparams["num_key_value_heads"]) is wrong
         self.gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
 
+    def shuffle_attn_q_weight(self, data_torch):
+        assert data_torch.size() == (5120, 5120)
+        data_torch = data_torch.reshape(8, 5, 128, 5120)
+        data_torch = torch.permute(data_torch, (1, 0, 2, 3))
+        data_torch = torch.reshape(data_torch, (5120, 5120))
+        return data_torch
+
+    def shuffle_attn_output_weight(self, data_torch):
+        assert data_torch.size() == (5120, 5120)
+        data_torch = data_torch.reshape(5120, 8, 5, 128)
+        data_torch = torch.permute(data_torch, (0, 2, 1, 3))
+        data_torch = torch.reshape(data_torch, (5120, 5120))
+        return data_torch
+
     def write_tensors(self):
         block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
@@ -1015,6 +1029,12 @@ class PlamoModel(Model):
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
+
+            # shuffle for broadcasting of gqa in ggml_mul_mat
+            if new_name.endswith("attn_q.weight"):
+                data_torch = self.shuffle_attn_q_weight(data_torch)
+            elif new_name.endswith("attn_output.weight"):
+                data_torch = self.shuffle_attn_output_weight(data_torch)
 
             old_dtype = data_torch.dtype
 
