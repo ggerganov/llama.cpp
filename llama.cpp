@@ -5704,13 +5704,14 @@ struct llm_build_context {
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
-                cb(cur, "mlp_out", il);
+                cb(cur, "ffn_out", il);
             }
 
             cur = ggml_add(ctx0, cur, sa_out);
-            cb(cur, "mlp_out + sa_out", il);
+            cb(cur, "l_out", il);
+
             cur = ggml_add(ctx0, cur, inpL);
-            cb(cur, "mlp_out + sa_out + inpL", il);
+            cb(cur, "l_out", il);
 
             // input for next layer
             inpL = cur;
