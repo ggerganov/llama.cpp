@@ -91,7 +91,7 @@ let
   ];
 in
 
-effectiveStdenv.mkDerivation {
+effectiveStdenv.mkDerivation (finalAttrs: {
   name = "llama.cpp";
   src = ../../.;
   meta = {
@@ -178,12 +178,14 @@ effectiveStdenv.mkDerivation {
       name = "default${descriptionSuffix}";
       description = "contains numpy and sentencepiece";
       buildInputs = [ llama-python ];
+      inputsFrom = [ finalAttrs.finalPackage ];
     };
 
     shell-extra = mkShell {
       name = "extra${descriptionSuffix}";
       description = "contains numpy, sentencepiece, torchWithoutCuda, and transformers";
       buildInputs = [ llama-python-extra ];
+      inputsFrom = [ finalAttrs.finalPackage ];
     };
   };
-}
+})
