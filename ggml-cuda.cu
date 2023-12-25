@@ -530,7 +530,7 @@ struct ggml_tensor_extra_gpu {
 
 // this is faster on Windows
 // probably because the Windows CUDA libraries forget to make this check before invoking the drivers
-inline void ggml_cuda_set_device(const int device) {
+static void ggml_cuda_set_device(const int device) {
     int current_device;
     CUDA_CHECK(cudaGetDevice(&current_device));
 
@@ -7028,7 +7028,7 @@ static void ggml_cuda_op_get_rows(
 }
 
 template<class op>
-inline void ggml_cuda_op_bin_bcast(
+static void ggml_cuda_op_bin_bcast(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7057,14 +7057,14 @@ static void ggml_cuda_op_repeat(
     (void) src1_d;
 }
 
-inline void ggml_cuda_op_add(
+static void ggml_cuda_op_add(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
     ggml_cuda_op_bin_bcast<bin_bcast_cuda<op_add>>(src0, src1, dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
-inline void ggml_cuda_op_acc(
+static void ggml_cuda_op_acc(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7083,21 +7083,21 @@ inline void ggml_cuda_op_acc(
     (void) dst;
 }
 
-inline void ggml_cuda_op_mul(
+static void ggml_cuda_op_mul(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
     ggml_cuda_op_bin_bcast<bin_bcast_cuda<op_mul>>(src0, src1, dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
-inline void ggml_cuda_op_div(
+static void ggml_cuda_op_div(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
     ggml_cuda_op_bin_bcast<bin_bcast_cuda<op_div>>(src0, src1, dst, src0_dd, src1_dd, dst_dd, main_stream);
 }
 
-inline void ggml_cuda_op_gelu(
+static void ggml_cuda_op_gelu(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7111,7 +7111,7 @@ inline void ggml_cuda_op_gelu(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_silu(
+static void ggml_cuda_op_silu(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7125,7 +7125,7 @@ inline void ggml_cuda_op_silu(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_gelu_quick(
+static void ggml_cuda_op_gelu_quick(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7139,7 +7139,7 @@ inline void ggml_cuda_op_gelu_quick(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_tanh(
+static void ggml_cuda_op_tanh(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7153,7 +7153,7 @@ inline void ggml_cuda_op_tanh(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_relu(
+static void ggml_cuda_op_relu(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7167,7 +7167,7 @@ inline void ggml_cuda_op_relu(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_leaky_relu(
+static void ggml_cuda_op_leaky_relu(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7184,7 +7184,7 @@ inline void ggml_cuda_op_leaky_relu(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_sqr(
+static void ggml_cuda_op_sqr(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7198,7 +7198,7 @@ inline void ggml_cuda_op_sqr(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_norm(
+static void ggml_cuda_op_norm(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7218,7 +7218,7 @@ inline void ggml_cuda_op_norm(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_group_norm(
+static void ggml_cuda_op_group_norm(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7234,7 +7234,7 @@ inline void ggml_cuda_op_group_norm(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_concat(
+static void ggml_cuda_op_concat(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7250,7 +7250,7 @@ inline void ggml_cuda_op_concat(
     (void) dst;
 }
 
-inline void ggml_cuda_op_upscale(
+static void ggml_cuda_op_upscale(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7267,7 +7267,7 @@ inline void ggml_cuda_op_upscale(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_pad(
+static void ggml_cuda_op_pad(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7284,7 +7284,7 @@ inline void ggml_cuda_op_pad(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_rms_norm(
+static void ggml_cuda_op_rms_norm(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7304,7 +7304,7 @@ inline void ggml_cuda_op_rms_norm(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_mul_mat_q(
+static void ggml_cuda_op_mul_mat_q(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
@@ -7427,7 +7427,7 @@ static int64_t get_row_rounding(ggml_type type) {
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 }
 
-inline void ggml_cuda_op_mul_mat_vec_q(
+static void ggml_cuda_op_mul_mat_vec_q(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
@@ -7480,7 +7480,7 @@ inline void ggml_cuda_op_mul_mat_vec_q(
     (void) src1_padded_row_size;
 }
 
-inline void ggml_cuda_op_dequantize_mul_mat_vec(
+static void ggml_cuda_op_dequantize_mul_mat_vec(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
@@ -7554,7 +7554,7 @@ inline void ggml_cuda_op_dequantize_mul_mat_vec(
     (void) src1_padded_row_size;
 }
 
-inline void ggml_cuda_op_mul_mat_cublas(
+static void ggml_cuda_op_mul_mat_cublas(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
     const char * src1_ddq_i, float * dst_dd_i, const int64_t row_low, const int64_t row_high, const int64_t src1_ncols,
     const int64_t src1_padded_row_size, const cudaStream_t & stream) {
@@ -7646,7 +7646,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
     (void) src1_padded_row_size;
 }
 
-inline void ggml_cuda_op_rope(
+static void ggml_cuda_op_rope(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7726,7 +7726,7 @@ inline void ggml_cuda_op_rope(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_alibi(
+static void ggml_cuda_op_alibi(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7757,7 +7757,7 @@ inline void ggml_cuda_op_alibi(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_im2col(
+static void ggml_cuda_op_im2col(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7792,7 +7792,7 @@ inline void ggml_cuda_op_im2col(
     (void) src0_dd;
 }
 
-inline void ggml_cuda_op_sum_rows(
+static void ggml_cuda_op_sum_rows(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7809,7 +7809,7 @@ inline void ggml_cuda_op_sum_rows(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_argsort(
+static void ggml_cuda_op_argsort(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7828,7 +7828,7 @@ inline void ggml_cuda_op_argsort(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_diag_mask_inf(
+static void ggml_cuda_op_diag_mask_inf(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7848,7 +7848,7 @@ inline void ggml_cuda_op_diag_mask_inf(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_soft_max(
+static void ggml_cuda_op_soft_max(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7869,7 +7869,7 @@ inline void ggml_cuda_op_soft_max(
     (void) dst;
 }
 
-inline void ggml_cuda_op_scale(
+static void ggml_cuda_op_scale(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
@@ -7887,7 +7887,7 @@ inline void ggml_cuda_op_scale(
     (void) src1_dd;
 }
 
-inline void ggml_cuda_op_clamp(
+static void ggml_cuda_op_clamp(
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst,
     const float * src0_dd, const float * src1_dd, float * dst_dd, const cudaStream_t & main_stream) {
 
