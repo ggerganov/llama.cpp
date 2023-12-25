@@ -1896,6 +1896,7 @@ def make_url_request(url, data, method='POST', headers={}):
 #A very simple and stripped down embedded horde worker with no dependencies
 def run_horde_worker(args, api_key, worker_name):
     from datetime import datetime
+    import random
     global friendlymodelname, maxhordectx, maxhordelen, exitcounter, punishcounter, modelbusy, session_starttime
     epurl = f"http://localhost:{args.port}"
     if args.host!="":
@@ -2001,6 +2002,8 @@ def run_horde_worker(args, api_key, worker_name):
         #do gen
         while exitcounter < 10:
             if not modelbusy.locked():
+                #horde gets a genkey to avoid KCPP overlap
+                current_payload['genkey'] = f"HORDEREQ_{random.randint(100, 999)}"
                 current_generation = make_url_request_horde(f'{epurl}/api/v1/generate', current_payload)
                 if current_generation:
                     break
