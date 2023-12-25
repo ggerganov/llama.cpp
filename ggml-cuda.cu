@@ -530,15 +530,15 @@ struct ggml_tensor_extra_gpu {
 
 // this is faster on Windows
 // probably because the Windows CUDA libraries forget to make this check before invoking the drivers
-inline cudaError_t ggml_cuda_set_device(const int device) {
+inline void ggml_cuda_set_device(const int device) {
     int current_device;
     CUDA_CHECK(cudaGetDevice(&current_device));
 
     if (device == current_device) {
-        return cudaSuccess;
+        return;
     }
 
-    return cudaSetDevice(device);
+    CUDA_CHECK(cudaSetDevice(device));
 }
 
 static int g_device_count = -1;
@@ -6871,7 +6871,7 @@ void ggml_init_cublas() {
         }
 
         for (int id = 0; id < g_device_count; ++id) {
-            CUDA_CHECK(ggml_cuda_set_device(id));
+            ggml_cuda_set_device(id);
 
             // create cuda streams
             for (int is = 0; is < MAX_STREAMS; ++is) {
@@ -7982,12 +7982,12 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
 
 #ifdef NDEBUG
     for (int id = 0; id < g_device_count; ++id) {
-        CUDA_CHECK(ggml_cuda_set_device(id));
+        ggml_cuda_set_device(id);
         CUDA_CHECK(cudaDeviceSynchronize());
     }
 
     for (int id = 0; id < g_device_count; ++id) {
-        CUDA_CHECK(ggml_cuda_set_device(id));
+        ggml_cuda_set_device(id);
 
         for (int id_other = 0; id_other < g_device_count; ++id_other) {
             if (id == id_other) {
@@ -8146,7 +8146,7 @@ static void ggml_cuda_op_mul_mat(
         if (dst_on_device) {
             dev[id].dst_dd = (float *) dst_extra->data_device[id];
         } else {
-            const size_t size_dst_ddf = split ? (dev[id].row_high-dev[id].row_low)*ne1 : ggml_nelements(dst);
+            const size_t size_dst_ddf = split ? (dev[id].row_high - dev[id].row_low)*ne1 : ggml_nelements(dst);
             dev[id].dst_dd = dev[id].dst_dd_alloc.alloc(size_dst_ddf);
         }
     }
@@ -8154,7 +8154,7 @@ static void ggml_cuda_op_mul_mat(
     // if multiple devices are used they need to wait for the main device
     // here an event is recorded that signals that the main device has finished calculating the input data
     if (split && used_devices > 1) {
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+        ggml_cuda_set_device(g_main_device);
         CUDA_CHECK(cudaEventRecord(src0_extra->events[g_main_device][0], g_cudaStreams[g_main_device][0]));
     }
 
@@ -8294,7 +8294,7 @@ static void ggml_cuda_op_mul_mat(
         int64_t is_max = (ne11 + MUL_MAT_SRC1_COL_STRIDE - 1) / MUL_MAT_SRC1_COL_STRIDE;
         is_max = is_max <= MAX_STREAMS ? is_max : MAX_STREAMS;
 
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+        ggml_cuda_set_device(g_main_device);
         for (int64_t id = 0; id < g_device_count; ++id) {
             if (dev[id].row_low == dev[id].row_high) {
                 continue;
@@ -8306,7 +8306,7 @@ static void ggml_cuda_op_mul_mat(
     }
 
     if (dst->backend == GGML_BACKEND_CPU) {
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+        ggml_cuda_set_device(g_main_device);
         CUDA_CHECK(cudaDeviceSynchronize());
     }
 }
@@ -8416,7 +8416,7 @@ static void ggml_cuda_mul_mat_vec_p021(const ggml_tensor * src0, const ggml_tens
 
     const int64_t ne12 = src1->ne[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -8448,7 +8448,7 @@ static void ggml_cuda_mul_mat_vec_nc(const ggml_tensor * src0, const ggml_tensor
 
     const int64_t ne12 = src1->ne[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -8519,7 +8519,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor * src0, const
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
     CUBLAS_CHECK(cublasSetStream(g_cublas_handles[g_main_device], main_stream));
@@ -8803,7 +8803,7 @@ static void ggml_cuda_mul_mat_id_cublas(ggml_tensor * dst) {
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
     CUBLAS_CHECK(cublasSetStream(g_cublas_handles[g_main_device], main_stream));
@@ -9077,7 +9077,7 @@ static void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, gg
     const int64_t nb11 = src1->nb[1];
     const int64_t nb12 = src1->nb[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
     const ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -9239,14 +9239,13 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
     for (int64_t id = 0; id < g_device_count; ++id) {
+        ggml_cuda_set_device(id);
         if (extra->data_device[id] != nullptr) {
-            CUDA_CHECK(ggml_cuda_set_device(id));
             CUDA_CHECK(cudaFree(extra->data_device[id]));
         }
 
         for (int64_t is = 0; is < MAX_STREAMS; ++is) {
             if (extra->events[id][is] != nullptr) {
-                CUDA_CHECK(ggml_cuda_set_device(id));
                 CUDA_CHECK(cudaEventDestroy(extra->events[id][is]));
             }
         }
@@ -9300,7 +9299,7 @@ static void ggml_cuda_assign_buffers_impl(struct ggml_tensor * tensor, bool scra
         force_inplace;
     const size_t size = ggml_nbytes(tensor);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
         ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
@@ -9377,7 +9376,7 @@ void ggml_cuda_copy_to_device(struct ggml_tensor * tensor) {
     GGML_ASSERT(ggml_is_contiguous(tensor));
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    ggml_cuda_set_device(g_main_device);
     CUDA_CHECK(cudaMemcpy(extra->data_device[g_main_device], tensor->data, ggml_nbytes(tensor), cudaMemcpyHostToDevice));
 }
 
