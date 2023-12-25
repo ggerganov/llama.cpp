@@ -17,23 +17,42 @@
     in
 
     {
-      # These define the various ways to build the llama.cpp project.
-      # Integrate them into your flake.nix configuration by adding this overlay to nixpkgs.overlays.
-      overlays.default = import ./.devops/nix/overlay.nix;
+      # An overlay can be used to have a more granular control over llama-cpp's
+      # dependencies and configuration, than that offered by the `.override`
+      # mechanism. Cf. https://nixos.org/manual/nixpkgs/stable/#chap-overlays.
+      #
+      # E.g. in a flake:
+      # ```
+      # { nixpkgs, llama-cpp, ... }:
+      # let pkgs = import nixpkgs {
+      #     overlays = [ (llama-cpp.overlays.default) ];
+      #     system = "aarch64-linux";
+      #     config.allowUnfree = true;
+      #     config.cudaSupport = true;
+      #     config.cudaCapabilities = [ "7.2" ];
+      #     config.cudaEnableForwardCompat = false;
+      # }; in {
+      #     packages.aarch64-linux.llamaJetsonXavier = pkgs.llamaPackages.llama-cpp;
+      # }
+      # ```
+      #
+      # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
+      overlays.default = (final: prev: { llamaPackages = final.callPackage .devops/nix/scope.nix { }; });
 
       # These use the package definition from `./.devops/nix/package.nix`.
       # There's one per backend that llama-cpp uses. Add more as needed!
       packages = eachSystem (
         system:
         let
-          defaultConfig = {
-            inherit system;
-            overlays = [ self.overlays.default ];
-          };
-          pkgs = import nixpkgs defaultConfig;
+          # Avoid re-evaluation for the nixpkgs instance,
+          # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
+          pkgs = nixpkgs.legacyPackages.${system};
 
-          # Let's not make a big deal about getting the CUDA bits.
-          cudaConfig = defaultConfig // {
+          # Ensure dependencies use CUDA consistently (e.g. that openmpi, ucc,
+          # and ucx are built with CUDA support)
+          pkgsCuda = import nixpkgs {
+            inherit system;
+
             config.cudaSupport = true;
             config.allowUnfreePredicate =
               p:
@@ -48,19 +67,18 @@
                 )
                 (p.meta.licenses or [ p.meta.license ]);
           };
-          pkgsCuda = import nixpkgs cudaConfig;
 
-          # Let's make sure to turn on ROCm support across the whole package ecosystem.
-          rocmConfig = defaultConfig // {
+          # Ensure dependencies use ROCm consistently
+          pkgsRocm = import nixpkgs {
+            inherit system;
             config.rocmSupport = true;
           };
-          pkgsRocm = import nixpkgs rocmConfig;
         in
         {
-          default = pkgs.llama-cpp;
-          opencl = pkgs.llama-cpp.override { useOpenCL = true; };
-          cuda = pkgsCuda.llama-cpp;
-          rocm = pkgsRocm.llama-cpp;
+          default = (pkgs.callPackage .devops/nix/scope.nix { }).llama-cpp;
+          opencl = self.packages.${system}.default.override { useOpenCL = true; };
+          cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { }).llama-cpp;
+          rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { }).llama-cpp;
         }
       );
 
