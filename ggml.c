@@ -4041,7 +4041,6 @@ static struct ggml_tensor * ggml_group_norm_impl(
     result->op = GGML_OP_GROUP_NORM;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
-    result->src[1] = NULL; // TODO: maybe store epsilon here?
 
     return result;
 }
@@ -5541,7 +5540,6 @@ static struct ggml_tensor * ggml_upscale_impl(
     result->op_params[0] = scale_factor;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
-    result->src[1] = NULL;
 
     return result;
 }
@@ -5846,7 +5844,6 @@ struct ggml_tensor * ggml_get_rel_pos(
     result->op   = GGML_OP_GET_REL_POS;
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
     result->src[0] = a;
-    result->src[1] = NULL;
 
     return result;
 }
