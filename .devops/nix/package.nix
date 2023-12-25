@@ -178,18 +178,24 @@ effectiveStdenv.mkDerivation (
     };
 
     meta = {
+      broken = (useCuda && effectiveStdenv.isDarwin) || (useMetalKit && !effectiveStdenv.isDarwin);
       description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
-      mainProgram = "llama";
+      homepage = "https://github.com/ggerganov/llama.cpp/";
+      license = lib.licenses.mit;
 
+      # Accommodates `nix run` and `lib.getExe`
+      mainProgram = "llama";
 
       # These people might respond if you ping them in case of Nix-specific
       # regressions or for reviewing Nix-specific PRs.
 
       # Note that lib.maintainers is defined in Nixpkgs.
       maintainers = with lib.maintainers; [
-          philiptaron
-          SomeoneSerge
+        philiptaron
+        SomeoneSerge
       ];
+
+      platforms = lib.platforms.unix;
     };
   }
 )
