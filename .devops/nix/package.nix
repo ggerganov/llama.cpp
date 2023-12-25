@@ -162,6 +162,14 @@ effectiveStdenv.mkDerivation (
 
     # Define the shells here, but don't add in the inputsFrom to avoid recursion.
     passthru = {
+      inherit
+        useBlas
+        useCuda
+        useMetalKit
+        useOpenCL
+        useRocm
+        ;
+
       shell = mkShell {
         name = "default${descriptionSuffix}";
         description = "contains numpy and sentencepiece";
@@ -178,18 +186,39 @@ effectiveStdenv.mkDerivation (
     };
 
     meta = {
+      # Configurations we don't want even the CI to evaluate. Results in the
+      # "unsupported platform" messages. This is mostly a no-op, because
+      # cudaPackages would've refused to evaluate anyway.
+      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
+
+      # Configurations that are known to result in build failures. Can be
+      # overridden by importing Nixpkgs with `allowBroken = true`.
+      broken = (useMetalKit && !effectiveStdenv.isDarwin);
+
       description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
+      homepage = "https://github.com/ggerganov/llama.cpp/";
+      license = lib.licenses.mit;
+
+      # Accommodates `nix run` and `lib.getExe`
       mainProgram = "llama";
 
+      # These people might respond, on the best effort basis, if you ping them
+      # in case of Nix-specific regressions or for reviewing Nix-specific PRs.
+      # Consider adding yourself to this list if you want to ensure this flake
+      # stays maintained and you're willing to invest your time. Do not add
+      # other people without their consent. Consider removing people after
+      # they've been unreachable for long periods of time.
 
-      # These people might respond if you ping them in case of Nix-specific
-      # regressions or for reviewing Nix-specific PRs.
-
-      # Note that lib.maintainers is defined in Nixpkgs.
+      # Note that lib.maintainers is defined in Nixpkgs, but you may just add
+      # an attrset following the same format as in
+      # https://github.com/NixOS/nixpkgs/blob/f36a80e54da29775c78d7eff0e628c2b4e34d1d7/maintainers/maintainer-list.nix
       maintainers = with lib.maintainers; [
-          philiptaron
-          SomeoneSerge
+        philiptaron
+        SomeoneSerge
       ];
+
+      # Extend `badPlatforms` instead
+      platforms = lib.platforms.all;
     };
   }
 )
