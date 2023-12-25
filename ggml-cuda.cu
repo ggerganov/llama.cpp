@@ -8258,8 +8258,18 @@ static void ggml_cuda_op_mul_mat(
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0 + row_low[id];
-                        CUDA_CHECK(cudaMemcpy2DAsync(dhf_dst_i, ne0*sizeof(float), dst_dd_i, row_diff*sizeof(float),
-                                                    row_diff*sizeof(float), src1_ncols, kind, stream));
+
+                        if (kind == cudaMemcpyDeviceToDevice && id != g_main_device) {
+                            // there is no cudaMemcpy2DPeerAsync so we need to copy each row separately
+                            for (int64_t i = 0; i < src1_ncols; ++i) {
+                                CUDA_CHECK(cudaMemcpyPeerAsync(dhf_dst_i + i*ne0, g_main_device,
+                                                                dst_dd_i + i*row_diff, id,
+                                                                row_diff*sizeof(float), stream));
+                            }
+                        } else {
+                            CUDA_CHECK(cudaMemcpy2DAsync(dhf_dst_i, ne0*sizeof(float), dst_dd_i, row_diff*sizeof(float),
+                                                        row_diff*sizeof(float), src1_ncols, kind, stream));
+                        }
                     } else {
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
