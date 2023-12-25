@@ -53,6 +53,7 @@
         flake.overlays.default =
           (final: prev: {
             llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+            inherit (final.llamaPackages) llama-cpp;
           });
 
         systems = [
