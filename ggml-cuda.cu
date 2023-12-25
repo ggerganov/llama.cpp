@@ -6718,8 +6718,7 @@ void * ggml_cuda_host_malloc(size_t size) {
     void * ptr = nullptr;
     cudaError_t err = cudaMallocHost((void **) &ptr, size);
     if (err != cudaSuccess) {
-        // The allocation error can be bypassed. A null ptr will assigned out of this function.
-        // This can fixed the OOM error in WSL.
+        // clear the error
         cudaGetLastError();
         fprintf(stderr, "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
             size/1024.0/1024.0, cudaGetErrorString(err));
@@ -7926,12 +7925,16 @@ static void ggml_cuda_op_mul_mat(
 
             if (id != 0) {
                 row_low[id]  = ne01*g_tensor_split[id];
-                row_low[id] -= row_low[id] % rounding;
+                if (row_low[id] < ne01) {
+                    row_low[id] -= row_low[id] % rounding;
+                }
             }
 
             if (id != g_device_count - 1) {
                 row_high[id]  = ne01*g_tensor_split[id + 1];
-                row_high[id] -= row_high[id] % rounding;
+                if (row_high[id] < ne01) {
+                    row_high[id] -= row_high[id] % rounding;
+                }
             }
         }
     }
@@ -9666,12 +9669,14 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
 // host buffer type
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    CUDA_CHECK(cudaFreeHost(buffer->context));
+    ggml_cuda_host_free(buffer->context);
 }
 
 static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    void * ptr;
-    CUDA_CHECK(cudaMallocHost(&ptr, size));
+    void * ptr = ggml_cuda_host_malloc(size);
+    if (ptr == nullptr) {
+        return nullptr;
+    }
 
     // FIXME: this is a hack to avoid having to implement a new buffer type
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);

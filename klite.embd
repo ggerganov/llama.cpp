@@ -7649,7 +7649,7 @@ Current version: 101
 			selected_workers = [];
 			localsettings.opmode = 1;
 		}
-		restart_new_game();
+		restart_new_game(true, document.getElementById("keep_memory").checked);
 		hide_popups();
 	}
 
@@ -7802,7 +7802,7 @@ Current version: 101
 		horde_poll_nearly_completed = false;
 	}
 
-	function restart_new_game(save = true) {
+	function restart_new_game(save = true, keep_memory = false) {
 		idle_timer = 0;
 		gametext_arr = [];
 		redo_arr = [];
@@ -7816,15 +7816,7 @@ Current version: 101
 		synchro_pending_stream = "";
 		waiting_for_autosummary = false;
 		last_reply_was_empty = false;
-		current_memory = "";
-		current_anote = "";
-		current_wi = [];
 		pending_context_preinjection = "";
-		extrastopseq = "";
-		anote_strength = 320;
-		wi_searchdepth = 0;
-		wi_insertlocation = 0;
-		current_anotetemplate = "[Author's note: <|>]";
 		document.getElementById("input_text").value = "";
 		document.getElementById("cht_inp").value = "";
 		chat_resize_input();
@@ -7833,9 +7825,20 @@ Current version: 101
 		localsettings.adventure_is_action = false;
 		prev_hl_chunk = null;
 		last_token_budget = "";
-		last_known_filename = "saved_story.json";
 		groupchat_removals = [];
 		welcome = "";
+		last_known_filename = "saved_story.json";
+		if (!keep_memory)
+		{
+			current_memory = "";
+			current_anote = "";
+			current_wi = [];
+			extrastopseq = "";
+			anote_strength = 320;
+			wi_searchdepth = 0;
+			wi_insertlocation = 0;
+			current_anotetemplate = "[Author's note: <|>]";
+		}
 		render_gametext(save); //necessary to trigger an autosave to wipe out current story in case they exit browser after newgame.
 	}
 
@@ -7849,6 +7852,7 @@ Current version: 101
 			restart_new_game();
 			display_settings();
 			confirm_settings();
+			document.getElementById("keep_memory").checked = false;
 		},null);
 
 	}
@@ -12004,7 +12008,18 @@ Current version: 101
 			</div>
 			<div class="aidgpopuplistheader anotelabel">
 				Unsaved data will be lost.<br><br>
-				<div class="" title="If disabled, brings you back to the start page"><span style=" vertical-align: middle;">Keep AI Selected? </span> <input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked></div>
+				<div>
+					<div style="vertical-align: middle;">
+						<div title="If disabled, brings you back to the start page">
+							<span>Keep AI Selected? </span>
+							<input type="checkbox" id="keep_ai_selected" style=" vertical-align: top;" checked>
+						</div>
+						<div>
+							<span>Keep Memory and World Info? </span>
+							<input type="checkbox" id="keep_memory" style=" vertical-align: top;">
+						</div>
+					</div>
+				</div>
 				<br>
 			</div>
 			<div class="popupfooter">
