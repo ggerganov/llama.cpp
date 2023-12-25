@@ -54,10 +54,8 @@ python convert-hf-to-gguf.py models/mpt-7b/ --awq-path awq_cache/llama-7b-w4-g12
 
 ## Test
 ```bash
-# For llama and llama2, and mistral models.
+# For all models.
 ./build/bin/main -m models/llama_7b_q4_0.gguf -n 128 --prompt "Once upon a time"
-# For mpt models.
-./build/bin/main -m models/mpt_7b_q4_0.gguf --use-awq -n 128 --prompt "Once upon a time"
 ```
 
 ## Benchmark
@@ -65,8 +63,6 @@ The perplexity measurements in table above are done against the `wikitext2` test
 ```bash
 # For llama and llama2, and mistral models.
 ./perplexity -m models/llama_7b_q4_0.gguf -f datasets/wikitext-2-raw/wiki.test.raw
-# For mpt models.
-./perplexity -m models/mpt_7b_q4_0.gguf --use-awq -f datasets/wikitext-2-raw/wiki.test.raw
 ```
 
 ## Results
