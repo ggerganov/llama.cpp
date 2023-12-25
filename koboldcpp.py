@@ -875,8 +875,8 @@ Enter Prompt:<br>
 
         reqblocking = False
         muint = int(args.multiuser)
-        multiuserlimit = ((muint-1) if muint > 1 else 4)
-        #backwards compatibility for up to 5 concurrent requests, use default limit of 5 if multiuser set to 1
+        multiuserlimit = ((muint-1) if muint > 1 else 6)
+        #backwards compatibility for up to 7 concurrent requests, use default limit of 7 if multiuser set to 1
         if muint > 0 and requestsinqueue < multiuserlimit:
             reqblocking = True
             requestsinqueue += 1
