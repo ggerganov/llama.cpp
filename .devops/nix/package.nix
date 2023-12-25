@@ -24,6 +24,7 @@
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
   useOpenCL ? false,
   useRocm ? config.rocmSupport,
+  llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 }@inputs:
 
 let
@@ -31,6 +32,7 @@ let
     cmakeBool
     cmakeFeature
     optionals
+    strings
     versionOlder
     ;
 
@@ -39,18 +41,19 @@ let
   stdenv = throw "Use effectiveStdenv instead";
   effectiveStdenv = if useCuda then cudaPackages.backendStdenv else inputs.stdenv;
 
-  # Give a little description difference between the flavors.
+  suffices =
+    lib.optionals useOpenCL [ "OpenCL" ]
+    ++ lib.optionals useCuda [ "CUDA" ]
+    ++ lib.optionals useRocm [ "ROCm" ]
+    ++ lib.optionals useMetalKit [ "MetalKit" ]
+    ++ lib.optionals useBlas [ "BLAS" ];
+
+  pnameSuffix =
+    strings.optionalString (suffices != [ ])
+      "-${strings.concatMapStringsSep "-" strings.toLower suffices}";
   descriptionSuffix =
-    if useOpenCL then
-      " (OpenCL accelerated)"
-    else if useCuda then
-      " (CUDA accelerated)"
-    else if useRocm then
-      " (ROCm accelerated)"
-    else if useMetalKit then
-      " (MetalKit accelerated)"
-    else
-      "";
+    strings.optionalString (suffices != [ ])
+      ", accelerated with ${strings.concatStringsSep ", " suffices}";
 
   # TODO: package the Python in this repository in a Nix-like way.
   # It'd be nice to migrate to buildPythonPackage, as well as ensure this repo
@@ -99,10 +102,12 @@ in
 
 effectiveStdenv.mkDerivation (
   finalAttrs: {
-    name = "llama.cpp";
+    pname = "llama-cpp${pnameSuffix}";
+    version = llamaVersion;
+
     src = ../../.;
     meta = {
-      description = "Inference of LLaMA model in pure C/C++${descriptionSuffix}";
+      description = "LLaMA model in pure C/C++${descriptionSuffix}";
       mainProgram = "llama";
     };
 
@@ -167,14 +172,14 @@ effectiveStdenv.mkDerivation (
     # Define the shells here, but don't add in the inputsFrom to avoid recursion.
     passthru = {
       shell = mkShell {
-        name = "default${descriptionSuffix}";
+        name = "shell-${finalAttrs.finalPackage.name}";
         description = "contains numpy and sentencepiece";
         buildInputs = [ llama-python ];
         inputsFrom = [ finalAttrs.finalPackage ];
       };
 
       shell-extra = mkShell {
-        name = "extra${descriptionSuffix}";
+        name = "shell-extra-${finalAttrs.finalPackage.name}";
         description = "contains numpy, sentencepiece, torchWithoutCuda, and transformers";
         buildInputs = [ llama-python-extra ];
         inputsFrom = [ finalAttrs.finalPackage ];
