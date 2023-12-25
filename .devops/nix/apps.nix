@@ -1,14 +1,22 @@
-{ package, binaries }:
-
-let
-  default = builtins.elemAt binaries 0;
-  mkApp = name: {
-    ${name} = {
-      type = "app";
-      program = "${package}/bin/${name}";
+{
+  perSystem =
+    { config, lib, ... }:
+    {
+      apps =
+        let
+          inherit (config.packages) default;
+          binaries = [
+            "llama"
+            "llama-embedding"
+            "llama-server"
+            "quantize"
+            "train-text-from-scratch"
+          ];
+          mkApp = name: {
+            type = "app";
+            program = "${default}/bin/${name}";
+          };
+        in
+        lib.genAttrs binaries mkApp;
     };
-  };
-  result = builtins.foldl' (acc: name: (mkApp name) // acc) { } binaries;
-in
-
-result // { default = result.${default}; }
+}
