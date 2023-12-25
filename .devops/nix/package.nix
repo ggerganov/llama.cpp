@@ -186,10 +186,16 @@ effectiveStdenv.mkDerivation (
       # Accommodates `nix run` and `lib.getExe`
       mainProgram = "llama";
 
-      # These people might respond if you ping them in case of Nix-specific
-      # regressions or for reviewing Nix-specific PRs.
+      # These people might respond, on the best effort basis, if you ping them
+      # in case of Nix-specific regressions or for reviewing Nix-specific PRs.
+      # Consider adding yourself to this list if you want to ensure this flake
+      # stays maintained and you're willing to invest your time. Do not add
+      # other people without their consent. Consider removing people after
+      # they've been unreachable for long periods of time.
 
-      # Note that lib.maintainers is defined in Nixpkgs.
+      # Note that lib.maintainers is defined in Nixpkgs, but you may just add
+      # an attrset following the same format as in
+      # https://github.com/NixOS/nixpkgs/blob/f36a80e54da29775c78d7eff0e628c2b4e34d1d7/maintainers/maintainer-list.nix
       maintainers = with lib.maintainers; [
         philiptaron
         SomeoneSerge
