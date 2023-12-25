@@ -6741,7 +6741,7 @@ static void ggml_cuda_pool_free_vmm(int device, void * ptr, size_t size) {
 }
 
 static void * ggml_cuda_pool_malloc(int device, size_t size, size_t * actual_size) {
-    if (g_device_caps[device].vmm) {
+    if (device == g_main_device && g_device_caps[device].vmm) {
         return ggml_cuda_pool_malloc_vmm(device, size, actual_size);
     } else {
         return ggml_cuda_pool_malloc_leg(device, size, actual_size);
@@ -6749,7 +6749,7 @@ static void * ggml_cuda_pool_malloc(int device, size_t size, size_t * actual_siz
 }
 
 static void ggml_cuda_pool_free(int device, void * ptr, size_t size) {
-    if (g_device_caps[device].vmm) {
+    if (device == g_main_device && g_device_caps[device].vmm) {
         ggml_cuda_pool_free_vmm(device, ptr, size);
     } else {
         ggml_cuda_pool_free_leg(device, ptr, size);
@@ -7365,7 +7365,7 @@ static void ggml_cuda_op_mul_mat_q(
 static int64_t get_row_rounding(ggml_type type) {
     int64_t min_compute_capability = INT_MAX;
     int64_t max_compute_capability = INT_MIN;
-    for (int64_t id = 0; id < g_device_count; ++id) {
+    for (int id = 0; id < g_device_count; ++id) {
         if (g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
             if (min_compute_capability > g_device_caps[id].cc) {
                 min_compute_capability = g_device_caps[id].cc;
@@ -8078,7 +8078,7 @@ static void ggml_cuda_op_mul_mat(
 
     int used_devices = 0;
 
-    for (int64_t id = 0; id < g_device_count; ++id) {
+    for (int id = 0; id < g_device_count; ++id) {
         // by default, use all rows
         dev[id].row_low  = 0;
         dev[id].row_high = ne01;
@@ -8158,7 +8158,7 @@ static void ggml_cuda_op_mul_mat(
         const int64_t is = split ? (src1_col_0/src1_col_stride) % MAX_STREAMS : 0;
         const int64_t src1_ncols = src1_col_0 + src1_col_stride > ne11 ? ne11 - src1_col_0 : src1_col_stride;
 
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             if ((!split && id != g_main_device) || dev[id].row_low == dev[id].row_high) {
                 continue;
             }
@@ -8209,7 +8209,7 @@ static void ggml_cuda_op_mul_mat(
                     }
                 } else if (src1->backend == GGML_BACKEND_CPU || (src1_on_device && !src1_is_contiguous)) {
                     CUDA_CHECK(ggml_cuda_cpy_tensor_2d(
-                                   src1_ddf_i, src1, i03, i02, src1_col_0, src1_col_0+src1_ncols, stream));
+                                src1_ddf_i, src1, i03, i02, src1_col_0, src1_col_0+src1_ncols, stream));
                 } else {
                     GGML_ASSERT(false);
                 }
@@ -8255,7 +8255,7 @@ static void ggml_cuda_op_mul_mat(
                             // cudaMemcpy2DAsync may fail with copies between vmm pools of different devices
                             cudaMemcpy3DPeerParms p = {};
                             p.dstDevice = g_main_device;
-                            p.dstPtr = make_cudaPitchedPtr(dhf_dst_i, ne0*sizeof(float), ne0, src1_ncols);
+                            p.dstPtr = make_cudaPitchedPtr(dhf_dst_i, ne0*sizeof(float), row_diff, src1_ncols);
                             p.srcDevice = id;
                             p.srcPtr = make_cudaPitchedPtr(dst_dd_i, row_diff*sizeof(float), row_diff, src1_ncols);
                             p.extent = make_cudaExtent(row_diff*sizeof(float), src1_ncols, 1);
@@ -8290,7 +8290,7 @@ static void ggml_cuda_op_mul_mat(
         is_max = is_max <= MAX_STREAMS ? is_max : MAX_STREAMS;
 
         ggml_cuda_set_device(g_main_device);
-        for (int64_t id = 0; id < g_device_count; ++id) {
+        for (int id = 0; id < g_device_count; ++id) {
             if (dev[id].row_low == dev[id].row_high) {
                 continue;
             }
@@ -8655,7 +8655,7 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     const bool split = src0->backend == GGML_BACKEND_GPU_SPLIT;
 
     int64_t min_compute_capability = INT_MAX;
-    for (int64_t id = 0; id < g_device_count; ++id) {
+    for (int id = 0; id < g_device_count; ++id) {
         if (min_compute_capability > g_device_caps[id].cc && g_tensor_split[id] < (id + 1 < g_device_count ? g_tensor_split[id + 1] : 1.0f)) {
             min_compute_capability = g_device_caps[id].cc;
         }
@@ -9162,7 +9162,7 @@ void ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor) {
     ggml_tensor_extra_gpu * extra = new struct ggml_tensor_extra_gpu;
     memset(extra, 0, sizeof(*extra));
 
-    for (int64_t id = 0; id < g_device_count; ++id) {
+    for (int id = 0; id < g_device_count; ++id) {
         if (backend == GGML_BACKEND_GPU && id != g_main_device) {
             continue;
         }
@@ -9233,7 +9233,7 @@ void ggml_cuda_free_data(struct ggml_tensor * tensor) {
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
-    for (int64_t id = 0; id < g_device_count; ++id) {
+    for (int id = 0; id < g_device_count; ++id) {
         ggml_cuda_set_device(id);
         if (extra->data_device[id] != nullptr) {
             CUDA_CHECK(cudaFree(extra->data_device[id]));
