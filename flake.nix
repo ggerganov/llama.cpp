@@ -16,7 +16,10 @@
   # { program = "/nix/store/00000000000000000000000000000000-llama.cpp/bin/quantize"; type = "app"; }
   # ```
   outputs =
-    { flake-parts, ... }@inputs:
+    { self, flake-parts, ... }@inputs:
+    let
+      llamaVersion = self.dirtyShortRev or self.shortRev;
+    in
     flake-parts.lib.mkFlake { inherit inputs; }
 
       {
@@ -48,7 +51,9 @@
         #
         # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
         flake.overlays.default =
-          (final: prev: { llamaPackages = final.callPackage .devops/nix/scope.nix { }; });
+          (final: prev: {
+            llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+          });
 
         systems = [
           "aarch64-darwin"
@@ -69,10 +74,10 @@
             # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
             # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
             packages = {
-              default = (pkgs.callPackage .devops/nix/scope.nix { }).llama-cpp;
+              default = (pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
               opencl = config.packages.default.override { useOpenCL = true; };
-              cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { }).llama-cpp;
-              rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { }).llama-cpp;
+              cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+              rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
             };
           };
       };
