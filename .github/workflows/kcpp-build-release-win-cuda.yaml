@@ -6,7 +6,7 @@ env:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
       - name: Clone
         id: checkout
@@ -17,16 +17,14 @@ jobs:
       - uses: Jimver/cuda-toolkit@v0.2.11
         id: cuda-toolkit
         with:
-          cuda: '11.7.1'
-          method: 'network'
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
-
+          cuda: '11.4.4'
+        
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_CUBLAS=ON
+          cmake .. -DLLAMA_CUBLAS=ON -DCMAKE_SYSTEM_VERSION="10.0.19041.0"
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Save artifact
