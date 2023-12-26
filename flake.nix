@@ -73,6 +73,7 @@
         perSystem =
           {
             config,
+            lib,
             pkgs,
             pkgsCuda,
             pkgsRocm,
@@ -81,15 +82,18 @@
           {
             # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
             # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
-            packages = {
-              default = (pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
-              opencl = config.packages.default.override { useOpenCL = true; };
-              cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
-              rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+            packages =
+              {
+                default = (pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+              }
+              // lib.optionalAttrs pkgs.stdenv.isLinux {
+                opencl = config.packages.default.override { useOpenCL = true; };
+                cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+                rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
 
-              mpi-cpu = config.packages.default.override { useMpi = true; };
-              mpi-cuda = config.packages.default.override { useMpi = true; };
-            };
+                mpi-cpu = config.packages.default.override { useMpi = true; };
+                mpi-cuda = config.packages.default.override { useMpi = true; };
+              };
           };
       };
 }
