@@ -124,12 +124,20 @@ effectiveStdenv.mkDerivation (
       substituteInPlace ./*.py --replace "/usr/bin/env python" "${llama-python}/bin/python"
     '';
 
-    nativeBuildInputs = [
-      cmake
-      ninja
-      pkg-config
-      git
-    ] ++ optionals useCuda [ cudaPackages.cuda_nvcc ];
+    nativeBuildInputs =
+      [
+        cmake
+        ninja
+        pkg-config
+        git
+      ]
+      ++ optionals useCuda [
+        cudaPackages.cuda_nvcc
+
+        # TODO: Replace with autoAddDriverRunpath
+        # once https://github.com/NixOS/nixpkgs/pull/275241 has been merged
+        cudaPackages.autoAddOpenGLRunpathHook
+      ];
 
     buildInputs =
       [ mpi ]
