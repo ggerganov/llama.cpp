@@ -3753,14 +3753,6 @@ static bool llm_load_tensors(
                         model.output_norm   = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd},          backend_norm);
                         model.output_norm_b = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT_NORM, "bias"),   {n_embd},          backend_norm);
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
-
-                        if (backend_norm == GGML_BACKEND_GPU) {
-                            vram_weights += ggml_nbytes(model.output_norm);
-                            vram_weights += ggml_nbytes(model.output_norm_b);
-                        }
-                        if (backend_output == GGML_BACKEND_GPU_SPLIT) {
-                            vram_weights += ggml_nbytes(model.output);
-                        }
                     }
 
                     const uint32_t n_ff = hparams.n_ff;
@@ -3792,16 +3784,6 @@ static bool llm_load_tensors(
 
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff}, backend_split);
                         layer.ffn_up_b = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "bias", i),           {n_ff}, backend);
-
-                        if (backend == GGML_BACKEND_GPU) {
-                            vram_weights +=
-                                ggml_nbytes(layer.attn_norm) + ggml_nbytes(layer.attn_norm_b) +
-                                ggml_nbytes(layer.wqkv)      + ggml_nbytes(layer.bqkv)        +
-                                ggml_nbytes(layer.wo)        + ggml_nbytes(layer.bo)          +
-                                ggml_nbytes(layer.ffn_norm)  + ggml_nbytes(layer.ffn_norm_b)  +
-                                ggml_nbytes(layer.ffn_down)  + ggml_nbytes(layer.ffn_down_b)  +
-                                ggml_nbytes(layer.ffn_up)    + ggml_nbytes(layer.ffn_up_b);
-                        }
                     }
                 } break;
             default:
@@ -5890,7 +5872,7 @@ struct llm_build_context {
 
                 cur = llm_build_kqv(ctx0, model, hparams, kv_self,
                         model.layers[il].wo, model.layers[il].bo,
-                        Qcur, KQ_scale, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Qcur, KQ_mask, n_ctx, n_tokens, n_kv, -1.0f, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 cb(cur, "kqv_out", il);
             }
 
