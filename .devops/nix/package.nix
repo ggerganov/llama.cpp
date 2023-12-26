@@ -150,6 +150,14 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
       ]
+      ++ optionals useCuda [
+        (
+          with cudaPackages.flags;
+          cmakeFeature "CMAKE_CUDA_ARCHITECTURES" (
+            builtins.concatStringsSep ";" (map dropDot cudaCapabilities)
+          )
+        )
+      ]
       ++ optionals useRocm [
         (cmakeFeature "CMAKE_C_COMPILER" "hipcc")
         (cmakeFeature "CMAKE_CXX_COMPILER" "hipcc")
