@@ -112,7 +112,16 @@ effectiveStdenv.mkDerivation (
     pname = "llama-cpp${pnameSuffix}";
     version = llamaVersion;
 
-    src = lib.cleanSource ../../.;
+    src = lib.cleanSourceWith {
+      filter =
+        name: type:
+        !(builtins.any (_: _) [
+          (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
+          (name == "README.md") # Ignore *.md changes whe computing outPaths
+          (lib.hasPrefix "." name) # Skip hidden files and directories
+        ]);
+      src = lib.cleanSource ../../.;
+    };
 
     postPatch = ''
       substituteInPlace ./ggml-metal.m \
