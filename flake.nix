@@ -18,7 +18,13 @@
   outputs =
     { self, flake-parts, ... }@inputs:
     let
-      llamaVersion = self.dirtyShortRev or self.shortRev;
+      # We could include the git revisions in the package names but those would
+      # needlessly trigger rebuilds:
+      # llamaVersion = self.dirtyShortRev or self.shortRev;
+
+      # Nix already uses cryptographic hashes for versioning, so we'll just fix
+      # the fake semver for now:
+      llamaVersion = "0.0.0";
     in
     flake-parts.lib.mkFlake { inherit inputs; }
 

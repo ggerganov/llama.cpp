@@ -112,7 +112,7 @@ effectiveStdenv.mkDerivation (
     pname = "llama-cpp${pnameSuffix}";
     version = llamaVersion;
 
-    src = ../../.;
+    src = lib.cleanSource ../../.;
 
     postPatch = ''
       substituteInPlace ./ggml-metal.m \
