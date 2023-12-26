@@ -85,6 +85,9 @@
               opencl = config.packages.default.override { useOpenCL = true; };
               cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
               rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+
+              mpi-cpu = config.packages.default.override { useMpi = true; };
+              mpi-cuda = config.packages.default.override { useMpi = true; };
             };
           };
       };

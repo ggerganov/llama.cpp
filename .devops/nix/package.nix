@@ -22,6 +22,7 @@
   ],
   useCuda ? config.cudaSupport,
   useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
+  useMpi ? false, # Increases the runtime closure size by ~700M
   useOpenCL ? false,
   useRocm ? config.rocmSupport,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
@@ -42,11 +43,12 @@ let
   effectiveStdenv = if useCuda then cudaPackages.backendStdenv else inputs.stdenv;
 
   suffices =
-    lib.optionals useOpenCL [ "OpenCL" ]
+    lib.optionals useBlas [ "BLAS" ]
     ++ lib.optionals useCuda [ "CUDA" ]
-    ++ lib.optionals useRocm [ "ROCm" ]
     ++ lib.optionals useMetalKit [ "MetalKit" ]
-    ++ lib.optionals useBlas [ "BLAS" ];
+    ++ lib.optionals useMpi [ "MPI" ]
+    ++ lib.optionals useOpenCL [ "OpenCL" ]
+    ++ lib.optionals useRocm [ "ROCm" ];
 
   pnameSuffix =
     strings.optionalString (suffices != [ ])
@@ -149,11 +151,11 @@ effectiveStdenv.mkDerivation (
       ];
 
     buildInputs =
-      [ mpi ]
-      ++ optionals useOpenCL [ clblast ]
+      optionals effectiveStdenv.isDarwin darwinBuildInputs
       ++ optionals useCuda cudaBuildInputs
-      ++ optionals useRocm rocmBuildInputs
-      ++ optionals effectiveStdenv.isDarwin darwinBuildInputs;
+      ++ optionals useMpi [ mpi ]
+      ++ optionals useOpenCL [ clblast ]
+      ++ optionals useRocm rocmBuildInputs;
 
     cmakeFlags =
       [
@@ -166,6 +168,7 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_CUBLAS" useCuda)
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
+        (cmakeBool "LLAMA_MPI" useMpi)
       ]
       ++ optionals useCuda [
         (
@@ -203,6 +206,7 @@ effectiveStdenv.mkDerivation (
         useBlas
         useCuda
         useMetalKit
+        useMpi
         useOpenCL
         useRocm
         ;
