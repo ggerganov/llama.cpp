@@ -8,7 +8,7 @@
 
    <!-- schema -->
    <script>
-      let spec = {
+     let spec = {
             "components": {
                "schemas": {
                   "BasicError": {
@@ -176,7 +176,17 @@
                            "default": false,
                            "description": "KoboldCpp ONLY. If true, also removes detected stop_sequences from the output and truncates all text after them. Does not work with SSE streaming.",
                            "type": "boolean"
-                        }
+                        },
+                        "logit_bias": {
+                           "default": {},
+                           "description": "KoboldCpp ONLY. An dictionary of key-value pairs, which indicate the token IDs (int) and logit bias (float) to apply for that token. Up to 16 value can be provided.",
+                           "type": "object",
+                           "example": {
+                              "2": -20,
+                              "145": -1.4,
+                              "3105": 3.2
+                           },
+                        },
                      },
                      "required": [
                         "prompt"

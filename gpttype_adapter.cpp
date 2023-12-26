@@ -101,6 +101,7 @@ static int stopper_unused_tokens = 0;
 static std::mutex concat_output_mtx;
 static std::string concat_output = "";
 static std::string concat_output_reader_copy = "";
+static std::vector<logit_bias> logit_biases;
 
 const int extra_context_handle_fragmentation = 80;
 
@@ -487,6 +488,12 @@ int mirostat, float mirostat_tau, float mirostat_eta, const std::vector<samplers
     candidates.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
         candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+    }
+
+    for(int i=0;i<logit_biases.size();++i)
+    {
+        auto & itm = logit_biases[i];
+        candidates[itm.token_id].logit += itm.bias;
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
@@ -1434,6 +1441,17 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
         if(stopper!="")
         {
             stop_sequence.push_back(stopper);
+        }
+    }
+
+    logit_biases.clear();
+    for(int x=0;x<logit_bias_max;++x)
+    {
+        int32_t t_id = inputs.logit_biases[x].token_id;
+        float bias = inputs.logit_biases[x].bias;
+        if(t_id >= 0 && t_id < n_vocab && bias!=0)
+        {
+           logit_biases.push_back(inputs.logit_biases[x]);
         }
     }
 
