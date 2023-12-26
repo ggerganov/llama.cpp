@@ -102,6 +102,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
 - [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
+- [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
 
 **Multimodal models:**
 
@@ -132,6 +133,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [semperai/amica](https://github.com/semperai/amica)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
+- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 
 ---
 

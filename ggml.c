@@ -17456,9 +17456,9 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
 }
 
 //
-// ADAM
+// Using AdamW - ref: https://arxiv.org/pdf/1711.05101v3.pdf
 //
-//   ref: https://arxiv.org/pdf/1412.6980.pdf
+// (Original Adam - ref: https://arxiv.org/pdf/1412.6980.pdf)
 //
 
 static enum ggml_opt_result ggml_opt_adam(
@@ -19351,7 +19351,7 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
                             data[j] = ((struct gguf_str *)src->kv[i].value.arr.data)[j].data;
                         }
                         gguf_set_arr_str(ctx, src->kv[i].key.data, data, src->kv[i].value.arr.n);
-                        free(data);
+                        free((void *)data);
                     } else if (src->kv[i].value.arr.type == GGUF_TYPE_ARRAY) {
                         GGML_ASSERT(false && "nested arrays not supported");
                     } else {
