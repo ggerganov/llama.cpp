@@ -137,13 +137,13 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_BUILD_SERVER" true)
         (cmakeBool "BUILD_SHARED_LIBS" true)
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
-        (cmakeBool "LLAMA_METAL" useMetalKit)
         (cmakeBool "LLAMA_BLAS" useBlas)
+        (cmakeBool "LLAMA_CLBLAST" useOpenCL)
+        (cmakeBool "LLAMA_CUBLAS" useCuda)
+        (cmakeBool "LLAMA_HIPBLAS" useRocm)
+        (cmakeBool "LLAMA_METAL" useMetalKit)
       ]
-      ++ optionals useOpenCL [ (cmakeBool "LLAMA_CLBLAST" true) ]
-      ++ optionals useCuda [ (cmakeBool "LLAMA_CUBLAS" true) ]
       ++ optionals useRocm [
-        (cmakeBool "LLAMA_HIPBLAS" true)
         (cmakeFeature "CMAKE_C_COMPILER" "hipcc")
         (cmakeFeature "CMAKE_CXX_COMPILER" "hipcc")
 
