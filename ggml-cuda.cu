@@ -8251,7 +8251,7 @@ static void ggml_cuda_op_mul_mat(
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0 + dev[id].row_low;
 #if !defined(GGML_USE_HIPBLAS)
-                        if (kind == cudaMemcpyDeviceToDevice && id != g_main_device) {
+                        if (kind == cudaMemcpyDeviceToDevice) {
                             // cudaMemcpy2DAsync may fail with copies between vmm pools of different devices
                             cudaMemcpy3DPeerParms p = {};
                             p.dstDevice = g_main_device;
