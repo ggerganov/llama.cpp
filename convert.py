@@ -371,7 +371,6 @@ class VocabLoader:
             self.spm = None
 
     def hf_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
-        tokenizer = self.tokenizer
         added_tokens_ids = set(self.added_tokens_dict.values())
 
         for i in range(self.vocab_size_base):
