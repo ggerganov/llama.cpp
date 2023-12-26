@@ -9519,7 +9519,8 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc = ggml_allocr_new_from_buffer(ctx->buf_alloc);
 #if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
             if (model->n_gpu_layers > 0) {
-                ggml_cuda_set_scratch_size(alloc_size);
+                // the CPU buffer adds this padding in case the malloc buffer is not aligned, so we need to do the same for the GPU buffer, since we use the same offsets
+                ggml_cuda_set_scratch_size(alloc_size + 64);
                 LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MiB\n", __func__, alloc_size / 1024.0 / 1024.0);
 
                 // calculate total VRAM usage
