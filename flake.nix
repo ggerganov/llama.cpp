@@ -74,6 +74,7 @@
           {
             config,
             lib,
+            system,
             pkgs,
             pkgsCuda,
             pkgsRocm,
@@ -103,10 +104,12 @@
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
                 cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
-                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
+              }
+              // lib.optionalAttrs (system == "x86_64-linux") {
+                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
               };
           };
       };
