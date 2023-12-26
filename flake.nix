@@ -34,6 +34,7 @@
           .devops/nix/nixpkgs-instances.nix
           .devops/nix/apps.nix
           .devops/nix/devshells.nix
+          .devops/nix/jetson-support.nix
         ];
 
         # An overlay can be used to have a more granular control over llama-cpp's
