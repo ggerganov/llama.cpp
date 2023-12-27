@@ -354,6 +354,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_GATE,
     LLM_TENSOR_FFN_DOWN,
     LLM_TENSOR_FFN_UP,
+    LLM_TENSOR_FFN_ACT,
     LLM_TENSOR_FFN_DOWN_EXP,
     LLM_TENSOR_FFN_GATE_EXP,
     LLM_TENSOR_FFN_UP_EXP,
@@ -482,6 +483,7 @@ static std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = 
             { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_ACT,         "blk.%d.ffn.act" },
         },
     },
     {
@@ -1298,6 +1300,7 @@ struct llama_hparams {
     float f_clamp_kqv;
     float f_max_alibi_bias;
 
+
     bool operator!=(const llama_hparams & other) const {
         if (this->vocab_only    != other.vocab_only)    return true;
         if (this->n_vocab       != other.n_vocab)       return true;
@@ -1401,6 +1404,7 @@ struct llama_layer {
     // ff bias
     struct ggml_tensor * ffn_down_b; // b2
     struct ggml_tensor * ffn_up_b;   // b3
+    struct ggml_tensor * ffn_act;
 };
 
 struct llama_kv_cell {
@@ -3499,7 +3503,6 @@ static bool llm_load_tensors(
             case LLM_ARCH_MPT:
                 {
                     model.tok_embd = ml.create_tensor(ctx, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, GGML_BACKEND_CPU);
-
                     // output
                     {
                         ggml_backend_type backend_norm;
@@ -3537,6 +3540,9 @@ static bool llm_load_tensors(
 
                         layer.ffn_down = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd}, backend_split);
                         layer.ffn_up   = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff}, backend_split);
+
+                        // AWQ ScaleActivation layer
+                        layer.ffn_act = ml.create_tensor(ctx, tn(LLM_TENSOR_FFN_ACT, "scales", i), {n_ff}, backend, false);
                     }
                 } break;
             case LLM_ARCH_STABLELM:
@@ -4121,6 +4127,7 @@ static struct ggml_tensor * llm_build_ffn(
          struct ggml_tensor * gate_b,
          struct ggml_tensor * down,
          struct ggml_tensor * down_b,
+         struct ggml_tensor * act_scales,
             llm_ffn_op_type   type_op,
           llm_ffn_gate_type   type_gate,
          const llm_build_cb & cb,
@@ -4165,6 +4172,10 @@ static struct ggml_tensor * llm_build_ffn(
             {
                 cur = ggml_gelu(ctx, cur);
                 cb(cur, "ffn_gelu", il);
+                if (act_scales != NULL) {
+                    cur = ggml_div(ctx, cur, act_scales);
+                    cb(cur, "ffn_act", il);
+                }
             } break;
         case LLM_FFN_RELU:
             {
@@ -4483,6 +4494,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             } else {
@@ -4662,6 +4674,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4776,6 +4789,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -4880,6 +4894,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5084,6 +5099,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_RELU_SQR, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5170,6 +5186,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5265,6 +5282,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5350,11 +5368,11 @@ struct llm_build_context {
                         NULL,
                         LLM_NORM, cb, il);
                 cb(cur, "ffn_norm", il);
-
                 cur = llm_build_ffn(ctx0, cur,
                         model.layers[il].ffn_up,   NULL,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, NULL,
+                        model.layers[il].ffn_act,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5463,6 +5481,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5575,6 +5594,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -5682,6 +5702,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
+                        NULL,
                         LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
                 cb(ffn_output, "ffn_out", il);
             }
@@ -5785,6 +5806,7 @@ struct llm_build_context {
                         model.layers[il].ffn_up, NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down, NULL,
+                        NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
@@ -6068,6 +6090,7 @@ static const std::unordered_map<const char *, llm_offload_func_e> k_offload_map 
     { "ffn_gate",                   OFFLOAD_FUNC     },
     { "ffn_gate_b",                 OFFLOAD_FUNC     },
     { "ffn_gate_par",               OFFLOAD_FUNC     },
+    { "ffn_act",                    OFFLOAD_FUNC     },
     { "ffn_down",                   OFFLOAD_FUNC     },
     { "ffn_down_b",                 OFFLOAD_FUNC     },
     { "ffn_out",                    OFFLOAD_FUNC     },
@@ -9704,7 +9727,8 @@ struct llama_context * llama_new_context_with_model(
             ctx->alloc = ggml_allocr_new_from_buffer(ctx->buf_alloc);
 #if defined(GGML_USE_CUBLAS) && !defined(LLAMA_GGML_BACKEND_CUDA_TEST)
             if (model->n_gpu_layers > 0) {
-                ggml_cuda_set_scratch_size(alloc_size);
+                // the CPU buffer adds this padding in case the malloc buffer is not aligned, so we need to do the same for the GPU buffer, since we use the same offsets
+                ggml_cuda_set_scratch_size(alloc_size + 64);
                 LLAMA_LOG_INFO("%s: VRAM scratch buffer: %.2f MiB\n", __func__, alloc_size / 1024.0 / 1024.0);
 
                 // calculate total VRAM usage
