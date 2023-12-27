@@ -255,6 +255,8 @@
 #define GGML_UNREACHABLE() GGML_ASSERT(!"statement should not be reached")
 #elif defined(__GNUC__)
 #define GGML_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define GGML_UNREACHABLE() __assume(0)
 #else
 #define GGML_UNREACHABLE() ((void) 0)
 #endif
@@ -484,7 +486,8 @@ extern "C" {
     enum ggml_log_level {
         GGML_LOG_LEVEL_ERROR = 2,
         GGML_LOG_LEVEL_WARN = 3,
-        GGML_LOG_LEVEL_INFO = 4
+        GGML_LOG_LEVEL_INFO = 4,
+        GGML_LOG_LEVEL_DEBUG = 5
     };
 
     // ggml object

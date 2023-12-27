@@ -883,9 +883,6 @@ int main(int argc, const char ** argv) {
             srand(seed);
             const int nargs = 1;
 
-            int64_t ne2[4];
-            ne2[0] = 1;
-
             for (int ndims = 1; ndims <= 2; ++ndims) {
                 x[0] = get_random_tensor_f32(ctx0, ndims, ne, -1.0f, 1.0f);
 
