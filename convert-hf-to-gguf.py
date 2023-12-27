@@ -46,7 +46,7 @@ class Model:
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
         self.model_arch = self._get_model_architecture()
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess)
+        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=False)
 
     def set_vocab(self):
         self._set_vocab_gpt2()
@@ -59,7 +59,7 @@ class Model:
                 from safetensors import safe_open
                 ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
             else:
-                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", mmap=True, weights_only=True))
+                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", weights_only=True))
 
             with ctx as model_part:
                 for name in model_part.keys():
@@ -464,7 +464,11 @@ class MPTModel(Model):
             data = data_torch.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if "scales" in name:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
+                new_name = new_name.replace("scales", "act.scales")
+            else:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -1096,6 +1100,9 @@ def parse_args() -> argparse.Namespace:
         help="extract only the vocab",
     )
     parser.add_argument(
+        "--awq-path", type=Path, default=None,
+        help="Path to scale awq cache file")
+    parser.add_argument(
         "--outfile", type=Path,
         help="path to write to; default: based on input",
     )
@@ -1115,6 +1122,20 @@ def parse_args() -> argparse.Namespace:
 args = parse_args()
 
 dir_model = args.model
+
+if args.awq_path:
+    sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
+    from awq.apply_awq import add_scale_weights
+    tmp_model_path = args.model / "weighted_model"
+    dir_model = tmp_model_path
+    if tmp_model_path.is_dir():
+        print(f"{tmp_model_path} exists as a weighted model.")
+    else:
+        tmp_model_path.mkdir(parents=True, exist_ok=True)
+        print("Saving new weighted model ...")
+        add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
+        print(f"Saved weighted model at {tmp_model_path}.")
+
 if not dir_model.is_dir():
     print(f'Error: {args.model} is not a directory', file=sys.stderr)
     sys.exit(1)
