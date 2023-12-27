@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 101
+Current version: 102
 -Concedo
 -->
 
@@ -315,6 +315,11 @@ Current version: 101
 			display: inline;
 			width: 94px;
 			padding: 6px 3px;
+		}
+		.stopseqbox
+		{
+			display: inline;
+			width: calc(100% - 110px);
 		}
 
 		#popuptitlebar {
@@ -3294,6 +3299,7 @@ Current version: 101
 	var globalabortcontroller = null;
 	var passed_ai_warning_local = false;
 	var welcome = "";
+	var logitbiasdict = {};
 
 	var localsettings = {
 		my_api_key: "0000000000", //put here so it can be saved and loaded in persistent mode
@@ -4531,6 +4537,7 @@ Current version: 101
 		new_save_storyobj.anotestr = anote_strength;
 		new_save_storyobj.wisearchdepth = wi_searchdepth;
 		new_save_storyobj.wiinsertlocation = wi_insertlocation;
+		new_save_storyobj.logitbiasdict = JSON.parse(JSON.stringify(logitbiasdict));
 
 		if (export_settings) {
 			new_save_storyobj.savedsettings = JSON.parse(JSON.stringify(localsettings));
@@ -4745,6 +4752,9 @@ Current version: 101
 				}
 				if (storyobj.anotestr) {
 					anote_strength = storyobj.anotestr;
+				}
+				if (storyobj.logitbiasdict) {
+					logitbiasdict = storyobj.logitbiasdict;
 				}
 				if (storyobj.wisearchdepth) {
 					wi_searchdepth = storyobj.wisearchdepth;
@@ -5883,6 +5893,27 @@ Current version: 101
 			pendinggrammar = userinput;
 			console.log("Saved grammar: " + pendinggrammar);
 		},false,true);
+	}
+
+	var pendinglogitbias = {};
+	function set_logit_bias()
+	{
+		inputBox("Enter OpenAI-formatted logit bias dictionary. Each key is the integer token IDs and their values are the biases (-100.0 to 100.0)<br><a href='https://platform.openai.com/docs/api-reference/chat/create#chat-create-logit_bias' class='color_blueurl'>Input is a JSON object, reference here.</a><br>Leave blank to disable.<br>","Set Logit Biases",JSON.stringify(pendinglogitbias),"Enter JSON Object",()=>{
+			let userinput = getInputBoxValue().trim();
+			if(userinput=="")
+			{
+				pendinglogitbias = {};
+			}
+			else
+			{
+				try {
+					pendinglogitbias = JSON.parse(userinput);
+				} catch (e) {
+					msgbox("Your logit bias JSON dictionary was not correctly formatted!");
+				}
+			}
+
+		},true,true);
 	}
 
 	var msgboxOnDone = hide_msgbox;
@@ -7660,6 +7691,7 @@ Current version: 101
 		anote_strength = document.getElementById("anote_strength").value;
 		extrastopseq = document.getElementById("extrastopseq").value;
 		newlineaftermemory = (document.getElementById("newlineaftermemory").checked?true:false);
+		logitbiasdict = pendinglogitbias;
 		hide_popups();
 		render_gametext();
 	}
@@ -7712,20 +7744,6 @@ Current version: 101
 		if(localsettings.sampler_seed>=1)
 		{
 			submit_payload.params.sampler_seed = localsettings.sampler_seed;
-		}
-
-		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
-		{
-			if(localsettings.miro_type>0)
-			{
-				submit_payload.params.mirostat = localsettings.miro_type;
-				submit_payload.params.mirostat_tau = localsettings.miro_tau;
-				submit_payload.params.mirostat_eta = localsettings.miro_eta;
-			}
-
-			//also supports min_p, in that it wont crash, so add it on. it will be ignored if not found
-			submit_payload.params.min_p = localsettings.min_p;
-			submit_payload.params.presence_penalty = localsettings.presence_penalty;
 		}
 
 		//v2 api specific fields
@@ -7835,6 +7853,7 @@ Current version: 101
 			current_wi = [];
 			extrastopseq = "";
 			anote_strength = 320;
+			logitbiasdict = {};
 			wi_searchdepth = 0;
 			wi_insertlocation = 0;
 			current_anotetemplate = "[Author's note: <|>]";
@@ -8581,20 +8600,6 @@ Current version: 101
 				submit_payload.params.sampler_seed = localsettings.sampler_seed;
 			}
 
-			if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
-			{
-				if(localsettings.miro_type>0)
-				{
-					submit_payload.params.mirostat = localsettings.miro_type;
-					submit_payload.params.mirostat_tau = localsettings.miro_tau;
-					submit_payload.params.mirostat_eta = localsettings.miro_eta;
-				}
-
-				//also supports min_p, in that it wont crash, so add it on. it will be ignored if not found
-				submit_payload.params.min_p = localsettings.min_p;
-				submit_payload.params.presence_penalty = localsettings.presence_penalty;
-			}
-
 			if((custom_kobold_endpoint != "" && is_using_kcpp_with_grammar()))
 			{
 				if(localsettings.grammar && localsettings.grammar!="")
@@ -8682,6 +8687,26 @@ Current version: 101
 	{
 		console.log(submit_payload);
 
+		//preprocess to add extra fields
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()))
+		{
+			if(localsettings.miro_type>0)
+			{
+				submit_payload.params.mirostat = localsettings.miro_type;
+				submit_payload.params.mirostat_tau = localsettings.miro_tau;
+				submit_payload.params.mirostat_eta = localsettings.miro_eta;
+			}
+
+			//also supports min_p, in that it wont crash, so add it on. it will be ignored if not found
+			submit_payload.params.min_p = localsettings.min_p;
+		}
+		//presence pen and logit bias for OAI and newer kcpp
+		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
+		{
+			submit_payload.params.presence_penalty = localsettings.presence_penalty;
+			submit_payload.params.logit_bias = JSON.parse(JSON.stringify(logitbiasdict));
+		}
+
 		startTimeTaken(); //timestamp start request
 
 		if (is_using_custom_ep()) {
@@ -8736,8 +8761,14 @@ Current version: 101
 
 				let targetep = (custom_oai_endpoint + oai_submit_endpoint);
 
-				//original range between 1 and 3, scale to 0 and 2
-				let scaled_rep_pen = (submit_payload.params.rep_pen - 1.0);
+				let scaled_rep_pen = 0;
+				if(submit_payload.params.presence_penalty > 0)
+				{
+					scaled_rep_pen = submit_payload.params.presence_penalty;
+				}else{
+					//original range between 1 and 3, scale to 0 and 2
+					scaled_rep_pen = (submit_payload.params.rep_pen - 1.0);
+				}
 				//logit bias prevents <|endoftext|>
 				let oai_payload =
 				{
@@ -8746,6 +8777,10 @@ Current version: 101
 					"presence_penalty": scaled_rep_pen,
 					"temperature": submit_payload.params.temperature,
 					"top_p": submit_payload.params.top_p,
+				}
+				if(submit_payload.params.logit_bias && JSON.stringify(submit_payload.params.logit_bias) != '{}')
+				{
+					oai_payload.logit_bias = submit_payload.params.logit_bias;
 				}
 
 				if (document.getElementById("useoaichatcompl").checked) {
@@ -8763,7 +8798,12 @@ Current version: 101
 					}
 				}
 				else {
-					oai_payload.logit_bias = { "50256": -100 };
+					if(oai_payload.logit_bias)
+					{
+						oai_payload.logit_bias["50256"] = -100;
+					}else{
+						oai_payload.logit_bias = { "50256": -100 };
+					}
 					oai_payload.prompt = submit_payload.prompt;
 				}
 
@@ -10760,6 +10800,7 @@ Current version: 101
 		document.getElementById("anote_strength").value = anote_strength;
 		document.getElementById("extrastopseq").value = extrastopseq;
 		document.getElementById("newlineaftermemory").checked = (newlineaftermemory?true:false);
+		pendinglogitbias = logitbiasdict;
 		if(custom_kobold_endpoint!="" || !is_using_custom_ep() )
 		{
 			document.getElementById("noextrastopseq").classList.add("hidden");
@@ -12612,8 +12653,8 @@ Current version: 101
 			<div class="justifyleft settinglabel">Extra Stopping Sequences <span class="helpicon">?<span
 				class="helptext">Triggers the text generator to stop generating early if this sequence appears, in addition to default stop sequences. If you want multiple sequences, separate them with the following delimiter: ||$||</span></span></div>
 				<div class="color_red hidden" id="noextrastopseq">Stop Sequences may be unavailable.</div>
-				<input class="form-control" type="text" placeholder="None" value="" id="extrastopseq">
-
+				<input class="form-control stopseqbox" type="text" placeholder="None" value="" id="extrastopseq">
+				<button type="button" class="btn btn-primary" style="width:104px;padding:6px 6px;margin-bottom: 4px;" id="btnlogitbias" onclick="set_logit_bias()">Logit Biases</button>
 			<br>
 			<div class="popupfooter">
 				<button type="button" class="btn btn-primary" onclick="confirm_memory()">OK</button>
