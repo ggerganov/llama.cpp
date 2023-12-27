@@ -1303,6 +1303,135 @@ static inline int nearest_int(float fval) {
     return (i & 0x007fffff) - 0x00400000;
 }
 
+static void quantize_q_k_1(const float * x, int bits, int scale_bits, int block_size, int * block_scales, int * block_mins, uint8_t * L, ggml_fp16_t * block_scale, ggml_fp16_t * block_min) {
+    float max_scale = 0.0f;
+    float max_min = 0.0f;
+
+    // If all the weight are positive we can invert the sign of min.
+    // Otherwise blocks with all positive weights need to be quantized with zero
+    // min, because min scale is unsigned.
+    int all_positive = 1;
+    for (int j = 0; j < QK_K; j++) {
+        if (x[j] < 0.0f) {
+            all_positive = 0;
+            break;
+        }
+    }
+
+    float scales[QK_K];
+    float mins[QK_K];
+
+    for (int j = 0; j < QK_K/block_size; j++) {
+        uint8_t q[QK_K/block_size];
+        // First find least squares solution for min and scale for each block.
+        quantize_1(&x[block_size*j], block_size, bits, q, &mins[j], &scales[j]);
+        // Flip the sign because quantize_1 assumes that min is added, but min
+        // is subtracted in k-quants.
+        mins[j] = -mins[j];
+        if (!all_positive && mins[j] < 0) {
+            // All weights are positive in this block, but some blocks have
+            // negative weights. Find new least squares scale with zero min.
+            mins[j] = 0.0f;
+            quantize_1_0min(&x[block_size*j], block_size, bits, q, &scales[j]);
+        }
+        if (scales[j] > max_scale) {
+            max_scale = scales[j];
+        }
+        if (j == 0) {
+            max_min = mins[j];
+        } else if (!all_positive && mins[j] > max_min) {
+            max_min = mins[j];
+        } else if (all_positive && mins[j] < max_min) {
+            max_min = mins[j];
+        }
+    }
+
+    int max_group = (1 << scale_bits) - 1;
+
+    // Increasing passes would decrease RMS error by miniscule amount with
+    // drawback of taking a lot more time.
+    for(int pass = 0; pass < 2; pass++) {
+        float inv_scale = max_scale == 0.0f ? 0.0f : max_group/max_scale;
+        float inv_min   = max_min == 0.0f ? 0.0f : max_group/max_min;
+        for (int j = 0; j < QK_K/block_size; ++j) {
+            uint8_t ls = nearest_int(inv_scale*scales[j]);
+            uint8_t lm = nearest_int(inv_min*mins[j]);
+            uint8_t best_lm = lm;
+            uint8_t best_ls = ls;
+            ls = MIN(max_group, ls);
+            lm = MIN(max_group, lm);
+            float best_rms = FLT_MAX;
+            const float d1 = max_scale / max_group;
+            const float dmin1 = max_min / max_group;
+            int limit = 1;
+            // Increase limit for minor RMS error decrease while increasing the
+            // quantization run time.
+            if (pass > 0) limit = 8;
+            // Due to quantization the best ls and lm might not be the nearest
+            // to the ones obtained by the round to nearest.
+            // Loop through few nearby choices and choose lm and ls that
+            // minimize RMS error.
+            for (int lst = MAX(0, ls-limit); lst <= MIN(max_group, ls+limit); lst++) {
+                for (int lmt = MAX(0, lm-limit); lmt <= MIN(max_group, lm+limit); lmt++) {
+                    float rms = 0.0f;
+                    for (int ii = 0; ii < block_size; ii++) {
+                        const float d = d1 * lst;
+                        const float dm1 = dmin1 * lmt;
+                        int l1 = 0;
+                        if (d) {
+                            l1 = nearest_int((x[block_size*j + ii] + dm1)/d);
+                            l1 = MAX(0, MIN((1 << bits) - 1, l1));
+                        }
+                        const float e = (d*l1 - dm1) - x[block_size*j + ii];
+                        rms += e*e;
+                    }
+                    if (rms < best_rms) {
+                        best_lm = lmt;
+                        best_ls = lst;
+                        best_rms = rms;
+                    }
+                }
+            }
+            block_scales[j] = best_ls;
+            block_mins[j] = best_lm;
+        }
+
+        float block_d = max_scale/max_group;
+        float block_dmin = max_min/max_group;
+        float q_fit[QK_K];
+        float q_m[QK_K];
+
+        // Quantize elements and populate arrays needed for least squares fit.
+        for (int j = 0; j < QK_K/block_size; ++j) {
+            const float d = block_d * block_scales[j];
+            const float dm = block_dmin * block_mins[j];
+            q_m[j] = block_mins[j];
+            for (int ii = 0; ii < block_size; ++ii) {
+                int l = 0;
+                if (d) {
+                    l = nearest_int((x[block_size*j + ii] + dm)/d);
+                    l = MAX(0, MIN((1 << bits) - 1, l));
+                }
+                L[block_size*j + ii] = l;
+                q_fit[block_size*j + ii] = block_scales[j] * l;
+            }
+        }
+
+        // Least squares fit min and scale.
+        float min, scale;
+        lstsq_q_k(q_fit, x, q_m, block_size, &min, &scale);
+        // Check for nans.
+        assert(min == min);
+        assert(scale == scale);
+        // Quantize to fp16 for the next pass.
+        max_scale = GGML_FP16_TO_FP32(GGML_FP32_TO_FP16(scale)) * max_group;
+        max_min = GGML_FP16_TO_FP32(GGML_FP32_TO_FP16(min)) * max_group;
+
+        *block_scale = GGML_FP32_TO_FP16(scale);
+        *block_min = GGML_FP32_TO_FP16(min);
+    }
+}
+
 static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * restrict L, int rmse_type) {
     float max = 0;
     float amax = 0;
@@ -1844,94 +1973,16 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
     const int nb = k / QK_K;
 
     uint8_t L[QK_K];
-    float mins[QK_K/32];
-    float scales[QK_K/32];
 
     for (int i = 0; i < nb; i++) {
-        float max_scale = 0; // as we are deducting the min, scales are always positive
-        float max_min = 0;
-
-        int all_positive = 1;
-        for (int j = 0; j < QK_K; j++) {
-            if (x[j] < 0.0f) {
-                all_positive = 0;
-                break;
-            }
-        }
-
-        for (int j = 0; j < QK_K/32; j++) {
-            uint8_t q[QK_K/32];
-            quantize_1(&x[32*j], 32, 4, q, &mins[j], &scales[j]);
-            mins[j] = -mins[j];
-            if ((!all_positive) && (mins[j] < 0)) {
-                mins[j] = 0.0f;
-                quantize_1_0min(&x[32*j], 32, 4, q, &scales[j]);
-            }
-
-            if (j == 0 || scales[j] > max_scale) {
-                max_scale = scales[j];
-            }
-            if (j == 0) {
-                max_min = mins[j];
-            }
-            if (!all_positive && mins[j] > max_min) {
-                max_min = mins[j];
-            } else if (all_positive && mins[j] < max_min) {
-                max_min = mins[j];
-            }
-        }
-
-        int ql_loop = 0;
-quant_loop: ;
 #if QK_K == 256
-        float inv_scale = max_scale == 0.0f ? 0.0f : 63.f/max_scale;
-        float inv_min   = max_min  == 0.0f ? 0.0f : 63.f/max_min;
+        int block_scales[QK_K/32];
+        int block_mins[QK_K/32];
+        quantize_q_k_1(x, 4, 6, 32, block_scales, block_mins, L, &y[i].d, &y[i].dmin);
+
         for (int j = 0; j < QK_K/32; ++j) {
-            uint8_t ls = nearest_int(inv_scale*scales[j]);
-            uint8_t lm = nearest_int(inv_min*mins[j]);
-            uint8_t best_lm = lm;
-            uint8_t best_ls = ls;
-            ls = MIN(63, ls);
-            lm = MIN(63, lm);
-            float best_rms = FLT_MAX;
-            const float d1 = max_scale / 63.0f;
-            const float dmin1 = max_min / 63.0f;
-            int limit = 1;
-            if (ql_loop) limit = 4;
-            for (int lst = MAX(0, ls-limit); lst <= MIN(63, ls+limit); lst++) {
-                for (int lmt = MAX(0, lm-limit); lmt <= MIN(63, lm+limit); lmt++) {
-                    float rms = 0.0f;
-                    for (int ii = 0; ii < 32; ii++) {
-                        const float d = d1 * lst;
-                        const float dm1 = dmin1 * lmt;
-                        int l1 = 0;
-                        if (d) {
-                            l1 = nearest_int((x[32*j + ii] + dm1)/d);
-                            l1 = MAX(0, MIN(15, l1));
-                        }
-                        float e = ((d*l1 - dm1) - x[32*j + ii]);
-                        rms += e*e;
-                    }
-                    if (rms < best_rms) {
-                        best_lm = lmt;
-                        best_ls = lst;
-                        best_rms = rms;
-                    }
-                }
-            }
-            //if (lm != best_lm) {
-            //    printf("best %d, orig %d\n", best_lm, lm);
-            //}
-            lm = best_lm;
-            ls = best_ls;
-            //if (rms2 < rms && rms2 < rms3) {
-            //    printf("rms2 %f %f %f, lm %d %d %d\n", rms, rms2, rms3, lm, lm2, lm3);
-            //    lm = lm2;
-            //}
-            //if (rms3 < rms && rms3 < rms2) {
-            //    printf("rms3 %f %f %f, lm %d %d %d\n", rms, rms2, rms3, lm, lm2, lm3);
-            //    lm = lm3;
-            //}
+            int ls = block_scales[j];
+            int lm = block_mins[j];
             if (j < 4) {
                 y[i].scales[j] = ls;
                 y[i].scales[j+4] = lm;
@@ -1940,58 +1991,6 @@ quant_loop: ;
                 y[i].scales[j-4] |= ((ls >> 4) << 6);
                 y[i].scales[j-0] |= ((lm >> 4) << 6);
             }
-        }
-
-        //if (all_zero_lm && !all_positive && !ql_loop) {
-        //    all_positive = 1;
-        //    //printf("**********red_pos4\n");
-        //    goto redo_pos4;
-        //}
-        //} else if (all_zero_lm) {
-        //    //printf("all_zero_lm, all_pos %d, max_scale %f, max_min %f\n", all_positive, max_scale, max_min);
-        //}
-
-        y[i].d = GGML_FP32_TO_FP16(max_scale/63.f);
-        y[i].dmin = GGML_FP32_TO_FP16(max_min/63.f);
-        float q_fit[QK_K];
-        float q_m[QK_K/32];
-
-        uint8_t sc, m;
-        for (int j = 0; j < QK_K/32; ++j) {
-            get_scale_min_k4(j, y[i].scales, &sc, &m);
-            const float d = GGML_FP16_TO_FP32(y[i].d) * sc;
-            const float dm = GGML_FP16_TO_FP32(y[i].dmin) * m;
-            q_m[j] = m;
-            for (int ii = 0; ii < 32; ++ii) {
-                int l = 0;
-                if (d) {
-                    l = nearest_int((x[32*j + ii] + dm)/d);
-                    l = MAX(0, MIN(15, l));
-                }
-                L[32*j + ii] = l;
-                q_fit[32*j + ii] = sc * l;
-            }
-        }
-
-        //printf("%d orig: %f %f, ", ql_loop, max_min, max_scale);
-        float min, scale;
-        lstsq_q_k(q_fit, x, q_m, 32, &min, &scale);
-        if (min != min) {
-            printf("min nan\n");
-        }
-        if (scale != scale) {
-            printf("scale nan\n");
-        }
-        //printf("fit: %f %f\n", max_min, max_scale);
-        y[i].d = GGML_FP32_TO_FP16(scale);
-        y[i].dmin = GGML_FP32_TO_FP16(min);
-        //printf("%f %f, %f %f\n", max_min, min * 63.0f, max_scale, scale * 63.0f);
-        max_scale = GGML_FP16_TO_FP32(y[i].d) * 63.0f;
-        max_min = GGML_FP16_TO_FP32(y[i].dmin) * 63.0f;
-
-        ql_loop++;
-        if (ql_loop == 1) {
-            goto quant_loop;
         }
 #else
         const float s_factor = 15.f;
