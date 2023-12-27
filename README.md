@@ -102,6 +102,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
 - [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
+- [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
 
 **Multimodal models:**
 
@@ -132,6 +133,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [semperai/amica](https://github.com/semperai/amica)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
+- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 
 ---
 
@@ -396,6 +398,9 @@ Building the program with BLAS support may lead to some performance improvements
 - #### cuBLAS
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+
+  For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
+
   - Using `make`:
     ```bash
     make LLAMA_CUBLAS=1
