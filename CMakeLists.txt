@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
+include(CheckIncludeFileCXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -96,11 +97,11 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
-option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
+option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
@@ -122,7 +123,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
 # Compile flags
 #
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
@@ -338,17 +339,10 @@ if (LLAMA_CUBLAS)
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
 
         if (LLAMA_STATIC)
-            if (WIN32)
-                # As of 12.3.1 CUDA Tookit for Windows does not offer a static cublas library
-                set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
-            else ()
-                set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
-            endif()
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
         else()
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
-
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cuda_driver)
 
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         # 52 == lowest CUDA 12 standard
@@ -426,9 +420,6 @@ if (LLAMA_HIPBLAS)
     if (${hipblas_FOUND} AND ${hip_FOUND})
         message(STATUS "HIP and hipBLAS found")
         add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUBLAS)
-        if (LLAMA_HIP_UMA)
-            add_compile_definitions(GGML_HIP_UMA)
-        endif()
         add_library(ggml-rocm OBJECT ggml-cuda.cu ggml-cuda.h)
         if (BUILD_SHARED_LIBS)
             set_target_properties(ggml-rocm PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -453,6 +444,64 @@ if (LLAMA_HIPBLAS)
         message(WARNING "hipBLAS or HIP not found. Try setting CMAKE_PREFIX_PATH=/opt/rocm")
     endif()
 endif()
+
+
+if (LLAMA_SYCL)
+    set(ENABLE_AOT ats)
+    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for SYCL")
+    endif()
+    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+        message(WARNING "Only LLVM is supported for SYCL")
+    endif()
+
+    #find_package(SYCL REQUIRED)
+    find_package(IntelSYCL REQUIRED)
+
+    # Check SYCL support by the compiler
+    check_cxx_compiler_flag("-fsycl" _fsycl_option)
+    if (_fsycl_option)
+	    #set (CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES} "/opt/intel/oneapi/compiler/2024.0/include")
+        CHECK_INCLUDE_FILE_CXX("sycl/sycl.hpp" _sycl_header "-fsycl")
+	    set (_sycl_header "/opt/intel/oneapi/compiler/2024.0/include/sycl/sycl.hpp")
+        if (NOT _sycl_header)
+            CHECK_INCLUDE_FILE_CXX("CL/sycl.hpp" _sycl_header_old "-fsycl")
+        endif()
+        if (_sycl_header OR _sycl_header_old)
+            set(_sycl_support TRUE)
+        endif()
+    endif()
+
+    if (_sycl_support)
+	    add_compile_definitions(GGML_USE_CUBLAS)
+	    #add_compile_options(-std=c++17 -O3 -fsycl)
+        add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include)
+        add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include/sycl)
+        add_compile_options(-I/opt/intel/oneapi/dpcpp-ct/2024.0/include)
+        add_compile_options(-I/opt/intel/oneapi/2024.0/include)
+
+	    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
+
+        set(GGML_HEADERS_SYCL ggml-cuda.h ggml.h ggml-sycl.hpp)
+        set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl OpenCL mkl_core pthread m dl  mkl_sycl_blas mkl_sycl_lapack mkl_sycl_dft mkl_sycl_sparse mkl_sycl_vm mkl_sycl_rng mkl_sycl_stats mkl_sycl_data_fitting mkl_intel_ilp64 mkl_tbb_thread)
+
+        #add_library(ggml-sycl OBJECT ${GGML_SOURCES_SYCL} ${GGML_HEADERS_SYCL})
+        #add_executable(${PROJECT_NAME} ${GGML_SOURCES_SYCL} ${GGML_HEADERS_SYCL})
+        #target_link_libraries(ggml-sycl PRIVATE sycl)
+        #target_compile_options(${PROJECT_NAME} PRIVATE ${CMAKE_CXX_FLAGS})
+        #set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} sycl)
+	#add_sycl_to_target({})
+
+    else()
+        message(FATAL_ERROR "SYCL Support is not present")
+    endif()
+endif()
+
+
 
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
@@ -790,6 +839,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_METAL}  ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}    ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_EXTRA}  ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}  ${GGML_HEADERS_SYCL}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})

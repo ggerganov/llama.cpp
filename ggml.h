@@ -2283,7 +2283,7 @@ extern "C" {
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int k);
     typedef void (*ggml_vec_dot_t)   (const int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT x, const void * GGML_RESTRICT y);
 
-    typedef struct {
+    typedef struct dpct_type_994041 {
         const char      * type_name;
         int               blck_size;
         size_t            type_size;
