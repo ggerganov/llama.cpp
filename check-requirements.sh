@@ -58,9 +58,12 @@ cleanup() {
     fi
 }
 
+do_cleanup=1
 if [[ ${1-} == nocleanup ]]; then
-    shift  # discard nocleanup arg
-else
+    do_cleanup=0; shift
+fi
+
+if (( do_cleanup )); then
     trap exit INT TERM
     trap cleanup EXIT
 fi
@@ -121,7 +124,9 @@ SourceFileLoader(pyname, py).load_module()
 EOF
     )
 
-    rm -rf -- "$venv"
+    if (( do_cleanup )); then
+        rm -rf -- "$venv"
+    fi
 
     info "$py: imports OK"
 }
@@ -156,7 +161,9 @@ python3 -m venv "$all_venv"
     check_requirements requirements.txt
 )
 
-rm -rf -- "$all_venv"
+if (( do_cleanup )); then
+    rm -rf -- "$all_venv"
+fi
 
 check_convert_script convert.py
 for py in convert-*.py; do
