@@ -133,6 +133,7 @@ as the main playground for developing new features for the [ggml](https://github
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [semperai/amica](https://github.com/semperai/amica)
 - [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
+- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 
 ---
 
