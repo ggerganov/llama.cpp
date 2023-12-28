@@ -1216,9 +1216,12 @@ def show_new_gui():
         temp.grid(row=row,column=column, padx=8, pady=1, stick="nw")
         return temp
 
-    def makelabel(parent, text, row, column=0):
+    def makelabel(parent, text, row, column=0, tooltiptxt=""):
         temp = ctk.CTkLabel(parent, text=text)
         temp.grid(row=row, column=column, padx=8, pady=1, stick="nw")
+        if tooltiptxt!="":
+            temp.bind("<Enter>", lambda event: show_tooltip(event, tooltiptxt))
+            temp.bind("<Leave>", hide_tooltip)
         return temp
 
     def makeslider(parent, label, options, var, from_ , to,  row=0, width=160, height=10, set=0):
@@ -1372,6 +1375,8 @@ def show_new_gui():
     def show_tooltip(event, tooltip_text=None):
         if hasattr(show_tooltip, "_tooltip"):
             tooltip = show_tooltip._tooltip
+            tooltip_label = show_tooltip._tooltiplabel
+            tooltip_label.configure(text=tooltip_text)
         else:
             tooltip = ctk.CTkToplevel(root)
             tooltip.configure(fg_color="#ffffe0")
@@ -1380,6 +1385,7 @@ def show_new_gui():
             tooltip_label = ctk.CTkLabel(tooltip, text=tooltip_text, text_color="#000000", fg_color="#ffffe0")
             tooltip_label.pack(expand=True, padx=2, pady=1)
             show_tooltip._tooltip = tooltip
+            show_tooltip._tooltiplabel = tooltip_label
         x, y = root.winfo_pointerxy()
         tooltip.wm_geometry(f"+{x + 10}+{y + 10}")
         tooltip.deiconify()
@@ -1390,13 +1396,12 @@ def show_new_gui():
             tooltip.withdraw()
 
     def setup_backend_tooltip(parent):
-        num_backends_built = makelabel(parent, str(len(runopts)) + f"/{7 if os.name == 'nt' else 4}", 5, 2)
+        # backend count label with the tooltip function
+        nl = '\n'
+        tooltxt = f"Number of backends you have built and available." + (f"\n\nMissing Backends: \n\n{nl.join(antirunopts)}" if len(runopts) != 6 else "")
+        num_backends_built = makelabel(parent, str(len(runopts)) + f"/{7 if os.name == 'nt' else 4}", 5, 2,tooltxt)
         num_backends_built.grid(row=1, column=1, padx=195, pady=0)
         num_backends_built.configure(text_color="#00ff00")
-        # Bind the backend count label with the tooltip function
-        nl = '\n'
-        num_backends_built.bind("<Enter>", lambda event: show_tooltip(event, f"Number of backends you have built and available." + (f"\n\nMissing Backends: \n\n{nl.join(antirunopts)}" if len(runopts) != 6 else "")))
-        num_backends_built.bind("<Leave>", hide_tooltip)
 
     def changed_gpulayers(*args):
         global gui_layers_untouched
@@ -1482,7 +1487,7 @@ def show_new_gui():
 
 
     # presets selector
-    makelabel(quick_tab, "Presets:", 1)
+    makelabel(quick_tab, "Presets:", 1,0,"Select the backend to load the model with")
 
     runoptbox = ctk.CTkComboBox(quick_tab, values=runopts, width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
@@ -1492,7 +1497,7 @@ def show_new_gui():
     setup_backend_tooltip(quick_tab)
 
     # gpu options
-    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3)
+    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3,0,"Which GPU to load the model with")
     quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
     CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
     quick_gpuname_label = ctk.CTkLabel(quick_tab, text="")
@@ -1522,7 +1527,7 @@ def show_new_gui():
     hardware_tab = tabcontent["Hardware"]
 
     # presets selector
-    makelabel(hardware_tab, "Presets:", 1)
+    makelabel(hardware_tab, "Presets:", 1,0,"Select the backend to load the model with")
     runoptbox = ctk.CTkComboBox(hardware_tab, values=runopts,  width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
     runoptbox.set(runopts[0]) # Set to first available option
@@ -1531,7 +1536,7 @@ def show_new_gui():
     setup_backend_tooltip(hardware_tab)
 
     # gpu options
-    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3)
+    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3,0,"Which GPU to load the model with")
     gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
     CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
     gpuname_label = ctk.CTkLabel(hardware_tab, text="")
