@@ -257,7 +257,7 @@ class model_backend(InferenceModel):
     def unload(self):
         print("Attemping to unload library")
         self.process.terminate()
-        
+
 
     def _load(self, save_model: bool, initial_load: bool) -> None:
         self.tokenizer = self._get_tokenizer("gpt2")
@@ -268,8 +268,8 @@ class model_backend(InferenceModel):
         unbantokens=False, bantokens=None, usemirostat=None, forceversion=0, nommap=self.kcpp_nommap,
         usemlock=False, noavx2=self.kcpp_noavx2, debugmode=self.kcpp_debugmode, skiplauncher=True, hordeconfig=None, noblas=self.kcpp_noblas,
         useclblast=self.kcpp_useclblast, usecublas=self.kcpp_usecublas, gpulayers=self.kcpp_gpulayers, tensor_split=self.kcpp_tensor_split, config=None,
-        onready='', multiuser=False, foreground=False, preloadstory=None, noshift=False, remotetunnel=False)
-        
+        onready='', multiuser=False, foreground=False, preloadstory=None, noshift=False, remotetunnel=False, ssl=False)
+
 
         #koboldcpp.main(kcppargs,False) #initialize library without enabling Lite http server
         (self.output_queue, self.input_queue, self.process) = koboldcpp.start_in_seperate_process(kcppargs)
@@ -301,17 +301,17 @@ class model_backend(InferenceModel):
         # Store context in memory to use it for comparison with generated content
         utils.koboldai_vars.lastctx = decoded_prompt
 
-        self.input_queue.put({'command': 'generate', 'data': [(decoded_prompt,max_new,utils.koboldai_vars.max_length,
+        self.input_queue.put({'command': 'generate', 'data': [(decoded_prompt,"",max_new,utils.koboldai_vars.max_length,
                                 gen_settings.temp,int(gen_settings.top_k),gen_settings.top_a,gen_settings.top_p,
                                 gen_settings.typical,gen_settings.tfs,gen_settings.rep_pen,gen_settings.rep_pen_range),
                                {"sampler_order": gen_settings.sampler_order, "use_default_badwordsids": utils.koboldai_vars.use_default_badwordsids}
                                 ]})
-        
-        #genresult = koboldcpp.generate(decoded_prompt,max_new,utils.koboldai_vars.max_length,
+
+        #genresult = koboldcpp.generate(decoded_prompt,"",max_new,utils.koboldai_vars.max_length,
         #gen_settings.temp,int(gen_settings.top_k),gen_settings.top_a,gen_settings.top_p,
         #gen_settings.typical,gen_settings.tfs,gen_settings.rep_pen,gen_settings.rep_pen_range,
         #sampler_order=gen_settings.sampler_order,use_default_badwordsids=utils.koboldai_vars.use_default_badwordsids)
-           
+
         genresult = []
         while True:
             data = self.output_queue.get()
