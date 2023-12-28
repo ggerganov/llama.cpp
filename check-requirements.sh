@@ -113,7 +113,7 @@ check_convert_script() {
 
         check_requirements "$reqs"
 
-        python - "$py" "$pyname" <<EOF
+        python - "$py" "$pyname" <<'EOF'
 import sys
 from importlib.machinery import SourceFileLoader
 py, pyname = sys.argv[1:]
