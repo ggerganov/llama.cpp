@@ -16,7 +16,7 @@
 #include <queue>
 #include <string>
 #include <math.h>
-
+#include <cstdint>
 #include "expose.h"
 #include "model_adapter.cpp"
 
