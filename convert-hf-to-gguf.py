@@ -182,6 +182,8 @@ class Model:
             return QwenModel
         if model_architecture == "MixtralForCausalLM":
             return MixtralModel
+        if model_architecture == "GPT2LMHeadModel":
+            return GPT2Model
         if model_architecture == "PhiForCausalLM":
             return Phi2Model
         if model_architecture == "PlamoForCausalLM":
@@ -225,6 +227,8 @@ class Model:
             return gguf.MODEL_ARCH.QWEN
         if arch == "MixtralForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
+        if arch == "GPT2LMHeadModel":
+            return gguf.MODEL_ARCH.GPT2
         if arch == "PhiForCausalLM":
             return gguf.MODEL_ARCH.PHI2
         if arch == "PlamoForCausalLM":
@@ -991,6 +995,68 @@ class QwenModel(Model):
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+
+
+class GPT2Model(Model):
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_ctx"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq", ".attn.bias")):
+                continue
+
+            if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
+                data_torch = data_torch.transpose(1, 0)
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+            # note: GPT2 output is tied to (same as) wte in original model
+            if new_name == "token_embd.weight":
+                print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+                self.gguf_writer.add_tensor("output.weight", data)
 
 
 class Phi2Model(Model):
