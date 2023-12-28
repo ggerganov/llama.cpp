@@ -8936,12 +8936,17 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                    return hpx::make_ready_future<void>();
                 };
 
-                hpx::future<void> this_fut = computefn(0, counters[0], thread_local_hist, local_sizes);
                 for (int it = 1; it < nthread_use - 1; ++it) {
                     futures.push_back(hpx::run_as_hpx_thread(computefn, it, counters[it], thread_local_hist, local_sizes));
                 }
+
+                hpx::future<void> this_fut =
+                    computefn(0, counters[0], thread_local_hist, local_sizes);
+
                 hpx::wait_all(futures);
+
                 this_fut.wait();
+
                 for(auto & local_hist : thread_local_hist) {
                     for(auto j = 0; j < int(local_hist.size()); ++j) {
                         hist_cur[j] += local_hist[j];
