@@ -188,6 +188,11 @@ class TensorNameMap:
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
         ),
 
+        # AWQ-activation gate
+        MODEL_TENSOR.FFN_ACT: (
+            "transformer.blocks.{bid}.ffn.act",  # mpt
+        ),
+
         # Feed-forward gate
         MODEL_TENSOR.FFN_GATE: (
             "model.layers.{bid}.mlp.gate_proj",           # llama-hf refact
