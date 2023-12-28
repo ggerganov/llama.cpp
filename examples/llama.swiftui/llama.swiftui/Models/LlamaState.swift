@@ -25,7 +25,7 @@ class LlamaState: ObservableObject {
             llamaContext = try LlamaContext.create_context(path: modelUrl.path())
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
         } else {
-            messageLog += "Could not locate model\n"
+            messageLog += "Could not locate model, select one from the bottom list\n"
         }
     }
 
@@ -37,7 +37,7 @@ class LlamaState: ObservableObject {
         await llamaContext.completion_init(text: text)
         messageLog += "\(text)"
 
-        while await llamaContext.n_cur <= llamaContext.n_len {
+        while await llamaContext.n_cur < llamaContext.n_len {
             let result = await llamaContext.completion_loop()
             messageLog += "\(result)"
         }
