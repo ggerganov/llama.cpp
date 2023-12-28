@@ -441,7 +441,6 @@ struct llama_client_slot
         }
 
         images.clear();
-        // llama_set_rng_seed(ctx, params.seed); in batched the seed matter???????
     }
 
     bool has_budget(gpt_params &global_params) {
@@ -921,6 +920,7 @@ struct llama_server_context
             llama_sampling_free(slot->ctx_sampling);
         }
         slot->ctx_sampling = llama_sampling_init(slot->sparams);
+        llama_set_rng_seed(ctx, slot->params.seed);
         slot->command = LOAD_PROMPT;
 
         all_slots_are_idle = false;
@@ -1215,7 +1215,7 @@ struct llama_server_context
             {"n_ctx",             slot.n_ctx},
             {"model",             params.model_alias},
             {"seed",              slot.params.seed},
-            {"temp",              slot.sparams.temp},
+            {"temperature",       slot.sparams.temp},
             {"top_k",             slot.sparams.top_k},
             {"top_p",             slot.sparams.top_p},
             {"min_p",             slot.sparams.min_p},
@@ -2437,26 +2437,33 @@ json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Map OpenAI parameters to llama.cpp parameters
+    //
+    // For parameters that are defined by the OpenAI documentation (e.g.
+    // temperature), we explicitly specify OpenAI's intended default; we
+    // need to do that because sometimes OpenAI disagrees with llama.cpp
+    //
+    // https://platform.openai.com/docs/api-reference/chat/create
+    llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body, "model", std::string("uknown"));
     llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
-    llama_params["temperature"]       = json_value(body, "temperature", 0.8);
-    llama_params["top_k"]             = json_value(body, "top_k", 40);
-    llama_params["top_p"]             = json_value(body, "top_p", 0.95);
+    llama_params["temperature"]       = json_value(body, "temperature", 0.0);
+    llama_params["top_k"]             = json_value(body, "top_k", default_sparams.top_k);
+    llama_params["top_p"]             = json_value(body, "top_p", 1.0);
     llama_params["n_predict"]         = json_value(body, "max_tokens", -1);
     llama_params["logit_bias"]        = json_value(body, "logit_bias",json::object());
     llama_params["frequency_penalty"] = json_value(body, "frequency_penalty", 0.0);
     llama_params["presence_penalty"]  = json_value(body, "presence_penalty", 0.0);
-    llama_params["seed"]              = json_value(body, "seed", 0);
+    llama_params["seed"]              = json_value(body, "seed", LLAMA_DEFAULT_SEED);
     llama_params["stream"]            = json_value(body, "stream", false);
-    llama_params["mirostat"]          = json_value(body, "mirostat", false);
-    llama_params["mirostat_tau"]      = json_value(body, "mirostat_tau", 0.0);
-    llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", 0.0);
-    llama_params["penalize_nl"]       = json_value(body, "penalize_nl", false);
-    llama_params["typical_p"]         = json_value(body, "typical_p", 0.0);
+    llama_params["mirostat"]          = json_value(body, "mirostat", default_sparams.mirostat);
+    llama_params["mirostat_tau"]      = json_value(body, "mirostat_tau", default_sparams.mirostat_tau);
+    llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", default_sparams.mirostat_eta);
+    llama_params["penalize_nl"]       = json_value(body, "penalize_nl", default_sparams.penalize_nl);
+    llama_params["typical_p"]         = json_value(body, "typical_p", default_sparams.typical_p);
     llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", 0);
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
-    llama_params["tfs_z"]             = json_value(body, "tfs_z", 0.0);
+    llama_params["tfs_z"]             = json_value(body, "tfs_z", default_sparams.tfs_z);
 
     if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
