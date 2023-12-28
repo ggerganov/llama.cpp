@@ -3,13 +3,13 @@ name: Python check requirements.txt
 on:
   push:
     paths:
-      - 'check-requirements.sh'
+      - 'scripts/check-requirements.sh'
       - 'convert*.py'
       - 'requirements.txt'
       - 'requirements/*.txt'
   pull_request:
     paths:
-      - 'check-requirements.sh'
+      - 'scripts/check-requirements.sh'
       - 'convert*.py'
       - 'requirements.txt'
       - 'requirements/*.txt'
@@ -26,4 +26,4 @@ jobs:
         with:
           python-version: "3.11"
       - name: Run check-requirements.sh script
-        run:  bash check-requirements.sh nocleanup
+        run:  bash scripts/check-requirements.sh nocleanup

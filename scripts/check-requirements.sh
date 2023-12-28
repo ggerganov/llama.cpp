@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+
 #
 # check-requirements.sh checks all requirements files for each top-level
 # convert*.py script.
@@ -8,8 +9,8 @@ set -euo pipefail
 # python script. As of 2023-12-22, this writes ~2.7GB of data. An adequately
 # sized tmpfs /tmp or ramdisk is recommended if running this frequently.
 #
-# usage:    ./check-requirements.sh [<working_dir>]
-#           ./check-requirements.sh nocleanup [<working_dir>]
+# usage:    check-requirements.sh [<working_dir>]
+#           check-requirements.sh nocleanup [<working_dir>]
 #
 # where:
 #           - <working_dir> is a directory that can be used as the base for
@@ -69,7 +70,7 @@ if (( do_cleanup )); then
 fi
 
 this=$(realpath -- "$0"); readonly this
-cd "$(dirname "$this")"
+cd "$(dirname "$this")/.." # PWD should stay in llama.cpp project directory
 
 shellcheck "$this"
 
