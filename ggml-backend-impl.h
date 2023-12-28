@@ -51,6 +51,7 @@ extern "C" {
         ggml_backend_buffer_type_t    buft;
         ggml_backend_buffer_context_t context;
         size_t size;
+        enum ggml_backend_buffer_usage usage;
     };
 
     ggml_backend_buffer_t ggml_backend_buffer_init(

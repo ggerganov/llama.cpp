@@ -24,6 +24,11 @@ extern "C" {
     GGML_API bool ggml_backend_buft_is_host         (ggml_backend_buffer_type_t buft);
 
     // buffer
+    enum ggml_backend_buffer_usage {
+        GGML_BACKEND_BUFFER_USAGE_ANY = 0,
+        GGML_BACKEND_BUFFER_USAGE_WEIGHTS = 1,
+    };
+
     GGML_API void   ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
     GGML_API void * ggml_backend_buffer_get_base      (ggml_backend_buffer_t buffer);
     GGML_API size_t ggml_backend_buffer_get_size      (ggml_backend_buffer_t buffer);
@@ -32,7 +37,9 @@ extern "C" {
     GGML_API size_t ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
     GGML_API void   ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
     GGML_API bool   ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
+    GGML_API void   ggml_backend_buffer_set_usage     (ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
     GGML_API ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer);
+
 
     //
     // Backend
@@ -146,6 +153,7 @@ extern "C" {
 
     // Initialize backend buffers from a measure graph
     GGML_API void ggml_backend_sched_init_measure(ggml_backend_sched_t sched, struct ggml_cgraph * measure_graph);
+    GGML_API int  ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched);
 
     GGML_API ggml_tallocr_t        ggml_backend_sched_get_tallocr(ggml_backend_sched_t sched, ggml_backend_t backend);
     GGML_API ggml_backend_buffer_t ggml_backend_sched_get_buffer (ggml_backend_sched_t sched, ggml_backend_t backend);

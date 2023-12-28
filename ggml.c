@@ -2324,6 +2324,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
 }
 
 void ggml_free(struct ggml_context * ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+
     // make this function thread safe
     ggml_critical_section_start();
 

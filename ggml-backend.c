@@ -58,6 +58,7 @@ ggml_backend_buffer_t ggml_backend_buffer_init(
         /* .buft      = */ buft,
         /* .context   = */ context,
         /* .size      = */ size,
+        /* .usage     = */ GGML_BACKEND_BUFFER_USAGE_ANY
     };
 
     return buffer;
@@ -107,6 +108,10 @@ void ggml_backend_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
 
 bool ggml_backend_buffer_is_host(ggml_backend_buffer_t buffer) {
     return ggml_backend_buft_is_host(ggml_backend_buffer_type(buffer));
+}
+
+void ggml_backend_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage) {
+    buffer->usage = usage;
 }
 
 ggml_backend_buffer_type_t ggml_backend_buffer_type(ggml_backend_buffer_t buffer) {
@@ -777,7 +782,7 @@ static ggml_backend_t get_allocr_backend(ggml_backend_sched_t sched, ggml_talloc
 }
 
 #if 0
-static char causes[GGML_DEFAULT_GRAPH_SIZE*8 + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS][128]; // debug, remove
+static char causes[GGML_DEFAULT_GRAPH_SIZE*16 + GGML_MAX_SPLITS*GGML_MAX_SPLIT_INPUTS][128]; // debug, remove
 #define SET_CAUSE(node, ...) sprintf(causes[hash_id(node)], __VA_ARGS__)
 #define GET_CAUSE(node) causes[hash_id(node)]
 #else
@@ -812,17 +817,25 @@ static ggml_backend_t sched_backend_from_cur(ggml_backend_sched_t sched, struct 
         if (src == NULL) {
             break;
         }
+
         ggml_backend_t src_backend = get_buffer_backend(sched, src->buffer);
-        if (src_backend != NULL) {
+        if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
+            // operations with weights are always on the same backend as the weights
+            cur_backend = src_backend;
+            SET_CAUSE(node, "1.wgt%d", i);
+            break;
+        }
+
+        //if (src_backend != NULL) {
             int src_prio = sched_backend_prio(sched, src_backend);
             size_t src_size = ggml_nbytes(src);
-            if (src_prio < cur_prio && src_size >= cur_size) {
+            if (/*src_prio < cur_prio &&*/ src_size >= cur_size) {
                 cur_prio = src_prio;
                 cur_size = src_size;
                 cur_backend = src_backend;
                 SET_CAUSE(node, "1.src%d", i);
             }
-        }
+        //}
     }
     return cur_backend;
 }
@@ -933,6 +946,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
     }
     //printf("PASS 1 ASSIGNMENTS\n"); sched_print_assignments(sched, graph);
 
+#if 0
     // pass 2: assign backends to ops from current assignments
     // TODO:
     //  - reuse sched_backend_from_cur
@@ -964,6 +978,23 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             }
         }
     }
+#else
+    // pass 2: assign backends to ops from current assignments
+    // start from the end and assign the same backend to previous ops
+    {
+    ggml_tallocr_t cur_allocr = NULL;
+    for (int i = graph->n_nodes - 1; i >= 0; i--) {
+        struct ggml_tensor * node = graph->nodes[i];
+        ggml_tallocr_t node_allocr = node_allocr(node);
+        if (node_allocr != NULL) {
+            cur_allocr = node_allocr;
+        } else {
+            node_allocr(node) = cur_allocr;
+            SET_CAUSE(node, "2.cur");
+        }
+    }
+    }
+#endif
     //printf("PASS 2 ASSIGNMENTS\n"); sched_print_assignments(sched, graph);
 
     // pass 3: assign backends to remaining src from dst (should only be leafs)
@@ -1029,9 +1060,21 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             }
             ggml_tallocr_t src_allocr = node_allocr(src);
             if (src_allocr != node_allocr) {
-                int n_inputs = sched->splits[cur_split].n_inputs++;
-                GGML_ASSERT(n_inputs < GGML_MAX_SPLIT_INPUTS);
-                sched->splits[cur_split].inputs[n_inputs] = (struct ggml_tensor *)src;
+                // check if the input is already in the split
+                bool found = false;
+                for (int k = 0; k < sched->splits[cur_split].n_inputs; k++) {
+                    if (sched->splits[cur_split].inputs[k] == src) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    int n_inputs = sched->splits[cur_split].n_inputs++;
+                    //printf("split %d input %d: %s (%s)\n", cur_split, n_inputs, src->name, ggml_backend_name(get_allocr_backend(sched, src_allocr)));
+                    GGML_ASSERT(n_inputs < GGML_MAX_SPLIT_INPUTS);
+                    sched->splits[cur_split].inputs[n_inputs] = (struct ggml_tensor *)src;
+                }
 
                 // create copies
                 size_t id = hash_id(src);
@@ -1235,6 +1278,10 @@ void ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cg
     sched_reset(sched);
 }
 
+int ggml_backend_sched_get_n_splits(ggml_backend_sched_t sched) {
+    return sched->n_splits;
+}
+
 ggml_tallocr_t ggml_backend_sched_get_tallocr(ggml_backend_sched_t sched, ggml_backend_t backend) {
     int backend_index = sched_backend_prio(sched, backend);
     return sched->tallocs[backend_index];
@@ -1320,6 +1367,7 @@ static void graph_init_tensor(struct ggml_hash_set hash_set, struct ggml_tensor 
 
     struct ggml_tensor * dst = node_copies[id];
     if (dst->view_src != NULL) {
+        graph_init_tensor(hash_set, node_copies, node_init, src->view_src);
         ggml_backend_view_init(dst->view_src->buffer, dst);
     }
     else {
