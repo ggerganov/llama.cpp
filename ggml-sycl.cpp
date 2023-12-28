@@ -117,7 +117,7 @@
 
 #include <dpct/lib_common_utils.hpp>
 
-#define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
+#define MIN_CC_DP4A   510 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
@@ -217,7 +217,7 @@ static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 #if DPCT_COMPAT_RT_VERSION >= 12000
     static const char *cublas_get_error_str(const int err) {
         /*
-        DPCT1009:63: SYCL uses exceptions to report errors and does not use the
+        DPCT1009:57: SYCL uses exceptions to report errors and does not use the
         error codes. The original code was commented out and a warning string
         was inserted. You need to rewrite this code.
         */
@@ -249,13 +249,13 @@ static void ggml_cuda_error(const char * stmt, const char * func, const char * f
 }
 
 /*
-DPCT1001:65: The statement could not be removed.
+DPCT1001:59: The statement could not be removed.
 */
 /*
-DPCT1000:66: Error handling if-stmt was detected but could not be rewritten.
+DPCT1000:60: Error handling if-stmt was detected but could not be rewritten.
 */
 /*
-DPCT1009:67: SYCL uses exceptions to report errors and does not use the error
+DPCT1009:61: SYCL uses exceptions to report errors and does not use the error
 codes. The original code was commented out and a warning string was inserted.
 You need to rewrite this code.
 */
@@ -273,16 +273,16 @@ You need to rewrite this code.
 static const char *cu_get_error_str(int err) {
     const char * err_str;
     /*
-    DPCT1007:64: Migration of cuGetErrorString is not supported.
+    DPCT1007:58: Migration of cuGetErrorString is not supported.
     */
     cuGetErrorString(err, &err_str);
     return err_str;
 }
 /*
-DPCT1001:82: The statement could not be removed.
+DPCT1001:76: The statement could not be removed.
 */
 /*
-DPCT1000:83: Error handling if-stmt was detected but could not be rewritten.
+DPCT1000:77: Error handling if-stmt was detected but could not be rewritten.
 */
 #define CU_CHECK(err)                                                          \
     do { auto err_ = (err);                                                    \
@@ -573,14 +573,15 @@ struct ggml_tensor_extra_gpu {
 // probably because the Windows CUDA libraries forget to make this check before invoking the drivers
 inline dpct::err0 ggml_cuda_set_device(const int device) try {
     int current_device;
-    CUDA_CHECK(current_device = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(DPCT_CHECK_ERROR(
+        current_device = dpct::dev_mgr::instance().current_device_id()));
 
     if (device == current_device) {
         return 0;
     }
 
     /*
-    DPCT1093:68: The "device" device may be not the one intended for use. Adjust
+    DPCT1093:62: The "device" device may be not the one intended for use. Adjust
     the selected device if needed.
     */
     return DPCT_CHECK_ERROR(dpct::select_device(device));
@@ -624,13 +625,7 @@ static __dpct_inline__ float warp_reduce_sum(float x,
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
         /*
-        DPCT1023:0: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
-        /*
-        DPCT1096:113: The right-most dimension of the work-group used in the
+        DPCT1096:107: The right-most dimension of the work-group used in the
         SYCL kernel that calls this function may be less than "32". The function
         "dpct::permute_sub_group_by_xor" may return an unexpected result on the
         CPU device. Modify the size of the work-group to ensure that the value
@@ -645,20 +640,8 @@ static __dpct_inline__ sycl::float2
 warp_reduce_sum(sycl::float2 a, const sycl::nd_item<3> &item_ct1) {
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:1: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         a.x() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.x(),
                                                 mask);
-        /*
-        DPCT1023:2: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         a.y() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.y(),
                                                 mask);
     }
@@ -670,13 +653,7 @@ static __dpct_inline__ float warp_reduce_max(float x,
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
         /*
-        DPCT1023:3: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
-        /*
-        DPCT1096:112: The right-most dimension of the work-group used in the
+        DPCT1096:106: The right-most dimension of the work-group used in the
         SYCL kernel that calls this function may be less than "32". The function
         "dpct::permute_sub_group_by_xor" may return an unexpected result on the
         CPU device. Modify the size of the work-group to ensure that the value
@@ -907,7 +884,7 @@ static void norm_f32(const float * x, float * dst, const int ncols, const float 
             s_sum[warp_id] = mean_var;
         }
         /*
-        DPCT1118:4: SYCL group functions and algorithms must be encountered in
+        DPCT1118:0: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         item_ct1.barrier(sycl::access::fence_space::local_space);
@@ -1012,11 +989,11 @@ static void group_norm_f32(const float * x, float * dst, const int group_size, c
             s_sum[warp_id] = tmp;
         }
         /*
-        DPCT1118:5: SYCL group functions and algorithms must be encountered in
+        DPCT1118:1: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:69: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:63: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -1043,11 +1020,11 @@ static void group_norm_f32(const float * x, float * dst, const int group_size, c
             s_sum[warp_id] = tmp;
         }
         /*
-        DPCT1118:6: SYCL group functions and algorithms must be encountered in
+        DPCT1118:2: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:70: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:64: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -1087,7 +1064,7 @@ static void rms_norm_f32(const float * x, float * dst, const int ncols, const fl
             s_sum[warp_id] = tmp;
         }
         /*
-        DPCT1118:7: SYCL group functions and algorithms must be encountered in
+        DPCT1118:3: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         item_ct1.barrier(sycl::access::fence_space::local_space);
@@ -1127,8 +1104,8 @@ static __dpct_inline__ void dequantize_q4_1(const void *vx, const int ib,
                                             const int iqs, dfloat2 &v) {
     const block_q4_1 * x = (const block_q4_1 *) vx;
 
-    const dfloat d = x[ib].dm[1];
-    const dfloat m = x[ib].dm[0];
+    const dfloat d = x[ib].dm[0];
+    const dfloat m = x[ib].dm[1];
 
     const int vui = x[ib].qs[iqs];
 
@@ -1172,8 +1149,8 @@ static __dpct_inline__ void dequantize_q5_1(const void *vx, const int ib,
                                             const int iqs, dfloat2 &v) {
     const block_q5_1 * x = (const block_q5_1 *) vx;
 
-    const dfloat d = x[ib].dm[1];
-    const dfloat m = x[ib].dm[0];
+    const dfloat d = x[ib].dm[0];
+    const dfloat m = x[ib].dm[1];
 
     uint32_t qh;
     memcpy(&qh, x[ib].qh, sizeof(qh));
@@ -1228,8 +1205,8 @@ static void dequantize_block_q2_K(const void * __restrict__ vx, dst_t * __restri
     const uint8_t q = x[i].qs[32*n + l];
     dst_t * y = yy + i*QK_K + 128*n;
 
-    float dall = x[i].dm[1];
-    float dmin = x[i].dm[0];
+    float dall = x[i].dm[0];
+    float dmin = x[i].dm[1];
     y[l+ 0] = dall * (x[i].scales[is+0] & 0xF) * ((q >> 0) & 3) - dmin * (x[i].scales[is+0] >> 4);
     y[l+32] = dall * (x[i].scales[is+2] & 0xF) * ((q >> 2) & 3) - dmin * (x[i].scales[is+2] >> 4);
     y[l+64] = dall * (x[i].scales[is+4] & 0xF) * ((q >> 4) & 3) - dmin * (x[i].scales[is+4] >> 4);
@@ -1330,8 +1307,8 @@ static void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restri
 
     dst_t * y = yy + i*QK_K + 64*il + n*ir;
 
-    const float dall = x[i].dm[1];
-    const float dmin = x[i].dm[0];
+    const float dall = x[i].dm[0];
+    const float dmin = x[i].dm[1];
 
     const uint8_t * q = x[i].qs + 32*il + n*ir;
 
@@ -1371,8 +1348,8 @@ static void dequantize_block_q5_K(const void * __restrict__ vx, dst_t * __restri
 
     dst_t * y = yy + i*QK_K + 64*il + 2*ir;
 
-    const float dall = x[i].dm[1];
-    const float dmin = x[i].dm[0];
+    const float dall = x[i].dm[0];
+    const float dmin = x[i].dm[1];
 
     const uint8_t * ql = x[i].qs + 32*il + 2*ir;
     const uint8_t * qh = x[i].qh + 2*ir;
@@ -1450,7 +1427,7 @@ static void dequantize_block_q6_K(const void * __restrict__ vx, dst_t * __restri
 }
 
 /*
-DPCT1110:8: The total declared local variable size in device function
+DPCT1110:4: The total declared local variable size in device function
 dequantize_mul_mat_vec_q2_k exceeds 128 bytes and may cause high register
 pressure. Consult with your hardware vendor to find the total register size
 available and adjust the code, or use smaller sub-group size to avoid high
@@ -1500,8 +1477,8 @@ static void dequantize_mul_mat_vec_q2_k(const void *__restrict__ vx,
         const float   * y = yy + i * QK_K + y_offset;
         const uint8_t * q = x[i].qs + q_offset;
 
-        const float dall = x[i].dm[1];
-        const float dmin = x[i].dm[0];
+        const float dall = x[i].dm[0];
+        const float dmin = x[i].dm[1];
 
         const uint32_t * a = (const uint32_t *)(x[i].scales + s_offset);
         aux[0] = a[0] & 0x0f0f0f0f;
@@ -1561,12 +1538,6 @@ static void dequantize_mul_mat_vec_q2_k(const void *__restrict__ vx,
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:9: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -1577,7 +1548,7 @@ static void dequantize_mul_mat_vec_q2_k(const void *__restrict__ vx,
 }
 
 /*
-DPCT1110:10: The total declared local variable size in device function
+DPCT1110:5: The total declared local variable size in device function
 dequantize_mul_mat_vec_q3_k exceeds 128 bytes and may cause high register
 pressure. Consult with your hardware vendor to find the total register size
 available and adjust the code, or use smaller sub-group size to avoid high
@@ -1686,12 +1657,6 @@ static void dequantize_mul_mat_vec_q3_k(const void *__restrict__ vx,
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:11: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -1702,7 +1667,7 @@ static void dequantize_mul_mat_vec_q3_k(const void *__restrict__ vx,
 }
 
 /*
-DPCT1110:12: The total declared local variable size in device function
+DPCT1110:6: The total declared local variable size in device function
 dequantize_mul_mat_vec_q4_k exceeds 128 bytes and may cause high register
 pressure. Consult with your hardware vendor to find the total register size
 available and adjust the code, or use smaller sub-group size to avoid high
@@ -1763,8 +1728,8 @@ static void dequantize_mul_mat_vec_q4_k(const void *__restrict__ vx,
         const float   * y1 = yy + i*QK_K + y_offset;
         const float   * y2 = y1 + 128;
 
-        const float dall = x[i].dm[1];
-        const float dmin = x[i].dm[0];
+        const float dall = x[i].dm[0];
+        const float dmin = x[i].dm[1];
 
         const uint16_t * a = (const uint16_t *)x[i].scales;
         aux[0] = a[im+0] & kmask1;
@@ -1845,12 +1810,6 @@ static void dequantize_mul_mat_vec_q4_k(const void *__restrict__ vx,
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:13: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -1861,7 +1820,7 @@ static void dequantize_mul_mat_vec_q4_k(const void *__restrict__ vx,
 }
 
 /*
-DPCT1110:14: The total declared local variable size in device function
+DPCT1110:7: The total declared local variable size in device function
 dequantize_mul_mat_vec_q5_k exceeds 128 bytes and may cause high register
 pressure. Consult with your hardware vendor to find the total register size
 available and adjust the code, or use smaller sub-group size to avoid high
@@ -1916,8 +1875,8 @@ static void dequantize_mul_mat_vec_q5_k(const void *__restrict__ vx,
         const float   * y1  = yy + i*QK_K + y_offset;
         const float   * y2  = y1 + 128;
 
-        const float dall = x[i].dm[1];
-        const float dmin = x[i].dm[0];
+        const float dall = x[i].dm[0];
+        const float dmin = x[i].dm[1];
 
         const uint16_t * a = (const uint16_t *)x[i].scales;
         aux[0] = a[im+0] & kmask1;
@@ -1985,12 +1944,6 @@ static void dequantize_mul_mat_vec_q5_k(const void *__restrict__ vx,
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:15: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -2106,12 +2059,6 @@ static void dequantize_mul_mat_vec_q6_k(const void * __restrict__ vx, const floa
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:16: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -2162,20 +2109,8 @@ static void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, 
 
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:17: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         amax = sycl::fmax(amax, dpct::permute_sub_group_by_xor(
                                     item_ct1.get_sub_group(), amax, mask));
-        /*
-        DPCT1023:18: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         sum +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), sum, mask);
     }
@@ -2300,9 +2235,9 @@ static void dequantize_block(const void * __restrict__ vx, dst_t * __restrict__ 
 #define VDR_Q4_0_Q8_1_MMQ  4
 
 template <int vdr>
-static __dpct_inline__ float
-vec_dot_q4_0_q8_1_impl(const int *v, const int *u, const float &d4,
-                       const sycl::half2 &ds8, const sycl::stream &stream_ct1) {
+static __dpct_inline__ float vec_dot_q4_0_q8_1_impl(const int *v, const int *u,
+                                                    const float &d4,
+                                                    const sycl::half2 &ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2314,16 +2249,17 @@ vec_dot_q4_0_q8_1_impl(const int *v, const int *u, const float &d4,
         const int vi1 = (v[i] >> 4) & 0x0F0F0F0F;
 
         // SIMD dot product of quantized values
-        sumi = __dp4a(vi0, u[2*i+0], sumi);
-        sumi = __dp4a(vi1, u[2*i+1], sumi);
+        sumi = dpct::dp4a(vi0, u[2 * i + 0], sumi);
+        sumi = dpct::dp4a(vi1, u[2 * i + 1], sumi);
     }
 
-    const float2 ds8f = __half22float2(ds8);
+    const sycl::float2 ds8f =
+        ds8.convert<float, sycl::rounding_mode::automatic>();
 
     // second part effectively subtracts 8 from each quant value
-    return d4 * (sumi * ds8f.x - (8*vdr/QI4_0) * ds8f.y);
+    return d4 * (sumi * ds8f.x() - (8 * vdr / QI4_0) * ds8f.y());
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2331,9 +2267,9 @@ vec_dot_q4_0_q8_1_impl(const int *v, const int *u, const float &d4,
 #define VDR_Q4_1_Q8_1_MMQ  4
 
 template <int vdr>
-static __dpct_inline__ float
-vec_dot_q4_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm4,
-                       const sycl::half2 &ds8, const sycl::stream &stream_ct1) {
+static __dpct_inline__ float vec_dot_q4_1_q8_1_impl(const int *v, const int *u,
+                                                    const sycl::half2 &dm4,
+                                                    const sycl::half2 &ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2345,8 +2281,8 @@ vec_dot_q4_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm4,
         const int vi1 = (v[i] >> 4) & 0x0F0F0F0F;
 
         // SIMD dot product of quantized values
-        sumi = __dp4a(vi0, u[2*i+0], sumi);
-        sumi = __dp4a(vi1, u[2*i+1], sumi);
+        sumi = dpct::dp4a(vi0, u[2 * i + 0], sumi);
+        sumi = dpct::dp4a(vi1, u[2 * i + 1], sumi);
     }
 
 #ifdef GGML_CUDA_F16
@@ -2354,16 +2290,18 @@ vec_dot_q4_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm4,
     const float d4d8 = tmp.x;
     const float m4s8 = tmp.y;
 #else
-    const float2 dm4f = __half22float2(dm4);
-    const float2 ds8f = __half22float2(ds8);
-    const float d4d8 = dm4f.x * ds8f.x;
-    const float m4s8 = dm4f.y * ds8f.y;
+    const sycl::float2 dm4f =
+        dm4.convert<float, sycl::rounding_mode::automatic>();
+    const sycl::float2 ds8f =
+        ds8.convert<float, sycl::rounding_mode::automatic>();
+    const float d4d8 = dm4f.x() * ds8f.x();
+    const float m4s8 = dm4f.y() * ds8f.y();
 #endif // GGML_CUDA_F16
 
     // scale second part of sum by QI8_1/(vdr * QR4_1) to compensate for multiple threads adding it
     return sumi * d4d8 + m4s8 / (QI8_1 / (vdr * QR4_1));
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2373,8 +2311,7 @@ vec_dot_q4_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm4,
 template <int vdr>
 static __dpct_inline__ float
 vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
-                       const float &d5, const sycl::half2 &ds8,
-                       const sycl::stream &stream_ct1) {
+                       const float &d5, const sycl::half2 &ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2387,22 +2324,25 @@ vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi0    |= (vh[i] << 11) & 0x00001000; // 1 -> 12
         vi0    |= (vh[i] << 18) & 0x00100000; // 2 -> 20
         vi0    |= (vh[i] << 25) & 0x10000000; // 3 -> 28
-        sumi = __dp4a(vi0, u[2*i+0], sumi); // SIMD dot product of quantized values
+        sumi = dpct::dp4a(vi0, u[2 * i + 0],
+                          sumi); // SIMD dot product of quantized values
 
         int vi1 = (vl[i] >>  4) & 0x0F0F0F0F; // upper 4 qs bits, still need qh as 5th bits
         vi1    |= (vh[i] >> 12) & 0x00000010; // 16 ->  4
         vi1    |= (vh[i] >>  5) & 0x00001000; // 17 -> 12
         vi1    |= (vh[i] <<  2) & 0x00100000; // 18 -> 20
         vi1    |= (vh[i] <<  9) & 0x10000000; // 19 -> 28
-        sumi = __dp4a(vi1, u[2*i+1], sumi); // SIMD dot product of quantized values
+        sumi = dpct::dp4a(vi1, u[2 * i + 1],
+                          sumi); // SIMD dot product of quantized values
     }
 
-    const float2 ds8f = __half22float2(ds8);
+    const sycl::float2 ds8f =
+        ds8.convert<float, sycl::rounding_mode::automatic>();
 
     // second part effectively subtracts 16 from each quant value
-    return d5 * (sumi * ds8f.x - (16*vdr/QI5_0) * ds8f.y);
+    return d5 * (sumi * ds8f.x() - (16 * vdr / QI5_0) * ds8f.y());
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2412,8 +2352,7 @@ vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
 template <int vdr>
 static __dpct_inline__ float
 vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
-                       const sycl::half2 &dm5, const sycl::half2 &ds8,
-                       const sycl::stream &stream_ct1) {
+                       const sycl::half2 &dm5, const sycl::half2 &ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2426,14 +2365,16 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
         vi0    |= (vh[i] << 11) & 0x00001000; // 1 -> 12
         vi0    |= (vh[i] << 18) & 0x00100000; // 2 -> 20
         vi0    |= (vh[i] << 25) & 0x10000000; // 3 -> 28
-        sumi = __dp4a(vi0, u[2*i+0], sumi); // SIMD dot product of quantized values
+        sumi = dpct::dp4a(vi0, u[2 * i + 0],
+                          sumi); // SIMD dot product of quantized values
 
         int vi1 = (vl[i] >>  4) & 0x0F0F0F0F; // upper 4 qs bits, still need qh as 5th bits
         vi1    |= (vh[i] >> 12) & 0x00000010; // 16 ->  4
         vi1    |= (vh[i] >>  5) & 0x00001000; // 17 -> 12
         vi1    |= (vh[i] <<  2) & 0x00100000; // 18 -> 20
         vi1    |= (vh[i] <<  9) & 0x10000000; // 19 -> 28
-        sumi = __dp4a(vi1, u[2*i+1], sumi); // SIMD dot product of quantized values
+        sumi = dpct::dp4a(vi1, u[2 * i + 1],
+                          sumi); // SIMD dot product of quantized values
     }
 
 #ifdef GGML_CUDA_F16
@@ -2441,17 +2382,19 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
     const float d5d8 = tmp.x;
     const float m5s8 = tmp.y;
 #else
-    const float2 dm5f = __half22float2(dm5);
-    const float2 ds8f = __half22float2(ds8);
-    const float d5d8 = dm5f.x * ds8f.x;
-    const float m5s8 = dm5f.y * ds8f.y;
+    const sycl::float2 dm5f =
+        dm5.convert<float, sycl::rounding_mode::automatic>();
+    const sycl::float2 ds8f =
+        ds8.convert<float, sycl::rounding_mode::automatic>();
+    const float d5d8 = dm5f.x() * ds8f.x();
+    const float m5s8 = dm5f.y() * ds8f.y();
 #endif // GGML_CUDA_F16
 
     // scale second part of sum by QI5_1 / vdr to compensate for multiple threads adding it
     return sumi*d5d8 + m5s8 / (QI5_1 / vdr);
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2459,9 +2402,9 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
 #define VDR_Q8_0_Q8_1_MMQ 8
 
 template <int vdr>
-static __dpct_inline__ float
-vec_dot_q8_0_q8_1_impl(const int *v, const int *u, const float &d8_0,
-                       const float &d8_1, const sycl::stream &stream_ct1) {
+static __dpct_inline__ float vec_dot_q8_0_q8_1_impl(const int *v, const int *u,
+                                                    const float &d8_0,
+                                                    const float &d8_1) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2470,19 +2413,19 @@ vec_dot_q8_0_q8_1_impl(const int *v, const int *u, const float &d8_0,
 #pragma unroll
     for (int i = 0; i < vdr; ++i) {
         // SIMD dot product of quantized values
-        sumi = __dp4a(v[i], u[i], sumi);
+        sumi = dpct::dp4a(v[i], u[i], sumi);
     }
 
     return d8_0*d8_1 * sumi;
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <int vdr>
-static __dpct_inline__ float
-vec_dot_q8_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm8,
-                       const sycl::half2 &ds8, const sycl::stream &stream_ct1) {
+static __dpct_inline__ float vec_dot_q8_1_q8_1_impl(const int *v, const int *u,
+                                                    const sycl::half2 &dm8,
+                                                    const sycl::half2 &ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2491,7 +2434,7 @@ vec_dot_q8_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm8,
 #pragma unroll
     for (int i = 0; i < vdr; ++i) {
         // SIMD dot product of quantized values
-        sumi = __dp4a(v[i], u[i], sumi);
+        sumi = dpct::dp4a(v[i], u[i], sumi);
     }
 
 #ifdef GGML_CUDA_F16
@@ -2499,16 +2442,18 @@ vec_dot_q8_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm8,
     const float d8d8 = tmp.x;
     const float m8s8 = tmp.y;
 #else
-    const float2 dm8f = __half22float2(dm8);
-    const float2 ds8f = __half22float2(ds8);
-    const float d8d8 = dm8f.x * ds8f.x;
-    const float m8s8 = dm8f.y * ds8f.y;
+    const sycl::float2 dm8f =
+        dm8.convert<float, sycl::rounding_mode::automatic>();
+    const sycl::float2 ds8f =
+        ds8.convert<float, sycl::rounding_mode::automatic>();
+    const float d8d8 = dm8f.x() * ds8f.x();
+    const float m8s8 = dm8f.y() * ds8f.y();
 #endif // GGML_CUDA_F16
 
     // scale second part of sum by QI8_1/ vdr to compensate for multiple threads adding it
     return sumi*d8d8 + m8s8 / (QI8_1 / vdr);
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2518,8 +2463,7 @@ vec_dot_q8_1_q8_1_impl(const int *v, const int *u, const sycl::half2 &dm8,
 // contiguous v/x values
 static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
     const int &v, const int *__restrict__ u, const uint8_t *__restrict__ scales,
-    const sycl::half2 &dm2, const float *__restrict__ d8,
-    const sycl::stream &stream_ct1) {
+    const sycl::half2 &dm2, const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2532,20 +2476,25 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
 
         const int vi = (v >> (2*i)) & 0x03030303;
 
-        sumf_d += d8[i] * (__dp4a(vi, u[i], 0) * (sc & 0xF)); // SIMD dot product
+        sumf_d +=
+            d8[i] * (dpct::dp4a(vi, u[i], 0) * (sc & 0xF)); // SIMD dot product
 
         // fill int with 4x m
         int m = sc >> 4;
         m |= m <<  8;
         m |= m << 16;
-        sumf_m += d8[i] * __dp4a(m, u[i], 0); // multiply constant q2_K part with sum of q8_1 values
+        sumf_m += d8[i] *
+                  dpct::dp4a(
+                      m, u[i],
+                      0); // multiply constant q2_K part with sum of q8_1 values
     }
 
-    const float2 dm2f = __half22float2(dm2);
+    const sycl::float2 dm2f =
+        dm2.convert<float, sycl::rounding_mode::automatic>();
 
-    return dm2f.x*sumf_d - dm2f.y*sumf_m;
+    return dm2f.x() * sumf_d - dm2f.y() * sumf_m;
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2553,8 +2502,7 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
 static __dpct_inline__ float
 vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const uint8_t *__restrict__ scales,
-                           const sycl::half2 &dm2, const float &d8,
-                           const sycl::stream &stream_ct1) {
+                           const sycl::half2 &dm2, const float &d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2574,18 +2522,20 @@ vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 
 #pragma unroll
         for (int i = i0; i < i0 + QI8_1/2; ++i) {
-            sumi_d_sc = __dp4a(v[i], u[i], sumi_d_sc); // SIMD dot product
-            sumi_m    = __dp4a(m,    u[i], sumi_m); // multiply sum of q8_1 values with m
+            sumi_d_sc = dpct::dp4a(v[i], u[i], sumi_d_sc); // SIMD dot product
+            sumi_m = dpct::dp4a(m, u[i],
+                                sumi_m); // multiply sum of q8_1 values with m
         }
 
         sumi_d += sumi_d_sc * (sc & 0xF);
     }
 
-    const float2 dm2f = __half22float2(dm2);
+    const sycl::float2 dm2f =
+        dm2.convert<float, sycl::rounding_mode::automatic>();
 
-    return d8 * (dm2f.x*sumi_d - dm2f.y*sumi_m);
+    return d8 * (dm2f.x() * sumi_d - dm2f.y() * sumi_m);
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2596,8 +2546,7 @@ vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
     const int &vl, const int &vh, const int *__restrict__ u,
     const uint8_t *__restrict__ scales, const int &scale_offset,
-    const float &d3, const float *__restrict__ d8,
-    const sycl::stream &stream_ct1) {
+    const float &d3, const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2621,14 +2570,15 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
 
         const int vih = ((vh >> i) << 2) & 0x04040404;
 
-        const int vi = __vsubss4(vil, vih);
+        const int vi =
+            dpct::vectorized_binary<sycl::char4>(vil, vih, dpct::sub_sat());
 
-        sumf += d8[i] * (__dp4a(vi, u[i], 0) * sc); // SIMD dot product
+        sumf += d8[i] * (dpct::dp4a(vi, u[i], 0) * sc); // SIMD dot product
     }
 
     return d3 * sumf;
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2636,7 +2586,7 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
 static __dpct_inline__ float
 vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const int8_t *__restrict__ scales, const float &d3,
-                           const float &d8, const sycl::stream &stream_ct1) {
+                           const float &d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2647,7 +2597,7 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
         int sumi_sc = 0;
 
         for (int i = i0; i < i0 + QI8_1/2; ++i) {
-            sumi_sc = __dp4a(v[i], u[i], sumi_sc); // SIMD dot product
+            sumi_sc = dpct::dp4a(v[i], u[i], sumi_sc); // SIMD dot product
         }
 
         sumi += sumi_sc * scales[i0 / (QI8_1/2)];
@@ -2655,7 +2605,7 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 
     return d3*d8 * sumi;
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2666,8 +2616,7 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
     const int *__restrict__ v, const int *__restrict__ u,
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
-    const sycl::half2 &dm4, const float *__restrict__ d8,
-    const sycl::stream &stream_ct1) {
+    const sycl::half2 &dm4, const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2679,19 +2628,24 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
         const int v0i = (v[0] >> (4*i)) & 0x0F0F0F0F;
         const int v1i = (v[1] >> (4*i)) & 0x0F0F0F0F;
 
-        const int dot1 = __dp4a(v1i, u[2*i+1], __dp4a(v0i, u[2*i+0], 0)); // SIMD dot product
-        const int dot2 = __dp4a(0x01010101, u[2*i+1], __dp4a(0x01010101, u[2*i+0], 0)); // sum of u
+        const int dot1 =
+            dpct::dp4a(v1i, u[2 * i + 1],
+                       dpct::dp4a(v0i, u[2 * i + 0], 0)); // SIMD dot product
+        const int dot2 =
+            dpct::dp4a(0x01010101, u[2 * i + 1],
+                       dpct::dp4a(0x01010101, u[2 * i + 0], 0)); // sum of u
 
         sumf_d += d8[i] * (dot1 * sc[i]);
         sumf_m += d8[i] * (dot2 * m[i]);  // multiply constant part of q4_K with sum of q8_1 values
     }
 
-    const float2 dm4f = __half22float2(dm4);
+    const sycl::float2 dm4f =
+        dm4.convert<float, sycl::rounding_mode::automatic>();
 
-    return dm4f.x*sumf_d - dm4f.y*sumf_m;
+    return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2699,8 +2653,7 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
 static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_mmq(
     const int *__restrict__ v, const int *__restrict__ u,
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
-    const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8,
-    const sycl::stream &stream_ct1) {
+    const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2713,21 +2666,24 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_mmq(
 
 #pragma unroll
         for (int j = 0; j < QI8_1; ++j) {
-            sumi_d = __dp4a((v[j] >> (4*i)) & 0x0F0F0F0F, u[i*QI8_1 + j], sumi_d); // SIMD dot product
+            sumi_d = dpct::dp4a((v[j] >> (4 * i)) & 0x0F0F0F0F,
+                                u[i * QI8_1 + j], sumi_d); // SIMD dot product
         }
 
-        const float2 ds8f = __half22float2(ds8[i]);
+        const sycl::float2 ds8f =
+            ds8[i].convert<float, sycl::rounding_mode::automatic>();
 
-        sumf_d += ds8f.x * (sc[i] * sumi_d);
-        sumf_m += ds8f.y *   m[i]; // sum of q8_1 block * q4_K min val
+        sumf_d += ds8f.x() * (sc[i] * sumi_d);
+        sumf_m += ds8f.y() * m[i]; // sum of q8_1 block * q4_K min val
     }
 
-    const float2 dm4f = __half22float2(dm4);
+    const sycl::float2 dm4f =
+        dm4.convert<float, sycl::rounding_mode::automatic>();
 
-    return dm4f.x*sumf_d - dm4f.y*sumf_m;
+    return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2739,7 +2695,7 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
     const int *__restrict__ vl, const int *__restrict__ vh,
     const int *__restrict__ u, const uint8_t *__restrict__ sc,
     const uint8_t *__restrict__ m, const sycl::half2 &dm5,
-    const float *__restrict__ d8, const sycl::stream &stream_ct1) {
+    const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2757,20 +2713,25 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
         const int v0i = vl0i | vh0i;
         const int v1i = vl1i | vh1i;
 
-        const int dot1 = __dp4a(v0i, u[2*i+0], __dp4a(v1i, u[2*i+1], 0)); // SIMD dot product
-        const int dot2 = __dp4a(0x01010101, u[2*i+0], __dp4a(0x01010101, u[2*i+1], 0)); // sum of u
+        const int dot1 =
+            dpct::dp4a(v0i, u[2 * i + 0],
+                       dpct::dp4a(v1i, u[2 * i + 1], 0)); // SIMD dot product
+        const int dot2 =
+            dpct::dp4a(0x01010101, u[2 * i + 0],
+                       dpct::dp4a(0x01010101, u[2 * i + 1], 0)); // sum of u
 
         sumf_d += d8[i] * (dot1 * sc[i]);
         sumf_m += d8[i] * (dot2 * m[i]);
 
     }
 
-    const float2 dm5f = __half22float2(dm5);
+    const sycl::float2 dm5f =
+        dm5.convert<float, sycl::rounding_mode::automatic>();
 
-    return dm5f.x*sumf_d - dm5f.y*sumf_m;
+    return dm5f.x() * sumf_d - dm5f.y() * sumf_m;
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2778,8 +2739,7 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
 static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
     const int *__restrict__ v, const int *__restrict__ u,
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
-    const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8,
-    const sycl::stream &stream_ct1) {
+    const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2792,21 +2752,24 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
 
 #pragma unroll
         for (int j = 0; j < QI8_1; ++j) {
-            sumi_d = __dp4a(v[i*QI8_1 + j], u[i*QI8_1 + j], sumi_d); // SIMD dot product
+            sumi_d = dpct::dp4a(v[i * QI8_1 + j], u[i * QI8_1 + j],
+                                sumi_d); // SIMD dot product
         }
 
-        const float2 ds8f = __half22float2(ds8[i]);
+        const sycl::float2 ds8f =
+            ds8[i].convert<float, sycl::rounding_mode::automatic>();
 
-        sumf_d += ds8f.x * (sc[i] * sumi_d);
-        sumf_m += ds8f.y *   m[i]; // sum of q8_1 block * q4_K min val
+        sumf_d += ds8f.x() * (sc[i] * sumi_d);
+        sumf_m += ds8f.y() * m[i]; // sum of q8_1 block * q4_K min val
     }
 
-    const float2 dm4f = __half22float2(dm4);
+    const sycl::float2 dm4f =
+        dm4.convert<float, sycl::rounding_mode::automatic>();
 
-    return dm4f.x*sumf_d - dm4f.y*sumf_m;
+    return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2814,10 +2777,11 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
 #define VDR_Q6_K_Q8_1_MMQ  8
 
 // contiguous v/x values
-static __dpct_inline__ float vec_dot_q6_K_q8_1_impl_mmvq(
-    const int &vl, const int &vh, const int *__restrict__ u,
-    const int8_t *__restrict__ scales, const float &d,
-    const float *__restrict__ d8, const sycl::stream &stream_ct1) {
+static __dpct_inline__ float
+vec_dot_q6_K_q8_1_impl_mmvq(const int &vl, const int &vh,
+                            const int *__restrict__ u,
+                            const int8_t *__restrict__ scales, const float &d,
+                            const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2831,14 +2795,15 @@ static __dpct_inline__ float vec_dot_q6_K_q8_1_impl_mmvq(
 
         const int vih = ((vh >> (4*i)) << 4) & 0x30303030;
 
-        const int vi = __vsubss4((vil | vih), 0x20202020); // vi = (vil | vih) - 32
+        const int vi = dpct::vectorized_binary<sycl::char4>(
+            (vil | vih), 0x20202020, dpct::sub_sat()); // vi = (vil | vih) - 32
 
-        sumf += d8[i] * (__dp4a(vi, u[i], 0) * sc); // SIMD dot product
+        sumf += d8[i] * (dpct::dp4a(vi, u[i], 0) * sc); // SIMD dot product
     }
 
     return d*sumf;
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
@@ -2846,8 +2811,7 @@ static __dpct_inline__ float vec_dot_q6_K_q8_1_impl_mmvq(
 static __dpct_inline__ float
 vec_dot_q6_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const int8_t *__restrict__ sc, const float &d6,
-                           const float *__restrict__ d8,
-                           const sycl::stream &stream_ct1) {
+                           const float *__restrict__ d8) {
 
 #if DPCT_COMPATIBILITY_TEMP >=                                                 \
     MIN_CC_DP4A // lowest compute capability for integer intrinsics
@@ -2855,31 +2819,35 @@ vec_dot_q6_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
 
 #pragma unroll
     for (int i0 = 0; i0 < VDR_Q6_K_Q8_1_MMQ; i0 += 4) {
-        int2 sumi_d = {0, 0}; // 2 q6_K scales per q8_1 scale
+        sycl::int2 sumi_d = {0, 0}; // 2 q6_K scales per q8_1 scale
 
 #pragma unroll
         for (int i = i0; i < i0 + 2; ++i) {
-            sumi_d.x = __dp4a(v[2*i+0], u[2*i+0], sumi_d.x); // SIMD dot product
-            sumi_d.x = __dp4a(v[2*i+1], u[2*i+1], sumi_d.x); // SIMD dot product
+            sumi_d.x() = dpct::dp4a(v[2 * i + 0], u[2 * i + 0],
+                                    sumi_d.x()); // SIMD dot product
+            sumi_d.x() = dpct::dp4a(v[2 * i + 1], u[2 * i + 1],
+                                    sumi_d.x()); // SIMD dot product
 
-            sumi_d.y = __dp4a(v[2*i+4], u[2*i+4], sumi_d.y); // SIMD dot product
-            sumi_d.y = __dp4a(v[2*i+5], u[2*i+5], sumi_d.y); // SIMD dot product
+            sumi_d.y() = dpct::dp4a(v[2 * i + 4], u[2 * i + 4],
+                                    sumi_d.y()); // SIMD dot product
+            sumi_d.y() = dpct::dp4a(v[2 * i + 5], u[2 * i + 5],
+                                    sumi_d.y()); // SIMD dot product
         }
 
-        sumf_d += d8[i0/4] * (sc[i0/2+0]*sumi_d.x + sc[i0/2+1]*sumi_d.y);
+        sumf_d += d8[i0 / 4] *
+                  (sc[i0 / 2 + 0] * sumi_d.x() + sc[i0 / 2 + 1] * sumi_d.y());
     }
 
     return d6 * sumf_d;
 
 #else
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 static __dpct_inline__ float
 vec_dot_q4_0_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q4_0 * bq4_0 = (const block_q4_0 *) vbq;
 
@@ -2893,8 +2861,7 @@ vec_dot_q4_0_q8_1(const void *__restrict__ vbq,
         u[2*i+1] = get_int_from_int8_aligned(bq8_1->qs, iqs + i + QI4_0);
     }
 
-    return vec_dot_q4_0_q8_1_impl<VDR_Q4_0_Q8_1_MMVQ>(v, u, bq4_0->d, bq8_1->ds,
-                                                      stream_ct1);
+    return vec_dot_q4_0_q8_1_impl<VDR_Q4_0_Q8_1_MMVQ>(v, u, bq4_0->d, bq8_1->ds);
 }
 
 template <int mmq_y>
@@ -2961,7 +2928,7 @@ static __dpct_inline__ float vec_dot_q4_0_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh; (void)x_sc;
 
     const int kyqs = k % (QI8_1/2) + QI8_1 * (k / (QI8_1/2));
@@ -2975,17 +2942,14 @@ static __dpct_inline__ float vec_dot_q4_0_q8_1_mul_mat(
         u[2*l+1] = y_qs[j * WARP_SIZE + (kyqs + l + QI4_0) % WARP_SIZE];
     }
 
-    return vec_dot_q4_0_q8_1_impl<VDR_Q4_0_Q8_1_MMQ>(
-        &x_ql[i * (WARP_SIZE + 1) + k], u,
-        x_dmf[i * (WARP_SIZE / QI4_0) + i / QI4_0 + k / QI4_0],
-        y_ds[j * (WARP_SIZE / QI8_1) + (2 * k / QI8_1) % (WARP_SIZE / QI8_1)],
-        stream_ct1);
+    return vec_dot_q4_0_q8_1_impl<VDR_Q4_0_Q8_1_MMQ>
+        (&x_ql[i * (WARP_SIZE + 1) + k], u, x_dmf[i * (WARP_SIZE/QI4_0) + i/QI4_0 + k/QI4_0],
+         y_ds[j * (WARP_SIZE/QI8_1) + (2*k/QI8_1) % (WARP_SIZE/QI8_1)]);
 }
 
 static __dpct_inline__ float
 vec_dot_q4_1_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q4_1 * bq4_1 = (const block_q4_1 *) vbq;
 
@@ -2999,8 +2963,7 @@ vec_dot_q4_1_q8_1(const void *__restrict__ vbq,
         u[2*i+1] = get_int_from_int8_aligned(bq8_1->qs, iqs + i + QI4_1);
     }
 
-    return vec_dot_q4_1_q8_1_impl<VDR_Q4_1_Q8_1_MMVQ>(v, u, bq4_1->dm,
-                                                      bq8_1->ds, stream_ct1);
+    return vec_dot_q4_1_q8_1_impl<VDR_Q4_1_Q8_1_MMVQ>(v, u, bq4_1->dm, bq8_1->ds);
 }
 
 template <int mmq_y>
@@ -3065,7 +3028,7 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh; (void)x_sc;
 
     const int kyqs = k % (QI8_1/2) + QI8_1 * (k / (QI8_1/2));
@@ -3078,17 +3041,14 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_mul_mat(
         u[2*l+1] = y_qs[j * WARP_SIZE + (kyqs + l + QI4_1) % WARP_SIZE];
     }
 
-    return vec_dot_q4_1_q8_1_impl<VDR_Q4_1_Q8_1_MMQ>(
-        &x_ql[i * (WARP_SIZE + 1) + k], u,
-        x_dm[i * (WARP_SIZE / QI4_1) + i / QI4_1 + k / QI4_1],
-        y_ds[j * (WARP_SIZE / QI8_1) + (2 * k / QI8_1) % (WARP_SIZE / QI8_1)],
-        stream_ct1);
+    return vec_dot_q4_1_q8_1_impl<VDR_Q4_1_Q8_1_MMQ>
+        (&x_ql[i * (WARP_SIZE + 1) + k], u, x_dm[i * (WARP_SIZE/QI4_1) + i/QI4_1 + k/QI4_1],
+         y_ds[j * (WARP_SIZE/QI8_1) + (2*k/QI8_1) % (WARP_SIZE/QI8_1)]);
 }
 
 static __dpct_inline__ float
 vec_dot_q5_0_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q5_0 * bq5_0 = (const block_q5_0 *) vbq;
 
@@ -3104,8 +3064,7 @@ vec_dot_q5_0_q8_1(const void *__restrict__ vbq,
         u[2*i+1] = get_int_from_int8_aligned(bq8_1->qs, iqs + i + QI5_0);
     }
 
-    return vec_dot_q5_0_q8_1_impl<VDR_Q5_0_Q8_1_MMVQ>(vl, vh, u, bq5_0->d,
-                                                      bq8_1->ds, stream_ct1);
+    return vec_dot_q5_0_q8_1_impl<VDR_Q5_0_Q8_1_MMVQ>(vl, vh, u, bq5_0->d, bq8_1->ds);
 }
 
 template <int mmq_y>
@@ -3192,7 +3151,7 @@ static __dpct_inline__ float vec_dot_q5_0_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh; (void)x_sc;
 
     const int kyqs = k % (QI8_1/2) + QI8_1 * (k / (QI8_1/2));
@@ -3208,16 +3167,13 @@ static __dpct_inline__ float vec_dot_q5_0_q8_1_mul_mat(
         u[2*l+1] = y_qs[j * WARP_SIZE + (kyqs + l + QI5_0) % WARP_SIZE];
     }
 
-    return vec_dot_q8_0_q8_1_impl<QR5_0 * VDR_Q5_0_Q8_1_MMQ>(
-        &x_ql[i * (2 * WARP_SIZE + 1) + 2 * k], u, x_dmf[index_bx],
-        y_df[j * (WARP_SIZE / QI8_1) + (2 * k / QI8_1) % (WARP_SIZE / QI8_1)],
-        stream_ct1);
+    return vec_dot_q8_0_q8_1_impl<QR5_0*VDR_Q5_0_Q8_1_MMQ>
+        (&x_ql[i * (2*WARP_SIZE + 1) + 2 * k], u, x_dmf[index_bx], y_df[j * (WARP_SIZE/QI8_1) + (2*k/QI8_1) % (WARP_SIZE/QI8_1)]);
 }
 
 static __dpct_inline__ float
 vec_dot_q5_1_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q5_1 * bq5_1 = (const block_q5_1 *) vbq;
 
@@ -3233,8 +3189,7 @@ vec_dot_q5_1_q8_1(const void *__restrict__ vbq,
         u[2*i+1] = get_int_from_int8_aligned(bq8_1->qs, iqs + i + QI5_1);
     }
 
-    return vec_dot_q5_1_q8_1_impl<VDR_Q5_1_Q8_1_MMVQ>(vl, vh, u, bq5_1->dm,
-                                                      bq8_1->ds, stream_ct1);
+    return vec_dot_q5_1_q8_1_impl<VDR_Q5_1_Q8_1_MMVQ>(vl, vh, u, bq5_1->dm, bq8_1->ds);
 }
 
 template <int mmq_y>
@@ -3316,7 +3271,7 @@ static __dpct_inline__ float vec_dot_q5_1_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh; (void)x_sc;
 
     const int kyqs = k % (QI8_1/2) + QI8_1 * (k / (QI8_1/2));
@@ -3330,16 +3285,13 @@ static __dpct_inline__ float vec_dot_q5_1_q8_1_mul_mat(
         u[2*l+1] = y_qs[j * WARP_SIZE + (kyqs + l + QI5_1) % WARP_SIZE];
     }
 
-    return vec_dot_q8_1_q8_1_impl<QR5_1 * VDR_Q5_1_Q8_1_MMQ>(
-        &x_ql[i * (2 * WARP_SIZE + 1) + 2 * k], u, x_dm[index_bx],
-        y_ds[j * (WARP_SIZE / QI8_1) + (2 * k / QI8_1) % (WARP_SIZE / QI8_1)],
-        stream_ct1);
+    return vec_dot_q8_1_q8_1_impl<QR5_1*VDR_Q5_1_Q8_1_MMQ>
+        (&x_ql[i * (2*WARP_SIZE + 1) + 2 * k], u, x_dm[index_bx], y_ds[j * (WARP_SIZE/QI8_1) + (2*k/QI8_1) % (WARP_SIZE/QI8_1)]);
 }
 
 static __dpct_inline__ float
 vec_dot_q8_0_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q8_0 * bq8_0 = (const block_q8_0 *) vbq;
 
@@ -3353,7 +3305,7 @@ vec_dot_q8_0_q8_1(const void *__restrict__ vbq,
     }
 
     return vec_dot_q8_0_q8_1_impl<VDR_Q8_0_Q8_1_MMVQ>(v, u, bq8_0->d,
-                                                      bq8_1->ds[1], stream_ct1);
+                                                      bq8_1->ds[0]);
 }
 
 template <int mmq_y>
@@ -3419,22 +3371,20 @@ static __dpct_inline__ float vec_dot_q8_0_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh; (void)x_sc;
 
     const float * x_dmf = (const float *) x_dm;
     const float * y_df  = (const float *) y_ds;
 
-    return vec_dot_q8_0_q8_1_impl<VDR_Q8_0_Q8_1_MMQ>(
-        &x_ql[i * (WARP_SIZE + 1) + k], &y_qs[j * WARP_SIZE + k],
-        x_dmf[i * (WARP_SIZE / QI8_0) + i / QI8_0 + k / QI8_0],
-        y_df[j * (WARP_SIZE / QI8_1) + k / QI8_1], stream_ct1);
+    return vec_dot_q8_0_q8_1_impl<VDR_Q8_0_Q8_1_MMQ>
+        (&x_ql[i * (WARP_SIZE + 1) + k], &y_qs[j * WARP_SIZE + k], x_dmf[i * (WARP_SIZE/QI8_0) + i/QI8_0 + k/QI8_0],
+         y_df[j * (WARP_SIZE/QI8_1) + k/QI8_1]);
 }
 
 static __dpct_inline__ float
 vec_dot_q2_K_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q2_K * bq2_K = (const block_q2_K *) vbq;
 
@@ -3450,10 +3400,10 @@ vec_dot_q2_K_q8_1(const void *__restrict__ vbq,
 #pragma unroll
     for (int i = 0; i < QR2_K; ++ i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + i].qs, iqs % QI8_1);
-        d8[i] = bq8_1[bq8_offset + i].ds[1];
+        d8[i] = bq8_1[bq8_offset + i].ds[0];
     }
 
-    return vec_dot_q2_K_q8_1_impl_mmvq(v, u, scales, bq2_K->dm, d8, stream_ct1);
+    return vec_dot_q2_K_q8_1_impl_mmvq(v, u, scales, bq2_K->dm, d8);
 }
 
 template <int mmq_y>
@@ -3532,7 +3482,7 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh;
 
     const int kbx = k / QI2_K;
@@ -3552,16 +3502,12 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_mul_mat(
     const uint8_t * scales = ((const uint8_t *) &x_sc[i * (WARP_SIZE/4) + i/4 + kbx*4]) + ky/4;
 
     const int index_y = j * WARP_SIZE + (QR2_K*k) % WARP_SIZE;
-    return vec_dot_q2_K_q8_1_impl_mmq(
-        v, &y_qs[index_y], scales,
-        x_dm[i * (WARP_SIZE / QI2_K) + i / QI2_K + kbx], y_df[index_y / QI8_1],
-        stream_ct1);
+    return vec_dot_q2_K_q8_1_impl_mmq(v, &y_qs[index_y], scales, x_dm[i * (WARP_SIZE/QI2_K) + i/QI2_K + kbx], y_df[index_y/QI8_1]);
 }
 
 static __dpct_inline__ float
 vec_dot_q3_K_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q3_K * bq3_K = (const block_q3_K *) vbq;
 
@@ -3581,11 +3527,10 @@ vec_dot_q3_K_q8_1(const void *__restrict__ vbq,
 #pragma unroll
     for (int i = 0; i < QR3_K; ++i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + i].qs, iqs % QI8_1);
-        d8[i] = bq8_1[bq8_offset + i].ds[1];
+        d8[i] = bq8_1[bq8_offset + i].ds[0];
     }
 
-    return vec_dot_q3_K_q8_1_impl_mmvq(vl, vh, u, bq3_K->scales, scale_offset,
-                                       d, d8, stream_ct1);
+    return vec_dot_q3_K_q8_1_impl_mmvq(vl, vh, u, bq3_K->scales, scale_offset, d, d8);
 }
 
 template <int mmq_y>
@@ -3692,7 +3637,7 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
 
     const int kbx  = k / QI3_K;
     const int ky  = (k % QI3_K) * QR3_K;
@@ -3716,16 +3661,12 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_mul_mat(
     }
 
     const int index_y = j * WARP_SIZE + (k*QR3_K) % WARP_SIZE;
-    return vec_dot_q3_K_q8_1_impl_mmq(
-        v, &y_qs[index_y], scales,
-        x_dmf[i * (WARP_SIZE / QI3_K) + i / QI3_K + kbx], y_df[index_y / QI8_1],
-        stream_ct1);
+    return vec_dot_q3_K_q8_1_impl_mmq(v, &y_qs[index_y], scales, x_dmf[i * (WARP_SIZE/QI3_K) + i/QI3_K + kbx], y_df[index_y/QI8_1]);
 }
 
 static __dpct_inline__ float
 vec_dot_q4_K_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
 #ifndef GGML_QKK_64
     const block_q4_K * bq4_K = (const block_q4_K *) vbq;
@@ -3761,14 +3702,14 @@ vec_dot_q4_K_q8_1(const void *__restrict__ vbq,
 
     for (int i = 0; i < QR4_K; ++i) {
         const block_q8_1 * bq8i = bq8_1 + bq8_offset + i;
-        d8[i] = bq8i->ds[1];
+        d8[i] = bq8i->ds[0];
 
         const int * q8 = (const int *)bq8i->qs + ((iqs/2)%4);
         u[2*i+0] = q8[0];
         u[2*i+1] = q8[4];
     }
 
-    return vec_dot_q4_K_q8_1_impl_vmmq(v, u, sc, m, bq4_K->dm, d8, stream_ct1);
+    return vec_dot_q4_K_q8_1_impl_vmmq(v, u, sc, m, bq4_K->dm, d8);
 
 #else
 
@@ -3905,22 +3846,19 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh;
 
     const uint8_t * sc = ((const uint8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k/16]) + 2*((k % 16) / 8);
 
     const int index_y = j * WARP_SIZE + (QR4_K*k) % WARP_SIZE;
-    return vec_dot_q4_K_q8_1_impl_mmq(&x_ql[i * (WARP_SIZE + 1) + k],
-                                      &y_qs[index_y], sc, sc + 8,
-                                      x_dm[i * (WARP_SIZE / QI4_K) + i / QI4_K],
-                                      &y_ds[index_y / QI8_1], stream_ct1);
+    return vec_dot_q4_K_q8_1_impl_mmq(&x_ql[i * (WARP_SIZE + 1) + k], &y_qs[index_y], sc, sc+8,
+                                      x_dm[i * (WARP_SIZE/QI4_K) + i/QI4_K], &y_ds[index_y/QI8_1]);
 }
 
 static __dpct_inline__ float
 vec_dot_q5_K_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
 #ifndef GGML_QKK_64
     const block_q5_K * bq5_K = (const block_q5_K *) vbq;
@@ -3963,8 +3901,7 @@ vec_dot_q5_K_q8_1(const void *__restrict__ vbq,
         u[2*i+1] = q8[4];
     }
 
-    return vec_dot_q5_K_q8_1_impl_vmmq(vl, vh, u, sc, m, bq5_K->dm, d8,
-                                       stream_ct1);
+    return vec_dot_q5_K_q8_1_impl_vmmq(vl, vh, u, sc, m, bq5_K->dm, d8);
 
 #else
 
@@ -4108,23 +4045,20 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh;
 
     const uint8_t * sc = ((const uint8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k/16]) + 2 * ((k % 16) / 8);
 
     const int index_x = i * (QR5_K*WARP_SIZE + 1) +  QR5_K*k;
     const int index_y = j * WARP_SIZE             + (QR5_K*k) % WARP_SIZE;
-    return vec_dot_q5_K_q8_1_impl_mmq(&x_ql[index_x], &y_qs[index_y], sc,
-                                      sc + 8,
-                                      x_dm[i * (WARP_SIZE / QI5_K) + i / QI5_K],
-                                      &y_ds[index_y / QI8_1], stream_ct1);
+    return vec_dot_q5_K_q8_1_impl_mmq(&x_ql[index_x], &y_qs[index_y], sc, sc+8,
+                                      x_dm[i * (WARP_SIZE/QI5_K) + i/QI5_K], &y_ds[index_y/QI8_1]);
 }
 
 static __dpct_inline__ float
 vec_dot_q6_K_q8_1(const void *__restrict__ vbq,
-                  const block_q8_1 *__restrict__ bq8_1, const int &iqs,
-                  const sycl::stream &stream_ct1) {
+                  const block_q8_1 *__restrict__ bq8_1, const int &iqs) {
 
     const block_q6_K * bq6_K = (const block_q6_K *) vbq;
 
@@ -4143,11 +4077,10 @@ vec_dot_q6_K_q8_1(const void *__restrict__ vbq,
 #pragma unroll
     for (int i = 0; i < QR6_K; ++i) {
         u[i]  = get_int_from_int8_aligned(bq8_1[bq8_offset + 2*i].qs, iqs % QI8_1);
-        d8[i] = bq8_1[bq8_offset + 2 * i].ds[1];
+        d8[i] = bq8_1[bq8_offset + 2 * i].ds[0];
     }
 
-    return vec_dot_q6_K_q8_1_impl_mmvq(vl, vh, u, scales, bq6_K->d, d8,
-                                       stream_ct1);
+    return vec_dot_q6_K_q8_1_impl_mmvq(vl, vh, u, scales, bq6_K->d, d8);
 }
 
 template <int mmq_y>
@@ -4244,7 +4177,7 @@ static __dpct_inline__ float vec_dot_q6_K_q8_1_mul_mat(
     const int *__restrict__ x_ql, const sycl::half2 *__restrict__ x_dm,
     const int *__restrict__ x_qh, const int *__restrict__ x_sc,
     const int *__restrict__ y_qs, const sycl::half2 *__restrict__ y_ds,
-    const int &i, const int &j, const int &k, const sycl::stream &stream_ct1) {
+    const int &i, const int &j, const int &k) {
     (void)x_qh;
 
     const float * x_dmf = (const float *) x_dm;
@@ -4254,10 +4187,7 @@ static __dpct_inline__ float vec_dot_q6_K_q8_1_mul_mat(
 
     const int index_x = i * (QR6_K*WARP_SIZE + 1) +  QR6_K*k;
     const int index_y = j * WARP_SIZE             + (QR6_K*k) % WARP_SIZE;
-    return vec_dot_q6_K_q8_1_impl_mmq(
-        &x_ql[index_x], &y_qs[index_y], sc,
-        x_dmf[i * (WARP_SIZE / QI6_K) + i / QI6_K], &y_df[index_y / QI8_1],
-        stream_ct1);
+    return vec_dot_q6_K_q8_1_impl_mmq(&x_ql[index_x], &y_qs[index_y], sc, x_dmf[i * (WARP_SIZE/QI6_K) + i/QI6_K], &y_df[index_y/QI8_1]);
 }
 
 template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x,
@@ -4265,7 +4195,7 @@ template <int qk, int qr, int qi, bool need_sum, typename block_q_t, int mmq_x,
           load_tiles_cuda_t load_tiles, int vdr,
           vec_dot_q_mul_mat_cuda_t vec_dot>
 /*
-DPCT1110:19: The total declared local variable size in device function mul_mat_q
+DPCT1110:8: The total declared local variable size in device function mul_mat_q
 exceeds 128 bytes and may cause high register pressure. Consult with your
 hardware vendor to find the total register size available and adjust the code,
 or use smaller sub-group size to avoid high register pressure.
@@ -4274,7 +4204,8 @@ static __dpct_inline__ void
 mul_mat_q(const void *__restrict__ vx, const void *__restrict__ vy,
           float *__restrict__ dst, const int ncols_x, const int nrows_x,
           const int ncols_y, const int nrows_y, const int nrows_dst,
-          const sycl::nd_item<3> &item_ct1, int *tile_y_qs,
+          const sycl::nd_item<3> &item_ct1, int *tile_x_ql,
+          sycl::half2 *tile_x_dm, int *tile_x_sc, int *tile_y_qs,
           sycl::half2 *tile_y_ds) {
 
     const block_q_t  * x = (const block_q_t  *) vx;
@@ -4297,7 +4228,53 @@ mul_mat_q(const void *__restrict__ vx, const void *__restrict__ vy,
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-    allocate_tiles(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
+    /*
+    DPCT1084:11: The function call "allocate_tiles_q4_0" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:12: The function call "allocate_tiles_q4_1" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:13: The function call "allocate_tiles_q5_0" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:14: The function call "allocate_tiles_q5_1" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:15: The function call "allocate_tiles_q8_0" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:16: The function call "allocate_tiles_q2_K" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:17: The function call "allocate_tiles_q3_K" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:18: The function call "allocate_tiles_q4_K" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    /*
+    DPCT1084:19: The function call "allocate_tiles_q5_K" has multiple migration
+    results in different template instantiations that could not be unified. You
+    may need to adjust the code.
+    */
+    allocate_tiles(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc, tile_x_ql,
+                   tile_x_dm, tile_x_sc);
 
     float sum[mmq_y/WARP_SIZE][mmq_x/nwarps] = {{0.0f}};
 
@@ -4347,16 +4324,16 @@ mul_mat_q(const void *__restrict__ vx, const void *__restrict__ vy,
                     *dsi_dst = *dsi_src;
                 } else {
                     float * dfi_dst = (float *) dsi_dst;
-                    *dfi_dst = (*dsi_src)[1];
+                    *dfi_dst = (*dsi_src)[0];
                 }
             }
 
             /*
-            DPCT1118:20: SYCL group functions and algorithms must be encountered
+            DPCT1118:9: SYCL group functions and algorithms must be encountered
             in converged control flow. You may need to adjust the code.
             */
             /*
-            DPCT1065:71: Consider replacing sycl::nd_item::barrier() with
+            DPCT1065:65: Consider replacing sycl::nd_item::barrier() with
             sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
             better performance if there is no access to global memory.
             */
@@ -4377,11 +4354,11 @@ mul_mat_q(const void *__restrict__ vx, const void *__restrict__ vy,
             }
 
             /*
-            DPCT1118:21: SYCL group functions and algorithms must be encountered
+            DPCT1118:10: SYCL group functions and algorithms must be encountered
             in converged control flow. You may need to adjust the code.
             */
             /*
-            DPCT1065:72: Consider replacing sycl::nd_item::barrier() with
+            DPCT1065:66: Consider replacing sycl::nd_item::barrier() with
             sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
             better performance if there is no access to global memory.
             */
@@ -4438,7 +4415,8 @@ template <bool need_check> static void
     mul_mat_q4_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4460,9 +4438,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q4_0_AMPERE;
     const int nwarps = NWARPS_Q4_0_AMPERE;
 
-    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps, allocate_tiles_q4_0<mmq_y>,
-        load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q4_0<mmq_y>,
+              load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ,
+              vec_dot_q4_0_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q4_0_PASCAL;
@@ -4474,7 +4455,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_0_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4503,12 +4484,13 @@ template <bool need_check> static void
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
 #elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-
+    __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_PASCAL, 2)
 #endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_1(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4530,9 +4512,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q4_1_AMPERE;
     const int nwarps = NWARPS_Q4_1_AMPERE;
 
-    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps, allocate_tiles_q4_1<mmq_y>,
-        load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q4_1<mmq_y>,
+              load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ,
+              vec_dot_q4_1_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q4_1_PASCAL;
@@ -4544,7 +4529,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_1_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4576,7 +4561,8 @@ template <bool need_check> static void
     mul_mat_q5_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4598,9 +4584,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q5_0_AMPERE;
     const int nwarps = NWARPS_Q5_0_AMPERE;
 
-    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps, allocate_tiles_q5_0<mmq_y>,
-        load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q5_0<mmq_y>,
+              load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ,
+              vec_dot_q5_0_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q5_0_PASCAL;
@@ -4612,7 +4601,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_0_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4644,7 +4633,8 @@ template <bool need_check> static void
 mul_mat_q5_1(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4666,9 +4656,12 @@ mul_mat_q5_1(
     const int mmq_y  =  MMQ_Y_Q5_1_AMPERE;
     const int nwarps = NWARPS_Q5_1_AMPERE;
 
-    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps, allocate_tiles_q5_1<mmq_y>,
-        load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q5_1<mmq_y>,
+              load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ,
+              vec_dot_q5_1_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q5_1_PASCAL;
@@ -4680,7 +4673,7 @@ mul_mat_q5_1(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_1_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4712,7 +4705,8 @@ template <bool need_check> static void
     mul_mat_q8_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4734,9 +4728,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q8_0_AMPERE;
     const int nwarps = NWARPS_Q8_0_AMPERE;
 
-    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps, allocate_tiles_q8_0<mmq_y>,
-        load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q8_0<mmq_y>,
+              load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ,
+              vec_dot_q8_0_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q8_0_PASCAL;
@@ -4748,7 +4745,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q8_0_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4780,7 +4777,8 @@ template <bool need_check> static void
 mul_mat_q2_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4802,9 +4800,12 @@ mul_mat_q2_K(
     const int mmq_y  =  MMQ_Y_Q2_K_AMPERE;
     const int nwarps = NWARPS_Q2_K_AMPERE;
 
-    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps, allocate_tiles_q2_K<mmq_y>,
-        load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q2_K<mmq_y>,
+              load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ,
+              vec_dot_q2_K_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q2_K_PASCAL;
@@ -4816,7 +4817,7 @@ mul_mat_q2_K(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q2_K_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4845,12 +4846,13 @@ template <bool need_check> static void
     __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
 #elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-
+    __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_PASCAL, 2)
 #endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q3_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4872,9 +4874,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q3_K_AMPERE;
     const int nwarps = NWARPS_Q3_K_AMPERE;
 
-    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps, allocate_tiles_q3_K<mmq_y>,
-        load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q3_K<mmq_y>,
+              load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ,
+              vec_dot_q3_K_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q3_K_PASCAL;
@@ -4886,7 +4891,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q3_K_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4915,12 +4920,13 @@ template <bool need_check> static void
     __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
 #elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-
+    __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_PASCAL, 2)
 #endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -4942,9 +4948,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q4_K_AMPERE;
     const int nwarps = NWARPS_Q4_K_AMPERE;
 
-    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps, allocate_tiles_q4_K<mmq_y>,
-        load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q4_K<mmq_y>,
+              load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ,
+              vec_dot_q4_K_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q4_K_PASCAL;
@@ -4956,7 +4965,7 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q4_K_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -4988,7 +4997,8 @@ template <bool need_check> static void
 mul_mat_q5_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -5010,9 +5020,12 @@ mul_mat_q5_K(
     const int mmq_y  =  MMQ_Y_Q5_K_AMPERE;
     const int nwarps = NWARPS_Q5_K_AMPERE;
 
-    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps, allocate_tiles_q5_K<mmq_y>,
-        load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q5_K<mmq_y>,
+              load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ,
+              vec_dot_q5_K_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q5_K_PASCAL;
@@ -5024,7 +5037,7 @@ mul_mat_q5_K(
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q5_K_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
@@ -5053,12 +5066,13 @@ template <bool need_check> static void
     __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_RDNA2, 2)
 #endif // defined(RDNA3) || defined(RDNA2)
 #elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-
+    __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_PASCAL, 2)
 #endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q6_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
-    const sycl::stream &stream_ct1) {
+    const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
+    int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -5080,9 +5094,12 @@ template <bool need_check> static void
     const int mmq_y  =  MMQ_Y_Q6_K_AMPERE;
     const int nwarps = NWARPS_Q6_K_AMPERE;
 
-    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps, allocate_tiles_q6_K<mmq_y>,
-        load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
+    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps,
+              allocate_tiles_q6_K<mmq_y>,
+              load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ,
+              vec_dot_q6_K_q8_1_mul_mat>(
+        vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, item_ct1,
+        tile_x_ql, tile_x_dm, tile_x_sc, tile_y_qs, tile_y_ds);
 
 #elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
     const int mmq_x  =  MMQ_X_Q6_K_PASCAL;
@@ -5094,14 +5111,13 @@ template <bool need_check> static void
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
     (void) vec_dot_q6_K_q8_1_mul_mat;
-    bad_arch(stream_ct1);
+    bad_arch();
 #endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 template <int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
 static void mul_mat_vec_q(const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst, const int ncols, const int nrows,
-                          const sycl::nd_item<3> &item_ct1,
-                          const sycl::stream &stream_ct1) {
+                          const sycl::nd_item<3> &item_ct1) {
     const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1) +
                     item_ct1.get_local_id(1);
 
@@ -5130,18 +5146,12 @@ static void mul_mat_vec_q(const void * __restrict__ vx, const void * __restrict_
             (item_ct1.get_local_id(2) %
              (qi / vdr)); // x block quant index when casting the quants to int
 
-        tmp += vec_dot_q_cuda(&x[ibx], &y[iby], iqs, stream_ct1);
+        tmp += vec_dot_q_cuda(&x[ibx], &y[iby], iqs);
     }
 
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:22: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -5209,12 +5219,6 @@ static void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * 
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:23: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -5258,7 +5262,7 @@ static void mul_mat_p021_f16_f32(
         // x is transposed and permuted
         const int ix = row_x*nchannels_x*ncols_x + channel_x*ncols_x + col_x;
         const float xi =
-            sycl::vec<sycl::half, 1>{x[ix]}
+            sycl::vec<sycl::half, 1>(x[ix])
                 .convert<float, sycl::rounding_mode::automatic>()[0];
 
         const int row_y = col_x;
@@ -5276,12 +5280,6 @@ static void mul_mat_p021_f16_f32(
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:24: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -5326,7 +5324,7 @@ static void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
         const int iy = channel*nrows_y + row_y;
 
         const float xi =
-            sycl::vec<sycl::half, 1>{x[ix]}
+            sycl::vec<sycl::half, 1>(x[ix])
                 .convert<float, sycl::rounding_mode::automatic>()[0];
 
         tmp += xi * y[iy];
@@ -5335,12 +5333,6 @@ static void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
     // sum up partial sums and write back result
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1) {
-        /*
-        DPCT1023:25: The SYCL sub-group does not support mask options for
-        dpct::permute_sub_group_by_xor. You can specify
-        "--use-experimental-features=masked-sub-group-operation" to use the
-        experimental helper function to migrate __shfl_xor_sync.
-        */
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -5361,7 +5353,7 @@ static void cpy_1_f32_f16(const char * cxi, char * cdsti) {
     const float * xi = (const float *) cxi;
     sycl::half *dsti = (sycl::half *)cdsti;
 
-    *dsti = sycl::vec<float, 1>{(*xi)}
+    *dsti = sycl::vec<float, 1>(*xi)
                 .convert<sycl::half, sycl::rounding_mode::automatic>()[0];
 }
 
@@ -5729,7 +5721,7 @@ static void k_argsort_f32_i32(const float * x, int * dst, const int ncols,
         dst_row[col] = col;
     }
     /*
-    DPCT1065:73: Consider replacing sycl::nd_item::barrier() with
+    DPCT1065:67: Consider replacing sycl::nd_item::barrier() with
     sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better
     performance if there is no access to global memory.
     */
@@ -5750,11 +5742,11 @@ static void k_argsort_f32_i32(const float * x, int * dst, const int ncols,
                 }
             }
             /*
-            DPCT1118:26: SYCL group functions and algorithms must be encountered
+            DPCT1118:20: SYCL group functions and algorithms must be encountered
             in converged control flow. You may need to adjust the code.
             */
             /*
-            DPCT1065:74: Consider replacing sycl::nd_item::barrier() with
+            DPCT1065:68: Consider replacing sycl::nd_item::barrier() with
             sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
             better performance if there is no access to global memory.
             */
@@ -5806,11 +5798,11 @@ static void soft_max_f32(const float * x, const float * y, float * dst, const in
             buf[lane_id] = -INFINITY;
         }
         /*
-        DPCT1118:27: SYCL group functions and algorithms must be encountered in
+        DPCT1118:21: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:75: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:69: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -5820,11 +5812,11 @@ static void soft_max_f32(const float * x, const float * y, float * dst, const in
             buf[warp_id] = max_val;
         }
         /*
-        DPCT1118:28: SYCL group functions and algorithms must be encountered in
+        DPCT1118:22: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:76: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:70: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -5852,11 +5844,11 @@ static void soft_max_f32(const float * x, const float * y, float * dst, const in
             buf[lane_id] = 0.f;
         }
         /*
-        DPCT1118:29: SYCL group functions and algorithms must be encountered in
+        DPCT1118:23: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:77: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:71: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -5866,11 +5858,11 @@ static void soft_max_f32(const float * x, const float * y, float * dst, const in
             buf[warp_id] = tmp;
         }
         /*
-        DPCT1118:30: SYCL group functions and algorithms must be encountered in
+        DPCT1118:24: SYCL group functions and algorithms must be encountered in
         converged control flow. You may need to adjust the code.
         */
         /*
-        DPCT1065:78: Consider replacing sycl::nd_item::barrier() with
+        DPCT1065:72: Consider replacing sycl::nd_item::barrier() with
         sycl::nd_item::barrier(sycl::access::fence_space::local_space) for
         better performance if there is no access to global memory.
         */
@@ -5938,12 +5930,12 @@ static void im2col_f32_f16(const float *x, sycl::half *dst, int offset_delta,
 
     if (iih < 0 || iih >= IH || iiw < 0 || iiw >= IW) {
         dst[offset_dst] =
-            sycl::vec<float, 1>{0.0f}
+            sycl::vec<float, 1>(0.0f)
                 .convert<sycl::half, sycl::rounding_mode::automatic>()[0];
     } else {
         const int64_t offset_src = item_ct1.get_group(0) * offset_delta;
         dst[offset_dst] =
-            sycl::vec<float, 1>{x[offset_src + iih * IW + iiw]}
+            sycl::vec<float, 1>(x[offset_src + iih * IW + iiw])
                 .convert<sycl::half, sycl::rounding_mode::automatic>()[0];
     }
 }
@@ -6009,6 +6001,7 @@ static void get_rows_cuda_float(const ggml_tensor *src0,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
@@ -6106,11 +6099,12 @@ struct bin_bcast_cuda {
 
             sycl::range<3> block_dims(1, 1, 1);
             block_dims[2] = std::min<unsigned int>(hne0, block_size);
-            block_dims[1] =
-                std::min<unsigned int>(ne1, block_size / block_dims[2]);
+            block_dims[1] = std::min<unsigned int>(
+                ne1, block_size / (unsigned int)block_dims[2]);
             block_dims[0] = std::min(
-                std::min<unsigned int>(ne2 * ne3, block_size / block_dims[2] /
-                                                      block_dims[1]),
+                std::min<unsigned int>(
+                    ne2 * ne3, block_size / (unsigned int)block_dims[2] /
+                                   (unsigned int)block_dims[1]),
                 64U);
 
             sycl::range<3> block_nums(
@@ -6124,6 +6118,7 @@ struct bin_bcast_cuda {
                 {
                     dpct::has_capability_or_fail(stream->get_device(),
                                                  {sycl::aspect::fp16});
+
                     stream->parallel_for(
                         sycl::nd_range<3>(sycl::range<3>(1, 1, block_num) *
                                               sycl::range<3>(1, 1, block_size),
@@ -6137,13 +6132,14 @@ struct bin_bcast_cuda {
                 }
             } else {
                 /*
-                DPCT1049:31: The work-group size passed to the SYCL kernel may
+                DPCT1049:25: The work-group size passed to the SYCL kernel may
                 exceed the limit. To get the device limit, query
                 info::device::max_work_group_size. Adjust the work-group size if
                 needed.
                 */
                 dpct::has_capability_or_fail(stream->get_device(),
                                              {sycl::aspect::fp16});
+
                 stream->parallel_for(
                     sycl::nd_range<3>(block_nums * block_dims, block_dims),
                     [=](sycl::nd_item<3> item_ct1) {
@@ -6279,7 +6275,7 @@ static void norm_f32_cuda(const float *x, float *dst, const int ncols,
     } else {
         const sycl::range<3> block_dims(1, 1, 1024);
         /*
-        DPCT1049:32: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:26: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
@@ -6324,7 +6320,7 @@ static void group_norm_f32_cuda(const float *x, float *dst,
     } else {
         const sycl::range<3> block_dims(1, 1, 1024);
         /*
-        DPCT1049:33: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:27: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
@@ -6411,7 +6407,7 @@ static void rms_norm_f32_cuda(const float *x, float *dst, const int ncols,
     } else {
         const sycl::range<3> block_dims(1, 1, 1024);
         /*
-        DPCT1049:34: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:28: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
@@ -6440,6 +6436,7 @@ static void quantize_row_q8_1_cuda(const float *x, void *vy, const int kx,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(num_blocks * block_size, block_size),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6456,6 +6453,7 @@ static void dequantize_block_cuda(const void *__restrict__ vx,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(
                 sycl::range<3>(1, 1, num_blocks) *
@@ -6475,6 +6473,7 @@ static void dequantize_row_q2_K_cuda(const void *vx, dst_t *y, const int k,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 64),
                                                sycl::range<3>(1, 1, 64)),
@@ -6495,6 +6494,7 @@ static void dequantize_row_q3_K_cuda(const void *vx, dst_t *y, const int k,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 64),
                                                sycl::range<3>(1, 1, 64)),
@@ -6514,6 +6514,7 @@ static void dequantize_row_q4_K_cuda(const void *vx, dst_t *y, const int k,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 32),
                                                sycl::range<3>(1, 1, 32)),
@@ -6531,6 +6532,7 @@ static void dequantize_row_q5_K_cuda(const void *vx, dst_t *y, const int k,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 64),
                                                sycl::range<3>(1, 1, 64)),
@@ -6551,6 +6553,7 @@ static void dequantize_row_q6_K_cuda(const void *vx, dst_t *y, const int k,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(sycl::nd_range<3>(sycl::range<3>(1, 1, nb) *
                                                    sycl::range<3>(1, 1, 64),
                                                sycl::range<3>(1, 1, 64)),
@@ -6633,6 +6636,7 @@ static void dequantize_mul_mat_vec_q4_0_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6653,6 +6657,7 @@ static void dequantize_mul_mat_vec_q4_1_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6673,6 +6678,7 @@ static void dequantize_mul_mat_vec_q5_0_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6693,6 +6699,7 @@ static void dequantize_mul_mat_vec_q5_1_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6713,6 +6720,7 @@ static void dequantize_mul_mat_vec_q8_0_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6810,6 +6818,7 @@ static void convert_mul_mat_vec_f16_cuda(const void *vx, const dfloat *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -6827,17 +6836,13 @@ static void mul_mat_vec_q4_0_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK4_0, QI4_0, block_q4_0, VDR_Q4_0_Q8_1_MMVQ,
-                              vec_dot_q4_0_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK4_0, QI4_0, block_q4_0, VDR_Q4_0_Q8_1_MMVQ,
+                          vec_dot_q4_0_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q4_1_q8_1_cuda(const void *vx, const void *vy,
@@ -6848,17 +6853,13 @@ static void mul_mat_vec_q4_1_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK4_0, QI4_1, block_q4_1, VDR_Q4_1_Q8_1_MMVQ,
-                              vec_dot_q4_1_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK4_0, QI4_1, block_q4_1, VDR_Q4_1_Q8_1_MMVQ,
+                          vec_dot_q4_1_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q5_0_q8_1_cuda(const void *vx, const void *vy,
@@ -6869,17 +6870,13 @@ static void mul_mat_vec_q5_0_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK5_0, QI5_0, block_q5_0, VDR_Q5_0_Q8_1_MMVQ,
-                              vec_dot_q5_0_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK5_0, QI5_0, block_q5_0, VDR_Q5_0_Q8_1_MMVQ,
+                          vec_dot_q5_0_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q5_1_q8_1_cuda(const void *vx, const void *vy,
@@ -6890,17 +6887,13 @@ static void mul_mat_vec_q5_1_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK5_1, QI5_1, block_q5_1, VDR_Q5_1_Q8_1_MMVQ,
-                              vec_dot_q5_1_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK5_1, QI5_1, block_q5_1, VDR_Q5_1_Q8_1_MMVQ,
+                          vec_dot_q5_1_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q8_0_q8_1_cuda(const void *vx, const void *vy,
@@ -6911,17 +6904,13 @@ static void mul_mat_vec_q8_0_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK8_0, QI8_0, block_q8_0, VDR_Q8_0_Q8_1_MMVQ,
-                              vec_dot_q8_0_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK8_0, QI8_0, block_q8_0, VDR_Q8_0_Q8_1_MMVQ,
+                          vec_dot_q8_0_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q2_K_q8_1_cuda(const void *vx, const void *vy,
@@ -6932,17 +6921,13 @@ static void mul_mat_vec_q2_K_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK_K, QI2_K, block_q2_K, VDR_Q2_K_Q8_1_MMVQ,
-                              vec_dot_q2_K_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK_K, QI2_K, block_q2_K, VDR_Q2_K_Q8_1_MMVQ,
+                          vec_dot_q2_K_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q3_K_q8_1_cuda(const void *vx, const void *vy,
@@ -6953,17 +6938,13 @@ static void mul_mat_vec_q3_K_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK_K, QI3_K, block_q3_K, VDR_Q3_K_Q8_1_MMVQ,
-                              vec_dot_q3_K_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK_K, QI3_K, block_q3_K, VDR_Q3_K_Q8_1_MMVQ,
+                          vec_dot_q3_K_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q4_K_q8_1_cuda(const void *vx, const void *vy,
@@ -6974,17 +6955,13 @@ static void mul_mat_vec_q4_K_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK_K, QI4_K, block_q4_K, VDR_Q4_K_Q8_1_MMVQ,
-                              vec_dot_q4_K_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK_K, QI4_K, block_q4_K, VDR_Q4_K_Q8_1_MMVQ,
+                          vec_dot_q4_K_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q5_K_q8_1_cuda(const void *vx, const void *vy,
@@ -6995,17 +6972,13 @@ static void mul_mat_vec_q5_K_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK_K, QI5_K, block_q5_K, VDR_Q5_K_Q8_1_MMVQ,
-                              vec_dot_q5_K_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK_K, QI5_K, block_q5_K, VDR_Q5_K_Q8_1_MMVQ,
+                          vec_dot_q5_K_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void mul_mat_vec_q6_K_q8_1_cuda(const void *vx, const void *vy,
@@ -7016,17 +6989,13 @@ static void mul_mat_vec_q6_K_q8_1_cuda(const void *vx, const void *vy,
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
     const sycl::range<3> block_nums(1, 1, block_num_y);
     const sycl::range<3> block_dims(1, GGML_CUDA_MMV_Y, WARP_SIZE);
-    stream->submit([&](sycl::handler &cgh) {
-        sycl::stream stream_ct1(64 * 1024, 80, cgh);
-
-        cgh.parallel_for(
-            sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                mul_mat_vec_q<QK_K, QI6_K, block_q6_K, VDR_Q6_K_Q8_1_MMVQ,
-                              vec_dot_q6_K_q8_1>(vx, vy, dst, ncols, nrows,
-                                                 item_ct1, stream_ct1);
-            });
-    });
+    stream->parallel_for(
+        sycl::nd_range<3>(block_nums * block_dims, block_dims),
+        [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            mul_mat_vec_q<QK_K, QI6_K, block_q6_K, VDR_Q6_K_Q8_1_MMVQ,
+                          vec_dot_q6_K_q8_1>(vx, vy, dst, ncols, nrows,
+                                             item_ct1);
+        });
 }
 
 static void ggml_mul_mat_q4_0_q8_1_cuda(const void *vx, const void *vy,
@@ -7036,7 +7005,8 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7068,39 +7038,99 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:35: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:29: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:36: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:30: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7116,7 +7146,8 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7148,39 +7179,101 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:37: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:31: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        //zjy const int mmq_y  =  MMQ_Y_Q4_1_PASCAL;
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_1<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
+
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(mmq_y /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   mmq_y /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_1<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:38: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:32: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_1<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_1<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7196,7 +7289,8 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7228,39 +7322,99 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:39: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:33: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:40: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:34: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7276,7 +7430,8 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7308,39 +7463,99 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:41: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:35: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_1<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_1<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:42: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:36: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_1<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_1<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7356,7 +7571,8 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7388,39 +7604,99 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:43: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:37: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q8_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q8_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:44: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:38: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q8_0<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q8_0<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7436,7 +7712,8 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7468,39 +7745,99 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:45: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:39: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q2_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q2_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:46: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:40: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q2_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q2_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7518,7 +7855,8 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(const void *vx, const void *vy,
 #if QK_K == 256
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7550,39 +7888,99 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:47: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:41: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q3_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q3_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:48: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:42: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q3_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q3_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 #endif
 }
@@ -7599,7 +7997,8 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7631,39 +8030,99 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:49: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:43: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:50: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:44: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q4_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q4_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7679,7 +8138,8 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7711,39 +8171,99 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:51: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:45: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:52: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:46: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q5_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q5_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7759,7 +8279,8 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -7791,39 +8312,99 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(const void *vx, const void *vy,
     if (nrows_x % mmq_y == 0) {
         const bool need_check = false;
         /*
-        DPCT1049:53: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:47: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q6_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q6_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     } else {
         const bool need_check = true;
         /*
-        DPCT1049:54: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:48: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::stream stream_ct1(64 * 1024, 80, cgh);
+        {
+            dpct::has_capability_or_fail(stream->get_device(),
+                                         {sycl::aspect::fp16});
 
-            cgh.parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
-                    mul_mat_q6_K<need_check>(vx, vy, dst, ncols_x, nrows_x,
-                                             ncols_y, nrows_y, nrows_dst,
-                                             stream_ct1);
-                });
-        });
+            stream->submit([&](sycl::handler &cgh) {
+                sycl::local_accessor<int, 1> tile_x_ql_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (2 * WARP_SIZE) +
+                                   dpct_placeholder /*Fix the type mannually*/),
+                    cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_x_dm_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / QI6_K) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       QI6_K),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_x_sc_acc_ct1(
+                    sycl::range<1>(dpct_placeholder /*Fix the type mannually*/ *
+                                       (WARP_SIZE / 8) +
+                                   dpct_placeholder /*Fix the type mannually*/ /
+                                       8),
+                    cgh);
+                sycl::local_accessor<int, 1> tile_y_qs_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE), cgh);
+                sycl::local_accessor<sycl::half2, 1> tile_y_ds_acc_ct1(
+                    sycl::range<1>(mmq_x * WARP_SIZE / QI8_1), cgh);
+
+                cgh.parallel_for(
+                    sycl::nd_range<3>(block_nums * block_dims, block_dims),
+                    [=](sycl::nd_item<3> item_ct1) {
+                        mul_mat_q6_K<need_check>(
+                            vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y,
+                            nrows_dst, item_ct1,
+                            tile_x_ql_acc_ct1.get_pointer(),
+                            tile_x_dm_acc_ct1.get_pointer(),
+                            tile_x_sc_acc_ct1.get_pointer(),
+                            tile_y_qs_acc_ct1.get_pointer(),
+                            tile_y_ds_acc_ct1.get_pointer());
+                    });
+            });
+        }
     }
 }
 catch (sycl::exception const &exc) {
@@ -7844,6 +8425,7 @@ static void ggml_mul_mat_p021_f16_f32_cuda(const void *vx, const float *y,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -7863,6 +8445,7 @@ static void ggml_mul_mat_vec_nc_f16_f32_cuda(
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
@@ -7885,6 +8468,7 @@ static void ggml_cpy_f32_f32_cuda(const char *cx, char *cdst, const int ne,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(sycl::range<3>(1, 1, num_blocks) *
                                   sycl::range<3>(1, 1, CUDA_CPY_BLOCK_SIZE),
@@ -7909,6 +8493,7 @@ static void ggml_cpy_f32_f16_cuda(const char *cx, char *cdst, const int ne,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(sycl::range<3>(1, 1, num_blocks) *
                                   sycl::range<3>(1, 1, CUDA_CPY_BLOCK_SIZE),
@@ -7990,6 +8575,7 @@ static void ggml_cpy_f16_f16_cuda(const char *cx, char *cdst, const int ne,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(sycl::range<3>(1, 1, num_blocks) *
                                   sycl::range<3>(1, 1, CUDA_CPY_BLOCK_SIZE),
@@ -8038,12 +8624,13 @@ static void rope_cuda(const T *x, T *dst, int ncols, int nrows,
     const sycl::range<3> block_nums(1, num_blocks_x, nrows);
     if (pos == nullptr) {
         /*
-        DPCT1049:55: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:49: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
@@ -8053,12 +8640,13 @@ static void rope_cuda(const T *x, T *dst, int ncols, int nrows,
             });
     } else {
         /*
-        DPCT1049:56: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:50: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
@@ -8085,12 +8673,13 @@ static void rope_neox_cuda(const T *x, T *dst, int ncols, int n_dims, int nrows,
 
     if (pos == nullptr) {
         /*
-        DPCT1049:57: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:51: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
@@ -8101,12 +8690,13 @@ static void rope_neox_cuda(const T *x, T *dst, int ncols, int n_dims, int nrows,
             });
     } else {
         /*
-        DPCT1049:58: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:52: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) {
@@ -8168,7 +8758,7 @@ static void argsort_f32_i32_cuda(const float *x, int *dst, const int ncols,
     const sycl::range<3> block_nums(1, nrows, 1);
     if (order == GGML_SORT_ASC) {
         /*
-        DPCT1049:59: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:53: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
@@ -8179,7 +8769,7 @@ static void argsort_f32_i32_cuda(const float *x, int *dst, const int ncols,
             });
     } else if (order == GGML_SORT_DESC) {
         /*
-        DPCT1049:60: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:54: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
@@ -8217,13 +8807,13 @@ static void soft_max_f32_cuda(const float *x, const float *y, float *dst,
     const sycl::range<3> block_dims(1, 1, nth);
     const sycl::range<3> block_nums(1, 1, nrows_x);
     /*
-    DPCT1049:61: The work-group size passed to the SYCL kernel may exceed the
+    DPCT1049:55: The work-group size passed to the SYCL kernel may exceed the
     limit. To get the device limit, query info::device::max_work_group_size.
     Adjust the work-group size if needed.
     */
     stream->submit([&](sycl::handler &cgh) {
         /*
-        DPCT1101:111: 'CUDA_SOFT_MAX_BLOCK_SIZE/WARP_SIZE' expression was
+        DPCT1101:105: 'CUDA_SOFT_MAX_BLOCK_SIZE/WARP_SIZE' expression was
         replaced with a value. Modify the code to use the original expression,
         provided in comments, if it is correct.
         */
@@ -8250,6 +8840,7 @@ static void im2col_f32_f16_cuda(const float *x, sycl::half *dst, int IW, int IH,
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
+
         stream->parallel_for(
             sycl::nd_range<3>(block_nums *
                                   sycl::range<3>(1, 1, CUDA_IM2COL_BLOCK_SIZE),
@@ -8293,7 +8884,8 @@ static size_t g_cuda_pool_size[GGML_CUDA_MAX_DEVICES] = {0};
 static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 #ifdef DEBUG_CUDA_MALLOC
     int nnz = 0;
     size_t max_size = 0;
@@ -8354,7 +8946,8 @@ catch (sycl::exception const &exc) {
 static void ggml_cuda_pool_free_leg(void *ptr, size_t size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
         cuda_buffer& b = g_cuda_buffer_pool[id][i];
@@ -8377,10 +8970,10 @@ catch (sycl::exception const &exc) {
 #if !defined(GGML_USE_HIPBLAS)
 // pool with virtual memory
 /*
-DPCT1082:79: Migration of CUmemGenericAllocationHandle type is not supported.
+DPCT1082:73: Migration of CUmemGenericAllocationHandle type is not supported.
 */
-// static std::vector<CUmemGenericAllocationHandle>
-//     g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
+static std::vector<CUmemGenericAllocationHandle>
+    g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
 static dpct::device_ptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
 static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
@@ -8388,7 +8981,8 @@ static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
 static void *ggml_cuda_pool_malloc_vmm(size_t size, size_t *actual_size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     // round up the allocation size to the alignment to ensure that all allocations are aligned for all data types
     const size_t alignment = 128;
@@ -8406,54 +9000,54 @@ static void *ggml_cuda_pool_malloc_vmm(size_t size, size_t *actual_size) try {
 
         // allocate more physical memory
         /*
-        DPCT1082:80: Migration of CUmemAllocationProp type is not supported.
+        DPCT1082:74: Migration of CUmemAllocationProp type is not supported.
         */
         CUmemAllocationProp prop = {};
         prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
         prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
         prop.location.id = id;
         /*
-        DPCT1082:81: Migration of CUmemGenericAllocationHandle type is not
+        DPCT1082:75: Migration of CUmemGenericAllocationHandle type is not
         supported.
         */
-        // CUmemGenericAllocationHandle handle;
+        CUmemGenericAllocationHandle handle;
         /*
-        DPCT1007:84: Migration of cuMemCreate is not supported.
+        DPCT1007:78: Migration of cuMemCreate is not supported.
         */
-        // CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
+        CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
 
         // reserve virtual address space (if not already reserved)
         if (g_cuda_pool_addr[id] == 0) {
             /*
-            DPCT1007:85: Migration of cuMemAddressReserve is not supported.
+            DPCT1007:79: Migration of cuMemAddressReserve is not supported.
             */
-            // CU_CHECK(cuMemAddressReserve(&g_cuda_pool_addr[id],
-            //                              CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0));
+            CU_CHECK(cuMemAddressReserve(&g_cuda_pool_addr[id],
+                                         CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0));
         }
 
         // map at the end of the pool
         /*
-        DPCT1007:86: Migration of cuMemMap is not supported.
+        DPCT1007:80: Migration of cuMemMap is not supported.
         */
-        // CU_CHECK(cuMemMap(g_cuda_pool_addr[id] + g_cuda_pool_size[id],
-        //                   reserve_size, 0, handle, 0));
+        CU_CHECK(cuMemMap(g_cuda_pool_addr[id] + g_cuda_pool_size[id],
+                          reserve_size, 0, handle, 0));
 
         // set access
         /*
-        DPCT1082:87: Migration of CUmemAccessDesc type is not supported.
+        DPCT1082:81: Migration of CUmemAccessDesc type is not supported.
         */
         CUmemAccessDesc access = {};
         access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
         access.location.id = id;
         access.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
         /*
-        DPCT1007:88: Migration of cuMemSetAccess is not supported.
+        DPCT1007:82: Migration of cuMemSetAccess is not supported.
         */
         CU_CHECK(cuMemSetAccess(g_cuda_pool_addr[id] + g_cuda_pool_size[id],
                                 reserve_size, &access, 1));
 
         // add to the pool
-        // g_cuda_pool_handles[id].push_back(handle);
+        g_cuda_pool_handles[id].push_back(handle);
         g_cuda_pool_size[id] += reserve_size;
 
         //printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
@@ -8482,7 +9076,8 @@ catch (sycl::exception const &exc) {
 static void ggml_cuda_pool_free_vmm(void *ptr, size_t size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
 #ifdef DEBUG_CUDA_MALLOC
     printf("cuda pool[%d]: freed %llu bytes at %llx\n", id, (unsigned long long) size, ptr);
@@ -8501,8 +9096,8 @@ catch (sycl::exception const &exc) {
 
 static void *ggml_cuda_pool_malloc(size_t size, size_t *actual_size) try {
     int id;
-
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     if (g_device_caps[id].vmm) {
         return ggml_cuda_pool_malloc_vmm(size, actual_size);
     } else {
@@ -8517,7 +9112,8 @@ catch (sycl::exception const &exc) {
 
 static void ggml_cuda_pool_free(void *ptr, size_t size) try {
     int id;
-    CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     if (g_device_caps[id].vmm) {
         ggml_cuda_pool_free_vmm(ptr, size);
     } else {
@@ -8573,43 +9169,37 @@ bool ggml_cublas_loaded(void) {
     return g_cublas_loaded;
 }
 
-void print_devices(int device_count){
+void print_devices(){
+    int device_count = dpct::dev_mgr::instance().device_count()
     for (int id = 0; id < device_count; ++id) {
         dpct::device_info prop;
         CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(id))));
-
         fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id,
                 prop.get_name(), prop.get_major_version(),
                 prop.get_minor_version());
     }
 }
 
-int get_env_value(const char *env_name, int default_val){
-    char * user_device_string = getenv(env_name);
-    int user_device_number = -1;
-
-    unsigned n;
-    if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < g_device_count) {
-        user_device_number = (int)n;
-    } else {
-        user_device_number=default_val;
-    }
-}
 void ggml_init_cublas() try {
     static bool initialized = false;
 
     if (!initialized) {
+        print_devices();
 
-#ifdef __HIP_PLATFORM_AMD__
-        // Workaround for a rocBLAS bug when using multiple graphics cards:
-        // https://github.com/ROCmSoftwarePlatform/rocBLAS/issues/1346
-        rocblas_initialize();
-        CUDA_CHECK(cudaDeviceSynchronize());
-#endif
+        char * user_device_string = getenv("GGML_SYCL_DEVICE");
+        int user_device_number = -1;
 
-        g_device_count = dpct::dev_mgr::instance().device_count();
-        if (DPCT_CHECK_ERROR(g_device_count != 0)) {
+        unsigned n;
+        if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1 && n < g_device_count) {
+            user_device_number = (int)n;
+        } else {
+            user_device_number=0;
+        }
+
+        if (DPCT_CHECK_ERROR(g_device_count =
+                                 dpct::dev_mgr::instance().device_count()) !=
+            0) {
             initialized = true;
             g_cublas_loaded = false;
             return;
@@ -8628,55 +9218,19 @@ void ggml_init_cublas() try {
         fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
 #endif
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
-        print_devices(g_device_count);
 
-	//zjy hardcode, force set to 1 device
+        //zjy hardcode, force set to 1 device
         g_device_count = 1;
-
         for (int id = 0; id < g_device_count; ++id) {
             int device_vmm = 0;
 
-#if !defined(GGML_USE_HIPBLAS)
-            //int device;
-            //CU_CHECK(DPCT_CHECK_ERROR(device = id));
-            /*
-            DPCT1028:89: The cuDeviceGetAttribute was not migrated because
-            parameter CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED is
-            unsupported.
-            */
-            /*CU_CHECK(cuDeviceGetAttribute(
-                &device_vmm,
-                CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED,
-                device));
-            */
-            //if (device_vmm) {
-                /*
-                DPCT1082:90: Migration of CUmemAllocationProp type is not
-                supported.
-                */
-                //CUmemAllocationProp alloc_prop = {};
-                //alloc_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-                //alloc_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-                //alloc_prop.location.id = id;
-                /*
-                DPCT1007:91: Migration of cuMemGetAllocationGranularity is not
-                supported.
-                */
-                //CU_CHECK(cuMemGetAllocationGranularity(
-                //    &g_device_caps[id].vmm_granularity, &alloc_prop,
-                //    CU_MEM_ALLOC_GRANULARITY_MINIMUM));
-            //}
-#endif // !defined(GGML_USE_HIPBLAS)
             g_device_caps[id].vmm = !!device_vmm;
 
             dpct::device_info prop;
-            dpct::get_device_info(
-                prop, dpct::dev_mgr::instance().get_device(id))；
-
-            // CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
-            //     prop, dpct::dev_mgr::instance().get_device(id))));
+            CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
+                prop, dpct::dev_mgr::instance().get_device(id))));
             /*
-            DPCT1005:92: The SYCL device version is different from CUDA Compute
+            DPCT1005:86: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
             */
             fprintf(stderr,
@@ -8690,55 +9244,45 @@ void ggml_init_cublas() try {
             g_device_caps[id].cc = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
 #else
             /*
-            DPCT1005:93: The SYCL device version is different from CUDA Compute
+            DPCT1005:87: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
             */
             g_device_caps[id].cc =
                 100 * prop.get_major_version() + 10 * prop.get_minor_version();
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         }
-
-        int user_device_number = get_env_value("GGML_SYCL_DEVICE", 0);
-
         for (int id = 0; id < g_device_count; ++id) {
             g_tensor_split[id] /= total_vram;
         }
 
         for (int id = 0; id < g_device_count; ++id) {
-            ggml_cuda_set_device(id)；
-            // CUDA_CHECK(ggml_cuda_set_device(id));
+            CUDA_CHECK(ggml_cuda_set_device(user_device_number));
 
             // create cuda streams
             for (int is = 0; is < MAX_STREAMS; ++is) {
                 /*
-                DPCT1025:105: The SYCL queue is created ignoring the flag and
+                DPCT1025:88: The SYCL queue is created ignoring the flag and
                 priority options.
                 */
-                g_cudaStreams[id][is] =
-                        dpct::get_current_device().create_queue()；
-                // CUDA_CHECK(DPCT_CHECK_ERROR(
-                //     g_cudaStreams[id][is] =
-                //         dpct::get_current_device().create_queue()));
+                CUDA_CHECK(DPCT_CHECK_ERROR(
+                    g_cudaStreams[id][is] =
+                        dpct::get_current_device().create_queue()));
             }
 
             // create cublas handle
-            g_cublas_handles[id] = &dpct::get_in_order_queue();
-            // CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] =
-            //                                   &dpct::get_in_order_queue()));
+            CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] =
+                                              &dpct::get_in_order_queue()));
             /*
-            DPCT1027:107: The call to cublasSetMathMode was replaced with 0
-            because this call is redundant in SYCL.
+            DPCT1027:89: The call to cublasSetMathMode was replaced with 0
+            because this functionality is redundant in SYCL.
             */
             CUBLAS_CHECK(0);
         }
 
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
-
-
         ggml_cuda_set_device(user_device_number);
         fprintf(stderr, "  set Device %d\n", user_device_number);
-
         initialized = true;
         g_cublas_loaded = true;
     }
@@ -8782,22 +9326,22 @@ void *ggml_cuda_host_malloc(size_t size) try {
     dpct::err0 err = DPCT_CHECK_ERROR(
         ptr = (void *)sycl::malloc_host(size, dpct::get_in_order_queue()));
     /*
-    DPCT1000:97: Error handling if-stmt was detected but could not be rewritten.
+    DPCT1000:91: Error handling if-stmt was detected but could not be rewritten.
     */
     if (err != 0) {
         // clear the error
         /*
-        DPCT1026:98: The call to cudaGetLastError was removed because this call
-        is redundant in SYCL.
+        DPCT1026:92: The call to cudaGetLastError was removed because this
+        functionality is redundant in SYCL.
         */
         /*
-        DPCT1001:96: The statement could not be removed.
+        DPCT1001:90: The statement could not be removed.
         */
         fprintf(
             stderr,
             "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
             /*
-            DPCT1009:99: SYCL uses exceptions to report errors and does not use
+            DPCT1009:93: SYCL uses exceptions to report errors and does not use
             the error codes. The original code was commented out and a warning
             string was inserted. You need to rewrite this code.
             */
@@ -8839,7 +9383,8 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
         kind = dpct::device_to_device;
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
         int id;
-        CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+        CUDA_CHECK(DPCT_CHECK_ERROR(
+            id = dpct::dev_mgr::instance().current_device_id()));
         src_ptr = (char *) extra->data_device[id];
     } else {
         GGML_ASSERT(false);
@@ -8871,10 +9416,10 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
             dpct::err0 r = DPCT_CHECK_ERROR(dpct::async_dpct_memcpy(
                 rd, ts / bs, rx, nb0, ts / bs, ne0, kind, *stream));
             /*
-            DPCT1001:100: The statement could not be removed.
+            DPCT1001:94: The statement could not be removed.
             */
             /*
-            DPCT1000:101: Error handling if-stmt was detected but could not be
+            DPCT1000:95: Error handling if-stmt was detected but could not be
             rewritten.
             */
             if (r != 0) return r;
@@ -9256,8 +9801,8 @@ inline void ggml_cuda_op_mul_mat_q(
     const int64_t row_diff = row_high - row_low;
 
     int id;
-    id = dpct::dev_mgr::instance().current_device_id();
-    // CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     // the main device has a larger memory buffer to hold the results from all GPUs
     // nrows_dst == nrows of the matrix that the dequantize_mul_mat kernel writes into
@@ -9520,8 +10065,8 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const int64_t row_diff = row_high - row_low;
 
     int id;
-    id = dpct::dev_mgr::instance().current_device_id();
-    // CUDA_CHECK(id = dpct::dev_mgr::instance().current_device_id());
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     // the main device has a larger memory buffer to hold the results from all GPUs
     // ldc == nrows of the matrix that cuBLAS writes into
@@ -9561,7 +10106,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
         CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
         CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm(
-            g_cublas_handles, oneapi::mkl::transpose::trans,
+            *g_cublas_handles[id], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
             &alpha_f16, src0_ptr, dpct::library_data_t::real_half, ne00,
             src1_ptr, dpct::library_data_t::real_half, ne10, &beta_f16,
@@ -9588,8 +10133,10 @@ inline void ggml_cuda_op_mul_mat_cublas(
         CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
         CUBLAS_CHECK(DPCT_CHECK_ERROR(oneapi::mkl::blas::column_major::gemm(
             *g_cublas_handles[id], oneapi::mkl::transpose::trans,
-            oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10, alpha,
-            src0_ddf_i, ne00, src1_ddf_i, ne10, beta, dst_dd_i, ldc)));
+            oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
+            dpct::get_value(&alpha, *g_cublas_handles[id]), src0_ddf_i, ne00,
+            src1_ddf_i, ne10, dpct::get_value(&beta, *g_cublas_handles[id]),
+            dst_dd_i, ldc)));
     }
 
     (void) dst;
@@ -9850,7 +10397,7 @@ inline void ggml_cuda_op_scale(const ggml_tensor *src0, const ggml_tensor *src1,
 
     scale_f32_cuda(src0_dd, dst_dd, scale, ggml_nelements(src0), main_stream);
     /*
-    DPCT1010:102: SYCL uses exceptions to report errors and does not use the
+    DPCT1010:96: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     CUDA_CHECK(0);
@@ -9875,7 +10422,7 @@ inline void ggml_cuda_op_clamp(const ggml_tensor *src0, const ggml_tensor *src1,
 
     clamp_f32_cuda(src0_dd, dst_dd, min, max, ggml_nelements(src0), main_stream);
     /*
-    DPCT1010:103: SYCL uses exceptions to report errors and does not use the
+    DPCT1010:97: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     CUDA_CHECK(0);
@@ -9940,7 +10487,7 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
     // do the computation
     op(src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
     /*
-    DPCT1010:104: SYCL uses exceptions to report errors and does not use the
+    DPCT1010:98: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
     CUDA_CHECK(0);
@@ -10131,7 +10678,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
             if (src1_on_device && src1_is_contiguous) {
                 quantize_row_q8_1_cuda(src1_ddf[id], src1_ddq[id], ne10, nrows1, src1_padded_col_size, stream);
                 /*
-                DPCT1010:105: SYCL uses exceptions to report errors and does not
+                DPCT1010:99: SYCL uses exceptions to report errors and does not
                 use the error codes. The call was replaced with 0. You need to
                 rewrite this code.
                 */
@@ -10152,7 +10699,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
     if (split && used_devices > 1) {
         CUDA_CHECK(ggml_cuda_set_device(g_main_device));
         /*
-        DPCT1024:106: The original code returned the error code that was further
+        DPCT1024:100: The original code returned the error code that was further
         consumed by the program logic. This original code was replaced with 0.
         You may need to rewrite the program logic consuming the error code.
         */
@@ -10229,7 +10776,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                 if (convert_src1_to_q8_1 && (src1->backend == GGML_BACKEND_CPU || !src1_is_contiguous)) {
                     quantize_row_q8_1_cuda(src1_ddf_i, src1_ddq_i, ne10, src1_ncols, src1_padded_col_size, stream);
                     /*
-                    DPCT1010:107: SYCL uses exceptions to report errors and does
+                    DPCT1010:101: SYCL uses exceptions to report errors and does
                     not use the error codes. The call was replaced with 0. You
                     need to rewrite this code.
                     */
@@ -10244,7 +10791,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                 op(src0, src1, dst, src0_dd_i, src1_ddf_i, src1_ddq_i, dst_dd_i,
                    row_low[id], row_high[id], src1_ncols, src1_padded_col_size, stream);
                 /*
-                DPCT1010:108: SYCL uses exceptions to report errors and does not
+                DPCT1010:102: SYCL uses exceptions to report errors and does not
                 use the error codes. The call was replaced with 0. You need to
                 rewrite this code.
                 */
@@ -10289,7 +10836,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                 // add event for the main device to wait on until other device is done
                 if (split && (id != g_main_device || is != 0)) {
                     /*
-                    DPCT1024:109: The original code returned the error code that
+                    DPCT1024:103: The original code returned the error code that
                     was further consumed by the program logic. This original
                     code was replaced with 0. You may need to rewrite the
                     program logic consuming the error code.
@@ -10666,7 +11213,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
         // there is no broadcast and src0, src1 are contiguous across dims 2, 3
         // use cublasGemmStridedBatchedEx
         CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
-            g_cublas_handles, oneapi::mkl::transpose::trans,
+            *g_cublas_handles[g_main_device], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
             (const char *)src0_as_f16, dpct::library_data_t::real_half,
             nb01 / sizeof(sycl::half), src0->nb[2] / sizeof(sycl::half),
@@ -10683,13 +11230,14 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
 
         sycl::range<3> block_dims(1, ne12, ne13);
         /*
-        DPCT1049:62: The work-group size passed to the SYCL kernel may exceed
+        DPCT1049:56: The work-group size passed to the SYCL kernel may exceed
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
         {
             dpct::has_capability_or_fail(main_stream->get_device(),
                                          {sycl::aspect::fp16});
+
             main_stream->submit([&](sycl::handler &cgh) {
                 const sycl::half *src1_as_f16_get_ct1 = src1_as_f16.get();
                 const void **ptrs_src_get_ct3 = ptrs_src.get();
@@ -10707,14 +11255,14 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
             });
         }
         /*
-        DPCT1010:110: SYCL uses exceptions to report errors and does not use the
+        DPCT1010:104: SYCL uses exceptions to report errors and does not use the
         error codes. The call was replaced with 0. You need to rewrite this
         code.
         */
         CUDA_CHECK(0);
 
         CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
-            g_cublas_handles, oneapi::mkl::transpose::trans,
+            *g_cublas_handles[g_main_device], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
             (const void **)(ptrs_src.get() + 0 * ne23),
             dpct::library_data_t::real_half, nb01 / sizeof(sycl::half),
