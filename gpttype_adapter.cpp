@@ -73,7 +73,7 @@ static llama_v2_context * llama_ctx_v2;
 static llama_v3_context * llama_ctx_v3;
 static llama_context * llama_ctx_v4;
 
-static gpt_params * kcpp_params;
+static gpt_params * kcpp_params = nullptr;
 static int max_context_limit_at_load = 0;
 static int n_past = 0;
 static int n_threads = 4;
@@ -1399,6 +1399,10 @@ ModelLoadResult gpttype_load_model(const load_model_inputs inputs, FileFormat in
 
 bool gpttype_generate_abort()
 {
+    if(kcpp_params==nullptr)
+    {
+        printf("\nWarning: KCPP not initialized!\n");
+    }
     stopper_unused_tokens = remaining_tokens;
     remaining_tokens = 0;
     return true;
@@ -1406,11 +1410,16 @@ bool gpttype_generate_abort()
 
 std::vector<int> gpttype_get_token_arr(const std::string & input)
 {
+    std::vector<int> toks;
+    if(kcpp_params==nullptr)
+    {
+        printf("\nWarning: KCPP not initialized!\n");
+        return toks;
+    }
     if(debugmode==1)
     {
         printf("\nFileFormat: %d, Tokenizing: %s",file_format ,input.c_str());
     }
-    std::vector<int> toks;
     TokenizeString(input, toks, file_format);
     int tokcount = toks.size();
     if(debugmode==1)
@@ -1422,6 +1431,11 @@ std::vector<int> gpttype_get_token_arr(const std::string & input)
 
 const std::string & gpttype_get_pending_output()
 {
+    if(kcpp_params==nullptr)
+    {
+        printf("\nWarning: KCPP not initialized!\n");
+        return concat_output_reader_copy;
+    }
     concat_output_mtx.lock();
     concat_output_reader_copy = concat_output;
     concat_output_mtx.unlock();
@@ -1430,6 +1444,14 @@ const std::string & gpttype_get_pending_output()
 
 generation_outputs gpttype_generate(const generation_inputs inputs, generation_outputs &output)
 {
+    if(kcpp_params==nullptr)
+    {
+        printf("\nWarning: KCPP not initialized!\n");
+        snprintf(output.text, sizeof(output.text), "%s", "");
+        output.status = 0;
+        generation_finished = true;
+        return output;
+    }
     concat_output_mtx.lock();
     concat_output = "";
     concat_output_reader_copy = "";
