@@ -20,12 +20,12 @@ class LlamaState: ObservableObject {
     }
 
     func loadModel(modelUrl: URL?) throws {
-        messageLog += "Loading model...\n"
         if let modelUrl {
+            messageLog += "Loading model...\n"
             llamaContext = try LlamaContext.create_context(path: modelUrl.path())
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
         } else {
-            messageLog += "Could not locate model, select one from the bottom list\n"
+            messageLog += "Select a model from the list\n"
         }
     }
 
