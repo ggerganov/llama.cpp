@@ -1754,8 +1754,6 @@ void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict
         }
 #endif
 
-        y[i].d = GGML_FP32_TO_FP16(lstsq_q_0(q_fit, x, QK_K));
-
         memset(y[i].hmask, 0, QK_K/8);
         // We put the high-bit for the 1st 8 quants into bit 0, the next 8 into bit 1, etc.
         int m = 0;
@@ -2231,8 +2229,6 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
                 q_fit[16*j + ii] = l * y[i].scales[j];
             }
         }
-
-        y[i].d = GGML_FP32_TO_FP16(lstsq_q_0(q_fit, x, QK_K));
 
         uint8_t * restrict ql = y[i].ql;
         uint8_t * restrict qh = y[i].qh;
