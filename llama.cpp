@@ -21,6 +21,7 @@
 #endif
 #ifdef GGML_USE_HPX
 #  include <cstdlib>
+#  include <algorithm>
 #  include <hpx/hpx_start.hpp>
 #  include <hpx/runtime_local/run_as_hpx_thread.hpp>
 #  include <hpx/execution.hpp>
@@ -8895,7 +8896,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 work.resize(nelements * 4); // upper bound on size
             }
             new_data = work.data();
-            std::vector<std::array<int64_t, 1 << 4> hist_cur = {};
+            std::array<int64_t, 1 << 4> hist_cur = {};
 
             static const int chunk_size = 32 * 512;
             const int nchunk = (nelements + chunk_size - 1)/chunk_size;
@@ -8910,14 +8911,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                 std::vector<std::array<int64_t, 1 << 4>> thread_local_hist(nthread_use);
                 std::vector<std::size_t> local_sizes(nthread_use, 0);
                 std::vector<std::size_t> counters(nthread_use, counter);
-                std::generate(counters.begin(), counters.end(), 0, [chunk_size, n = 0]() mutable { return (++n) * chunk_size; });
+                std::generate(counters.begin(), counters.end(), [n = 0]() mutable { return (++n) * (32 * 512); });
 
-                std::function<hpx::future<void>()> computefn =
-                   [&new_size, new_type, f32_data, new_data, nelements](const std::size_t thread, const std::size_t counter) -> hpx::future<void> {
+                std::function<hpx::future<void>(const std::size_t, const std::size_t, std::vector<std::array<int64_t, 1 << 4>> &, std::vector<std::size_t> &)> computefn =
+                   [new_type, f32_data, new_data, nelements](const std::size_t thread, const std::size_t counter, std::vector<std::array<int64_t, 1 << 4>> & thread_local_hist, std::vector<std::size_t> & local_sizes) -> hpx::future<void> {
 
-                   auto & local_hist = thread_local_hist[thread];
+                   std::array<int64_t, 1 << 4> & local_hist = thread_local_hist[thread];
                    std::size_t & local_size = local_sizes[thread];
-                   std:size_t first = counter;
+                   std::size_t first = counter;
 
                    while(true) {
                         first = counter;
@@ -8933,11 +8934,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                    } 
                    return hpx::make_ready_future<void>();
-                }
+                };
 
-                hpx::future<void> this_fut = compute(0, counters[0]);
+                hpx::future<void> this_fut = computefn(0, counters[0], thread_local_hist, local_sizes);
                 for (int it = 1; it < nthread_use - 1; ++it) {
-                    futures.push_back(hpx::run_as_hpx_thread(compute, it, counters[it]));
+                    futures.push_back(hpx::run_as_hpx_thread(computefn, it, counters[it], thread_local_hist, local_sizes));
                 }
                 hpx::wait_all(futures);
                 this_fut.wait();
