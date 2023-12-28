@@ -232,7 +232,7 @@ bool   ggml_hash_contains      (const struct ggml_hash_set hash_set, struct ggml
 // returns GGML_HASHTABLE_FULL if table is full, otherwise the current index of the key or where it should be inserted
 size_t ggml_hash_find          (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
 
-// returns GGML_HAHSHTABLE_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
+// returns GGML_HASHTABLE_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
 size_t ggml_hash_insert        (      struct ggml_hash_set hash_set, struct ggml_tensor * key);
 
 // return index, asserts if table is full

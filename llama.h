@@ -39,10 +39,11 @@
 
 #define LLAMA_MAX_RNG_STATE (64*1024)
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 2
+#define LLAMA_SESSION_VERSION 3
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
@@ -128,7 +129,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef void (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void *ctx);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -160,15 +161,37 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
+    enum llama_model_kv_override_type {
+        LLAMA_KV_OVERRIDE_INT,
+        LLAMA_KV_OVERRIDE_FLOAT,
+        LLAMA_KV_OVERRIDE_BOOL,
+    };
+
+    struct llama_model_kv_override {
+        char key[128];
+        enum llama_model_kv_override_type tag;
+        union {
+            int64_t int_value;
+            double float_value;
+            bool bool_value;
+        };
+    };
+
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
-        // called with a progress value between 0 and 1, pass NULL to disable
+        // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
+        // If the provided progress_callback returns true, model loading continues.
+        // If it returns false, model loading is immediately aborted.
         llama_progress_callback progress_callback;
+
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        // override key-value pairs of the model meta data
+        const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only; // only load the vocabulary, no weights
@@ -187,17 +210,20 @@ extern "C" {
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
         float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
-        float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, negative = from model
         float    yarn_attn_factor; // YaRN magnitude scaling factor
         float    yarn_beta_fast;   // YaRN low correction dim
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
 
+        enum ggml_type type_k; // data type for K cache
+        enum ggml_type type_v; // data type for V cache
+
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
-        bool embedding;  // embedding mode only
+        bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
+        bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        bool embedding;   // embedding mode only
+        bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
     };
 
     // model quantization parameters
@@ -292,7 +318,9 @@ extern "C" {
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
-    LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    // TODO: become more consistent with returned int types across the API
+    LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 
@@ -363,9 +391,60 @@ extern "C" {
     // KV cache
     //
 
-    // Returns the number of tokens in the KV cache
-    LLAMA_API DEPRECATED(int llama_get_kv_cache_token_count(const struct llama_context * ctx),
-            "avoid using this, it will be removed in the future, instead - count the tokens in user code");
+    // Information associated with an individual cell in the KV cache view.
+    struct llama_kv_cache_view_cell {
+        // The position for this cell. Takes KV cache shifts into account.
+        // May be negative if the cell is not populated.
+        llama_pos pos;
+    };
+
+    // An updateable view of the KV cache.
+    struct llama_kv_cache_view {
+        // Number of KV cache cells. This will be the same as the context size.
+        int32_t n_cells;
+
+        // Maximum number of sequences that can exist in a cell. It's not an error
+        // if there are more sequences in a cell than this value, however they will
+        // not be visible in the view cells_sequences.
+        int32_t n_max_seq;
+
+        // Number of tokens in the cache. For example, if there are two populated
+        // cells, the first with 1 sequence id in it and the second with 2 sequence
+        // ids then you'll have 3 tokens.
+        int32_t token_count;
+
+        // Number of populated cache cells.
+        int32_t used_cells;
+
+        // Maximum contiguous empty slots in the cache.
+        int32_t max_contiguous;
+
+        // Index to the start of the max_contiguous slot range. Can be negative
+        // when cache is full.
+        int32_t max_contiguous_idx;
+
+        // Information for an individual cell.
+        struct llama_kv_cache_view_cell * cells;
+
+        // The sequences for each cell. There will be n_max_seq items per cell.
+        llama_seq_id * cells_sequences;
+    };
+
+    // Create an empty KV cache view. (use only for debugging purposes)
+    LLAMA_API struct llama_kv_cache_view llama_kv_cache_view_init(const struct llama_context * ctx, int32_t n_max_seq);
+
+    // Free a KV cache view. (use only for debugging purposes)
+    LLAMA_API void llama_kv_cache_view_free(struct llama_kv_cache_view * view);
+
+    // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
+    LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
+
+    // Returns the number of tokens in the KV cache (slow, use only for debug)
+    // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
+    LLAMA_API int llama_get_kv_cache_token_count(const struct llama_context * ctx);
+
+    // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
+    LLAMA_API int llama_get_kv_cache_used_cells(const struct llama_context * ctx);
 
     // Clear the KV cache
     LLAMA_API void llama_kv_cache_clear(
