@@ -3349,6 +3349,7 @@ Current version: 102
 		gui_type_chat: 1, //0=standard, 1=messenger, 2=aesthetic
 		gui_type_instruct: 0, //0=standard, 1=messenger, 2=aesthetic
 		multiline_replies: true,
+		multiline_replies_adventure: true,
 		allow_continue_chat: false,
 		idle_responses: 0,
 		idle_duration: 60,
@@ -7209,6 +7210,7 @@ Current version: 102
 			toggle_generate_images_mode(true);
 		}
 		document.getElementById("multiline_replies").checked = localsettings.multiline_replies;
+		document.getElementById("multiline_replies_adventure").checked = localsettings.multiline_replies_adventure;
 		document.getElementById("allow_continue_chat").checked = localsettings.allow_continue_chat;
 		document.getElementById("idle_responses").value = localsettings.idle_responses;
 		document.getElementById("idle_duration").value = localsettings.idle_duration;
@@ -7391,6 +7393,7 @@ Current version: 102
 			localsettings.gui_type_instruct = document.getElementById("gui_type").value;
 		}
 		localsettings.multiline_replies = (document.getElementById("multiline_replies").checked ? true : false);
+		localsettings.multiline_replies_adventure = (document.getElementById("multiline_replies_adventure").checked ? true : false);
 		localsettings.allow_continue_chat = (document.getElementById("allow_continue_chat").checked ? true : false);
 		localsettings.idle_responses = document.getElementById("idle_responses").value;
 		localsettings.idle_duration = document.getElementById("idle_duration").value;
@@ -8639,6 +8642,10 @@ Current version: 102
 		if (localsettings.opmode == 2) //stop on new action found
 		{
 			seqs = ["\n\> "];
+			if(!localsettings.multiline_replies_adventure)
+			{
+				seqs.push("\n");
+			}
 		}
 		if (localsettings.opmode == 3) //stop on selfname found
 		{
@@ -9435,6 +9442,15 @@ Current version: 102
 			{
 				splitresponse = gentxt.split("\n\> ");
 				gentxt = splitresponse[0];
+			}
+			if(!localsettings.multiline_replies_adventure)
+			{
+				let foundnl = gentxt.indexOf("\n");
+				if (foundnl != -1) //if found, truncate to it
+				{
+					splitresponse = gentxt.split("\n");
+					gentxt = splitresponse[0];
+				}
 			}
 		}
 
@@ -12285,6 +12301,10 @@ Current version: 102
 							</div>
 						</div>
 						<div id="adventuresection2" class="settinglabel hidden" style="padding-top: 3px;">
+							<div class="settinglabel">
+								<div class="justifyleft settingsmall" title="Whether to allow multiple lines in AI responses.">Multiline Replies </div>
+								<input type="checkbox" id="multiline_replies_adventure" style="margin:0px 0 0;">
+							</div>
 						</div>
 						<div id="instructsection2" class="settinglabel hidden" style="padding-top: 3px;">
 							<div class="justifyleft settingsmall">Instruct Tag Preset <span class="helpicon">?<span class="helptext">Quickly select between common instruct tag formats. Different models are trained with different tags.</span></span></div>
