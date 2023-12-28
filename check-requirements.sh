@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 #
 # check-requirements.sh checks all requirements files for each top-level
 # convert*.py script.
@@ -8,7 +9,7 @@
 # sized tmpfs /tmp or ramdisk is recommended if running this frequently.
 #
 # usage:    ./check-requirements.sh [<working_dir>]
-#           ./check-requirements.sh 'nocleanup' [<working_dir>]
+#           ./check-requirements.sh nocleanup [<working_dir>]
 #
 # where:
 #           - <working_dir> is a directory that can be used as the base for
@@ -20,135 +21,108 @@
 #           - bash >= 3.2.57
 #           - shellcheck
 #
-# For each script, it creates a fresh venv, `pip install -r` the
-# requirements, and finally executes the python script with no arguments to
-# check for a `ModuleNotFoundError`.
+# For each script, it creates a fresh venv, `pip install`s the requirements, and
+# finally imports the python script to check for `ImportError`.
 #
 
 log() {
-    local level="$1"; shift
-    local format="$1"; shift
-    # shellcheck disable=SC2059
-    >&2 printf "$level: $format\n" "$@"
+    local level=$1 msg=$2
+    printf >&2 '%s: %s\n' "$level" "$msg"
 }
 
-debug () {
-    log 'DEBUG' "$@"
+debug() {
+    log DEBUG "$@"
 }
 
 info() {
-    log 'INFO' "$@"
+    log INFO "$@"
 }
 
 fatal() {
-    log 'FATAL' "$@"
+    log FATAL "$@"
     exit 1
 }
 
 cleanup() {
     if [[ -n ${workdir+x} && -d $workdir && -w $workdir ]]; then
         info "Removing $workdir"
-        (
-            count=0
-            rm -rfv "$workdir" | while read -r; do
-                if (( count++ > 750 )); then
-                    printf '.'
-                    count=0
-                fi
-            done
-            printf '\n'
-        )&
-        wait $!
-        info "Removed '$workdir'"
+        local count=0
+        rm -rfv -- "$workdir" | while read -r; do
+            if (( count++ > 750 )); then
+                printf .
+                count=0
+            fi
+        done
+        printf '\n'
+        info "Removed $workdir"
     fi
 }
 
-abort() {
-    cleanup
-    exit 1
-}
-
-if [[ $1 == nocleanup ]]; then
-    shift # discard nocleanup arg
+if [[ ${1-} == nocleanup ]]; then
+    shift  # discard nocleanup arg
 else
-    trap abort SIGINT SIGTERM SIGQUIT SIGABRT
+    trap exit INT TERM
     trap cleanup EXIT
 fi
 
-set -eu -o pipefail
-this="$(realpath "$0")"; readonly this
+this=$(realpath -- "$0"); readonly this
 cd "$(dirname "$this")"
 
 shellcheck "$this"
 
-readonly reqs_dir='./requirements'
+readonly reqs_dir=requirements
 
-workdir=
-if [[ -n ${1+x} ]]; then
-    arg_dir="$(realpath "$1")"
-    if [[ ! ( -d $arg_dir && -w $arg_dir ) ]]; then
-        fatal "$arg_dir is not a valid directory"
+if [[ ${1+x} ]]; then
+    tmp_dir=$(realpath -- "$1")
+    if [[ ! ( -d $tmp_dir && -w $tmp_dir ) ]]; then
+        fatal "$tmp_dir is not a writable directory"
     fi
-    workdir="$(mktemp -d "$arg_dir/check-requirements.XXXX")"
 else
-    workdir="$(mktemp -d "/tmp/check-requirements.XXXX")"
+    tmp_dir=/tmp
 fi
-readonly workdir
 
+workdir=$(mktemp -d "$tmp_dir/check-requirements.XXXX"); readonly workdir
 info "Working directory: $workdir"
 
-assert_arg_count() {
-    local argcount="$1"; shift
-    if (( $# != argcount )); then
-        fatal "${FUNCNAME[1]}: incorrect number of args"
-    fi
-}
-
 check_requirements() {
-    assert_arg_count 2 "$@"
-    local venv="$1"
-    local reqs="$2"
+    local reqs=$1
 
     info "$reqs: beginning check"
-    (
-        # shellcheck source=/dev/null
-        source "$venv/bin/activate"
-        pip --disable-pip-version-check install -q -r "$reqs"
-    )
+    pip --disable-pip-version-check install -qr "$reqs"
     info "$reqs: OK"
 }
 
 check_convert_script() {
-    assert_arg_count 1 "$@"
-    local py="$1"; shift                     # e.g. ./convert-hf-to-gguf.py
-    local pyname; pyname="$(basename "$py")" # e.g. convert-hf-to-gguf.py
-    pyname="${pyname%.py}"                   # e.g. convert-hf-to-gguf
+    local py=$1             # e.g. ./convert-hf-to-gguf.py
+    local pyname=${py##*/}  # e.g. convert-hf-to-gguf.py
+    pyname=${pyname%.py}    # e.g. convert-hf-to-gguf
 
     info "$py: beginning check"
 
     local reqs="$reqs_dir/requirements-$pyname.txt"
-    if [[ ! -r "$reqs" ]]; then
+    if [[ ! -r $reqs ]]; then
         fatal "$py missing requirements. Expected: $reqs"
     fi
 
     local venv="$workdir/$pyname-venv"
     python3 -m venv "$venv"
 
-    check_requirements "$venv" "$reqs"
-
-    # Because we mask the return value of the subshell,
-    # we don't need to use set +e/-e.
-    # shellcheck disable=SC2155
-    local py_err=$(
+    (
         # shellcheck source=/dev/null
         source "$venv/bin/activate"
-        python "$py" 2>&1
+
+        check_requirements "$reqs"
+
+        python - "$py" "$pyname" <<EOF
+import sys
+from importlib.machinery import SourceFileLoader
+py, pyname = sys.argv[1:]
+SourceFileLoader(pyname, py).load_module()
+EOF
     )
 
-    # shellcheck disable=SC2181
-    if grep -Fe 'ModuleNotFoundError' <<< "$py_err"; then
-        fatal "$py: some imports not declared in $reqs"
-    fi
+    rm -rf -- "$venv"
+
     info "$py: imports OK"
 }
 
@@ -156,25 +130,37 @@ readonly ignore_eq_eq='check_requirements: ignore "=="'
 
 for req in "$reqs_dir"/*; do
     # Check that all sub-requirements are added to top-level requirements.txt
-    if ! grep -qFe "$req" ./requirements.txt; then
-        fatal "$req needs to be added to ./requirements.txt"
+    if ! grep -qF "$req" requirements.txt; then
+        fatal "$req needs to be added to requirements.txt"
     fi
 
     # Make sure exact release versions aren't being pinned in the requirements
     # Filters out the ignore string
-    req_no_ignore_eq_eq="$(grep -vF "$ignore_eq_eq" "$req")"
-    if grep -Fe '==' <<< "$req_no_ignore_eq_eq" ; then
-        fatal "Avoid pinning exact package versions. Use '~=' instead.\nYou can suppress this error by appending the following to the line: \n\t# $ignore_eq_eq"
+    if grep -vF "$ignore_eq_eq" "$req" | grep -q '=='; then
+        tab=$'\t'
+        cat >&2 <<EOF
+FATAL: Avoid pinning exact package versions. Use '~=' instead.
+You can suppress this error by appending the following to the line:
+$tab# $ignore_eq_eq
+EOF
+        exit 1
     fi
 done
 
 all_venv="$workdir/all-venv"
 python3 -m venv "$all_venv"
-check_requirements "$all_venv" './requirements.txt'
 
-check_convert_script './convert.py'
-for py in ./convert-*.py;do
+(
+    # shellcheck source=/dev/null
+    source "$all_venv/bin/activate"
+    check_requirements requirements.txt
+)
+
+rm -rf -- "$all_venv"
+
+check_convert_script convert.py
+for py in convert-*.py; do
     check_convert_script "$py"
 done
 
-info "Done! No issues found."
+info 'Done! No issues found.'
