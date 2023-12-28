@@ -1209,11 +1209,14 @@ def show_new_gui():
     quick_tab = tabcontent["Quick Launch"]
 
     # helper functions
-    def makecheckbox(parent, text, variable=None, row=0, column=0, command=None, onvalue=1, offvalue=0):
+    def makecheckbox(parent, text, variable=None, row=0, column=0, command=None, onvalue=1, offvalue=0,tooltiptxt=""):
         temp = ctk.CTkCheckBox(parent, text=text,variable=variable, onvalue=onvalue, offvalue=offvalue)
         if command is not None and variable is not None:
             variable.trace("w", command)
         temp.grid(row=row,column=column, padx=8, pady=1, stick="nw")
+        if tooltiptxt!="":
+            temp.bind("<Enter>", lambda event: show_tooltip(event, tooltiptxt))
+            temp.bind("<Leave>", hide_tooltip)
         return temp
 
     def makelabel(parent, text, row, column=0, tooltiptxt=""):
@@ -1224,9 +1227,9 @@ def show_new_gui():
             temp.bind("<Leave>", hide_tooltip)
         return temp
 
-    def makeslider(parent, label, options, var, from_ , to,  row=0, width=160, height=10, set=0):
+    def makeslider(parent, label, options, var, from_ , to,  row=0, width=160, height=10, set=0, tooltip=""):
         sliderLabel = makelabel(parent, options[set], row + 1, 1)
-        makelabel(parent, label, row)
+        makelabel(parent, label, row,0,tooltip)
 
         def sliderUpdate(a,b,c):
             sliderLabel.configure(text = options[int(var.get())])
@@ -1237,15 +1240,15 @@ def show_new_gui():
         return slider
 
 
-    def makelabelentry(parent, text, var, row=0, width= 50):
-        label = makelabel(parent, text, row)
+    def makelabelentry(parent, text, var, row=0, width= 50,tooltip=""):
+        label = makelabel(parent, text, row,0,tooltip)
         entry = ctk.CTkEntry(parent, width=width, textvariable=var) #you cannot set placeholder text for SHARED variables
         entry.grid(row=row, column=1, padx= 8, stick="nw")
         return entry, label
 
 
-    def makefileentry(parent, text, searchtext, var, row=0, width=200, filetypes=[], onchoosefile=None, singlerow=False):
-        makelabel(parent, text, row)
+    def makefileentry(parent, text, searchtext, var, row=0, width=200, filetypes=[], onchoosefile=None, singlerow=False, tooltiptxt=""):
+        makelabel(parent, text, row,0,tooltiptxt)
         def getfilename(var, text):
             var.set(askopenfilename(title=text,filetypes=filetypes))
             if onchoosefile:
@@ -1487,7 +1490,7 @@ def show_new_gui():
 
 
     # presets selector
-    makelabel(quick_tab, "Presets:", 1,0,"Select the backend to load the model with")
+    makelabel(quick_tab, "Presets:", 1,0,"Select a backend to use.\nOpenBLAS and NoBLAS runs purely on CPU only.\nCuBLAS runs on Nvidia GPUs, and is much faster.\nCLBlast works on all GPUs but is somewhat slower.\nNoAVX2 and Failsafe modes support older PCs.")
 
     runoptbox = ctk.CTkComboBox(quick_tab, values=runopts, width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
@@ -1497,37 +1500,43 @@ def show_new_gui():
     setup_backend_tooltip(quick_tab)
 
     # gpu options
-    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3,0,"Which GPU to load the model with")
+    quick_gpu_selector_label = makelabel(quick_tab, "GPU ID:", 3,0,"Which GPU ID to load the model with.\nNormally your main GPU is #1, but it can vary for multi GPU setups.")
     quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
     CUDA_quick_gpu_selector_box = ctk.CTkComboBox(quick_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
     quick_gpuname_label = ctk.CTkLabel(quick_tab, text="")
     quick_gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
     quick_gpuname_label.configure(text_color="#ffff00")
-    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50)
-    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0)
-    quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
+    quick_gpu_layers_entry,quick_gpu_layers_label = makelabelentry(quick_tab,"GPU Layers:", gpulayers_var, 5, 50,"How many layers to offload onto the GPU.\nVRAM intensive, usage increases with model and context size.\nRequires some trial and error to find the best fit value.")
+    quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0,tooltiptxt="Low VRAM mode avoids offloading the KV cache to the GPU.")
+    quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1,tooltiptxt="Enable MMQ mode instead of CuBLAS for prompt processing. Read the wiki. Speed may vary.")
 
     # threads
-    makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50)
+    makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50,"How many threads to use.\nRecommended value is your CPU core count, defaults are usually OK.")
 
     # blas batch size
-    makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
+    makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5,tooltip="How many tokens to process at once per batch.\nLarger values use more memory.")
 
     # quick boxes
     quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Use SmartContext":smartcontext, "Disable MMAP":disablemmap,"Use ContextShift":contextshift,"Remote Tunnel":remotetunnel}
+    quick_boxes_desc = {"Launch Browser": "Launches your default browser after model loading is complete",
+    "High Priority": "Increases the koboldcpp process priority.\nMay cause lag or slowdown instead. Not recommended.",
+    "Use SmartContext": "Uses SmartContext. Now considered outdated and not recommended.\nCheck the wiki for more info.",
+    "Disable MMAP":"Avoids using mmap to load models if enabled",
+    "Use ContextShift":"Uses Context Shifting to reduce reprocessing.\nRecommended. Check the wiki for more info.",
+    "Remote Tunnel":"Creates a trycloudflare tunnel.\nAllows you to access koboldcpp from other devices over an internet URL."}
     for idx, name, in enumerate(quick_boxes):
-        makecheckbox(quick_tab, name, quick_boxes[name], int(idx/2) +20, idx%2)
+        makecheckbox(quick_tab, name, quick_boxes[name], int(idx/2) +20, idx%2,tooltiptxt=quick_boxes_desc[name])
     # context size
-    makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=3)
+    makeslider(quick_tab, "Context Size:", contextsize_text, context_var, 0, len(contextsize_text)-1, 30, set=3,tooltip="What is the maximum context size to support. Model specific. You cannot exceed it.\nLarger contexts require more memory, and not all models support it.")
 
     # load model
-    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170, onchoosefile=on_picked_model_file)
+    makefileentry(quick_tab, "Model:", "Select GGML Model File", model_var, 40, 170, onchoosefile=on_picked_model_file,tooltiptxt="Select a GGUF or GGML model file on disk to be loaded.")
 
     # Hardware Tab
     hardware_tab = tabcontent["Hardware"]
 
     # presets selector
-    makelabel(hardware_tab, "Presets:", 1,0,"Select the backend to load the model with")
+    makelabel(hardware_tab, "Presets:", 1,0,"Select a backend to use.\nOpenBLAS and NoBLAS runs purely on CPU only.\nCuBLAS runs on Nvidia GPUs, and is much faster.\nCLBlast works on all GPUs but is somewhat slower.\nNoAVX2 and Failsafe modes support older PCs.")
     runoptbox = ctk.CTkComboBox(hardware_tab, values=runopts,  width=180,variable=runopts_var, state="readonly")
     runoptbox.grid(row=1, column=1,padx=8, stick="nw")
     runoptbox.set(runopts[0]) # Set to first available option
@@ -1536,32 +1545,38 @@ def show_new_gui():
     setup_backend_tooltip(hardware_tab)
 
     # gpu options
-    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3,0,"Which GPU to load the model with")
+    gpu_selector_label = makelabel(hardware_tab, "GPU ID:", 3,0,"Which GPU ID to load the model with.\nNormally your main GPU is #1, but it can vary for multi GPU setups.")
     gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CLDevices, width=60, variable=gpu_choice_var, state="readonly")
     CUDA_gpu_selector_box = ctk.CTkComboBox(hardware_tab, values=CUDevices, width=60, variable=gpu_choice_var, state="readonly")
     gpuname_label = ctk.CTkLabel(hardware_tab, text="")
     gpuname_label.grid(row=3, column=1, padx=75, sticky="W")
     gpuname_label.configure(text_color="#ffff00")
-    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50)
+    gpu_layers_entry,gpu_layers_label = makelabelentry(hardware_tab,"GPU Layers:", gpulayers_var, 5, 50,"How many layers to offload onto the GPU.\nVRAM intensive, usage increases with model and context size.\nRequires some trial and error to find the best fit value.")
     tensor_split_entry,tensor_split_label = makelabelentry(hardware_tab, "Tensor Split:", tensor_split_str_vars, 6, 80)
     lowvram_box = makecheckbox(hardware_tab,  "Low VRAM", lowvram_var, 4,0)
     mmq_box = makecheckbox(hardware_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1)
 
     # threads
-    makelabelentry(hardware_tab, "Threads:" , threads_var, 8, 50)
+    makelabelentry(hardware_tab, "Threads:" , threads_var, 8, 50,"How many threads to use.\nRecommended value is your CPU core count, defaults are usually OK.")
 
     # hardware checkboxes
-    hardware_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "Debug Mode":debugmode, "Keep Foreground":keepforeground}
+    hardware_boxes = {"Launch Browser": launchbrowser, "High Priority" : highpriority, "Disable MMAP":disablemmap, "Use mlock":usemlock, "Debug Mode":debugmode, "Keep Foreground":keepforeground}
+    hardware_boxes_desc = {"Launch Browser": "Launches your default browser after model loading is complete",
+    "High Priority": "Increases the koboldcpp process priority.\nMay cause lag or slowdown instead. Not recommended.",
+    "Disable MMAP": "Avoids using mmap to load models if enabled",
+    "Use mlock": "Enables mlock, preventing the RAM used to load the model from being paged out.",
+    "Debug Mode": "Enables debug mode, with extra info printed to the terminal.",
+    "Keep Foreground": "Bring KoboldCpp to the foreground every time there is a new generation."}
 
     for idx, name, in enumerate(hardware_boxes):
-        makecheckbox(hardware_tab, name, hardware_boxes[name], int(idx/2) +30, idx%2)
+        makecheckbox(hardware_tab, name, hardware_boxes[name], int(idx/2) +30, idx%2, tooltiptxt=hardware_boxes_desc[name])
 
     # blas thread specifier
-    makelabelentry(hardware_tab, "BLAS threads:" , blas_threads_var, 11, 50)
+    makelabelentry(hardware_tab, "BLAS threads:" , blas_threads_var, 11, 50,"How many threads to use during BLAS processing.\nIf left blank, uses same value as regular thread count.")
     # blas batch size
-    makeslider(hardware_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5)
+    makeslider(hardware_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5,tooltip="How many tokens to process at once per batch.\nLarger values use more memory.")
     # force version
-    makelabelentry(hardware_tab, "Force Version:" , version_var, 100, 50)
+    makelabelentry(hardware_tab, "Force Version:" , version_var, 100, 50,"If the autodetected version is wrong, you can change it here.\nLeave as 0 for default.")
 
     runopts_var.trace('w', changerunmode)
     changerunmode(1,1,1)
@@ -1572,15 +1587,17 @@ def show_new_gui():
     tokens_tab = tabcontent["Tokens"]
     # tokens checkboxes
     token_boxes = {"Use SmartContext":smartcontext, "Use ContextShift":contextshift}
+    token_boxes_tip = {"Use SmartContext":"Uses SmartContext. Now considered outdated and not recommended.\nCheck the wiki for more info.",
+    "Use ContextShift":"Uses Context Shifting to reduce reprocessing.\nRecommended. Check the wiki for more info."}
     for idx, name, in enumerate(token_boxes):
-        makecheckbox(tokens_tab, name, token_boxes[name], idx + 1)
+        makecheckbox(tokens_tab, name, token_boxes[name], idx + 1,tooltiptxt=token_boxes_tip[name])
 
     # context size
-    makeslider(tokens_tab, "Context Size:",contextsize_text, context_var, 0, len(contextsize_text)-1, 20, set=3)
+    makeslider(tokens_tab, "Context Size:",contextsize_text, context_var, 0, len(contextsize_text)-1, 20, set=3,tooltip="What is the maximum context size to support. Model specific. You cannot exceed it.\nLarger contexts require more memory, and not all models support it.")
 
 
-    customrope_scale_entry, customrope_scale_label = makelabelentry(tokens_tab, "RoPE Scale:", customrope_scale)
-    customrope_base_entry, customrope_base_label = makelabelentry(tokens_tab, "RoPE Base:", customrope_base)
+    customrope_scale_entry, customrope_scale_label = makelabelentry(tokens_tab, "RoPE Scale:", customrope_scale,tooltip="For Linear RoPE scaling. RoPE frequency scale.")
+    customrope_base_entry, customrope_base_label = makelabelentry(tokens_tab, "RoPE Base:", customrope_base,tooltip="For NTK Aware Scaling. RoPE frequency base.")
     def togglerope(a,b,c):
         items = [customrope_scale_label, customrope_scale_entry,customrope_base_label, customrope_base_entry]
         for idx, item in enumerate(items):
@@ -1588,39 +1605,39 @@ def show_new_gui():
                 item.grid(row=23 + int(idx/2), column=idx%2, padx=8, stick="nw")
             else:
                 item.grid_forget()
-    makecheckbox(tokens_tab,  "Custom RoPE Config", variable=customrope_var, row=22, command=togglerope)
+    makecheckbox(tokens_tab,  "Custom RoPE Config", variable=customrope_var, row=22, command=togglerope,tooltiptxt="Override the default RoPE configuration with custom RoPE scaling.")
     togglerope(1,1,1)
 
     # Model Tab
     model_tab = tabcontent["Model"]
 
-    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, onchoosefile=on_picked_model_file)
-    makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3)
-    makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5)
-    makefileentry(model_tab, "Preloaded Story:", "Select Preloaded Story File", preloadstory_var, 7)
+    makefileentry(model_tab, "Model:", "Select GGML Model File", model_var, 1, onchoosefile=on_picked_model_file,tooltiptxt="Select a GGUF or GGML model file on disk to be loaded.")
+    makefileentry(model_tab, "Lora:", "Select Lora File",lora_var, 3,tooltiptxt="Select an optional GGML LoRA adapter to use.\nLeave blank to skip.")
+    makefileentry(model_tab, "Lora Base:", "Select Lora Base File", lora_base_var, 5,tooltiptxt="Select an optional F16 GGML LoRA base file to use.\nLeave blank to skip.")
+    makefileentry(model_tab, "Preloaded Story:", "Select Preloaded Story File", preloadstory_var, 7,tooltiptxt="Select an optional KoboldAI JSON savefile \nto be served on launch to any client.")
 
     # Network Tab
     network_tab = tabcontent["Network"]
 
     # interfaces
-    makelabelentry(network_tab, "Port: ", port_var, 1, 150)
-    makelabelentry(network_tab, "Host: ", host_var, 2, 150)
+    makelabelentry(network_tab, "Port: ", port_var, 1, 150,tooltip="Select the port to host the KoboldCPP webserver.\n(Defaults to 5001)")
+    makelabelentry(network_tab, "Host: ", host_var, 2, 150,tooltip="Select a specific host interface to bind to.\n(Defaults to all)")
 
-    makecheckbox(network_tab, "Multiuser Mode", multiuser_var, 3)
-    makecheckbox(network_tab, "Remote Tunnel", remotetunnel, 3, 1)
-    makecheckbox(network_tab, "Quiet Mode", quietmode, 4)
+    makecheckbox(network_tab, "Multiuser Mode", multiuser_var, 3,tooltiptxt="Allows requests by multiple different clients to be queued and handled in sequence.")
+    makecheckbox(network_tab, "Remote Tunnel", remotetunnel, 3, 1,tooltiptxt="Creates a trycloudflare tunnel.\nAllows you to access koboldcpp from other devices over an internet URL.")
+    makecheckbox(network_tab, "Quiet Mode", quietmode, 4,tooltiptxt="Prevents all generation related terminal output from being displayed.")
 
-    makefileentry(network_tab, "SSL Cert:", "Select SSL cert.pem file",ssl_cert_var, 5, width=130 ,filetypes=[("Unencrypted Certificate PEM", "*.pem")], singlerow=True)
-    makefileentry(network_tab, "SSL Key:", "Select SSL key.pem file", ssl_key_var, 7, width=130, filetypes=[("Unencrypted Key PEM", "*.pem")], singlerow=True)
+    makefileentry(network_tab, "SSL Cert:", "Select SSL cert.pem file",ssl_cert_var, 5, width=130 ,filetypes=[("Unencrypted Certificate PEM", "*.pem")], singlerow=True,tooltiptxt="Select your unencrypted .pem SSL certificate file for https.\nCan be generated with OpenSSL.")
+    makefileentry(network_tab, "SSL Key:", "Select SSL key.pem file", ssl_key_var, 7, width=130, filetypes=[("Unencrypted Key PEM", "*.pem")], singlerow=True,tooltiptxt="Select your unencrypted .pem SSL key file for https.\nCan be generated with OpenSSL.")
 
     # horde
-    makelabel(network_tab, "Horde:", 18).grid(pady=10)
+    makelabel(network_tab, "Horde:", 18,0,"Settings for embedded AI Horde worker").grid(pady=10)
 
-    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 20, 180)
-    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 21, 50)
-    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 22, 50)
-    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 23, 180)
-    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 24, 180)
+    horde_name_entry,  horde_name_label = makelabelentry(network_tab, "Horde Model Name:", horde_name_var, 20, 180,"The model name to be displayed on the AI Horde.")
+    horde_gen_entry,  horde_gen_label = makelabelentry(network_tab, "Gen. Length:", horde_gen_var, 21, 50,"The maximum amount to generate per request \nthat this worker will accept jobs for.")
+    horde_context_entry,  horde_context_label = makelabelentry(network_tab, "Max Context:",horde_context_var, 22, 50,"The maximum context length \nthat this worker will accept jobs for.")
+    horde_apikey_entry,  horde_apikey_label = makelabelentry(network_tab, "API Key (If Embedded Worker):",horde_apikey_var, 23, 180,"Your AI Horde API Key that you have registered.")
+    horde_workername_entry,  horde_workername_label = makelabelentry(network_tab, "Horde Worker Name:",horde_workername_var, 24, 180,"Your worker's name to be displayed.")
 
     def togglehorde(a,b,c):
         labels = [horde_name_label, horde_gen_label, horde_context_label, horde_apikey_label, horde_workername_label]
@@ -1635,7 +1652,7 @@ def show_new_gui():
             basefile = os.path.basename(model_var.get())
             horde_name_var.set(sanitize_string(os.path.splitext(basefile)[0]))
 
-    makecheckbox(network_tab, "Configure for Horde", usehorde_var, 19, command=togglehorde)
+    makecheckbox(network_tab, "Configure for Horde", usehorde_var, 19, command=togglehorde,tooltiptxt="Enable the embedded AI Horde worker.")
     togglehorde(1,1,1)
 
     # launch
