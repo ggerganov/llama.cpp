@@ -93,7 +93,7 @@ struct DownloadButton: View {
                         print("Error: \(err.localizedDescription)")
                     }
                 }) {
-                    Text("\(modelName) (Downloaded)")
+                    Text("Load \(modelName)")
                 }
             } else {
                 Text("Unknown status")

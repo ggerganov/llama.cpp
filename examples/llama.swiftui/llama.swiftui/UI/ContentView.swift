@@ -63,7 +63,6 @@ struct ContentView: View {
                     modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
                     filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
                 )
-                .padding(.top, 4)
 
                 DownloadButton(
                     llamaState: llamaState,
@@ -104,7 +103,10 @@ struct ContentView: View {
                     ContentView.cleanupModelCaches()
                     llamaState.cacheCleared = true
                 }
-            }.font(.system(size: 12))
+            }
+            .padding(.top, 4)
+            .font(.system(size: 12))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
     }
