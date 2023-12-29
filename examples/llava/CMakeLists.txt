@@ -24,7 +24,8 @@ endif()
 
 if (NOT MSVC)
     target_compile_options(llava PRIVATE -Wno-cast-qual) # stb_image.h
-    endif()
+endif()
+
 if(TARGET BUILD_INFO)
     add_dependencies(llava BUILD_INFO)
 endif()
