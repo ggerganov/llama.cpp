@@ -6662,7 +6662,7 @@ static void ggml_cuda_pool_free_leg(int device, void * ptr, size_t size) {
 // pool with virtual memory
 static CUdeviceptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
-static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
+static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 35; // 32 GB
 
 static void * ggml_cuda_pool_malloc_vmm(int device, size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
