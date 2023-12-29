@@ -18,18 +18,16 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 
-#ifdef CLIP_USE_CUBLAS
+#ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
 #endif
 
-#ifdef CLIP_USE_METAL
+#ifdef GGML_USE_METAL
 #include "ggml-metal.h"
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
-#define CLIP_DEBUG
 
 static std::string format(const char * fmt, ...) {
     va_list ap;
@@ -299,13 +297,11 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         free(zero_mem);
     }
 
-    struct ggml_tensor * temp = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, 1, batch_size);
-    ggml_allocr_alloc(ctx->compute_alloc, temp);
+    embeddings = ggml_acc(ctx0, embeddings, model.class_embedding,
+            embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], 0);
 
-    embeddings = ggml_acc(ctx0, embeddings, ggml_repeat(ctx0, model.class_embedding, temp), embeddings->nb[1],
-                          embeddings->nb[2], embeddings->nb[3], 0);
-    embeddings =
-        ggml_acc(ctx0, embeddings, inp, embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
+    embeddings = ggml_acc(ctx0, embeddings, inp,
+            embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
 
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
     ggml_allocr_alloc(ctx->compute_alloc, positions);
@@ -446,7 +442,6 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
 
 // read and create ggml_context containing the tensors and their data
 struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
-
     struct ggml_context * meta = NULL;
 
     struct gguf_init_params params = {
@@ -511,19 +506,19 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     buffer_size += n_tensors * 128 /* CLIP PADDING */;
 
     clip_ctx * new_clip = new clip_ctx;
-#ifdef CLIP_USE_CUBLAS
+#ifdef GGML_USE_CUBLAS
     new_clip->backend = ggml_backend_cuda_init(0);
-    printf("CLIP using CUDA backend\n");
+    printf("%s: CLIP using CUDA backend\n", __func__);
 #endif
 
-#ifdef CLIP_USE_METAL
+#ifdef GGML_USE_METAL
     new_clip->backend = ggml_backend_metal_init();
-    printf("CLIP using Metal backend\n");
+    printf("%s: CLIP using Metal backend\n", __func__);
 #endif
 
-    if(!new_clip->backend) {
+    if (!new_clip->backend) {
         new_clip->backend = ggml_backend_cpu_init();
-        printf("CLIP using CPU backend\n");
+        printf("%s: CLIP using CPU backend\n", __func__);
     }
 
     // model size and capabilities
@@ -604,7 +599,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             }
             int num_bytes = ggml_nbytes(cur);
             if (ggml_backend_is_cpu(new_clip->backend)
-#ifdef CLIP_USE_METAL
+#ifdef GGML_USE_METAL
             || ggml_backend_is_metal(new_clip->backend)
 #endif
             ) {
@@ -692,7 +687,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 // measure mem requirement and allocate
     {
         new_clip->compute_alloc = ggml_allocr_new_measure_from_backend(new_clip->backend);
-        static const size_t tensor_alignment = 32;
         clip_image_f32_batch batch;
         batch.size = 1;
         ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch);
@@ -895,7 +889,7 @@ bool clip_image_batch_encode(const clip_ctx * ctx, const int n_threads, const cl
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
     }
 
-#ifdef CLIP_USE_METAL
+#ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(ctx->backend)) {
         ggml_backend_metal_set_n_cb(ctx->backend, n_threads);
     }
@@ -1078,8 +1072,8 @@ bool clip_model_quantize(const char * fname_inp, const char * fname_out, const i
     gguf_free(ctx_out);
 
     {
-        printf("%s: original size  = %8.2f MB\n", __func__, total_size_org / 1024.0 / 1024.0);
-        printf("%s: quantized size  = %8.2f MB\n", __func__, total_size_new / 1024.0 / 1024.0);
+        printf("%s: original  size = %8.2f MB\n", __func__, total_size_org / 1024.0 / 1024.0);
+        printf("%s: quantized size = %8.2f MB\n", __func__, total_size_new / 1024.0 / 1024.0);
 
         int64_t sum_all = 0;
         for (size_t i = 0; i < hist_all.size(); ++i) {
