@@ -5,7 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include <float.h>
-#include <stdio.h>
 
 #ifdef __ARM_NEON
 
@@ -530,7 +529,7 @@ static void quantize_1_0min(const float * restrict x, int n, int bits, uint8_t *
     for (int l = 0; l < n; l++) {
         const float x0 = x[l]*id;
 
-        const uint8_t xi0 = MIN((1 << bits) - 1, (int8_t)(x0 + 0.5f));
+        const uint8_t xi0 = MAX(0, MIN((1 << bits) - 1, (int8_t)(x0 + 0.5f)));
 
         q[l] = xi0;
     }
@@ -611,18 +610,32 @@ void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict
     const int nb = k / qk;
 
     for (int i = 0; i < nb; i++) {
-        uint8_t q[qk];
-        float min;
-        float scale;
-        quantize_1(&x[i*qk], qk, 4, q, &min, &scale);
+        float min = FLT_MAX;
+        float max = -FLT_MAX;
 
-        for (int j = 0; j < qk/2; ++j) {
-            y[i].qs[j]  = q[j];
-            y[i].qs[j] |= q[j + qk/2] << 4;
+        for (int j = 0; j < qk; j++) {
+            const float v = x[i*qk + j];
+
+            if (v < min) min = v;
+            if (v > max) max = v;
         }
 
-        y[i].d = GGML_FP32_TO_FP16(scale);
+        const float d  = (max - min) / ((1 << 4) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
         y[i].m = GGML_FP32_TO_FP16(min);
+
+        for (int j = 0; j < qk/2; ++j) {
+            const float x0 = (x[i*qk + 0    + j] - min)*id;
+            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
+
+            const uint8_t xi0 = MIN(15, (int8_t)(x0 + 0.5f));
+            const uint8_t xi1 = MIN(15, (int8_t)(x1 + 0.5f));
+
+            y[i].qs[j]  = xi0;
+            y[i].qs[j] |= xi1 << 4;
+        }
     }
 }
 
@@ -686,16 +699,30 @@ void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict
     const int nb = k / qk;
 
     for (int i = 0; i < nb; i++) {
-        uint8_t q[qk];
-        float min;
-        float scale;
-        quantize_1(&x[i*qk], qk, 5, q, &min, &scale);
+        float min = FLT_MAX;
+        float max = -FLT_MAX;
+
+        for (int j = 0; j < qk; j++) {
+            const float v = x[i*qk + j];
+
+            if (v < min) min = v;
+            if (v > max) max = v;
+        }
+
+        const float d  = (max - min) / ((1 << 5) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
+        y[i].m = GGML_FP32_TO_FP16(min);
 
         uint32_t qh = 0;
 
         for (int j = 0; j < qk/2; ++j) {
-            const uint8_t xi0 = q[j];
-            const uint8_t xi1 = q[j + qk/2];
+            const float x0 = (x[i*qk + 0    + j] - min)*id;
+            const float x1 = (x[i*qk + qk/2 + j] - min)*id;
+
+            const uint8_t xi0 = (uint8_t)(x0 + 0.5f);
+            const uint8_t xi1 = (uint8_t)(x1 + 0.5f);
 
             y[i].qs[j] = (xi0 & 0x0F) | ((xi1 & 0x0F) << 4);
 
@@ -703,9 +730,6 @@ void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict
             qh |= ((xi0 & 0x10u) >> 4) << (j + 0);
             qh |= ((xi1 & 0x10u) >> 4) << (j + qk/2);
         }
-
-        y[i].d = GGML_FP32_TO_FP16(scale);
-        y[i].m = GGML_FP32_TO_FP16(min);
 
         memcpy(&y[i].qh, &qh, sizeof(y[i].qh));
     }
@@ -1559,6 +1583,87 @@ static float make_q3_quants(int n, int nmax, const float * restrict x, int8_t * 
     return 1/iscale;
 }
 
+static float make_qkx2_quants(int n, int nmax, const float * restrict x, const float * restrict weights,
+        uint8_t * restrict L, float * restrict the_min, uint8_t * restrict Laux,
+        float rmin, float rdelta, int nstep, bool use_mad) {
+    float min = x[0];
+    float max = x[0];
+    float sum_w = weights[0];
+    float sum_x = sum_w * x[0];
+#ifdef HAVE_BUGGY_APPLE_LINKER
+    // use 'volatile' to prevent unroll and work around a bug in Apple ld64 1015.7
+    for (volatile int i = 1; i < n; ++i) {
+#else
+    for (int i = 1; i < n; ++i) {
+#endif
+        if (x[i] < min) min = x[i];
+        if (x[i] > max) max = x[i];
+        float w = weights[i];
+        sum_w += w;
+        sum_x += w * x[i];
+    }
+    if (min > 0) min = 0;
+    if (max == min) {
+        for (int i = 0; i < n; ++i) L[i] = 0;
+        *the_min = -min;
+        return 0.f;
+    }
+    float iscale = nmax/(max - min);
+    float scale = 1/iscale;
+    float best_mad = 0;
+    for (int i = 0; i < n; ++i) {
+        int l = nearest_int(iscale*(x[i] - min));
+        L[i] = MAX(0, MIN(nmax, l));
+        float diff = scale * L[i] + min - x[i];
+        diff = use_mad ? fabsf(diff) : diff * diff;
+        float w = weights[i];
+        best_mad += w * diff;
+    }
+    if (nstep < 1) {
+        *the_min = -min;
+        return scale;
+    }
+    for (int is = 0; is <= nstep; ++is) {
+        iscale = (rmin + rdelta*is + nmax)/(max - min);
+        float sum_l = 0, sum_l2 = 0, sum_xl = 0;
+        for (int i = 0; i < n; ++i) {
+            int l = nearest_int(iscale*(x[i] - min));
+            l = MAX(0, MIN(nmax, l));
+            Laux[i] = l;
+            float w = weights[i];
+            sum_l += w*l;
+            sum_l2 += w*l*l;
+            sum_xl += w*l*x[i];
+        }
+        float D = sum_w * sum_l2 - sum_l * sum_l;
+        if (D > 0) {
+            float this_scale = (sum_w * sum_xl - sum_x * sum_l)/D;
+            float this_min   = (sum_l2 * sum_x - sum_l * sum_xl)/D;
+            if (this_min > 0) {
+                this_min = 0;
+                this_scale = sum_xl / sum_l2;
+            }
+            float mad = 0;
+            for (int i = 0; i < n; ++i) {
+                float diff = this_scale * Laux[i] + this_min - x[i];
+                diff = use_mad ? fabsf(diff) : diff * diff;
+                float w = weights[i];
+                mad += w * diff;
+            }
+            if (mad < best_mad) {
+                for (int i = 0; i < n; ++i) {
+                    L[i] = Laux[i];
+                }
+                best_mad = mad;
+                scale = this_scale;
+                min = this_min;
+            }
+        }
+    }
+    *the_min = -min;
+    return scale;
+}
+
 #if QK_K == 256
 static inline void get_scale_min_k4(int j, const uint8_t * restrict q, uint8_t * restrict d, uint8_t * restrict m) {
     if (j < 4) {
@@ -1577,14 +1682,59 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
     const int nb = k / QK_K;
 
     uint8_t L[QK_K];
+    uint8_t Laux[16];
+    float   weights[16];
+    float mins[QK_K/16];
+    float scales[QK_K/16];
+
+    const float q4scale = 15.f;
 
     for (int i = 0; i < nb; i++) {
-        int block_scales[QK_K/16];
-        int block_mins[QK_K/16];
-        quantize_q_k_1(x, 2, 4, 16, block_scales, block_mins, L, &y[i].d, &y[i].dmin);
-
+        float max_scale = 0; // as we are deducting the min, scales are always positive
+        float max_min = 0;
         for (int j = 0; j < QK_K/16; ++j) {
-            y[i].scales[j] = (block_mins[j] << 4) | (block_scales[j]);
+            for (int l = 0; l < 16; ++l) weights[l] = fabsf(x[16*j + l]);
+            scales[j] = make_qkx2_quants(16, 3, x + 16*j, weights, L + 16*j, &mins[j], Laux, -0.5f, 0.1f, 15, true);
+            float scale = scales[j];
+            if (scale > max_scale) {
+                max_scale = scale;
+            }
+            float min = mins[j];
+            if (min > max_min) {
+                max_min = min;
+            }
+        }
+
+        if (max_scale > 0) {
+            float iscale = q4scale/max_scale;
+            for (int j = 0; j < QK_K/16; ++j) {
+                int l = nearest_int(iscale*scales[j]);
+                y[i].scales[j] = l;
+            }
+            y[i].d = GGML_FP32_TO_FP16(max_scale/q4scale);
+        } else {
+            for (int j = 0; j < QK_K/16; ++j) y[i].scales[j] = 0;
+            y[i].d = GGML_FP32_TO_FP16(0.f);
+        }
+        if (max_min > 0) {
+            float iscale = q4scale/max_min;
+            for (int j = 0; j < QK_K/16; ++j) {
+                int l = nearest_int(iscale*mins[j]);
+                y[i].scales[j] |= (l << 4);
+            }
+            y[i].dmin = GGML_FP32_TO_FP16(max_min/q4scale);
+        } else {
+            y[i].dmin = GGML_FP32_TO_FP16(0.f);
+        }
+        for (int j = 0; j < QK_K/16; ++j) {
+            const float d = GGML_FP16_TO_FP32(y[i].d) * (y[i].scales[j] & 0xF);
+            if (!d) continue;
+            const float dm = GGML_FP16_TO_FP32(y[i].dmin) * (y[i].scales[j] >> 4);
+            for (int ii = 0; ii < 16; ++ii) {
+                int l = nearest_int((x[16*j + ii] + dm)/d);
+                l = MAX(0, MIN(3, l));
+                L[16*j + ii] = l;
+            }
         }
 
 #if QK_K == 256
@@ -1706,19 +1856,17 @@ void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict
         }
 
         int8_t sc;
-        float q_fit[QK_K];
         for (int j = 0; j < QK_K/16; ++j) {
             sc = j < 8 ? y[i].scales[j] & 0xF : y[i].scales[j-8] >> 4;
             sc = (sc | (((y[i].scales[8 + j%4] >> (2*(j/4))) & 3) << 4)) - 32;
             float d = GGML_FP16_TO_FP32(y[i].d) * sc;
+            if (!d) {
+                continue;
+            }
             for (int ii = 0; ii < 16; ++ii) {
-                int l = 0;
-                if (d) {
-                    l = nearest_int(x[16*j + ii]/d);
-                    l = MAX(-4, MIN(3, l));
-                }
+                int l = nearest_int(x[16*j + ii]/d);
+                l = MAX(-4, MIN(3, l));
                 L[16*j + ii] = l + 4;
-                q_fit[16*j + ii] = l * sc;
             }
         }
 #else
@@ -1738,18 +1886,16 @@ void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict
             }
             y[i].d = GGML_FP32_TO_FP16(0.f);
         }
-        float q_fit[QK_K];
         for (int j = 0; j < QK_K/16; ++j) {
             int s = j%2 == 0 ? y[i].scales[j/2] & 0xF : y[i].scales[j/2] >> 4;
             float d = GGML_FP16_TO_FP32(y[i].d) * (s - 8);
+            if (!d) {
+                continue;
+            }
             for (int ii = 0; ii < 16; ++ii) {
-                int l = 0;
-                if (d) {
-                    l = nearest_int(x[16*j + ii]/d);
-                    l = MAX(-4, MIN(3, l));
-                }
+                int l = nearest_int(x[16*j + ii]/d);
+                l = MAX(-4, MIN(3, l));
                 L[16*j + ii] = l + 4;
-                q_fit[16*j + ii] = l * (s - 8);
             }
         }
 #endif
@@ -2015,8 +2161,6 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
 
 #if QK_K == 256
     uint8_t L[QK_K];
-    float mins[QK_K/32];
-    float scales[QK_K/32];
 #else
     int8_t L[QK_K];
     float scales[QK_K/16];
@@ -2216,17 +2360,15 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
             y[i].scales[ib] = MIN(127, nearest_int(iscale*scales[ib]));
         }
 
-        float q_fit[QK_K];
         for (int j = 0; j < QK_K/16; ++j) {
             float d = GGML_FP16_TO_FP32(y[i].d) * y[i].scales[j];
+            if (!d) {
+                continue;
+            }
             for (int ii = 0; ii < 16; ++ii) {
-                int l = 0;
-                if (d) {
-                    l = nearest_int(x[16*j + ii]/d);
-                    l = MAX(-32, MIN(31, l));
-                }
+                int l = nearest_int(x[16*j + ii]/d);
+                l = MAX(-32, MIN(31, l));
                 L[16*j + ii] = l + 32;
-                q_fit[16*j + ii] = l * y[i].scales[j];
             }
         }
 
