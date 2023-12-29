@@ -7,16 +7,15 @@ arg1="$1"
 # Shift the arguments to remove the first one
 shift
 
-# Join the remaining arguments into a single string
-arg2="$@"
-
-if [[ $arg1 == '--convert' || $arg1 == '-c' ]]; then
-    python3 ./convert.py $arg2
-elif [[ $arg1 == '--quantize' || $arg1 == '-q' ]]; then
-    ./quantize $arg2
-elif [[ $arg1 == '--run' || $arg1 == '-r' ]]; then
-    ./main $arg2
-elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
+if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
+    python3 ./convert.py "$@"
+elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
+    ./quantize "$@"
+elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
+    ./main "$@"
+elif [[ "$arg1" == '--finetune' || "$arg1" == '-f' ]]; then
+    ./finetune "$@"
+elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
         if [ -f "${i/f16/q4_0}" ]; then
@@ -26,6 +25,8 @@ elif [[ $arg1 == '--all-in-one' || $arg1 == '-a' ]]; then
             ./quantize "$i" "${i/f16/q4_0}" q4_0
         fi
     done
+elif [[ "$arg1" == '--server' || "$arg1" == '-s' ]]; then
+    ./server "$@"
 else
     echo "Unknown command: $arg1"
     echo "Available commands: "
@@ -35,6 +36,10 @@ else
     echo "              ex: --outtype f16 \"/models/7B/\" "
     echo "  --quantize (-q): Optimize with quantization process ggml"
     echo "              ex: \"/models/7B/ggml-model-f16.bin\" \"/models/7B/ggml-model-q4_0.bin\" 2"
+    echo "  --finetune (-f): Run finetune command to create a lora finetune of the model"
+    echo "              See documentation for finetune for command-line parameters"
     echo "  --all-in-one (-a): Execute --convert & --quantize"
     echo "              ex: \"/models/\" 7B"
+    echo "  --server (-s): Run a model on the server"
+    echo "              ex: -m /models/7B/ggml-model-q4_0.bin -c 2048 -ngl 43 -mg 1 --port 8080"
 fi

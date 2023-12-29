@@ -13,24 +13,24 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-const float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001f;
-const float MAX_QUANTIZATION_TOTAL_ERROR = 0.002f;
-const float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
-const float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
-const float MAX_DOT_PRODUCT_ERROR = 0.02f;
+constexpr float MAX_QUANTIZATION_REFERENCE_ERROR = 0.0001f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR = 0.002f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR_2BITS = 0.0075f;
+constexpr float MAX_QUANTIZATION_TOTAL_ERROR_3BITS = 0.0040f;
+constexpr float MAX_DOT_PRODUCT_ERROR = 0.02f;
 
-const char* RESULT_STR[] = {"ok", "FAILED"};
+static const char* RESULT_STR[] = {"ok", "FAILED"};
 
 
 // Generate synthetic data
-void generate_data(float offset, size_t n, float * dst) {
+static void generate_data(float offset, size_t n, float * dst) {
     for (size_t i = 0; i < n; i++) {
         dst[i] = 0.1 + 2*cosf(i + offset);
     }
 }
 
 // Calculate RMSE between two float arrays
-float array_rmse(const float * a1, const float * a2, size_t n) {
+static float array_rmse(const float * a1, const float * a2, size_t n) {
     double sum = 0;
     for (size_t i = 0; i < n; i++) {
         double diff = a1[i] - a2[i];
@@ -40,31 +40,31 @@ float array_rmse(const float * a1, const float * a2, size_t n) {
 }
 
 // Total quantization error on test data
-float total_quantization_error(quantize_fns_t & qfns, size_t test_size, const float * test_data) {
+static float total_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
 
-    qfns.quantize_row_q(test_data, tmp_q.data(), test_size);
-    qfns.dequantize_row_q(tmp_q.data(), tmp_out.data(), test_size);
+    qfns.from_float(test_data, tmp_q.data(), test_size);
+    qfns.to_float(tmp_q.data(), tmp_out.data(), test_size);
     return array_rmse(test_data, tmp_out.data(), test_size);
 }
 
 // Total quantization error on test data
-float reference_quantization_error(quantize_fns_t & qfns, size_t test_size, const float * test_data) {
+static float reference_quantization_error(ggml_type_traits_t & qfns, size_t test_size, const float * test_data) {
     std::vector<uint8_t> tmp_q(2*test_size);
     std::vector<float> tmp_out(test_size);
     std::vector<float> tmp_out_ref(test_size);
 
-    qfns.quantize_row_q(test_data, tmp_q.data(), test_size);
-    qfns.dequantize_row_q(tmp_q.data(), tmp_out.data(), test_size);
+    qfns.from_float(test_data, tmp_q.data(), test_size);
+    qfns.to_float(tmp_q.data(), tmp_out.data(), test_size);
 
-    qfns.quantize_row_q_reference(test_data, tmp_q.data(), test_size);
-    qfns.dequantize_row_q(tmp_q.data(), tmp_out_ref.data(), test_size);
+    qfns.from_float_reference(test_data, tmp_q.data(), test_size);
+    qfns.to_float(tmp_q.data(), tmp_out_ref.data(), test_size);
 
     return array_rmse(tmp_out.data(), tmp_out_ref.data(), test_size);
 }
 
-float dot_product(const float * a1, const float * a2, size_t test_size) {
+static float dot_product(const float * a1, const float * a2, size_t test_size) {
     double sum = 0;
     for (size_t i = 0; i < test_size; i++) {
         sum += a1[i] * a2[i];
@@ -73,15 +73,19 @@ float dot_product(const float * a1, const float * a2, size_t test_size) {
 }
 
 // Total dot product error
-float dot_product_error(quantize_fns_t & qfns, size_t test_size, const float * test_data1, const float *test_data2) {
+static float dot_product_error(
+    ggml_type_traits_t & qfns, size_t test_size, const float * test_data1, const float *test_data2
+) {
     std::vector<uint8_t> tmp_q1(2*test_size);
     std::vector<uint8_t> tmp_q2(2*test_size);
 
-    qfns.quantize_row_q    (test_data1, tmp_q1.data(), test_size);
-    qfns.quantize_row_q_dot(test_data2, tmp_q2.data(), test_size);
+    auto vdot = ggml_internal_get_type_traits(qfns.vec_dot_type);
+
+    qfns.from_float(test_data1, tmp_q1.data(), test_size);
+    vdot.from_float(test_data2, tmp_q2.data(), test_size);
 
     float result = INFINITY;
-    qfns.vec_dot_q(test_size, &result, tmp_q1.data(), tmp_q2.data());
+    qfns.vec_dot(test_size, &result, tmp_q1.data(), tmp_q2.data());
 
     const float dot_ref = dot_product(test_data1, test_data2, test_size);
 
@@ -123,9 +127,16 @@ int main(int argc, char * argv[]) {
 
     for (int i = 0; i < GGML_TYPE_COUNT; i++) {
         ggml_type type = (ggml_type) i;
-        quantize_fns_t qfns = ggml_internal_get_quantize_fn(i);
+        ggml_type_traits_t qfns = ggml_internal_get_type_traits(type);
 
-        if (qfns.quantize_row_q && qfns.dequantize_row_q) {
+        // deprecated - skip
+        if (qfns.blck_size == 0) {
+            continue;
+        }
+
+        printf("Testing %s\n", ggml_type_name((ggml_type) i));
+
+        if (qfns.from_float && qfns.to_float) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             const float max_quantization_error =
                 type == GGML_TYPE_Q2_K ? MAX_QUANTIZATION_TOTAL_ERROR_2BITS :

@@ -48,8 +48,8 @@ make -j
 According to the BLIS documentation, we could set the following
 environment variables to modify the behavior of openmp:
 
-```
-export GOMP_GPU_AFFINITY="0-19"
+```bash
+export GOMP_CPU_AFFINITY="0-19"
 export BLIS_NUM_THREADS=14
 ```
 
