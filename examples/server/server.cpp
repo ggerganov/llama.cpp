@@ -3077,7 +3077,17 @@ int main(int argc, char **argv)
                 {
                     prompt = "";
                 }
-                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true, -1);
+
+                json image_data;
+                if (body.count("image_data") != 0) {
+                    image_data = body["image_data"];
+                }
+                else
+                {
+                    image_data = "";
+                }
+
+                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0}, {"image_data", image_data} }, false, true, -1);
                 task_result result = llama.next_result(task_id);
                 return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
             });
