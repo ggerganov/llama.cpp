@@ -14,7 +14,7 @@ let package = Package(
         .library(name: "llama", targets: ["llama"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/1-ashraful-islam/ggml.git", .branch("master"))
+        .package(url: "https://github.com/ggerganov/ggml.git", .branch("master"))
     ],
     targets: [
         .target(
@@ -23,15 +23,7 @@ let package = Package(
             path: ".",
             exclude: [],
             sources: [
-                // "ggml.c",
                 "llama.cpp",
-                // "ggml-alloc.c",
-                // "ggml-backend.c",
-                // "ggml-quants.c",
-                // "ggml-metal.m",
-            ],
-            resources: [
-                // .process("ggml-metal.metal")
             ],
             publicHeadersPath: "spm-headers",
             cSettings: [
