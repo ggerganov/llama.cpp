@@ -78,7 +78,6 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
-#include <iostream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -7006,20 +7005,20 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
+
         std::vector<std::string> word_collection;
-        switch (vocab.type)
-        {
-        case LLAMA_VOCAB_TYPE_BPE:
-            word_collection = bpe_gpt2_preprocess(text);
-            break;
-        case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
-            word_collection = bpe_deepseek_coder_preprocess(text);
-            break;
-        case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
-            word_collection = bpe_deepseek_llm_preprocess(text);
-            break;
-        default:
-            break;
+        switch (vocab.type) {
+            case LLAMA_VOCAB_TYPE_BPE:
+                word_collection = bpe_gpt2_preprocess(text);
+                break;
+            case LLAMA_VOCAB_TYPE_DEEPSEEKCODER:
+                word_collection = bpe_deepseek_coder_preprocess(text);
+                break;
+            case LLAMA_VOCAB_TYPE_DEEPSEEKLLM:
+                word_collection = bpe_deepseek_llm_preprocess(text);
+                break;
+            default:
+                break;
         }
 
         symbols_final.clear();
@@ -7147,7 +7146,7 @@ private:
         work_queue.push(bigram);
     }
 
-    std::vector<std::string> byte_encoding_process(const std::vector<std::string> &bpe_words) {
+    std::vector<std::string> byte_encoding_process(const std::vector<std::string> & bpe_words) {
         std::vector<std::string>bpe_encoded_words;
         for (auto word : bpe_words) {
             std::string text_utf = "";
@@ -7164,7 +7163,7 @@ private:
         return bpe_encoded_words;
     }
 
-    std::vector<size_t> regex_preprocess(const std::wstring & text, const std::vector<size_t> & offsets, const std::wstring& regex_expr) {
+    std::vector<size_t> regex_preprocess(const std::wstring & text, const std::vector<size_t> & offsets, const std::wstring & regex_expr) {
         std::wregex expr(regex_expr);
         std::vector<size_t> bpe_words; // stroe the offset of each word
         bpe_words.reserve(offsets.size()); // Reserve memory for the approximate size
