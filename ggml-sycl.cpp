@@ -122,7 +122,7 @@ static int g_ggml_sycl_debug=0;
 //#define GGML_SYCL_DEBUG(...) (if(g_ggml_sycl_debug) printf(__VA_ARGS__))
 #define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
 
-#define MIN_CC_DP4A   510 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
+#define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
@@ -246,7 +246,7 @@ static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
     }
 #endif // CUDART_VERSION >= 12000
 
-[[noreturn]]
+
 static void ggml_cuda_error(const char * stmt, const char * func, const char * file, const int line, const char * msg) {
     fprintf(stderr, "CUDA error: %s: %s\n", stmt, msg);
     fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
@@ -11043,7 +11043,7 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                 GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_vec_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
             } else {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_dequantize_mul_mat_vec path\n");
+                // GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_dequantize_mul_mat_vec path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
             }
         } else {
@@ -11059,7 +11059,7 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
                 GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
             } else {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_cublas path\n");
+                //GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_cublas path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
             }
         }
