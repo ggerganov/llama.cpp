@@ -2461,7 +2461,7 @@ json oaicompat_completion_params_parse(
     llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", default_sparams.mirostat_eta);
     llama_params["penalize_nl"]       = json_value(body, "penalize_nl", default_sparams.penalize_nl);
     llama_params["typical_p"]         = json_value(body, "typical_p", default_sparams.typical_p);
-    llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", 0);
+    llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", default_sparams.penalty_last_n);
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
     llama_params["tfs_z"]             = json_value(body, "tfs_z", default_sparams.tfs_z);
 
