@@ -309,7 +309,7 @@ static struct ggml_cgraph * build_graph_lora(
 ) {
     struct ggml_tensor * ab = ggml_mul_mat(ctx, lora_a, lora_b);
     if (scaling != 1.0f) {
-        ab = ggml_scale(ctx, ab, ggml_new_f32(ctx, scaling));
+        ab = ggml_scale(ctx, ab, scaling);
     }
     struct ggml_tensor * res = ggml_add_inplace(ctx, tensor, ab);
 

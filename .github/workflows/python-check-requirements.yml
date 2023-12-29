@@ -1,0 +1,29 @@
+name: Python check requirements.txt
+
+on:
+  push:
+    paths:
+      - 'scripts/check-requirements.sh'
+      - 'convert*.py'
+      - 'requirements.txt'
+      - 'requirements/*.txt'
+  pull_request:
+    paths:
+      - 'scripts/check-requirements.sh'
+      - 'convert*.py'
+      - 'requirements.txt'
+      - 'requirements/*.txt'
+
+jobs:
+  python-check-requirements:
+    runs-on: ubuntu-latest
+    name: check-requirements
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v3
+      - name: Set up Python environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Run check-requirements.sh script
+        run:  bash scripts/check-requirements.sh nocleanup

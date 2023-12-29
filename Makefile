@@ -2,7 +2,7 @@
 BUILD_TARGETS = \
 	main quantize quantize-stats perplexity embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf llama-bench libllava.a llava-cli baby-llama beam-search  \
-	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead tests/test-c.o
+	speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
@@ -65,7 +65,7 @@ test: $(TEST_TARGETS)
 			./$$test_target; \
 		fi; \
 		if [ $$? -ne 0 ]; then \
-			printf 'Test $$test_target FAILED!\n\n' $$test_target; \
+			printf 'Test %s FAILED!\n\n' $$test_target; \
 			failures=$$(( failures + 1 )); \
 		else \
 			printf 'Test %s passed.\n\n' $$test_target; \
@@ -282,8 +282,17 @@ endif
 ifneq ($(filter aarch64%,$(UNAME_M)),)
 	# Apple M1, M2, etc.
 	# Raspberry Pi 3, 4, Zero 2 (64-bit)
+	# Nvidia Jetson
 	MK_CFLAGS   += -mcpu=native
 	MK_CXXFLAGS += -mcpu=native
+	JETSON_RELEASE_INFO = $(shell jetson_release)
+	ifdef JETSON_RELEASE_INFO
+		ifneq ($(filter TX2%,$(JETSON_RELEASE_INFO)),)
+			JETSON_EOL_MODULE_DETECT = 1
+			CC = aarch64-unknown-linux-gnu-gcc
+			cxx = aarch64-unknown-linux-gnu-g++
+		endif
+	endif
 endif
 
 ifneq ($(filter armv6%,$(UNAME_M)),)
@@ -357,15 +366,16 @@ ifdef LLAMA_BLIS
 endif # LLAMA_BLIS
 
 ifdef LLAMA_CUBLAS
-	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	MK_LDFLAGS   += -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib
+	MK_CPPFLAGS  += -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include -I/usr/local/cuda/targets/aarch64-linux/include
+	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
-	MK_NVCCFLAGS  = --forward-unknown-to-host-compiler -use_fast_math
-
+	MK_NVCCFLAGS  = -use_fast_math
+ifndef JETSON_EOL_MODULE_DETECT
+	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
+endif # JETSON_EOL_MODULE_DETECT
 ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
-endif
-
+endif # LLAMA_DEBUG
 ifdef LLAMA_CUDA_NVCC
 	NVCC = $(LLAMA_CUDA_NVCC)
 else
@@ -417,7 +427,11 @@ ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
 endif
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h
+ifdef JETSON_EOL_MODULE_DETECT
+	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+else
 	$(NVCC) $(BASE_CXXFLAGS) $(NVCCFLAGS) -Wno-pedantic -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
+endif # JETSON_EOL_MODULE_DETECT
 endif # LLAMA_CUBLAS
 
 ifdef LLAMA_CLBLAST
@@ -452,6 +466,9 @@ ifdef LLAMA_HIPBLAS
 	LLAMA_CUDA_MMV_Y        ?= 1
 	LLAMA_CUDA_KQUANTS_ITER ?= 2
 	MK_CPPFLAGS += -DGGML_USE_HIPBLAS -DGGML_USE_CUBLAS
+ifdef LLAMA_HIP_UMA
+	MK_CPPFLAGS += -DGGML_HIP_UMA
+endif # LLAMA_HIP_UMA
 	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
@@ -606,7 +623,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o $(C
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp examples/llava/clip.cpp examples/llava/clip.h common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS) $(LWINSOCK2) -Wno-cast-qual
 
-gguf: examples/gguf/gguf.cpp ggml.o llama.o $(OBJS)
+gguf: examples/gguf/gguf.cpp ggml.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
@@ -643,6 +660,9 @@ parallel: examples/parallel/parallel.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 lookahead: examples/lookahead/lookahead.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
+
+lookup: examples/lookup/lookup.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h,$^) -o $@ $(LDFLAGS)
 
 ifdef LLAMA_METAL
