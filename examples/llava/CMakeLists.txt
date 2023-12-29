@@ -24,7 +24,8 @@ endif()
 
 if (NOT MSVC)
     target_compile_options(llava PRIVATE -Wno-cast-qual) # stb_image.h
-    endif()
+endif()
+
 if(TARGET BUILD_INFO)
     add_dependencies(llava BUILD_INFO)
 endif()
@@ -32,5 +33,5 @@ endif()
 set(TARGET llava-cli)
 add_executable(llava-cli llava-cli.cpp)
 install(TARGETS llava-cli RUNTIME)
-target_link_libraries(llava-cli PRIVATE common llama llava ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(llava-cli PRIVATE common llava ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(llava PRIVATE cxx_std_11)

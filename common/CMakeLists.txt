@@ -65,4 +65,4 @@ endif()
 
 target_include_directories(${TARGET} PUBLIC .)
 target_compile_features(${TARGET} PUBLIC cxx_std_11)
-target_link_libraries(${TARGET} PRIVATE llama build_info)
+target_link_libraries(${TARGET} PRIVATE build_info PUBLIC llama)
