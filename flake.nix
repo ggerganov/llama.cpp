@@ -111,6 +111,11 @@
               // lib.optionalAttrs (system == "x86_64-linux") {
                 rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
               };
+
+            # Packages exposed in `.#checks` will be built by the CI and by
+            # `nix flake check`. Currently we expose all packages, but we could
+            # make more granular choices
+            checks = config.packages;
           };
       };
 }
