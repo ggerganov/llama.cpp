@@ -9,7 +9,7 @@ Write-Verbose "Loading environment configuration - $PSScriptRoot\env.ps1"
 # LLAMA.CPP executable path
 $llama_cpp_binary_path = "$PSScriptRoot\..\build\bin\Release\main.exe"
 # Default model path for environment
-$llm_model_path = "Z:\AI\LLM\MythoMax-L2-13B-GGUF\mythomax-l2-13b.Q4_K_M.gguf"
+$llm_model_path = "Z:\AI\LLM\dolphin-2.6-mixtral-8x7b-GGUF\dolphin-2.6-mixtral-8x7b.Q4_K_M.gguf"
 #endregion
 
 #region Set current environment variables
