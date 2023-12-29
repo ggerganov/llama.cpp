@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
             success = false;
         }
     }
-    
+
     if (!fname_text.empty()) {
         fprintf(stderr, "%s : tokenizing: '%s'\n", __func__, fname_text.c_str());
 
