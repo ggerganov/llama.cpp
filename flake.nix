@@ -80,16 +80,30 @@
             ...
           }:
           {
+            # Unlike `.#packages`, legacyPackages may contain values of
+            # arbitrary types (including nested attrsets) and may even throw
+            # exceptions. This attribute isn't recursed into by `nix flake
+            # show` either.
+            #
+            # You can add arbitrary scripts to `.devops/nix/scope.nix` and
+            # access them as `nix build .#llamaPackages.${scriptName}` using
+            # the same path you would with an overlay.
+            legacyPackages = {
+              llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+            };
+
             # We don't use the overlay here so as to avoid making too many instances of nixpkgs,
             # cf. https://zimbatm.com/notes/1000-instances-of-nixpkgs
             packages =
               {
-                default = (pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+                default = config.legacyPackages.llamaPackages.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
-                cuda = (pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
-                rocm = (pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; }).llama-cpp;
+                cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
+                rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
