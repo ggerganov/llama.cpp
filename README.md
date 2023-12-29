@@ -10,7 +10,11 @@ Inference of [LLaMA](https://arxiv.org/abs/2302.13971) model in pure C/C++
 
 ### Hot topics
 
-- Collecting Apple Silicon performance stats: https://github.com/ggerganov/llama.cpp/discussions/4167
+- Collecting Apple Silicon performance stats:
+  - M-series: https://github.com/ggerganov/llama.cpp/discussions/4167
+  - A-series: https://github.com/ggerganov/llama.cpp/discussions/4508
+- Added Mixtral support: https://github.com/ggerganov/llama.cpp/pull/4406
+- Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
 
 ----
 
@@ -93,7 +97,20 @@ as the main playground for developing new features for the [ggml](https://github
 - [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
+- [x] [Yi models](https://huggingface.co/models?search=01-ai/Yi)
 - [X] [StableLM-3b-4e1t](https://github.com/ggerganov/llama.cpp/pull/3586)
+- [x] [Deepseek models](https://huggingface.co/models?search=deepseek-ai/deepseek)
+- [x] [Qwen models](https://huggingface.co/models?search=Qwen/Qwen)
+- [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
+- [x] [PLaMo-13B](https://github.com/ggerganov/llama.cpp/pull/3557)
+- [x] [GPT-2](https://huggingface.co/gpt2)
+
+**Multimodal models:**
+
+- [x] [Llava 1.5 models](https://huggingface.co/collections/liuhaotian/llava-15-653aac15d994e992e2677a7e)
+- [x] [Bakllava](https://huggingface.co/models?search=SkunkworksAI/Bakllava)
+- [x] [Obsidian](https://huggingface.co/NousResearch/Obsidian-3B-V0.5)
+- [x] [ShareGPT4V](https://huggingface.co/models?search=Lin-Chen/ShareGPT4V)
 
 
 **Bindings:**
@@ -108,12 +125,16 @@ as the main playground for developing new features for the [ggml](https://github
 - Clojure: [phronmophobic/llama.clj](https://github.com/phronmophobic/llama.clj)
 - React Native: [mybigday/llama.rn](https://github.com/mybigday/llama.rn)
 - Java: [kherud/java-llama.cpp](https://github.com/kherud/java-llama.cpp)
+- Zig: [deins/llama.cpp.zig](https://github.com/Deins/llama.cpp.zig)
 
 **UI:**
 
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [oobabooga/text-generation-webui](https://github.com/oobabooga/text-generation-webui)
 - [withcatai/catai](https://github.com/withcatai/catai)
+- [semperai/amica](https://github.com/semperai/amica)
+- [psugihara/FreeChat](https://github.com/psugihara/FreeChat)
+- [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 
 ---
 
@@ -320,7 +341,7 @@ mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
 
 ### BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). BLAS doesn't affect the normal generation performance. There are currently three different implementations of it:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
 
 - #### Accelerate Framework:
 
@@ -378,6 +399,9 @@ Building the program with BLAS support may lead to some performance improvements
 - #### cuBLAS
 
   This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+
+  For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
+
   - Using `make`:
     ```bash
     make LLAMA_CUBLAS=1
@@ -415,25 +439,34 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     make LLAMA_HIPBLAS=1
     ```
-  - Using `CMake` for Linux:
+  - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
-    mkdir build
-    cd build
-    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ cmake .. -DLLAMA_HIPBLAS=ON
-    cmake --build .
+    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
+        cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build -- -j 16
     ```
-  - Using `CMake` for Windows:
+    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
+    However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
+
+  - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash
+    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gxf1030
+    ```
+
+  - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
+    ```bash
+    set PATH=%HIP_PATH%\bin;%PATH%
     mkdir build
     cd build
     cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
     cmake --build .
     ```
     Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
+    Find your gpu version string by matching the most significant version information from `rocminfo | grep gfx | head -1 | awk '{print $2}'` with the list of processors, e.g. `gfx1035` maps to `gfx1030`.
 
 
   The environment variable [`HIP_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/understand/gpu_isolation.html#hip-visible-devices) can be used to specify which GPU(s) will be used.
-  If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 or 11.0.0 on RDNA3.
+  If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 (e.g. gfx1030, gfx1031, or gfx1035) or 11.0.0 on RDNA3.
   The following compilation options are also available to tweak performance (yes, they refer to CUDA, not HIP, because it uses the same code as the cuBLAS version above):
 
   | Option                  | Legal values           | Default | Description |
@@ -891,7 +924,7 @@ Additionally, there the following images, similar to the above:
 - `ghcr.io/ggerganov/llama.cpp:full-rocm`: Same as `full` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
 - `ghcr.io/ggerganov/llama.cpp:light-rocm`: Same as `light` but compiled with ROCm support. (platforms: `linux/amd64`, `linux/arm64`)
 
-The GPU enabled images are not currently tested by CI beyond being built. They are not built with any variation from the ones in the Dockerfiles defined in [.devops/](.devops/) and the Gitlab Action defined in [.github/workflows/docker.yml](.github/workflows/docker.yml). If you need different settings (for example, a different CUDA or ROCm library, you'll need to build the images locally for now).
+The GPU enabled images are not currently tested by CI beyond being built. They are not built with any variation from the ones in the Dockerfiles defined in [.devops/](.devops/) and the GitHub Action defined in [.github/workflows/docker.yml](.github/workflows/docker.yml). If you need different settings (for example, a different CUDA or ROCm library, you'll need to build the images locally for now).
 
 #### Usage
 
@@ -964,6 +997,8 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:light-cuda -m /
 - There are no strict rules for the code style, but try to follow the patterns in the code (indentation, spaces, etc.). Vertical alignment makes things more readable and easier to batch edit
 - Clean-up any trailing whitespaces, use 4 spaces for indentation, brackets on the same line, `void * ptr`, `int & a`
 - See [good first issues](https://github.com/ggerganov/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
+- Tensors store data in row-major order. We refer to dimension 0 as columns, 1 as rows, 2 as matrices
+- Matrix multiplication is unconventional: [`z = ggml_mul_mat(ctx, x, y)`](https://github.com/ggerganov/llama.cpp/blob/880e352277fc017df4d5794f0c21c44e1eae2b84/ggml.h#L1058-L1064) means `zT = x @ yT`
 
 ### Docs
 

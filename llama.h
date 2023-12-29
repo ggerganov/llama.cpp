@@ -39,10 +39,11 @@
 
 #define LLAMA_MAX_RNG_STATE (64*1024)
 
+#define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 2
+#define LLAMA_SESSION_VERSION 3
 
 #if defined(GGML_USE_CUBLAS) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL)
 // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
@@ -126,7 +127,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef void (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void *ctx);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -158,15 +159,37 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
+    enum llama_model_kv_override_type {
+        LLAMA_KV_OVERRIDE_INT,
+        LLAMA_KV_OVERRIDE_FLOAT,
+        LLAMA_KV_OVERRIDE_BOOL,
+    };
+
+    struct llama_model_kv_override {
+        char key[128];
+        enum llama_model_kv_override_type tag;
+        union {
+            int64_t int_value;
+            double float_value;
+            bool bool_value;
+        };
+    };
+
     struct llama_model_params {
         int32_t n_gpu_layers; // number of layers to store in VRAM
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
-        // called with a progress value between 0 and 1, pass NULL to disable
+        // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
+        // If the provided progress_callback returns true, model loading continues.
+        // If it returns false, model loading is immediately aborted.
         llama_progress_callback progress_callback;
+
         // context pointer passed to the progress callback
         void * progress_callback_user_data;
+
+        // override key-value pairs of the model meta data
+        const struct llama_model_kv_override * kv_overrides;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only; // only load the vocabulary, no weights
@@ -185,17 +208,20 @@ extern "C" {
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
         float    rope_freq_scale;  // RoPE frequency scaling factor, 0 = from model
-        float    yarn_ext_factor;  // YaRN extrapolation mix factor, NaN = from model
+        float    yarn_ext_factor;  // YaRN extrapolation mix factor, negative = from model
         float    yarn_attn_factor; // YaRN magnitude scaling factor
         float    yarn_beta_fast;   // YaRN low correction dim
         float    yarn_beta_slow;   // YaRN high correction dim
         uint32_t yarn_orig_ctx;    // YaRN original context size
 
+        enum ggml_type type_k; // data type for K cache
+        enum ggml_type type_v; // data type for V cache
+
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool mul_mat_q;  // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
-        bool f16_kv;     // use fp16 for KV cache, fp32 otherwise
-        bool logits_all; // the llama_eval() call computes all logits, not just the last one
-        bool embedding;  // embedding mode only
+        bool mul_mat_q;   // if true, use experimental mul_mat_q kernels (DEPRECATED - always true)
+        bool logits_all;  // the llama_eval() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        bool embedding;   // embedding mode only
+        bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
     };
 
     // model quantization parameters
@@ -290,7 +316,9 @@ extern "C" {
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
-    LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    // TODO: become more consistent with returned int types across the API
+    LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 

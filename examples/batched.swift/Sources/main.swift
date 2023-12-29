@@ -153,7 +153,7 @@ while n_cur <= n_len {
         // const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
         // is it an end of stream? -> mark the stream as finished
-        if new_token_id == llama_token_eos(context) || n_cur == n_len {
+        if new_token_id == llama_token_eos(model) || n_cur == n_len {
             i_batch[i] = -1
             // print("")
             if n_parallel > 1 {
@@ -215,9 +215,10 @@ print("decoded \(n_decode) tokens in \(String(format: "%.2f", Double(t_main_end 
 llama_print_timings(context)
 
 private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
-    let n_tokens = text.count + (add_bos ? 1 : 0)
+    let utf8Count = text.utf8.count
+    let n_tokens = utf8Count + (add_bos ? 1 : 0)
     let tokens = UnsafeMutablePointer<llama_token>.allocate(capacity: n_tokens)
-    let tokenCount = llama_tokenize(model, text, Int32(text.count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
+    let tokenCount = llama_tokenize(model, text, Int32(utf8Count), tokens, Int32(n_tokens), add_bos, /*special tokens*/ false)
     var swiftTokens: [llama_token] = []
     for i in 0 ..< tokenCount {
         swiftTokens.append(tokens[Int(i)])
@@ -230,18 +231,15 @@ private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String
     var result = [CChar](repeating: 0, count: 8)
     let nTokens = llama_token_to_piece(model, token, &result, Int32(result.count))
     if nTokens < 0 {
-        if result.count >= -Int(nTokens) {
-            result.removeLast(-Int(nTokens))
-        } else {
-            result.removeAll()
-        }
+        let actualTokensCount = -Int(nTokens)
+        result = .init(repeating: 0, count: actualTokensCount)
         let check = llama_token_to_piece(
             model,
             token,
             &result,
             Int32(result.count)
         )
-        assert(check == nTokens)
+        assert(check == actualTokensCount)
     } else {
         result.removeLast(result.count - Int(nTokens))
     }
@@ -259,5 +257,4 @@ private func token_to_piece(token: llama_token, buffer: inout [CChar]) -> String
         buffer = []
         return bufferString
     }
-    return nil
 }

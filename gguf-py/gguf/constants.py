@@ -38,6 +38,8 @@ class Keys:
         FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
         USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
         TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
+        EXPERT_COUNT          = "{arch}.expert_count"
+        EXPERT_USED_COUNT     = "{arch}.expert_used_count"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -92,6 +94,9 @@ class MODEL_ARCH(IntEnum):
     BERT      = auto()
     BLOOM     = auto()
     STABLELM  = auto()
+    QWEN      = auto()
+    PHI2      = auto()
+    PLAMO     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -110,10 +115,15 @@ class MODEL_TENSOR(IntEnum):
     ATTN_NORM       = auto()
     ATTN_NORM_2     = auto()
     ATTN_ROT_EMBD   = auto()
+    FFN_GATE_INP    = auto()
+    FFN_NORM        = auto()
     FFN_GATE        = auto()
     FFN_DOWN        = auto()
     FFN_UP          = auto()
-    FFN_NORM        = auto()
+    FFN_ACT         = auto()
+    FFN_GATE_EXP    = auto()
+    FFN_DOWN_EXP    = auto()
+    FFN_UP_EXP      = auto()
     ATTN_Q_NORM     = auto()
     ATTN_K_NORM     = auto()
 
@@ -132,6 +142,9 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
+    MODEL_ARCH.QWEN:           "qwen",
+    MODEL_ARCH.PHI2:           "phi2",
+    MODEL_ARCH.PLAMO:          "plamo",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -152,10 +165,15 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_ROT_EMBD:   "blk.{bid}.attn_rot_embd",
     MODEL_TENSOR.ATTN_Q_NORM:     "blk.{bid}.attn_q_norm",
     MODEL_TENSOR.ATTN_K_NORM:     "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.FFN_GATE_INP:    "blk.{bid}.ffn_gate_inp",
     MODEL_TENSOR.FFN_NORM:        "blk.{bid}.ffn_norm",
     MODEL_TENSOR.FFN_GATE:        "blk.{bid}.ffn_gate",
     MODEL_TENSOR.FFN_DOWN:        "blk.{bid}.ffn_down",
     MODEL_TENSOR.FFN_UP:          "blk.{bid}.ffn_up",
+    MODEL_TENSOR.FFN_ACT:         "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_GATE_EXP:    "blk.{bid}.ffn_gate.{xid}",
+    MODEL_TENSOR.FFN_DOWN_EXP:    "blk.{bid}.ffn_down.{xid}",
+    MODEL_TENSOR.FFN_UP_EXP:      "blk.{bid}.ffn_up.{xid}",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -170,10 +188,14 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
     ],
     MODEL_ARCH.GPTNEOX: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -249,6 +271,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_ACT,
     ],
     MODEL_ARCH.GPTJ: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -317,9 +340,58 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
-    MODEL_ARCH.GPT2: [
-        # TODO
+    MODEL_ARCH.QWEN: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.PLAMO: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GPT2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.PHI2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ]
     # TODO
 }
 
@@ -335,6 +407,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
     MODEL_ARCH.PERSIMMON: [
         MODEL_TENSOR.ROPE_FREQS,
+    ],
+    MODEL_ARCH.QWEN: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
 }
 
