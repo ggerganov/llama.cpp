@@ -9,7 +9,7 @@ find_package(Llama 0.0.1 REQUIRED)
 # source tree, main-cmake-pkg pretends the dependencies are built-in.
 set(_common_path "${CMAKE_CURRENT_LIST_DIR}/../../common")
 add_library(common OBJECT)
-file(GLOB _common_files 
+file(GLOB _common_files
     "${_common_path}/*.h"
     "${_common_path}/*.cpp"
 )
