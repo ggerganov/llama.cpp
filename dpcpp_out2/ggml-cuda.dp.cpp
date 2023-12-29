@@ -117,11 +117,6 @@
 
 #include <dpct/lib_common_utils.hpp>
 
-static int g_ggml_sycl_debug=0;
-
-//#define GGML_SYCL_DEBUG(...) (if(g_ggml_sycl_debug) printf(__VA_ARGS__))
-#define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
-
 #define MIN_CC_DP4A   510 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
@@ -280,7 +275,7 @@ static const char *cu_get_error_str(int err) {
     /*
     DPCT1007:49: Migration of cuGetErrorString is not supported.
     */
-    // cuGetErrorString(err, &err_str);
+    cuGetErrorString(err, &err_str);
     return err_str;
 }
 /*
@@ -620,8 +615,7 @@ static dpct::queue_ptr g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
 static void bad_arch(const sycl::stream &stream_ct1) {
     stream_ct1 << "ERROR: ggml-cuda was compiled without support for the "
                   "current GPU architecture.\n";
-    // __trap();
-    std::exit(1);
+    __trap();
 
     (void) bad_arch; // suppress unused function warning
 }
@@ -5073,10 +5067,10 @@ template <bool need_check> static void
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
     const sycl::nd_item<3> &item_ct1, int *tile_x_ql, sycl::half2 *tile_x_dm,
     int *tile_x_sc, int *tile_y_qs, sycl::half2 *tile_y_ds) {
-    // int   * tile_x_ql = nullptr;
-    // sycl::half2 *tile_x_dm = nullptr;
+    int   * tile_x_ql = nullptr;
+    sycl::half2 *tile_x_dm = nullptr;
     int   * tile_x_qh = nullptr;
-    // int   * tile_x_sc = nullptr;
+    int   * tile_x_sc = nullptr;
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 #if defined(RDNA3) || defined(RDNA2)
@@ -8750,15 +8744,100 @@ catch (sycl::exception const &exc) {
 /*
 DPCT1082:64: Migration of CUmemGenericAllocationHandle type is not supported.
 */
-// static std::vector<CUmemGenericAllocationHandle>
-//     g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
+static std::vector<CUmemGenericAllocationHandle>
+    g_cuda_pool_handles[GGML_CUDA_MAX_DEVICES];
 static dpct::device_ptr g_cuda_pool_addr[GGML_CUDA_MAX_DEVICES] = {0};
 static size_t g_cuda_pool_used[GGML_CUDA_MAX_DEVICES] = {0};
 static const size_t CUDA_POOL_VMM_MAX_SIZE = 1ull << 36; // 64 GB
 
 static void *ggml_cuda_pool_malloc_vmm(size_t size, size_t *actual_size) try {
+    scoped_spin_lock lock(g_cuda_pool_lock);
+    int id;
+    CUDA_CHECK(
+        DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
-    return NULL;
+    // round up the allocation size to the alignment to ensure that all allocations are aligned for all data types
+    const size_t alignment = 128;
+    size = alignment * ((size + alignment - 1) / alignment);
+
+    size_t avail = g_cuda_pool_size[id] - g_cuda_pool_used[id];
+
+    if (size > avail) {
+        // round up to the next multiple of the granularity
+        size_t reserve_size = size - avail;
+        const size_t granularity = g_device_caps[id].vmm_granularity;
+        reserve_size = granularity * ((reserve_size + granularity - 1) / granularity);
+
+        GGML_ASSERT(g_cuda_pool_size[id] + reserve_size <= CUDA_POOL_VMM_MAX_SIZE);
+
+        // allocate more physical memory
+        /*
+        DPCT1082:65: Migration of CUmemAllocationProp type is not supported.
+        */
+        CUmemAllocationProp prop = {};
+        prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+        prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        prop.location.id = id;
+        /*
+        DPCT1082:66: Migration of CUmemGenericAllocationHandle type is not
+        supported.
+        */
+        CUmemGenericAllocationHandle handle;
+        /*
+        DPCT1007:69: Migration of cuMemCreate is not supported.
+        */
+        CU_CHECK(cuMemCreate(&handle, reserve_size, &prop, 0));
+
+        // reserve virtual address space (if not already reserved)
+        if (g_cuda_pool_addr[id] == 0) {
+            /*
+            DPCT1007:70: Migration of cuMemAddressReserve is not supported.
+            */
+            CU_CHECK(cuMemAddressReserve(&g_cuda_pool_addr[id],
+                                         CUDA_POOL_VMM_MAX_SIZE, 0, 0, 0));
+        }
+
+        // map at the end of the pool
+        /*
+        DPCT1007:71: Migration of cuMemMap is not supported.
+        */
+        CU_CHECK(cuMemMap(g_cuda_pool_addr[id] + g_cuda_pool_size[id],
+                          reserve_size, 0, handle, 0));
+
+        // set access
+        /*
+        DPCT1082:72: Migration of CUmemAccessDesc type is not supported.
+        */
+        CUmemAccessDesc access = {};
+        access.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+        access.location.id = id;
+        access.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+        /*
+        DPCT1007:73: Migration of cuMemSetAccess is not supported.
+        */
+        CU_CHECK(cuMemSetAccess(g_cuda_pool_addr[id] + g_cuda_pool_size[id],
+                                reserve_size, &access, 1));
+
+        // add to the pool
+        g_cuda_pool_handles[id].push_back(handle);
+        g_cuda_pool_size[id] += reserve_size;
+
+        //printf("cuda pool[%d]: size increased to %llu MB (reserved %llu MB)\n",
+        //       id, (unsigned long long) (g_cuda_pool_size[id]/1024/1024),
+        //       (unsigned long long) (reserve_size/1024/1024));
+    }
+
+    GGML_ASSERT(g_cuda_pool_addr[id] != 0);
+
+    void * ptr = (void *) (g_cuda_pool_addr[id] + g_cuda_pool_used[id]);
+    *actual_size = size;
+    g_cuda_pool_used[id] += size;
+
+#ifdef DEBUG_CUDA_MALLOC
+    printf("cuda pool[%d]: allocated %llu bytes at %llx [%s]\n", id, (unsigned long long) size, ptr);
+#endif
+
+    return ptr;
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -8861,42 +8940,18 @@ static bool g_cublas_loaded = false;
 bool ggml_cublas_loaded(void) {
     return g_cublas_loaded;
 }
-void print_devices(){
-    int device_count = dpct::dev_mgr::instance().device_count();
-    for (int id = 0; id < device_count; ++id) {
-        dpct::device_info prop;
-        CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
-            prop, dpct::dev_mgr::instance().get_device(id))));
-        fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id,
-                prop.get_name(), prop.get_major_version(),
-                prop.get_minor_version());
-    }
-}
-
-int get_sycl_env(const char* env_name, int default_val){
-    char * user_device_string = getenv(env_name);
-    printf("get_sycl_env=%s=%s\n", env_name, user_device_string);
-    int user_number = default_val;
-
-    unsigned n;
-    if (user_device_string != NULL && sscanf(user_device_string, " %u", &n) == 1) {
-            user_number = (int)n;
-        } else {
-            user_number=default_val;
-        }
-    return user_number;
-}
 
 void ggml_init_cublas() try {
     static bool initialized = false;
+
     if (!initialized) {
-        g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
 
-        printf("g_ggml_sycl_debug=%d\n", g_ggml_sycl_debug);
-
-        int user_device_number = get_sycl_env("GGML_SYCL_DEVICE", 0);
-
-        print_devices();
+#ifdef __HIP_PLATFORM_AMD__
+        // Workaround for a rocBLAS bug when using multiple graphics cards:
+        // https://github.com/ROCmSoftwarePlatform/rocBLAS/issues/1346
+        rocblas_initialize();
+        CUDA_CHECK(cudaDeviceSynchronize());
+#endif
 
         if (DPCT_CHECK_ERROR(g_device_count =
                                  dpct::dev_mgr::instance().device_count()) !=
@@ -8919,19 +8974,47 @@ void ggml_init_cublas() try {
         fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
 #endif
         fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
-
-        //zjy hardcode, force set to 1 device
-        g_device_count = 1;
         for (int id = 0; id < g_device_count; ++id) {
             int device_vmm = 0;
 
+#if !defined(GGML_USE_HIPBLAS)
+            int device;
+            CU_CHECK(DPCT_CHECK_ERROR(device = id));
+            /*
+            DPCT1028:74: The cuDeviceGetAttribute was not migrated because
+            parameter CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED is
+            unsupported.
+            */
+            CU_CHECK(cuDeviceGetAttribute(
+                &device_vmm,
+                CU_DEVICE_ATTRIBUTE_VIRTUAL_MEMORY_MANAGEMENT_SUPPORTED,
+                device));
+
+            if (device_vmm) {
+                /*
+                DPCT1082:75: Migration of CUmemAllocationProp type is not
+                supported.
+                */
+                CUmemAllocationProp alloc_prop = {};
+                alloc_prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+                alloc_prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+                alloc_prop.location.id = id;
+                /*
+                DPCT1007:76: Migration of cuMemGetAllocationGranularity is not
+                supported.
+                */
+                CU_CHECK(cuMemGetAllocationGranularity(
+                    &g_device_caps[id].vmm_granularity, &alloc_prop,
+                    CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+            }
+#endif // !defined(GGML_USE_HIPBLAS)
             g_device_caps[id].vmm = !!device_vmm;
 
             dpct::device_info prop;
             CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
                 prop, dpct::dev_mgr::instance().get_device(id))));
             /*
-            DPCT1005:86: The SYCL device version is different from CUDA Compute
+            DPCT1005:77: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
             */
             fprintf(stderr,
@@ -8945,26 +9028,24 @@ void ggml_init_cublas() try {
             g_device_caps[id].cc = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
 #else
             /*
-            DPCT1005:87: The SYCL device version is different from CUDA Compute
+            DPCT1005:78: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
             */
             g_device_caps[id].cc =
                 100 * prop.get_major_version() + 10 * prop.get_minor_version();
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-            // g_device_caps[id].cc = 9000;
-            printf("g_device_caps[%d].cc=%d\n", id, g_device_caps[id].cc);
         }
         for (int id = 0; id < g_device_count; ++id) {
             g_tensor_split[id] /= total_vram;
         }
 
         for (int id = 0; id < g_device_count; ++id) {
-            CUDA_CHECK(ggml_cuda_set_device(user_device_number));
+            CUDA_CHECK(ggml_cuda_set_device(id));
 
             // create cuda streams
             for (int is = 0; is < MAX_STREAMS; ++is) {
                 /*
-                DPCT1025:88: The SYCL queue is created ignoring the flag and
+                DPCT1025:79: The SYCL queue is created ignoring the flag and
                 priority options.
                 */
                 CUDA_CHECK(DPCT_CHECK_ERROR(
@@ -8976,7 +9057,7 @@ void ggml_init_cublas() try {
             CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] =
                                               &dpct::get_in_order_queue()));
             /*
-            DPCT1027:89: The call to cublasSetMathMode was replaced with 0
+            DPCT1027:80: The call to cublasSetMathMode was replaced with 0
             because this functionality is redundant in SYCL.
             */
             CUBLAS_CHECK(0);
@@ -8984,8 +9065,7 @@ void ggml_init_cublas() try {
 
         // configure logging to stdout
         // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
-        ggml_cuda_set_device(user_device_number);
-        fprintf(stderr, "  set Device %d\n", user_device_number);
+
         initialized = true;
         g_cublas_loaded = true;
     }
@@ -8995,7 +9075,6 @@ catch (sycl::exception const &exc) {
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
-
 
 void ggml_cuda_set_tensor_split(const float * tensor_split) {
     if (tensor_split == nullptr) {
@@ -9780,7 +9859,6 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
     if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
-        GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp16 path\n");
         cuda_pool_alloc<sycl::half> src0_as_f16;
         if (src0->type != GGML_TYPE_F16) {
             const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src0->type);
@@ -9822,7 +9900,6 @@ inline void ggml_cuda_op_mul_mat_cublas(
         to_fp32_cuda(dst_f16.get(), dst_dd_i, row_diff*src1_ncols, stream);
     }
     else {
-        GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp32 path\n");
         cuda_pool_alloc<float> src0_ddq_as_f32;
 
         if (src0->type != GGML_TYPE_F32) {
@@ -10227,7 +10304,7 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
 #ifdef NDEBUG
     for (int id = 0; id < g_device_count; ++id) {
         CUDA_CHECK(ggml_cuda_set_device(id));
-        // CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaDeviceSynchronize());
     }
 
     for (int id = 0; id < g_device_count; ++id) {
@@ -10242,14 +10319,14 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
             }
 
             int can_access_peer;
-            // CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
-            // if (can_access_peer) {
-            //     if (enable_peer_access) {
-            //         CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
-            //     } else {
-            //         CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
-            //     }
-            // }
+            CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
+            if (can_access_peer) {
+                if (enable_peer_access) {
+                    CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
+                } else {
+                    CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+                }
+            }
         }
     }
 #endif // NDEBUG
@@ -10857,7 +10934,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
     cuda_pool_alloc<sycl::half> dst_f16;
     char * dst_t;
 
-    dpct::library_data_t cu_compute_type = dpct::library_data_t::real_half;
+    dpct::library_data_t cu_compute_type = CUBLAS_COMPUTE_16F;
     dpct::library_data_t cu_data_type = dpct::library_data_t::real_half;
 
     // dst strides
@@ -10881,7 +10958,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
     } else {
         dst_t = (char *) dst_ddf;
 
-        cu_compute_type = dpct::library_data_t::real_float;
+        cu_compute_type = CUBLAS_COMPUTE_32F;
         cu_data_type = dpct::library_data_t::real_float;
 
         alpha = &alpha_f32;
@@ -11040,10 +11117,8 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
             if (use_mul_mat_vec_q) {
                 // NOTE: this kernel does not support ggml_nrows(src1) > 1
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_vec_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
             } else {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_dequantize_mul_mat_vec path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_dequantize_mul_mat_vec, false);
             }
         } else {
@@ -11054,12 +11129,10 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             if (use_tensor_cores && min_compute_capability >= CC_VOLTA && src1->ne[1] > MMQ_MAX_BATCH_SIZE) {
                 use_mul_mat_q = false;
             }
-            // use_mul_mat_q = false;//zjy
+
             if (use_mul_mat_q) {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
             } else {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_cublas path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
             }
         }
