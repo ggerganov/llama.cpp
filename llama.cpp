@@ -3812,7 +3812,10 @@ static bool llm_load_tensors(
                         model.output        = ml.create_tensor(ctx, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, backend_output);
                     }
 
-                    const uint32_t n_ff = hparams.n_ff;
+                    const uint32_t n_ff      = hparams.n_ff;
+                    const int64_t n_embd_gqa = n_value_gqa;
+                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_key_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
 
@@ -5945,6 +5948,11 @@ struct llm_build_context {
 
     struct ggml_cgraph * build_gpt2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        const int64_t n_embd_head = hparams.n_value_dim;
+        const int64_t n_embd_gqa  = hparams.n_value_gqa();
+        GGML_ASSERT(n_embd_head == hparams.n_key_dim);
+        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
