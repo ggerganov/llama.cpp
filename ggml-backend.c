@@ -614,10 +614,14 @@ static void ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_c
 }
 
 static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    return true;
+    switch (op->op) {
+        case GGML_OP_MUL_MAT:
+            return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
+        default:
+            return true;
+    }
 
     GGML_UNUSED(backend);
-    GGML_UNUSED(op);
 }
 
 static struct ggml_backend_i cpu_backend_i = {

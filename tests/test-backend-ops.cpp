@@ -350,12 +350,17 @@ struct test_case {
         fflush(stdout);
 
         // check if backends support op
+        bool supported = true;
         for (ggml_backend_t backend : {backend1, backend2}) {
             if (!ggml_backend_supports_op(backend, out)) {
-                printf("not supported\n");
-                ggml_free(ctx);
-                return true;
+                printf("not supported [%s] ", ggml_backend_name(backend));
+                supported = false;
             }
+        }
+        if (!supported) {
+            printf("\n");
+            ggml_free(ctx);
+            return true;
         }
 
         // post-graph sentinel
@@ -1505,8 +1510,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     }
 
     for (ggml_type type_a : all_types) {
-        for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
-            // FIXME: CPU crashes on f16xf16
+        for (ggml_type type_b : {GGML_TYPE_F32, GGML_TYPE_F16}) {
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, { 1,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {2, 1}));
