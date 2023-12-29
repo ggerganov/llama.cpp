@@ -26,6 +26,7 @@ echo "Syncing ggml changes since commit $lc"
 
 cd $SRC_GGML
 
+git log --oneline $lc..HEAD
 git log --oneline $lc..HEAD | grep -v "(llama/[0-9]*)" | cut -d' ' -f1 > $SRC_LLAMA/ggml-commits
 
 if [ ! -s $SRC_LLAMA/ggml-commits ]; then
