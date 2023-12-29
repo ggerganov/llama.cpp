@@ -242,7 +242,7 @@ class Model:
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
-        from transformers import AutoTokenizer  # type: ignore[attr-defined]
+        from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model)
         vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
         assert max(tokenizer.vocab.values()) < vocab_size
@@ -856,7 +856,7 @@ class StableLMModel(Model):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -902,7 +902,7 @@ class QwenModel(Model):
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
-        from transformers import AutoTokenizer  # type: ignore[attr-defined]
+        from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
         vocab_size = hparams["vocab_size"]
         assert max(tokenizer.get_vocab().values()) < vocab_size
@@ -1185,57 +1185,62 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-args = parse_args()
+def main() -> None:
+    args = parse_args()
 
-dir_model = args.model
+    dir_model = args.model
 
-if args.awq_path:
-    sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
-    from awq.apply_awq import add_scale_weights
-    tmp_model_path = args.model / "weighted_model"
-    dir_model = tmp_model_path
-    if tmp_model_path.is_dir():
-        print(f"{tmp_model_path} exists as a weighted model.")
+    if args.awq_path:
+        sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
+        from awq.apply_awq import add_scale_weights
+        tmp_model_path = args.model / "weighted_model"
+        dir_model = tmp_model_path
+        if tmp_model_path.is_dir():
+            print(f"{tmp_model_path} exists as a weighted model.")
+        else:
+            tmp_model_path.mkdir(parents=True, exist_ok=True)
+            print("Saving new weighted model ...")
+            add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
+            print(f"Saved weighted model at {tmp_model_path}.")
+
+    if not dir_model.is_dir():
+        print(f'Error: {args.model} is not a directory', file=sys.stderr)
+        sys.exit(1)
+
+    ftype_map = {
+        "f32": gguf.GGMLQuantizationType.F32,
+        "f16": gguf.GGMLQuantizationType.F16,
+    }
+
+    if args.outfile is not None:
+        fname_out = args.outfile
     else:
-        tmp_model_path.mkdir(parents=True, exist_ok=True)
-        print("Saving new weighted model ...")
-        add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
-        print(f"Saved weighted model at {tmp_model_path}.")
+        # output in the same directory as the model by default
+        fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
 
-if not dir_model.is_dir():
-    print(f'Error: {args.model} is not a directory', file=sys.stderr)
-    sys.exit(1)
+    print(f"Loading model: {dir_model.name}")
 
-ftype_map = {
-    "f32": gguf.GGMLQuantizationType.F32,
-    "f16": gguf.GGMLQuantizationType.F16,
-}
+    hparams = Model.load_hparams(dir_model)
 
-if args.outfile is not None:
-    fname_out = args.outfile
-else:
-    # output in the same directory as the model by default
-    fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
+    with torch.inference_mode():
+        model_class = Model.from_model_architecture(hparams["architectures"][0])
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
 
-print(f"Loading model: {dir_model.name}")
+        print("Set model parameters")
+        model_instance.set_gguf_parameters()
 
-hparams = Model.load_hparams(dir_model)
+        print("Set model tokenizer")
+        model_instance.set_vocab()
 
-with torch.inference_mode():
-    model_class = Model.from_model_architecture(hparams["architectures"][0])
-    model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
+        if args.vocab_only:
+            print(f"Exporting model vocab to '{fname_out}'")
+            model_instance.write_vocab()
+        else:
+            print(f"Exporting model to '{fname_out}'")
+            model_instance.write()
 
-    print("Set model parameters")
-    model_instance.set_gguf_parameters()
+        print(f"Model successfully exported to '{fname_out}'")
 
-    print("Set model tokenizer")
-    model_instance.set_vocab()
 
-    if args.vocab_only:
-        print(f"Exporting model vocab to '{fname_out}'")
-        model_instance.write_vocab()
-    else:
-        print(f"Exporting model to '{fname_out}'")
-        model_instance.write()
-
-    print(f"Model successfully exported to '{fname_out}'")
+if __name__ == '__main__':
+    main()
