@@ -155,9 +155,9 @@ if (APPLE AND LLAMA_ACCELERATE)
 endif()
 
 if (LLAMA_METAL)
-    find_library(FOUNDATION_LIBRARY         Foundation              REQUIRED)
-    find_library(METAL_FRAMEWORK            Metal                   REQUIRED)
-    find_library(METALKIT_FRAMEWORK         MetalKit                REQUIRED)
+    find_library(FOUNDATION_LIBRARY Foundation REQUIRED)
+    find_library(METAL_FRAMEWORK    Metal      REQUIRED)
+    find_library(METALKIT_FRAMEWORK MetalKit   REQUIRED)
 
     message(STATUS "Metal framework found")
     set(GGML_HEADERS_METAL ggml-metal.h)
