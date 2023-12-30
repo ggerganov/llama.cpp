@@ -413,7 +413,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         ggml_allocr_alloc(ctx->compute_alloc, patches);
         if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
             int* patches_data = (int*)malloc(ggml_nbytes(patches));
-            for (int i = 0; i < num_positions; i++) {
+            for (int i = 0; i < num_patches; i++) {
                 patches_data[i] = i + 1;
             }
             ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
