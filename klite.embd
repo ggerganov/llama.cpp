@@ -7535,8 +7535,16 @@ Current version: 103
 			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
 
-		localsettings.img_cfgscale = document.getElementById("img_cfgscale").value;
-		localsettings.img_steps = document.getElementById("img_steps").value;
+		localsettings.img_cfgscale = parseFloat(document.getElementById("img_cfgscale").value);
+		localsettings.img_steps = parseInt(document.getElementById("img_steps").value);
+		if(isNaN(localsettings.img_steps))
+		{
+			localsettings.img_steps = defaultsettings.img_steps;
+		}
+		if(isNaN(localsettings.img_cfgscale))
+		{
+			localsettings.img_cfgscale = defaultsettings.img_cfgscale;
+		}
 
 		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
