@@ -19639,9 +19639,9 @@ int ggml_cpu_has_avx(void) {
 
 int ggml_cpu_has_avx_vnni(void) {
 #if defined(__AVXVNNI__)
- return 1;
+    return 1;
 #else
- return 0;
+    return 0;
 #endif
 }
 
