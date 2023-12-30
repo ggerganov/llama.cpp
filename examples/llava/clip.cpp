@@ -259,11 +259,11 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     ggml_allocr_alloc(ctx->compute_alloc, inp_raw);
 
     if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
-        float * data = (float *)malloc(ggml_nbytes(inp_raw));
+        const int nx = imgs->data[0].nx; // all images have the same size (336 in llava-1.5 with the OA clip patch 14)
+        const int ny = imgs->data[0].ny;
+        float * data = (float *)malloc(batch_size * 3 * ny * nx * sizeof(float));
 
         for (size_t i = 0; i < imgs->size; i++) {
-            const int nx = imgs->data[i].nx;
-            const int ny = imgs->data[i].ny;
             GGML_ASSERT(nx == image_size && ny == image_size);
 
             const int n = nx * ny;
@@ -306,7 +306,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
     ggml_allocr_alloc(ctx->compute_alloc, positions);
     if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
-        int* positions_data = (int*)malloc(ggml_nbytes(positions));
+        int* positions_data = (int*)malloc(num_positions * sizeof(int));
         for (int i = 0; i < num_positions; i++) {
             positions_data[i] = i;
         }
@@ -412,7 +412,7 @@ static ggml_cgraph * clip_image_build_graph(const clip_ctx * ctx, const clip_ima
         struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
         ggml_allocr_alloc(ctx->compute_alloc, patches);
         if (!ggml_allocr_is_measure(ctx->compute_alloc)) {
-            int* patches_data = (int*)malloc(ggml_nbytes(patches));
+            int* patches_data = (int*)malloc(num_patches * sizeof(int));
             for (int i = 0; i < num_patches; i++) {
                 patches_data[i] = i + 1;
             }
