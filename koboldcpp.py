@@ -1275,8 +1275,14 @@ def show_new_gui():
         AMDgpu = None
         try: # Get OpenCL GPU names on windows using a special binary. overwrite at known index if found.
             basepath = os.path.abspath(os.path.dirname(__file__))
-            output = run([((os.path.join(basepath, "winclinfo.exe")) if os.name == 'nt' else "clinfo"),"--json"], capture_output=True, text=True, check=True, encoding='utf-8').stdout
-            data = json.loads(output)
+            output = ""
+            data = None
+            try:
+                output = run(["clinfo","--json"], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+                data = json.loads(output)
+            except Exception as e1:
+                output = run([((os.path.join(basepath, "winclinfo.exe")) if os.name == 'nt' else "clinfo"),"--json"], capture_output=True, text=True, check=True, encoding='utf-8').stdout
+                data = json.loads(output)
             plat = 0
             dev = 0
             lowestclmem = 0
@@ -1386,7 +1392,6 @@ def show_new_gui():
             gtooltip_box.overrideredirect(True)
             gtooltip_label = ctk.CTkLabel(gtooltip_box, text=tooltip_text, text_color="#000000", fg_color="#ffffe0")
             gtooltip_label.pack(expand=True, padx=2, pady=1)
-
         else:
             gtooltip_label.configure(text=tooltip_text)
 
