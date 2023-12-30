@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 102
+Current version: 103
 -Concedo
 -->
 
@@ -55,6 +55,10 @@ Current version: 102
 
 		body {
 			background-color: #303030;
+            background-image: none;
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
 		}
 		.invert_colors
 		{
@@ -169,7 +173,6 @@ Current version: 102
 			height: 66vh;
 			display: flex;
 			vertical-align: bottom;
-			background-color: #262626;
 			color: #ffffff;
 			font-size: 12pt;
 			font-family: "Helvetica";
@@ -1161,6 +1164,22 @@ Current version: 102
 			width: 50px;
 		}
 
+		.inlinelabel {
+			color: #ffffff;
+			display: flex;
+			flex-flow: wrap;
+		}
+
+		.inlinelabel input
+		{
+    		border-radius: 4px;
+			background-color: #ffffff;
+			color:#555;
+			border:0px solid #ccc;
+			margin: 4px;
+		}
+
+
 
 		@media only screen and (max-width: 768px) {
 			.SideMenu.open {
@@ -1410,6 +1429,7 @@ Current version: 102
 		{
 			font-size:9pt;
 			padding-top: 2px;
+            text-shadow: 1px 1px 1px #000000;
 			/* font-style: italic; */
 		}
 
@@ -1633,6 +1653,20 @@ Current version: 102
 		background: #0b141a;
 	}
 
+	.gamescreenbgnormal
+	{
+		background-color: #262626;
+	}
+
+	.translucentbg
+	{
+		background-color: #00000066;
+	}
+	.transparentbg
+	{
+		background-color: #00000000;
+	}
+
 	.chat_sent_msg p {
 		font-size: 14px;
 		margin: 0;
@@ -1663,13 +1697,14 @@ Current version: 102
 	{
 		display: inline-block;
 		width: calc(100% - 84px);
-		background: #86868638 none repeat scroll 0 0;
+		background: #222222aa none repeat scroll 0 0;
 		margin-top: 8px;
 		margin-left: 2px;
 		border-radius: 16px;
 		padding-left: 10px;
 		padding-right: 10px;
 		padding-top: 7px;
+        border: 1px solid #bbbbbbaa;
 	}
 	.cht_inp_bg_inner
 	{
@@ -3342,6 +3377,8 @@ Current version: 102
 		generate_images_model: "stable_diffusion", //"" is disabled and "*" is all, anything else is the model name pulled from stable horde
 		img_autogen: false,
 		img_allownsfw: true,
+		img_cfgscale: 7,
+		img_steps: 20,
 		save_images: true,
 		prompt_for_savename: false,
 		case_sensitive_wi: false,
@@ -3547,6 +3584,7 @@ Current version: 102
 		try {
 			let loadedsettingsjson = localStorage.getItem(STORAGE_PREFIX + "settings");
 			let loadedstorycompressed = localStorage.getItem(STORAGE_PREFIX + "story");
+			let loadedbackgroundimg = localStorage.getItem(STORAGE_PREFIX + "bgimg");
 			if (loadedsettingsjson != null && loadedsettingsjson != "" && loadedstorycompressed != null && loadedstorycompressed != "") {
 				let loadedsettings = JSON.parse(loadedsettingsjson);
 				//see if persist is enabled
@@ -3569,6 +3607,13 @@ Current version: 102
 				{
 					//toggle persistence off to prevent it from turning on again
 					localsettings.persist_session = false;
+				}
+				if(loadedbackgroundimg && loadedbackgroundimg!="")
+				{
+					let selectedImg = `url('${loadedbackgroundimg}')`;
+					document.body.style.backgroundImage = selectedImg;
+					document.getElementById("gamescreen").classList.add("translucentbg");
+					document.getElementById("enhancedchatinterface").classList.add("transparentbg");
 				}
 				loadok = true;
 			} else {
@@ -4424,11 +4469,36 @@ Current version: 102
 		return gs;
 	}
 
+	function load_bgimg_button() {
+		document.getElementById('loadbgimg').click();
+	}
+	function load_bg_img(event) {
+		let input = event.target;
+		if (input.files.length > 0) {
+			let selectedImg = null;
+			selectedImg = input.files[0];
+			const objectURL = URL.createObjectURL(selectedImg);
+			compressImage(objectURL, (compressedImageURI, aspectratio)=>{
+				selectedImg = `url('${compressedImageURI}')`;
+				document.body.style.backgroundImage = selectedImg;
+				document.getElementById("gamescreen").classList.add("translucentbg");
+				document.getElementById("enhancedchatinterface").classList.add("transparentbg");
+				localStorage.setItem(STORAGE_PREFIX + "bgimg", compressedImageURI);
+			}, true, false, 1024, 0.5);
+		}
+	};
+	function clear_bg_img()
+	{
+		document.body.style.backgroundImage = "none";
+		document.getElementById("gamescreen").classList.remove("translucentbg");
+		document.getElementById("enhancedchatinterface").classList.remove("transparentbg");
+		localStorage.setItem(STORAGE_PREFIX + "bgimg", "");
+	}
+
 	function load_file_button()
 	{
 		document.getElementById('loadfileinput').click();
 	}
-
 	var tempfileurl = null;
 	var tempfileobj = generate_base_storyobj();
 	var newfilename = "";
@@ -5849,6 +5919,7 @@ Current version: 102
 			document.getElementById("quickstartcontainer").classList.contains("hidden") &&
 			document.getElementById("zoomedimgcontainer").classList.contains("hidden") &&
 			document.getElementById("groupselectcontainer").classList.contains("hidden") &&
+			document.getElementById("imagestylecontainer").classList.contains("hidden") &&
 			document.getElementById("advancedloadfile").classList.contains("hidden")
 		);
 	}
@@ -5868,6 +5939,7 @@ Current version: 102
 		document.getElementById("quickstartcontainer").classList.add("hidden");
 		document.getElementById("zoomedimgcontainer").classList.add("hidden");
 		document.getElementById("groupselectcontainer").classList.add("hidden");
+		document.getElementById("imagestylecontainer").classList.add("hidden");
 		document.getElementById("advancedloadfile").classList.add("hidden");
 	}
 
@@ -5877,13 +5949,17 @@ Current version: 102
 	}
 
 	var pendingstyle = "";
-	function selectStyle()
+	function selectImgStyle()
 	{
-		inputBox("Style tags to use for generating images:\n(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)\n\n","Extra Image Styles",pendingstyle,"Default Style",()=>{
-			let userinput = getInputBoxValue();
-			pendingstyle = userinput;
-			console.log("Saved styles: " + pendingstyle);
-		},false);
+		document.getElementById("imagestylecontainer").classList.remove("hidden");
+		document.getElementById("imagestyleinput").value = pendingstyle;
+	}
+	function confirmImgStyle()
+	{
+		let userinput = document.getElementById("imagestyleinput").value;
+		pendingstyle = userinput;
+		console.log("Saved styles: " + pendingstyle);
+		document.getElementById("imagestylecontainer").classList.add("hidden");
 	}
 
 	var pendinggrammar = "";
@@ -6081,12 +6157,16 @@ Current version: 102
 			}
 		}
 
+		let oaiheaders = {
+			'Authorization': 'Bearer '+desired_oai_key,
+		};
+		if (!desired_oai_ep.toLowerCase().includes("api.mistral.ai")) {
+			oaiheaders["x-api-key"] = desired_oai_key;
+		}
+
 		fetch((desired_oai_ep + oai_models_endpoint), {
 			method: 'GET',
-			headers: {
-				'Authorization': 'Bearer '+desired_oai_key,
-				'x-api-key': desired_oai_key,
-			},
+			headers: oaiheaders,
 			referrerPolicy: 'no-referrer',
 		})
 		.then((response) => response.json())
@@ -7266,6 +7346,8 @@ Current version: 102
 		document.getElementById("tokenstreammode").value = localsettings.tokenstreammode;
 		document.getElementById("img_autogen").checked = localsettings.img_autogen;
 		document.getElementById("save_images").checked = localsettings.save_images;
+		document.getElementById("img_cfgscale").value = localsettings.img_cfgscale;
+		document.getElementById("img_steps").value = localsettings.img_steps;
 		document.getElementById("prompt_for_savename").checked = localsettings.prompt_for_savename;
 		document.getElementById("img_allownsfw").checked = localsettings.img_allownsfw;
 
@@ -7452,6 +7534,9 @@ Current version: 102
 			document.getElementById("btn_genimg").classList.remove("hidden");
 			document.getElementById("btn_genimg2").classList.remove("hidden");
 		}
+
+		localsettings.img_cfgscale = document.getElementById("img_cfgscale").value;
+		localsettings.img_steps = document.getElementById("img_steps").value;
 
 		if((localsettings.gui_type_chat!=0 && localsettings.opmode==3)||(localsettings.gui_type_instruct!=0 && localsettings.opmode==4))
 		{
@@ -7875,6 +7960,7 @@ Current version: 102
 			display_settings();
 			confirm_settings();
 			document.getElementById("keep_memory").checked = false;
+			clear_bg_img();
 		},null);
 
 	}
@@ -8819,12 +8905,22 @@ Current version: 102
 					'Content-Type': 'application/json',
 					'Authorization': 'Bearer ' + custom_oai_key
 				};
+				// if(targetep.toLowerCase().includes("api.mistral.ai"))
+				// {
+				// 	//use cors proxy for mistral ai
+				// 	targetep = cors_proxy + "?" + targetep;
+				// }
+				if(!targetep.toLowerCase().includes("openrouter.ai") &&
+				!targetep.toLowerCase().includes("api.mistral.ai"))
+				{
+					oaiheaders["x-api-key"] = custom_oai_key;
+				}
+
 				if(targetep.toLowerCase().includes("openrouter.ai"))
 				{
 					oaiheaders["HTTP-Referer"] = "https://lite.koboldai.net";
-				}else{
-					oaiheaders["x-api-key"] = custom_oai_key;
 				}
+
 				fetch(targetep, {
 					method: 'POST',
 					headers: oaiheaders,
@@ -9229,11 +9325,11 @@ Current version: 102
 		let genimg_payload = {
 			"prompt": (sentence + " ### ugly, deformed, poorly, censor, blurry, lowres, malformed, watermark, duplicated, grainy, distorted, signature"),
 			"params": {
-				"cfg_scale": 7,
+				"cfg_scale": localsettings.img_cfgscale,
 				"sampler_name": "k_euler_a",
 				"height": 512,
 				"width": 512,
-				"steps": 20,
+				"steps": localsettings.img_steps,
 				"karras": false,
 				"n": 1,
 				"seed": "",
@@ -9678,10 +9774,10 @@ Current version: 102
 		}
 	}
 
-	function compressImage(inputDataUri, onDone, isJpeg=true) {
+	function compressImage(inputDataUri, onDone, isJpeg=true, fixedSize=true, maxSize=256, quality = 0.33) {
 		let img = document.createElement('img');
-		let wantedWidth = 256;
-		let wantedHeight = 256;
+		let wantedWidth = maxSize;
+		let wantedHeight = maxSize;
 
 		// When the event "onload" is triggered we can resize the image.
 		img.onload = function () {
@@ -9693,7 +9789,29 @@ Current version: 102
 			var origH = img.height;
 			var aspectratio = origW/origH;
 
-			// We set the dimensions at the wanted size.
+			// We set the dimensions at the wanted size for fixedsize.
+			if(!fixedSize)
+			{
+				//otherwise, we preserve the original ratio but scale them down to fit
+				let newwidth = maxSize;
+				let newheight = maxSize;
+				let scalef = 1;
+				if(origW>=origH)
+				{
+					newwidth = origW>maxSize?maxSize:origW;
+					scalef = newwidth/origW;
+					newheight = origH*scalef;
+				}
+				else
+				{
+					newheight = origH>maxSize?maxSize:origH;
+					scalef = newheight/origH;
+					newwidth = origW*scalef;
+				}
+				wantedWidth = newwidth;
+				wantedHeight = newheight;
+			}
+
 			canvas.width = wantedWidth;
 			canvas.height = wantedHeight;
 
@@ -9703,7 +9821,7 @@ Current version: 102
 			var dataURI = "";
 			if(isJpeg)
 			{
-				dataURI = canvas.toDataURL(`image/jpeg`, 0.33);
+				dataURI = canvas.toDataURL(`image/jpeg`, quality);
 			}
 			else
 			{
@@ -11183,7 +11301,7 @@ Current version: 102
 			this.rounded_bubbles = true;
 
 			this.you_portrait = null;
-			this.AI_portrait = niko_square;
+			this.AI_portrait = "default";
 
 			this.font_size = 12;
 			this.use_markdown = true;
@@ -11310,7 +11428,7 @@ Current version: 102
 
 		document.getElementById("reset-portrait").addEventListener('click', (e) => {
 			aestheticInstructUISettings.you_portrait = null;
-			aestheticInstructUISettings.AI_portrait = niko_square;
+			aestheticInstructUISettings.AI_portrait = "default";
 			document.getElementById('portrait_ratio_AI').value = 1.0;
 			document.getElementById('portrait_width_AI').value = 100;
 			document.getElementById('portrait_ratio_you').value = 1.0;
@@ -11506,7 +11624,7 @@ Current version: 102
 		let portraitsStyling = // Also, implement portraits as css classes. Now chat entries can reuse them instead of recreating them.
 		`<style>
 			.you-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.you_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
-			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ as.AI_portrait +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
+			.AI-portrait-image`+classSuffixStr+` {margin: 10px 6px; background:url(`+ (as.AI_portrait!="default"?as.AI_portrait:niko_square) +`); background-clip: content-box; background-position: 50% 50%; background-size: 100% 100%; background-origin: content-box; background-repeat: no-repeat; border:none;}
 		</style>
 		`;
 
@@ -11662,7 +11780,6 @@ Current version: 102
 									<input type="file" id="loadfileinput" accept="text/json,application/json,image/png,image/webp,.kaistory,.webp,.png,.json,.txt,*.*,*" onchange="load_file(event)" style="display:none;">
 									<a class="nav-link" href="#" onclick="display_saveloadcontainer()">Save / Load</a>
 								</li>
-
 								<li class="nav-item hidden" id="topbtn_settings">
 									<a class="nav-link" href="#" id="btn_settings"
 										onclick="display_settings()">Settings</a>
@@ -11685,7 +11802,7 @@ Current version: 102
 		</div>
 		<div id="normalinterface">
 		<div id="maineditbody" class="layer-container">
-			<div class="layer-bottom" id="gamescreen">
+			<div class="layer-bottom gamescreenbgnormal" id="gamescreen">
 				<span id="gametext" contenteditable="false" onclick="click_gametext()" onblur="merge_edit_field()">
 					<p id="tempgtloadtxt">Loading...</p>
 					<noscript><style>#tempgtloadtxt { display: none; } #gametext { white-space: normal!important; }</style><p>Sorry, Kobold Lite requires Javascript to function.</p></noscript>
@@ -12487,7 +12604,7 @@ Current version: 102
 								   <input type="checkbox" id="save_images" style="margin:0px 0 0;">
 								</div>
 								</td>
-								<td class="settingsmall"><a class="color_blueurl" href="#" onclick="selectStyle()">Style<br>🎨</a></td>
+								<td class="settingsmall"><a class="color_blueurl" href="#" onclick="selectImgStyle()">Style<br>🎨</a></td>
 								</tr>
 								</table>
 							</div>
@@ -12605,6 +12722,12 @@ Current version: 102
 							<div class="justifyleft settingsmall">Inverted Colors <span class="helpicon">?<span
 								class="helptext">Inverts all colors, simple light mode</span></span></div>
 						   <input type="checkbox" id="invert_colors" style="margin:0px 0px 0px auto;">
+						</div>
+						<div class="settinglabel">
+							<input type="file" id="loadbgimg" accept="image/png,image/webp,.webp,.jpg,.jpeg,.png,*.*,*" onchange="load_bg_img(event)" style="display:none;">
+							<div class="justifyleft settingsmall">Background Img</div>
+							<button type="button" class="btn btn-primary bg_green" style="padding:2px 2px;margin:1px;font-size:10px;" onclick="load_bgimg_button()">Set</button>
+							<button type="button" class="btn btn-primary bg_red" style="padding:2px 2px;margin:1px;font-size:10px;" onclick="clear_bg_img()">Clear</button>
 						</div>
 					</div>
 
@@ -12808,6 +12931,30 @@ Current version: 102
 			<div class="popupfooter">
 				<button type="button" class="bg_red btn btn-primary" style="width: 124px;" onclick="delete_curr_image();hide_popups();">Delete Image</button>
 				<button type="button" class="btn btn-primary" onclick="hide_popups()">Close</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="popupcontainer flex hidden" id="imagestylecontainer">
+		<div class="popupbg flex"></div>
+		<div class="nspopup fixsize">
+			<div class="popuptitlebar">
+				<div class="popuptitletext">Image Generation Settings</div>
+			</div>
+			<div class="aidgpopuplistheader anotelabel">Style tags to use for generating images:<br>(E.g. Sketch, Realistic, Anime, 3D Render, Drawing)<br><br></div>
+			<input class="form-control" type="text" placeholder="Default Style" value="" id="imagestyleinput">
+
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Number of Steps: </div>
+				<input type="text" inputmode="decimal" id="img_steps" style="width:60px">
+			</div>
+			<div class="inlinelabel">
+				<div class="justifyleft" style="padding:4px">Cfg. Scale: </div>
+				<input type="text" inputmode="decimal" id="img_cfgscale" style="width:60px">
+			</div>
+
+			<div class="popupfooter">
+				<button type="button" class="btn btn-primary" onclick="confirmImgStyle()">Ok</button>
 			</div>
 		</div>
 	</div>
