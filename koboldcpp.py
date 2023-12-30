@@ -1089,6 +1089,8 @@ def show_new_gui():
     root.geometry(str(windowwidth) + "x" + str(windowheight))
     root.title("KoboldCpp v"+KcppVersion)
     root.resizable(False,False)
+    gtooltip_box = None
+    gtooltip_label = None
 
     tabs = ctk.CTkFrame(root, corner_radius = 0, width=windowwidth, height=windowheight-50)
     tabs.grid(row=0, stick="nsew")
@@ -1376,27 +1378,26 @@ def show_new_gui():
             pass
 
     def show_tooltip(event, tooltip_text=None):
-        if hasattr(show_tooltip, "_tooltip"):
-            tooltip = show_tooltip._tooltip
-            tooltip_label = show_tooltip._tooltiplabel
-            tooltip_label.configure(text=tooltip_text)
+        nonlocal gtooltip_box, gtooltip_label
+        if not gtooltip_box:
+            gtooltip_box = ctk.CTkToplevel(root)
+            gtooltip_box.configure(fg_color="#ffffe0")
+            gtooltip_box.withdraw()
+            gtooltip_box.overrideredirect(True)
+            gtooltip_label = ctk.CTkLabel(gtooltip_box, text=tooltip_text, text_color="#000000", fg_color="#ffffe0")
+            gtooltip_label.pack(expand=True, padx=2, pady=1)
+
         else:
-            tooltip = ctk.CTkToplevel(root)
-            tooltip.configure(fg_color="#ffffe0")
-            tooltip.withdraw()
-            tooltip.overrideredirect(True)
-            tooltip_label = ctk.CTkLabel(tooltip, text=tooltip_text, text_color="#000000", fg_color="#ffffe0")
-            tooltip_label.pack(expand=True, padx=2, pady=1)
-            show_tooltip._tooltip = tooltip
-            show_tooltip._tooltiplabel = tooltip_label
+            gtooltip_label.configure(text=tooltip_text)
+
         x, y = root.winfo_pointerxy()
-        tooltip.wm_geometry(f"+{x + 10}+{y + 10}")
-        tooltip.deiconify()
+        gtooltip_box.wm_geometry(f"+{x + 10}+{y + 10}")
+        gtooltip_box.deiconify()
 
     def hide_tooltip(event):
-        if hasattr(show_tooltip, "_tooltip"):
-            tooltip = show_tooltip._tooltip
-            tooltip.withdraw()
+        nonlocal gtooltip_box
+        if gtooltip_box:
+            gtooltip_box.withdraw()
 
     def setup_backend_tooltip(parent):
         # backend count label with the tooltip function
