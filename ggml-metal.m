@@ -1238,7 +1238,7 @@ void ggml_metal_graph_compute(
                                 // not sure how to avoid this
                                 // TODO: make a simpler cpy_bytes kernel
 
-                                const int nth = MIN(1024, ne00);
+                                const int nth = MIN((int) ctx->pipeline_cpy_f32_f32.maxTotalThreadsPerThreadgroup, ne00);
 
                                 [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f32];
                                 [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
@@ -2239,7 +2239,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:17];
                             [encoder setBytes:&sf   length:sizeof(sf)   atIndex:18];
 
-                            const int nth = MIN(1024, ne0);
+                            const int nth = MIN((int) ctx->pipeline_upscale_f32.maxTotalThreadsPerThreadgroup, ne0);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne1, ne2, ne3) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                         } break;

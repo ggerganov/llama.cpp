@@ -3523,7 +3523,7 @@ void dequantize_q8_0(device const block_q8_0 *xb, short il, thread type4x4 & reg
     device const int8_t * qs = ((device const int8_t *)xb->qs);
     const half d = xb->d;
 
-    for (int i=0;i<16;i++) {
+    for (int i = 0; i < 16; i++) {
         reg[i/4][i%4] = (qs[i + 16*il] * d);
     }
 }
