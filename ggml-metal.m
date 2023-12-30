@@ -291,6 +291,10 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             options = [MTLCompileOptions new];
             options.preprocessorMacros = @{ @"QK_K" : @(64) };
 #endif
+            // disable fast math
+            // NOTE: this seems to have no effect whatsoever
+            //[options setFastMathEnabled:false];
+
             ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
         }
 

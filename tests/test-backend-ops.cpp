@@ -437,11 +437,12 @@ struct test_case {
             double err = nmse(f1.data(), f2.data(), f1.size());
             if (err > ud->max_err) {
                 printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
-                //for (int i = 0; i < f1.size(); i++) {
-                //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
-                //}
-                //printf("\n");
-                //exit(1);
+                printf("\n");
+                for (int i = 0; i < f1.size(); i++) {
+                    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
+                }
+                printf("\n");
+                exit(1);
                 ud->ok = false;
             }
             return true;
@@ -1459,8 +1460,14 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     test_cases.emplace_back(new test_dup());
 
-    for (ggml_type type : all_types) {
-       test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 10, 10, 1}));
+    //for (ggml_type type : all_types) {
+    //   test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {256, 10, 10, 1}));
+    //}
+
+    for (ggml_type type : { GGML_TYPE_Q4_1} ) {
+        for (int i = 0; i < 2048; ++i) {
+            test_cases.emplace_back(new test_cpy(GGML_TYPE_F32, type, {32, 1, 1, 1}));
+        }
     }
 
     test_cases.emplace_back(new test_cont());

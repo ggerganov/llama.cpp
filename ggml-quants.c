@@ -1103,12 +1103,17 @@ void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int 
     }
 }
 
+#include <stdio.h>
+
 void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict y, int k) {
     static const int qk = QK4_1;
 
     assert(k % qk == 0);
 
     const int nb = k / qk;
+
+    printf("d = %9f\n", GGML_FP16_TO_FP32(x[0].d));
+    printf("m = %9f\n", GGML_FP16_TO_FP32(x[0].m));
 
     for (int i = 0; i < nb; i++) {
         const float d = GGML_FP16_TO_FP32(x[i].d);
