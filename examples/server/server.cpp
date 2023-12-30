@@ -2378,7 +2378,7 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
                 break;
             }
             llama.formatter_params = json::parse(file);
-            fprintf(stdout, "Loaded chat format '%s'\n", llama.formatter_params.dump().c_str());
+            fprintf(stdout, "Loaded chat template '%s'\n", llama.formatter_params.dump().c_str());
         }
         else if(arg == "--mmproj")
         {
@@ -2954,22 +2954,18 @@ int main(int argc, char **argv)
                 {
                     formatter.conversion = [&formatter_json](std::vector<json> messages){return format_chat(messages, formatter_json);};
                     // need json parsing the keys
-                    // fprintf(stdout, "\n attempt to get json keys");
                     auto items = formatter_json.items();
                     formatter.stop_keys = std::vector<std::string>(2);
                     for(auto it = items.begin(); it != items.end(); ++it){
                         if((*it).key() == "delimiter"){
                             continue;
-                            // fprintf(stdout, "\n skipped delimiter");
                         }
                         // We try to get stop token and store non-duplicate ones
                         auto stop_token = (*it).value().value("suffix", "");
                         if(stop_token != "")
                         {
-                            // fprintf(stdout, "\n try add stop token %s", stop_token.c_str());
                             if(std::find(formatter.stop_keys.begin(), formatter.stop_keys.end(), stop_token) == formatter.stop_keys.end())
                             {
-                                // fprintf(stdout, "\n add stop token %s", stop_token.c_str());
                                 formatter.stop_keys.push_back(stop_token);
                             }
                         }
@@ -2980,11 +2976,9 @@ int main(int argc, char **argv)
                         formatter.stop_keys[0], 
                         [](const std::string a, const std::string b){ return a + ", " + b; }
                     );
-                    fprintf(stdout, "\n Stop Keys: %s", r.c_str());
                 }
                 
                 json data = oaicompat_completion_params_parse(json::parse(req.body), formatter);
-                // json data = oaicompat_completion_params_parse(json::parse(req.body));
 
                 const int task_id = llama.request_completion(data, false, false, -1);
 
