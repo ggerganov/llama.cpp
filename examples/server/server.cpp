@@ -863,6 +863,7 @@ struct llama_server_context
                         LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
                         return false;
                     }
+                    LOG_TEE("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
                 }
