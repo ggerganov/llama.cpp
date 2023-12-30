@@ -1510,17 +1510,15 @@ def show_new_gui():
     quick_lowvram_box = makecheckbox(quick_tab,  "Low VRAM", lowvram_var, 4,0,tooltiptxt="Low VRAM mode avoids offloading the KV cache to the GPU.")
     quick_mmq_box = makecheckbox(quick_tab,  "Use QuantMatMul (mmq)", mmq_var, 4,1,tooltiptxt="Enable MMQ mode instead of CuBLAS for prompt processing. Read the wiki. Speed may vary.")
 
-    # threads
-    makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50,"How many threads to use.\nRecommended value is your CPU core count, defaults are usually OK.")
+    # # threads
+    # makelabelentry(quick_tab, "Threads:" , threads_var, 8, 50,"How many threads to use.\nRecommended value is your CPU core count, defaults are usually OK.")
 
-    # blas batch size
-    makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5,tooltip="How many tokens to process at once per batch.\nLarger values use more memory.")
+    # # blas batch size
+    # makeslider(quick_tab, "BLAS Batch Size:", blasbatchsize_text, blas_size_var, 0, 7, 12, set=5,tooltip="How many tokens to process at once per batch.\nLarger values use more memory.")
 
     # quick boxes
-    quick_boxes = {"Launch Browser": launchbrowser , "High Priority" : highpriority, "Use SmartContext":smartcontext, "Disable MMAP":disablemmap,"Use ContextShift":contextshift,"Remote Tunnel":remotetunnel}
+    quick_boxes = {"Launch Browser": launchbrowser , "Disable MMAP":disablemmap,"Use ContextShift":contextshift,"Remote Tunnel":remotetunnel}
     quick_boxes_desc = {"Launch Browser": "Launches your default browser after model loading is complete",
-    "High Priority": "Increases the koboldcpp process priority.\nMay cause lag or slowdown instead. Not recommended.",
-    "Use SmartContext": "Uses SmartContext. Now considered outdated and not recommended.\nCheck the wiki for more info.",
     "Disable MMAP":"Avoids using mmap to load models if enabled",
     "Use ContextShift":"Uses Context Shifting to reduce reprocessing.\nRecommended. Check the wiki for more info.",
     "Remote Tunnel":"Creates a trycloudflare tunnel.\nAllows you to access koboldcpp from other devices over an internet URL."}
