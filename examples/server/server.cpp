@@ -82,7 +82,7 @@ static inline bool is_base64(uint8_t c)
     return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
-static std::vector<uint8_t> base64_decode(std::string const &encoded_string)
+static std::vector<uint8_t> base64_decode(const std::string & encoded_string)
 {
     int i = 0;
     int j = 0;
@@ -209,10 +209,10 @@ struct slot_image
     int32_t id;
 
     bool request_encode_image = false;
-    float* image_embedding = nullptr;
+    float * image_embedding = nullptr;
     int32_t image_tokens = 0;
 
-    clip_image_u8 img_data;
+    clip_image_u8 * img_data;
 
     std::string prefix_prompt; // before of this image
 };
@@ -434,10 +434,12 @@ struct llama_client_slot
 
         generated_token_probs.clear();
 
-        for (slot_image &img : images)
+        for (slot_image & img : images)
         {
             free(img.image_embedding);
-            delete[] img.img_data.data;
+            if (img.img_data) {
+                clip_image_u8_free(img.img_data);
+            }
             img.prefix_prompt = "";
         }
 
@@ -851,24 +853,17 @@ struct llama_server_context
             {
                 for (const auto &img : *images_data)
                 {
-                    std::string data_b64 = img["data"].get<std::string>();
+                    const std::vector<uint8_t> image_buffer = base64_decode(img["data"].get<std::string>());
+
                     slot_image img_sl;
                     img_sl.id = img.count("id") != 0 ? img["id"].get<int>() : slot->images.size();
-                    int width, height, channels;
-                    std::vector<uint8_t> image_buffer = base64_decode(data_b64);
-                    data_b64.clear();
-                    auto data = stbi_load_from_memory(image_buffer.data(), image_buffer.size(), &width, &height, &channels, 3);
-                    if (!data) {
+                    img_sl.img_data = clip_image_u8_init();
+                    if (!clip_image_load_from_bytes(image_buffer.data(), image_buffer.size(), img_sl.img_data))
+                    {
                         LOG_TEE("slot %i - failed to load image [id: %i]\n", slot->id, img_sl.id);
                         return false;
                     }
-                    LOG_TEE("slot %i - image loaded [id: %i] resolution (%i x %i)\n", slot->id, img_sl.id, width, height);
-                    img_sl.img_data.nx = width;
-                    img_sl.img_data.ny = height;
-                    img_sl.img_data.size = width * height * 3;
-                    img_sl.img_data.data = new uint8_t[width * height * 3]();
-                    memcpy(img_sl.img_data.data, data, width * height * 3);
-                    stbi_image_free(data);
+                    LOG_TEE("slot %i - loaded image\n", slot->id);
                     img_sl.request_encode_image = true;
                     slot->images.push_back(img_sl);
                 }
@@ -1143,8 +1138,8 @@ struct llama_server_context
             {
                 continue;
             }
-            clip_image_f32 img_res;
-            if (!clip_image_preprocess(clp_ctx, &img.img_data, &img_res, /*pad2square =*/ true))
+            clip_image_f32 * img_res = clip_image_f32_init();
+            if (!clip_image_preprocess(clp_ctx, img.img_data, img_res, /*pad2square =*/ true))
             {
                 LOG_TEE("Error processing the given image");
                 clip_free(clp_ctx);
@@ -1159,11 +1154,12 @@ struct llama_server_context
                 return false;
             }
             LOG_TEE("slot %i - encoding image [id: %i]\n", slot.id, img.id);
-            if (!clip_image_encode(clp_ctx, params.n_threads, &img_res, img.image_embedding))
+            if (!clip_image_encode(clp_ctx, params.n_threads, img_res, img.image_embedding))
             {
                 LOG_TEE("Unable to encode image\n");
                 return false;
             }
+            clip_image_f32_free(img_res);
             img.request_encode_image = false;
         }
 
