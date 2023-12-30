@@ -119,9 +119,28 @@
 #define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
 #define CC_VOLTA      700
 #define CC_OFFSET_AMD 1000000
+#define CC_RDNA1      (CC_OFFSET_AMD + 1010)
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
+#define CC_RDNA3      (CC_OFFSET_AMD + 1100)
 
 #define GGML_CUDA_MAX_NODES 8192
+
+// define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
+// on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
+// for large computational tasks. the drawback is that this requires some extra amount of VRAM:
+// -  7B quantum model: +100-200 MB
+// - 13B quantum model: +200-400 MB
+//
+//#define GGML_CUDA_FORCE_MMQ
+
+// TODO: improve this to be correct for more hardware
+//       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
+#if !defined(GGML_CUDA_FORCE_MMQ)
+#define CUDA_USE_TENSOR_CORES
+#endif
+
+// max batch size to use MMQ kernels when tensor cores are available
+#define MMQ_MAX_BATCH_SIZE 32
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
@@ -188,23 +207,6 @@ static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
     return c;
 }
 #endif // defined(GGML_USE_HIPBLAS)
-
-// define this if you want to always fallback to MMQ kernels and not use cuBLAS for matrix multiplication
-// on modern hardware, using cuBLAS is recommended as it utilizes F16 tensor cores which are very performant
-// for large computational tasks. the drawback is that this requires some extra amount of VRAM:
-// -  7B quantum model: +100-200 MB
-// - 13B quantum model: +200-400 MB
-//
-//#define GGML_CUDA_FORCE_MMQ
-
-// TODO: improve this to be correct for more hardware
-//       for example, currently fails for GeForce GTX 1660 which is TURING arch (> VOLTA) but does not have tensor cores
-#if !defined(GGML_CUDA_FORCE_MMQ) && (!defined(GGML_USE_HIPBLAS) || defined(RDNA3))
-#define CUDA_USE_TENSOR_CORES
-#endif
-
-// max batch size to use MMQ kernels when tensor cores are available
-#define MMQ_MAX_BATCH_SIZE 32
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -8661,13 +8663,12 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     }
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-    const bool fp16_performance_good = true;
 
-#ifdef RDNA3
-    const bool use_mul_mat_q = false;
-#else
-    const bool use_mul_mat_q = true;
-#endif // RDNA3
+    const bool fp16_performance_good = min_compute_capability >= CC_RDNA1;
+    bool               use_mul_mat_q = ggml_is_quantized(src0->type);
+#ifdef CUDA_USE_TENSOR_CORES
+    use_mul_mat_q = use_mul_mat_q && min_compute_capability < CC_RDNA3;
+#endif // CUDA_USE_TENSOR_CORES
 
 #else
 
