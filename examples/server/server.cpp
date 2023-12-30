@@ -2521,7 +2521,9 @@ json oaicompat_completion_params_parse(
     }
 
     // Ensure there is ChatML-specific end sequence among stop words
-    llama_params["stop"].push_back("<|im_end|>");
+    for(auto& stop : formatter.stop_keys){
+        llama_params["stop"].push_back(stop);
+    }
 
     return llama_params;
 }
