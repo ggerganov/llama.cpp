@@ -1187,6 +1187,7 @@ def main(args_in: list[str] | None = None) -> None:
         # We currently only support Q8_0 output on little endian systems.
         output_choices.append("q8_0")
     parser = argparse.ArgumentParser(description="Convert a LLaMa model to a GGML compatible file")
+    parser.add_argument("--awq-path",    type=Path,              help="Path to scale awq cache file", default=None)
     parser.add_argument("--dump",        action="store_true",    help="don't convert, just show what's in the model")
     parser.add_argument("--dump-single", action="store_true",    help="don't convert, just show what's in a single model file")
     parser.add_argument("--vocab-only",  action="store_true",    help="extract only the vocab")
@@ -1200,6 +1201,19 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--padvocab", action="store_true", help="add pad tokens when model vocab expects more than tokenizer metadata provides")
 
     args = parser.parse_args(args_in)
+    if args.awq_path:
+        sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
+        from awq.apply_awq import add_scale_weights
+        tmp_model_path = args.model / "weighted_model"
+        if tmp_model_path.is_dir():
+            print(f"{tmp_model_path} exists as a weighted model.")
+        else:
+            tmp_model_path.mkdir(parents=True, exist_ok=True)
+            print("Saving new weighted model ...")
+            add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
+            print(f"Saved weighted model at {tmp_model_path}.")
+        args.model = tmp_model_path
+
     if args.dump_single:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)

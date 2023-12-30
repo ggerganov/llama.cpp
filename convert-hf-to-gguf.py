@@ -46,7 +46,7 @@ class Model:
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
         self.model_arch = self._get_model_architecture()
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess)
+        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=False)
 
     def set_vocab(self):
         self._set_vocab_gpt2()
@@ -59,7 +59,7 @@ class Model:
                 from safetensors import safe_open
                 ctx = cast(ContextManager[Any], safe_open(self.dir_model / part_name, framework="pt", device="cpu"))
             else:
-                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", mmap=True, weights_only=True))
+                ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", weights_only=True))
 
             with ctx as model_part:
                 for name in model_part.keys():
@@ -182,6 +182,8 @@ class Model:
             return QwenModel
         if model_architecture == "MixtralForCausalLM":
             return MixtralModel
+        if model_architecture == "GPT2LMHeadModel":
+            return GPT2Model
         if model_architecture == "PhiForCausalLM":
             return Phi2Model
         if model_architecture == "PlamoForCausalLM":
@@ -225,6 +227,8 @@ class Model:
             return gguf.MODEL_ARCH.QWEN
         if arch == "MixtralForCausalLM":
             return gguf.MODEL_ARCH.LLAMA
+        if arch == "GPT2LMHeadModel":
+            return gguf.MODEL_ARCH.GPT2
         if arch == "PhiForCausalLM":
             return gguf.MODEL_ARCH.PHI2
         if arch == "PlamoForCausalLM":
@@ -238,7 +242,7 @@ class Model:
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
-        from transformers import AutoTokenizer  # type: ignore[attr-defined]
+        from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model)
         vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
         assert max(tokenizer.vocab.values()) < vocab_size
@@ -464,7 +468,11 @@ class MPTModel(Model):
             data = data_torch.squeeze().numpy()
 
             # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if "scales" in name:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias", ".scales"))
+                new_name = new_name.replace("scales", "act.scales")
+            else:
+                new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
                 print(f"Can not map tensor {name!r}")
                 sys.exit()
@@ -848,7 +856,7 @@ class StableLMModel(Model):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -894,7 +902,7 @@ class QwenModel(Model):
         tokens: list[bytearray] = []
         toktypes: list[int] = []
 
-        from transformers import AutoTokenizer  # type: ignore[attr-defined]
+        from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
         vocab_size = hparams["vocab_size"]
         assert max(tokenizer.get_vocab().values()) < vocab_size
@@ -987,6 +995,68 @@ class QwenModel(Model):
 
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+
+
+class GPT2Model(Model):
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_ctx"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(4 * self.hparams["n_embd"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq", ".attn.bias")):
+                continue
+
+            if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
+                data_torch = data_torch.transpose(1, 0)
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+            # note: GPT2 output is tied to (same as) wte in original model
+            if new_name == "token_embd.weight":
+                print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+                self.gguf_writer.add_tensor("output.weight", data)
 
 
 class Phi2Model(Model):
@@ -1096,6 +1166,9 @@ def parse_args() -> argparse.Namespace:
         help="extract only the vocab",
     )
     parser.add_argument(
+        "--awq-path", type=Path, default=None,
+        help="Path to scale awq cache file")
+    parser.add_argument(
         "--outfile", type=Path,
         help="path to write to; default: based on input",
     )
@@ -1112,43 +1185,62 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-args = parse_args()
+def main() -> None:
+    args = parse_args()
 
-dir_model = args.model
-if not dir_model.is_dir():
-    print(f'Error: {args.model} is not a directory', file=sys.stderr)
-    sys.exit(1)
+    dir_model = args.model
 
-ftype_map = {
-    "f32": gguf.GGMLQuantizationType.F32,
-    "f16": gguf.GGMLQuantizationType.F16,
-}
+    if args.awq_path:
+        sys.path.insert(1, str(Path(__file__).parent / 'awq-py'))
+        from awq.apply_awq import add_scale_weights
+        tmp_model_path = args.model / "weighted_model"
+        dir_model = tmp_model_path
+        if tmp_model_path.is_dir():
+            print(f"{tmp_model_path} exists as a weighted model.")
+        else:
+            tmp_model_path.mkdir(parents=True, exist_ok=True)
+            print("Saving new weighted model ...")
+            add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
+            print(f"Saved weighted model at {tmp_model_path}.")
 
-if args.outfile is not None:
-    fname_out = args.outfile
-else:
-    # output in the same directory as the model by default
-    fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
+    if not dir_model.is_dir():
+        print(f'Error: {args.model} is not a directory', file=sys.stderr)
+        sys.exit(1)
 
-print(f"Loading model: {dir_model.name}")
+    ftype_map = {
+        "f32": gguf.GGMLQuantizationType.F32,
+        "f16": gguf.GGMLQuantizationType.F16,
+    }
 
-hparams = Model.load_hparams(dir_model)
-
-with torch.inference_mode():
-    model_class = Model.from_model_architecture(hparams["architectures"][0])
-    model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
-
-    print("Set model parameters")
-    model_instance.set_gguf_parameters()
-
-    print("Set model tokenizer")
-    model_instance.set_vocab()
-
-    if args.vocab_only:
-        print(f"Exporting model vocab to '{fname_out}'")
-        model_instance.write_vocab()
+    if args.outfile is not None:
+        fname_out = args.outfile
     else:
-        print(f"Exporting model to '{fname_out}'")
-        model_instance.write()
+        # output in the same directory as the model by default
+        fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
 
-    print(f"Model successfully exported to '{fname_out}'")
+    print(f"Loading model: {dir_model.name}")
+
+    hparams = Model.load_hparams(dir_model)
+
+    with torch.inference_mode():
+        model_class = Model.from_model_architecture(hparams["architectures"][0])
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian)
+
+        print("Set model parameters")
+        model_instance.set_gguf_parameters()
+
+        print("Set model tokenizer")
+        model_instance.set_vocab()
+
+        if args.vocab_only:
+            print(f"Exporting model vocab to '{fname_out}'")
+            model_instance.write_vocab()
+        else:
+            print(f"Exporting model to '{fname_out}'")
+            model_instance.write()
+
+        print(f"Model successfully exported to '{fname_out}'")
+
+
+if __name__ == '__main__':
+    main()
