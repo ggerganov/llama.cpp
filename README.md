@@ -31,7 +31,8 @@ For more information, be sure to run the program with the `--help` flag, or [che
 - Note that KoboldCpp is not responsible for your usage of this Colab Notebook, you should ensure that your own usage complies with Google Colab's terms of use.
 
 ## OSX and Linux
-- You will have to compile your binaries from source. A makefile is provided, simply run `make`.
+- For Linux users with a modern system with AVX2 support, you can try the `koboldcpp-linux-x64` PyInstaller prebuilt binary on the **[releases](https://github.com/LostRuins/koboldcpp/releases/latest)** page first.
+- Otherwise, you will have to compile your binaries from source. A makefile is provided, simply run `make`.
 - If you want you can also link your own install of OpenBLAS manually with `make LLAMA_OPENBLAS=1`
 - Arch Linux users can install koboldcpp via the AUR package provided by @AlpinDale. Please see [below](#arch-linux) for more details.
 - Alternatively, if you want you can also link your own install of CLBlast manually with `make LLAMA_CLBLAST=1`, for this you will need to obtain and link OpenCL and CLBlast libraries.
