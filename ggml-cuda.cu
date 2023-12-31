@@ -8216,7 +8216,7 @@ static void ggml_cuda_op_mul_mat(
             cudaStream_t stream = g_cudaStreams[id][is];
 
             // wait for main GPU data if necessary
-            if (split && (id != g_main_device || is != 0)) { // TODO is this correct?
+            if (split && (id != g_main_device || is != is0)) { // TODO is this correct?
                 CUDA_CHECK(cudaStreamWaitEvent(stream, src0_extra->events[g_main_device][is0], 0));
             }
 
@@ -8322,7 +8322,7 @@ static void ggml_cuda_op_mul_mat(
                 }
 
                 // add event for the main device to wait on until other device is done
-                if (split && (id != g_main_device || is != 0)) { // TODO is this correct?
+                if (split && (id != g_main_device || is != is0)) { // TODO is this correct?
                     CUDA_CHECK(cudaEventRecord(src0_extra->events[id][is], stream));
                 }
             }
