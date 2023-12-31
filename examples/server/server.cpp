@@ -1265,7 +1265,7 @@ struct llama_server_context
         {
             std::vector<completion_token_output> probs_output = {};
             const std::vector<llama_token> to_send_toks = llama_tokenize(ctx, tkn.text_to_send, false);
-            size_t probs_pos = std::min(slot.sent_token_probs_index, slot.generated_token_probs.size());
+            size_t probs_pos      = std::min(slot.sent_token_probs_index,                       slot.generated_token_probs.size());
             size_t probs_stop_pos = std::min(slot.sent_token_probs_index + to_send_toks.size(), slot.generated_token_probs.size());
             if (probs_pos < probs_stop_pos)
             {
@@ -1325,7 +1325,7 @@ struct llama_server_context
             {
                 probs = std::vector<completion_token_output>(
                                     slot.generated_token_probs.begin(),
-                                    slot.generated_token_probs.begin() + slot.sent_token_probs_index);
+                                    slot.generated_token_probs.end());
             }
             res.result_json["completion_probabilities"] = probs_vector_to_json(ctx, probs);
         }
