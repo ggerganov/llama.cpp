@@ -1543,7 +1543,8 @@ kernel void kernel_alibi_f32(
     const int64_t i3 = n / (ne2*ne1*ne0);
     const int64_t i2 = (n - i3*ne2*ne1*ne0) / (ne1*ne0);
     const int64_t i1 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0) / ne0;
-    const int64_t i0 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0 - i1*ne0);
+  //const int64_t i0 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0 - i1*ne0);
+
     const int64_t k = i3*ne3 + i2;
 
     float m_k;
@@ -2409,22 +2410,6 @@ typedef struct {
     half d;                  // super-block scale
 } block_q6_K;
 // 210 bytes / block
-
-static inline uchar4 get_scale_min_k4(int j, device const uint8_t * q) {
-    uchar4 r;
-    if (j < 4) {
-        r[0] = q[j+0] & 63;
-        r[2] = q[j+1] & 63;
-        r[1] = q[j+4] & 63;
-        r[3] = q[j+5] & 63;
-    } else {
-        r[0] = (q[j+4] & 0xF) | ((q[j-4] >> 6) << 4);
-        r[2] = (q[j+5] & 0xF) | ((q[j-3] >> 6) << 4);
-        r[1] = (q[j+4] >>  4) | ((q[j-0] >> 6) << 4);
-        r[3] = (q[j+5] >>  4) | ((q[j+1] >> 6) << 4);
-    }
-    return r;
-}
 
 //====================================== dot products =========================
 
