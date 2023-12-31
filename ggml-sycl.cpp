@@ -1,7 +1,3 @@
-#define DPCT_PROFILING_ENABLED
-#define DPCT_COMPAT_RT_VERSION 12010
-#include <sycl/sycl.hpp>
-#include <dpct/dpct.hpp>
 #include <algorithm>
 #include <assert.h>
 #include <atomic>
@@ -13,113 +9,21 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <vector>
+#include <cmath>
+
+
+#include <sycl/sycl.hpp>
+#include <sycl/half_type.hpp>
+#include <dpct/dpct.hpp>
 #include <dpct/blas_utils.hpp>
-
-#if defined(GGML_USE_HIPBLAS)
-#include <hip/hip_runtime.h>
-#include <hipblas/hipblas.h>
-#include <hip/hip_fp16.h>
-#ifdef __HIP_PLATFORM_AMD__
-// for rocblas_initialize()
-#include "rocblas/rocblas.h"
-#endif // __HIP_PLATFORM_AMD__
-#define CUBLAS_COMPUTE_16F HIPBLAS_R_16F
-#define CUBLAS_COMPUTE_32F HIPBLAS_R_32F
-#define CUBLAS_COMPUTE_32F_FAST_16F HIPBLAS_R_32F
-#define CUBLAS_GEMM_DEFAULT HIPBLAS_GEMM_DEFAULT
-#define CUBLAS_GEMM_DEFAULT_TENSOR_OP HIPBLAS_GEMM_DEFAULT
-#define CUBLAS_OP_N HIPBLAS_OP_N
-#define CUBLAS_OP_T HIPBLAS_OP_T
-#define CUBLAS_STATUS_SUCCESS HIPBLAS_STATUS_SUCCESS
-#define CUBLAS_TF32_TENSOR_OP_MATH 0
-#define CUDA_R_16F  HIPBLAS_R_16F
-#define CUDA_R_32F  HIPBLAS_R_32F
-#define __shfl_xor_sync(mask, var, laneMask, width) __shfl_xor(var, laneMask, width)
-#define cublasComputeType_t hipblasDatatype_t //deprecated, new hipblasComputeType_t not in 5.6
-#define cublasCreate hipblasCreate
-#define cublasGemmEx hipblasGemmEx
-#define cublasGemmBatchedEx hipblasGemmBatchedEx
-#define cublasGemmStridedBatchedEx hipblasGemmStridedBatchedEx
-#define cublasHandle_t hipblasHandle_t
-#define cublasSetMathMode(handle, mode) CUBLAS_STATUS_SUCCESS
-#define cublasSetStream hipblasSetStream
-#define cublasSgemm hipblasSgemm
-#define cublasStatus_t hipblasStatus_t
-#define cudaDataType_t hipblasDatatype_t //deprecated, new hipblasDatatype not in 5.6
-#define cudaDeviceCanAccessPeer hipDeviceCanAccessPeer
-#define cudaDeviceDisablePeerAccess hipDeviceDisablePeerAccess
-#define cudaDeviceEnablePeerAccess hipDeviceEnablePeerAccess
-#define cudaDeviceProp hipDeviceProp_t
-#define cudaDeviceSynchronize hipDeviceSynchronize
-#define cudaError_t hipError_t
-#define cudaEventCreateWithFlags hipEventCreateWithFlags
-#define cudaEventDisableTiming hipEventDisableTiming
-#define cudaEventRecord hipEventRecord
-#define cudaEvent_t hipEvent_t
-#define cudaEventDestroy hipEventDestroy
-#define cudaFree hipFree
-#define cudaFreeHost hipHostFree
-#define cudaGetDevice hipGetDevice
-#define cudaGetDeviceCount hipGetDeviceCount
-#define cudaGetDeviceProperties hipGetDeviceProperties
-#define cudaGetErrorString hipGetErrorString
-#define cudaGetLastError hipGetLastError
-#ifdef GGML_HIP_UMA
-#define cudaMalloc hipMallocManaged
-#define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size)
-#else
-#define cudaMalloc hipMalloc
-#define cudaMallocHost(ptr, size) hipHostMalloc(ptr, size, hipHostMallocDefault)
-#endif
-#define cudaMemcpy hipMemcpy
-#define cudaMemcpy2DAsync hipMemcpy2DAsync
-#define cudaMemcpyAsync hipMemcpyAsync
-#define cudaMemcpyDeviceToDevice hipMemcpyDeviceToDevice
-#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
-#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
-#define cudaMemcpyKind hipMemcpyKind
-#define cudaMemset hipMemset
-#define cudaMemsetAsync hipMemsetAsync
-#define cudaOccupancyMaxPotentialBlockSize hipOccupancyMaxPotentialBlockSize
-#define cudaSetDevice hipSetDevice
-#define cudaStreamCreateWithFlags hipStreamCreateWithFlags
-#define cudaStreamFireAndForget hipStreamFireAndForget
-#define cudaStreamNonBlocking hipStreamNonBlocking
-#define cudaStreamSynchronize hipStreamSynchronize
-#define cudaStreamWaitEvent(stream, event, flags) hipStreamWaitEvent(stream, event, flags)
-#define cudaStream_t hipStream_t
-#define cudaSuccess hipSuccess
-#define __trap abort
-#define CUBLAS_STATUS_SUCCESS HIPBLAS_STATUS_SUCCESS
-#define CUBLAS_STATUS_NOT_INITIALIZED HIPBLAS_STATUS_NOT_INITIALIZED
-#define CUBLAS_STATUS_ALLOC_FAILED HIPBLAS_STATUS_ALLOC_FAILED
-#define CUBLAS_STATUS_INVALID_VALUE HIPBLAS_STATUS_INVALID_VALUE
-#define CUBLAS_STATUS_ARCH_MISMATCH HIPBLAS_STATUS_ARCH_MISMATCH
-#define CUBLAS_STATUS_MAPPING_ERROR HIPBLAS_STATUS_MAPPING_ERROR
-#define CUBLAS_STATUS_EXECUTION_FAILED HIPBLAS_STATUS_EXECUTION_FAILED
-#define CUBLAS_STATUS_INTERNAL_ERROR HIPBLAS_STATUS_INTERNAL_ERROR
-#define CUBLAS_STATUS_NOT_SUPPORTED HIPBLAS_STATUS_NOT_SUPPORTED
-#else
-
-#if DPCT_COMPAT_RT_VERSION < 11020
-#define CUBLAS_TF32_TENSOR_OP_MATH CUBLAS_TENSOR_OP_MATH
-#define CUBLAS_COMPUTE_16F CUDA_R_16F
-#define CUBLAS_COMPUTE_32F CUDA_R_32F
-#define cublasComputeType_t cudaDataType_t
-#endif // CUDART_VERSION < 11020
-
-#endif // defined(GGML_USE_HIPBLAS)
+#include <dpct/lib_common_utils.hpp>
 
 #include "ggml-cuda.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
-#include <cmath>
-
-#include <dpct/lib_common_utils.hpp>
 
 static int g_ggml_sycl_debug=0;
 
-//#define GGML_SYCL_DEBUG(...) (if(g_ggml_sycl_debug) printf(__VA_ARGS__))
 #define GGML_SYCL_DEBUG(...) do{if(g_ggml_sycl_debug) printf(__VA_ARGS__);}while(0)
 
 #define MIN_CC_DP4A   610 // minimum compute capability for __dp4a, an intrinsic for byte-wise dot products
@@ -147,71 +51,6 @@ static int g_ggml_sycl_debug=0;
 // max batch size to use MMQ kernels when tensor cores are available
 #define MMQ_MAX_BATCH_SIZE 32
 
-#if defined(GGML_USE_HIPBLAS)
-#define __CUDA_ARCH__ 1300
-
-#if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || \
-    defined(__gfx1150__) || defined(__gfx1151__)
-#define RDNA3
-#endif
-
-#if defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || defined(__gfx1033__) || \
-    defined(__gfx1034__) || defined(__gfx1035__) || defined(__gfx1036__) || defined(__gfx1037__)
-#define RDNA2
-#endif
-
-#ifndef __has_builtin
-    #define __has_builtin(x) 0
-#endif
-
-typedef int8_t int8x4_t __attribute__((ext_vector_type(4)));
-static __device__ __forceinline__ int __vsubss4(const int a, const int b) {
-    const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
-    const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
-#if __has_builtin(__builtin_elementwise_sub_sat)
-    const int8x4_t c = __builtin_elementwise_sub_sat(va, vb);
-    return reinterpret_cast<const int&>(c);
-#else
-    int8x4_t c;
-    int16_t tmp;
-#pragma unroll
-    for (int i = 0; i < 4; i++) {
-        tmp = va[i] - vb[i];
-        if(tmp > std::numeric_limits<int8_t>::max()) tmp = std::numeric_limits<int8_t>::max();
-        if(tmp < std::numeric_limits<int8_t>::min()) tmp = std::numeric_limits<int8_t>::min();
-        c[i] = tmp;
-    }
-    return reinterpret_cast<int&>(c);
-#endif // __has_builtin(__builtin_elementwise_sub_sat)
-}
-
-static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
-#if defined(__gfx906__) || defined(__gfx908__) || defined(__gfx90a__) || defined(__gfx1030__)
-    c = __builtin_amdgcn_sdot4(a, b, c, false);
-#elif defined(__gfx1100__)
-    c = __builtin_amdgcn_sudot4( true, a, true, b, c, false);
-#elif defined(__gfx1010__) || defined(__gfx900__)
-    int tmp1;
-    int tmp2;
-    asm("\n \
-        v_mul_i32_i24 %1, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_0 src1_sel:BYTE_0 \n \
-        v_mul_i32_i24 %2, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_1 src1_sel:BYTE_1 \n \
-        v_add3_u32 %0, %1, %2, %0 \n \
-        v_mul_i32_i24 %1, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_2 src1_sel:BYTE_2 \n \
-        v_mul_i32_i24 %2, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_3 src1_sel:BYTE_3 \n \
-        v_add3_u32 %0, %1, %2, %0 \n \
-        "
-        : "+v"(c), "=&v"(tmp1), "=&v"(tmp2)
-        : "v"(a), "v"(b)
-    );
-#else
-    const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
-    const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
-    c += va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2] + va[3] * vb[3];
-#endif
-    return c;
-}
-#endif // defined(GGML_USE_HIPBLAS)
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -257,7 +96,7 @@ You need to rewrite this code.
              ggml_cuda_error(#err, __func__, __FILE__, __LINE__,               \
                              cublas_get_error_str(err_)); } while (0)
 
-#if !defined(GGML_USE_HIPBLAS)
+
 static const char *cu_get_error_str(int err) {
     const char * err_str;
     /*
@@ -276,7 +115,7 @@ DPCT1000:68: Error handling if-stmt was detected but could not be rewritten.
     do { auto err_ = (err);                                                    \
          if (err_ != 0) ggml_cuda_error(#err, __func__, __FILE__, __LINE__,    \
                                         cu_get_error_str(err_)); } while (0)
-#endif
+
 
 #if DPCT_COMPAT_RT_VERSION >= 11100
 #define GGML_CUDA_ASSUME(x) __builtin_assume(x)
@@ -284,13 +123,14 @@ DPCT1000:68: Error handling if-stmt was detected but could not be rewritten.
 #define GGML_CUDA_ASSUME(x)
 #endif // CUDART_VERSION >= 11100
 
-#ifdef GGML_CUDA_F16
-typedef half dfloat; // dequantize float
-typedef half2 dfloat2;
+#ifdef GGML_SYCL_F16
+typedef sycl::half dfloat; // dequantize float
+typedef sycl::half2 dfloat2;
 #else
 typedef float dfloat; // dequantize float
 typedef sycl::float2 dfloat2;
-#endif //GGML_CUDA_F16
+#endif //GGML_SYCL_F16
+
 
 static __dpct_inline__ int get_int_from_int8(const int8_t *x8, const int &i32) {
     const uint16_t * x16 = (const uint16_t *) (x8 + sizeof(int) * i32); // assume at least 2 byte alignment
@@ -1080,13 +920,16 @@ static __dpct_inline__ void dequantize_q4_0(const void *vx, const int ib,
     v.x() = vui & 0xF;
     v.y() = vui >> 4;
 
-#ifdef GGML_CUDA_F16
-    v = __hsub2(v, {8.0f, 8.0f});
-    v = __hmul2(v, {d, d});
+#ifdef GGML_SYCL_F16
+    // v = v - {8.0f, 8.0f};
+    // v = v * {d, d};
+    v.s0() = (v.s0() - 8.0f) * d;
+    v.s1() = (v.s1() - 8.0f) * d;
+
 #else
     v.x() = (v.x() - 8.0f) * d;
     v.y() = (v.y() - 8.0f) * d;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 }
 
 static __dpct_inline__ void dequantize_q4_1(const void *vx, const int ib,
@@ -1101,13 +944,16 @@ static __dpct_inline__ void dequantize_q4_1(const void *vx, const int ib,
     v.x() = vui & 0xF;
     v.y() = vui >> 4;
 
-#ifdef GGML_CUDA_F16
-    v = __hmul2(v, {d, d});
-    v = __hadd2(v, {m, m});
+#ifdef GGML_SYCL_F16
+    // v = v * {d, d};
+    // v = v + {m, m};
+    v.s0() = (v.s0() * d) + m;
+    v.s1() = (v.s1() * d) + m;
+
 #else
     v.x() = (v.x() * d) + m;
     v.y() = (v.y() * d) + m;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 }
 
 static __dpct_inline__ void dequantize_q5_0(const void *vx, const int ib,
@@ -1125,13 +971,16 @@ static __dpct_inline__ void dequantize_q5_0(const void *vx, const int ib,
     v.x() = ((x[ib].qs[iqs] & 0xf) | xh_0);
     v.y() = ((x[ib].qs[iqs] >> 4) | xh_1);
 
-#ifdef GGML_CUDA_F16
-    v = __hsub2(v, {16.0f, 16.0f});
-    v = __hmul2(v, {d, d});
+#ifdef GGML_SYCL_F16
+    // v = v - {16.0f, 16.0f};
+    // v = v * {d, d};
+    v.s0() = (v.s0() - 16.0f) * d;
+    v.s1() = (v.s1() - 16.0f) * d;
+
 #else
     v.x() = (v.x() - 16.0f) * d;
     v.y() = (v.y() - 16.0f) * d;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 }
 
 static __dpct_inline__ void dequantize_q5_1(const void *vx, const int ib,
@@ -1150,13 +999,15 @@ static __dpct_inline__ void dequantize_q5_1(const void *vx, const int ib,
     v.x() = ((x[ib].qs[iqs] & 0xf) | xh_0);
     v.y() = ((x[ib].qs[iqs] >> 4) | xh_1);
 
-#ifdef GGML_CUDA_F16
-    v = __hmul2(v, {d, d});
-    v = __hadd2(v, {m, m});
+#ifdef GGML_SYCL_F16
+    // v = v * {d, d};
+    // v = v + {m, m};
+    v.s0() = (v.s0() * d) + m;
+    v.s1() = (v.s1() * d) + m;
 #else
     v.x() = (v.x() * d) + m;
     v.y() = (v.y() * d) + m;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 }
 
 static __dpct_inline__ void dequantize_q8_0(const void *vx, const int ib,
@@ -1168,12 +1019,14 @@ static __dpct_inline__ void dequantize_q8_0(const void *vx, const int ib,
     v.x() = x[ib].qs[iqs + 0];
     v.y() = x[ib].qs[iqs + 1];
 
-#ifdef GGML_CUDA_F16
-    v = __hmul2(v, {d, d});
+#ifdef GGML_SYCL_F16
+    // v = v * {d, d};
+    v.s0() *= d;
+    v.s1() *= d;
 #else
     v.x() *= d;
     v.y() *= d;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 }
 
 //================================== k-quants
@@ -2227,11 +2080,7 @@ template <int vdr>
 static __dpct_inline__ float vec_dot_q4_0_q8_1_impl(const int *v, const int *u,
                                                     const float &d4,
                                                     const sycl::half2 &ds8) {
-
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
-
 #pragma unroll
     for (int i = 0; i < vdr; ++i) {
         const int vi0 = (v[i] >> 0) & 0x0F0F0F0F;
@@ -2247,9 +2096,6 @@ static __dpct_inline__ float vec_dot_q4_0_q8_1_impl(const int *v, const int *u,
 
     // second part effectively subtracts 8 from each quant value
     return d4 * (sumi * ds8f.x() - (8 * vdr / QI4_0) * ds8f.y());
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q4_1_Q8_1_MMVQ 2
@@ -2260,8 +2106,6 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_impl(const int *v, const int *u,
                                                     const sycl::half2 &dm4,
                                                     const sycl::half2 &ds8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2274,10 +2118,11 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_impl(const int *v, const int *u,
         sumi = dpct::dp4a(vi1, u[2 * i + 1], sumi);
     }
 
-#ifdef GGML_CUDA_F16
-    const float2 tmp = __half22float2(__hmul2(dm4, ds8));
-    const float d4d8 = tmp.x;
-    const float m4s8 = tmp.y;
+#ifdef GGML_SYCL_F16
+    const sycl::float2 tmp =
+        (dm4 * ds8).convert<float, sycl::rounding_mode::automatic>();
+    const float d4d8 = tmp.x();
+    const float m4s8 = tmp.y();
 #else
     const sycl::float2 dm4f =
         dm4.convert<float, sycl::rounding_mode::automatic>();
@@ -2285,13 +2130,10 @@ static __dpct_inline__ float vec_dot_q4_1_q8_1_impl(const int *v, const int *u,
         ds8.convert<float, sycl::rounding_mode::automatic>();
     const float d4d8 = dm4f.x() * ds8f.x();
     const float m4s8 = dm4f.y() * ds8f.y();
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 
     // scale second part of sum by QI8_1/(vdr * QR4_1) to compensate for multiple threads adding it
     return sumi * d4d8 + m4s8 / (QI8_1 / (vdr * QR4_1));
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q5_0_Q8_1_MMVQ 2
@@ -2301,9 +2143,6 @@ template <int vdr>
 static __dpct_inline__ float
 vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
                        const float &d5, const sycl::half2 &ds8) {
-
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2330,9 +2169,6 @@ vec_dot_q5_0_q8_1_impl(const int *vl, const int *vh, const int *u,
 
     // second part effectively subtracts 16 from each quant value
     return d5 * (sumi * ds8f.x() - (16 * vdr / QI5_0) * ds8f.y());
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q5_1_Q8_1_MMVQ 2
@@ -2343,8 +2179,6 @@ static __dpct_inline__ float
 vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
                        const sycl::half2 &dm5, const sycl::half2 &ds8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2366,10 +2200,13 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
                           sumi); // SIMD dot product of quantized values
     }
 
-#ifdef GGML_CUDA_F16
-    const float2 tmp = __half22float2(__hmul2(dm5, ds8));
-    const float d5d8 = tmp.x;
-    const float m5s8 = tmp.y;
+#ifdef GGML_SYCL_F16
+     const sycl::float2 tmp =
+        (dm5 * ds8).convert<float, sycl::rounding_mode::automatic>();
+    const float d5d8 = tmp.x();
+    const float m5s8 = tmp.y();
+
+
 #else
     const sycl::float2 dm5f =
         dm5.convert<float, sycl::rounding_mode::automatic>();
@@ -2377,14 +2214,10 @@ vec_dot_q5_1_q8_1_impl(const int *vl, const int *vh, const int *u,
         ds8.convert<float, sycl::rounding_mode::automatic>();
     const float d5d8 = dm5f.x() * ds8f.x();
     const float m5s8 = dm5f.y() * ds8f.y();
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 
     // scale second part of sum by QI5_1 / vdr to compensate for multiple threads adding it
     return sumi*d5d8 + m5s8 / (QI5_1 / vdr);
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q8_0_Q8_1_MMVQ 2
@@ -2395,8 +2228,6 @@ static __dpct_inline__ float vec_dot_q8_0_q8_1_impl(const int *v, const int *u,
                                                     const float &d8_0,
                                                     const float &d8_1) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2406,9 +2237,6 @@ static __dpct_inline__ float vec_dot_q8_0_q8_1_impl(const int *v, const int *u,
     }
 
     return d8_0*d8_1 * sumi;
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <int vdr>
@@ -2416,8 +2244,6 @@ static __dpct_inline__ float vec_dot_q8_1_q8_1_impl(const int *v, const int *u,
                                                     const sycl::half2 &dm8,
                                                     const sycl::half2 &ds8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2426,10 +2252,11 @@ static __dpct_inline__ float vec_dot_q8_1_q8_1_impl(const int *v, const int *u,
         sumi = dpct::dp4a(v[i], u[i], sumi);
     }
 
-#ifdef GGML_CUDA_F16
-    const float2 tmp = __half22float2(__hmul2(dm8, ds8));
-    const float d8d8 = tmp.x;
-    const float m8s8 = tmp.y;
+#ifdef GGML_SYCL_F16
+    const sycl::float2 tmp =
+        (dm8 * ds8).convert<float, sycl::rounding_mode::automatic>();
+    const float d8d8 = tmp.x();
+    const float m8s8 = tmp.y();
 #else
     const sycl::float2 dm8f =
         dm8.convert<float, sycl::rounding_mode::automatic>();
@@ -2437,13 +2264,10 @@ static __dpct_inline__ float vec_dot_q8_1_q8_1_impl(const int *v, const int *u,
         ds8.convert<float, sycl::rounding_mode::automatic>();
     const float d8d8 = dm8f.x() * ds8f.x();
     const float m8s8 = dm8f.y() * ds8f.y();
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 
     // scale second part of sum by QI8_1/ vdr to compensate for multiple threads adding it
     return sumi*d8d8 + m8s8 / (QI8_1 / vdr);
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q2_K_Q8_1_MMVQ 1
@@ -2454,8 +2278,6 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
     const int &v, const int *__restrict__ u, const uint8_t *__restrict__ scales,
     const sycl::half2 &dm2, const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
 
@@ -2482,9 +2304,6 @@ static __dpct_inline__ float vec_dot_q2_K_q8_1_impl_mmvq(
         dm2.convert<float, sycl::rounding_mode::automatic>();
 
     return dm2f.x() * sumf_d - dm2f.y() * sumf_m;
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
@@ -2493,8 +2312,6 @@ vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const uint8_t *__restrict__ scales,
                            const sycl::half2 &dm2, const float &d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi_d = 0;
     int sumi_m = 0;
 
@@ -2523,9 +2340,6 @@ vec_dot_q2_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
         dm2.convert<float, sycl::rounding_mode::automatic>();
 
     return d8 * (dm2f.x() * sumi_d - dm2f.y() * sumi_m);
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q3_K_Q8_1_MMVQ 1
@@ -2537,8 +2351,6 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
     const uint8_t *__restrict__ scales, const int &scale_offset,
     const float &d3, const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf = 0.0f;
 
 #pragma unroll
@@ -2566,9 +2378,6 @@ static __dpct_inline__ float vec_dot_q3_K_q8_1_impl_mmvq(
     }
 
     return d3 * sumf;
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
@@ -2577,8 +2386,6 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const int8_t *__restrict__ scales, const float &d3,
                            const float &d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     int sumi = 0;
 
 #pragma unroll
@@ -2593,9 +2400,6 @@ vec_dot_q3_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
     }
 
     return d3*d8 * sumi;
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q4_K_Q8_1_MMVQ 2
@@ -2607,8 +2411,6 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
     const sycl::half2 &dm4, const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
 
@@ -2632,10 +2434,6 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_vmmq(
         dm4.convert<float, sycl::rounding_mode::automatic>();
 
     return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
@@ -2644,8 +2442,6 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_mmq(
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
     const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
 
@@ -2670,10 +2466,6 @@ static __dpct_inline__ float vec_dot_q4_K_q8_1_impl_mmq(
         dm4.convert<float, sycl::rounding_mode::automatic>();
 
     return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q5_K_Q8_1_MMVQ 2
@@ -2686,8 +2478,6 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
     const uint8_t *__restrict__ m, const sycl::half2 &dm5,
     const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
 
@@ -2718,10 +2508,6 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_vmmq(
         dm5.convert<float, sycl::rounding_mode::automatic>();
 
     return dm5f.x() * sumf_d - dm5f.y() * sumf_m;
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
@@ -2730,8 +2516,6 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
     const uint8_t *__restrict__ sc, const uint8_t *__restrict__ m,
     const sycl::half2 &dm4, const sycl::half2 *__restrict__ ds8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
     float sumf_m = 0.0f;
 
@@ -2756,10 +2540,6 @@ static __dpct_inline__ float vec_dot_q5_K_q8_1_impl_mmq(
         dm4.convert<float, sycl::rounding_mode::automatic>();
 
     return dm4f.x() * sumf_d - dm4f.y() * sumf_m;
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 #define VDR_Q6_K_Q8_1_MMVQ 1
@@ -2772,8 +2552,6 @@ vec_dot_q6_K_q8_1_impl_mmvq(const int &vl, const int &vh,
                             const int8_t *__restrict__ scales, const float &d,
                             const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf = 0.0f;
 
 #pragma unroll
@@ -2791,9 +2569,6 @@ vec_dot_q6_K_q8_1_impl_mmvq(const int &vl, const int &vh,
     }
 
     return d*sumf;
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 // contiguous u/y values
@@ -2802,8 +2577,6 @@ vec_dot_q6_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
                            const int8_t *__restrict__ sc, const float &d6,
                            const float *__restrict__ d8) {
 
-#if DPCT_COMPATIBILITY_TEMP >=                                                 \
-    MIN_CC_DP4A // lowest compute capability for integer intrinsics
     float sumf_d = 0.0f;
 
 #pragma unroll
@@ -2828,10 +2601,6 @@ vec_dot_q6_K_q8_1_impl_mmq(const int *__restrict__ v, const int *__restrict__ u,
     }
 
     return d6 * sumf_d;
-
-#else
-    bad_arch();
-#endif // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 static __dpct_inline__ float
@@ -4345,11 +4114,6 @@ mul_mat_q(const void *__restrict__ vx, const void *__restrict__ vy,
 #define NWARPS_Q4_0_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q4_0_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
     mul_mat_q4_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4360,24 +4124,8 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q4_0_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q4_0_RDNA2;
-    const int nwarps = NWARPS_Q4_0_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q4_0_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q4_0_RDNA1;
-    const int nwarps = NWARPS_Q4_0_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
+//sycl_todo: change according to hardware
 
-    allocate_tiles_q4_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-
-    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
     const int mmq_x  =  MMQ_X_Q4_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_0_AMPERE;
     const int nwarps = NWARPS_Q4_0_AMPERE;
@@ -4388,20 +4136,6 @@ template <bool need_check> static void
               vec_dot_q4_0_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q4_0_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q4_0_PASCAL;
-    const int nwarps = NWARPS_Q4_0_PASCAL;
-
-    allocate_tiles_q4_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK4_0, QR4_0, QI4_0, true, block_q4_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_0<mmq_y, nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q4_0_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q4_1_RDNA2  64
@@ -4424,13 +4158,6 @@ template <bool need_check> static void
 #define NWARPS_Q4_1_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-    __launch_bounds__(WARP_SIZE*NWARPS_Q4_1_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_1(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4441,23 +4168,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q4_1_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q4_1_RDNA2;
-    const int nwarps = NWARPS_Q4_1_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q4_1_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q4_1_RDNA1;
-    const int nwarps = NWARPS_Q4_1_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-
-    allocate_tiles_q4_1<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q4_1_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_1_AMPERE;
     const int nwarps = NWARPS_Q4_1_AMPERE;
@@ -4468,19 +4179,6 @@ template <bool need_check> static void
               vec_dot_q4_1_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q4_1_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q4_1_PASCAL;
-    const int nwarps = NWARPS_Q4_1_PASCAL;
-    allocate_tiles_q4_1<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK4_1, QR4_1, QI4_1, true, block_q4_1, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_1<mmq_y, nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q4_1_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_0_RDNA2  64
@@ -4503,11 +4201,6 @@ template <bool need_check> static void
 #define NWARPS_Q5_0_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q5_0_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
     mul_mat_q5_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4518,22 +4211,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q5_0_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q5_0_RDNA2;
-    const int nwarps = NWARPS_Q5_0_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q5_0_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q5_0_RDNA1;
-    const int nwarps = NWARPS_Q5_0_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q5_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q5_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_0_AMPERE;
     const int nwarps = NWARPS_Q5_0_AMPERE;
@@ -4544,19 +4222,6 @@ template <bool need_check> static void
               vec_dot_q5_0_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q5_0_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q5_0_PASCAL;
-    const int nwarps = NWARPS_Q5_0_PASCAL;
-    allocate_tiles_q5_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK5_0, QR5_0, QI5_0, false, block_q5_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_0<mmq_y, nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q5_0_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_1_RDNA2  64
@@ -4579,11 +4244,6 @@ template <bool need_check> static void
 #define NWARPS_Q5_1_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q5_1_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 mul_mat_q5_1(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4594,22 +4254,7 @@ mul_mat_q5_1(
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q5_1_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q5_1_RDNA2;
-    const int nwarps = NWARPS_Q5_1_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q5_1_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q5_1_RDNA1;
-    const int nwarps = NWARPS_Q5_1_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q5_1<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q5_1_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_1_AMPERE;
     const int nwarps = NWARPS_Q5_1_AMPERE;
@@ -4620,19 +4265,6 @@ mul_mat_q5_1(
               vec_dot_q5_1_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q5_1_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q5_1_PASCAL;
-    const int nwarps = NWARPS_Q5_1_PASCAL;
-    allocate_tiles_q5_1<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK5_1, QR5_1, QI5_1, true, block_q5_1, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_1<mmq_y, nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q5_1_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q8_0_RDNA2  64
@@ -4655,11 +4287,6 @@ mul_mat_q5_1(
 #define NWARPS_Q8_0_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q8_0_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
     mul_mat_q8_0(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4670,22 +4297,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q8_0_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q8_0_RDNA2;
-    const int nwarps = NWARPS_Q8_0_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q8_0_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q8_0_RDNA1;
-    const int nwarps = NWARPS_Q8_0_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q8_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q8_0_AMPERE;
     const int mmq_y  =  MMQ_Y_Q8_0_AMPERE;
     const int nwarps = NWARPS_Q8_0_AMPERE;
@@ -4696,19 +4308,6 @@ template <bool need_check> static void
               vec_dot_q8_0_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q8_0_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q8_0_PASCAL;
-    const int nwarps = NWARPS_Q8_0_PASCAL;
-    allocate_tiles_q8_0<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK8_0, QR8_0, QI8_0, false, block_q8_0, mmq_x, mmq_y, nwarps,
-        load_tiles_q8_0<mmq_y, nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q8_0_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q2_K_RDNA2  64
@@ -4731,11 +4330,6 @@ template <bool need_check> static void
 #define NWARPS_Q2_K_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q2_K_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 mul_mat_q2_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4747,22 +4341,7 @@ mul_mat_q2_K(
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q2_K_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q2_K_RDNA2;
-    const int nwarps = NWARPS_Q2_K_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q2_K_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q2_K_RDNA1;
-    const int nwarps = NWARPS_Q2_K_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q2_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q2_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q2_K_AMPERE;
     const int nwarps = NWARPS_Q2_K_AMPERE;
@@ -4773,19 +4352,6 @@ mul_mat_q2_K(
               vec_dot_q2_K_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q2_K_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q2_K_PASCAL;
-    const int nwarps = NWARPS_Q2_K_PASCAL;
-    allocate_tiles_q2_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR2_K, QI2_K, false, block_q2_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q2_K<mmq_y, nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q2_K_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q3_K_RDNA2  128
@@ -4808,14 +4374,7 @@ mul_mat_q2_K(
 #define NWARPS_Q3_K_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-    __launch_bounds__(WARP_SIZE*NWARPS_Q3_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_VOLTA
-    mul_mat_q3_K(
+mul_mat_q3_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
     const sycl::nd_item<3> &item_ct1, int *tile_x_ql_q3_K,
@@ -4826,22 +4385,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q3_K_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q3_K_RDNA2;
-    const int nwarps = NWARPS_Q3_K_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q3_K_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q3_K_RDNA1;
-    const int nwarps = NWARPS_Q3_K_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q3_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q3_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q3_K_AMPERE;
     const int nwarps = NWARPS_Q3_K_AMPERE;
@@ -4853,19 +4397,6 @@ template <bool need_check> static void
               vec_dot_q3_K_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q3_K_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q3_K_PASCAL;
-    const int nwarps = NWARPS_Q3_K_PASCAL;
-    allocate_tiles_q3_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR3_K, QI3_K, false, block_q3_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q3_K<mmq_y, nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q3_K_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q4_K_RDNA2  64
@@ -4888,13 +4419,6 @@ template <bool need_check> static void
 #define NWARPS_Q4_K_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-    __launch_bounds__(WARP_SIZE*NWARPS_Q4_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q4_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4906,22 +4430,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q4_K_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q4_K_RDNA2;
-    const int nwarps = NWARPS_Q4_K_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q4_K_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q4_K_RDNA1;
-    const int nwarps = NWARPS_Q4_K_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q4_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q4_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q4_K_AMPERE;
     const int nwarps = NWARPS_Q4_K_AMPERE;
@@ -4932,19 +4441,6 @@ template <bool need_check> static void
               vec_dot_q4_K_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q4_K_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q4_K_PASCAL;
-    const int nwarps = NWARPS_Q4_K_PASCAL;
-    allocate_tiles_q4_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR4_K, QI4_K, true, block_q4_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q4_K<mmq_y, nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q4_K_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q5_K_RDNA2  64
@@ -4967,11 +4463,6 @@ template <bool need_check> static void
 #define NWARPS_Q5_K_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q5_K_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 mul_mat_q5_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -4983,22 +4474,7 @@ mul_mat_q5_K(
     int   * tile_x_qh = nullptr;
     int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q5_K_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q5_K_RDNA2;
-    const int nwarps = NWARPS_Q5_K_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q5_K_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q5_K_RDNA1;
-    const int nwarps = NWARPS_Q5_K_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q5_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q5_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q5_K_AMPERE;
     const int nwarps = NWARPS_Q5_K_AMPERE;
@@ -5009,19 +4485,6 @@ mul_mat_q5_K(
               vec_dot_q5_K_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q5_K_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q5_K_PASCAL;
-    const int nwarps = NWARPS_Q5_K_PASCAL;
-    allocate_tiles_q5_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR5_K, QI5_K, true, block_q5_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q5_K<mmq_y, nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q5_K_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 #define  MMQ_X_Q6_K_RDNA2  64
@@ -5044,13 +4507,6 @@ mul_mat_q5_K(
 #define NWARPS_Q6_K_PASCAL 8
 
 template <bool need_check> static void
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_RDNA2, 2)
-#endif // defined(RDNA3) || defined(RDNA2)
-#elif DPCT_COMPATIBILITY_TEMP < CC_VOLTA
-    __launch_bounds__(WARP_SIZE*NWARPS_Q6_K_PASCAL, 2)
-#endif // __CUDA_ARCH__ < CC_VOLTA
     mul_mat_q6_K(
     const void * __restrict__ vx, const void * __restrict__ vy, float * __restrict__ dst,
     const int ncols_x, const int nrows_x, const int ncols_y, const int nrows_y, const int nrows_dst,
@@ -5061,22 +4517,7 @@ template <bool need_check> static void
     int   * tile_x_qh = nullptr;
     // int   * tile_x_sc = nullptr;
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-#if defined(RDNA3) || defined(RDNA2)
-    const int mmq_x  =  MMQ_X_Q6_K_RDNA2;
-    const int mmq_y  =  MMQ_Y_Q6_K_RDNA2;
-    const int nwarps = NWARPS_Q6_K_RDNA2;
-#else
-    const int mmq_x  =  MMQ_X_Q6_K_RDNA1;
-    const int mmq_y  =  MMQ_Y_Q6_K_RDNA1;
-    const int nwarps = NWARPS_Q6_K_RDNA1;
-#endif // defined(RDNA3) || defined(RDNA2)
-    allocate_tiles_q6_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-
-#elif DPCT_COMPATIBILITY_TEMP >= CC_VOLTA
+//sycl_todo: change according to hardware
     const int mmq_x  =  MMQ_X_Q6_K_AMPERE;
     const int mmq_y  =  MMQ_Y_Q6_K_AMPERE;
     const int nwarps = NWARPS_Q6_K_AMPERE;
@@ -5087,19 +4528,6 @@ template <bool need_check> static void
               vec_dot_q6_K_q8_1_mul_mat>(
         vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql,
         tile_x_dm, tile_x_qh, tile_x_sc, item_ct1, tile_y_qs, tile_y_ds);
-
-#elif DPCT_COMPATIBILITY_TEMP >= MIN_CC_DP4A
-    const int mmq_x  =  MMQ_X_Q6_K_PASCAL;
-    const int mmq_y  =  MMQ_Y_Q6_K_PASCAL;
-    const int nwarps = NWARPS_Q6_K_PASCAL;
-    allocate_tiles_q6_K<mmq_y>(&tile_x_ql, &tile_x_dm, &tile_x_qh, &tile_x_sc);
-    mul_mat_q<QK_K, QR6_K, QI6_K, false, block_q6_K, mmq_x, mmq_y, nwarps,
-        load_tiles_q6_K<mmq_y, nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
-        (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst, tile_x_ql, tile_x_dm, tile_x_qh, tile_x_sc);
-#else
-    (void) vec_dot_q6_K_q8_1_mul_mat;
-    bad_arch();
-#endif // __CUDA_ARCH__ >= CC_VOLTA
 }
 
 template <int qk, int qi, typename block_q_t, int vdr, vec_dot_q_cuda_t vec_dot_q_cuda>
@@ -5167,11 +4595,11 @@ static void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * 
     const int y_offset = qr == 1 ? 1 : qk/2;
 
 // partial sum for each thread
-#ifdef GGML_CUDA_F16
-    half2 tmp = {0.0f, 0.0f}; // two sums for f16 to take advantage of half2 intrinsics
+#ifdef GGML_SYCL_F16
+    sycl::half2 tmp = {0.0f, 0.0f}; // two sums for f16 to take advantage of half2 intrinsics
 #else
     float tmp = 0.0f;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 
     for (int i = 0; i < ncols; i += iter_stride) {
         const int col = i + vals_per_iter*tid;
@@ -5191,15 +4619,15 @@ static void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * 
 
             // matrix multiplication
             // for qr = 2 the y index needs to increase by 1 per j iter because of y_offset = qk/2
-#ifdef GGML_CUDA_F16
-            tmp += __hmul2(v, {
-                y[iybs + iqs + j/qr + 0],
-                y[iybs + iqs + j/qr + y_offset]
-            });
+#ifdef GGML_SYCL_F16
+            dfloat2 t1{y[iybs + iqs + j / qr + 0],
+                        y[iybs + iqs + j / qr + y_offset]};
+
+            tmp += v * t1;
 #else
             tmp += v.x() * y[iybs + iqs + j / qr + 0];
             tmp += v.y() * y[iybs + iqs + j / qr + y_offset];
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
         }
     }
 
@@ -5211,11 +4639,11 @@ static void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * 
     }
 
     if (tid == 0) {
-#ifdef GGML_CUDA_F16
-        dst[row] = tmp.x + tmp.y;
+#ifdef GGML_SYCL_F16
+        dst[row] = tmp.x() + tmp.y();
 #else
         dst[row] = tmp;
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
     }
 }
 
@@ -8728,7 +8156,6 @@ catch (sycl::exception const &exc) {
   std::exit(1);
 }
 
-#if !defined(GGML_USE_HIPBLAS)
 // pool with virtual memory
 /*
 DPCT1082:64: Migration of CUmemGenericAllocationHandle type is not supported.
@@ -8801,10 +8228,7 @@ catch (sycl::exception const &exc) {
             << ", line:" << __LINE__ << std::endl;
   std::exit(1);
 }
-#else
-#define ggml_cuda_pool_malloc ggml_cuda_pool_malloc_leg
-#define ggml_cuda_pool_free ggml_cuda_pool_free_leg
-#endif // !defined(GGML_USE_HIPBLAS)
+
 
 template<typename T>
 struct cuda_pool_alloc {
@@ -8924,16 +8348,13 @@ void ggml_init_cublas() try {
 
             g_tensor_split[id] = total_vram;
             total_vram += prop.get_global_mem_size();
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-            g_device_caps[id].cc = 100*prop.major + 10*prop.minor + CC_OFFSET_AMD;
-#else
             /*
             DPCT1005:87: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
             */
             g_device_caps[id].cc =
                 100 * prop.get_major_version() + 10 * prop.get_minor_version();
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
+
             // g_device_caps[id].cc = 9000;
             printf("g_device_caps[%d].cc=%d\n", id, g_device_caps[id].cc);
         }
@@ -9555,29 +8976,6 @@ static int64_t get_row_rounding(ggml_type type) {
         }
     }
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-    switch(type) {
-        case GGML_TYPE_Q4_0:
-        case GGML_TYPE_Q4_1:
-        case GGML_TYPE_Q5_0:
-        case GGML_TYPE_Q5_1:
-        case GGML_TYPE_Q8_0:
-            return max_compute_capability >= CC_RDNA2 ? 128 : 64;
-        case GGML_TYPE_F16:
-        case GGML_TYPE_F32:
-            return 1;
-        case GGML_TYPE_Q2_K:
-            return max_compute_capability >= CC_RDNA2 ? 128 : 32;
-        case GGML_TYPE_Q3_K:
-            return min_compute_capability < CC_RDNA2 ? 128 : 64;
-        case GGML_TYPE_Q4_K:
-        case GGML_TYPE_Q5_K:
-        case GGML_TYPE_Q6_K:
-            return max_compute_capability >= CC_RDNA2 ? 128 : 64;
-        default:
-            GGML_ASSERT(false);
-    }
-#else
     switch(type) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
@@ -9599,7 +8997,6 @@ static int64_t get_row_rounding(ggml_type type) {
         default:
             GGML_ASSERT(false);
     }
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 }
 
 inline void ggml_cuda_op_mul_mat_vec_q(
@@ -9668,9 +9065,9 @@ inline void ggml_cuda_op_dequantize_mul_mat_vec(
     const int64_t row_diff = row_high - row_low;
 
     // on some GPUs it is faster to convert src1 to half and to use half precision intrinsics
-#ifdef GGML_CUDA_F16
-    cuda_pool_alloc<half> src1_dfloat_a;
-    half * src1_dfloat = nullptr; // dfloat == half
+#ifdef GGML_SYCL_F16
+    cuda_pool_alloc<sycl::half> src1_dfloat_a;
+    sycl::half *src1_dfloat = nullptr; // dfloat == half
 
     bool src1_convert_f16 =
         src0->type == GGML_TYPE_Q4_0 || src0->type == GGML_TYPE_Q4_1 ||
@@ -9679,13 +9076,13 @@ inline void ggml_cuda_op_dequantize_mul_mat_vec(
 
     if (src1_convert_f16) {
         src1_dfloat = src1_dfloat_a.alloc(ne00);
-        ggml_cpy_f32_f16_cuda((const char *) src1_ddf_i, (char *) src1_dfloat, ne00,
-                                ne00, 1, sizeof(float), 0, 0,
-                                ne00, 1, sizeof(half),  0, 0, stream);
+        ggml_cpy_f32_f16_cuda((const char *)src1_ddf_i, (char *)src1_dfloat,
+                              ne00, ne00, 1, sizeof(float), 0, 0, ne00, 1,
+                              sizeof(sycl::half), 0, 0, stream);
     }
 #else
     const dfloat * src1_dfloat = (const dfloat *) src1_ddf_i; // dfloat == float, no conversion
-#endif // GGML_CUDA_F16
+#endif // GGML_SYCL_F16
 
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
@@ -9761,9 +9158,11 @@ inline void ggml_cuda_op_mul_mat_cublas(
 
     const int compute_capability = g_device_caps[id].cc;
 
+    // if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
     if (compute_capability >= CC_VOLTA && (src0->type == GGML_TYPE_F16 || ggml_is_quantized(src0->type)) && ggml_is_contiguous(src0) && row_diff == src0->ne[1] && dst->op_params[0] == GGML_PREC_DEFAULT) {
+
         // convert src0 and src1 to fp16, multiply as fp16, convert dst to fp32
-        GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp16 path\n");
+        // GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp16 path\n");
         cuda_pool_alloc<sycl::half> src0_as_f16;
         if (src0->type != GGML_TYPE_F16) {
             const to_fp16_cuda_t to_fp16_cuda = ggml_get_to_fp16_cuda(src0->type);
@@ -9805,7 +9204,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
         to_fp32_cuda(dst_f16.get(), dst_dd_i, row_diff*src1_ncols, stream);
     }
     else {
-        GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp32 path\n");
+        // GGML_SYCL_DEBUG("ggml_cuda_op_mul_mat_cublas - fp32 path\n");
         cuda_pool_alloc<float> src0_ddq_as_f32;
 
         if (src0->type != GGML_TYPE_F32) {
@@ -11023,7 +10422,7 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
 
             if (use_mul_mat_vec_q) {
                 // NOTE: this kernel does not support ggml_nrows(src1) > 1
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_vec_q path\n");
+                // GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_vec_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_vec_q, true);
             } else {
                 // GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_dequantize_mul_mat_vec path\n");
@@ -11037,12 +10436,12 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             if (use_tensor_cores && min_compute_capability >= CC_VOLTA && src1->ne[1] > MMQ_MAX_BATCH_SIZE) {
                 use_mul_mat_q = false;
             }
-            // use_mul_mat_q = false;//zjy
+
             if (use_mul_mat_q) {
-                GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_q path\n");
+                // GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_q path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_q, true);
             } else {
-                //GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_cublas path\n");
+                // GGML_SYCL_DEBUG("ggml_cuda_mul_mat ggml_cuda_op_mul_mat_cublas path\n");
                 ggml_cuda_op_mul_mat(src0, src1, dst, ggml_cuda_op_mul_mat_cublas, false);
             }
         }
