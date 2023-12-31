@@ -3018,8 +3018,8 @@ void kernel_mul_mv_q4_K_f32_impl(
         constant   uint    & r2,
         constant   uint    & r3,
         uint3 tgpig[[threadgroup_position_in_grid]],
-        uint tiisg[[thread_index_in_simdgroup]],
-        uint sgitg[[simdgroup_index_in_threadgroup]]) {
+        uint  tiisg[[thread_index_in_simdgroup]],
+        uint  sgitg[[simdgroup_index_in_threadgroup]]) {
 
     const int ix = tiisg/4;  // 0...7
     const int it = tiisg%4;  // 0...3
@@ -3028,7 +3028,7 @@ void kernel_mul_mv_q4_K_f32_impl(
     const int r0 = tgpig.x;
     const int r1 = tgpig.y;
     const int im = tgpig.z;
-    const int first_row = (r0 * N_SIMDGROUP + sgitg) * N_DST;
+    const int first_row = r0 * N_DST;
     const int ib_row = first_row * nb;
 
     const uint i12 = im%ne12;
@@ -3094,7 +3094,7 @@ void kernel_mul_mv_q4_K_f32_impl(
     for (int row = 0; row < N_DST; ++row) {
         all_sum = simd_sum(sumf[row]);
         if (tiisg == 0) {
-            dst[r1*ne0+ im*ne0*ne1 + first_row + row] = all_sum;
+            dst[r1*ne0 + im*ne0*ne1 + first_row + row] = all_sum;
         }
     }
 }
