@@ -9316,8 +9316,8 @@ static ggml_tensor_extra_gpu * ggml_cuda_alloc_temp_tensor_extra() {
     if (g_temp_tensor_extras == nullptr) {
         g_temp_tensor_extras = new ggml_tensor_extra_gpu[GGML_CUDA_MAX_NODES];
         for (int64_t i = 0; i < GGML_CUDA_MAX_NODES; ++i) {
-            CUDA_CHECK(cudaEventCreate(&g_temp_tensor_extras[i].src0_done, cudaEventDisableTiming));
-            CUDA_CHECK(cudaEventCreate(&g_temp_tensor_extras[i].src1_done, cudaEventDisableTiming));
+            CUDA_CHECK(cudaEventCreateWithFlags(&g_temp_tensor_extras[i].src0_done, cudaEventDisableTiming));
+            CUDA_CHECK(cudaEventCreateWithFlags(&g_temp_tensor_extras[i].src1_done, cudaEventDisableTiming));
         }
     }
 
