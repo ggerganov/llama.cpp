@@ -522,7 +522,7 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 
 #define MUL_MAT_SRC1_COL_STRIDE 128
 
-#define MAX_STREAMS 8
+#define MAX_STREAMS 4
 static cudaStream_t g_cudaStreams[GGML_CUDA_MAX_DEVICES][MAX_STREAMS] = { { nullptr } };
 
 struct ggml_tensor_extra_gpu {
