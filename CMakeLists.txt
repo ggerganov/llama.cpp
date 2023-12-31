@@ -95,7 +95,7 @@ option(LLAMA_HIP_UMA                         "llama: use HIP unified memory arch
 option(LLAMA_CLBLAST                         "llama: use CLBlast"                               OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
-option(LLAMA_METAL_NO_FAST_MATH              "llama: compile Metal with -fno-fast-math"         OFF)
+option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 
@@ -174,7 +174,7 @@ if (LLAMA_METAL)
     # copy ggml-metal.metal to bin directory
     configure_file(ggml-metal.metal ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
 
-    if (LLAMA_METAL_NO_FAST_MATH)
+    if (LLAMA_METAL_SHADER_DEBUG)
         # custom command to do the following:
         #   xcrun -sdk macosx metal    -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
         #   xcrun -sdk macosx metallib                   ggml-metal.air   -o ggml.metallib
@@ -184,7 +184,7 @@ if (LLAMA_METAL)
         # note: adding -fno-inline fixes the tests when using MTL_SHADER_VALIDATION=1
         add_custom_command(
             OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml.metallib
-            COMMAND xcrun -sdk macosx metal -fno-fast-math -fno-inline -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
+            COMMAND xcrun -sdk macosx metal -fno-fast-math -fno-inline -g -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
             COMMAND xcrun -sdk macosx metallib ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml.metallib
             DEPENDS ggml-metal.metal
             COMMENT "Compiling Metal kernels"
