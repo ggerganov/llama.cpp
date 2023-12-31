@@ -9703,11 +9703,11 @@ bool ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_
 
         if (extra_src0 != nullptr && extra_src0->is != is) {
             CUDA_CHECK(cudaEventRecord(extra_dst->src0_done, g_cudaStreams[g_main_device][extra_src0->is]));
-            CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][is], extra_dst->src0_done));
+            CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][is], extra_dst->src0_done, 0));
         }
         if (tensor->src[1] != nullptr && extra_src1 != nullptr && extra_src1->is != is) {
             CUDA_CHECK(cudaEventRecord(extra_dst->src1_done, g_cudaStreams[g_main_device][extra_src1->is]));
-            CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][extra_dst->is], extra_dst->src1_done));
+            CUDA_CHECK(cudaStreamWaitEvent(g_cudaStreams[g_main_device][extra_dst->is], extra_dst->src1_done, 0));
         }
         // if (is != 0) {
         //     fprintf(stderr, "%s + %s -> %s is=%ld\n", tensor->src[0]->name, tensor->src[1] == nullptr ? "null" : tensor->src[1]->name, tensor->name, is);
