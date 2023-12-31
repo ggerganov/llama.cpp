@@ -59,20 +59,10 @@ static int g_ggml_sycl_debug=0;
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 
-static const char *cublas_get_error_str(const int err) {
-    /*
-    DPCT1009:48: SYCL uses exceptions to report errors and does not use the
-    error codes. The original code was commented out and a warning string
-    was inserted. You need to rewrite this code.
-    */
-    return "cublasGetStatusString is not supported" /*cublasGetStatusString(err)*/
-        ;
-}
-
-static void ggml_cuda_error(const char * stmt, const char * func, const char * file, const int line, const char * msg) {
-    fprintf(stderr, "CUDA error: %s: %s\n", stmt, msg);
+static void ggml_sycl_error(const char * stmt, const char * func, const char * file, const int line, const char * msg) {
+    fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
     fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
-    GGML_ASSERT(!"CUDA error");
+    GGML_ASSERT(!"SYCL error");
 }
 
 /*
@@ -86,36 +76,11 @@ DPCT1009:52: SYCL uses exceptions to report errors and does not use the error
 codes. The original code was commented out and a warning string was inserted.
 You need to rewrite this code.
 */
-#define CUDA_CHECK(err) do {                                                   \
-    auto err_ = (err); if (err_ != 0) ggml_cuda_error(                         \
+#define SYCL_CHECK(err) do {                                                   \
+    auto err_ = (err); if (err_ != 0) ggml_sycl_error(                         \
         #err, __func__, __FILE__, __LINE__,                                    \
-        "cudaGetErrorString is not supported" /*cudaGetErrorString(err_)*/);   \
+        "Meet error in this line code!");   \
 } while (0)
-#define CUBLAS_CHECK(err)                                                      \
-    do { auto err_ = (err); if (err_ != 0)                                     \
-             ggml_cuda_error(#err, __func__, __FILE__, __LINE__,               \
-                             cublas_get_error_str(err_)); } while (0)
-
-
-static const char *cu_get_error_str(int err) {
-    const char * err_str;
-    /*
-    DPCT1007:49: Migration of cuGetErrorString is not supported.
-    */
-    // cuGetErrorString(err, &err_str);
-    return err_str;
-}
-/*
-DPCT1001:67: The statement could not be removed.
-*/
-/*
-DPCT1000:68: Error handling if-stmt was detected but could not be rewritten.
-*/
-#define CU_CHECK(err)                                                          \
-    do { auto err_ = (err);                                                    \
-         if (err_ != 0) ggml_cuda_error(#err, __func__, __FILE__, __LINE__,    \
-                                        cu_get_error_str(err_)); } while (0)
-
 
 #if DPCT_COMPAT_RT_VERSION >= 11100
 #define GGML_CUDA_ASSUME(x) __builtin_assume(x)
@@ -401,7 +366,7 @@ struct ggml_tensor_extra_gpu {
 // probably because the Windows CUDA libraries forget to make this check before invoking the drivers
 inline dpct::err0 ggml_cuda_set_device(const int device) try {
     int current_device;
-    CUDA_CHECK(DPCT_CHECK_ERROR(
+    SYCL_CHECK(DPCT_CHECK_ERROR(
         current_device = dpct::dev_mgr::instance().current_device_id()));
 
     if (device == current_device) {
@@ -6420,7 +6385,7 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -6535,7 +6500,7 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -6650,7 +6615,7 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -6765,7 +6730,7 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -6880,7 +6845,7 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -6995,7 +6960,7 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -7118,7 +7083,7 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(const void *vx, const void *vy,
 #if QK_K == 256
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -7246,7 +7211,7 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -7367,7 +7332,7 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -7488,7 +7453,7 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(const void *vx, const void *vy,
                                         dpct::queue_ptr stream) try {
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     const int compute_capability = g_device_caps[id].cc;
 
@@ -8073,7 +8038,7 @@ static size_t g_cuda_pool_size[GGML_CUDA_MAX_DEVICES] = {0};
 static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 #ifdef DEBUG_CUDA_MALLOC
     int nnz = 0;
@@ -8115,7 +8080,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     void * ptr;
     size_t look_ahead_size = (size_t) (1.05 * size);
     look_ahead_size = 256 * ((look_ahead_size + 255)/256);
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(ptr = (void *)sycl::malloc_device(
                              look_ahead_size, dpct::get_in_order_queue())));
     *actual_size = look_ahead_size;
@@ -8135,7 +8100,7 @@ catch (sycl::exception const &exc) {
 static void ggml_cuda_pool_free_leg(void *ptr, size_t size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
@@ -8147,7 +8112,7 @@ static void ggml_cuda_pool_free_leg(void *ptr, size_t size) try {
         }
     }
     fprintf(stderr, "WARNING: cuda buffer pool full, increase MAX_CUDA_BUFFERS\n");
-    CUDA_CHECK(DPCT_CHECK_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
+    SYCL_CHECK(DPCT_CHECK_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
     g_cuda_pool_size[id] -= size;
 }
 catch (sycl::exception const &exc) {
@@ -8179,7 +8144,7 @@ catch (sycl::exception const &exc) {
 static void ggml_cuda_pool_free_vmm(void *ptr, size_t size) try {
     scoped_spin_lock lock(g_cuda_pool_lock);
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
 #ifdef DEBUG_CUDA_MALLOC
@@ -8199,7 +8164,7 @@ catch (sycl::exception const &exc) {
 
 static void *ggml_cuda_pool_malloc(size_t size, size_t *actual_size) try {
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     if (g_device_caps[id].vmm) {
         return ggml_cuda_pool_malloc_vmm(size, actual_size);
@@ -8215,7 +8180,7 @@ catch (sycl::exception const &exc) {
 
 static void ggml_cuda_pool_free(void *ptr, size_t size) try {
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
     if (g_device_caps[id].vmm) {
         ggml_cuda_pool_free_vmm(ptr, size);
@@ -8270,9 +8235,10 @@ bool ggml_cublas_loaded(void) {
 }
 void print_devices(){
     int device_count = dpct::dev_mgr::instance().device_count();
+    fprintf(stderr, "%s: found %d SYCL devices:\n", __func__, device_count);
     for (int id = 0; id < device_count; ++id) {
         dpct::device_info prop;
-        CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(id))));
         fprintf(stderr, "  Device %d: %s, compute capability %d.%d\n", id,
                 prop.get_name(), prop.get_major_version(),
@@ -8305,7 +8271,7 @@ void ggml_init_cublas() try {
 
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
 
-        printf("g_ggml_sycl_debug=%d\n", g_ggml_sycl_debug);
+        printf("GGML_SYCL_DEBUG=%d\n", g_ggml_sycl_debug);
 
         int user_device_number = get_sycl_env("GGML_SYCL_DEVICE", 0);
 
@@ -8321,17 +8287,19 @@ void ggml_init_cublas() try {
 
         GGML_ASSERT(g_device_count <= GGML_CUDA_MAX_DEVICES);
         int64_t total_vram = 0;
-#if defined(GGML_CUDA_FORCE_MMQ)
-        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   yes\n", __func__);
+
+#if defined(GGML_SYCL_FP16)
+        fprintf(stderr, "%s: GGML_SYCL_FP16:   yes\n", __func__);
 #else
-        fprintf(stderr, "%s: GGML_CUDA_FORCE_MMQ:   no\n", __func__);
+        fprintf(stderr, "%s: GGML_SYCL_FP16:   no\n", __func__);
 #endif
+
+
 #if defined(CUDA_USE_TENSOR_CORES)
         fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: yes\n", __func__);
 #else
         fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
 #endif
-        fprintf(stderr, "%s: found %d " GGML_CUDA_NAME " devices:\n", __func__, g_device_count);
 
         //zjy hardcode, force set to 1 device
         g_device_count = 1;
@@ -8341,8 +8309,8 @@ void ggml_init_cublas() try {
             g_device_caps[id].vmm = !!device_vmm;
 
             dpct::device_info prop;
-            CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
-                prop, dpct::dev_mgr::instance().get_device(id))));
+            SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
+                prop, dpct::dev_mgr::instance().get_device(user_device_number))));
             /*
             DPCT1005:86: The SYCL device version is different from CUDA Compute
             Compatibility. You may need to rewrite this code.
@@ -8369,7 +8337,7 @@ void ggml_init_cublas() try {
         }
 
         for (int id = 0; id < g_device_count; ++id) {
-            CUDA_CHECK(ggml_cuda_set_device(user_device_number));
+            SYCL_CHECK(ggml_cuda_set_device(user_device_number));
 
             // create cuda streams
             for (int is = 0; is < MAX_STREAMS; ++is) {
@@ -8377,25 +8345,25 @@ void ggml_init_cublas() try {
                 DPCT1025:88: The SYCL queue is created ignoring the flag and
                 priority options.
                 */
-                CUDA_CHECK(DPCT_CHECK_ERROR(
+                SYCL_CHECK(DPCT_CHECK_ERROR(
                     g_cudaStreams[id][is] =
                         dpct::get_current_device().create_queue()));
             }
 
             // create cublas handle
-            CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] =
+            SYCL_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] =
                                               &dpct::get_in_order_queue()));
             /*
             DPCT1027:89: The call to cublasSetMathMode was replaced with 0
             because this functionality is redundant in SYCL.
             */
-            CUBLAS_CHECK(0);
+            SYCL_CHECK(0);
         }
 
         // configure logging to stdout
-        // CUBLAS_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
+        // SYCL_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
         ggml_cuda_set_device(user_device_number);
-        fprintf(stderr, "  set Device %d\n", user_device_number);
+        fprintf(stderr, "Using Device %d\n", user_device_number);
         initialized = true;
         g_cublas_loaded = true;
     }
@@ -8473,7 +8441,7 @@ catch (sycl::exception const &exc) {
 }
 
 void ggml_cuda_host_free(void *ptr) try {
-    CUDA_CHECK(DPCT_CHECK_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
+    SYCL_CHECK(DPCT_CHECK_ERROR(sycl::free(ptr, dpct::get_in_order_queue())));
 }
 catch (sycl::exception const &exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
@@ -8497,7 +8465,7 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
         kind = dpct::device_to_device;
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src->extra;
         int id;
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             id = dpct::dev_mgr::instance().current_device_id()));
         src_ptr = (char *) extra->data_device[id];
     } else {
@@ -8915,7 +8883,7 @@ inline void ggml_cuda_op_mul_mat_q(
     const int64_t row_diff = row_high - row_low;
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     // the main device has a larger memory buffer to hold the results from all GPUs
@@ -9155,7 +9123,7 @@ inline void ggml_cuda_op_mul_mat_cublas(
     const int64_t row_diff = row_high - row_low;
 
     int id;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(id = dpct::dev_mgr::instance().current_device_id()));
 
     // the main device has a larger memory buffer to hold the results from all GPUs
@@ -9197,8 +9165,8 @@ inline void ggml_cuda_op_mul_mat_cublas(
         const sycl::half alpha_f16 = 1.0f;
         const sycl::half beta_f16 = 0.0f;
 
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm(
+        SYCL_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::gemm(
             *g_cublas_handles[id], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
             &alpha_f16, src0_ptr, dpct::library_data_t::real_half, ne00,
@@ -9224,8 +9192,8 @@ inline void ggml_cuda_op_mul_mat_cublas(
         const float alpha = 1.0f;
         const float beta = 0.0f;
 
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(oneapi::mkl::blas::column_major::gemm(
+        SYCL_CHECK(DPCT_CHECK_ERROR(g_cublas_handles[id] = stream));
+        SYCL_CHECK(DPCT_CHECK_ERROR(oneapi::mkl::blas::column_major::gemm(
             *g_cublas_handles[id], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, row_diff, src1_ncols, ne10,
             dpct::get_value(&alpha, *g_cublas_handles[id]), src0_ddf_i, ne00,
@@ -9494,7 +9462,7 @@ inline void ggml_cuda_op_scale(const ggml_tensor *src0, const ggml_tensor *src1,
     DPCT1010:87: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
-    CUDA_CHECK(0);
+    SYCL_CHECK(0);
 
     (void) src1;
     (void) dst;
@@ -9519,7 +9487,7 @@ inline void ggml_cuda_op_clamp(const ggml_tensor *src0, const ggml_tensor *src1,
     DPCT1010:88: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
-    CUDA_CHECK(0);
+    SYCL_CHECK(0);
 
     (void) src1;
     (void) dst;
@@ -9561,7 +9529,7 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
         src0_ddf = (float *) src0_extra->data_device[g_main_device];
     } else {
         src0_ddf = src0_f.alloc(ggml_nelements(src0));
-        CUDA_CHECK(ggml_cuda_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
+        SYCL_CHECK(ggml_cuda_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
     }
 
     if (use_src1) {
@@ -9569,7 +9537,7 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
             src1_ddf = (float *) src1_extra->data_device[g_main_device];
         } else {
             src1_ddf = src1_f.alloc(ggml_nelements(src1));
-            CUDA_CHECK(ggml_cuda_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
+            SYCL_CHECK(ggml_cuda_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
         }
     }
     if (dst_on_device) {
@@ -9584,16 +9552,16 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
     DPCT1010:89: SYCL uses exceptions to report errors and does not use the
     error codes. The call was replaced with 0. You need to rewrite this code.
     */
-    CUDA_CHECK(0);
+    SYCL_CHECK(0);
 
     // copy dst to host if necessary
     if (!dst_on_device) {
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             main_stream->memcpy(dst->data, dst_ddf, ggml_nbytes(dst))));
     }
 
     if (dst->backend == GGML_BACKEND_CPU) {
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             dpct::get_current_device().queues_wait_and_throw()));
     }
 }
@@ -9614,12 +9582,12 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
 
 #ifdef NDEBUG
     for (int id = 0; id < g_device_count; ++id) {
-        CUDA_CHECK(ggml_cuda_set_device(id));
-        // CUDA_CHECK(cudaDeviceSynchronize());
+        SYCL_CHECK(ggml_cuda_set_device(id));
+        // SYCL_CHECK(cudaDeviceSynchronize());
     }
 
     for (int id = 0; id < g_device_count; ++id) {
-        CUDA_CHECK(ggml_cuda_set_device(id));
+        SYCL_CHECK(ggml_cuda_set_device(id));
 
         for (int id_other = 0; id_other < g_device_count; ++id_other) {
             if (id == id_other) {
@@ -9630,12 +9598,12 @@ static void ggml_cuda_set_peer_access(const int n_tokens) {
             }
 
             int can_access_peer;
-            // CUDA_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
+            // SYCL_CHECK(cudaDeviceCanAccessPeer(&can_access_peer, id, id_other));
             // if (can_access_peer) {
             //     if (enable_peer_access) {
-            //         CUDA_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
+            //         SYCL_CHECK(cudaDeviceEnablePeerAccess(id_other, 0));
             //     } else {
-            //         CUDA_CHECK(cudaDeviceDisablePeerAccess(id_other));
+            //         SYCL_CHECK(cudaDeviceDisablePeerAccess(id_other));
             //     }
             // }
         }
@@ -9776,7 +9744,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                 use the error codes. The call was replaced with 0. You need to
                 rewrite this code.
                 */
-                CUDA_CHECK(0);
+                SYCL_CHECK(0);
             }
         }
 
@@ -9791,13 +9759,13 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
     // if multiple devices are used they need to wait for the main device
     // here an event is recorded that signals that the main device has finished calculating the input data
     if (split && used_devices > 1) {
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+        SYCL_CHECK(ggml_cuda_set_device(g_main_device));
         /*
         DPCT1024:91: The original code returned the error code that was further
         consumed by the program logic. This original code was replaced with 0.
         You may need to rewrite the program logic consuming the error code.
         */
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             *src0_extra->events[g_main_device][0] =
                 g_cudaStreams[g_main_device][0]->ext_oneapi_submit_barrier()));
     }
@@ -9821,7 +9789,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
 
             // wait for main GPU data if necessary
             if (split && (id != g_main_device || is != 0)) {
-                CUDA_CHECK(DPCT_CHECK_ERROR(stream->ext_oneapi_submit_barrier(
+                SYCL_CHECK(DPCT_CHECK_ERROR(stream->ext_oneapi_submit_barrier(
                     {*src0_extra->events[g_main_device][0]})));
             }
 
@@ -9848,20 +9816,20 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                     if (id != g_main_device) {
                         if (convert_src1_to_q8_1) {
                             char * src1_ddq_i_source = src1_ddq[g_main_device] + src1_ddq_i_offset;
-                            CUDA_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
+                            SYCL_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
                                 src1_ddq_i, src1_ddq_i_source,
                                 src1_ncols * src1_padded_col_size * q8_1_ts /
                                     q8_1_bs)));
                         } else {
                             float * src1_ddf_i_source = (float *) src1_extra->data_device[g_main_device];
                             src1_ddf_i_source += (i0*ne11 + src1_col_0) * ne10;
-                            CUDA_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
+                            SYCL_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
                                 src1_ddf_i, src1_ddf_i_source,
                                 src1_ncols * ne10 * sizeof(float))));
                         }
                     }
                 } else if (src1->backend == GGML_BACKEND_CPU || (src1_on_device && !src1_is_contiguous)) {
-                    CUDA_CHECK(ggml_cuda_cpy_tensor_2d(
+                    SYCL_CHECK(ggml_cuda_cpy_tensor_2d(
                                    src1_ddf_i, src1, i03, i02, src1_col_0, src1_col_0+src1_ncols, stream));
                 } else {
                     GGML_ASSERT(false);
@@ -9874,11 +9842,11 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                     not use the error codes. The call was replaced with 0. You
                     need to rewrite this code.
                     */
-                    CUDA_CHECK(0);
+                    SYCL_CHECK(0);
                 }
 
                 if (src1_col_0 == 0 && (!src0_on_device || !src0_is_contiguous) && i02 % i02_divisor == 0) {
-                    CUDA_CHECK(ggml_cuda_cpy_tensor_2d(src0_dd_i, src0, i03, i02/i02_divisor, row_low[id], row_high[id], stream));
+                    SYCL_CHECK(ggml_cuda_cpy_tensor_2d(src0_dd_i, src0, i03, i02/i02_divisor, row_low[id], row_high[id], stream));
                 }
 
                 // do the computation
@@ -9889,7 +9857,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                 use the error codes. The call was replaced with 0. You need to
                 rewrite this code.
                 */
-                CUDA_CHECK(0);
+                SYCL_CHECK(0);
 
                 // copy dst to host or other device if necessary
                 if (!dst_on_device) {
@@ -9913,7 +9881,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0 + row_low[id];
-                        CUDA_CHECK(DPCT_CHECK_ERROR(dpct::async_dpct_memcpy(
+                        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::async_dpct_memcpy(
                             dhf_dst_i, ne0 * sizeof(float), dst_dd_i,
                             row_diff * sizeof(float), row_diff * sizeof(float),
                             src1_ncols, kind, *stream)));
@@ -9921,7 +9889,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0;
-                        CUDA_CHECK(DPCT_CHECK_ERROR(
+                        SYCL_CHECK(DPCT_CHECK_ERROR(
                             stream->memcpy(dhf_dst_i, dst_dd_i,
                                            src1_ncols * ne0 * sizeof(float))));
                     }
@@ -9935,7 +9903,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
                     code was replaced with 0. You may need to rewrite the
                     program logic consuming the error code.
                     */
-                    CUDA_CHECK(DPCT_CHECK_ERROR(
+                    SYCL_CHECK(DPCT_CHECK_ERROR(
                         *src0_extra->events[id][is] =
                             stream->ext_oneapi_submit_barrier()));
                 }
@@ -9947,7 +9915,7 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
         if ((!split && id != g_main_device) || row_low[id] == row_high[id]) {
             continue;
         }
-        CUDA_CHECK(ggml_cuda_set_device(id));
+        SYCL_CHECK(ggml_cuda_set_device(id));
 
         // free buffers again when done
         if (dst_as[id] > 0) {
@@ -9969,13 +9937,13 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
         int64_t is_max = (ne11 + MUL_MAT_SRC1_COL_STRIDE - 1) / MUL_MAT_SRC1_COL_STRIDE;
         is_max = is_max <= MAX_STREAMS ? is_max : MAX_STREAMS;
 
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+        SYCL_CHECK(ggml_cuda_set_device(g_main_device));
         for (int64_t id = 0; id < g_device_count; ++id) {
             if (row_low[id] == row_high[id]) {
                 continue;
             }
             for (int64_t is = 0; is < is_max; ++is) {
-                CUDA_CHECK(DPCT_CHECK_ERROR(
+                SYCL_CHECK(DPCT_CHECK_ERROR(
                     g_cudaStreams[g_main_device][0]->ext_oneapi_submit_barrier(
                         {*src0_extra->events[id][is]})));
             }
@@ -9983,8 +9951,8 @@ static void ggml_cuda_op_mul_mat(const ggml_tensor *src0,
     }
 
     if (dst->backend == GGML_BACKEND_CPU) {
-        CUDA_CHECK(ggml_cuda_set_device(g_main_device));
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(ggml_cuda_set_device(g_main_device));
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             dpct::get_current_device().queues_wait_and_throw()));
     }
 }
@@ -10101,7 +10069,7 @@ static void ggml_cuda_mul_mat_vec_p021(const ggml_tensor *src0,
 
     const int64_t ne12 = src1->ne[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_cudaStreams[g_main_device][0];
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -10140,7 +10108,7 @@ static void ggml_cuda_mul_mat_vec_nc(const ggml_tensor *src0,
 
     const int64_t ne12 = src1->ne[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_cudaStreams[g_main_device][0];
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -10219,10 +10187,10 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_cudaStreams[g_main_device][0];
 
-    CUBLAS_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(g_cublas_handles[g_main_device] = main_stream));
 
     ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -10291,7 +10259,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
                 int i03 = i13 / r3;
                 int i02 = i12 / r2;
 
-                CUBLAS_CHECK(
+                SYCL_CHECK(
                         cublasGemmEx(g_cublas_handles[g_main_device], CUBLAS_OP_T, CUBLAS_OP_N,
                             ne01, ne11, ne10,
                             alpha, (const char *) src0_as_f16 + i02*src0->nb[2]   + i03*src0->nb[3]  , CUDA_R_16F,   nb01/sizeof(half),
@@ -10306,7 +10274,7 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
     if (r2 == 1 && r3 == 1 && src0->nb[2]*src0->ne[2] == src0->nb[3] && src1->nb[2]*src1->ne[2] == src1->nb[3]) {
         // there is no broadcast and src0, src1 are contiguous across dims 2, 3
         // use cublasGemmStridedBatchedEx
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
             *g_cublas_handles[g_main_device], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
             (const char *)src0_as_f16, dpct::library_data_t::real_half,
@@ -10353,9 +10321,9 @@ static void ggml_cuda_mul_mat_mat_batched_cublas(const ggml_tensor *src0,
         error codes. The call was replaced with 0. You need to rewrite this
         code.
         */
-        CUDA_CHECK(0);
+        SYCL_CHECK(0);
 
-        CUBLAS_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::gemm_batch(
             *g_cublas_handles[g_main_device], oneapi::mkl::transpose::trans,
             oneapi::mkl::transpose::nontrans, ne01, ne11, ne10, alpha,
             (const void **)(ptrs_src.get() + 0 * ne23),
@@ -10534,10 +10502,10 @@ static void ggml_cuda_mul_mat_id_cublas(ggml_tensor * dst) {
     const int64_t ne1 = ggml_nelements(src1);
     const int64_t ne  = ggml_nelements(dst);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     cudaStream_t main_stream = g_cudaStreams[g_main_device][0];
 
-    CUBLAS_CHECK(cublasSetStream(g_cublas_handles[g_main_device], main_stream));
+    SYCL_CHECK(cublasSetStream(g_cublas_handles[g_main_device], main_stream));
 
     //ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
     //void * src0_ddq = src0_extra->data_device[g_main_device];
@@ -10607,9 +10575,9 @@ static void ggml_cuda_mul_mat_id_cublas(ggml_tensor * dst) {
             dst->src[4] ? (const half *)((ggml_tensor_extra_gpu *)dst->src[4]->extra)->data_device[g_main_device] : nullptr,
             dst->src[5] ? (const half *)((ggml_tensor_extra_gpu *)dst->src[5]->extra)->data_device[g_main_device] : nullptr
     );
-    CUDA_CHECK(cudaGetLastError());
+    SYCL_CHECK(cudaGetLastError());
 
-    CUBLAS_CHECK(
+    SYCL_CHECK(
     cublasGemmBatchedEx(g_cublas_handles[g_main_device], CUBLAS_OP_T, CUBLAS_OP_N,
             ne01, ne11, ne10,
             &alpha_f16, (const void **) (ptrs_src + 0*ne23), CUDA_R_16F, ne00,
@@ -10658,9 +10626,9 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor *src0,
 
     if (ids->backend == GGML_BACKEND_GPU) {
         const char * ids_dev = (const char *)((const ggml_tensor_extra_gpu *)ids->extra)->data_device[g_main_device];
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             stream->memcpy(ids_host.data(), ids_dev, ggml_nbytes(ids))));
-        CUDA_CHECK(DPCT_CHECK_ERROR(stream->wait()));
+        SYCL_CHECK(DPCT_CHECK_ERROR(stream->wait()));
     } else {
         memcpy(ids_host.data(), ids->data, ggml_nbytes(ids));
     }
@@ -10691,8 +10659,8 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor *src0,
 
         for (int64_t i01 = 0; i01 < ids->ne[1]; i01++) {
             //int32_t row_id;
-            //CUDA_CHECK(cudaMemcpyAsync(&row_id, ids_dev + i01*ids->nb[1] + id*ids->nb[0], sizeof(int32_t), cudaMemcpyDeviceToHost, g_cudaStreams[g_main_device][0]));
-            //CUDA_CHECK(cudaStreamSynchronize(g_cudaStreams[g_main_device][0]));
+            //SYCL_CHECK(cudaMemcpyAsync(&row_id, ids_dev + i01*ids->nb[1] + id*ids->nb[0], sizeof(int32_t), cudaMemcpyDeviceToHost, g_cudaStreams[g_main_device][0]));
+            //SYCL_CHECK(cudaStreamSynchronize(g_cudaStreams[g_main_device][0]));
 
             const int32_t row_id = *(const int32_t *) (ids_host.data() + i01*ids->nb[1] + id*ids->nb[0]);
 
@@ -10735,7 +10703,7 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor *src0,
 
                 GGML_ASSERT(row_id >= 0 && row_id < n_as);
 
-                CUDA_CHECK(DPCT_CHECK_ERROR(
+                SYCL_CHECK(DPCT_CHECK_ERROR(
                     stream->memcpy(src1_contiguous.get() + num_src1_rows * nb11,
                                    src1_original + i01 * nb11, nb11)));
                 num_src1_rows++;
@@ -10768,7 +10736,7 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor *src0,
 
                 GGML_ASSERT(row_id >= 0 && row_id < n_as);
 
-                CUDA_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
+                SYCL_CHECK(DPCT_CHECK_ERROR(stream->memcpy(
                     dst_original + i01 * nb1,
                     dst_contiguous.get() + num_src1_rows * nb1, nb1)));
                 num_src1_rows++;
@@ -10777,7 +10745,7 @@ static void ggml_cuda_mul_mat_id(const ggml_tensor *src0,
     }
 
     if (dst->backend == GGML_BACKEND_CPU) {
-        CUDA_CHECK(DPCT_CHECK_ERROR(stream->wait()));
+        SYCL_CHECK(DPCT_CHECK_ERROR(stream->wait()));
     }
 }
 catch (sycl::exception const &exc) {
@@ -10821,7 +10789,7 @@ static void ggml_cuda_cpy(const ggml_tensor *src0, const ggml_tensor *src1,
     const int64_t nb11 = src1->nb[1];
     const int64_t nb12 = src1->nb[2];
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     dpct::queue_ptr main_stream = g_cudaStreams[g_main_device][0];
 
     const ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
@@ -10958,19 +10926,19 @@ void ggml_cuda_transform_tensor(void *data, struct ggml_tensor *tensor) try {
         }
 
         char * buf;
-        CUDA_CHECK(DPCT_CHECK_ERROR(buf = (char *)sycl::malloc_device(
+        SYCL_CHECK(DPCT_CHECK_ERROR(buf = (char *)sycl::malloc_device(
                                         size, dpct::get_in_order_queue())));
         char * buf_host = (char *)data + offset_split;
 
         // set padding to 0 to avoid possible NaN values
         if (size > original_size) {
-            CUDA_CHECK(DPCT_CHECK_ERROR(
+            SYCL_CHECK(DPCT_CHECK_ERROR(
                 dpct::get_in_order_queue()
                     .memset(buf + original_size, 0, size - original_size)
                     .wait()));
         }
 
-        CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
                                         .memcpy(buf, buf_host, original_size)
                                         .wait()));
 
@@ -10978,7 +10946,7 @@ void ggml_cuda_transform_tensor(void *data, struct ggml_tensor *tensor) try {
 
         if (backend == GGML_BACKEND_GPU_SPLIT) {
             for (int64_t is = 0; is < MAX_STREAMS; ++is) {
-                CUDA_CHECK(DPCT_CHECK_ERROR(extra->events[id][is] =
+                SYCL_CHECK(DPCT_CHECK_ERROR(extra->events[id][is] =
                                                 new sycl::event()));
             }
         }
@@ -11001,15 +10969,15 @@ void ggml_cuda_free_data(struct ggml_tensor *tensor) try {
 
     for (int64_t id = 0; id < g_device_count; ++id) {
         if (extra->data_device[id] != nullptr) {
-            CUDA_CHECK(ggml_cuda_set_device(id));
-            CUDA_CHECK(DPCT_CHECK_ERROR(sycl::free(
+            SYCL_CHECK(ggml_cuda_set_device(id));
+            SYCL_CHECK(DPCT_CHECK_ERROR(sycl::free(
                 extra->data_device[id], dpct::get_in_order_queue())));
         }
 
         for (int64_t is = 0; is < MAX_STREAMS; ++is) {
             if (extra->events[id][is] != nullptr) {
-                CUDA_CHECK(ggml_cuda_set_device(id));
-                CUDA_CHECK(DPCT_CHECK_ERROR(
+                SYCL_CHECK(ggml_cuda_set_device(id));
+                SYCL_CHECK(DPCT_CHECK_ERROR(
                     dpct::destroy_event(extra->events[id][is])));
             }
         }
@@ -11070,7 +11038,7 @@ static void ggml_cuda_assign_buffers_impl(struct ggml_tensor *tensor,
         force_inplace;
     const size_t size = ggml_nbytes(tensor);
 
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
     if (inplace && (tensor->src[0]->backend == GGML_BACKEND_GPU || tensor->src[0]->backend == GGML_BACKEND_GPU_SPLIT)) {
         ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu * ) tensor->src[0]->extra;
         char * src0_ddc = (char *) src0_extra->data_device[g_main_device];
@@ -11093,7 +11061,7 @@ static void ggml_cuda_assign_buffers_impl(struct ggml_tensor *tensor,
 
         char * data = (char *) g_scratch_buffer;
         if (data == nullptr) {
-            CUDA_CHECK(DPCT_CHECK_ERROR(
+            SYCL_CHECK(DPCT_CHECK_ERROR(
                 data = (char *)sycl::malloc_device(
                     g_scratch_size, dpct::get_in_order_queue())));
             g_scratch_buffer = data;
@@ -11106,9 +11074,9 @@ static void ggml_cuda_assign_buffers_impl(struct ggml_tensor *tensor,
         GGML_ASSERT(g_scratch_offset <= g_scratch_size);
     } else { // allocate new buffers outside of scratch
         void * data;
-        CUDA_CHECK(DPCT_CHECK_ERROR(data = (void *)sycl::malloc_device(
+        SYCL_CHECK(DPCT_CHECK_ERROR(data = (void *)sycl::malloc_device(
                                         size, dpct::get_in_order_queue())));
-        CUDA_CHECK(DPCT_CHECK_ERROR(
+        SYCL_CHECK(DPCT_CHECK_ERROR(
             dpct::get_in_order_queue().memset(data, 0, size).wait()));
         extra = new ggml_tensor_extra_gpu;
         memset(extra, 0, sizeof(*extra));
@@ -11130,7 +11098,7 @@ void ggml_cuda_assign_scratch_offset(struct ggml_tensor *tensor,
     }
     if (g_scratch_buffer == nullptr) {
         ggml_cuda_set_device(g_main_device);
-        CUDA_CHECK(
+        SYCL_CHECK(
             DPCT_CHECK_ERROR(g_scratch_buffer = (void *)sycl::malloc_device(
                                  g_scratch_size, dpct::get_in_order_queue())));
     }
@@ -11164,8 +11132,8 @@ void ggml_cuda_copy_to_device(struct ggml_tensor *tensor) try {
     GGML_ASSERT(ggml_is_contiguous(tensor));
 
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
-    CUDA_CHECK(ggml_cuda_set_device(g_main_device));
-    CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
+    SYCL_CHECK(ggml_cuda_set_device(g_main_device));
+    SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
                                     .memcpy(extra->data_device[g_main_device],
                                             tensor->data, ggml_nbytes(tensor))
                                     .wait()));
@@ -11202,7 +11170,7 @@ void ggml_cuda_set_main_device(const int main_device) try {
     if (g_main_device != main_device && g_device_count > 1) {
         g_main_device = main_device;
         dpct::device_info prop;
-        CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
+        SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(g_main_device))));
         fprintf(stderr, "%s: using device %d (%s) as main device\n", __func__,
                 g_main_device, prop.get_name());
@@ -11228,7 +11196,7 @@ void ggml_cuda_free_scratch() try {
         return;
     }
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(
+    SYCL_CHECK(DPCT_CHECK_ERROR(
         sycl::free(g_scratch_buffer, dpct::get_in_order_queue())));
     g_scratch_buffer = nullptr;
 }
@@ -11413,7 +11381,7 @@ catch (sycl::exception const &exc) {
 void ggml_cuda_get_device_description(int device, char *description,
                                       size_t description_size) try {
     dpct::device_info prop;
-    CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
+    SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_device_info(
         prop, dpct::dev_mgr::instance().get_device(device))));
     snprintf(description, description_size, "%s", prop.get_name());
 }
@@ -11460,7 +11428,7 @@ struct ggml_backend_buffer_context_cuda {
 static void
 ggml_backend_cuda_buffer_free_buffer(ggml_backend_buffer_t buffer) try {
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(sycl::free(ctx->dev_ptr, dpct::get_in_order_queue())));
     delete ctx;
 }
@@ -11503,7 +11471,7 @@ static void ggml_backend_cuda_buffer_init_tensor(ggml_backend_buffer_t buffer,
         size_t padded_size = ggml_backend_buft_get_alloc_size(buffer->buft, tensor);
 
         if (padded_size > original_size && tensor->view_src == nullptr) {
-            CUDA_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[ctx->device][0]->memset(
+            SYCL_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[ctx->device][0]->memset(
                 (char *)tensor->data + original_size, 0,
                 padded_size - original_size)));
         }
@@ -11526,10 +11494,10 @@ static void ggml_backend_cuda_buffer_set_tensor(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
     ggml_cuda_set_device(ctx->device);
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(dpct::get_in_order_queue()
                              .memcpy((char *)tensor->data + offset, data, size)
                              .wait()));
@@ -11549,10 +11517,10 @@ static void ggml_backend_cuda_buffer_get_tensor(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
     ggml_cuda_set_device(ctx->device);
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(
+    SYCL_CHECK(DPCT_CHECK_ERROR(
         dpct::get_in_order_queue()
             .memcpy(data, (const char *)tensor->data + offset, size)
             .wait()));
@@ -11568,10 +11536,10 @@ static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer,
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
 
     ggml_cuda_set_device(ctx->device);
-    CUDA_CHECK(
+    SYCL_CHECK(
         DPCT_CHECK_ERROR(dpct::get_current_device().queues_wait_and_throw()));
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
+    SYCL_CHECK(DPCT_CHECK_ERROR(dpct::get_in_order_queue()
                                     .memset(ctx->dev_ptr, value, buffer->size)
                                     .wait()));
 }
@@ -11604,7 +11572,7 @@ ggml_backend_cuda_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     size = std::max(size, (size_t)1); // cudaMalloc returns null for size 0
 
     void * dev_ptr;
-    CUDA_CHECK(DPCT_CHECK_ERROR(dev_ptr = (void *)sycl::malloc_device(
+    SYCL_CHECK(DPCT_CHECK_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, dpct::get_in_order_queue())));
 
     ggml_backend_buffer_context_cuda * ctx = new ggml_backend_buffer_context_cuda(device, dev_ptr);
@@ -11746,7 +11714,7 @@ static void ggml_backend_cuda_set_tensor_async(ggml_backend_t backend,
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->memcpy(
+    SYCL_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->memcpy(
         (char *)tensor->data + offset, data, size)));
 }
 catch (sycl::exception const &exc) {
@@ -11764,7 +11732,7 @@ static void ggml_backend_cuda_get_tensor_async(ggml_backend_t backend,
     GGML_ASSERT(tensor->buffer->buft == ggml_backend_cuda_buffer_type(cuda_ctx->device) && "unsupported buffer type");
     GGML_ASSERT(tensor->backend == GGML_BACKEND_GPU);
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->memcpy(
+    SYCL_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->memcpy(
         data, (const char *)tensor->data + offset, size)));
 }
 catch (sycl::exception const &exc) {
@@ -11776,7 +11744,7 @@ catch (sycl::exception const &exc) {
 static void ggml_backend_cuda_synchronize(ggml_backend_t backend) try {
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
 
-    CUDA_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->wait()));
+    SYCL_CHECK(DPCT_CHECK_ERROR(g_cudaStreams[cuda_ctx->device][0]->wait()));
 
     UNUSED(backend);
 }
