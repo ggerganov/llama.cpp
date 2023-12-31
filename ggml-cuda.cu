@@ -4,7 +4,6 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <float.h>
 #include <limits>
 #include <stdint.h>
@@ -8169,11 +8168,6 @@ static void ggml_cuda_op_mul_mat(
             dev[id].src1_ddf = dev[id].src1_ddf_alloc.alloc(is0, ggml_nelements(src1));
         }
 
-        // if (strcmp(dst->name, "Qcur-0") == 0) {
-        //     fprintf(stderr, "device synchronize for %s\n", dst->name);
-        //     CUDA_CHECK(cudaDeviceSynchronize());
-        // }
-
         if (convert_src1_to_q8_1) {
             dev[id].src1_ddq = dev[id].src1_ddq_alloc.alloc(is0, nrows1*src1_padded_col_size*q8_1_ts/q8_1_bs);
 
@@ -8216,7 +8210,7 @@ static void ggml_cuda_op_mul_mat(
             cudaStream_t stream = g_cudaStreams[id][is];
 
             // wait for main GPU data if necessary
-            if (split && (id != g_main_device || is != is0)) { // TODO is this correct?
+            if (split && (id != g_main_device || is != is0)) {
                 CUDA_CHECK(cudaStreamWaitEvent(stream, src0_extra->events[g_main_device][is0], 0));
             }
 
@@ -8322,7 +8316,7 @@ static void ggml_cuda_op_mul_mat(
                 }
 
                 // add event for the main device to wait on until other device is done
-                if (split && (id != g_main_device || is != is0)) { // TODO is this correct?
+                if (split && (id != g_main_device || is != is0)) {
                     CUDA_CHECK(cudaEventRecord(src0_extra->events[id][is], stream));
                 }
             }
@@ -9102,7 +9096,6 @@ static void ggml_cuda_clamp(const ggml_tensor * src0, const ggml_tensor * src1, 
 }
 
 static void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    // CUDA_CHECK(cudaDeviceSynchronize());
     const int64_t ne = ggml_nelements(src0);
     GGML_ASSERT(ne == ggml_nelements(src1));
 
@@ -9166,7 +9159,6 @@ static void ggml_cuda_cpy(const ggml_tensor * src0, const ggml_tensor * src1, gg
     }
 
     (void) dst;
-    // CUDA_CHECK(cudaDeviceSynchronize());
 }
 
 static void ggml_cuda_dup(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
