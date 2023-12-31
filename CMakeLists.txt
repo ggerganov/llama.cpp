@@ -182,10 +182,15 @@ if (LLAMA_METAL)
         # note: this is the only way I found to disable fast-math in Metal. it's ugly, but at least it works
         #       disabling fast math is needed in order to pass tests/test-backend-ops
         # note: adding -fno-inline fixes the tests when using MTL_SHADER_VALIDATION=1
+        set(XC_FLAGS -fno-fast-math -fno-inline -g)
+        if (LLAMA_QKK_64)
+            set(XC_FLAGS ${XC_FLAGS} -DQK_K=64)
+        endif()
+
         add_custom_command(
             OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml.metallib
-            COMMAND xcrun -sdk macosx metal -fno-fast-math -fno-inline -g -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
-            COMMAND xcrun -sdk macosx metallib ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml.metallib
+            COMMAND xcrun -sdk macosx metal    ${XC_FLAGS} -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
+            COMMAND xcrun -sdk macosx metallib                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air   -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml.metallib
             DEPENDS ggml-metal.metal
             COMMENT "Compiling Metal kernels"
         )
