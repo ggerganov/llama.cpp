@@ -7,6 +7,7 @@ source /opt/intel/oneapi/setvars.sh
 
 export GGML_SYCL_DEVIC=0
 export GGML_SYCL_DEBUG=1
+export GGML_SYCL_LIST_DEVICE=1
 #./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT1}" -e -n 400 -ngl 33 -c 2048
 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "${INPUT2}" -n 400 -e -ngl 33
 

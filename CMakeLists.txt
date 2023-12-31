@@ -474,13 +474,14 @@ if (LLAMA_SYCL)
 
     if (_sycl_support)
 	    add_compile_definitions(GGML_USE_CUBLAS)
+	    #add_compile_definitions(GGML_SYCL_F16)
 	    #add_compile_options(-std=c++17 -O3 -fsycl)
         add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include)
         add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include/sycl)
         add_compile_options(-I/opt/intel/oneapi/dpcpp-ct/2024.0/include)
         add_compile_options(-I/opt/intel/oneapi/2024.0/include)
 
-	    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+	    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wno-narrowing")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
 

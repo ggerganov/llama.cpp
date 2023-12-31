@@ -43,7 +43,17 @@ If you want to get more binary files, please change the build prject.
 
 1. Install Intel oneAPI Base toolkit.
 
-2. Setup Local
+2. Build locally:
+
+```
+mkdir -p build
+cd build
+source /opt/intel/oneapi/setvars.sh
+cmake .. -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx
+cmake --build . --config Release -v
+```
+
+or
 
 ```
 ./setup.sh
@@ -56,17 +66,22 @@ If you want to get more binary files, please change the build prject.
 Run without parameter:
 
 ```
+export GGML_SYCL_LIST_DEVICE=1
 ./build/bin/main
 ```
 
 Check the id in startup log, like:
-ggml_init_cublas: found 6 CUDA devices:
+
+```
+SYCL devices:
   Device 0: Intel(R) Arc(TM) A770 Graphics, compute capability 1.3
   Device 1: Intel(R) FPGA Emulation Device, compute capability 1.2
   Device 2: 13th Gen Intel(R) Core(TM) i7-13700K, compute capability 3.0
   Device 3: Intel(R) Arc(TM) A770 Graphics, compute capability 3.0
   Device 4: Intel(R) UHD Graphics 770, compute capability 3.0
   Device 5: Intel(R) UHD Graphics 770, compute capability 1.3
+Exit for list devices task. unset GGML_SYCL_LIST_DEVICE to restore LLM work!
+```
 
 #### Put model file to folder **models**
 
@@ -133,17 +148,21 @@ Run the command in command line or powershell.
 Run without parameter:
 
 ```
+set GGML_SYCL_LIST_DEVICE=1
 .\x64\Release\llama.cpp.sycl.exe
 ```
-
 Check the id in startup log, like:
-ggml_init_cublas: found 6 CUDA devices:
+
+```
+SYCL devices:
   Device 0: Intel(R) Arc(TM) A770 Graphics, compute capability 1.3
   Device 1: Intel(R) FPGA Emulation Device, compute capability 1.2
   Device 2: 13th Gen Intel(R) Core(TM) i7-13700K, compute capability 3.0
   Device 3: Intel(R) Arc(TM) A770 Graphics, compute capability 3.0
   Device 4: Intel(R) UHD Graphics 770, compute capability 3.0
   Device 5: Intel(R) UHD Graphics 770, compute capability 1.3
+Exit for list devices task. unset GGML_SYCL_LIST_DEVICE to restore LLM work!
+```
 
 #### Put model file to folder **models**
 
@@ -161,3 +180,25 @@ set GGML_SYCL_DEVICE=0
 ```
 .\run.bat
 ```
+
+### Environment Variable
+
+#### Build
+
+|Name|Value|Function|
+|-|-|-|
+|LLAMA_SYCL|ON (mandatory)|Enable build with SYCL code path|
+|CMAKE_C_COMPILER|icx|Use icx compiler for SYCL code path|
+|CMAKE_CXX_COMPILER|icpx|use icpx for SYCL code path|
+|GGML_SYCL_F16|OFF (default) or ON|Enable FP16 in computing|
+
+
+#### Running
+
+
+|Name|Value|Function|
+|-|-|-|
+|GGML_SYCL_DEVICE|0 (default) or 1|Set the device id used. List the device ids by **GGML_SYCL_LIST_DEVICE**|
+|GGML_SYCL_DEBUG|0 (default) or 1|Enable log funciton by macro: GGML_SYCL_DEBUG|
+|GGML_SYCL_LIST_DEVICE|0 (default) or 1|List the device ids only|
+

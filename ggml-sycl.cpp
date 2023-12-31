@@ -8282,7 +8282,6 @@ void print_devices(){
 
 int get_sycl_env(const char* env_name, int default_val){
     char * user_device_string = getenv(env_name);
-    printf("get_sycl_env=%s=%s\n", env_name, user_device_string);
     int user_number = default_val;
 
     unsigned n;
@@ -8297,6 +8296,13 @@ int get_sycl_env(const char* env_name, int default_val){
 void ggml_init_cublas() try {
     static bool initialized = false;
     if (!initialized) {
+        if (get_sycl_env("GGML_SYCL_LIST_DEVICE", 0)!=0){
+            printf("SYCL devices:\n");
+            print_devices();
+            printf("Exit for list devices task. unset GGML_SYCL_LIST_DEVICE to restore LLM work!\n");
+            std::exit(0);
+        }
+
         g_ggml_sycl_debug = get_sycl_env("GGML_SYCL_DEBUG", 0);
 
         printf("g_ggml_sycl_debug=%d\n", g_ggml_sycl_debug);
