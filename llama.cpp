@@ -3224,7 +3224,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3295,7 +3295,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3346,7 +3346,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3399,7 +3399,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3454,7 +3454,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3507,7 +3507,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3561,7 +3561,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3611,7 +3611,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3712,7 +3712,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3764,7 +3764,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
@@ -3814,7 +3814,7 @@ static bool llm_load_tensors(
 
                     const uint32_t n_ff      = hparams.n_ff;
                     const int64_t n_embd_gqa = n_embd_v_gqa;
-                    GGML_ASSERT(n_embd_gqa == n_embd);
+                    GGML_ASSERT(n_embd_gqa == n_embd / hparams.n_gqa());
                     GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
 
                     const int i_gpu_start = n_layer - n_gpu_layers;
