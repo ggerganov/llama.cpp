@@ -2016,6 +2016,10 @@ static void server_print_usage(const char *argv0, const gpt_params &params,
     printf("  --mmproj MMPROJ_FILE  path to a multimodal projector file for LLaVA.\n");
     printf("  --log-disable         disables logging to a file.\n");
     printf("\n");
+    printf("  --override-kv KEY=TYPE:VALUE\n");
+    printf("                        advanced option to override model metadata by key. may be specified multiple times.\n");
+    printf("                        types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
+    printf("\n");
 }
 
 static void server_params_parse(int argc, char **argv, server_params &sparams,
