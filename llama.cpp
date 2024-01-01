@@ -1194,10 +1194,10 @@ static void ggml_offload_nop(struct ggml_tensor * tensor) {
 
 static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size());
+        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), false);
         GGML_ASSERT(check == -n_tokens);
     }
     else {
@@ -10680,10 +10680,15 @@ static std::string llama_decode_text(const std::string & text) {
 
 // does not write null-terminator to buf
 int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length) {
+    return llama_token_to_piece(model, token, buf, length, false);
+}
+
+// does not write null-terminator to buf
+int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length, bool print_all_types = false) {
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
-            if (llama_is_normal_token(model->vocab, token)) {
+            if (print_all_types || llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 llama_unescape_whitespace(result);
                 if (length < (int) result.length()) {
@@ -10713,7 +10718,7 @@ int llama_token_to_piece(const struct llama_model * model, llama_token token, ch
             break;
         }
         case LLAMA_VOCAB_TYPE_BPE: {
-            if (llama_is_normal_token(model->vocab, token)) {
+            if (print_all_types || llama_is_normal_token(model->vocab, token)) {
                 std::string result = model->vocab.id_to_token[token].text;
                 result = llama_decode_text(result);
                 if (length < (int) result.length()) {
