@@ -138,7 +138,7 @@ endif
 # it is recommended to use the CMAKE file to build for cublas if you can - will likely work better
 ifdef LLAMA_CUBLAS
 	CUBLAS_FLAGS = -DGGML_USE_CUBLAS -I/usr/local/cuda/include -I/opt/cuda/include -I$(CUDA_PATH)/targets/x86_64-linux/include
-	CUBLASLD_FLAGS = -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
+	CUBLASLD_FLAGS = -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -Lconda/envs/linux/lib -Lconda/envs/linux/lib/stubs -L/usr/local/cuda/lib64 -L/opt/cuda/lib64 -L$(CUDA_PATH)/targets/x86_64-linux/lib -L/usr/local/cuda/targets/aarch64-linux/lib -L/usr/lib/wsl/lib
 	CUBLAS_OBJS = ggml-cuda.o ggml_v2-cuda.o ggml_v2-cuda-legacy.o
 	NVCC      = nvcc
 	NVCCFLAGS = --forward-unknown-to-host-compiler -use_fast_math
