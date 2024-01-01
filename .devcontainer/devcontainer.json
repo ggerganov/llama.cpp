@@ -1,0 +1,8 @@
+{
+	"name": "llama.cpp",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
+	"postStartCommand": ".devcontainer/start.sh"
+}
