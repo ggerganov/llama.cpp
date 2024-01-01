@@ -373,3 +373,16 @@ You can use html formatting if needed.
   </body>
 </html>
 ```
+
+
+### Updating Custom Prompts
+
+Run below script to update custom prompts, which will get the latest prompts from github repository.
+
+```bash
+./update-prompts.sh
+```
+
+#### Awesome Prompts
+Custom Prompts are sourced from below location.
+[awesome-chatgpt-prompts](https://github.com/f/awesome-chatgpt-prompts)
