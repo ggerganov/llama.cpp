@@ -5,7 +5,6 @@
 #include <string.h>
 #include <assert.h>
 #include <float.h>
-#include <stdio.h>
 
 #ifdef __ARM_NEON
 
@@ -2041,6 +2040,29 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
             }
         }
 #else
+        float weights[32];
+        float mins[QK_K/32];
+        float scales[QK_K/32];
+        uint8_t Laux[32];
+        float max_scale = 0; // as we are deducting the min, scales are always positive
+        float max_min = 0;
+        for (int j = 0; j < QK_K/32; ++j) {
+            //scales[j] = make_qkx1_quants(32, 15, x + 32*j, L + 32*j, &mins[j], 9, 0.5f);
+            float sum_x2 = 0;
+            for (int l = 0; l < 32; ++l) sum_x2 += x[32*j + l] * x[32*j + l];
+            float av_x = sqrtf(sum_x2/32);
+            for (int l = 0; l < 32; ++l) weights[l] = av_x + fabsf(x[32*j + l]);
+            scales[j] = make_qkx2_quants(32, 15, x + 32*j, weights, L + 32*j, &mins[j], Laux, -1.f, 0.1f, 20, false);
+            float scale = scales[j];
+            if (scale > max_scale) {
+                max_scale = scale;
+            }
+            float min = mins[j];
+            if (min > max_min) {
+                max_min = min;
+            }
+        }
+
         const float s_factor = 15.f;
         float inv_scale = max_scale > 0 ? s_factor/max_scale : 0.f;
         float inv_min   = max_min   > 0 ? s_factor/max_min   : 0.f;
@@ -2156,43 +2178,43 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
     for (int i = 0; i < nb; i++) {
 
 #if QK_K == 256
-    int block_scales[QK_K/32];
-    int block_mins[QK_K/32];
-    quantize_q_k_1(x, 5, 6, 32, block_scales, block_mins, L, &y[i].d, &y[i].dmin);
+        int block_scales[QK_K/32];
+        int block_mins[QK_K/32];
+        quantize_q_k_1(x, 5, 6, 32, block_scales, block_mins, L, &y[i].d, &y[i].dmin);
 
-    for (int j = 0; j < QK_K/32; ++j) {
-        int ls = block_scales[j];
-        int lm = block_mins[j];
-        if (j < 4) {
-            y[i].scales[j] = ls;
-            y[i].scales[j+4] = lm;
-        } else {
-            y[i].scales[j+4] = (ls & 0xF) | ((lm & 0xF) << 4);
-            y[i].scales[j-4] |= ((ls >> 4) << 6);
-            y[i].scales[j-0] |= ((lm >> 4) << 6);
-        }
-    }
-
-    uint8_t * restrict qh = y[i].qh;
-    uint8_t * restrict ql = y[i].qs;
-    memset(qh, 0, QK_K/8);
-
-    uint8_t m1 = 1, m2 = 2;
-    for (int n = 0; n < QK_K; n += 64) {
-        for (int j = 0; j < 32; ++j) {
-            int l1 = L[n + j];
-            if (l1 > 15) {
-                l1 -= 16; qh[j] |= m1;
+        for (int j = 0; j < QK_K/32; ++j) {
+            int ls = block_scales[j];
+            int lm = block_mins[j];
+            if (j < 4) {
+                y[i].scales[j] = ls;
+                y[i].scales[j+4] = lm;
+            } else {
+                y[i].scales[j+4] = (ls & 0xF) | ((lm & 0xF) << 4);
+                y[i].scales[j-4] |= ((ls >> 4) << 6);
+                y[i].scales[j-0] |= ((lm >> 4) << 6);
             }
-            int l2 = L[n + j + 32];
-            if (l2 > 15) {
-                l2 -= 16; qh[j] |= m2;
-            }
-            ql[j] = l1 | (l2 << 4);
         }
-        m1 <<= 2; m2 <<= 2;
-        ql += 32;
-    }
+
+        uint8_t * restrict qh = y[i].qh;
+        uint8_t * restrict ql = y[i].qs;
+        memset(qh, 0, QK_K/8);
+
+        uint8_t m1 = 1, m2 = 2;
+        for (int n = 0; n < QK_K; n += 64) {
+            for (int j = 0; j < 32; ++j) {
+                int l1 = L[n + j];
+                if (l1 > 15) {
+                    l1 -= 16; qh[j] |= m1;
+                }
+                int l2 = L[n + j + 32];
+                if (l2 > 15) {
+                    l2 -= 16; qh[j] |= m2;
+                }
+                ql[j] = l1 | (l2 << 4);
+            }
+            m1 <<= 2; m2 <<= 2;
+            ql += 32;
+        }
 #else
         float max_scale = 0, amax = 0;
         for (int j = 0; j < QK_K/16; ++j) {
