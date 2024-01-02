@@ -2383,8 +2383,8 @@ static void server_params_parse(int argc, char **argv, server_params &sparams,
             log_set_target(stdout);
             LOG_INFO("logging to file is disabled.", {});
         }
-	else if (arg == "--override-kv") 
-	{
+        else if (arg == "--override-kv")
+        {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
