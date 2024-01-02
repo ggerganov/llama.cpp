@@ -68,7 +68,6 @@
 #include <initializer_list>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <numeric>
 #include <queue>
 #include <random>
@@ -9085,7 +9084,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     std::vector<std::thread> workers;
     workers.reserve(nthread);
-    std::mutex mutex;
 
     int idx = 0;
 
@@ -9159,7 +9157,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_size = ggml_nbytes(tensor);
             LLAMA_LOG_INFO("size = %8.3f MB\n", ggml_nbytes(tensor)/1024.0/1024.0);
         } else {
-            const size_t nelements = ggml_nelements(tensor);
+            const size_t ne = ggml_nelements(tensor);
 
             float * f32_data;
 
@@ -9168,53 +9166,60 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             } else if (ggml_is_quantized(tensor->type) && !params->allow_requantize) {
                 throw std::runtime_error(format("requantizing from type %s is disabled", ggml_type_name(tensor->type)));
             } else {
-                llama_convert_tensor_internal(tensor, f32_conv_buf, workers, nelements, nthread);
+                llama_convert_tensor_internal(tensor, f32_conv_buf, workers, ne, nthread);
                 f32_data = (float *) f32_conv_buf.data();
             }
 
             LLAMA_LOG_INFO("quantizing to %s .. ", ggml_type_name(new_type));
             fflush(stdout);
 
-            if (work.size() < nelements * 4) {
-                work.resize(nelements * 4); // upper bound on size
+            if (work.size() < ne * 4) {
+                work.resize(ne * 4); // upper bound on size
             }
             new_data = work.data();
+
             std::array<int64_t, 1 << 4> hist_cur = {};
 
-            static const int chunk_size = 32 * 512;
-            const int nchunk = (nelements + chunk_size - 1)/chunk_size;
-            const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
-            if (nthread_use < 2) {
-                new_size = ggml_quantize_chunk(new_type, f32_data, new_data, 0, nelements, hist_cur.data());
-            } else {
-                size_t counter = 0;
-                new_size = 0;
-                auto compute = [&mutex, &counter, &hist_cur, &new_size, new_type, f32_data, new_data, nelements]() {
-                    std::array<int64_t, 1 << 4> local_hist = {};
-                    size_t local_size = 0;
-                    while (true) {
-                        std::unique_lock<std::mutex> lock(mutex);
-                        size_t first = counter; counter += chunk_size;
-                        if (first >= nelements) {
-                            if (local_size > 0) {
-                                for (int j=0; j<int(local_hist.size()); ++j) {
-                                    hist_cur[j] += local_hist[j];
-                                }
-                                new_size += local_size;
-                            }
-                            break;
-                        }
-                        lock.unlock();
-                        size_t last = std::min(nelements, first + chunk_size);
+            {
+                static const size_t chunk_size = 32*512;
+
+                const int nchunk = GGML_PAD(ne, chunk_size)/chunk_size;
+                const int nthread_use = nthread > 1 ? std::max(1, std::min(nthread, nchunk)) : 1;
+
+                std::vector<size_t> size_th(nthread_use, 0);
+                std::vector<std::array<int64_t, 1 << 4>> hist_cur_th(nthread_use);
+
+                auto compute = [&size_th, &hist_cur_th, new_type, f32_data, new_data, ne, nchunk, nthread_use](int tid) {
+                    auto & local_size = size_th[tid];
+                    auto & local_hist = hist_cur_th[tid];
+
+                    for (int ch = tid; ch < nchunk; ch += nthread_use) {
+                        const size_t first = ch * chunk_size;
+                        const size_t last  = std::min(ne, first + chunk_size);
+
                         local_size += ggml_quantize_chunk(new_type, f32_data, new_data, first, last - first, local_hist.data());
                     }
                 };
+
                 for (int it = 0; it < nthread_use - 1; ++it) {
-                    workers.emplace_back(compute);
+                    workers.emplace_back(compute, it);
                 }
-                compute();
-                for (auto & w : workers) { w.join(); }
+
+                compute(nthread_use - 1);
+
+                for (auto & w : workers) {
+                    w.join();
+                }
+
                 workers.clear();
+
+                new_size = 0;
+                for (int it = 0; it < nthread_use; ++it) {
+                    for (int j = 0; j < int(hist_cur.size()); ++j) {
+                        hist_cur[j] += hist_cur_th[it][j];
+                    }
+                    new_size += size_th[it];
+                }
             }
 
             LLAMA_LOG_INFO("size = %8.2f MiB -> %8.2f MiB | hist: ", ggml_nbytes(tensor)/1024.0/1024.0, new_size/1024.0/1024.0);
@@ -9226,7 +9231,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
             if (tot_count > 0) {
                 for (size_t i = 0; i < hist_cur.size(); i++) {
-                    LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(nelements));
+                    LLAMA_LOG_INFO("%5.3f ", hist_cur[i] / float(ne));
                 }
             }
             LLAMA_LOG_INFO("\n");
