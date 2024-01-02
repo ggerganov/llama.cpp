@@ -3974,7 +3974,6 @@ void kernel_mul_mm_impl(device const  uchar * src0,
 }
 
 // same as kernel_mul_mm_impl, but src1 and dst are accessed via indices stored in src1ids
-// TODO: simplify and optimize constants
 template<typename block_q, short nl, void (*dequantize_func)(device const block_q *, short, thread half4x4 &)>
 void kernel_mul_mm_id_impl(
         device const  uchar * src0,
@@ -4042,7 +4041,6 @@ void kernel_mul_mm_id_impl(
         dequantize_func(x, il, temp_a);
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        #pragma unroll(16)
         for (int i = 0; i < 16; i++) {
             *(sa + SG_MAT_SIZE * ((tiitg / THREAD_PER_ROW / 8) \
             +                     (tiitg % THREAD_PER_ROW) * 16 + (i / 8) * 8) \
@@ -4061,14 +4059,11 @@ void kernel_mul_mm_id_impl(
         threadgroup half  * lsma = (sa + THREAD_MAT_M * SG_MAT_SIZE * (sgitg % 2));
         threadgroup float * lsmb = (sb + THREAD_MAT_N * SG_MAT_SIZE * (sgitg / 2));
 
-        #pragma unroll(4)
         for (int ik = 0; ik < BLOCK_SIZE_K / 8; ik++) {
-            #pragma unroll(4)
             for (int i = 0; i < 4; i++) {
                 simdgroup_load(ma[i],lsma + SG_MAT_SIZE * i);
             }
             simdgroup_barrier(mem_flags::mem_none);
-            #pragma unroll(2)
             for (int i = 0; i < 2; i++) {
                 simdgroup_load(mb[i],lsmb + SG_MAT_SIZE * i);
             }
@@ -4076,23 +4071,13 @@ void kernel_mul_mm_id_impl(
             lsma += BLOCK_SIZE_M / SG_MAT_ROW * SG_MAT_SIZE;
             lsmb += BLOCK_SIZE_N / SG_MAT_ROW * SG_MAT_SIZE;
 
-            #pragma unroll(8)
             for (int i = 0; i < 8; i++){
                 simdgroup_multiply_accumulate(c_res[i], mb[i/4], ma[i%4], c_res[i]);
             }
         }
     }
 
-    // TODO: this branch is invalid - need to fix it
-    //if ((r0 + 1) * BLOCK_SIZE_M <= ne0 && (r1 + 1) * BLOCK_SIZE_N <= ne1) {
-    //    device float * C = dst + (BLOCK_SIZE_M * r0 + 32 * (sgitg &  1)) \
-    //                           + im*ne1*ne0;
-    //    for (int i = 0; i < 8; i++) {
-    //        simdgroup_store(c_res[i], C + 8 * (i%4) + ne0*src1ids[8*(i/4) + BLOCK_SIZE_N * r1 + 16 * (sgitg >> 1)], ne0);
-    //    }
-    //} else {
     {
-        // block is smaller than 64x32, we should avoid writing data outside of the matrix
         threadgroup_barrier(mem_flags::mem_threadgroup);
         threadgroup float * temp_str = ((threadgroup float *)shared_memory) \
                                       + 32 * (sgitg&1) + (16 * (sgitg>>1)) * BLOCK_SIZE_M;
