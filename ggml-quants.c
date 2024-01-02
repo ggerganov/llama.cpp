@@ -1332,11 +1332,11 @@ static void quantize_q_k_1(const float * x, int bits, int scale_bits, int block_
         }
     }
 
-    float scales[QK_K/block_size];
-    float mins[QK_K/block_size];
+    float scales[QK_K];
+    float mins[QK_K];
 
     for (int j = 0; j < QK_K/block_size; j++) {
-        uint8_t q[block_size];
+        uint8_t q[QK_K];
         // First find least squares solution for min and scale for each block.
         quantize_1(&x[block_size*j], block_size, bits, q, &mins[j], &scales[j]);
         // Flip the sign because quantize_1 assumes that min is added, but min
@@ -1411,7 +1411,7 @@ static void quantize_q_k_1(const float * x, int bits, int scale_bits, int block_
         }
 
         float q_fit[QK_K];
-        float q_m[QK_K/block_size];
+        float q_m[QK_K];
 
         // Quantize elements and populate arrays needed for least squares fit.
         for (int j = 0; j < QK_K/block_size; ++j) {
