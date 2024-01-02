@@ -9965,8 +9965,9 @@ int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int3
 }
 
 int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
-    return snprintf(buf, buf_size, "%s %s %s",
+    return snprintf(buf, buf_size, "%s %s%s %s",
             llama_model_arch_name(model->arch).c_str(),
+            model->hparams.n_expert > 0 ? (std::to_string(model->hparams.n_expert) + "x").c_str() : "",
             llama_model_type_name(model->type),
             llama_model_ftype_name(model->ftype).c_str());
 }
