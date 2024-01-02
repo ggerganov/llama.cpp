@@ -8030,7 +8030,7 @@ void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * c
     }
 }
 
-void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int k, size_t min_keep) {
+void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
     const int64_t t_start_sample_us = ggml_time_us();
 
     k = std::max(k, (int) min_keep);
@@ -8390,7 +8390,7 @@ void llama_sample_classifier_free_guidance(
     }
 }
 
-llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int m, float * mu) {
+llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
     GGML_ASSERT(ctx);
 
     auto N = float(llama_n_vocab(llama_get_model(ctx)));
@@ -9598,7 +9598,7 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
-int llama_max_devices(void) {
+int32_t llama_max_devices(void) {
     return LLAMA_MAX_DEVICES;
 }
 
@@ -9909,15 +9909,15 @@ enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
     return model->vocab.type;
 }
 
-int llama_n_vocab(const struct llama_model * model) {
+int32_t llama_n_vocab(const struct llama_model * model) {
     return model->vocab.id_to_token.size();
 }
 
-int llama_n_ctx_train(const struct llama_model * model) {
+int32_t llama_n_ctx_train(const struct llama_model * model) {
     return model->hparams.n_ctx_train;
 }
 
-int llama_n_embd(const struct llama_model * model) {
+int32_t llama_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
@@ -9925,7 +9925,7 @@ float llama_rope_freq_scale_train(const struct llama_model * model) {
     return model->hparams.rope_freq_scale_train;
 }
 
-int llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size) {
+int32_t llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size) {
     const auto & it = model->gguf_kv.find(key);
     if (it == model->gguf_kv.end()) {
         if (buf_size > 0) {
@@ -9936,11 +9936,11 @@ int llama_model_meta_val_str(const struct llama_model * model, const char * key,
     return snprintf(buf, buf_size, "%s", it->second.c_str());
 }
 
-int llama_model_meta_count(const struct llama_model * model) {
+int32_t llama_model_meta_count(const struct llama_model * model) {
     return (int)model->gguf_kv.size();
 }
 
-int llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size) {
+int32_t llama_model_meta_key_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
         if (buf_size > 0) {
             buf[0] = '\0';
@@ -9952,7 +9952,7 @@ int llama_model_meta_key_by_index(const struct llama_model * model, int i, char 
     return snprintf(buf, buf_size, "%s", it->first.c_str());
 }
 
-int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, char * buf, size_t buf_size) {
+int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size) {
     if (i < 0 || i >= (int)model->gguf_kv.size()) {
         if (buf_size > 0) {
             buf[0] = '\0';
@@ -9964,7 +9964,7 @@ int llama_model_meta_val_str_by_index(const struct llama_model * model, int i, c
     return snprintf(buf, buf_size, "%s", it->second.c_str());
 }
 
-int llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
+int32_t llama_model_desc(const struct llama_model * model, char * buf, size_t buf_size) {
     return snprintf(buf, buf_size, "%s %s %s",
             llama_model_arch_name(model->arch).c_str(),
             llama_model_type_name(model->type),
@@ -9991,7 +9991,7 @@ struct ggml_tensor * llama_get_model_tensor(struct llama_model * model, const ch
     return ggml_get_tensor(model->ctx, name);
 }
 
-int llama_model_quantize(
+uint32_t llama_model_quantize(
         const char * fname_inp,
         const char * fname_out,
         const llama_model_quantize_params * params) {
@@ -10004,7 +10004,7 @@ int llama_model_quantize(
     }
 }
 
-int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, float scale, const char * path_base_model, int n_threads) {
+int32_t llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lora, float scale, const char * path_base_model, int32_t n_threads) {
     try {
         return llama_apply_lora_from_file_internal(ctx->model, path_lora, scale, path_base_model, n_threads);
     } catch (const std::exception & err) {
@@ -10013,7 +10013,7 @@ int llama_apply_lora_from_file(struct llama_context * ctx, const char * path_lor
     }
 }
 
-int llama_model_apply_lora_from_file(const struct llama_model * model, const char * path_lora, float scale, const char * path_base_model, int n_threads) {
+int32_t llama_model_apply_lora_from_file(const struct llama_model * model, const char * path_lora, float scale, const char * path_base_model, int32_t n_threads) {
     try {
         return llama_apply_lora_from_file_internal(*model, path_lora, scale, path_base_model, n_threads);
     } catch (const std::exception & err) {
@@ -10111,7 +10111,7 @@ void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_k
     }
 }
 
-int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
+int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     int result = 0;
 
     for (uint32_t i = 0; i < ctx->kv_self.size; i++) {
@@ -10121,7 +10121,7 @@ int llama_get_kv_cache_token_count(const struct llama_context * ctx) {
     return result;
 }
 
-int llama_get_kv_cache_used_cells(const struct llama_context * ctx) {
+int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx) {
     return ctx->kv_self.used;
 }
 
@@ -10603,7 +10603,7 @@ int llama_eval(
         struct llama_context * ctx,
                  llama_token * tokens,
                      int32_t   n_tokens,
-                         int   n_past) {
+                     int32_t   n_past) {
     llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
 
     const int ret = llama_decode_internal(*ctx, llama_batch_get_one(tokens, n_tokens, n_past, 0));
@@ -10618,7 +10618,7 @@ int llama_eval_embd(
             struct llama_context * ctx,
                            float * embd,
                          int32_t   n_tokens,
-                             int   n_past) {
+                         int32_t   n_past) {
     llama_kv_cache_seq_rm(ctx->kv_self, -1, n_past, -1);
 
     llama_batch batch = { n_tokens, nullptr, embd, nullptr, nullptr, nullptr, nullptr, n_past, 1, 0, };
@@ -10689,7 +10689,7 @@ void llama_batch_free(struct llama_batch batch) {
     if (batch.logits)   free(batch.logits);
 }
 
-int llama_decode(
+int32_t llama_decode(
         struct llama_context * ctx,
           struct llama_batch   batch) {
     const int ret = llama_decode_internal(*ctx, batch);
@@ -10737,11 +10737,11 @@ llama_token llama_token_nl(const struct llama_model * model) {
     return model->vocab.linefeed_id;
 }
 
-int llama_add_bos_token(const struct llama_model * model) {
+int32_t llama_add_bos_token(const struct llama_model * model) {
     return model->vocab.special_add_bos;
 }
 
-int llama_add_eos_token(const struct llama_model * model) {
+int32_t llama_add_eos_token(const struct llama_model * model) {
     return model->vocab.special_add_eos;
 }
 
@@ -10761,12 +10761,12 @@ llama_token llama_token_eot(const struct llama_model * model) {
     return model->vocab.special_eot_id;
 }
 
-int llama_tokenize(
+int32_t llama_tokenize(
     const struct llama_model * model,
                   const char * text,
-                         int   text_len,
+                     int32_t   text_len,
                  llama_token * tokens,
-                         int   n_max_tokens,
+                     int32_t   n_max_tokens,
                         bool   add_bos,
                         bool   special) {
     auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_bos, special);
@@ -10794,7 +10794,7 @@ static std::string llama_decode_text(const std::string & text) {
 }
 
 // does not write null-terminator to buf
-int llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int length) {
+int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length) {
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
         case LLAMA_VOCAB_TYPE_SPM: {
