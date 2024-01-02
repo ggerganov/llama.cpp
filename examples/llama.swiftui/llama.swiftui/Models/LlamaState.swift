@@ -4,6 +4,7 @@ import Foundation
 class LlamaState: ObservableObject {
     @Published var messageLog = ""
     @Published var cacheCleared = false
+    let NS_PER_S = 1_000_000_000.0
 
     private var llamaContext: LlamaContext?
     private var defaultModelUrl: URL? {
@@ -20,12 +21,12 @@ class LlamaState: ObservableObject {
     }
 
     func loadModel(modelUrl: URL?) throws {
-        messageLog += "Loading model...\n"
         if let modelUrl {
+            messageLog += "Loading model...\n"
             llamaContext = try LlamaContext.create_context(path: modelUrl.path())
             messageLog += "Loaded model \(modelUrl.lastPathComponent)\n"
         } else {
-            messageLog += "Could not locate model\n"
+            messageLog += "Load a model from the list below\n"
         }
     }
 
@@ -34,15 +35,29 @@ class LlamaState: ObservableObject {
             return
         }
 
+        let t_start = DispatchTime.now().uptimeNanoseconds
         await llamaContext.completion_init(text: text)
+        let t_heat_end = DispatchTime.now().uptimeNanoseconds
+        let t_heat = Double(t_heat_end - t_start) / NS_PER_S
+
         messageLog += "\(text)"
 
-        while await llamaContext.n_cur <= llamaContext.n_len {
+        while await llamaContext.n_cur < llamaContext.n_len {
             let result = await llamaContext.completion_loop()
             messageLog += "\(result)"
         }
+
+        let t_end = DispatchTime.now().uptimeNanoseconds
+        let t_generation = Double(t_end - t_heat_end) / NS_PER_S
+        let tokens_per_second = Double(await llamaContext.n_len) / t_generation
+
         await llamaContext.clear()
-        messageLog += "\n\ndone\n"
+        messageLog += """
+            \n
+            Done
+            Heat up took \(t_heat)s
+            Generated \(tokens_per_second) t/s\n
+            """
     }
 
     func bench() async {
@@ -56,10 +71,10 @@ class LlamaState: ObservableObject {
         messageLog += await llamaContext.model_info() + "\n"
 
         let t_start = DispatchTime.now().uptimeNanoseconds
-        await llamaContext.bench(pp: 8, tg: 4, pl: 1) // heat up
+        let _ = await llamaContext.bench(pp: 8, tg: 4, pl: 1) // heat up
         let t_end = DispatchTime.now().uptimeNanoseconds
 
-        let t_heat = Double(t_end - t_start) / 1_000_000_000.0
+        let t_heat = Double(t_end - t_start) / NS_PER_S
         messageLog += "Heat up time: \(t_heat) seconds, please wait...\n"
 
         // if more than 5 seconds, then we're probably running on a slow device
