@@ -1791,7 +1791,7 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:11];
                                 [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:12];
                                 [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:13];
-                                [encoder setBytes:&ne11    length:sizeof(ne11) atIndex:14];
+                                [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:14];
                                 [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:15];
                                 [encoder setBytes:&r2      length:sizeof(r2)   atIndex:16];
                                 [encoder setBytes:&r3      length:sizeof(r3)   atIndex:17];
