@@ -257,13 +257,14 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
 #endif
         NSError * error = nil;
-        NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
+        NSString * libPath = [bundle pathForResource:@"ggml" ofType:@"metallib"];
         if (libPath != nil) {
+            // pre-compiled library found
             NSURL * libURL = [NSURL fileURLWithPath:libPath];
             GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [libPath UTF8String]);
             ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
         } else {
-            GGML_METAL_LOG_INFO("%s: default.metallib not found, loading from source\n", __func__);
+            GGML_METAL_LOG_INFO("%s: ggml.metallib not found, loading from source\n", __func__);
 
             NSString * sourcePath;
             NSString * ggmlMetalPathResources = [[NSProcessInfo processInfo].environment objectForKey:@"GGML_METAL_PATH_RESOURCES"];
@@ -291,6 +292,13 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             options = [MTLCompileOptions new];
             options.preprocessorMacros = @{ @"QK_K" : @(64) };
 #endif
+            // try to disable fast-math
+            // NOTE: this seems to have no effect whatsoever
+            //       instead, in order to disable fast-math, we have to build ggml.metallib from the command line
+            //       using xcrun -sdk macosx metal -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
+            //       and go through the "pre-compiled library found" path above
+            //[options setFastMathEnabled:false];
+
             ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
         }
 
@@ -1230,7 +1238,7 @@ void ggml_metal_graph_compute(
                                 // not sure how to avoid this
                                 // TODO: make a simpler cpy_bytes kernel
 
-                                const int nth = MIN(1024, ne00);
+                                const int nth = MIN((int) ctx->pipeline_cpy_f32_f32.maxTotalThreadsPerThreadgroup, ne00);
 
                                 [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f32];
                                 [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
@@ -1285,7 +1293,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&pnb3 length:sizeof(pnb3) atIndex:26];
                             [encoder setBytes:&offs length:sizeof(offs) atIndex:27];
 
-                            const int nth = MIN(1024, ne0);
+                            const int nth = MIN((int) ctx->pipeline_add.maxTotalThreadsPerThreadgroup, ne00);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne11, ne12, ne13) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                         } break;
@@ -1785,8 +1793,9 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&r3      length:sizeof(r3)   atIndex:17];
                                 [encoder setBytes:&idx     length:sizeof(idx)  atIndex:18];
                                 // TODO: how to make this an array? read Metal docs
-                                for (int j = 0; j < n_as; ++j) {
-                                    struct ggml_tensor * src_cur = dst->src[2 + j];
+                                for (int j = 0; j < 8; ++j) {
+                                    // NOTE: this is done like this to avoid uninitialized kernel arguments when n_as < 8
+                                    struct ggml_tensor * src_cur = dst->src[2 + (j % n_as)];
 
                                     size_t offs_src_cur = 0;
                                     id<MTLBuffer> id_src_cur = ggml_metal_get_buffer(ctx, src_cur, &offs_src_cur);
@@ -1909,8 +1918,9 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&r3   length:sizeof(r3)   atIndex:21];
                                 [encoder setBytes:&idx  length:sizeof(idx)  atIndex:22];
                                 // TODO: how to make this an array? read Metal docs
-                                for (int j = 0; j < n_as; ++j) {
-                                    struct ggml_tensor * src_cur = dst->src[2 + j];
+                                for (int j = 0; j < 8; ++j) {
+                                    // NOTE: this is done like this to avoid uninitialized kernel arguments when n_as < 8
+                                    struct ggml_tensor * src_cur = dst->src[2 + (j % n_as)];
 
                                     size_t offs_src_cur = 0;
                                     id<MTLBuffer> id_src_cur = ggml_metal_get_buffer(ctx, src_cur, &offs_src_cur);
@@ -2229,7 +2239,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:17];
                             [encoder setBytes:&sf   length:sizeof(sf)   atIndex:18];
 
-                            const int nth = MIN(1024, ne0);
+                            const int nth = MIN((int) ctx->pipeline_upscale_f32.maxTotalThreadsPerThreadgroup, ne0);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne1, ne2, ne3) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                         } break;

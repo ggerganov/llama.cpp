@@ -15,19 +15,18 @@
 #include <thread>
 #include <vector>
 
-
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
 
 #if 0
-    std::default_random_engine generator(rd());
+    static std::default_random_engine generator(1234);
     std::uniform_real_distribution<float> distribution(min, max);
 
     for (size_t i = 0; i < size; i++) {
         data[i] = distribution(generator);
     }
-#endif
+#else
     auto init_thread = [&](size_t start, size_t end) {
         std::random_device rd;
         std::default_random_engine generator(rd());
@@ -49,6 +48,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     for (auto & t : threads) {
         t.join();
     }
+#endif
 
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
@@ -437,7 +437,7 @@ struct test_case {
             double err = nmse(f1.data(), f2.data(), f1.size());
             if (err > ud->max_err) {
                 printf("[%s] NMSE = %f ", ggml_op_desc(t1), err);
-                //for (int i = 0; i < f1.size(); i++) {
+                //for (int i = 0; i < (int) f1.size(); i++) {
                 //    printf("%5d %9.6f %9.6f, diff = %9.6f\n", i, f1[i], f2[i], f1[i] - f2[i]);
                 //}
                 //printf("\n");
