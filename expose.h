@@ -102,5 +102,6 @@ extern bool generation_finished;
 extern float last_eval_time;
 extern float last_process_time;
 extern int last_token_count;
+extern int last_seed;
 extern int total_gens;
 extern stop_reason last_stop_reason;

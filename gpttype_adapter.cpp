@@ -39,6 +39,7 @@ bool generation_finished;
 float last_process_time = 0;
 float last_eval_time = 0;
 int last_token_count = 0;
+int last_seed = -1;
 int total_gens = 0;
 stop_reason last_stop_reason = stop_reason::INVALID;
 std::vector<std::string> generated_tokens;
@@ -1531,7 +1532,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
     if (kcpp_params->seed <= 0 || kcpp_params->seed==0xFFFFFFFF)
     {
-        kcpp_params->seed = time(NULL);
+        kcpp_params->seed = (((uint32_t)time(NULL)) % 1000000);
     }
 
     // tokenize the prompt
@@ -2051,6 +2052,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     last_eval_time = pt2;
     last_process_time = pt1;
     last_token_count = realnpredict;
+    last_seed = kcpp_params->seed;
     total_gens += 1;
     snprintf(output.text, sizeof(output.text), "%s", concat_output.c_str());
 

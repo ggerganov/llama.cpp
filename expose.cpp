@@ -217,6 +217,10 @@ extern "C"
     int get_last_token_count() {
         return last_token_count;
     }
+    int get_last_seed()
+    {
+        return last_seed;
+    }
     int get_total_gens() {
         return total_gens;
     }

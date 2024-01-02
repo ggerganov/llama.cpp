@@ -226,6 +226,7 @@ def init_library():
     handle.get_last_eval_time.restype = ctypes.c_float
     handle.get_last_process_time.restype = ctypes.c_float
     handle.get_last_token_count.restype = ctypes.c_int
+    handle.get_last_seed.restype = ctypes.c_int
     handle.get_total_gens.restype = ctypes.c_int
     handle.get_last_stop_reason.restype = ctypes.c_int
     handle.abort_generate.restype = ctypes.c_bool
@@ -793,7 +794,8 @@ Enter Prompt:<br>
             lastc = handle.get_last_token_count()
             totalgens = handle.get_total_gens()
             stopreason = handle.get_last_stop_reason()
-            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "total_gens":totalgens, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1), "hordeexitcounter":exitcounter}).encode())
+            lastseed = handle.get_last_seed()
+            response_body = (json.dumps({"last_process":lastp,"last_eval":laste,"last_token_count":lastc, "last_seed":lastseed, "total_gens":totalgens, "stop_reason":stopreason, "queue":requestsinqueue, "idle":(0 if modelbusy.locked() else 1), "hordeexitcounter":exitcounter}).encode())
 
         elif self.path.endswith('/api/extra/generate/check'):
             pendtxtStr = ""
@@ -2214,6 +2216,7 @@ def unload_libs():
         del handle.get_last_eval_time
         del handle.get_last_process_time
         del handle.get_last_token_count
+        del handle.get_last_seed
         del handle.get_total_gens
         del handle.get_last_stop_reason
         del handle.abort_generate
