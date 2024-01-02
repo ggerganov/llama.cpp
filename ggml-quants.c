@@ -1336,7 +1336,7 @@ static void quantize_q_k_1(const float * x, int bits, int scale_bits, int block_
     float mins[QK_K/block_size];
 
     for (int j = 0; j < QK_K/block_size; j++) {
-        uint8_t q[QK_K/block_size];
+        uint8_t q[block_size];
         // First find least squares solution for min and scale for each block.
         quantize_1(&x[block_size*j], block_size, bits, q, &mins[j], &scales[j]);
         // Flip the sign because quantize_1 assumes that min is added, but min
