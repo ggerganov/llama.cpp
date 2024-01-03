@@ -10044,10 +10044,7 @@ static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, const ggml_ten
         case GGML_OP_CONCAT:
             {
                 ggml_type src0_type = op->src[0]->type;
-                if (src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16) {
-                    return true;
-                }
-                return false;
+                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
             } break;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
