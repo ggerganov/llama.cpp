@@ -4,9 +4,10 @@
 #include "ggml.h"
 #ifdef GGML_USE_CUBLAS
 #include "ggml-cuda.h"
-#define LLAMA_MAX_DEVICES GGML_CUDA_MAX_DEVICES
+#define LLAMA_MAX_DEVICES 16
 #else
-#define LLAMA_MAX_DEVICES 1
+//just max it out, same as GGML_CUDA_MAX_DEVICES
+#define LLAMA_MAX_DEVICES 16
 #endif // GGML_USE_CUBLAS
 #include <stddef.h>
 #include <stdint.h>
