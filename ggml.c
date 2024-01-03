@@ -1,6 +1,8 @@
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnings on Windows
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
+// Load `stdlib.h` before other headers to work around MinGW bug: <https://sourceforge.net/p/mingw-w64/bugs/192/>.
+#include <stdlib.h>
 #include "ggml-impl.h"
 #include "ggml-quants.h"
 
@@ -14,7 +16,6 @@
 #include <errno.h>
 #include <time.h>
 #include <math.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
