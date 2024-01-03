@@ -3592,8 +3592,6 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
     float yl[32];
     float sumf[N_DST]={0.f}, all_sum;
 
-    const int step = sizeof(block_q2_K) * nb;
-
     const int nb32 = nb * (QK_K / 32);
 
 #if QK_K == 256
@@ -3611,11 +3609,12 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
         const int ib  = ib32 % (QK_K / 32);
 
         device const block_iq2_xxs * xr = x + ibl;
+        device const uint16_t * q2 = xr->qs + 4 * ib;
+        device const half * dh = &xr->d;
 
         for (int row = 0; row < N_DST; row++) {
 
-            const float db = xr->d;
-            device const uint16_t * q2 = xr->qs + 4 * ib;
+            const float db = dh[0];
             device const uint8_t * aux8 = (device const uint8_t *)q2;
             const uint32_t aux32 = q2[2] | (q2[3] << 16);
             const float d = db * (0.5f + (aux32 >> 28));
@@ -3630,7 +3629,8 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
             }
             sumf[row] += d * sum;
 
-            xr += nb;
+            dh += nb*sizeof(block_iq2_xxs)/2;
+            q2 += nb*sizeof(block_iq2_xxs)/2;
         }
 
         y4 += 32 * 32;
