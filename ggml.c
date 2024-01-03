@@ -9704,10 +9704,10 @@ static void ggml_compute_forward_group_norm(
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
 // helper function to determine if it is better to use BLAS or not
 // for large matrices, BLAS is faster
-static bool ggml_compute_forward_mul_mat_use_blas(
-        const struct ggml_tensor * src0,
-        const struct ggml_tensor * src1,
-              struct ggml_tensor * dst) {
+static bool ggml_compute_forward_mul_mat_use_blas(struct ggml_tensor * dst) {
+    const struct ggml_tensor * src0 = dst->src[0];
+    const struct ggml_tensor * src1 = dst->src[1];
+
     //const int64_t ne00 = src0->ne[0];
     //const int64_t ne01 = src0->ne[1];
 
@@ -9787,7 +9787,7 @@ static void ggml_compute_forward_mul_mat(
 #endif
 
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-    if (ggml_compute_forward_mul_mat_use_blas(src0, src1, dst)) {
+    if (ggml_compute_forward_mul_mat_use_blas(dst)) {
         if (params->ith != 0) {
             return;
         }
@@ -16314,7 +16314,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                 }
 #endif
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
+                if (ggml_compute_forward_mul_mat_use_blas(node)) {
                     n_tasks = 1; // TODO: this actually is doing nothing
                                  //       the threads are still spinning
                 }
@@ -16486,11 +16486,14 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
     int node_n = -1;
 
+    bool do_yield = false;
+
     while (true) {
         if (cplan->abort_callback && cplan->abort_callback(cplan->abort_callback_data)) {
             state->shared->node_n += 1;
             return (thread_ret_t) GGML_EXIT_ABORTED;
         }
+
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             // all other threads are finished and spinning
             // do finalize and init here so we don't have synchronize again
@@ -16561,9 +16564,12 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 //       depending on the workload and the operating system.
                 //       since it is not clear what is the best approach, it should potentially become user-configurable
                 //       ref: https://github.com/ggerganov/ggml/issues/291
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                sched_yield();
-#endif
+                // UPD:  adding the do_yield flag seems to resolve the issue universally, though it is the opposite of
+                //       what I expected. I would expect that when we call BLAS, the ggml threads should yield, but it
+                //       seems that the opposite is true - when we call BLAS, we should not yield.
+                if (do_yield) {
+                    sched_yield();
+                }
 
                 node_n = atomic_load(&state->shared->node_n);
                 if (node_n != last) break;
@@ -16588,6 +16594,15 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         if (state->ith < n_tasks) {
             ggml_compute_forward(&params, node);
         }
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+        do_yield = true;
+
+        // do not yield when we call BLAS
+        if (node->op == GGML_OP_MUL_MAT && ggml_compute_forward_mul_mat_use_blas(node)) {
+            do_yield = false;
+        }
+#endif
     }
 
     return GGML_EXIT_SUCCESS;
@@ -16642,7 +16657,7 @@ struct ggml_cplan ggml_graph_plan(struct ggml_cgraph * cgraph, int n_threads) {
                     } else
 #endif
 #if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                    if (ggml_compute_forward_mul_mat_use_blas(node->src[0], node->src[1], node)) {
+                    if (ggml_compute_forward_mul_mat_use_blas(node)) {
                         if (node->src[0]->type != GGML_TYPE_F32) {
                             // here we need memory just for single 2D matrix from src0
                             cur = ggml_type_size(GGML_TYPE_F32)*(node->src[0]->ne[0]*node->src[0]->ne[1]);
