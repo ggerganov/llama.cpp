@@ -16301,24 +16301,6 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
 
                 //n_tasks = MIN(n_threads, MAX(1, nr0/128));
                 //printf("nr0 = %8d, nr1 = %8d, nr0*nr1 = %8d, n_tasks%d\n", nr0, nr1, nr0*nr1, n_tasks);
-
-#if defined(GGML_USE_CUBLAS)
-                if (ggml_cuda_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#elif defined(GGML_USE_CLBLAST)
-                if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#endif
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-                if (ggml_compute_forward_mul_mat_use_blas(node)) {
-                    n_tasks = 1; // TODO: this actually is doing nothing
-                                 //       the threads are still spinning
-                }
-#endif
             } break;
         case GGML_OP_MUL_MAT_ID:
             {
@@ -16564,9 +16546,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 //       depending on the workload and the operating system.
                 //       since it is not clear what is the best approach, it should potentially become user-configurable
                 //       ref: https://github.com/ggerganov/ggml/issues/291
-                // UPD:  adding the do_yield flag seems to resolve the issue universally, though it is the opposite of
-                //       what I expected. I would expect that when we call BLAS, the ggml threads should yield, but it
-                //       seems that the opposite is true - when we call BLAS, we should not yield.
+                // UPD:  adding the do_yield flag seems to resolve the issue universally
                 if (do_yield) {
                     sched_yield();
                 }
@@ -16595,14 +16575,14 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             ggml_compute_forward(&params, node);
         }
 
-#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
-        do_yield = true;
+        do_yield = false;
 
-        // do not yield when we call BLAS
-        if (node->op == GGML_OP_MUL_MAT && ggml_compute_forward_mul_mat_use_blas(node)) {
-            do_yield = false;
+        // call sched_yield() for heavier ops
+        // TODO: might have to yield only when calling into BLAS - not sure yet
+        if (node->op == GGML_OP_MUL_MAT) {
+        //if (node->op == GGML_OP_MUL_MAT && ggml_compute_forward_mul_mat_use_blas(node)) {
+            do_yield = true;
         }
-#endif
     }
 
     return GGML_EXIT_SUCCESS;
