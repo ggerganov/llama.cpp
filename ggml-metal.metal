@@ -3596,10 +3596,14 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
     const int nb32 = nb * (QK_K / 32);
 
     threadgroup uint64_t * values = (threadgroup uint64_t *)shared_values;
+    threadgroup uint8_t  * shared_signs = (threadgroup uint8_t *)(values + 256);
     {
-        const int nval = 4;
-        const int pos  = (32*sgitg + tiisg)*nval;
+        int nval = 4;
+        int pos  = (32*sgitg + tiisg)*nval;
         for (int i = 0; i < nval; ++i) values[pos + i] = kgrid_iq2xxs[pos + i];
+        nval = 2;
+        pos  = (32*sgitg + tiisg)*nval;
+        for (int i = 0; i < nval; ++i) shared_signs[pos+i] = ksigns_iq2xs[pos+i];
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
@@ -3631,7 +3635,7 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
             float sum = 0;
             for (int l = 0; l < 4; ++l) {
                 const threadgroup uint8_t * grid = (const threadgroup uint8_t *)(values + aux8[l]);
-                const uint8_t signs = ksigns_iq2xs[(aux32 >> 7*l) & 127];
+                const uint8_t signs = shared_signs[(aux32 >> 7*l) & 127];
                 for (int j = 0; j < 8; ++j) {
                     sum += yl[8*l + j] * grid[j] * (signs & kmask_iq2xs[j] ? -1.f : 1.f);
                 }
