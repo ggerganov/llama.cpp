@@ -13,6 +13,10 @@
 #  include "ggml-opencl.h"
 #endif
 
+#ifdef GGML_USE_SYCL
+#  include "ggml-sycl.hpp"
+#endif
+
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
@@ -9785,6 +9789,14 @@ struct llama_model * llama_load_model_from_file(
               struct llama_model_params   params) {
     ggml_time_init();
 
+#ifdef GGML_USE_SYCL
+    int main_device = get_main_device();
+    if(main_device>=0) params.main_gpu = main_device;
+    else {
+        LLAMA_LOG_ERROR("%s: missed to init GPU device\n", __func__);
+        std::exit(1);
+    }
+#endif
     llama_model * model = new llama_model;
 
     unsigned cur_percentage = 0;

@@ -387,8 +387,8 @@ catch (sycl::exception const &exc) {
 
 static int g_device_count = -1;
 static int g_all_sycl_device_count = -1;
-static int g_main_device = 0;
-static int g_main_device_index = 0;
+static int g_main_device = -1;
+static int g_main_device_index = -1;
 
 static float g_tensor_split[GGML_CUDA_MAX_DEVICES] = {0};
 
@@ -412,6 +412,10 @@ static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 static dpct::queue_ptr g_cublas_handles[GGML_CUDA_MAX_DEVICES] = {nullptr};
+
+int get_main_device(){
+    return g_main_device;
+}
 
 [[noreturn]]
 static void bad_arch(const sycl::stream &stream_ct1) {
@@ -6388,7 +6392,10 @@ static void mul_mat_vec_q6_K_q8_1_cuda(const void *vx, const void *vy,
 }
 
 int get_device_index_by_id(int id){
-    return g_sycl_device_id2index[id].index;
+    int res = g_sycl_device_id2index[id].index;
+    GGML_SYCL_DEBUG("zjy get_device_index_by_id id=%d device_index=%d\n", id, res);
+    GGML_ASSERT(res>=0);
+    return res;
 }
 
 int get_current_device_index(){
@@ -8057,6 +8064,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_index()));
+    GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg index %d\n", id);
 #ifdef DEBUG_CUDA_MALLOC
     int nnz = 0;
     size_t max_size = 0;
@@ -8080,6 +8088,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
                         *actual_size = b.size;
                         b.ptr = nullptr;
                         b.size = 0;
+                        GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg return 1 %p\n", ptr);
                         return ptr;
                     }
                 }
@@ -8092,6 +8101,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
         *actual_size = b.size;
         b.ptr = nullptr;
         b.size = 0;
+        GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg return 2 %p\n", ptr);
         return ptr;
     }
     void * ptr;
@@ -8327,10 +8337,19 @@ void ggml_init_cublas() try {
         fprintf(stderr, "%s: CUDA_USE_TENSOR_CORES: no\n", __func__);
 #endif
 
+        for (int id = 0; id < GGML_CUDA_MAX_DEVICES; ++id) {
+            g_sycl_device_id2index[id].index = -1;
+            g_device_caps[id].vmm = 0;
+            g_device_caps[id].device_id = -1;
+            g_device_caps[id].cc = 0;
+            g_tensor_split[id] = 0;
+        }
+
 
         int device_inx = -1;
         for (int id = 0; id < g_all_sycl_device_count; ++id) {
             if(id!=user_device_number) continue;
+
             device_inx++;
             int device_vmm = 0;
 
@@ -8400,8 +8419,15 @@ void ggml_init_cublas() try {
 
         //zjy hardcode, force set to 1 device
         g_device_count = 1;
+        ggml_cuda_set_main_device(user_device_number);
         ggml_cuda_set_device(user_device_number);
         fprintf(stderr, "Using Device %d\n", user_device_number);
+
+        // for (int id = 0; id < g_all_sycl_device_count; ++id) {
+        //     GGML_SYCL_DEBUG("zjy id=%d  g_device_caps[%d].device_id=%d g_sycl_device_id2index[%d].index=%d ", id, id,
+        //     g_device_caps[id].device_id, id, g_sycl_device_id2index[id].index);
+        // }
+
         initialized = true;
         g_cublas_loaded = true;
     }
@@ -11220,7 +11246,7 @@ void ggml_cuda_set_main_device(const int main_device) try {
         return;
     }
 
-    if (g_main_device != main_device && g_device_count > 1) {
+    if (g_main_device != main_device && g_device_count >= 1) {
         g_main_device = main_device;
         g_main_device_index = get_device_index_by_id(g_main_device);
         dpct::device_info prop;

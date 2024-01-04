@@ -474,6 +474,7 @@ if (LLAMA_SYCL)
 
     if (_sycl_support)
 	    add_compile_definitions(GGML_USE_CUBLAS)
+	    add_compile_definitions(GGML_USE_SYCL)
 	    #add_compile_definitions(GGML_SYCL_F16)
 	    #add_compile_options(-std=c++17 -O3 -fsycl)
 	add_compile_options(-I./)
