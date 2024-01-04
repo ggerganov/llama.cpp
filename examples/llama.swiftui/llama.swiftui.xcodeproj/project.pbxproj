@@ -38,7 +38,7 @@
 				"${DERIVED_FILES_DIR}/ggml-metal.air",
 				"${DERIVED_FILES_DIR}/ggml.metallib",
 			);
-			script = "# metal\nxcrun metal -fno-fast-math -fno-inline -g -c \"${INPUT_FILE_PATH}\" -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\nxcrun metallib -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE%-metal}.metallib\" \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\n";
+			script = "# metal\nxcrun metal    -c \"${INPUT_FILE_PATH}\" -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\nxcrun metallib -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE%-metal}.metallib\" \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\n";
 		};
 /* End PBXBuildRule section */
 
