@@ -174,35 +174,48 @@ node index.js
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
-    *Result JSON:*
+### Result JSON:
 
-    Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
+* Note: When using streaming mode (`stream`) only `content` and `stop` will be returned until end of completion.
 
-    `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string.
 
-    `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
+- `completion_probabilities: List[Completion]`: A list of probabilities for each token in the completion, if available. Note the type/schema of Completion is:
 
-    `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+```
+{'$defs': {'Probability': {'properties': {'prob': {'description': 'The probability of the token.',
+     'title': 'Prob',
+     'type': 'number'},
+    'tok_str': {'description': 'The string representation of the token.',
+     'title': 'Tok Str',
+     'type': 'string'}},
+   'required': ['prob', 'tok_str'],
+   'title': 'Probability',
+   'type': 'object'}},
+ 'properties': {'content': {'description': 'The content associated with the probabilities.',
+   'title': 'Content',
+   'type': 'string'},
+  'probs': {'description': 'A list of probabilities for each token.',
+   'items': {'$ref': '#/$defs/Probability'},
+   'title': 'Probs',
+   'type': 'array'}},
+ 'required': ['content', 'probs'],
+ 'title': 'Completion',
+ 'type': 'object'}
+ ```
 
-    `model`: The path to the model loaded with `-m`
-
-    `prompt`: The provided `prompt`
-
-    `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
-
-    `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
-
-    `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
-
-    `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
-
-    `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
-
-    `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
-
-    `tokens_evaluated`: Number of tokens evaluated in total from the prompt
-
-    `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
+- `content`: Completion result as a string (excluding `stopping_word` if any). In case of streaming mode, will contain the next token as a string. 
+- `stop`: Boolean for use with `stream` to check whether the generation has stopped (Note: This is not related to stopping words array `stop` from input options)
+- `generation_settings`: The provided options above excluding `prompt` but including `n_ctx`, `model`
+- `model`: The path to the model loaded with `-m`
+- `prompt`: The provided `prompt`
+- `stopped_eos`: Indicating whether the completion has stopped because it encountered the EOS token
+- `stopped_limit`: Indicating whether the completion stopped because `n_predict` tokens were generated before stop words or EOS was encountered
+- `stopped_word`: Indicating whether the completion stopped due to encountering a stopping word from `stop` JSON array provided
+- `stopping_word`: The stopping word encountered which stopped the generation (or "" if not stopped due to a stopping word)
+- `timings`: Hash of timing information about the completion such as the number of tokens `predicted_per_second`
+- `tokens_cached`: Number of tokens from the prompt which could be re-used from previous completion (`n_past`)
+- `tokens_evaluated`: Number of tokens evaluated in total from the prompt
+- `truncated`: Boolean indicating if the context size was exceeded during generation, i.e. the number of tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`) exceeded the context size (`n_ctx`)
 
 -   **POST** `/tokenize`: Tokenize a given text.
 
