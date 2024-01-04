@@ -4,11 +4,11 @@ import UniformTypeIdentifiers
 struct LoadCustomButton: View {
     @ObservedObject private var llamaState: LlamaState
     @State private var showFileImporter = false
-    
+
     init(llamaState: LlamaState) {
         self.llamaState = llamaState
     }
-    
+
     var body: some View {
         VStack {
             Button(action: {
@@ -16,7 +16,6 @@ struct LoadCustomButton: View {
             }) {
                 Text("Load Custom Model")
             }
-            
         }
         .fileImporter(
             isPresented: $showFileImporter,
