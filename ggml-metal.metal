@@ -3569,6 +3569,7 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
         constant   int64_t & ne1,
         constant   uint    & r2,
         constant   uint    & r3,
+        threadgroup int8_t * shared_values [[threadgroup(0)]],
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint  tiisg[[thread_index_in_simdgroup]],
         uint  sgitg[[simdgroup_index_in_threadgroup]]) {
@@ -3593,6 +3594,14 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
     float sumf[N_DST]={0.f}, all_sum;
 
     const int nb32 = nb * (QK_K / 32);
+
+    threadgroup uint64_t * values = (threadgroup uint64_t *)shared_values;
+    {
+        const int nval = 4;
+        const int pos  = (32*sgitg + tiisg)*nval;
+        for (int i = 0; i < nval; ++i) values[pos + i] = kgrid_iq2xxs[pos + i];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
 
 #if QK_K == 256
     const int ix = tiisg;
@@ -3621,7 +3630,7 @@ void kernel_mul_mv_iq2_xxs_f32_impl(
 
             float sum = 0;
             for (int l = 0; l < 4; ++l) {
-                constant uint8_t * grid = (constant uint8_t *)(kgrid_iq2xxs + aux8[l]);
+                const threadgroup uint8_t * grid = (const threadgroup uint8_t *)(values + aux8[l]);
                 const uint8_t signs = ksigns_iq2xs[(aux32 >> 7*l) & 127];
                 for (int j = 0; j < 8; ++j) {
                     sum += yl[8*l + j] * grid[j] * (signs & kmask_iq2xs[j] ? -1.f : 1.f);
@@ -3668,11 +3677,12 @@ kernel void kernel_mul_mv_iq2_xxs_f32(
         constant   int64_t & ne1,
         constant   uint    & r2,
         constant   uint    & r3,
+        threadgroup int8_t * shared_values [[threadgroup(0)]],
         uint3 tgpig[[threadgroup_position_in_grid]],
         uint  tiisg[[thread_index_in_simdgroup]],
         uint  sgitg[[simdgroup_index_in_threadgroup]]) {
 
-    kernel_mul_mv_iq2_xxs_f32_impl(src0, src1, dst, ne00, ne01, ne02, ne10, ne12, ne0, ne1, r2, r3, tgpig, tiisg, sgitg);
+    kernel_mul_mv_iq2_xxs_f32_impl(src0, src1, dst, ne00, ne01, ne02, ne10, ne12, ne0, ne1, r2, r3, shared_values, tgpig, tiisg, sgitg);
 }
 
 //============================= templates and their specializations =============================
@@ -5403,6 +5413,7 @@ kernel void kernel_mul_mv_id_iq2_xxs_f32(
         device const    char * src05,
         device const    char * src06,
         device const    char * src07,
+        threadgroup int8_t   * shared_values [[threadgroup(0)]],
         uint3                  tgpig[[threadgroup_position_in_grid]],
         uint                   tiitg[[thread_index_in_threadgroup]],
         uint                   tiisg[[thread_index_in_simdgroup]],
@@ -5428,6 +5439,7 @@ kernel void kernel_mul_mv_id_iq2_xxs_f32(
         ne1,
         r2,
         r3,
+        shared_values,
         tgpig,
         tiisg,
         sgitg);

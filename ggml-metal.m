@@ -1708,8 +1708,12 @@ bool ggml_metal_graph_compute(
 
                                 if (src0t == GGML_TYPE_Q4_0 || src0t == GGML_TYPE_Q4_1 ||
                                     src0t == GGML_TYPE_Q5_0 || src0t == GGML_TYPE_Q5_1 || src0t == GGML_TYPE_Q8_0 ||
-                                    src0t == GGML_TYPE_IQ2_XXS ||
+                                    //src0t == GGML_TYPE_IQ2_XXS ||
                                     src0t == GGML_TYPE_Q2_K) { // || src0t == GGML_TYPE_Q4_K) {
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                }
+                                else if (src0t == GGML_TYPE_IQ2_XXS) {
+                                    [encoder setThreadgroupMemoryLength:256*8 atIndex:0];
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src0t == GGML_TYPE_Q4_K) {
@@ -1972,9 +1976,13 @@ bool ggml_metal_graph_compute(
 
                                 if (src2t == GGML_TYPE_Q4_0 || src2t == GGML_TYPE_Q4_1 ||
                                     src2t == GGML_TYPE_Q5_0 || src2t == GGML_TYPE_Q5_1 || src2t == GGML_TYPE_Q8_0 ||
-                                    src2t == GGML_TYPE_IQ2_XXS ||
+                                    //src2t == GGML_TYPE_IQ2_XXS ||
                                     src2t == GGML_TYPE_Q2_K) { // || src2t == GGML_TYPE_Q4_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne21 + 7)/8, _ne1, ne01*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
+                                }
+                                else if (src0t == GGML_TYPE_IQ2_XXS) {
+                                    [encoder setThreadgroupMemoryLength:256*8 atIndex:0];
+                                    [encoder dispatchThreadgroups:MTLSizeMake((ne01 + 7)/8, ne11, ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
                                 }
                                 else if (src2t == GGML_TYPE_Q4_K) {
                                     [encoder dispatchThreadgroups:MTLSizeMake((ne21 + 3)/4, _ne1, ne01*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(nth0, nth1, 1)];
