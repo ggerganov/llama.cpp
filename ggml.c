@@ -16468,8 +16468,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
     int node_n = -1;
 
-    bool do_yield = false;
-
     while (true) {
         if (cplan->abort_callback && cplan->abort_callback(cplan->abort_callback_data)) {
             state->shared->node_n += 1;
@@ -16541,6 +16539,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         } else {
             // wait for other threads to finish
             const int last = node_n;
+
+            const bool do_yield = last < 0 || cgraph->nodes[last]->op == GGML_OP_MUL_MAT;
+
             while (true) {
                 // TODO: this sched_yield can have significant impact on the performance - either positive or negative
                 //       depending on the workload and the operating system.
@@ -16573,15 +16574,6 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         if (state->ith < n_tasks) {
             ggml_compute_forward(&params, node);
-        }
-
-        do_yield = false;
-
-        // call sched_yield() for heavier ops
-        // TODO: might have to yield only when calling into BLAS - not sure yet
-        if (node->op == GGML_OP_MUL_MAT) {
-        //if (node->op == GGML_OP_MUL_MAT && ggml_compute_forward_mul_mat_use_blas(node)) {
-            do_yield = true;
         }
     }
 
