@@ -23,6 +23,7 @@
 		8A3F84242AC4C891005E2EE8 /* models in Resources */ = {isa = PBXBuildFile; fileRef = 8A3F84232AC4C891005E2EE8 /* models */; };
 		8A907F332AC7138A006146EA /* LibLlama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A907F322AC7134E006146EA /* LibLlama.swift */; };
 		8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */; };
+		F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */; };
 		F1FE20DC2B465C4500B45541 /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 /* End PBXBuildFile section */
 
@@ -68,6 +69,7 @@
 		8A3F84232AC4C891005E2EE8 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = llama.swiftui/Resources/models; sourceTree = "<group>"; };
 		8A907F322AC7134E006146EA /* LibLlama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibLlama.swift; sourceTree = "<group>"; };
 		8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaState.swift; sourceTree = "<group>"; };
+		F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadCustomButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +184,7 @@
 			children = (
 				7FA3D2B22B2EA2F600543F92 /* DownloadButton.swift */,
 				8A1C83782AC328BD0096AF73 /* ContentView.swift */,
+				F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -274,6 +277,7 @@
 			files = (
 				542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */,
 				549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */,
+				F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */,
 				542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */,
 				8A907F332AC7138A006146EA /* LibLlama.swift in Sources */,
 				542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */,
