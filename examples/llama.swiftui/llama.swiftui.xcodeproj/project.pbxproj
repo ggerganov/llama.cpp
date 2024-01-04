@@ -23,21 +23,24 @@
 		8A3F84242AC4C891005E2EE8 /* models in Resources */ = {isa = PBXBuildFile; fileRef = 8A3F84232AC4C891005E2EE8 /* models */; };
 		8A907F332AC7138A006146EA /* LibLlama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A907F322AC7134E006146EA /* LibLlama.swift */; };
 		8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */; };
-		F1CB82D92B45708500031669 /* ggml-metal.metal in CopyFiles */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
+		F1FE20DC2B465C4500B45541 /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		F1CB82D82B45707F00031669 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
-			files = (
-				F1CB82D92B45708500031669 /* ggml-metal.metal in CopyFiles */,
+/* Begin PBXBuildRule section */
+		F1FE20DB2B465C2100B45541 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			fileType = sourcecode.metal;
+			inputFiles = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
+			isEditable = 1;
+			outputFiles = (
+				"${DERIVED_FILES_DIR}/ggml-metal.air",
+				"${DERIVED_FILES_DIR}/ggml.metallib",
+			);
+			script = "# metal\nxcrun metal -fno-fast-math -fno-inline -g -c \"${INPUT_FILE_PATH}\" -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\nxcrun metallib -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE%-metal}.metallib\" \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\n";
 		};
-/* End PBXCopyFilesBuildPhase section */
+/* End PBXBuildRule section */
 
 /* Begin PBXFileReference section */
 		542376062B0D9BEA008E6A1C /* ggml-quants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-quants.h"; path = "../../ggml-quants.h"; sourceTree = "<group>"; };
@@ -201,9 +204,9 @@
 				8A1C836F2AC328BD0096AF73 /* Sources */,
 				8A1C83702AC328BD0096AF73 /* Frameworks */,
 				8A1C83712AC328BD0096AF73 /* Resources */,
-				F1CB82D82B45707F00031669 /* CopyFiles */,
 			);
 			buildRules = (
+				F1FE20DB2B465C2100B45541 /* PBXBuildRule */,
 			);
 			dependencies = (
 			);
@@ -255,6 +258,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1FE20DC2B465C4500B45541 /* ggml-metal.metal in Resources */,
 				8A3F84242AC4C891005E2EE8 /* models in Resources */,
 				8A1C837E2AC328BE0096AF73 /* Preview Assets.xcassets in Resources */,
 				8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */,
