@@ -27,7 +27,7 @@ echo "Syncing ggml changes since commit $lc"
 cd $SRC_GGML
 
 git log --oneline $lc..HEAD
-git log --oneline $lc..HEAD | grep -v "(llama/[0-9]*)" | cut -d' ' -f1 > $SRC_LLAMA/ggml-commits
+git log --oneline $lc..HEAD --reverse | grep -v "(llama/[0-9]*)" | cut -d' ' -f1 > $SRC_LLAMA/ggml-commits
 
 if [ ! -s $SRC_LLAMA/ggml-commits ]; then
     rm -v $SRC_LLAMA/ggml-commits
@@ -87,7 +87,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-impl.h             -> ggml-impl.h
     # src/ggml-metal.h            -> ggml-metal.h
     # src/ggml-metal.m            -> ggml-metal.m
-    # src/ggml-metal.metal        -> ggml-metal.metal
     # src/ggml-mpi.h              -> ggml-mpi.h
     # src/ggml-mpi.c              -> ggml-mpi.c
     # src/ggml-opencl.cpp         -> ggml-opencl.cpp
@@ -114,7 +113,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-impl\.h/ggml-impl.h/g' \
         -e 's/src\/ggml-metal\.h/ggml-metal.h/g' \
         -e 's/src\/ggml-metal\.m/ggml-metal.m/g' \
-        -e 's/src\/ggml-metal\.metal/ggml-metal.metal/g' \
         -e 's/src\/ggml-mpi\.h/ggml-mpi.h/g' \
         -e 's/src\/ggml-mpi\.c/ggml-mpi.c/g' \
         -e 's/src\/ggml-opencl\.cpp/ggml-opencl.cpp/g' \
