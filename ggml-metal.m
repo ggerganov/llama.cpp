@@ -258,14 +258,14 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         bundle = [NSBundle bundleForClass:[GGMLMetalClass class]];
 #endif
         NSError * error = nil;
-        NSString * libPath = [bundle pathForResource:@"ggml" ofType:@"metallib"];
+        NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
         if (libPath != nil) {
             // pre-compiled library found
             NSURL * libURL = [NSURL fileURLWithPath:libPath];
             GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [libPath UTF8String]);
             ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
         } else {
-            GGML_METAL_LOG_INFO("%s: ggml.metallib not found, loading from source\n", __func__);
+            GGML_METAL_LOG_INFO("%s: default.metallib not found, loading from source\n", __func__);
 
             NSString * sourcePath;
             NSString * ggmlMetalPathResources = [[NSProcessInfo processInfo].environment objectForKey:@"GGML_METAL_PATH_RESOURCES"];
@@ -295,7 +295,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
 #endif
             // try to disable fast-math
             // NOTE: this seems to have no effect whatsoever
-            //       instead, in order to disable fast-math, we have to build ggml.metallib from the command line
+            //       instead, in order to disable fast-math, we have to build default.metallib from the command line
             //       using xcrun -sdk macosx metal -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
             //       and go through the "pre-compiled library found" path above
             //[options setFastMathEnabled:false];
