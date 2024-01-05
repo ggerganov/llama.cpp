@@ -1711,7 +1711,7 @@ static bool llama_kv_cache_init(
     cache.v_l.reserve(n_layer);
 
     for (int i = 0; i < (int) n_layer; i++) {
-        struct ggml_context * ctx = offload ? ctx_map[model.buft_layer[i].buft] : cache.ctxs.front();
+        struct ggml_context * ctx = offload ? ctx_map.at(model.buft_layer[i].buft) : cache.ctxs.front();
         ggml_tensor * k = ggml_new_tensor_1d(ctx, ktype, n_embd_k_gqa*n_ctx);
         ggml_tensor * v = ggml_new_tensor_1d(ctx, vtype, n_embd_v_gqa*n_ctx);
         ggml_format_name(k, "cache_k_l%d", i);
@@ -1731,7 +1731,7 @@ static bool llama_kv_cache_init(
         }
         ggml_backend_buffer_clear(buf, 0);
         // FIXME: buffer type name
-        LLAMA_LOG_INFO("%s: %10s KV buffer size = %7.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
         cache.bufs.push_back(buf);
     }
 
@@ -3172,8 +3172,10 @@ static bool llm_load_tensors(
         // calculate the split points
         int device_count = ggml_backend_cuda_get_device_count();
         float splits[GGML_CUDA_MAX_DEVICES];
-        std::copy(tensor_split, tensor_split + device_count, splits);
-        bool all_zero = std::all_of(splits, splits + device_count, [](float x) { return x == 0.0f; });
+        if (tensor_split != nullptr) {
+            std::copy(tensor_split, tensor_split + device_count, splits);
+        }
+        bool all_zero = tensor_split == nullptr || std::all_of(splits, splits + device_count, [](float x) { return x == 0.0f; });
         if (all_zero) {
             // default split, by free memory
             for (int i = 0; i < device_count; ++i) {
@@ -3752,7 +3754,7 @@ static bool llm_load_tensors(
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
 
         for (ggml_backend_buffer_t buf : model.bufs) {
-            LLAMA_LOG_INFO("%s: %10s buffer size = %7.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
+            LLAMA_LOG_INFO("%s: %10s buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
         }
     }
 
@@ -9258,7 +9260,7 @@ struct llama_context * llama_new_context_with_model(
 
             for (ggml_backend_t backend : backends) {
                 ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
-                LLAMA_LOG_INFO("%s: %10s compute buffer size = %7.2f MiB\n", __func__,
+                LLAMA_LOG_INFO("%s: %10s compute buffer size = %8.2f MiB\n", __func__,
                         ggml_backend_name(backend),
                         ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
             }
