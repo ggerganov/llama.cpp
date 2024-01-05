@@ -2401,7 +2401,7 @@ struct llama_model_loader {
         return gguf_get_data_offset(ctx_gguf) + gguf_get_tensor_offset(ctx_gguf, idx);
     }
 
-    void init_mapping(bool prefetch = true) {
+    void init_mapping(bool prefetch = true, llama_mlock * lmlock = nullptr) {
         /*
         // prefetch only CPU tensors
         if (use_mmap) {
@@ -2421,6 +2421,18 @@ struct llama_model_loader {
         if (use_mmap) {
             mapping.reset(new llama_mmap(&file, prefetch ? -1 : 0, ggml_is_numa()));
         }
+
+        for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
+            struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+            size_data += ggml_nbytes(cur);
+        }
+
+        if (use_mmap && mapping) {
+            if (lmlock) {
+                lmlock->init(mapping->addr);
+            }
+            mmap_used_first = mapping->size;
+        }
     }
 
     // for backwards compatibility, does not support ggml-backend
@@ -2439,28 +2451,14 @@ struct llama_model_loader {
 
     size_t size_done = 0;
     size_t size_data = 0;
-    size_t mmap_first = -1;
-    size_t mmap_last  = 0;
+    size_t mmap_used_first = -1;
+    size_t mmap_used_last  = 0;
 
     // Returns false if cancelled by progress_callback
     bool load_all_data(struct ggml_context * ctx, llama_progress_callback progress_callback, void * progress_callback_user_data, ggml_backend_buffer_t buf_mmap, llama_mlock * lmlock) {
-        // TODO: move to a better place
-        if (size_data == 0) {
-            for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
-                struct ggml_tensor * cur = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
-                size_data += ggml_nbytes(cur);
-            }
-
-            if (use_mmap && buf_mmap) {
-                // FIXME
-                //if (lmlock) {
-                //    lmlock->init(mapping->addr);
-                //}
-            }
-        }
+        GGML_ASSERT(size_data != 0 && "call init_mapping() first");
 
         std::vector<no_init<uint8_t>> read_buf;
-
 
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
@@ -2477,15 +2475,14 @@ struct llama_model_loader {
 
             const size_t offs = file_offset(ggml_get_name(cur));
 
-            // FIXME
             if (use_mmap && mapping) {
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, (uint8_t *) mapping->addr + offs);
                     if (lmlock) {
                         lmlock->grow_to(offs + ggml_nbytes(cur));
                     }
-                    mmap_first = std::min(mmap_first, offs);
-                    mmap_last  = std::max(mmap_last,  offs + ggml_nbytes(cur));
+                    mmap_used_first = std::min(mmap_used_first, offs);
+                    mmap_used_last  = std::max(mmap_used_last,  offs + ggml_nbytes(cur));
                 } else {
                     ggml_backend_tensor_set(cur, (uint8_t *) mapping->addr + offs, 0, ggml_nbytes(cur));
                 }
@@ -2504,20 +2501,23 @@ struct llama_model_loader {
             size_done += ggml_nbytes(cur);
         }
 
-        if (progress_callback && size_done >= size_data) {
-            // Even though the model is done loading, we still honor
-            // cancellation since we need to free allocations.
-            return progress_callback(1.0f, progress_callback_user_data);
+        // check if this is the last call and do final cleanup
+        if (size_done >= size_data) {
+            // unmap offloaded tensors and metadata
+            if (use_mmap && mapping) {
+                mapping->unmap_fragment(0, mmap_used_first);
+                if (mmap_used_last != 0) {
+                    mapping->unmap_fragment(mmap_used_last, mapping->size);
+                }
+            }
+            if (progress_callback) {
+                // Even though the model is done loading, we still honor
+                // cancellation since we need to free allocations.
+                return progress_callback(1.0f, progress_callback_user_data);
+            }
         }
-        return true;
-    }
 
-    void unmap_fragments() {
-        // unmap offloaded tensors and metadata
-        if (use_mmap && mapping) {
-            mapping->unmap_fragment(0, mmap_first);
-            mapping->unmap_fragment(mmap_last, mapping->size);
-        }
+        return true;
     }
 };
 
@@ -3700,16 +3700,7 @@ static bool llm_load_tensors(
 
     ml.done_getting_tensors();
 
-    ml.init_mapping();
-
-    // TODO: move to ggml
-    //auto ggml_n_tensors = [](struct ggml_context * ctx) {
-    //    int n = 0;
-    //    for (auto * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
-    //        ++n;
-    //    }
-    //    return n;
-    //};
+    ml.init_mapping(true, use_mlock ? &model.mlock_mmap : nullptr);
 
     // create backend buffers
 
@@ -3720,9 +3711,9 @@ static bool llm_load_tensors(
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = nullptr;
 
-        // TODO: do not use whole model mapping for the buffer, only the region containing the tensors
-        // this is important for metal: if the entire model could be mapped, then we could use metal for all layers
-        if (ml.use_mmap && buft == ggml_backend_cpu_buffer_type()) {
+        // TODO: do not use the whole model mapping for the buffer, only the region containing the tensors
+        // this is important for metal: if the entire model could be mapped to a metal buffer, then we could use metal for all layers
+        if (ml.use_mmap && buft == llama_default_buffer_type_cpu(true)) {
             buf = ggml_backend_cpu_buffer_from_ptr(ml.mapping->addr, ml.mapping->size);
         }
 #ifdef GGML_USE_METAL
@@ -3780,7 +3771,6 @@ static bool llm_load_tensors(
             return false;
         }
     }
-    ml.unmap_fragments();
 
     model.mapping = std::move(ml.mapping);
 
