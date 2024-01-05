@@ -564,9 +564,11 @@ class ServerRequestHandler(http.server.SimpleHTTPRequestHandler):
             res = {"data": {"seqs":[recvtxt]}}
         elif api_format==3:
             res = {"id": "cmpl-1", "object": "text_completion", "created": 1, "model": friendlymodelname,
+            "usage": {"prompt_tokens": 100,"completion_tokens": 100,"total_tokens": 200},
             "choices": [{"text": recvtxt, "index": 0, "finish_reason": "length"}]}
         elif api_format==4:
             res = {"id": "chatcmpl-1", "object": "chat.completion", "created": 1, "model": friendlymodelname,
+            "usage": {"prompt_tokens": 100,"completion_tokens": 100,"total_tokens": 200},
             "choices": [{"index": 0, "message":{"role": "assistant", "content": recvtxt,}, "finish_reason": "length"}]}
         else:
             res = {"results": [{"text": recvtxt}]}

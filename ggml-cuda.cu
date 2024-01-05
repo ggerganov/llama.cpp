@@ -6592,42 +6592,43 @@ static size_t g_cuda_pool_size[GGML_CUDA_MAX_DEVICES] = {0};
 
 static void * ggml_cuda_pool_malloc_leg(int device, size_t size, size_t * actual_size) {
     scoped_spin_lock lock(g_cuda_pool_lock);
-#ifdef DEBUG_CUDA_MALLOC
-    int nnz = 0;
-    size_t max_size = 0;
-#endif
-    size_t best_diff = 1ull << 36;
-    int ibest = -1;
+
+    int best_i = -1;
+    size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
+    int worst_i = -1;
+    size_t worst_size = 0; //largest unused buffer seen so far
+
     for (int i = 0; i < MAX_CUDA_BUFFERS; ++i) {
         ggml_cuda_buffer& b = g_cuda_buffer_pool[device][i];
-        if (b.ptr != nullptr) {
-#ifdef DEBUG_CUDA_MALLOC
-            ++nnz;
-            if (b.size > max_size) max_size = b.size;
-#endif
-            if (b.size >= size) {
-                size_t diff = b.size - size;
-                if (diff < best_diff) {
-                    best_diff = diff;
-                    ibest = i;
-                    if (!best_diff) {
-                        void * ptr = b.ptr;
-                        *actual_size = b.size;
-                        b.ptr = nullptr;
-                        b.size = 0;
-                        return ptr;
-                    }
-                }
-            }
+        if (b.size > 0 && b.size >= size && b.size < best_size)
+        {
+            best_i = i;
+            best_size = b.size;
+        }
+        if (b.size > 0 && b.size > worst_size)
+        {
+            worst_i = i;
+            worst_size = b.size;
         }
     }
-    if (ibest >= 0) {
-        ggml_cuda_buffer& b = g_cuda_buffer_pool[device][ibest];
+    if(best_i!=-1) //found the smallest buffer that fits our needs
+    {
+        ggml_cuda_buffer& b = g_cuda_buffer_pool[device][best_i];
         void * ptr = b.ptr;
         *actual_size = b.size;
         b.ptr = nullptr;
         b.size = 0;
         return ptr;
+    }
+    if(worst_i!=-1 && !g_mul_mat_q) //no buffer that fits our needs, resize largest one to save memory (non mmq only)
+    {
+        ggml_cuda_buffer& b = g_cuda_buffer_pool[device][worst_i];
+        b.size = 0;
+        void * ptr = b.ptr;
+		ggml_cuda_set_device(device);
+        cudaFree(ptr);
+		g_cuda_pool_size[device] -= size;
+        b.ptr = ptr = nullptr;
     }
     void * ptr;
 
@@ -6637,10 +6638,7 @@ static void * ggml_cuda_pool_malloc_leg(int device, size_t size, size_t * actual
     CUDA_CHECK(cudaMalloc((void **) &ptr, look_ahead_size));
     *actual_size = look_ahead_size;
     g_cuda_pool_size[device] += look_ahead_size;
-#ifdef DEBUG_CUDA_MALLOC
-    fprintf(stderr, "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, id, nnz,
-            (uint32_t)(max_size/1024/1024), (uint32_t)(g_cuda_pool_size[id]/1024/1024), (uint32_t)(size/1024/1024));
-#endif
+
     return ptr;
 }
 
