@@ -16,6 +16,7 @@ extern "C" {
     typedef void * ggml_backend_buffer_type_context_t;
 
     struct ggml_backend_buffer_type_i {
+        const char *          (*get_name)        (ggml_backend_buffer_type_t buft);
         ggml_backend_buffer_t (*alloc_buffer)    (ggml_backend_buffer_type_t buft, size_t size);
         size_t                (*get_alignment)   (ggml_backend_buffer_type_t buft); // tensor alignment
         size_t                (*get_alloc_size)  (ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor); // data size needed to allocate the tensor, including padding
@@ -34,16 +35,17 @@ extern "C" {
     typedef void * ggml_backend_buffer_context_t;
 
     struct ggml_backend_buffer_i {
-        void   (*free_buffer)    (ggml_backend_buffer_t buffer);
-        //void     (*reset)      (ggml_backend_buffer_t buffer); // reset any internal state due to tensor initialization, such as tensor extras
-        void * (*get_base)       (ggml_backend_buffer_t buffer);
-        void   (*init_tensor)    (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
-        void   (*set_tensor)     (ggml_backend_buffer_t buffer,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
-        void   (*get_tensor)     (ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
+        const char * (*get_name)       (ggml_backend_buffer_t buffer);
+        void         (*free_buffer)    (ggml_backend_buffer_t buffer);
+        //void         (*reset)      (ggml_backend_buffer_t buffer); // reset any internal state due to tensor initialization, such as tensor extras
+        void *       (*get_base)       (ggml_backend_buffer_t buffer);
+        void         (*init_tensor)    (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+        void         (*set_tensor)     (ggml_backend_buffer_t buffer,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
+        void         (*get_tensor)     (ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
         // (optional) copy tensor between different buffer-type, allow for single-copy tranfers
-        void   (*cpy_tensor_from)(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst);
-        void   (*cpy_tensor_to)  (ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst);
-        void   (*clear)          (ggml_backend_buffer_t buffer, uint8_t value);
+        void         (*cpy_tensor_from)(ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst);
+        void         (*cpy_tensor_to)  (ggml_backend_buffer_t buffer, struct ggml_tensor * src, struct ggml_tensor * dst);
+        void         (*clear)          (ggml_backend_buffer_t buffer, uint8_t value);
     };
 
     struct ggml_backend_buffer {

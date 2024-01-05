@@ -8,6 +8,7 @@
 #include <limits>
 #include <stdint.h>
 #include <stdio.h>
+#include <string>
 #include <vector>
 
 
@@ -77,6 +78,7 @@
 #define cudaMemcpyKind hipMemcpyKind
 #define cudaMemset hipMemset
 #define cudaMemsetAsync hipMemsetAsync
+#define cudaMemGetInfo hipMemGetInfo
 #define cudaOccupancyMaxPotentialBlockSize hipOccupancyMaxPotentialBlockSize
 #define cudaSetDevice hipSetDevice
 #define cudaStreamCreateWithFlags hipStreamCreateWithFlags
@@ -6885,6 +6887,8 @@ void ggml_init_cublas() {
     }
 }
 
+// TODO: cleanup this after the split buffer type is implemented
+#if 0
 void ggml_cuda_set_tensor_split(const float * tensor_split) {
     if (tensor_split == nullptr) {
         return;
@@ -6908,6 +6912,7 @@ void ggml_cuda_set_tensor_split(const float * tensor_split) {
         g_tensor_split[i] /= split_sum;
     }
 }
+#endif
 
 void * ggml_cuda_host_malloc(size_t size) {
     if (getenv("GGML_CUDA_NO_PINNED") != nullptr) {
@@ -9349,9 +9354,8 @@ void ggml_cuda_get_device_description(int device, char * description, size_t des
 
 struct ggml_backend_context_cuda {
     int device;
-    char name[128];
+    std::string name;
 };
-
 
 // cuda buffer
 
@@ -9360,8 +9364,12 @@ struct ggml_backend_buffer_context_cuda {
     void * dev_ptr = nullptr;
     ggml_tensor_extra_gpu * temp_tensor_extras = nullptr;
     size_t temp_tensor_extra_index = 0;
+    std::string name;
 
-    ggml_backend_buffer_context_cuda(int device, void * dev_ptr) : device(device), dev_ptr(dev_ptr) {}
+    ggml_backend_buffer_context_cuda(int device, void * dev_ptr) :
+        device(device), dev_ptr(dev_ptr),
+        name(GGML_CUDA_NAME + std::to_string(device)) {
+    }
 
     ~ggml_backend_buffer_context_cuda() {
         delete[] temp_tensor_extras;
@@ -9380,6 +9388,11 @@ struct ggml_backend_buffer_context_cuda {
         return extra;
     }
 };
+
+static const char * ggml_backend_cuda_buffer_get_name(ggml_backend_buffer_t buffer) {
+    ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
+    return ctx->name.c_str();
+}
 
 static void ggml_backend_cuda_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_buffer_context_cuda * ctx = (ggml_backend_buffer_context_cuda *)buffer->context;
@@ -9457,6 +9470,7 @@ static void ggml_backend_cuda_buffer_clear(ggml_backend_buffer_t buffer, uint8_t
 }
 
 static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
+    /* .get_name        = */ ggml_backend_cuda_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_cuda_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_cuda_buffer_get_base,
     /* .init_tensor     = */ ggml_backend_cuda_buffer_init_tensor,
@@ -9469,21 +9483,32 @@ static struct ggml_backend_buffer_i cuda_backend_buffer_interface = {
 
 // cuda buffer type
 
-static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    int device = (int) (intptr_t) buft->context;
+struct ggml_backend_cuda_buffer_type_context {
+    int device;
+    std::string name;
+};
 
-    ggml_cuda_set_device(device);
+static const char * ggml_backend_cuda_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    ggml_backend_cuda_buffer_type_context * ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+
+    return ctx->name.c_str();
+}
+
+static ggml_backend_buffer_t ggml_backend_cuda_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+
+    ggml_cuda_set_device(buft_ctx->device);
 
     size = std::max(size, (size_t)1); // cudaMalloc returns null for size 0
 
     void * dev_ptr;
     cudaError_t err = cudaMalloc(&dev_ptr, size);
     if (err != cudaSuccess) {
-        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMalloc failed: %s\n", __func__, size/1024.0/1024.0, device, cudaGetErrorString(err));
+        fprintf(stderr, "%s: allocating %.2f MiB on device %d: cudaMalloc failed: %s\n", __func__, size/1024.0/1024.0, buft_ctx->device, cudaGetErrorString(err));
         return nullptr;
     }
 
-    ggml_backend_buffer_context_cuda * ctx = new ggml_backend_buffer_context_cuda(device, dev_ptr);
+    ggml_backend_buffer_context_cuda * ctx = new ggml_backend_buffer_context_cuda(buft_ctx->device, dev_ptr);
 
     return ggml_backend_buffer_init(buft, cuda_backend_buffer_interface, ctx, size);
 }
@@ -9519,13 +9544,14 @@ static bool ggml_backend_cuda_buffer_type_supports_backend(ggml_backend_buffer_t
         return false;
     }
 
-    int device = (int) (intptr_t) buft->context;
+    ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
 
-    return device == cuda_ctx->device;
+    return buft_ctx->device == cuda_ctx->device;
 }
 
 static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
+    /* .get_name         = */ ggml_backend_cuda_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
     /* .get_alloc_size   = */ ggml_backend_cuda_buffer_type_get_alloc_size,
@@ -9542,7 +9568,7 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
         for (int i = 0; i < GGML_CUDA_MAX_DEVICES; i++) {
             ggml_backend_cuda_buffer_types[i] = {
                 /* .iface    = */ ggml_backend_cuda_buffer_type_interface,
-                /* .context  = */ (ggml_backend_buffer_type_context_t) (intptr_t) i,
+                /* .context  = */ new ggml_backend_cuda_buffer_type_context{i, GGML_CUDA_NAME + std::to_string(i)},
             };
         }
         ggml_backend_cuda_buffer_type_initialized = true;
@@ -9552,6 +9578,18 @@ ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
 }
 
 // host buffer type
+
+static const char * ggml_backend_cuda_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    return "CUDA_Host";
+
+    UNUSED(buft);
+}
+
+static const char * ggml_backend_cuda_host_buffer_name(ggml_backend_buffer_t buffer) {
+    return "CUDA_Host";
+
+    UNUSED(buffer);
+}
 
 static void ggml_backend_cuda_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_cuda_host_free(buffer->context);
@@ -9568,6 +9606,7 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
     // FIXME: this is a hack to avoid having to implement a new buffer type
     ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
     buffer->buft = buft;
+    buffer->iface.get_name = ggml_backend_cuda_host_buffer_name;
     buffer->iface.free_buffer = ggml_backend_cuda_host_buffer_free_buffer;
 
     return buffer;
@@ -9576,6 +9615,7 @@ static ggml_backend_buffer_t ggml_backend_cuda_host_buffer_type_alloc_buffer(ggm
 ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
     static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_type_host = {
         /* .iface    = */ {
+            /* .get_name         = */ ggml_backend_cuda_host_buffer_type_name,
             /* .alloc_buffer     = */ ggml_backend_cuda_host_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
             /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
@@ -9591,12 +9631,9 @@ ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type() {
 // backend
 
 static const char * ggml_backend_cuda_name(ggml_backend_t backend) {
-    //return GGML_CUDA_NAME;
-    //UNUSED(backend);
     ggml_backend_context_cuda * cuda_ctx = (ggml_backend_context_cuda *)backend->context;
-    // TODO: on init
-    sprintf(cuda_ctx->name, "%s%d", "CUD", cuda_ctx->device);
-    return cuda_ctx->name;
+
+    return cuda_ctx->name.c_str();
 }
 
 static void ggml_backend_cuda_free(ggml_backend_t backend) {
@@ -9861,7 +9898,8 @@ ggml_backend_t ggml_backend_cuda_init(int device) {
     ggml_cuda_set_main_device(device);
 
     ggml_backend_context_cuda * ctx = new ggml_backend_context_cuda {
-        /* .device = */ device
+        /* .device = */ device,
+        /* .name   = */ GGML_CUDA_NAME + std::to_string(device),
     };
 
     ggml_backend_t cuda_backend = new ggml_backend {

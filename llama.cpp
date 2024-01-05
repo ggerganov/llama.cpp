@@ -1731,7 +1731,7 @@ static bool llama_kv_cache_init(
         }
         ggml_backend_buffer_clear(buf, 0);
         // FIXME: buffer type name
-        LLAMA_LOG_INFO("%s: KV %10s buffer size: %.02f MiB\n", __func__, "???", ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: %10s KV buffer size = %7.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
         cache.bufs.push_back(buf);
     }
 
@@ -3169,12 +3169,13 @@ static bool llm_load_tensors(
 
 #ifdef GGML_USE_CUBLAS
     if (split_mode == CUDA_SPLIT_LAYER) {
+        // calculate the split points
         int device_count = ggml_backend_cuda_get_device_count();
         float splits[GGML_CUDA_MAX_DEVICES];
         std::copy(tensor_split, tensor_split + device_count, splits);
         bool all_zero = std::all_of(splits, splits + device_count, [](float x) { return x == 0.0f; });
         if (all_zero) {
-            // set by free memory
+            // default split, by free memory
             for (int i = 0; i < device_count; ++i) {
                 size_t total;
                 size_t free;
@@ -3189,21 +3190,17 @@ static bool llm_load_tensors(
         }
         for (int i = 0; i < device_count; ++i) {
             splits[i] /= split_sum;
-            printf("split[%d] = %.2f\n", i, splits[i]);
         }
 
+        // assign GPU layers according to the splits to the devices
         int act_gpu_layers = std::min(n_gpu_layers, (int)n_layer + 1);
-
-        // assign layers proportionally, in reverse order
         for (int64_t i = i_gpu_start; i < n_layer; ++i) {
             int layer_gpu = std::upper_bound(splits, splits + device_count, float(i - i_gpu_start)/act_gpu_layers) - splits;
-            printf("layer %d -> gpu %d\n", (int)i, layer_gpu);
             model.buft_layer[i] = llama_default_buffer_type_offload(layer_gpu);
         }
         // output layer
         if (n_gpu_layers > n_layer) {
             int layer_gpu = std::upper_bound(splits, splits + device_count, float(n_layer)/act_gpu_layers) - splits;
-            printf("output -> gpu %d\n", layer_gpu);
             model.buft_output = llama_default_buffer_type_offload(layer_gpu);
         } else {
             model.buft_output = llama_default_buffer_type_cpu(true);
@@ -3250,7 +3247,7 @@ static bool llm_load_tensors(
         model.ctxs.push_back(ctx);
     }
 
-    LLAMA_LOG_INFO("%s: ggml ctx size       = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
+    LLAMA_LOG_INFO("%s: ggml ctx size = %7.2f MiB\n", __func__, model.ctxs.size()*ctx_size/1024.0/1024.0);
 
     // create tensors for the weights
     {
@@ -3764,14 +3761,7 @@ static bool llm_load_tensors(
         LLAMA_LOG_INFO("%s: offloaded %d/%d layers to GPU\n", __func__, std::min(n_gpu_layers, max_offloadable_layers), max_backend_supported_layers);
 
         for (ggml_backend_buffer_t buf : model.bufs) {
-            // FIXME: add buffer type names to ggml-backend
-            const char * name;
-            if (ggml_backend_buffer_type(buf) == ggml_backend_cpu_buffer_type()) {
-                name = "CPU";
-            } else {
-                name = "???";
-            }
-            LLAMA_LOG_INFO("%s: %10s buffer size = %7.2f MiB\n", __func__, name, ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
+            LLAMA_LOG_INFO("%s: %10s buffer size = %7.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
         }
     }
 
@@ -6223,6 +6213,8 @@ static int llama_decode_internal(
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
     }
     ggml_backend_sched_graph_compute(lctx.sched, gf);
+
+    // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 
 #ifdef GGML_USE_MPI
     ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
@@ -9269,13 +9261,14 @@ struct llama_context * llama_new_context_with_model(
 
             // initialize scheduler with the worst-case graph
             ggml_backend_sched_init_measure(ctx->sched, gf);
+            // note: the number of splits during measure is higher than during inference due to the kv shift
             int n_splits = ggml_backend_sched_get_n_splits(ctx->sched);
-            LLAMA_LOG_INFO("%s: graph splits: %d\n", __func__, n_splits);
+            LLAMA_LOG_INFO("%s: graph splits (measure): %d\n", __func__, n_splits);
             ctx->alloc = ggml_backend_sched_get_tallocr(ctx->sched, ctx->backend_cpu);
 
             for (ggml_backend_t backend : backends) {
                 ggml_backend_buffer_t buf = ggml_backend_sched_get_buffer(ctx->sched, backend);
-                LLAMA_LOG_INFO("%s: %10s compute buffer size = %.2f MiB\n", __func__,
+                LLAMA_LOG_INFO("%s: %10s compute buffer size = %7.2f MiB\n", __func__,
                         ggml_backend_name(backend),
                         ggml_backend_buffer_get_size(buf) / 1024.0 / 1024.0);
             }

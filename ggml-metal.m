@@ -2442,10 +2442,10 @@ static void ggml_backend_metal_free_device(void) {
     }
 }
 
-static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
-    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+static const char * ggml_backend_metal_buffer_get_name(ggml_backend_buffer_t buffer) {
+    return "Metal";
 
-    return ctx->all_data;
+    UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) {
@@ -2461,6 +2461,12 @@ static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) 
     }
 
     free(ctx);
+}
+
+static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
+    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+
+    return ctx->all_data;
 }
 
 static void ggml_backend_metal_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -2494,6 +2500,7 @@ static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_
 }
 
 static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
+    /* .get_name        = */ ggml_backend_metal_buffer_get_name,
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -2505,6 +2512,12 @@ static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
 };
 
 // default buffer type
+
+static const char * ggml_backend_metal_buffer_type_get_name(ggml_backend_buffer_type_t buft) {
+    return "Metal";
+
+    UNUSED(buft);
+}
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
@@ -2578,6 +2591,7 @@ static bool ggml_backend_metal_buffer_type_is_host(ggml_backend_buffer_type_t bu
 ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
     static struct ggml_backend_buffer_type ggml_backend_buffer_type_metal = {
         /* .iface = */ {
+            /* .get_name         = */ ggml_backend_metal_buffer_type_get_name,
             /* .alloc_buffer     = */ ggml_backend_metal_buffer_type_alloc_buffer,
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
