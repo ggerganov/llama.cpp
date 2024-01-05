@@ -727,7 +727,7 @@ static ggml_backend_t ggml_backend_reg_cpu_init(const char * params, void * user
 
 // scheduler
 
-#define GGML_MAX_BACKENDS 4
+#define GGML_MAX_BACKENDS 16
 #define GGML_MAX_SPLITS 256
 #define GGML_MAX_SPLIT_INPUTS 16
 
@@ -903,7 +903,7 @@ static void sched_print_assignments(ggml_backend_sched_t sched, struct ggml_cgra
         }
         ggml_tallocr_t node_allocr = node_allocr(node);
         ggml_backend_t node_backend = node_allocr ? get_allocr_backend(sched, node_allocr) : NULL; // FIXME:
-        fprintf(stderr, "node #%3d (%10.10s): %20.20s (%4.4s) [%4.4s %8.8s]:", i, ggml_op_name(node->op), node->name,
+        fprintf(stderr, "node #%3d (%10.10s): %20.20s (%5.5s) [%5.5s %8.8s]:", i, ggml_op_name(node->op), node->name,
             fmt_size(ggml_nbytes(node)), node_allocr ? ggml_backend_name(node_backend) : "NULL", GET_CAUSE(node));
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
@@ -912,7 +912,7 @@ static void sched_print_assignments(ggml_backend_sched_t sched, struct ggml_cgra
             }
             ggml_tallocr_t src_allocr = node_allocr(src);
             ggml_backend_t src_backend = src_allocr ? get_allocr_backend(sched, src_allocr) : NULL;
-            fprintf(stderr, " %20.20s (%4.4s) [%4.4s %8.8s]", src->name,
+            fprintf(stderr, " %20.20s (%5.5s) [%5.5s %8.8s]", src->name,
                 fmt_size(ggml_nbytes(src)), src_backend ? ggml_backend_name(src_backend) : "NULL", GET_CAUSE(src));
         }
         fprintf(stderr, "\n");
@@ -1091,7 +1091,7 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
         sched->n_splits = cur_split + 1;
     }
 
-    //fprintf(stderr, "PASS 4 ASSIGNMENTS\n"); sched_print_assignments(sched, graph); fflush(stdout);
+    //fprintf(stderr, "PASS 4 ASSIGNMENTS\n"); sched_print_assignments(sched, graph);
 
 #ifndef NDEBUG
     // sanity check: all sources should have the same backend as the node
