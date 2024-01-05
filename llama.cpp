@@ -1730,7 +1730,6 @@ static bool llama_kv_cache_init(
             return false;
         }
         ggml_backend_buffer_clear(buf, 0);
-        // FIXME: buffer type name
         LLAMA_LOG_INFO("%s: %10s KV buffer size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
         cache.bufs.push_back(buf);
     }
@@ -2463,9 +2462,9 @@ struct llama_model_loader {
         for (int i = 0; i < gguf_get_n_tensors(ctx_gguf); i++) {
             struct ggml_tensor * cur = ggml_get_tensor(ctx, gguf_get_tensor_name(ctx_gguf, i));
             if (!cur) {
+                // some tensors may be allocated in a different context
                 continue;
             }
-            GGML_ASSERT(cur); // unused tensors should have been caught by load_data already
 
             if (progress_callback) {
                 if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
@@ -3734,6 +3733,8 @@ static bool llm_load_tensors(
         if (buf == nullptr) {
             throw std::runtime_error("failed to allocate buffer");
         }
+        // indicate that this buffer contains weights
+        // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are always scheduled to the backend that contains the weight
         ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
         model.bufs.push_back(buf);
         ctx_bufs.emplace_back(ctx, buf);
@@ -4335,6 +4336,12 @@ struct llm_build_context {
                     Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
                     cb(Vcur, "Vcur", il);
                 }
+
+                // these nodes are added to the graph together so that they are not reordered
+                // by doing so, the number of splits in the graph is reduced
+                ggml_build_forward_expand(gf, Qcur);
+                ggml_build_forward_expand(gf, Kcur);
+                ggml_build_forward_expand(gf, Vcur);
 
                 Qcur = ggml_rope_custom(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos,
