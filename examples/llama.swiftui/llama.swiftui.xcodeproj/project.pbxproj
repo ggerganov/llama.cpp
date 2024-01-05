@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */ = {isa = PBXBuildFile; fileRef = 542376072B0D9BFB008E6A1C /* ggml-quants.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
 		5423760B2B0D9C4B008E6A1C /* ggml-backend.c in Sources */ = {isa = PBXBuildFile; fileRef = 5423760A2B0D9C4B008E6A1C /* ggml-backend.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
-		542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 		542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09B2AC8723900A8AEE9 /* ggml.c */; settings = {COMPILER_FLAGS = "-DGGML_USE_ACCELERATE -DGGML_USE_METAL -DGGML_USE_K_QUANTS -O3"; }; };
 		542EA0A02AC8725700A8AEE9 /* ggml-alloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 542EA09F2AC8725700A8AEE9 /* ggml-alloc.c */; settings = {COMPILER_FLAGS = "-O3"; }; };
 		542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 542EA0A12AC8729100A8AEE9 /* llama.cpp */; settings = {COMPILER_FLAGS = "-DGGML_USE_K_QUANTS -DGGML_USE_METAL -O3"; }; };
@@ -24,7 +23,25 @@
 		8A3F84242AC4C891005E2EE8 /* models in Resources */ = {isa = PBXBuildFile; fileRef = 8A3F84232AC4C891005E2EE8 /* models */; };
 		8A907F332AC7138A006146EA /* LibLlama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A907F322AC7134E006146EA /* LibLlama.swift */; };
 		8A9F7C4D2AC332EE008AE1EA /* LlamaState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */; };
+		F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */; };
+		F1FE20DC2B465C4500B45541 /* ggml-metal.metal in Resources */ = {isa = PBXBuildFile; fileRef = 549479C82AC9E10B00E0F78B /* ggml-metal.metal */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		F1FE20DB2B465C2100B45541 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			fileType = sourcecode.metal;
+			inputFiles = (
+			);
+			isEditable = 1;
+			outputFiles = (
+				"${DERIVED_FILES_DIR}/ggml-metal.air",
+				"${DERIVED_FILES_DIR}/ggml.metallib",
+			);
+			script = "# metal\nxcrun metal    -c \"${INPUT_FILE_PATH}\" -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\nxcrun metallib -o \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE%-metal}.metallib\" \"${DERIVED_FILES_DIR}/${INPUT_FILE_BASE}.air\"\n";
+		};
+/* End PBXBuildRule section */
 
 /* Begin PBXFileReference section */
 		542376062B0D9BEA008E6A1C /* ggml-quants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "ggml-quants.h"; path = "../../ggml-quants.h"; sourceTree = "<group>"; };
@@ -52,6 +69,7 @@
 		8A3F84232AC4C891005E2EE8 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = llama.swiftui/Resources/models; sourceTree = "<group>"; };
 		8A907F322AC7134E006146EA /* LibLlama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibLlama.swift; sourceTree = "<group>"; };
 		8A9F7C4C2AC332EE008AE1EA /* LlamaState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaState.swift; sourceTree = "<group>"; };
+		F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadCustomButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +184,7 @@
 			children = (
 				7FA3D2B22B2EA2F600543F92 /* DownloadButton.swift */,
 				8A1C83782AC328BD0096AF73 /* ContentView.swift */,
+				F1FE20E12B465EC900B45541 /* LoadCustomButton.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -190,6 +209,7 @@
 				8A1C83712AC328BD0096AF73 /* Resources */,
 			);
 			buildRules = (
+				F1FE20DB2B465C2100B45541 /* PBXBuildRule */,
 			);
 			dependencies = (
 			);
@@ -241,7 +261,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				542378792ACE3F3500834A7B /* ggml-metal.metal in Resources */,
+				F1FE20DC2B465C4500B45541 /* ggml-metal.metal in Resources */,
 				8A3F84242AC4C891005E2EE8 /* models in Resources */,
 				8A1C837E2AC328BE0096AF73 /* Preview Assets.xcassets in Resources */,
 				8A1C837B2AC328BE0096AF73 /* Assets.xcassets in Resources */,
@@ -257,6 +277,7 @@
 			files = (
 				542376082B0D9BFB008E6A1C /* ggml-quants.c in Sources */,
 				549479CD2AC9E42A00E0F78B /* ggml-metal.m in Sources */,
+				F1FE20E22B465ECA00B45541 /* LoadCustomButton.swift in Sources */,
 				542EA09D2AC8723900A8AEE9 /* ggml.c in Sources */,
 				8A907F332AC7138A006146EA /* LibLlama.swift in Sources */,
 				542EA0A32AC8729100A8AEE9 /* llama.cpp in Sources */,
