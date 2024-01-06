@@ -5782,6 +5782,7 @@ static void rms_norm_f32_cuda(const float *x, float *dst, const int ncols,
                               const int nrows, const float eps,
                               dpct::queue_ptr stream) {
     GGML_ASSERT(ncols % WARP_SIZE == 0);
+    // printf("%s ncols=%d, nrows=%d, WARP_SIZE=%d\n", __func__, ncols, nrows, WARP_SIZE);
     if (ncols < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
         stream->submit([&](sycl::handler &cgh) {
@@ -6393,7 +6394,7 @@ static void mul_mat_vec_q6_K_q8_1_cuda(const void *vx, const void *vy,
 
 int get_device_index_by_id(int id){
     int res = g_sycl_device_id2index[id].index;
-    GGML_SYCL_DEBUG("zjy get_device_index_by_id id=%d device_index=%d\n", id, res);
+    // GGML_SYCL_DEBUG("get_device_index_by_id id=%d device_index=%d\n", id, res);
     GGML_ASSERT(res>=0);
     return res;
 }
@@ -8064,7 +8065,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_index()));
-    GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg index %d\n", id);
+    GGML_SYCL_DEBUG("ggml_cuda_pool_malloc_leg index %d\n", id);
 #ifdef DEBUG_CUDA_MALLOC
     int nnz = 0;
     size_t max_size = 0;
@@ -8088,7 +8089,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
                         *actual_size = b.size;
                         b.ptr = nullptr;
                         b.size = 0;
-                        GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg return 1 %p\n", ptr);
+                        // GGML_SYCL_DEBUG("ggml_cuda_pool_malloc_leg return 1 %p\n", ptr);
                         return ptr;
                     }
                 }
@@ -8101,7 +8102,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
         *actual_size = b.size;
         b.ptr = nullptr;
         b.size = 0;
-        GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg return 2 %p\n", ptr);
+        // GGML_SYCL_DEBUG("ggml_cuda_pool_malloc_leg return 2 %p\n", ptr);
         return ptr;
     }
     void * ptr;
@@ -8117,7 +8118,7 @@ static void *ggml_cuda_pool_malloc_leg(size_t size, size_t *actual_size) try {
     fprintf(stderr, "%s[%d]: %d buffers, max_size = %u MB, pool_size = %u MB, requested %u MB\n", __func__, id, nnz,
             (uint32_t)(max_size/1024/1024), (uint32_t)(g_cuda_pool_size[id]/1024/1024), (uint32_t)(size/1024/1024));
 #endif
-    GGML_SYCL_DEBUG("zjy ggml_cuda_pool_malloc_leg return %p\n", ptr);
+    // GGML_SYCL_DEBUG("ggml_cuda_pool_malloc_leg return %p\n", ptr);
     return ptr;
 }
 catch (sycl::exception const &exc) {
@@ -8233,7 +8234,7 @@ struct cuda_pool_alloc {
     T * alloc(size_t size) {
         GGML_ASSERT(ptr == nullptr);
         ptr = (T *) ggml_cuda_pool_malloc(size * sizeof(T), &this->actual_size);
-        GGML_SYCL_DEBUG("zjy alloc %lu return %p actual size=%lu\n", size * sizeof(T), ptr, this->actual_size);
+        GGML_SYCL_DEBUG("alloc %lu return %p actual size=%lu\n", size * sizeof(T), ptr, this->actual_size);
         return ptr;
     }
 
@@ -8417,14 +8418,14 @@ void ggml_init_cublas() try {
         // configure logging to stdout
         // SYCL_CHECK(cublasLoggerConfigure(1, 1, 0, nullptr));
 
-        //zjy hardcode, force set to 1 device
+        //hardcode, force set to 1 device
         g_device_count = 1;
         ggml_cuda_set_main_device(user_device_number);
         ggml_cuda_set_device(user_device_number);
         fprintf(stderr, "Using Device %d\n", user_device_number);
 
         // for (int id = 0; id < g_all_sycl_device_count; ++id) {
-        //     GGML_SYCL_DEBUG("zjy id=%d  g_device_caps[%d].device_id=%d g_sycl_device_id2index[%d].index=%d ", id, id,
+        //     GGML_SYCL_DEBUG("id=%d  g_device_caps[%d].device_id=%d g_sycl_device_id2index[%d].index=%d ", id, id,
         //     g_device_caps[id].device_id, id, g_sycl_device_id2index[id].index);
         // }
 
@@ -8524,7 +8525,7 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
     if (src->backend == GGML_BACKEND_CPU) {
         kind = dpct::host_to_device;
         src_ptr = (char *) src->data;
-        GGML_SYCL_DEBUG("zjy ggml_cuda_cpy_tensor_2d  GGML_BACKEND_CPU src_ptr %p\n", src_ptr);
+        GGML_SYCL_DEBUG("ggml_cuda_cpy_tensor_2d  GGML_BACKEND_CPU src_ptr %p\n", src_ptr);
     } else if (src->backend == GGML_BACKEND_GPU || src->backend == GGML_BACKEND_GPU_SPLIT) {
         GGML_ASSERT(src->backend != GGML_BACKEND_GPU_SPLIT || (i1_low == 0 && i1_high == src->ne[1]));
         kind = dpct::device_to_device;
@@ -8532,10 +8533,10 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
         int id;
         SYCL_CHECK(CHECK_TRY_ERROR(
             id = get_current_device_index()));
-        GGML_SYCL_DEBUG("zjy current device index %d\n", id);
+        GGML_SYCL_DEBUG("current device index %d\n", id);
         src_ptr = (char *) extra->data_device[id];
     } else {
-        GGML_SYCL_DEBUG("zjy GGML_ASSERT(false)\n");
+        GGML_SYCL_DEBUG("GGML_ASSERT(false)\n");
         GGML_ASSERT(false);
     }
     char * dst_ptr = (char *) dst;
@@ -8552,7 +8553,7 @@ static dpct::err0 ggml_cuda_cpy_tensor_2d(void *dst,
 
     const char * x = src_ptr + i1_low*nb1 + i2*nb2 + i3*nb3;
     if (nb0 == ts && nb1 == ts*ne0/bs) {
-        GGML_SYCL_DEBUG("zjy stream->memcpy: dst_ptr=%p, x=%p, size=%lu\n", dst_ptr, x, i1_diff * nb1);
+        GGML_SYCL_DEBUG("stream->memcpy: dst_ptr=%p, x=%p, size=%lu\n", dst_ptr, x, i1_diff * nb1);
         // return CHECK_TRY_ERROR(stream->memcpy(dst_ptr, x, i1_diff * nb1));
         return CHECK_TRY_ERROR(dpct::async_dpct_memcpy(dst_ptr, x, i1_diff * nb1,
                                     kind, *stream));
@@ -9596,15 +9597,15 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
 
     ggml_cuda_set_device(g_main_device);
     dpct::queue_ptr main_stream = g_cudaStreams[g_main_device_index][0];
-    GGML_SYCL_DEBUG("zjy g_main_device_index=%d, src0=%p\n", g_main_device_index, src0);
+    GGML_SYCL_DEBUG("g_main_device_index=%d, src0=%p\n", g_main_device_index, src0);
 
     if (src0_on_device) {
         src0_ddf = (float *) src0_extra->data_device[g_main_device_index];
     } else {
         src0_ddf = src0_f.alloc(ggml_nelements(src0));
-        GGML_SYCL_DEBUG("zjy g_main_device_index=%d, src0_ddf=%p\n", g_main_device_index, src0_ddf);
+        GGML_SYCL_DEBUG("g_main_device_index=%d, src0_ddf=%p\n", g_main_device_index, src0_ddf);
 
-        GGML_SYCL_DEBUG("zjy before ggml_cuda_cpy_tensor_2d src0_ddf=%p, src0=%p\n", src0_ddf, src0);
+        GGML_SYCL_DEBUG("before ggml_cuda_cpy_tensor_2d src0_ddf=%p, src0=%p\n", src0_ddf, src0);
         SYCL_CHECK(ggml_cuda_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
     }
 
@@ -9642,8 +9643,11 @@ static void ggml_cuda_op_flatten(const ggml_tensor *src0,
     }
 }
 catch (sycl::exception const &exc) {
+
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
+  int *foo = (int*)-1;
+  printf("%d\n", *foo);
   std::exit(1);
 }
 
@@ -10041,78 +10045,97 @@ catch (sycl::exception const &exc) {
 }
 
 static void ggml_cuda_repeat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_repeat);
 }
 
 static void ggml_cuda_get_rows(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_get_rows);
 }
 
 static void ggml_cuda_add(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_add);
 }
 
 static void ggml_cuda_acc(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_acc);
 }
 
 static void ggml_cuda_mul(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_mul);
 }
 
 static void ggml_cuda_div(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_div);
 }
 
 static void ggml_cuda_gelu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_gelu);
 }
 
 static void ggml_cuda_silu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_silu);
 }
 
 static void ggml_cuda_gelu_quick(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_gelu_quick);
 }
 
 static void ggml_cuda_tanh(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_tanh);
 }
 
 static void ggml_cuda_relu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_relu);
 }
 
 static void ggml_cuda_leaky_relu(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_leaky_relu);
 }
 
 static void ggml_cuda_sqr(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_sqr);
 }
 
 static void ggml_cuda_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_norm);
 }
 
 static void ggml_cuda_group_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_group_norm);
 }
 
 static void ggml_cuda_concat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_concat);
 }
 
 static void ggml_cuda_upscale(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_upscale);
 }
 
 static void ggml_cuda_pad(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_pad);
 }
 
 static void ggml_cuda_rms_norm(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+    GGML_SYCL_DEBUG("call %s\n", __func__);
     ggml_cuda_op_flatten(src0, src1, dst, ggml_cuda_op_rms_norm);
 }
 

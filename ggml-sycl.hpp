@@ -14,6 +14,6 @@
     }                                                                          \
   }()
 
-#define DEBUG_CUDA_MALLOC
+// #define DEBUG_CUDA_MALLOC
 
 int get_main_device();
