@@ -482,7 +482,7 @@ void sample_grammar(FileFormat file_format, int32_t n_vocab, llama_token_data_ar
 }
 
 int SampleLogits(const float * logits, int n_ctx, int n_vocab, int rep_pen_range, float rep_pen, float presence_penalty, float top_k, float top_a, float top_p, float min_p, float typical_p, float tfs, float temp, std::mt19937 & rng,
-int mirostat, float mirostat_tau, float mirostat_eta, const std::vector<samplers> & sampler_order, llama_grammar * grammar)
+int mirostat, float mirostat_tau, float mirostat_eta, const std::vector<samplers> & sampler_order, llama_grammar * grammar, float dynatemp_range)
 {
     int id = 0;
     std::vector<llama_token_data> candidates;
@@ -541,7 +541,19 @@ int mirostat, float mirostat_tau, float mirostat_eta, const std::vector<samplers
                     llama_sample_typical(nullptr, &candidates_p, typical_p,1);
                     break;
                 case KCPP_SAMPLER_TEMP:
-                    sample_temperature(&candidates_p, temp);
+                    if (dynatemp_range>0)
+                    {
+                        float dynatemp_min = temp - dynatemp_range;
+                        float dynatemp_max = temp + dynatemp_range;
+                        //do not allow negative values
+                        dynatemp_min = dynatemp_min<0?0:dynatemp_min;
+                        dynatemp_max = dynatemp_max<0?0:dynatemp_max;
+                        llama_sample_entropy(nullptr, &candidates_p, temp, dynatemp_min, dynatemp_max);
+                    }
+                    else
+                    {
+                        sample_temperature(&candidates_p, temp);
+                    }
                     break;
                 case KCPP_SAMPLER_REP_PEN:
                     sample_rep_pen(n_ctx, rep_pen_range, rep_pen, presence_penalty, &candidates_p);
@@ -1480,6 +1492,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     }
 
     std::string addedmemory = inputs.memory;
+
     kcpp_params->prompt = inputs.prompt;
     kcpp_params->seed = inputs.seed;
     kcpp_params->n_predict = inputs.max_length;
@@ -1495,10 +1508,12 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
     kcpp_params->mirostat = inputs.mirostat;
     kcpp_params->mirostat_eta = inputs.mirostat_eta;
     kcpp_params->mirostat_tau = inputs.mirostat_tau;
+    kcpp_params->dynatemp_range = inputs.dynatemp_range;
     kcpp_params->n_ctx = inputs.max_context_length;
     kcpp_params->n_batch = n_batch;
     kcpp_params->n_threads = n_threads;
     kcpp_params->n_threads_batch = n_blasthreads;
+
     bool stream_sse = inputs.stream_sse;
 
     bool allow_regular_prints = (debugmode!=-1 && !inputs.quiet) || debugmode >= 1;
@@ -1889,6 +1904,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
             const float presence_penalty = kcpp_params->presence_penalty;
             const float typical_p = kcpp_params->typical_p;
             const float tfs_z = kcpp_params->tfs_z;
+            const float dynatemp_range = kcpp_params->dynatemp_range;
 
             if (!startedsampling)
             {
@@ -1944,7 +1960,7 @@ generation_outputs gpttype_generate(const generation_inputs inputs, generation_o
 
             id = SampleLogits(logitsPtr, nctx, n_vocab, last_n_size, repeat_penalty, presence_penalty,
             top_k, top_a, top_p, min_p, typical_p, tfs_z, temp, rng,
-            kcpp_params->mirostat, kcpp_params->mirostat_tau, kcpp_params->mirostat_eta, sampler_order, grammar);
+            kcpp_params->mirostat, kcpp_params->mirostat_tau, kcpp_params->mirostat_eta, sampler_order, grammar, dynatemp_range);
 
             if (grammar != nullptr) {
                 grammar_accept_token(file_format, n_vocab, grammar, id);

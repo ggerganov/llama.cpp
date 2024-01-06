@@ -6,7 +6,7 @@ It requires no dependencies, installation or setup.
 Just copy this single static HTML file anywhere and open it in a browser, or from a webserver.
 Please go to https://github.com/LostRuins/lite.koboldai.net for updates on Kobold Lite.
 Kobold Lite is under the AGPL v3.0 License unless otherwise exempted. Please do not remove this line.
-Current version: 103
+Current version: 104
 -Concedo
 -->
 
@@ -3404,6 +3404,7 @@ Current version: 103
 		rep_pen_range: 320,
 		rep_pen_slope: 0.7,
 		temperature: 0.7,
+		dynatemp_range: 0.0,
 		top_p: 0.92,
 		min_p: 0.00,
 		presence_penalty: 0.00,
@@ -3426,6 +3427,7 @@ Current version: 103
 			preset: "[Default]",
 			description: "Known Working Settings.",
 			temp: defaultsettings.temperature,
+			dynatemp_range: defaultsettings.dynatemp_range,
 			genamt: defaultsettings.max_length,
 			top_k: defaultsettings.top_k,
 			top_p: defaultsettings.top_p,
@@ -3443,6 +3445,7 @@ Current version: 103
 			preset: "Inverted Mirror",
 			description: "Good defaults with a different sampler order.",
 			temp: defaultsettings.temperature,
+			dynatemp_range: defaultsettings.dynatemp_range,
 			genamt: defaultsettings.max_length,
 			top_k: defaultsettings.top_k,
 			top_p: defaultsettings.top_p,
@@ -3456,7 +3459,7 @@ Current version: 103
 			rep_pen_slope: defaultsettings.rep_pen_slope,
 			sampler_order: [0, 1, 2, 3, 4, 5, 6]
 		},
-		{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"genamt":120,"top_k":0,"top_p":0.5,"min_p":0.0,"presence_penalty":0.0,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"genamt":120,"top_k":0,"top_p":0.95,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"TavernAI","description":"Preset used in TavernAI.","temp":0.79,"genamt":120,"top_k":0,"top_p":0.9,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.95,"rep_pen":1.19,"rep_pen_range":1024,"rep_pen_slope":0.9,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":120,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"min_p":0.0,"presence_penalty":0.0,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":120,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":1.5,"genamt":120,"top_k":85,"top_p":0.24,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"genamt":120,"top_k":0,"top_p":0.98,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"genamt":120,"top_k":100,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"genamt":120,"top_k":0,"top_p":0.95,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"genamt":120,"top_k":12,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]},{"preset":"Default 20B","description":"Good starting settings for NeoX 20B.","temp":0.6,"genamt":120,"top_k":0,"top_p":0.9,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.04,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Min-P","description":"A good default for Min-P, only works on backends with min-p.","temp":1.25,"genamt":120,"top_k":0,"top_p":1,"min_p":0.1,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.03,"rep_pen_range":320,"rep_pen_slope":0.7,"sampler_order":[6,5,0,1,3,4,2]}
+		{"preset":"Godlike","description":"Makes AI give a descriptive and sensual output.","temp":0.7,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.5,"min_p":0.0,"presence_penalty":0.0,"top_a":0.75,"typical":0.19,"tfs":0.97,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,5,4,3,2,1,0]},{"preset":"Mayday","description":"Wacky plot, creativity from AI, crazy stories you want AI to weird out.","temp":1.05,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.95,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Good Winds","description":"Let AI direct the plot, but still stay logical.","temp":0.7,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Liminal Drift","description":"Drives coherent dialogue, responses, and behavior, sometimes surreal situations arise based on information already present in the story.","temp":0.66,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0.96,"typical":0.6,"tfs":1,"rep_pen":1.1,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,4,5,1,0,2,3]},{"preset":"TavernAI","description":"Preset used in TavernAI.","temp":0.79,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.9,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.95,"rep_pen":1.19,"rep_pen_range":1024,"rep_pen_slope":0.9,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Storywriter 6B","description":"Optimized settings for relevant output.","genamt":120,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4],"temp":0.72,"dynatemp_range":0.0,"tfs":1,"top_a":0,"top_k":0,"top_p":0.73,"min_p":0.0,"presence_penalty":0.0,"typical":1},{"preset":"Coherent Creativity 6B","description":"A good balance between coherence, creativity, and quality of prose.","genamt":120,"rep_pen":1.2,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4],"temp":0.51,"dynatemp_range":0.0,"tfs":0.99,"top_a":0,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"typical":1},{"preset":"Luna Moth 6B","description":"A great degree of creativity without losing coherency.","temp":1.5,"dynatemp_range":0.0,"genamt":120,"top_k":85,"top_p":0.24,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pleasing Results 6B","description":"Expectable output with alternative context settings.","temp":0.44,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.9,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":6.8,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Genesis 13B","description":"Stable and logical, but with scattered creativity.","temp":0.63,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.98,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.98,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,2,0,3,5,1,4]},{"preset":"Basic Coherence 13B","description":"Keep things on track.","temp":0.59,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.87,"rep_pen":1.1,"rep_pen_range":2048,"rep_pen_slope":0.3,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Ouroboros 13B","description":"Versatile, conforms well to poems, lists, chat, etc.","temp":1.07,"dynatemp_range":0.0,"genamt":120,"top_k":100,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.93,"rep_pen":1.05,"rep_pen_range":404,"rep_pen_slope":0.8,"sampler_order":[6,0,5,3,2,1,4]},{"preset":"Ace of Spades 13B","description":"Expressive, while still staying focused.","temp":1.15,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.95,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.8,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":7,"sampler_order":[6,3,2,0,5,1,4]},{"preset":"Low Rider 13B","description":"Reliable, aimed at story development.","temp":0.94,"dynatemp_range":0.0,"genamt":120,"top_k":12,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.94,"rep_pen":1.05,"rep_pen_range":2048,"rep_pen_slope":0.2,"sampler_order":[6,5,0,2,3,1,4]},{"preset":"Pro Writer 13B","description":"Optimal setting for readability, based on AI-powered mass statistical analysis of Euterpe output.","temp":1.35,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":0.69,"rep_pen":1.15,"rep_pen_range":2048,"rep_pen_slope":0.1,"sampler_order":[6,3,2,5,0,1,4]},{"preset":"Default 20B","description":"Good starting settings for NeoX 20B.","temp":0.6,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":0.9,"min_p":0.0,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.04,"rep_pen_range":1024,"rep_pen_slope":0.7,"sampler_order":[6,0,1,2,3,4,5]},{"preset":"Min-P","description":"A good default for Min-P, only works on backends with min-p.","temp":1.25,"dynatemp_range":0.0,"genamt":120,"top_k":0,"top_p":1,"min_p":0.1,"presence_penalty":0.0,"top_a":0,"typical":1,"tfs":1,"rep_pen":1.03,"rep_pen_range":320,"rep_pen_slope":0.7,"sampler_order":[6,5,0,1,3,4,2]}
 	];
 
 	function polyfills()
@@ -7253,6 +7256,7 @@ Current version: 103
 		document.getElementById("instruct_starttag").value = localsettings.instruct_starttag;
 		document.getElementById("instruct_endtag").value = localsettings.instruct_endtag;
 		document.getElementById("min_p").value = localsettings.min_p;
+		document.getElementById("dynatemp_range").value = localsettings.dynatemp_range;
 		document.getElementById("presence_penalty").value = localsettings.presence_penalty;
 		document.getElementById("sampler_seed").value = localsettings.sampler_seed;
 		document.getElementById("top_k").value = localsettings.top_k;
@@ -7371,6 +7375,7 @@ Current version: 103
 			document.getElementById("max_length").value = document.getElementById("max_length_slide").value = found.genamt;
 			document.getElementById("presence_penalty").value = found.presence_penalty;
 			document.getElementById("min_p").value = found.min_p;
+			document.getElementById("dynatemp_range").value = found.dynatemp_range;
 			document.getElementById("top_k").value = found.top_k;
 			document.getElementById("top_p").value = document.getElementById("top_p_slide").value = found.top_p;
 			document.getElementById("top_a").value = found.top_a;
@@ -7505,6 +7510,7 @@ Current version: 103
 		}
 		localsettings.sampler_seed = document.getElementById("sampler_seed").value;
 		localsettings.min_p = document.getElementById("min_p").value;
+		localsettings.dynatemp_range = document.getElementById("dynatemp_range").value;
 		localsettings.presence_penalty = document.getElementById("presence_penalty").value;
 		localsettings.top_k = document.getElementById("top_k").value;
 		localsettings.top_a = document.getElementById("top_a").value;
@@ -7569,6 +7575,7 @@ Current version: 103
 		localsettings.rep_pen_slope = cleannum(localsettings.rep_pen_slope, 0, 20);
 		localsettings.top_p = cleannum(localsettings.top_p, 0.002, 1);
 		localsettings.min_p = cleannum(localsettings.min_p, 0.0, 1);
+		localsettings.dynatemp_range = cleannum(localsettings.dynatemp_range, 0.0, 2.0);
 		localsettings.presence_penalty = cleannum(localsettings.presence_penalty, -2, 2);
 		localsettings.top_k = cleannum(Math.floor(localsettings.top_k), 0, 300);
 		localsettings.top_a = cleannum(localsettings.top_a, 0, 1);
@@ -8800,6 +8807,7 @@ Current version: 103
 
 			//also supports min_p, in that it wont crash, so add it on. it will be ignored if not found
 			submit_payload.params.min_p = localsettings.min_p;
+			submit_payload.params.dynatemp_range = localsettings.dynatemp_range;
 		}
 		//presence pen and logit bias for OAI and newer kcpp
 		if((custom_kobold_endpoint != "" && is_using_kcpp_with_mirostat()) || custom_oai_endpoint!="")
@@ -12491,6 +12499,7 @@ Current version: 103
 								<th title="Sampler Seed. -1 to Deactivate.">Seed</th>
 								<th title="Min-P Sampling. 0 to Deactivate.">Min-P</th>
 								<th title="Presence Penalty. 0 to Deactivate.">PrPen.</th>
+								<th title="DynaTemp Range. 0 to Deactivate.">DyTmp.R</th>
 								</tr>
 								<tr>
 
@@ -12500,6 +12509,8 @@ Current version: 103
 								id="min_p"></td>
 								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
 								id="presence_penalty"></td>
+								<td><input class="" type="text" inputmode="decimal" placeholder="0" value="0"
+								id="dynatemp_range"></td>
 								</tr>
 
 
