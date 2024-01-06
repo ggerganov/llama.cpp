@@ -47,8 +47,6 @@ GGML_API int  ggml_backend_cuda_get_device_count(void);
 GGML_API void ggml_backend_cuda_get_device_description(int device, char * description, size_t description_size);
 GGML_API void ggml_backend_cuda_get_device_memory(int device, size_t * free, size_t * total);
 
-
-
 #ifdef  __cplusplus
 }
 #endif

@@ -9568,6 +9568,10 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
 
 ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device) {
     // FIXME: this is not thread safe
+    if (device >= ggml_backend_cuda_get_device_count()) {
+        return nullptr;
+    }
+
     static struct ggml_backend_buffer_type ggml_backend_cuda_buffer_types[GGML_CUDA_MAX_DEVICES];
 
     static bool ggml_backend_cuda_buffer_type_initialized = false;
@@ -9792,7 +9796,6 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_split_buffer_type_interface 
 ggml_backend_buffer_type_t ggml_backend_cuda_split_buffer_type(const float * tensor_split) {
     // FIXME: this is not thread safe
     static std::map<std::array<float, GGML_CUDA_MAX_DEVICES>, struct ggml_backend_buffer_type> buft_map;
-
 
     std::array<float, GGML_CUDA_MAX_DEVICES> tensor_split_arr = {};
 
