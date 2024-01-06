@@ -364,6 +364,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             ctx->kernels[i].pipeline = nil;
         }
 
+        /*
+            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
+                    (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
+                    (int) kernel->pipeline.threadExecutionWidth); \
+        */
 #define GGML_METAL_ADD_KERNEL(e, name, supported) \
         if (supported) { \
             struct ggml_metal_kernel * kernel = &ctx->kernels[e]; \
@@ -373,11 +378,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 GGML_METAL_LOG_ERROR("%s: error: load pipeline error: %s\n", __func__, [[error description] UTF8String]); \
                 return NULL; \
             } \
-            GGML_METAL_LOG_INFO("%s: loaded %-32s %16p | th_max = %4d | th_width = %4d\n", __func__, "kernel_"#name, (void *) kernel->pipeline, \
-                    (int) kernel->pipeline.maxTotalThreadsPerThreadgroup, \
-                    (int) kernel->pipeline.threadExecutionWidth); \
         } else { \
-            GGML_METAL_LOG_INFO("%s: skipping %-32s\n", __func__, "kernel_"#name); \
+            GGML_METAL_LOG_WARN("%s: skipping %-32s (not supported)\n", __func__, "kernel_"#name); \
         }
 
         // simd_sum and simd_max requires MTLGPUFamilyApple7
