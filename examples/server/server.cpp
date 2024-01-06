@@ -10,7 +10,8 @@
 // crash the server in debug mode, otherwise send an http 500 error
 #define CPPHTTPLIB_NO_EXCEPTIONS 1
 #endif
-
+// increase max payload length to allow use of larger context size
+#define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
 #include "json.hpp"
 
@@ -24,6 +25,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <condition_variable>
 
 #ifndef SERVER_VERBOSE
 #define SERVER_VERBOSE 1
@@ -440,7 +442,6 @@ struct llama_client_slot
         }
 
         images.clear();
-        // llama_set_rng_seed(ctx, params.seed); in batched the seed matter???????
     }
 
     bool has_budget(gpt_params &global_params) {
@@ -541,7 +542,9 @@ struct llama_server_context
     std::vector<task_result> queue_results;
     std::vector<task_multi>  queue_multitasks;
     std::mutex mutex_tasks; // also guards id_gen, and queue_multitasks
+    std::condition_variable condition_tasks;
     std::mutex mutex_results;
+    std::condition_variable condition_results;
 
     ~llama_server_context()
     {
@@ -760,6 +763,42 @@ struct llama_server_context
             slot->prompt = "";
         }
 
+        slot->sparams.penalty_prompt_tokens.clear();
+        slot->sparams.use_penalty_prompt_tokens = false;
+        const auto &penalty_prompt = data.find("penalty_prompt");
+        if (penalty_prompt != data.end())
+        {
+            if (penalty_prompt->is_string())
+            {
+                const auto penalty_prompt_string = penalty_prompt->get<std::string>();
+                auto penalty_tokens = llama_tokenize(model, penalty_prompt_string, false);
+                slot->sparams.penalty_prompt_tokens.swap(penalty_tokens);
+                if (slot->params.n_predict > 0)
+                {
+                    slot->sparams.penalty_prompt_tokens.reserve(slot->sparams.penalty_prompt_tokens.size() + slot->params.n_predict);
+                }
+                slot->sparams.use_penalty_prompt_tokens = true;
+            }
+            else if (penalty_prompt->is_array())
+            {
+                const auto n_tokens = penalty_prompt->size();
+                slot->sparams.penalty_prompt_tokens.reserve(n_tokens + std::max(0, slot->params.n_predict));
+                const int n_vocab = llama_n_vocab(model);
+                for (const auto &penalty_token : *penalty_prompt)
+                {
+                    if (penalty_token.is_number_integer())
+                    {
+                        const auto tok = penalty_token.get<llama_token>();
+                        if (tok >= 0 && tok < n_vocab)
+                        {
+                            slot->sparams.penalty_prompt_tokens.push_back(tok);
+                        }
+                    }
+                }
+                slot->sparams.use_penalty_prompt_tokens = true;
+            }
+        }
+
         slot->sparams.logit_bias.clear();
 
         if (json_value(data, "ignore_eos", false))
@@ -884,6 +923,7 @@ struct llama_server_context
             llama_sampling_free(slot->ctx_sampling);
         }
         slot->ctx_sampling = llama_sampling_init(slot->sparams);
+        llama_set_rng_seed(ctx, slot->params.seed);
         slot->command = LOAD_PROMPT;
 
         all_slots_are_idle = false;
@@ -990,6 +1030,12 @@ struct llama_server_context
         // search stop word and delete it
         slot.generated_text += token_str;
         slot.has_next_token = true;
+
+        if (slot.ctx_sampling->params.use_penalty_prompt_tokens && result.tok != -1)
+        {
+            // we can change penalty_prompt_tokens because it is always created from scratch each request
+            slot.ctx_sampling->params.penalty_prompt_tokens.push_back(result.tok);
+        }
 
         // check if there is incomplete UTF-8 character at the end
         bool incomplete = false;
@@ -1126,7 +1172,7 @@ struct llama_server_context
 
     void send_error(task_server& task, std::string error)
     {
-        std::lock_guard<std::mutex> lock(mutex_results);
+        std::unique_lock<std::mutex> lock(mutex_results);
         task_result res;
         res.id = task.id;
         res.multitask_id = task.multitask_id;
@@ -1134,6 +1180,7 @@ struct llama_server_context
         res.error = true;
         res.result_json = { { "content", error } };
         queue_results.push_back(res);
+        condition_results.notify_all();
     }
 
     void add_multi_task(int id, std::vector<int>& sub_ids)
@@ -1143,6 +1190,7 @@ struct llama_server_context
         multi.id = id;
         std::copy(sub_ids.begin(), sub_ids.end(), std::inserter(multi.subtasks_remaining, multi.subtasks_remaining.end()));
         queue_multitasks.push_back(multi);
+        condition_tasks.notify_one();
     }
 
     void update_multi_task(int multitask_id, int subtask_id, task_result& result)
@@ -1154,6 +1202,7 @@ struct llama_server_context
             {
                 multitask.subtasks_remaining.erase(subtask_id);
                 multitask.results.push_back(result);
+                condition_tasks.notify_one();
             }
         }
     }
@@ -1172,7 +1221,7 @@ struct llama_server_context
             {"n_ctx",             slot.n_ctx},
             {"model",             params.model_alias},
             {"seed",              slot.params.seed},
-            {"temp",              slot.sparams.temp},
+            {"temperature",       slot.sparams.temp},
             {"top_k",             slot.sparams.top_k},
             {"top_p",             slot.sparams.top_p},
             {"min_p",             slot.sparams.min_p},
@@ -1182,6 +1231,8 @@ struct llama_server_context
             {"repeat_penalty",    slot.sparams.penalty_repeat},
             {"presence_penalty",  slot.sparams.penalty_present},
             {"frequency_penalty", slot.sparams.penalty_freq},
+            {"penalty_prompt_tokens", slot.sparams.penalty_prompt_tokens},
+            {"use_penalty_prompt_tokens", slot.sparams.use_penalty_prompt_tokens},
             {"mirostat",          slot.sparams.mirostat},
             {"mirostat_tau",      slot.sparams.mirostat_tau},
             {"mirostat_eta",      slot.sparams.mirostat_eta},
@@ -1199,7 +1250,7 @@ struct llama_server_context
 
     void send_partial_response(llama_client_slot &slot, completion_token_output tkn)
     {
-        std::lock_guard<std::mutex> lock(mutex_results);
+        std::unique_lock<std::mutex> lock(mutex_results);
         task_result res;
         res.id = slot.task_id;
         res.multitask_id = slot.multitask_id;
@@ -1235,11 +1286,12 @@ struct llama_server_context
         }
 
         queue_results.push_back(res);
+        condition_results.notify_all();
     }
 
     void send_final_response(llama_client_slot &slot)
     {
-        std::lock_guard<std::mutex> lock(mutex_results);
+        std::unique_lock<std::mutex> lock(mutex_results);
         task_result res;
         res.id = slot.task_id;
         res.multitask_id = slot.multitask_id;
@@ -1295,11 +1347,12 @@ struct llama_server_context
         }
 
         queue_results.push_back(res);
+        condition_results.notify_all();
     }
 
     void send_embedding(llama_client_slot &slot)
     {
-        std::lock_guard<std::mutex> lock(mutex_results);
+        std::unique_lock<std::mutex> lock(mutex_results);
         task_result res;
         res.id = slot.task_id;
         res.multitask_id = slot.multitask_id;
@@ -1327,6 +1380,7 @@ struct llama_server_context
             };
         }
         queue_results.push_back(res);
+        condition_results.notify_all();
     }
 
     int request_completion(json data, bool infill, bool embedding, int multitask_id)
@@ -1350,6 +1404,7 @@ struct llama_server_context
 
         // otherwise, it's a single-prompt task, we actually queue it
         queue_tasks.push_back(task);
+        condition_tasks.notify_one();
         return task.id;
     }
 
@@ -1357,13 +1412,10 @@ struct llama_server_context
     {
         while (true)
         {
-            std::this_thread::sleep_for(std::chrono::microseconds(5));
-            std::lock_guard<std::mutex> lock(mutex_results);
-
-            if (queue_results.empty())
-            {
-                continue;
-            }
+            std::unique_lock<std::mutex> lock(mutex_results);
+            condition_results.wait(lock, [&]{
+                return !queue_results.empty();
+            });
 
             for (int i = 0; i < (int) queue_results.size(); i++)
             {
@@ -1459,12 +1511,13 @@ struct llama_server_context
 
     void request_cancel(int task_id)
     {
-        std::lock_guard<std::mutex> lock(mutex_tasks);
+        std::unique_lock<std::mutex> lock(mutex_tasks);
         task_server task;
         task.id = id_gen++;
         task.type = CANCEL_TASK;
         task.target_id = task_id;
         queue_tasks.push_back(task);
+        condition_tasks.notify_one();
     }
 
     int split_multiprompt_task(task_server& multiprompt_task)
@@ -1490,7 +1543,7 @@ struct llama_server_context
 
     void process_tasks()
     {
-        std::lock_guard<std::mutex> lock(mutex_tasks);
+        std::unique_lock<std::mutex> lock(mutex_tasks);
         while (!queue_tasks.empty())
         {
             task_server task = queue_tasks.front();
@@ -1562,6 +1615,7 @@ struct llama_server_context
 
                 std::lock_guard<std::mutex> lock(mutex_results);
                 queue_results.push_back(aggregate_result);
+                condition_results.notify_all();
 
                 queue_iterator = queue_multitasks.erase(queue_iterator);
             }
@@ -1592,8 +1646,10 @@ struct llama_server_context
                 LOG_TEE("all slots are idle and system prompt is empty, clear the KV cache\n");
                 kv_cache_clear();
             }
-            // avoid 100% usage of cpu all time
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            std::unique_lock<std::mutex> lock(mutex_tasks);
+            condition_tasks.wait(lock, [&]{
+                return !queue_tasks.empty();
+            });
         }
 
         for (llama_client_slot &slot : slots)
@@ -2392,28 +2448,35 @@ json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Map OpenAI parameters to llama.cpp parameters
+    //
+    // For parameters that are defined by the OpenAI documentation (e.g.
+    // temperature), we explicitly specify OpenAI's intended default; we
+    // need to do that because sometimes OpenAI disagrees with llama.cpp
+    //
+    // https://platform.openai.com/docs/api-reference/chat/create
+    llama_sampling_params default_sparams;
     llama_params["model"]             = json_value(body, "model", std::string("uknown"));
     llama_params["prompt"]            = format_chatml(body["messages"]); // OpenAI 'messages' to llama.cpp 'prompt'
     llama_params["cache_prompt"]      = json_value(body, "cache_prompt", false);
-    llama_params["temperature"]       = json_value(body, "temperature", 0.8);
-    llama_params["top_k"]             = json_value(body, "top_k", 40);
-    llama_params["top_p"]             = json_value(body, "top_p", 0.95);
+    llama_params["temperature"]       = json_value(body, "temperature", 0.0);
+    llama_params["top_k"]             = json_value(body, "top_k", default_sparams.top_k);
+    llama_params["top_p"]             = json_value(body, "top_p", 1.0);
     llama_params["n_predict"]         = json_value(body, "max_tokens", -1);
     llama_params["logit_bias"]        = json_value(body, "logit_bias",json::object());
     llama_params["frequency_penalty"] = json_value(body, "frequency_penalty", 0.0);
     llama_params["presence_penalty"]  = json_value(body, "presence_penalty", 0.0);
-    llama_params["seed"]              = json_value(body, "seed", 0);
+    llama_params["seed"]              = json_value(body, "seed", LLAMA_DEFAULT_SEED);
     llama_params["stream"]            = json_value(body, "stream", false);
-    llama_params["mirostat"]          = json_value(body, "mirostat", false);
-    llama_params["mirostat_tau"]      = json_value(body, "mirostat_tau", 0.0);
-    llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", 0.0);
-    llama_params["penalize_nl"]       = json_value(body, "penalize_nl", false);
-    llama_params["typical_p"]         = json_value(body, "typical_p", 0.0);
-    llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", 0);
+    llama_params["mirostat"]          = json_value(body, "mirostat", default_sparams.mirostat);
+    llama_params["mirostat_tau"]      = json_value(body, "mirostat_tau", default_sparams.mirostat_tau);
+    llama_params["mirostat_eta"]      = json_value(body, "mirostat_eta", default_sparams.mirostat_eta);
+    llama_params["penalize_nl"]       = json_value(body, "penalize_nl", default_sparams.penalize_nl);
+    llama_params["typical_p"]         = json_value(body, "typical_p", default_sparams.typical_p);
+    llama_params["repeat_last_n"]     = json_value(body, "repeat_last_n", default_sparams.penalty_last_n);
     llama_params["ignore_eos"]        = json_value(body, "ignore_eos", false);
-    llama_params["tfs_z"]             = json_value(body, "tfs_z", 0.0);
+    llama_params["tfs_z"]             = json_value(body, "tfs_z", default_sparams.tfs_z);
 
-    if (llama_params.count("grammar") != 0) {
+    if (body.count("grammar") != 0) {
         llama_params["grammar"] = json_value(body, "grammar", json::object());
     }
 
@@ -2644,6 +2707,9 @@ static void append_to_generated_text_from_generated_token_probs(llama_server_con
 
 int main(int argc, char **argv)
 {
+#if SERVER_VERBOSE != 1
+    log_disable();
+#endif
     // own arguments required by this example
     gpt_params params;
     server_params sparams;
@@ -2698,7 +2764,7 @@ int main(int argc, char **argv)
         }
 
         // API key is invalid or not provided
-        res.set_content("Unauthorized: Invalid API Key", "text/plain");
+        res.set_content("Unauthorized: Invalid API Key", "text/plain; charset=utf-8");
         res.status = 401; // Unauthorized
 
         LOG_WARNING("Unauthorized: Invalid API Key", {});
@@ -2713,28 +2779,28 @@ int main(int argc, char **argv)
     // this is only called if no index.html is found in the public --path
     svr.Get("/", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html");
+                res.set_content(reinterpret_cast<const char*>(&index_html), index_html_len, "text/html; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.js is found in the public --path
     svr.Get("/index.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript");
+                res.set_content(reinterpret_cast<const char *>(&index_js), index_js_len, "text/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/completion.js", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&completion_js), completion_js_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
     // this is only called if no index.html is found in the public --path
     svr.Get("/json-schema-to-grammar.mjs", [](const httplib::Request &, httplib::Response &res)
             {
-                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript");
+                res.set_content(reinterpret_cast<const char*>(&json_schema_to_grammar_mjs), json_schema_to_grammar_mjs_len, "application/javascript; charset=utf-8");
                 return false;
             });
 
@@ -2745,7 +2811,7 @@ int main(int argc, char **argv)
                     { "user_name",      llama.name_user.c_str() },
                     { "assistant_name", llama.name_assistant.c_str() }
                 };
-                res.set_content(data.dump(), "application/json");
+                res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/completion", [&llama, &validate_api_key](const httplib::Request &req, httplib::Response &res)
@@ -2759,12 +2825,12 @@ int main(int argc, char **argv)
                     std::string completion_text;
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop) {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2835,7 +2901,7 @@ int main(int argc, char **argv)
                     }}
                 };
 
-                res.set_content(models.dump(), "application/json");
+                res.set_content(models.dump(), "application/json; charset=utf-8");
             });
 
     // TODO: add mount point without "/v1" prefix -- how?
@@ -2857,10 +2923,10 @@ int main(int argc, char **argv)
 
                         res.set_content(oaicompat_result.dump(-1, ' ', false,
                                             json::error_handler_t::replace),
-                                            "application/json");
+                                            "application/json; charset=utf-8");
                     } else {
                         res.status = 500;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2924,12 +2990,12 @@ int main(int argc, char **argv)
                     task_result result = llama.next_result(task_id);
                     if (!result.error && result.stop)
                     {
-                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json");
+                        res.set_content(result.result_json.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
                     }
                     else
                     {
                         res.status = 404;
-                        res.set_content(result.result_json["content"], "text/plain");
+                        res.set_content(result.result_json["content"], "text/plain; charset=utf-8");
                         return;
                     }
                 } else {
@@ -2978,11 +3044,11 @@ int main(int argc, char **argv)
     svr.Get("/model.json", [&llama](const httplib::Request &, httplib::Response &res)
             {
                 const json data = llama.get_model_props();
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Options(R"(/.*)", [](const httplib::Request &, httplib::Response &res)
-                { return res.set_content("", "application/json"); });
+                { return res.set_content("", "application/json; charset=utf-8"); });
 
     svr.Post("/tokenize", [&llama](const httplib::Request &req, httplib::Response &res)
             {
@@ -2993,7 +3059,7 @@ int main(int argc, char **argv)
                     tokens = llama.tokenize(body["content"], false);
                 }
                 const json data = format_tokenizer_response(tokens);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/detokenize", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -3007,7 +3073,7 @@ int main(int argc, char **argv)
                 }
 
                 const json data = format_detokenized_response(content);
-                return res.set_content(data.dump(), "application/json");
+                return res.set_content(data.dump(), "application/json; charset=utf-8");
             });
 
     svr.Post("/embedding", [&llama](const httplib::Request &req, httplib::Response &res)
@@ -3022,9 +3088,19 @@ int main(int argc, char **argv)
                 {
                     prompt = "";
                 }
-                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0} }, false, true, -1);
+
+                json image_data;
+                if (body.count("image_data") != 0) {
+                    image_data = body["image_data"];
+                }
+                else
+                {
+                    image_data = "";
+                }
+
+                const int task_id = llama.request_completion({ {"prompt", prompt}, { "n_predict", 0}, {"image_data", image_data} }, false, true, -1);
                 task_result result = llama.next_result(task_id);
-                return res.set_content(result.result_json.dump(), "application/json");
+                return res.set_content(result.result_json.dump(), "application/json; charset=utf-8");
             });
 
     svr.set_logger(log_server_request);
@@ -3045,7 +3121,7 @@ int main(int argc, char **argv)
                 {
                     snprintf(buf, sizeof(buf), fmt, "Unknown Exception");
                 }
-                res.set_content(buf, "text/plain");
+                res.set_content(buf, "text/plain; charset=utf-8");
                 res.status = 500;
             });
 
@@ -3053,15 +3129,15 @@ int main(int argc, char **argv)
             {
                 if (res.status == 401)
                 {
-                    res.set_content("Unauthorized", "text/plain");
+                    res.set_content("Unauthorized", "text/plain; charset=utf-8");
                 }
                 if (res.status == 400)
                 {
-                    res.set_content("Invalid request", "text/plain");
+                    res.set_content("Invalid request", "text/plain; charset=utf-8");
                 }
                 else if (res.status == 404)
                 {
-                    res.set_content("File Not Found", "text/plain");
+                    res.set_content("File Not Found", "text/plain; charset=utf-8");
                     res.status = 404;
                 }
             });

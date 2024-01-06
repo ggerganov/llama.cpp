@@ -127,7 +127,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef void (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void *ctx);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -180,7 +180,9 @@ extern "C" {
         int32_t main_gpu;     // the GPU that is used for scratch and small tensors
         const float * tensor_split; // how to split layers across multiple GPUs (size: LLAMA_MAX_DEVICES)
 
-        // called with a progress value between 0 and 1, pass NULL to disable
+        // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
+        // If the provided progress_callback returns true, model loading continues.
+        // If it returns false, model loading is immediately aborted.
         llama_progress_callback progress_callback;
 
         // context pointer passed to the progress callback
@@ -314,7 +316,9 @@ extern "C" {
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
-    LLAMA_API int llama_n_ctx      (const struct llama_context * ctx);
+    // TODO: become more consistent with returned int types across the API
+    LLAMA_API uint32_t llama_n_ctx      (const struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_batch    (const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
 

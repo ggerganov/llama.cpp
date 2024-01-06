@@ -350,12 +350,17 @@ struct test_case {
         fflush(stdout);
 
         // check if backends support op
+        bool supported = true;
         for (ggml_backend_t backend : {backend1, backend2}) {
             if (!ggml_backend_supports_op(backend, out)) {
-                printf("not supported\n");
-                ggml_free(ctx);
-                return true;
+                printf("not supported [%s] ", ggml_backend_name(backend));
+                supported = false;
             }
+        }
+        if (!supported) {
+            printf("\n");
+            ggml_free(ctx);
+            return true;
         }
 
         // post-graph sentinel
@@ -766,18 +771,19 @@ struct test_bin_bcast : public test_case {
 struct test_scale : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
+    float scale;
 
     std::string vars() override {
-        return VARS_TO_STR2(type, ne);
+        return VARS_TO_STR3(type, ne, scale);
     }
 
     test_scale(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10})
-        : type(type), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 10},
+            float scale = 2.0f)
+        : type(type), ne(ne), scale(scale) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * scale = ggml_new_tensor_1d(ctx, type, 1);
         ggml_tensor * out = ggml_scale(ctx, a, scale);
         return out;
     }
@@ -1504,8 +1510,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     }
 
     for (ggml_type type_a : all_types) {
-        for (ggml_type type_b : {GGML_TYPE_F32 /*, GGML_TYPE_F16 */}) {
-            // FIXME: CPU crashes on f16xf16
+        for (ggml_type type_b : {GGML_TYPE_F32, GGML_TYPE_F16}) {
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, { 1,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {1, 1}));
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, {10,  1}, {2, 1}));
@@ -1555,6 +1560,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_rope(type, { 64,   8, 10, 1},  64, 2, 512)); // neox (falcon 40B)
         test_cases.emplace_back(new test_rope(type, { 64, 128, 10, 1},  64, 2, 512)); // neox (falcon 40B)
         test_cases.emplace_back(new test_rope(type, { 80,  32, 10, 1},  20, 2, 512)); // neox (stablelm)
+        test_cases.emplace_back(new test_rope(type, { 80,  32, 10, 1},  32, 2, 512)); // neox (phi-2)
     }
 
     test_cases.emplace_back(new test_alibi());

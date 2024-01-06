@@ -72,7 +72,7 @@ static void remove_allocated_tensor(ggml_tallocr_t alloc, struct ggml_tensor * t
 
 // check if a tensor is allocated by this buffer
 static bool ggml_tallocr_is_own(ggml_tallocr_t alloc, const struct ggml_tensor * tensor) {
-    return tensor->buffer == alloc->buffer;
+    return tensor->buffer == alloc->buffer && (!tensor->view_src || tensor->view_src->buffer == alloc->buffer);
 }
 
 static bool ggml_is_view(struct ggml_tensor * t) {
@@ -449,11 +449,10 @@ static void init_view(ggml_gallocr_t galloc, struct ggml_tensor * view, bool upd
     if (update_backend) {
         view->backend = view->view_src->backend;
     }
-    view->buffer  = view->view_src->buffer;
+    // views are initialized in the alloc buffer rather than the view_src buffer
+    view->buffer  = alloc->buffer;
     view->data    = (char *)view->view_src->data + view->view_offs;
 
-    // FIXME: the view should be initialized by the owning buffer, but currently this breaks the CUDA backend
-    // due to the ggml_tensor_extra_gpu ring buffer overwriting the KV cache extras
     assert(ggml_tallocr_is_measure(alloc) || !view->buffer || view->buffer->buft == alloc->buffer->buft);
 
     if (!alloc->measure) {
@@ -736,6 +735,10 @@ void ggml_allocr_set_parse_seq(ggml_allocr_t alloc, const int * list, int n) {
 }
 
 void ggml_allocr_free(ggml_allocr_t alloc) {
+    if (alloc == NULL) {
+        return;
+    }
+
     ggml_gallocr_free(alloc->galloc);
     ggml_tallocr_free(alloc->talloc);
     free(alloc);
@@ -775,7 +778,7 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
     }
 
     if (nbytes == 0) {
-        fprintf(stderr, "%s: no tensors to allocate\n", __func__);
+        // all the tensors in the context are already allocated
         return NULL;
     }
 
@@ -787,6 +790,11 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
             if (t->view_src == NULL) {
                 ggml_tallocr_alloc(tallocr, t);
             } else {
+                ggml_backend_view_init(buffer, t);
+            }
+        } else {
+            if (t->view_src != NULL) {
+                // view of a pre-allocated tensor
                 ggml_backend_view_init(buffer, t);
             }
         }

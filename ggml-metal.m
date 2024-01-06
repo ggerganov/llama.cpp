@@ -180,7 +180,15 @@ struct ggml_metal_context {
 @implementation GGMLMetalClass
 @end
 
-ggml_log_callback ggml_metal_log_callback = NULL;
+
+static void ggml_metal_default_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
+    fprintf(stderr, "%s", msg);
+
+    UNUSED(level);
+    UNUSED(user_data);
+}
+
+ggml_log_callback ggml_metal_log_callback = ggml_metal_default_log_callback;
 void * ggml_metal_log_user_data = NULL;
 
 void ggml_metal_log_set_callback(ggml_log_callback log_callback, void * user_data) {
@@ -607,10 +615,22 @@ int * ggml_metal_get_concur_list(struct ggml_metal_context * ctx) {
 }
 
 // temporarily defined here for compatibility between ggml-backend and the old API
-struct ggml_backend_metal_buffer_context {
-    void * data;
+
+struct ggml_backend_metal_buffer {
+    void   * data;
+    size_t   size;
 
     id<MTLBuffer> metal;
+};
+
+struct ggml_backend_metal_buffer_context {
+    void * all_data;
+    size_t all_size;
+    bool owned;
+
+    // multiple buffers are used only to avoid the maximum buffer size limitation when using mmap
+    int n_buffers;
+    struct ggml_backend_metal_buffer buffers[GGML_METAL_MAX_BUFFERS];
 };
 
 // finds the Metal buffer that contains the tensor data on the GPU device
@@ -622,17 +642,29 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_metal_context * ctx, stru
 
     const int64_t tsize = ggml_nbytes(t);
 
+    ggml_backend_buffer_t buffer = t->view_src ? t->view_src->buffer : t->buffer;
+
     // compatibility with ggml-backend
-    if (t->buffer && t->buffer->buft == ggml_backend_metal_buffer_type()) {
-        struct ggml_backend_metal_buffer_context * buf_ctx = (struct ggml_backend_metal_buffer_context *) t->buffer->context;
+    if (buffer && buffer->buft == ggml_backend_metal_buffer_type()) {
+        struct ggml_backend_metal_buffer_context * buf_ctx = (struct ggml_backend_metal_buffer_context *) buffer->context;
 
-        const int64_t ioffs = (int64_t) t->data - (int64_t) buf_ctx->data;
+        // find the view that contains the tensor fully
+        for (int i = 0; i < buf_ctx->n_buffers; ++i) {
+            const int64_t ioffs = (int64_t) t->data - (int64_t) buf_ctx->buffers[i].data;
 
-        GGML_ASSERT(ioffs >= 0 && ioffs + tsize <= (int64_t) t->buffer->size);
+            //GGML_METAL_LOG_INFO("ioffs = %10ld, tsize = %10ld, sum = %10ld, buf_ctx->buffers[%d].size = %10ld\n", ioffs, tsize, ioffs + tsize, i, buf_ctx->buffers[i].size);
+            if (ioffs >= 0 && ioffs + tsize <= (int64_t) buf_ctx->buffers[i].size) {
+                *offs = (size_t) ioffs;
 
-        *offs = (size_t) ioffs;
+                //GGML_METAL_LOG_INFO("%s: tensor '%16s', offs = %8ld\n", __func__, t->name, *offs);
 
-        return buf_ctx->metal;
+                return buf_ctx->buffers[i].metal;
+            }
+        }
+
+        GGML_METAL_LOG_ERROR("%s: error: tensor '%s' buffer is nil\n", __func__, t->name);
+
+        return nil;
     }
 
     // find the view that contains the tensor fully
@@ -1261,7 +1293,7 @@ void ggml_metal_graph_compute(
                         {
                             GGML_ASSERT(ggml_is_contiguous(src0));
 
-                            const float scale = *(const float *) src1->data;
+                            const float scale = *(const float *) dst->op_params;
 
                             int64_t n = ggml_nelements(dst);
 
@@ -1272,8 +1304,8 @@ void ggml_metal_graph_compute(
                                 [encoder setComputePipelineState:ctx->pipeline_scale];
                             }
 
-                            [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                            [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+                            [encoder setBuffer:id_src0   offset:offs_src0 atIndex:0];
+                            [encoder setBuffer:id_dst    offset:offs_dst  atIndex:1];
                             [encoder setBytes:&scale length:sizeof(scale) atIndex:2];
 
                             [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
@@ -2361,6 +2393,7 @@ void ggml_metal_graph_compute(
 
 // backend interface
 
+// default buffer
 static id<MTLDevice> g_backend_device = nil;
 static int g_backend_device_ref_count = 0;
 
@@ -2388,34 +2421,31 @@ static void ggml_backend_metal_free_device(void) {
 static void * ggml_backend_metal_buffer_get_base(ggml_backend_buffer_t buffer) {
     struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
 
-    return ctx->data;
+    return ctx->all_data;
 }
 
 static void ggml_backend_metal_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
 
-    [ctx->metal release];
+    for (int i = 0; i < ctx->n_buffers; i++) {
+        [ctx->buffers[i].metal release];
+    }
     ggml_backend_metal_free_device();
 
-    free(ctx->data);
-    free(ctx);
+    if (ctx->owned) {
+        free(ctx->all_data);
+    }
 
-    UNUSED(buffer);
+    free(ctx);
 }
 
 static void ggml_backend_metal_buffer_set_tensor(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor write out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy((char *)tensor->data + offset, data, size);
 
     UNUSED(buffer);
 }
 
 static void ggml_backend_metal_buffer_get_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * tensor, void * data, size_t offset, size_t size) {
-    GGML_ASSERT(offset + size <= ggml_nbytes(tensor) && "tensor read out of bounds");
-    GGML_ASSERT(tensor->data != NULL && "tensor not allocated");
-
     memcpy(data, (const char *)tensor->data + offset, size);
 
     UNUSED(buffer);
@@ -2433,7 +2463,13 @@ static void ggml_backend_metal_buffer_cpy_tensor_to(ggml_backend_buffer_t buffer
     UNUSED(buffer);
 }
 
-static struct ggml_backend_buffer_i metal_backend_buffer_i = {
+static void ggml_backend_metal_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
+    struct ggml_backend_metal_buffer_context * ctx = (struct ggml_backend_metal_buffer_context *)buffer->context;
+
+    memset(ctx->all_data, value, ctx->all_size);
+}
+
+static struct ggml_backend_buffer_i ggml_backend_metal_buffer_i = {
     /* .free_buffer     = */ ggml_backend_metal_buffer_free_buffer,
     /* .get_base        = */ ggml_backend_metal_buffer_get_base,
     /* .init_tensor     = */ NULL,
@@ -2441,7 +2477,10 @@ static struct ggml_backend_buffer_i metal_backend_buffer_i = {
     /* .get_tensor      = */ ggml_backend_metal_buffer_get_tensor,
     /* .cpy_tensor_from = */ ggml_backend_metal_buffer_cpy_tensor_from,
     /* .cpy_tensor_to   = */ ggml_backend_metal_buffer_cpy_tensor_to,
+    /* .clear           = */ ggml_backend_metal_buffer_clear,
 };
+
+// default buffer type
 
 static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
@@ -2453,13 +2492,46 @@ static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buffer(ggml_ba
         size_aligned += (size_page - (size_aligned % size_page));
     }
 
-    ctx->data  = ggml_metal_host_malloc(size);
-    ctx->metal = [ggml_backend_metal_get_device() newBufferWithBytesNoCopy:ctx->data
+    id<MTLDevice> device = ggml_backend_metal_get_device();
+
+    ctx->all_data = ggml_metal_host_malloc(size_aligned);
+    ctx->all_size = size_aligned;
+    ctx->owned = true;
+    ctx->n_buffers = 1;
+
+    ctx->buffers[0].data = ctx->all_data;
+    ctx->buffers[0].size = size;
+    ctx->buffers[0].metal = [device newBufferWithBytesNoCopy:ctx->all_data
                     length:size_aligned
                     options:MTLResourceStorageModeShared
                     deallocator:nil];
 
-    return ggml_backend_buffer_init(buft, metal_backend_buffer_i, ctx, size);
+    if (ctx->buffers[0].metal == nil) {
+        GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
+        free(ctx);
+        ggml_backend_metal_free_device();
+        return NULL;
+    }
+
+    GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
+
+
+#if TARGET_OS_OSX
+    GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
+            device.currentAllocatedSize / 1024.0 / 1024.0,
+            device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+    if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
+        GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+    } else {
+        GGML_METAL_LOG_INFO("\n");
+    }
+#else
+    GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
+#endif
+
+
+    return ggml_backend_buffer_init(buft, ggml_backend_metal_buffer_i, ctx, size);
 }
 
 static size_t ggml_backend_metal_buffer_type_get_alignment(ggml_backend_buffer_type_t buft) {
@@ -2470,7 +2542,13 @@ static size_t ggml_backend_metal_buffer_type_get_alignment(ggml_backend_buffer_t
 static bool ggml_backend_metal_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
     return ggml_backend_is_metal(backend) || ggml_backend_is_cpu(backend);
 
-    GGML_UNUSED(buft);
+    UNUSED(buft);
+}
+
+static bool ggml_backend_metal_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
+    return true;
+
+    UNUSED(buft);
 }
 
 ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
@@ -2480,12 +2558,94 @@ ggml_backend_buffer_type_t ggml_backend_metal_buffer_type(void) {
             /* .get_alignment    = */ ggml_backend_metal_buffer_type_get_alignment,
             /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
             /* .supports_backend = */ ggml_backend_metal_buffer_type_supports_backend,
+            /* .is_host          = */ ggml_backend_metal_buffer_type_is_host,
         },
         /* .context = */ NULL,
     };
 
     return &ggml_backend_buffer_type_metal;
 }
+
+// buffer from ptr
+
+ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size) {
+    struct ggml_backend_metal_buffer_context * ctx = malloc(sizeof(struct ggml_backend_metal_buffer_context));
+
+    ctx->all_data = data;
+    ctx->all_size = size;
+    ctx->owned = false;
+    ctx->n_buffers = 0;
+
+    const size_t size_page = sysconf(_SC_PAGESIZE);
+    size_t size_aligned = size;
+    if ((size_aligned % size_page) != 0) {
+        size_aligned += (size_page - (size_aligned % size_page));
+    }
+
+    id<MTLDevice> device = ggml_backend_metal_get_device();
+
+    // the buffer fits into the max buffer size allowed by the device
+    if (size_aligned <= device.maxBufferLength) {
+        ctx->buffers[ctx->n_buffers].data = data;
+        ctx->buffers[ctx->n_buffers].size = size;
+
+        ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:data length:size_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+        if (ctx->buffers[ctx->n_buffers].metal == nil) {
+            GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
+            return false;
+        }
+
+        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB", __func__, size_aligned / 1024.0 / 1024.0);
+
+        ++ctx->n_buffers;
+    } else {
+        // this overlap between the views will guarantee that the tensor with the maximum size will fully fit into
+        // one of the views
+        const size_t size_ovlp = ((max_size + size_page - 1) / size_page + 1) * size_page; // round-up 2 pages just in case
+        const size_t size_step = device.maxBufferLength - size_ovlp;
+        const size_t size_view = device.maxBufferLength;
+
+        for (size_t i = 0; i < size; i += size_step) {
+            const size_t size_step_aligned = (i + size_view <= size) ? size_view : (size_aligned - i);
+
+            ctx->buffers[ctx->n_buffers].data = (void *) ((uint8_t *) data + i);
+            ctx->buffers[ctx->n_buffers].size = size_step_aligned;
+
+            ctx->buffers[ctx->n_buffers].metal = [device newBufferWithBytesNoCopy:(void *) ((uint8_t *) data + i) length:size_step_aligned options:MTLResourceStorageModeShared deallocator:nil];
+
+            if (ctx->buffers[ctx->n_buffers].metal == nil) {
+                GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_step_aligned / 1024.0 / 1024.0);
+                return false;
+            }
+
+            GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, offs = %12ld", __func__, size_step_aligned / 1024.0 / 1024.0, i);
+            if (i + size_step < size) {
+                GGML_METAL_LOG_INFO("\n");
+            }
+
+            ++ctx->n_buffers;
+        }
+    }
+
+#if TARGET_OS_OSX
+    GGML_METAL_LOG_INFO(", (%8.2f / %8.2f)",
+            device.currentAllocatedSize / 1024.0 / 1024.0,
+            device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
+
+    if (device.currentAllocatedSize > device.recommendedMaxWorkingSetSize) {
+        GGML_METAL_LOG_WARN("%s: warning: current allocated size is greater than the recommended max working set size\n", __func__);
+    } else {
+        GGML_METAL_LOG_INFO("\n");
+    }
+#else
+    GGML_METAL_LOG_INFO(", (%8.2f)\n", device.currentAllocatedSize / 1024.0 / 1024.0);
+#endif
+
+    return ggml_backend_buffer_init(ggml_backend_metal_buffer_type(), ggml_backend_metal_buffer_i, ctx, size);
+}
+
+// backend
 
 static const char * ggml_backend_metal_name(ggml_backend_t backend) {
     return "Metal";
@@ -2497,10 +2657,6 @@ static void ggml_backend_metal_free(ggml_backend_t backend) {
     struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
     ggml_metal_free(ctx);
     free(backend);
-}
-
-static void ggml_backend_metal_synchronize(ggml_backend_t backend) {
-    UNUSED(backend);
 }
 
 static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffer_type(ggml_backend_t backend) {
@@ -2529,25 +2685,15 @@ static struct ggml_backend_i metal_backend_i = {
     /* .get_tensor_async        = */ NULL,
     /* .cpy_tensor_from_async   = */ NULL,
     /* .cpy_tensor_to_async     = */ NULL,
-    /* .synchronize             = */ ggml_backend_metal_synchronize,
-    /* .graph_plan_create       = */ NULL, // the metal implementation does not require creating graph plans atm
+    /* .synchronize             = */ NULL,
+    /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_metal_graph_compute,
     /* .supports_op             = */ ggml_backend_metal_supports_op,
 };
 
-// TODO: make a common log callback for all backends in ggml-backend
-static void ggml_backend_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
-    fprintf(stderr, "%s", msg);
-
-    UNUSED(level);
-    UNUSED(user_data);
-}
-
 ggml_backend_t ggml_backend_metal_init(void) {
-    ggml_metal_log_set_callback(ggml_backend_log_callback, NULL);
-
     struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
 
     if (ctx == NULL) {
