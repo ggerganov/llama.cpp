@@ -325,27 +325,37 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
     {
-        bool found = false;
-
-        for (int i = MTLGPUFamilyApple1 + 20; !found && i >= MTLGPUFamilyApple1; --i) {
+        for (int i = MTLGPUFamilyApple1 + 20; i >= MTLGPUFamilyApple1; --i) {
             if ([ctx->device supportsFamily:i]) {
                 GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyApple%d  (%d)\n", __func__, i - (int) MTLGPUFamilyApple1 + 1, i);
-                found = true;
                 break;
             }
         }
 
-        for (int i = MTLGPUFamilyCommon1 + 5; !found && i >= MTLGPUFamilyCommon1; --i) {
+        for (int i = MTLGPUFamilyCommon1 + 5; i >= MTLGPUFamilyCommon1; --i) {
             if ([ctx->device supportsFamily:i]) {
                 GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyCommon%d (%d)\n", __func__, i - (int) MTLGPUFamilyCommon1 + 1, i);
-                found = true;
                 break;
+            }
+        }
+
+        if (@available(macOS 13.0, iOS 16.0, *)) {
+            for (int i = MTLGPUFamilyMetal3 + 5; i >= MTLGPUFamilyMetal3; --i) {
+                if ([ctx->device supportsFamily:i]) {
+                    GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3 + 3, i);
+                    break;
+                }
             }
         }
     }
 
     ctx->support_simdgroup_reduction = [ctx->device supportsFamily:MTLGPUFamilyApple7];
 
+    if (@available(macOS 13.0, iOS 16.0, *)) {
+        ctx->support_simdgroup_reduction |= [ctx->device supportsFamily:MTLGPUFamilyMetal3];
+    }
+
+    GGML_METAL_LOG_INFO("%s: simdgroup reduction support   = %s\n",       __func__, ctx->support_simdgroup_reduction ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: recommendedMaxWorkingSetSize  = %8.2f MB\n", __func__, ctx->device.recommendedMaxWorkingSetSize / 1e6);
     if (ctx->device.maxTransferRate != 0) {
