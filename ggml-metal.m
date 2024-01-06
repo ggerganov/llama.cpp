@@ -316,10 +316,23 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // determine max supported GPU family
     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
-    for (int i = MTLGPUFamilyApple1 + 20; i >= MTLGPUFamilyApple1; --i) {
-        if ([ctx->device supportsFamily:i]) {
-            GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyApple%d (%d)\n", __func__, i - (int) MTLGPUFamilyApple1 + 1, i);
-            break;
+    {
+        bool found = false;
+
+        for (int i = MTLGPUFamilyApple1 + 20; !found && i >= MTLGPUFamilyApple1; --i) {
+            if ([ctx->device supportsFamily:i]) {
+                GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyApple%d  (%d)\n", __func__, i - (int) MTLGPUFamilyApple1 + 1, i);
+                found = true;
+                break;
+            }
+        }
+
+        for (int i = MTLGPUFamilyCommon1 + 5; !found && i >= MTLGPUFamilyCommon1; --i) {
+            if ([ctx->device supportsFamily:i]) {
+                GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyCommon%d (%d)\n", __func__, i - (int) MTLGPUFamilyCommon1 + 1, i);
+                found = true;
+                break;
+            }
         }
     }
 
