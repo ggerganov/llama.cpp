@@ -339,21 +339,21 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             }
         }
 
-        if (@available(macOS 13.0, iOS 16.0, *)) {
-            for (int i = MTLGPUFamilyMetal3 + 5; i >= MTLGPUFamilyMetal3; --i) {
-                if ([ctx->device supportsFamily:i]) {
+#if __METAL_VERSION__ >= 300
+        for (int i = MTLGPUFamilyMetal3 + 5; i >= MTLGPUFamilyMetal3; --i) {
+            if ([ctx->device supportsFamily:i]) {
                     GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3 + 3, i);
                     break;
-                }
             }
         }
+#endif
     }
 
     ctx->support_simdgroup_reduction = [ctx->device supportsFamily:MTLGPUFamilyApple7];
 
-    if (@available(macOS 13.0, iOS 16.0, *)) {
-        ctx->support_simdgroup_reduction |= [ctx->device supportsFamily:MTLGPUFamilyMetal3];
-    }
+#if __METAL_VERSION__ >= 300
+    ctx->support_simdgroup_reduction |= [ctx->device supportsFamily:MTLGPUFamilyMetal3];
+#endif
 
     GGML_METAL_LOG_INFO("%s: simdgroup reduction support   = %s\n",       __func__, ctx->support_simdgroup_reduction ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
