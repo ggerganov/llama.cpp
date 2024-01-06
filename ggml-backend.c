@@ -1015,9 +1015,9 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             ggml_tallocr_t node_allocr = node_allocr(node);
             if (node_allocr != NULL) {
                 if (sched_allocr_prio(sched, node_allocr) == sched->n_backends - 1) {
+                    // skip cpu
                     cur_allocr = NULL;
-                }
-                else {
+                } else {
                     cur_allocr = node_allocr;
                 }
             } else {
@@ -1038,9 +1038,9 @@ static void sched_split_graph(ggml_backend_sched_t sched, struct ggml_cgraph * g
             ggml_tallocr_t node_allocr = node_allocr(node);
             if (node_allocr != NULL) {
                 if (sched_allocr_prio(sched, node_allocr) == sched->n_backends - 1) {
+                    // skip cpu
                     cur_allocr = NULL;
-                }
-                else {
+                } else {
                     cur_allocr = node_allocr;
                 }
             } else {
@@ -1274,7 +1274,7 @@ static void sched_compute_splits(ggml_backend_sched_t sched) {
                 GGML_ASSERT(false);
             }
             // TODO: avoid this copy if it was already copied in a previous split, and the input didn't change
-            // this is important to avoid copying constants such as KQ_mask and inp_pos multiple time
+            // this is important to avoid copying constants such as KQ_mask and inp_pos multiple times
             ggml_backend_tensor_copy(input, input_cpy);
         }
         // ggml_backend_synchronize(split_backend);

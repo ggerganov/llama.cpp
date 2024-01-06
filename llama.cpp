@@ -1238,16 +1238,17 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     GGML_UNUSED(gpu);
 }
 
-static ggml_backend_buffer_type_t llama_default_buffer_type_split(int main_gpu, const float * tensor_split) {
+static ggml_backend_buffer_type_t llama_default_buffer_type_split(int fallback_gpu, const float * tensor_split) {
     ggml_backend_buffer_type_t buft = nullptr;
 
 #ifdef GGML_USE_CUBLAS
-    // TODO
-    // buft = ggml_backend_cuda_buffer_type_split(tensor_split);
+    if (ggml_backend_cuda_get_device_count() > 1) {
+        buft = ggml_backend_cuda_split_buffer_type(tensor_split);
+    }
 #endif
 
     if (buft == nullptr) {
-        buft = llama_default_buffer_type_offload(main_gpu);
+        buft = llama_default_buffer_type_offload(fallback_gpu);
     }
     return buft;
 
@@ -2357,13 +2358,6 @@ struct llama_model_loader {
             throw std::runtime_error(format("%s: tensor '%s' not found", __func__, name.c_str()));
         }
 
-        // FIXME: this should be ggml_backend_cuda_split_buffer_type
-        //if (backend == GGML_BACKEND_GPU_SPLIT) {
-        //    if (ne.size() == 1) {
-        //        throw std::runtime_error(format("%s: 1-dimensional tensor '%s' cannot be split on the GPU", __func__, name.c_str()));
-        //    }
-        //}
-
         {
             bool is_ok = true;
             for (size_t i = 0; i < ne.size(); ++i) {
@@ -3148,12 +3142,12 @@ static bool llm_load_tensors(
 
     // TODO: user configurable
     enum gpu_split_mode {
-        CUDA_SPLIT_NONE,    // single GPU
-        CUDA_SPLIT_LAYER,   // offload layers to different GPUs
-        CUDA_SPLIT_ROW      // split matrix rows across GPUs
+        LLAMA_SPLIT_NONE,    // single GPU
+        LLAMA_SPLIT_LAYER,   // offload layers to different GPUs
+        LLAMA_SPLIT_ROW      // split matrix rows across GPUs
     };
 
-    gpu_split_mode split_mode = CUDA_SPLIT_LAYER;
+    gpu_split_mode split_mode = LLAMA_SPLIT_LAYER;
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
 
@@ -3167,7 +3161,7 @@ static bool llm_load_tensors(
     }
 
 #ifdef GGML_USE_CUBLAS
-    if (split_mode == CUDA_SPLIT_LAYER) {
+    if (split_mode == LLAMA_SPLIT_LAYER) {
         // calculate the split points
         int device_count = ggml_backend_cuda_get_device_count();
         float splits[GGML_CUDA_MAX_DEVICES];
@@ -9181,7 +9175,8 @@ struct llama_context * llama_new_context_with_model(
         std::vector<ggml_backend_t> backends;
 
         // initialize backends
-        // TODO: only initialize the backends that are actually used
+        // FIXME: only initialize the backends that are actually used
+        // this is important for CUDA split buffers, only the main_gpu backend should be initialized
 #ifdef GGML_USE_METAL
         if (model->n_gpu_layers > 0) {
             ctx->backend = ggml_backend_metal_init();
