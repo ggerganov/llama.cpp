@@ -26,7 +26,7 @@
 
 #define GGML_MAX_CONCUR (2*GGML_DEFAULT_GRAPH_SIZE)
 
-#define GGML_METAL_MAX_KERNELS 1024
+#define GGML_METAL_MAX_KERNELS 256
 
 struct ggml_metal_buffer {
     const char * name;
@@ -294,16 +294,16 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
                 return NULL;
             }
 
-            MTLCompileOptions* options = nil;
+            // dictionary of preprocessor macros
+            NSMutableDictionary * prep = [NSMutableDictionary dictionary];
+
 #ifdef GGML_QKK_64
-            options = [MTLCompileOptions new];
-            options.preprocessorMacros = @{ @"QK_K" : @(64) };
+            prep[@"QK_K"] = @(64);
 #endif
-            // try to disable fast-math
-            // NOTE: this seems to have no effect whatsoever
-            //       instead, in order to disable fast-math, we have to build default.metallib from the command line
-            //       using xcrun -sdk macosx metal -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
-            //       and go through the "pre-compiled library found" path above
+
+            MTLCompileOptions* options = [MTLCompileOptions new];
+            options.preprocessorMacros = prep;
+
             //[options setFastMathEnabled:false];
 
             ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
@@ -354,6 +354,11 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // load kernels
     {
         NSError * error = nil;
+
+        for (int i = 0; i < GGML_METAL_MAX_KERNELS; ++i) {
+            ctx->kernels[i].function = nil;
+            ctx->kernels[i].pipeline = nil;
+        }
 
 #define GGML_METAL_ADD_KERNEL(e, name, family) \
         if ([ctx->device supportsFamily:(family)]) { \
