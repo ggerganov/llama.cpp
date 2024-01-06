@@ -447,8 +447,14 @@ struct llama_client_slot
     }
 
     bool has_budget(gpt_params &global_params) {
+        if (params.n_predict == -1 && global_params.n_predict == -1)
+        {
+            return true; // limitless
+        }
+
         n_remaining = -1;
-        if(params.n_predict != -1)
+
+        if (params.n_predict != -1)
         {
             n_remaining = params.n_predict - n_decoded;
         }
@@ -456,7 +462,8 @@ struct llama_client_slot
         {
             n_remaining = global_params.n_predict - n_decoded;
         }
-        return n_remaining > 0 || n_remaining == -1; // no budget || limitless
+
+        return n_remaining > 0; // no budget
     }
 
     bool available() const {
@@ -1102,7 +1109,7 @@ struct llama_server_context
         }
 
         // check the limits
-        if (slot.n_decoded > 2 && slot.has_next_token && !slot.has_budget(params))
+        if (slot.n_decoded > 0 && slot.has_next_token && !slot.has_budget(params))
         {
             slot.stopped_limit = true;
             slot.has_next_token = false;
@@ -1703,7 +1710,6 @@ struct llama_server_context
 
             llama_batch_add(batch, slot.sampled, system_tokens.size() + slot.n_past, { slot.id }, true);
 
-            slot.n_decoded += 1;
             slot.n_past += 1;
         }
 
@@ -1921,6 +1927,7 @@ struct llama_server_context
 
                 llama_sampling_accept(slot.ctx_sampling, ctx, id, true);
 
+                slot.n_decoded += 1;
                 if (slot.n_decoded == 1)
                 {
                     slot.t_start_genereration = ggml_time_us();
