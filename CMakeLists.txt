@@ -104,6 +104,7 @@ option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fas
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
+option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
@@ -448,14 +449,13 @@ endif()
 
 if (LLAMA_SYCL)
     set(ENABLE_AOT ats)
-    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "Intel")
+    if (NOT ${CMAKE_C_COMPILER_ID} MATCHES "IntelLLVM")
 	    message(WARNING "${CMAKE_C_COMPILER_ID} Need IntelLLVM for SYCL")
     endif()
-    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Intel")
+    if (NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "IntelLLVM")
         message(WARNING "${CMAKE_CXX_COMPILER_ID} Need IntelLLVM for SYCL")
     endif()
 
-    #find_package(SYCL REQUIRED)
     find_package(IntelSYCL REQUIRED)
 
     # Check SYCL support by the compiler
@@ -473,10 +473,9 @@ if (LLAMA_SYCL)
     endif()
 
     if (_sycl_support)
-	    add_compile_definitions(GGML_USE_CUBLAS)
-	    add_compile_definitions(GGML_USE_SYCL)
+	    #add_compile_definitions(GGML_USE_CUBLAS)
+	add_compile_definitions(GGML_USE_SYCL)
 	    #add_compile_definitions(GGML_SYCL_F16)
-	    #add_compile_options(-std=c++17 -O3 -fsycl)
 	add_compile_options(-I./)
         add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include)
         add_compile_options(-I/opt/intel/oneapi/compiler/2024.0/include/sycl)

@@ -11,9 +11,7 @@
 #  include "ggml-cuda.h"
 #elif defined(GGML_USE_CLBLAST)
 #  include "ggml-opencl.h"
-#endif
-
-#ifdef GGML_USE_SYCL
+#elif defined(GGML_USE_SYCL)
 #  include "ggml-sycl.hpp"
 #endif
 
@@ -1260,6 +1258,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
     if (host_buffer) {
         buft = ggml_backend_cuda_host_buffer_type();
     }
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_host_buffer_type();
 #elif defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
 #endif
@@ -1279,6 +1279,8 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUBLAS)
     buft = ggml_backend_cuda_buffer_type(gpu);
+#elif defined(GGML_USE_SYCL)
+    buft = ggml_backend_sycl_buffer_type(gpu);
 #elif defined(GGML_USE_CLBLAST)
     buft = ggml_backend_opencl_buffer_type();
 #endif
@@ -9935,6 +9937,15 @@ struct llama_context * llama_new_context_with_model(
                 }
             }
         }
+#elif defined(GGML_USE_SYCL)
+        if (model->n_gpu_layers > 0) {
+            ctx->backend = ggml_backend_sycl_init(0);
+            if (ctx->backend == nullptr) {
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL backend\n", __func__);
+            }
+        }
+
+
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
         if (ctx->backend_cpu == nullptr) {
