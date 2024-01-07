@@ -125,7 +125,7 @@ int main(int argc, char ** argv) {
     const int n_batch     = ctx_params.n_batch;
     const int n_batch_grp = ctx_params.n_batch/n_grp;
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_kv_req);
+    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d, n_grp = %d, n_batch = %d\n", __func__, n_len, n_ctx, n_kv_req, n_grp, n_batch);
 
     // print the prompt token-by-token
 
@@ -141,6 +141,7 @@ int main(int argc, char ** argv) {
     // fill the KV cache
     for (int i = 0; i < n_ctx; i += n_batch) {
         if (i > 0 && n_grp > 1) {
+            // if SelfExtend is enabled, we compress the position from the last batch by a factor of n_grp
             const int ib = i/n_batch - 1;
             const int bd = n_batch_grp*(n_grp - 1);
 
