@@ -484,6 +484,13 @@ extern "C" {
                        llama_pos   p1,
                        llama_pos   delta);
 
+    LLAMA_API void llama_kv_cache_seq_div(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id,
+                       llama_pos   p0,
+                       llama_pos   p1,
+                             int   d);
+
     //
     // State / sessions
     //
