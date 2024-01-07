@@ -324,6 +324,8 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
     // print MTL GPU family:
     GGML_METAL_LOG_INFO("%s: GPU name:   %s\n", __func__, [[ctx->device name] UTF8String]);
 
+    const NSInteger MTLGPUFamilyMetal3 = 5001;
+
     // determine max supported GPU family
     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
     // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
@@ -342,21 +344,16 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             }
         }
 
-#if __METAL_VERSION__ >= 300
         for (int i = MTLGPUFamilyMetal3 + 5; i >= MTLGPUFamilyMetal3; --i) {
             if ([ctx->device supportsFamily:i]) {
-                    GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3 + 3, i);
-                    break;
+                GGML_METAL_LOG_INFO("%s: GPU family: MTLGPUFamilyMetal%d  (%d)\n", __func__, i - (int) MTLGPUFamilyMetal3 + 3, i);
+                break;
             }
         }
-#endif
     }
 
-    ctx->support_simdgroup_reduction = [ctx->device supportsFamily:MTLGPUFamilyApple7];
-
-#if __METAL_VERSION__ >= 300
+    ctx->support_simdgroup_reduction  = [ctx->device supportsFamily:MTLGPUFamilyApple7];
     ctx->support_simdgroup_reduction |= [ctx->device supportsFamily:MTLGPUFamilyMetal3];
-#endif
 
     GGML_METAL_LOG_INFO("%s: simdgroup reduction support   = %s\n",       __func__, ctx->support_simdgroup_reduction ? "true" : "false");
     GGML_METAL_LOG_INFO("%s: hasUnifiedMemory              = %s\n",       __func__, ctx->device.hasUnifiedMemory ? "true" : "false");
@@ -2717,8 +2714,6 @@ static bool ggml_backend_metal_supports_op(ggml_backend_t backend, const struct 
     struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
 
     return ggml_metal_supports_op(metal_ctx, op);
-
-    UNUSED(backend);
 }
 
 static struct ggml_backend_i metal_backend_i = {
