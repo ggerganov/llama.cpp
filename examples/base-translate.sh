@@ -8,12 +8,17 @@
 #   cd llama.cpp
 #   make -j
 #
-#   ./examples/base-translate.sh <model-base> "<text>"
+#   ./examples/base-translate.sh <model-base> "<text>" [extra-main-args]
 #
 
-if [ $# -ne 2 ]; then
-  echo "Usage: ./base-translate.sh <model-base> \"<text>\""
+if [ $# -lt 2 ]; then
+  echo "Usage: ./base-translate.sh <model-base> \"<text>\" [extra-main-args]"
   exit 1
+fi
+
+eargs=""
+if [ $# -gt 2 ]; then
+  eargs="${@:3}"
 fi
 
 ftmp="__llama.cpp_example_tmp__.txt"
@@ -52,5 +57,5 @@ echo "$2
 
 model=$1
 
-# generate the most likely continuation, run on the CPU until the string "===" is found
-./main -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -ngl 0 -r "==="
+# generate the most likely continuation until the string "===" is found
+./main -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -r "===" $eargs
