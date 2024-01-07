@@ -4776,7 +4776,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -4900,7 +4899,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
@@ -5001,7 +4999,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         const int64_t n_rot = n_embd_head_k / 2;
 
@@ -5215,7 +5212,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5308,7 +5304,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5404,7 +5399,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -5731,7 +5725,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * attn_norm_output;
@@ -5955,7 +5948,6 @@ struct llm_build_context {
         const int64_t n_embd_head = hparams.n_embd_head_v;
         const int64_t n_embd_gqa  = hparams.n_embd_v_gqa();
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
-        GGML_ASSERT(n_embd_gqa  == n_embd);
 
         struct ggml_tensor * cur;
         struct ggml_tensor * pos;
