@@ -87,6 +87,7 @@ struct ggml_metal_context {
     GGML_METAL_DECL_KERNEL(get_rows_q4_K);
     GGML_METAL_DECL_KERNEL(get_rows_q5_K);
     GGML_METAL_DECL_KERNEL(get_rows_q6_K);
+    GGML_METAL_DECL_KERNEL(get_rows_i32);
     GGML_METAL_DECL_KERNEL(rms_norm);
     GGML_METAL_DECL_KERNEL(group_norm);
     GGML_METAL_DECL_KERNEL(norm);
@@ -259,6 +260,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         NSError * error = nil;
         NSString * libPath = [bundle pathForResource:@"default" ofType:@"metallib"];
         if (libPath != nil) {
+            // pre-compiled library found
             NSURL * libURL = [NSURL fileURLWithPath:libPath];
             GGML_METAL_LOG_INFO("%s: loading '%s'\n", __func__, [libPath UTF8String]);
             ctx->library = [ctx->device newLibraryWithURL:libURL error:&error];
@@ -291,6 +293,13 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
             options = [MTLCompileOptions new];
             options.preprocessorMacros = @{ @"QK_K" : @(64) };
 #endif
+            // try to disable fast-math
+            // NOTE: this seems to have no effect whatsoever
+            //       instead, in order to disable fast-math, we have to build default.metallib from the command line
+            //       using xcrun -sdk macosx metal -fno-fast-math -c ggml-metal.metal -o ggml-metal.air
+            //       and go through the "pre-compiled library found" path above
+            //[options setFastMathEnabled:false];
+
             ctx->library = [ctx->device newLibraryWithSource:src options:options error:&error];
         }
 
@@ -369,6 +378,7 @@ struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(get_rows_q4_K);
         GGML_METAL_ADD_KERNEL(get_rows_q5_K);
         GGML_METAL_ADD_KERNEL(get_rows_q6_K);
+        GGML_METAL_ADD_KERNEL(get_rows_i32);
         GGML_METAL_ADD_KERNEL(rms_norm);
         GGML_METAL_ADD_KERNEL(group_norm);
         GGML_METAL_ADD_KERNEL(norm);
@@ -491,6 +501,7 @@ void ggml_metal_free(struct ggml_metal_context * ctx) {
     GGML_METAL_DEL_KERNEL(get_rows_q4_K);
     GGML_METAL_DEL_KERNEL(get_rows_q5_K);
     GGML_METAL_DEL_KERNEL(get_rows_q6_K);
+    GGML_METAL_DEL_KERNEL(get_rows_i32);
     GGML_METAL_DEL_KERNEL(rms_norm);
     GGML_METAL_DEL_KERNEL(group_norm);
     GGML_METAL_DEL_KERNEL(norm);
@@ -966,7 +977,7 @@ static bool ggml_metal_supports_op(const struct ggml_tensor * op) {
             return false;
     }
 }
-void ggml_metal_graph_compute(
+bool ggml_metal_graph_compute(
         struct ggml_metal_context * ctx,
                struct ggml_cgraph * gf) {
     @autoreleasepool {
@@ -1230,7 +1241,7 @@ void ggml_metal_graph_compute(
                                 // not sure how to avoid this
                                 // TODO: make a simpler cpy_bytes kernel
 
-                                const int nth = MIN(1024, ne00);
+                                const int nth = MIN((int) ctx->pipeline_cpy_f32_f32.maxTotalThreadsPerThreadgroup, ne00);
 
                                 [encoder setComputePipelineState:ctx->pipeline_cpy_f32_f32];
                                 [encoder setBuffer:id_src0 offset:offs_src0        atIndex:0];
@@ -1285,7 +1296,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&pnb3 length:sizeof(pnb3) atIndex:26];
                             [encoder setBytes:&offs length:sizeof(offs) atIndex:27];
 
-                            const int nth = MIN(1024, ne0);
+                            const int nth = MIN((int) ctx->pipeline_add.maxTotalThreadsPerThreadgroup, ne00);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne11, ne12, ne13) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                         } break;
@@ -1649,6 +1660,10 @@ void ggml_metal_graph_compute(
                                         }
                                 };
 
+                                if (ggml_is_quantized(src0t)) {
+                                    GGML_ASSERT(ne00 >= nth0*nth1);
+                                }
+
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
                                 [encoder setBuffer:id_dst  offset:offs_dst  atIndex:2];
@@ -1707,6 +1722,9 @@ void ggml_metal_graph_compute(
                             // TODO: make this more general
                             GGML_ASSERT(n_as <= 8);
 
+                            // max size of the src1ids array in the kernel stack
+                            GGML_ASSERT(ne11 <= 512);
+
                             struct ggml_tensor * src2 = gf->nodes[i]->src[2];
 
                             const int64_t  ne20 = src2 ? src2->ne[0] : 0;
@@ -1724,9 +1742,6 @@ void ggml_metal_graph_compute(
                             GGML_ASSERT(!ggml_is_transposed(src2));
                             GGML_ASSERT(!ggml_is_transposed(src1));
 
-                            GGML_ASSERT(ne20 % 32 == 0);
-                            // !!!!!!!!! TODO: this assert is probably required but not sure!
-                            //GGML_ASSERT(ne20 >= 64);
                             GGML_ASSERT(src1t == GGML_TYPE_F32);
 
                             const uint r2 = ne12/ne22;
@@ -1734,14 +1749,12 @@ void ggml_metal_graph_compute(
 
                             // find the break-even point where the matrix-matrix kernel becomes more efficient compared
                             // to the matrix-vector kernel
-                            int ne11_mm_min = 1;
+                            int ne11_mm_min = n_as;
 
                             const int idx = ((int32_t *) dst->op_params)[0];
 
                             // batch size
                             GGML_ASSERT(ne01 == ne11);
-
-                            const int64_t _ne1 = 1; // kernel_mul_mm_impl needs a reference in constant memory
 
                             // for now the matrix-matrix multiplication kernel only works on A14+/M1+ SoCs
                             // AMD GPU and older A-chips will reuse matrix-vector multiplication kernel
@@ -1749,7 +1762,9 @@ void ggml_metal_graph_compute(
                             // TODO: for now, always use mat-vec kernels until we figure out how to improve the
                             //       indirect matrix multiplication
                             // !!!
-                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] && _ne1 > ne11_mm_min) {
+                            if ([ctx->device supportsFamily:MTLGPUFamilyApple7] &&
+                                ne20 % 32 == 0 && ne20 >= 64 &&
+                                ne11 > ne11_mm_min) {
                                 switch (src2->type) {
                                     case GGML_TYPE_F32:  [encoder setComputePipelineState:ctx->pipeline_mul_mm_id_f32_f32];  break;
                                     case GGML_TYPE_F16:  [encoder setComputePipelineState:ctx->pipeline_mul_mm_id_f16_f32];  break;
@@ -1779,14 +1794,15 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:11];
                                 [encoder setBytes:&nb12    length:sizeof(nb12) atIndex:12];
                                 [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:13];
-                                [encoder setBytes:&_ne1    length:sizeof(_ne1) atIndex:14];
+                                [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:14];
                                 [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:15];
                                 [encoder setBytes:&r2      length:sizeof(r2)   atIndex:16];
                                 [encoder setBytes:&r3      length:sizeof(r3)   atIndex:17];
                                 [encoder setBytes:&idx     length:sizeof(idx)  atIndex:18];
                                 // TODO: how to make this an array? read Metal docs
-                                for (int j = 0; j < n_as; ++j) {
-                                    struct ggml_tensor * src_cur = dst->src[2 + j];
+                                for (int j = 0; j < 8; ++j) {
+                                    // NOTE: this is done like this to avoid uninitialized kernel arguments when n_as < 8
+                                    struct ggml_tensor * src_cur = dst->src[2 + (j % n_as)];
 
                                     size_t offs_src_cur = 0;
                                     id<MTLBuffer> id_src_cur = ggml_metal_get_buffer(ctx, src_cur, &offs_src_cur);
@@ -1796,8 +1812,7 @@ void ggml_metal_graph_compute(
 
                                 [encoder setThreadgroupMemoryLength:8192 atIndex:0];
 
-                                // TODO: processing one row at a time (ne11 -> 1) is not efficient
-                                [encoder dispatchThreadgroups:MTLSizeMake( (_ne1 + 31)/32, (ne21 + 63)/64, ne01*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
+                                [encoder dispatchThreadgroups:MTLSizeMake((ne11 + 31)/32, (ne21 + 63)/64, n_as*ne12*ne13) threadsPerThreadgroup:MTLSizeMake(128, 1, 1)];
                             } else {
                                 int nth0 = 32;
                                 int nth1 = 1;
@@ -1880,10 +1895,16 @@ void ggml_metal_graph_compute(
                                         } break;
                                     default:
                                         {
-                                            GGML_METAL_LOG_ERROR("Asserting on type %d\n", (int)src0t);
+                                            GGML_METAL_LOG_ERROR("Asserting on type %d\n", (int)src2t);
                                             GGML_ASSERT(false && "not implemented");
                                         }
                                 };
+
+                                if (ggml_is_quantized(src2t)) {
+                                    GGML_ASSERT(ne20 >= nth0*nth1);
+                                }
+
+                                const int64_t _ne1 = 1; // kernels needs a reference in constant memory
 
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                                 [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1909,8 +1930,9 @@ void ggml_metal_graph_compute(
                                 [encoder setBytes:&r3   length:sizeof(r3)   atIndex:21];
                                 [encoder setBytes:&idx  length:sizeof(idx)  atIndex:22];
                                 // TODO: how to make this an array? read Metal docs
-                                for (int j = 0; j < n_as; ++j) {
-                                    struct ggml_tensor * src_cur = dst->src[2 + j];
+                                for (int j = 0; j < 8; ++j) {
+                                    // NOTE: this is done like this to avoid uninitialized kernel arguments when n_as < 8
+                                    struct ggml_tensor * src_cur = dst->src[2 + (j % n_as)];
 
                                     size_t offs_src_cur = 0;
                                     id<MTLBuffer> id_src_cur = ggml_metal_get_buffer(ctx, src_cur, &offs_src_cur);
@@ -1959,6 +1981,7 @@ void ggml_metal_graph_compute(
                                 case GGML_TYPE_Q4_K: [encoder setComputePipelineState:ctx->pipeline_get_rows_q4_K]; break;
                                 case GGML_TYPE_Q5_K: [encoder setComputePipelineState:ctx->pipeline_get_rows_q5_K]; break;
                                 case GGML_TYPE_Q6_K: [encoder setComputePipelineState:ctx->pipeline_get_rows_q6_K]; break;
+                                case GGML_TYPE_I32:  [encoder setComputePipelineState:ctx->pipeline_get_rows_i32];  break;
                                 default: GGML_ASSERT(false && "not implemented");
                             }
 
@@ -2229,7 +2252,7 @@ void ggml_metal_graph_compute(
                             [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:17];
                             [encoder setBytes:&sf   length:sizeof(sf)   atIndex:18];
 
-                            const int nth = MIN(1024, ne0);
+                            const int nth = MIN((int) ctx->pipeline_upscale_f32.maxTotalThreadsPerThreadgroup, ne0);
 
                             [encoder dispatchThreadgroups:MTLSizeMake(ne1, ne2, ne3) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                         } break;
@@ -2382,10 +2405,11 @@ void ggml_metal_graph_compute(
         MTLCommandBufferStatus status = (MTLCommandBufferStatus) [ctx->command_buffers[i] status];
         if (status != MTLCommandBufferStatusCompleted) {
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
-            GGML_ASSERT(false);
+            return false;
         }
     }
 
+    return true;
     }
 }
 
@@ -2665,10 +2689,10 @@ static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffer_type(ggm
     UNUSED(backend);
 }
 
-static void ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+static bool ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
 
-    ggml_metal_graph_compute(metal_ctx, cgraph);
+    return ggml_metal_graph_compute(metal_ctx, cgraph);
 }
 
 static bool ggml_backend_metal_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {

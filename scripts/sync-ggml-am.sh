@@ -27,21 +27,36 @@ echo "Syncing ggml changes since commit $lc"
 cd $SRC_GGML
 
 git log --oneline $lc..HEAD
+git log --oneline $lc..HEAD --reverse | grep -v "(llama/[0-9]*)" | cut -d' ' -f1 > $SRC_LLAMA/ggml-commits
 
-git format-patch $lc --stdout -- \
-    include/ggml/ggml*.h \
-    src/ggml*.h \
-    src/ggml*.c \
-    src/ggml*.cpp \
-    src/ggml*.m \
-    src/ggml*.metal \
-    src/ggml*.cu \
-    tests/test-opt.cpp \
-    tests/test-grad0.cpp \
-    tests/test-quantize-fns.cpp \
-    tests/test-quantize-perf.cpp \
-    tests/test-backend-ops.cpp \
-    > $SRC_LLAMA/ggml-src.patch
+if [ ! -s $SRC_LLAMA/ggml-commits ]; then
+    rm -v $SRC_LLAMA/ggml-commits
+    echo "No new commits"
+    exit 0
+fi
+
+if [ -f $SRC_LLAMA/ggml-src.patch ]; then
+    rm -v $SRC_LLAMA/ggml-src.patch
+fi
+
+while read c; do
+    git format-patch -k $c~1..$c --stdout -- \
+        include/ggml/ggml*.h \
+        src/ggml*.h \
+        src/ggml*.c \
+        src/ggml*.cpp \
+        src/ggml*.m \
+        src/ggml*.metal \
+        src/ggml*.cu \
+        tests/test-opt.cpp \
+        tests/test-grad0.cpp \
+        tests/test-quantize-fns.cpp \
+        tests/test-quantize-perf.cpp \
+        tests/test-backend-ops.cpp \
+        >> $SRC_LLAMA/ggml-src.patch
+done < $SRC_LLAMA/ggml-commits
+
+rm -v $SRC_LLAMA/ggml-commits
 
 # delete files if empty
 if [ ! -s $SRC_LLAMA/ggml-src.patch ]; then
@@ -72,7 +87,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-impl.h             -> ggml-impl.h
     # src/ggml-metal.h            -> ggml-metal.h
     # src/ggml-metal.m            -> ggml-metal.m
-    # src/ggml-metal.metal        -> ggml-metal.metal
     # src/ggml-mpi.h              -> ggml-mpi.h
     # src/ggml-mpi.c              -> ggml-mpi.c
     # src/ggml-opencl.cpp         -> ggml-opencl.cpp
@@ -99,7 +113,6 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-impl\.h/ggml-impl.h/g' \
         -e 's/src\/ggml-metal\.h/ggml-metal.h/g' \
         -e 's/src\/ggml-metal\.m/ggml-metal.m/g' \
-        -e 's/src\/ggml-metal\.metal/ggml-metal.metal/g' \
         -e 's/src\/ggml-mpi\.h/ggml-mpi.h/g' \
         -e 's/src\/ggml-mpi\.c/ggml-mpi.c/g' \
         -e 's/src\/ggml-opencl\.cpp/ggml-opencl.cpp/g' \

@@ -427,7 +427,7 @@
         }
 
         if (data.timings) {
-          llamaStats.value = data.timings;
+          llamaStats.value = data;
         }
       }
 
@@ -880,7 +880,7 @@
       }
       return html`
         <span>
-          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }

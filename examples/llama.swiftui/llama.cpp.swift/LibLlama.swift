@@ -1,5 +1,7 @@
 import Foundation
 
+// To use this in your own project, add llama.cpp as a swift package dependency
+// and uncomment this import line.
 // import llama
 
 enum LlamaError: Error {
@@ -159,7 +161,7 @@ actor LlamaContext {
             new_token_id = llama_sample_token_greedy(context, &candidates_p)
         }
 
-        if new_token_id == llama_token_eos(context) || n_cur == n_len {
+        if new_token_id == llama_token_eos(model) || n_cur == n_len {
             print("\n")
             let new_token_str = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()

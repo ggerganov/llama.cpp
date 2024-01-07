@@ -10,7 +10,7 @@
 #include "base64.hpp"
 
 static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
-    clip_image_f32 * img_res = make_clip_image_f32();
+    clip_image_f32 * img_res = clip_image_f32_init();
     if (!clip_image_preprocess(ctx_clip, img, img_res, /*pad2square =*/ true)) {
         fprintf(stderr, "%s: unable to preprocess image\n", __func__);
         clip_image_f32_free(img_res);
@@ -86,7 +86,7 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
 }
 
 LLAVA_API struct llava_image_embed * llava_image_embed_make_with_bytes(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length) {
-    clip_image_u8 * img = make_clip_image_u8();
+    clip_image_u8 * img = clip_image_u8_init();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
         fprintf(stderr, "%s: can't load image from bytes, is it a valid image?", __func__);

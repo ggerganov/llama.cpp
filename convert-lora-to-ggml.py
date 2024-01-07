@@ -47,95 +47,96 @@ def write_tensor_header(fout: BinaryIO, name: str, shape: Sequence[int], data_ty
     fout.seek((fout.tell() + 31) & -32)
 
 
-if len(sys.argv) < 2:
-    print(f"Usage: python {sys.argv[0]} <path> [arch]")
-    print(
-        "Path must contain HuggingFace PEFT LoRA files 'adapter_config.json' and 'adapter_model.bin'"
-    )
-    print(f"Arch must be one of {list(gguf.MODEL_ARCH_NAMES.values())} (default: llama)")
-    sys.exit(1)
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print(f"Usage: python {sys.argv[0]} <path> [arch]")
+        print(
+            "Path must contain HuggingFace PEFT LoRA files 'adapter_config.json' and 'adapter_model.bin'"
+        )
+        print(f"Arch must be one of {list(gguf.MODEL_ARCH_NAMES.values())} (default: llama)")
+        sys.exit(1)
 
-input_json = os.path.join(sys.argv[1], "adapter_config.json")
-input_model = os.path.join(sys.argv[1], "adapter_model.bin")
-output_path = os.path.join(sys.argv[1], "ggml-adapter-model.bin")
+    input_json = os.path.join(sys.argv[1], "adapter_config.json")
+    input_model = os.path.join(sys.argv[1], "adapter_model.bin")
+    output_path = os.path.join(sys.argv[1], "ggml-adapter-model.bin")
 
-model = torch.load(input_model, map_location="cpu")
-arch_name = sys.argv[2] if len(sys.argv) == 3 else "llama"
+    model = torch.load(input_model, map_location="cpu")
+    arch_name = sys.argv[2] if len(sys.argv) == 3 else "llama"
 
-if arch_name not in gguf.MODEL_ARCH_NAMES.values():
-    print(f"Error: unsupported architecture {arch_name}")
-    sys.exit(1)
+    if arch_name not in gguf.MODEL_ARCH_NAMES.values():
+        print(f"Error: unsupported architecture {arch_name}")
+        sys.exit(1)
 
-arch = list(gguf.MODEL_ARCH_NAMES.keys())[list(gguf.MODEL_ARCH_NAMES.values()).index(arch_name)]
-name_map = gguf.TensorNameMap(arch, 200) # 200 layers ought to be enough for anyone
+    arch = list(gguf.MODEL_ARCH_NAMES.keys())[list(gguf.MODEL_ARCH_NAMES.values()).index(arch_name)]
+    name_map = gguf.TensorNameMap(arch, 200) # 200 layers ought to be enough for anyone
 
-with open(input_json, "r") as f:
-    params = json.load(f)
+    with open(input_json, "r") as f:
+        params = json.load(f)
 
-if params["peft_type"] != "LORA":
-    print(f"Error: unsupported adapter type {params['peft_type']}, expected LORA")
-    sys.exit(1)
+    if params["peft_type"] != "LORA":
+        print(f"Error: unsupported adapter type {params['peft_type']}, expected LORA")
+        sys.exit(1)
 
-if params["fan_in_fan_out"] is True:
-    print("Error: param fan_in_fan_out is not supported")
-    sys.exit(1)
+    if params["fan_in_fan_out"] is True:
+        print("Error: param fan_in_fan_out is not supported")
+        sys.exit(1)
 
-if params["bias"] is not None and params["bias"] != "none":
-    print("Error: param bias is not supported")
-    sys.exit(1)
+    if params["bias"] is not None and params["bias"] != "none":
+        print("Error: param bias is not supported")
+        sys.exit(1)
 
-# TODO: these seem to be layers that have been trained but without lora.
-# doesn't seem widely used but eventually should be supported
-if params["modules_to_save"] is not None and len(params["modules_to_save"]) > 0:
-    print("Error: param modules_to_save is not supported")
-    sys.exit(1)
+    # TODO: these seem to be layers that have been trained but without lora.
+    # doesn't seem widely used but eventually should be supported
+    if params["modules_to_save"] is not None and len(params["modules_to_save"]) > 0:
+        print("Error: param modules_to_save is not supported")
+        sys.exit(1)
 
-with open(output_path, "wb") as fout:
-    fout.truncate()
+    with open(output_path, "wb") as fout:
+        fout.truncate()
 
-    write_file_header(fout, params)
-    for k, v in model.items():
-        orig_k = k
-        if k.endswith(".default.weight"):
-            k = k.replace(".default.weight", ".weight")
-        if k in ["llama_proj.weight", "llama_proj.bias"]:
-            continue
-        if k.endswith("lora_A.weight"):
-            if v.dtype != torch.float16 and v.dtype != torch.float32:
+        write_file_header(fout, params)
+        for k, v in model.items():
+            orig_k = k
+            if k.endswith(".default.weight"):
+                k = k.replace(".default.weight", ".weight")
+            if k in ["llama_proj.weight", "llama_proj.bias"]:
+                continue
+            if k.endswith("lora_A.weight"):
+                if v.dtype != torch.float16 and v.dtype != torch.float32:
+                    v = v.float()
+                v = v.T
+            else:
                 v = v.float()
-            v = v.T
-        else:
-            v = v.float()
 
-        t = v.detach().numpy()
+            t = v.detach().numpy()
 
-        prefix = "base_model.model."
-        if k.startswith(prefix):
-            k = k[len(prefix) :]
+            prefix = "base_model.model."
+            if k.startswith(prefix):
+                k = k[len(prefix) :]
 
-        lora_suffixes = (".lora_A.weight", ".lora_B.weight")
-        if k.endswith(lora_suffixes):
-            suffix = k[-len(lora_suffixes[0]):]
-            k = k[: -len(lora_suffixes[0])]
-        else:
-            print(f"Error: unrecognized tensor name {orig_k}")
-            sys.exit(1)
+            lora_suffixes = (".lora_A.weight", ".lora_B.weight")
+            if k.endswith(lora_suffixes):
+                suffix = k[-len(lora_suffixes[0]):]
+                k = k[: -len(lora_suffixes[0])]
+            else:
+                print(f"Error: unrecognized tensor name {orig_k}")
+                sys.exit(1)
 
-        tname = name_map.get_name(k)
-        if tname is None:
-            print(f"Error: could not map tensor name {orig_k}")
-            print(" Note: the arch parameter must be specified if the model is not llama")
-            sys.exit(1)
+            tname = name_map.get_name(k)
+            if tname is None:
+                print(f"Error: could not map tensor name {orig_k}")
+                print(" Note: the arch parameter must be specified if the model is not llama")
+                sys.exit(1)
 
-        if suffix == ".lora_A.weight":
-            tname += ".weight.loraA"
-        elif suffix == ".lora_B.weight":
-            tname += ".weight.loraB"
-        else:
-            assert False
+            if suffix == ".lora_A.weight":
+                tname += ".weight.loraA"
+            elif suffix == ".lora_B.weight":
+                tname += ".weight.loraB"
+            else:
+                assert False
 
-        print(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
-        write_tensor_header(fout, tname, t.shape, t.dtype)
-        t.tofile(fout)
+            print(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
+            write_tensor_header(fout, tname, t.shape, t.dtype)
+            t.tofile(fout)
 
-print(f"Converted {input_json} and {input_model} to {output_path}")
+    print(f"Converted {input_json} and {input_model} to {output_path}")
