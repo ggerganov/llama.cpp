@@ -10140,7 +10140,7 @@ ggml_backend_t ggml_backend_cuda_init(int device) {
 }
 
 bool ggml_backend_is_cuda(ggml_backend_t backend) {
-    return backend->iface.get_name == ggml_backend_cuda_name;
+    return backend && backend->iface.get_name == ggml_backend_cuda_name;
 }
 
 int ggml_backend_cuda_get_device_count() {

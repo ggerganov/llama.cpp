@@ -703,7 +703,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
 }
 
 bool ggml_backend_is_cpu(ggml_backend_t backend) {
-    return backend->iface.get_name == ggml_backend_cpu_name;
+    return backend && backend->iface.get_name == ggml_backend_cpu_name;
 }
 
 void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads) {
