@@ -1503,6 +1503,21 @@ struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, s
     struct ggml_context * ctx_allocated = ggml_init(params);
     struct ggml_context * ctx_unallocated = ggml_init(params);
 
+    if (ctx_allocated == NULL || ctx_unallocated == NULL) {
+        fprintf(stderr, "failed to allocate context for graph copy\n");
+        free(hash_set.keys);
+        free(node_copies);
+        free(node_init);
+        ggml_free(ctx_allocated);
+        ggml_free(ctx_unallocated);
+        return (struct ggml_backend_graph_copy) {
+            /* .buffer           = */ NULL,
+            /* .ctx_allocated    = */ NULL,
+            /* .ctx_unallocated  = */ NULL,
+            /* .graph            = */ NULL,
+        };
+    }
+
     // dup nodes
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
@@ -1511,6 +1526,20 @@ struct ggml_backend_graph_copy ggml_backend_graph_copy(ggml_backend_t backend, s
 
     // allocate nodes
     ggml_backend_buffer_t buffer = ggml_backend_alloc_ctx_tensors(ctx_allocated, backend);
+    if (buffer == NULL) {
+        fprintf(stderr, "failed to allocate buffer for graph copy\n");
+        free(hash_set.keys);
+        free(node_copies);
+        free(node_init);
+        ggml_free(ctx_allocated);
+        ggml_free(ctx_unallocated);
+        return (struct ggml_backend_graph_copy) {
+            /* .buffer           = */ NULL,
+            /* .ctx_allocated    = */ NULL,
+            /* .ctx_unallocated  = */ NULL,
+            /* .graph            = */ NULL,
+        };
+    }
 
     //printf("copy buffer size: %zu MB\n", ggml_backend_buffer_get_size(buffer) / 1024 / 1024);
 
@@ -1547,8 +1576,12 @@ void ggml_backend_graph_copy_free(struct ggml_backend_graph_copy copy) {
     ggml_free(copy.ctx_unallocated);
 }
 
-void ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t backend2, struct ggml_cgraph * graph, ggml_backend_eval_callback callback, void * user_data) {
+bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t backend2, struct ggml_cgraph * graph, ggml_backend_eval_callback callback, void * user_data) {
     struct ggml_backend_graph_copy copy = ggml_backend_graph_copy(backend2, graph);
+    if (copy.buffer == NULL) {
+        return false;
+    }
+
     struct ggml_cgraph * g1 = graph;
     struct ggml_cgraph * g2 = copy.graph;
 
@@ -1578,4 +1611,6 @@ void ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
     }
 
     ggml_backend_graph_copy_free(copy);
+
+    return true;
 }
