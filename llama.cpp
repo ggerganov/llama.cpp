@@ -2180,7 +2180,11 @@ struct llama_model_loader {
                     type_max   = type;
                 }
 
-                // LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, name, ggml_type_name(meta->type), llama_format_tensor_shape(meta).c_str());
+                // TODO: make runtime configurable
+#if 0
+                struct ggml_tensor * meta = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+                LLAMA_LOG_INFO("%s: - tensor %4d: %32s %-8s [ %s ]\n", __func__, i, ggml_get_name(meta), ggml_type_name(type), llama_format_tensor_shape(meta).c_str());
+#endif
             }
 
             switch (type_max) {
