@@ -179,14 +179,13 @@ effectiveStdenv.mkDerivation (
         )
       ]
       ++ optionals useRocm [
-        (cmakeFeature "CMAKE_C_COMPILER" "hipcc")
-        (cmakeFeature "CMAKE_CXX_COMPILER" "hipcc")
+        (cmakeFeature "CMAKE_HIP_COMPILER" "${rocmPackages.llvm.clang}/bin/clang")
 
         # Build all targets supported by rocBLAS. When updating search for TARGET_LIST_ROCM
         # in https://github.com/ROCmSoftwarePlatform/rocBLAS/blob/develop/CMakeLists.txt
         # and select the line that matches the current nixpkgs version of rocBLAS.
         # Should likely use `rocmPackages.clr.gpuTargets`.
-        "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
+        (cmakeFeature "CMAKE_HIP_ARCHITECTURES" "gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102")
       ]
       ++ optionals useMetalKit [ (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1") ]
       ++ optionals useBlas [ (lib.cmakeFeature "LLAMA_BLAS_VENDOR" "OpenBLAS") ];
