@@ -1394,6 +1394,8 @@ ggml_backend_buffer_t ggml_backend_sched_get_buffer(ggml_backend_sched_t sched, 
 }
 
 void ggml_backend_sched_set_node_backend(ggml_backend_sched_t sched, struct ggml_tensor * node, ggml_backend_t backend) {
+    // FIXME: node_allocr is cleared when splitting the graph, so all user assignments are lost
+    // to avoid this, we need to clear node_allocr after compute rather than before split
     int backend_index = sched_backend_prio(sched, backend);
     GGML_ASSERT(backend_index >= 0 && backend_index < sched->n_backends);
     node_allocr(node) = sched->tallocs[backend_index];

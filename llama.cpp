@@ -3130,6 +3130,7 @@ static bool llm_load_tensors(
         llama_model_loader & ml,
         llama_model & model,
         int n_gpu_layers,
+        enum llama_split_mode split_mode,
         int main_gpu,
         const float * tensor_split,
         bool use_mlock,
@@ -3144,14 +3145,6 @@ static bool llm_load_tensors(
 
     size_t ctx_size = ggml_tensor_overhead()*ml.n_tensors;
 
-    // TODO: user configurable
-    enum gpu_split_mode {
-        LLAMA_SPLIT_NONE,    // single GPU
-        LLAMA_SPLIT_LAYER,   // offload layers to different GPUs
-        LLAMA_SPLIT_ROW      // split matrix rows across GPUs
-    };
-
-    gpu_split_mode split_mode = LLAMA_SPLIT_LAYER;
     const int64_t n_layer     = hparams.n_layer;
     const int64_t i_gpu_start = std::max((int64_t) hparams.n_layer - n_gpu_layers, (int64_t) 0);
 
@@ -3207,13 +3200,25 @@ static bool llm_load_tensors(
     } else
 #endif
     {
-        // offload layers
+        ggml_backend_buffer_type_t split_buft;
+        if (split_mode == LLAMA_SPLIT_ROW) {
+            split_buft = llama_default_buffer_type_split(main_gpu, tensor_split);
+        } else {
+            split_buft = llama_default_buffer_type_offload(main_gpu);
+        }
+        // repeating layers
         for (int64_t i = i_gpu_start; i < n_layer; ++i) {
-            model.buft_layer[i] = { llama_default_buffer_type_split(main_gpu, tensor_split), llama_default_buffer_type_offload(main_gpu) };
+            model.buft_layer[i] = {
+                split_buft,
+                llama_default_buffer_type_offload(main_gpu)
+            };
         }
         // output layer
         if (n_gpu_layers > n_layer) {
-            model.buft_output = { llama_default_buffer_type_split(main_gpu, tensor_split), llama_default_buffer_type_offload(main_gpu) };
+            model.buft_output = {
+                split_buft,
+                llama_default_buffer_type_offload(main_gpu)
+            };
         } else {
             model.buft_output = llama_default_buffer_type_cpu(true);
         }
@@ -3804,7 +3809,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, cons
         }
 
         if (!llm_load_tensors(
-            ml, model, params.n_gpu_layers, params.main_gpu, params.tensor_split, params.use_mlock,
+            ml, model, params.n_gpu_layers, params.split_mode,  params.main_gpu, params.tensor_split, params.use_mlock,
             params.progress_callback, params.progress_callback_user_data
         )) {
             return -2;
@@ -8964,6 +8969,7 @@ static int llama_apply_lora_from_file_internal(
 struct llama_model_params llama_model_default_params() {
     struct llama_model_params result = {
         /*.n_gpu_layers                =*/ 0,
+        /*.split_mode                  =*/ LLAMA_SPLIT_LAYER,
         /*.main_gpu                    =*/ 0,
         /*.tensor_split                =*/ nullptr,
         /*.progress_callback           =*/ nullptr,
