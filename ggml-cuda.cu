@@ -8894,9 +8894,9 @@ static void ggml_cuda_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     use_mul_mat_q = use_mul_mat_q && !(fp16_performance_good && src1->ne[1] > MMQ_MAX_BATCH_SIZE);
 #endif // CUDA_USE_TENSOR_CORES
 
-    use_mul_mat_q = use_mul_mat_q && ggml_cuda_supports_mmq(src0->type);
-
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
+
+    use_mul_mat_q = use_mul_mat_q && ggml_cuda_supports_mmq(src0->type);
 
     // debug helpers
     //printf("src0: %8d %8d %8d %8d\n", src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3]);
