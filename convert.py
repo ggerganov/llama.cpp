@@ -1019,8 +1019,12 @@ def check_vocab_size(params: Params, vocab: Vocab, pad_vocab: bool = False) -> N
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE) -> None:
-        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
+    def __init__(
+        self, fname_out: Path, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE
+    ) -> None:
+        self.gguf = gguf.GGUFWriter(
+            fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess
+        )
 
     def add_meta_arch(self, params: Params) -> None:
         name = "LLaMA"
@@ -1029,27 +1033,27 @@ class OutputFile:
         if params.n_ctx == 4096:
             name = "LLaMA v2"
         elif params.path_model is not None:
-            name = str(params.path_model.parent).split('/')[-1]
+            name = str(params.path_model.parent).split("/")[-1]
 
-        self.gguf.add_name                (name)
-        self.gguf.add_context_length      (params.n_ctx)
-        self.gguf.add_embedding_length    (params.n_embd)
-        self.gguf.add_block_count         (params.n_layer)
-        self.gguf.add_feed_forward_length (params.n_ff)
+        self.gguf.add_name(name)
+        self.gguf.add_context_length(params.n_ctx)
+        self.gguf.add_embedding_length(params.n_embd)
+        self.gguf.add_block_count(params.n_layer)
+        self.gguf.add_feed_forward_length(params.n_ff)
         self.gguf.add_rope_dimension_count(params.n_embd // params.n_head)
-        self.gguf.add_head_count          (params.n_head)
-        self.gguf.add_head_count_kv       (params.n_head_kv)
+        self.gguf.add_head_count(params.n_head)
+        self.gguf.add_head_count_kv(params.n_head_kv)
+
+        if params.f_norm_eps is None:
+            raise ValueError("f_norm_eps is None")
+
+        self.gguf.add_layer_norm_rms_eps(params.f_norm_eps)
 
         if params.n_experts:
             self.gguf.add_expert_count(params.n_experts)
 
         if params.n_experts_used:
             self.gguf.add_expert_used_count(params.n_experts_used)
-
-        if params.f_norm_eps:
-            self.gguf.add_layer_norm_rms_eps(params.f_norm_eps)
-        else:
-            raise ValueError('f_norm_eps is None')
 
         if params.f_rope_freq_base is not None:
             self.gguf.add_rope_freq_base(params.f_rope_freq_base)
@@ -1068,18 +1072,44 @@ class OutputFile:
         if params.ftype is not None:
             self.gguf.add_file_type(params.ftype)
 
-    def add_meta_vocab(self, vocab: Vocab) -> None:
+    def handle_tokenizer_model(self, vocab: Vocab) -> str:
+        # Map the vocab types to the supported tokenizer models
+        tokenizer_model = {
+            SentencePieceVocab: "llama",
+            HfVocab: "llama",
+            BpeVocab: "gpt2",
+        }.get(type(vocab))
+
+        # Block if vocab type is not predefined
+        if tokenizer_model is None:
+            raise ValueError("Unknown vocab type: Not supported")
+
+        return tokenizer_model
+
+    def extract_vocabulary_from_model(self, vocab: Vocab) -> Tuple[list, list, list]:
         tokens = []
         scores = []
         toktypes = []
+
         # NOTE: `all_tokens` returns the base vocabulary and added tokens
         for text, score, toktype in vocab.all_tokens():
             tokens.append(text)
             scores.append(score)
             toktypes.append(toktype)
 
-        vocab_type = vocab.get_vocab_type()
-        self.gguf.add_tokenizer_model(vocab_type)
+        return tokens, scores, toktypes
+
+    def add_meta_vocab(self, vocab: Vocab) -> None:
+        # Handle the tokenizer model
+        tokenizer_model = self.handle_tokenizer_model(vocab)
+
+        # Ensure that tokenizer_model is added to the GGUF model
+        self.gguf.add_tokenizer_model(tokenizer_model)
+
+        # Extract model vocabulary for model conversion
+        tokens, scores, toktypes = self.extract_vocabulary_from_model(vocab)
+
+        # Add extracted token information for model conversion
         self.gguf.add_token_list(tokens)
         self.gguf.add_token_scores(scores)
         self.gguf.add_token_types(toktypes)
@@ -1089,10 +1119,14 @@ class OutputFile:
 
     def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
         n_elements = int(np.prod(tensor.shape))
-        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
-        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
+        raw_dtype = getattr(tensor.data_type, "ggml_type", None)
+        data_type = (
+            getattr(tensor.data_type, "quantized_type", None) or tensor.data_type.dtype
+        )
         data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
-        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype = raw_dtype)
+        self.gguf.add_tensor_info(
+            name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype
+        )
 
     def write_meta(self) -> None:
         self.gguf.write_header_to_file()
@@ -1106,11 +1140,14 @@ class OutputFile:
 
     @staticmethod
     def write_vocab_only(
-        fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
+        fname_out: Path,
+        params: Params,
+        vocab: Vocab,
+        svocab: gguf.SpecialVocab,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
     ) -> None:
-        check_vocab_size(params, vocab, pad_vocab = pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -1138,12 +1175,17 @@ class OutputFile:
 
     @staticmethod
     def write_all(
-        fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: Vocab, svocab: gguf.SpecialVocab,
+        fname_out: Path,
+        ftype: GGMLFileType,
+        params: Params,
+        model: LazyModel,
+        vocab: Vocab,
+        svocab: gguf.SpecialVocab,
         concurrency: int = DEFAULT_CONCURRENCY,
         endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
     ) -> None:
-        check_vocab_size(params, vocab, pad_vocab = pad_vocab)
+        check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
 
@@ -1160,18 +1202,30 @@ class OutputFile:
         of.write_tensor_info()
 
         # tensor data
-        ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency = concurrency)
+        ndarrays_inner = bounded_parallel_map(
+            OutputFile.do_item, model.items(), concurrency=concurrency
+        )
         if ftype == GGMLFileType.MostlyQ8_0:
-            ndarrays = bounded_parallel_map(OutputFile.maybe_do_quantize, ndarrays_inner, concurrency = concurrency, max_workers = concurrency, use_processpool_executor = True)
+            ndarrays = bounded_parallel_map(
+                OutputFile.maybe_do_quantize,
+                ndarrays_inner,
+                concurrency=concurrency,
+                max_workers=concurrency,
+                use_processpool_executor=True,
+            )
         else:
             ndarrays = map(OutputFile.maybe_do_quantize, ndarrays_inner)
 
         start = time.time()
-        for i, ((name, lazy_tensor), ndarray) in enumerate(zip(model.items(), ndarrays)):
+        for i, ((name, lazy_tensor), ndarray) in enumerate(
+            zip(model.items(), ndarrays)
+        ):
             elapsed = time.time() - start
-            size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
+            size = " x ".join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
-            print(f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}")
+            print(
+                f"[{i+1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
+            )
             of.gguf.write_tensor_data(ndarray)
 
         of.close()
